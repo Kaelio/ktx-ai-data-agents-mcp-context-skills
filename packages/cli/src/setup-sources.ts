@@ -1,14 +1,18 @@
 import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cancel, isCancel, log, multiselect, select, text } from '@clack/prompts';
-import { resolveNotionAuthToken } from '@ktx/context/connections';
+import { cancel, isCancel, log, multiselect, password, select, text } from '@clack/prompts';
+import { localConnectionTypeForConfig, resolveNotionAuthToken } from '@ktx/context/connections';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   cloneOrPull,
+  DEFAULT_METABASE_CLIENT_CONFIG,
+  discoverMetabaseDatabases,
+  type DiscoveredMetabaseDatabase,
   loadDbtSchemaFiles,
   loadProjectInfo,
+  MetabaseClient,
   type NotionApi,
   NotionClient,
   parseLookmlStagedDir,
@@ -28,6 +32,7 @@ import { runKtxConnection } from './connection.js';
 import { withMenuOptionsSpacing, withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxPublicIngest } from './public-ingest.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { writeProjectLocalSecretReference } from './setup-secrets.js';
 
 export type KtxSetupSourceType = 'dbt' | 'metricflow' | 'metabase' | 'looker' | 'lookml' | 'notion';
 
@@ -71,6 +76,7 @@ export interface KtxSetupSourcesPromptAdapter {
   }): Promise<string[]>;
   select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
   text(options: { message: string; placeholder?: string; initialValue?: string }): Promise<string | undefined>;
+  password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
   log?(message: string): void;
 }
@@ -86,6 +92,11 @@ export interface KtxSetupSourcesDeps {
   validateLooker?: (projectDir: string, connectionId: string) => Promise<SourceValidationResult>;
   validateLookml?: (connection: KtxProjectConnectionConfig) => Promise<SourceValidationResult>;
   validateNotion?: (connection: KtxProjectConnectionConfig) => Promise<SourceValidationResult>;
+  discoverMetabaseDatabases?: (args: {
+    sourceUrl: string;
+    sourceApiKeyRef: string;
+    sourceConnectionId: string;
+  }) => Promise<DiscoveredMetabaseDatabase[]>;
   runMapping?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
   runInitialIngest?: (
     projectDir: string,
@@ -143,6 +154,12 @@ function createPromptAdapter(): KtxSetupSourcesPromptAdapter {
       );
       return isCancel(value) ? undefined : String(value);
     },
+    async password(options) {
+      const value = await withSetupInterruptConfirmation(() =>
+        password({ ...options, message: withTextInputNavigation(options.message) }),
+      );
+      return isCancel(value) ? undefined : String(value);
+    },
     cancel(message) {
       cancel(message);
     },
@@ -172,17 +189,6 @@ function connectionNamePrompt(label: string): string {
   return `Name this ${label} connection\nKTX will use this short name in commands and config. You can rename it now.`;
 }
 
-function gitAuthAfterFailurePrompt(source: KtxSetupSourceType): string {
-  const label = source === 'dbt' ? 'This' : `This ${sourceLabel(source)}`;
-  return [
-    `${label} repo requires authentication.`,
-    'Generate a token at: https://github.com/settings/tokens/new',
-    'Store it in an env var, then enter env:VARIABLE_NAME here (e.g. env:GITHUB_TOKEN).',
-    'Or use file:/absolute/path if the token is stored in a file.',
-    'Press Enter to skip and try without authentication anyway.',
-  ].join('\n');
-}
-
 function sourceSubpathPrompt(source: KtxSetupSourceType): string {
   if (source === 'dbt') {
     return [
@@ -196,6 +202,21 @@ function sourceSubpathPrompt(source: KtxSetupSourceType): string {
     'If the project files are inside a subfolder, enter that path.',
     'Press Enter if the path or repo already points at the project.',
   ].join('\n');
+}
+
+const SCAN_SKIP_DIRS = new Set(['.git', 'node_modules', '.venv', 'target', 'dbt_packages', 'dbt_modules', '__pycache__']);
+
+async function findDbtProjectSubpaths(rootDir: string): Promise<string[]> {
+  const entries = await readdir(rootDir, { withFileTypes: true, recursive: true });
+  const subpaths: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (entry.name !== 'dbt_project.yml' && entry.name !== 'dbt_project.yaml') continue;
+    const relDir = relative(rootDir, entry.parentPath);
+    if (relDir.split('/').some((part) => SCAN_SKIP_DIRS.has(part))) continue;
+    subpaths.push(relDir);
+  }
+  return subpaths;
 }
 
 async function promptText(
@@ -220,6 +241,70 @@ function credentialRef(value: string | undefined, label: string): string {
     throw new Error(`${label} must use env:NAME or file:/absolute/path`);
   }
   return ref;
+}
+
+async function chooseSourceCredentialRef(input: {
+  prompts: KtxSetupSourcesPromptAdapter;
+  projectDir: string;
+  label: string;
+  envName: string;
+  secretFileName: string;
+}): Promise<string | 'back'> {
+  while (true) {
+    const choice = await input.prompts.select({
+      message: `How should KTX find your ${input.label}?`,
+      options: [
+        { value: 'env', label: `Use ${input.envName} from the environment` },
+        { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    if (choice === 'back') return 'back';
+    if (choice === 'paste') {
+      const value = await input.prompts.password({ message: input.label });
+      if (value === undefined) continue;
+      if (!value.trim()) continue;
+      return await writeProjectLocalSecretReference({
+        projectDir: input.projectDir,
+        fileName: input.secretFileName,
+        value,
+      });
+    }
+    return `env:${input.envName}`;
+  }
+}
+
+async function chooseGitAuthCredentialRef(input: {
+  prompts: KtxSetupSourcesPromptAdapter;
+  projectDir: string;
+  source: KtxSetupSourceType;
+  connectionId: string;
+}): Promise<string | undefined | 'back'> {
+  const label = input.source === 'dbt' ? 'This' : `This ${sourceLabel(input.source)}`;
+  while (true) {
+    const choice = await input.prompts.select({
+      message: `${label} repo requires authentication.`,
+      options: [
+        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
+        { value: 'paste', label: 'Paste a token and save it as a local secret file' },
+        { value: 'skip', label: 'Skip — try without authentication' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    if (choice === 'back') return 'back';
+    if (choice === 'skip') return undefined;
+    if (choice === 'paste') {
+      const value = await input.prompts.password({ message: 'Git access token' });
+      if (value === undefined) continue;
+      if (!value.trim()) continue;
+      return await writeProjectLocalSecretReference({
+        projectDir: input.projectDir,
+        fileName: `${input.connectionId}-auth-token`,
+        value,
+      });
+    }
+    return 'env:GITHUB_TOKEN';
+  }
 }
 
 function repoOrLocalSource(args: KtxSetupSourcesArgs): { sourceDir?: string; repoUrl?: string } {
@@ -512,16 +597,6 @@ async function defaultValidateMetricflow(connection: KtxProjectConnectionConfig)
   };
 }
 
-async function defaultValidateMetabase(projectDir: string, connectionId: string): Promise<SourceValidationResult> {
-  const code = await runKtxConnection(
-    { command: 'map', projectDir, sourceConnectionId: connectionId, json: true },
-    { stdout: { write() {} }, stderr: { write() {} } },
-  );
-  return code === 0
-    ? { ok: true, detail: 'mapping validated' }
-    : { ok: false, message: 'Metabase mapping validation failed' };
-}
-
 async function defaultValidateLooker(projectDir: string, connectionId: string): Promise<SourceValidationResult> {
   const code = await runKtxConnectionMapping(
     { command: 'refresh', projectDir, connectionId, autoAccept: true },
@@ -634,6 +709,11 @@ type SourcePromptState = KtxSetupSourcesArgs & {
 
 type SourcePromptStep = (state: SourcePromptState) => Promise<'next' | 'back'>;
 
+interface WarehouseConnectionChoice {
+  id: string;
+  connectionType: string;
+}
+
 type InteractiveSourceConnectionChoice =
   | { kind: 'existing'; connectionId: string; connection: KtxProjectConnectionConfig }
   | { kind: 'new'; args: KtxSetupSourcesArgs }
@@ -672,6 +752,107 @@ function resetRepoLocationFields(state: SourcePromptState): void {
   delete state.sourceProjectName;
 }
 
+function warehouseConnectionChoices(config: KtxProjectConfig): WarehouseConnectionChoice[] {
+  return Object.entries(config.connections)
+    .filter(([, connection]) => PRIMARY_SOURCE_DRIVERS.has(String(connection.driver ?? '').toLowerCase()))
+    .map(([id, connection]) => ({ id, connectionType: localConnectionTypeForConfig(id, connection) }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+async function chooseMappedWarehouseConnectionId(input: {
+  projectDir: string;
+  prompts: KtxSetupSourcesPromptAdapter;
+}): Promise<string | 'back'> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const choices = warehouseConnectionChoices(project.config);
+  if (choices.length === 1) {
+    return choices[0].id;
+  }
+  if (choices.length === 0) {
+    const entered = await promptText(input.prompts, { message: 'Mapped warehouse connection id' });
+    return entered === undefined ? 'back' : entered;
+  }
+
+  const selected = await input.prompts.select({
+    message: 'Mapped warehouse connection',
+    options: [
+      ...choices.map((choice) => ({
+        value: choice.id,
+        label: `${choice.id} (${choice.connectionType})`,
+      })),
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  return selected === 'back' ? 'back' : selected;
+}
+
+async function defaultDiscoverMetabaseDatabases(input: {
+  sourceUrl: string;
+  sourceApiKeyRef: string;
+}): Promise<DiscoveredMetabaseDatabase[]> {
+  const apiKey = resolveKtxConfigReference(input.sourceApiKeyRef, process.env);
+  if (!apiKey) {
+    throw new Error('Metabase API key ref could not be resolved');
+  }
+  const client = new MetabaseClient(
+    { apiUrl: input.sourceUrl, apiKey },
+    DEFAULT_METABASE_CLIENT_CONFIG,
+  );
+  try {
+    return await discoverMetabaseDatabases(client);
+  } finally {
+    await client.cleanup();
+  }
+}
+
+function metabaseDatabaseLabel(database: DiscoveredMetabaseDatabase): string {
+  const detail = [database.engine].filter(Boolean).join(', ');
+  return detail ? `${database.id}: ${database.name} (${detail})` : `${database.id}: ${database.name}`;
+}
+
+async function chooseMetabaseDatabaseId(input: {
+  state: SourcePromptState;
+  prompts: KtxSetupSourcesPromptAdapter;
+  deps: KtxSetupSourcesDeps;
+}): Promise<number | 'back'> {
+  const sourceUrl = input.state.sourceUrl;
+  const sourceApiKeyRef = input.state.sourceApiKeyRef;
+  if (sourceUrl && sourceApiKeyRef) {
+    try {
+      const discovered = await (input.deps.discoverMetabaseDatabases ?? defaultDiscoverMetabaseDatabases)({
+        sourceUrl,
+        sourceApiKeyRef,
+        sourceConnectionId: input.state.sourceConnectionId ?? 'metabase-main',
+      });
+      if (discovered.length === 1) {
+        return discovered[0].id;
+      }
+      if (discovered.length > 1) {
+        const selected = await input.prompts.select({
+          message: 'Metabase database',
+          options: [
+            ...discovered
+              .slice()
+              .sort((left, right) => left.id - right.id)
+              .map((database) => ({
+                value: String(database.id),
+                label: metabaseDatabaseLabel(database),
+              })),
+            { value: 'back', label: 'Back' },
+          ],
+        });
+        return selected === 'back' ? 'back' : Number.parseInt(selected, 10);
+      }
+    } catch {
+      // Discovery is a convenience. Fall back to the raw id prompt when credentials
+      // are unavailable locally or the Metabase API cannot be reached yet.
+    }
+  }
+
+  const databaseId = await promptText(input.prompts, { message: 'Metabase database id' });
+  return databaseId === undefined ? 'back' : Number.parseInt(databaseId, 10);
+}
+
 function connectionIdPromptSteps(
   args: KtxSetupSourcesArgs,
   source: KtxSetupSourceType,
@@ -703,6 +884,7 @@ async function promptForInteractiveSource(
   prompts: KtxSetupSourcesPromptAdapter,
   defaultConnectionId = `${source}-main`,
   testGitRepo: KtxSetupSourcesDeps['testGitRepo'] = testRepoConnection,
+  discoverMetabaseDatabaseList?: KtxSetupSourcesDeps['discoverMetabaseDatabases'],
 ): Promise<KtxSetupSourcesArgs | 'back'> {
   const initialState: SourcePromptState = { ...args, source };
   if (args.sourceConnectionId) {
@@ -757,23 +939,6 @@ async function promptForInteractiveSource(
             },
           ]
         : []),
-      ...(state.sourceLocation
-        ? [
-            async (currentState: SourcePromptState) => {
-              const subpath = await promptText(prompts, {
-                message: sourceSubpathPrompt(source),
-                placeholder: 'optional',
-              });
-              if (subpath === undefined) return 'back';
-              if (subpath) {
-                currentState.sourceSubpath = subpath;
-              } else {
-                delete currentState.sourceSubpath;
-              }
-              return 'next';
-            },
-          ]
-        : []),
       ...(state.sourceLocation === 'git'
         ? [
             async (currentState: SourcePromptState) => {
@@ -783,15 +948,90 @@ async function promptForInteractiveSource(
                 prompts.log?.('Repository connected.');
                 return 'next';
               }
-              const authRef = await promptText(prompts, {
-                message: gitAuthAfterFailurePrompt(source),
-                placeholder: 'env:GITHUB_TOKEN',
+              const authRef = await chooseGitAuthCredentialRef({
+                prompts,
+                projectDir: args.projectDir,
+                source,
+                connectionId: currentState.sourceConnectionId ?? `${source}-main`,
               });
-              if (authRef === undefined) return 'back';
+              if (authRef === 'back') return 'back';
               if (authRef) {
                 currentState.sourceAuthTokenRef = authRef;
               } else {
                 delete currentState.sourceAuthTokenRef;
+              }
+              return 'next';
+            },
+          ]
+        : []),
+      ...(state.sourceLocation
+        ? [
+            async (currentState: SourcePromptState) => {
+              if (source === 'dbt') {
+                let scanDir: string | undefined;
+                if (currentState.sourceLocation === 'path' && currentState.sourcePath) {
+                  scanDir = currentState.sourcePath;
+                } else if (currentState.sourceLocation === 'git' && currentState.sourceGitUrl) {
+                  try {
+                    const cacheDir = await mkdtemp(join(tmpdir(), 'ktx-setup-dbt-scan-'));
+                    const authToken = currentState.sourceAuthTokenRef
+                      ? resolveKtxConfigReference(currentState.sourceAuthTokenRef, process.env)
+                      : null;
+                    await cloneOrPull({
+                      repoUrl: currentState.sourceGitUrl,
+                      authToken,
+                      cacheDir,
+                      branch: currentState.sourceBranch ?? 'main',
+                    });
+                    scanDir = cacheDir;
+                  } catch {
+                    // Clone failed — fall through to manual prompt
+                  }
+                }
+                if (scanDir) {
+                  try {
+                    const subpaths = await findDbtProjectSubpaths(scanDir);
+                    if (subpaths.length === 1) {
+                      const found = subpaths[0]!;
+                      if (found) {
+                        currentState.sourceSubpath = found;
+                        prompts.log?.(`Found dbt_project.yml in ${found}/`);
+                      } else {
+                        delete currentState.sourceSubpath;
+                      }
+                      return 'next';
+                    }
+                    if (subpaths.length > 1) {
+                      const selected = await prompts.select({
+                        message: 'Multiple dbt projects found — which one should KTX use?',
+                        options: [
+                          ...subpaths.map((p) => ({ value: p || '.', label: p || '(project root)' })),
+                          { value: 'back', label: 'Back' },
+                        ],
+                      });
+                      if (selected === 'back') return 'back';
+                      const subpath = selected === '.' ? '' : selected;
+                      if (subpath) {
+                        currentState.sourceSubpath = subpath;
+                      } else {
+                        delete currentState.sourceSubpath;
+                      }
+                      return 'next';
+                    }
+                  } catch {
+                    // Directory unreadable — fall through to manual prompt
+                  }
+                }
+              }
+              const subpath = await promptText(prompts, {
+                message: sourceSubpathPrompt(source),
+                placeholder: 'optional',
+              });
+              if (subpath === undefined) return 'back';
+              if (subpath) {
+                currentState.sourceSubpath = subpath;
+              } else {
+                delete currentState.sourceSubpath;
               }
               return 'next';
             },
@@ -810,24 +1050,34 @@ async function promptForInteractiveSource(
         return 'next';
       },
       async (state) => {
-        const sourceApiKeyRef = await promptText(prompts, {
-          message: 'Metabase API key ref',
-          placeholder: 'env:METABASE_API_KEY',
+        const ref = await chooseSourceCredentialRef({
+          prompts,
+          projectDir: args.projectDir,
+          label: 'Metabase API key',
+          envName: 'METABASE_API_KEY',
+          secretFileName: `${state.sourceConnectionId ?? 'metabase-main'}-api-key`,
         });
-        if (sourceApiKeyRef === undefined) return 'back';
-        state.sourceApiKeyRef = sourceApiKeyRef;
+        if (ref === 'back') return 'back';
+        state.sourceApiKeyRef = ref;
         return 'next';
       },
       async (state) => {
-        const sourceWarehouseConnectionId = await promptText(prompts, { message: 'Mapped warehouse connection id' });
-        if (sourceWarehouseConnectionId === undefined) return 'back';
+        const sourceWarehouseConnectionId = await chooseMappedWarehouseConnectionId({
+          projectDir: args.projectDir,
+          prompts,
+        });
+        if (sourceWarehouseConnectionId === 'back') return 'back';
         state.sourceWarehouseConnectionId = sourceWarehouseConnectionId;
         return 'next';
       },
       async (state) => {
-        const databaseId = await promptText(prompts, { message: 'Metabase database id' });
-        if (databaseId === undefined) return 'back';
-        state.metabaseDatabaseId = Number.parseInt(databaseId, 10);
+        const databaseId = await chooseMetabaseDatabaseId({
+          state,
+          prompts,
+          deps: { discoverMetabaseDatabases: discoverMetabaseDatabaseList },
+        });
+        if (databaseId === 'back') return 'back';
+        state.metabaseDatabaseId = databaseId;
         return 'next';
       },
     ]);
@@ -849,17 +1099,23 @@ async function promptForInteractiveSource(
         return 'next';
       },
       async (state) => {
-        const sourceClientSecretRef = await promptText(prompts, {
-          message: 'Looker client secret ref',
-          placeholder: 'env:LOOKER_CLIENT_SECRET',
+        const ref = await chooseSourceCredentialRef({
+          prompts,
+          projectDir: args.projectDir,
+          label: 'Looker client secret',
+          envName: 'LOOKER_CLIENT_SECRET',
+          secretFileName: `${state.sourceConnectionId ?? 'looker-main'}-client-secret`,
         });
-        if (sourceClientSecretRef === undefined) return 'back';
-        state.sourceClientSecretRef = sourceClientSecretRef;
+        if (ref === 'back') return 'back';
+        state.sourceClientSecretRef = ref;
         return 'next';
       },
       async (state) => {
-        const sourceWarehouseConnectionId = await promptText(prompts, { message: 'Mapped warehouse connection id' });
-        if (sourceWarehouseConnectionId === undefined) return 'back';
+        const sourceWarehouseConnectionId = await chooseMappedWarehouseConnectionId({
+          projectDir: args.projectDir,
+          prompts,
+        });
+        if (sourceWarehouseConnectionId === 'back') return 'back';
         state.sourceWarehouseConnectionId = sourceWarehouseConnectionId;
         return 'next';
       },
@@ -882,12 +1138,15 @@ async function promptForInteractiveSource(
   return await runSourcePromptSteps(initialState, (state) => [
     ...connectionSteps,
     async (currentState) => {
-      const sourceApiKeyRef = await promptText(prompts, {
-        message: 'Notion token ref',
-        placeholder: 'env:NOTION_TOKEN',
+      const ref = await chooseSourceCredentialRef({
+        prompts,
+        projectDir: args.projectDir,
+        label: 'Notion integration token',
+        envName: 'NOTION_TOKEN',
+        secretFileName: `${currentState.sourceConnectionId ?? 'notion-main'}-token`,
       });
-      if (sourceApiKeyRef === undefined) return 'back';
-      currentState.sourceApiKeyRef = sourceApiKeyRef;
+      if (ref === 'back') return 'back';
+      currentState.sourceApiKeyRef = ref;
       return 'next';
     },
     async (currentState) => {
@@ -956,13 +1215,21 @@ async function chooseInteractiveSourceConnection(input: {
   connections: Record<string, KtxProjectConnectionConfig>;
   prompts: KtxSetupSourcesPromptAdapter;
   testGitRepo?: KtxSetupSourcesDeps['testGitRepo'];
+  discoverMetabaseDatabases?: KtxSetupSourcesDeps['discoverMetabaseDatabases'];
 }): Promise<InteractiveSourceConnectionChoice> {
   const existingIds = existingConnectionIdsBySource(input.connections, input.source);
   const defaultConnectionId = defaultConnectionIdForSource(input.connections, input.source);
   const label = sourceLabel(input.source);
 
   if (existingIds.length === 0) {
-    const sourceArgs = await promptForInteractiveSource(input.args, input.source, input.prompts, defaultConnectionId, input.testGitRepo);
+    const sourceArgs = await promptForInteractiveSource(
+      input.args,
+      input.source,
+      input.prompts,
+      defaultConnectionId,
+      input.testGitRepo,
+      input.discoverMetabaseDatabases,
+    );
     return sourceArgs === 'back' ? 'back' : { kind: 'new', args: sourceArgs };
   }
 
@@ -987,7 +1254,14 @@ async function chooseInteractiveSourceConnection(input: {
       }
       continue;
     }
-    const sourceArgs = await promptForInteractiveSource(input.args, input.source, input.prompts, defaultConnectionId, input.testGitRepo);
+    const sourceArgs = await promptForInteractiveSource(
+      input.args,
+      input.source,
+      input.prompts,
+      defaultConnectionId,
+      input.testGitRepo,
+      input.discoverMetabaseDatabases,
+    );
     if (sourceArgs === 'back') {
       continue;
     }
@@ -1026,7 +1300,9 @@ async function validateSource(
     return await (deps.validateMetricflow ?? defaultValidateMetricflow)(args.connection);
   }
   if (source === 'metabase') {
-    return await (deps.validateMetabase ?? defaultValidateMetabase)(args.projectDir, args.connectionId);
+    return deps.validateMetabase
+      ? await deps.validateMetabase(args.projectDir, args.connectionId)
+      : { ok: true, detail: 'mapping validation runs after the connection is saved' };
   }
   if (source === 'looker') {
     return await (deps.validateLooker ?? defaultValidateLooker)(args.projectDir, args.connectionId);
@@ -1097,6 +1373,7 @@ export async function runKtxSetupSourcesStep(
               connections: (await loadKtxProject({ projectDir: args.projectDir })).config.connections,
               prompts,
               testGitRepo: deps.testGitRepo,
+              discoverMetabaseDatabases: deps.discoverMetabaseDatabases,
             });
         if (sourceChoice === 'back') {
           if (args.source) {

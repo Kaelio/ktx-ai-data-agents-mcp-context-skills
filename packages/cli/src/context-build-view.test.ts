@@ -98,11 +98,11 @@ describe('parseScanSummary', () => {
 
 describe('parseIngestSummary', () => {
   it('extracts work units and saved memory', () => {
-    expect(parseIngestSummary('Work units: 5\nSaved memory: 3 wiki, 2 SL')).toBe('5 work units · 3 wiki, 2 SL');
+    expect(parseIngestSummary('Work units: 5\nSaved memory: 3 wiki, 2 SL')).toBe('5 items indexed · 3 wiki, 2 SL');
   });
 
   it('extracts work units alone when no saved memory', () => {
-    expect(parseIngestSummary('Work units: 5\nStatus: done')).toBe('5 work units');
+    expect(parseIngestSummary('Work units: 5\nStatus: done')).toBe('5 items indexed');
   });
 
   it('extracts saved memory alone when no work units', () => {
@@ -127,10 +127,18 @@ describe('initViewState', () => {
     expect(state.contextSources[0].target.connectionId).toBe('dbt-main');
     expect(state.frame).toBe(0);
   });
+
+  it('initializes global timing fields', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    expect(state.startedAt).toBeNull();
+    expect(state.totalElapsedMs).toBe(0);
+  });
 });
 
 describe('renderContextBuildView', () => {
-  it('renders all-queued state', () => {
+  it('renders all-queued state with ○ icon and progress counter', () => {
     const state = initViewState([
       { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
       { connectionId: 'dbt-main', driver: 'dbt', operation: 'source-ingest', adapter: 'dbt', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
@@ -138,11 +146,36 @@ describe('renderContextBuildView', () => {
 
     const output = renderContextBuildView(state, { styled: false });
     expect(output).toContain('Building KTX context');
+    expect(output).toContain('(0/2)');
+    expect(output).toContain('○');
     expect(output).toContain('Primary sources:');
     expect(output).toContain('warehouse');
     expect(output).toContain('queued');
     expect(output).toContain('Context sources:');
     expect(output).toContain('dbt-main');
+  });
+
+  it('renders header with total elapsed time when set', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    state.totalElapsedMs = 65000;
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('(0/1 · 1m05s)');
+  });
+
+  it('renders dynamic separator matching header width', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    state.totalElapsedMs = 120000;
+
+    const output = renderContextBuildView(state, { styled: false });
+    const lines = output.split('\n');
+    const headerLine = lines.find((l) => l.includes('Building KTX context'))!;
+    const separatorLine = lines.find((l) => /^─+$/.test(l))!;
+    expect(separatorLine.length).toBeGreaterThanOrEqual(headerLine.length);
   });
 
   it('renders completed state with summary', () => {
@@ -156,6 +189,74 @@ describe('renderContextBuildView', () => {
     const output = renderContextBuildView(state, { styled: false });
     expect(output).toContain('42 tables');
     expect(output).toContain('1m12s');
+    expect(output).toContain('(1/1)');
+  });
+
+  it('renders running target with elapsed time', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    state.primarySources[0].status = 'running';
+    state.primarySources[0].elapsedMs = 30000;
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('scanning...');
+    expect(output).toContain('30s');
+  });
+
+  it('renders running target with progress bar when percentage is available', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    state.primarySources[0].status = 'running';
+    state.primarySources[0].detailLine = '[50%] Scanning tables...';
+    state.primarySources[0].elapsedMs = 15000;
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('██████░░░░░░');
+    expect(output).toContain('50%');
+    expect(output).toContain('Scanning tables...');
+    expect(output).toContain('15s');
+  });
+
+  it('renders completion summary when all targets are done', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'dbt-main', driver: 'dbt', operation: 'source-ingest', adapter: 'dbt', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
+    ]);
+    state.primarySources[0].status = 'done';
+    state.primarySources[0].elapsedMs = 72000;
+    state.contextSources[0].status = 'done';
+    state.contextSources[0].elapsedMs = 34000;
+    state.totalElapsedMs = 106000;
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Done in 1m46s · 2 sources processed');
+  });
+
+  it('renders singular source label in completion summary', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    state.primarySources[0].status = 'done';
+    state.primarySources[0].elapsedMs = 5000;
+    state.totalElapsedMs = 5000;
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Done in 5s · 1 source processed');
+  });
+
+  it('does not render completion summary while targets are still active', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'dbt-main', driver: 'dbt', operation: 'source-ingest', adapter: 'dbt', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
+    ]);
+    state.primarySources[0].status = 'done';
+    state.contextSources[0].status = 'running';
+    state.totalElapsedMs = 30000;
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).not.toContain('Done in');
   });
 
   it('renders failed state', () => {
@@ -177,6 +278,29 @@ describe('renderContextBuildView', () => {
     const output = renderContextBuildView(state, { styled: false });
     expect(output).not.toContain('Primary sources:');
     expect(output).toContain('Context sources:');
+  });
+
+  it('preserves detach hint while targets are active', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    state.primarySources[0].status = 'running';
+
+    const output = renderContextBuildView(state, { styled: false, showHint: true, projectDir: '/tmp/project' });
+    expect(output).toContain('d to detach');
+    expect(output).toContain('ktx setup --project-dir /tmp/project');
+    expect(output).toContain('to resume');
+  });
+
+  it('omits detach hint when all targets are done', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+    state.primarySources[0].status = 'done';
+    state.totalElapsedMs = 5000;
+
+    const output = renderContextBuildView(state, { styled: false, showHint: true });
+    expect(output).not.toContain('d to detach');
   });
 });
 

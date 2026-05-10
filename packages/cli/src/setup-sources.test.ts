@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -8,6 +8,7 @@ import {
   serializeKtxProjectConfig,
 } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { KtxCliIo } from './cli-runtime.js';
 import {
   runKtxSetupSourcesStep,
   type KtxSetupSourcesDeps,
@@ -41,14 +42,17 @@ function prompts(values: {
   multiselect?: string[][];
   select?: string[];
   text?: Array<string | undefined>;
+  password?: Array<string | undefined>;
 }): KtxSetupSourcesPromptAdapter {
   const multiselectValues = [...(values.multiselect ?? [])];
   const selectValues = [...(values.select ?? [])];
   const textValues = [...(values.text ?? [])];
+  const passwordValues = [...(values.password ?? [])];
   return {
     multiselect: vi.fn(async () => multiselectValues.shift() ?? []),
     select: vi.fn(async () => selectValues.shift() ?? 'skip'),
     text: vi.fn(async () => (textValues.length > 0 ? textValues.shift() : '')),
+    password: vi.fn(async () => (passwordValues.length > 0 ? passwordValues.shift() : undefined)),
     cancel: vi.fn(),
     log: vi.fn(),
   };
@@ -207,6 +211,193 @@ describe('setup sources step', () => {
     expect(runMapping).toHaveBeenCalledWith(projectDir, 'prod_metabase', io.io);
   });
 
+  it('defaults interactive Metabase and Looker source setup to the only warehouse connection', async () => {
+    await addPrimarySource();
+    const cases: Array<{
+      source: 'metabase' | 'looker';
+      text: string[];
+      deps: KtxSetupSourcesDeps;
+      expectedConnection: Record<string, unknown>;
+    }> = [
+      {
+        source: 'metabase',
+        text: ['metabase-main', 'https://metabase.example.com'],
+        deps: {
+          discoverMetabaseDatabases: vi.fn(async () => [
+            { id: 1, name: 'Analytics', engine: 'postgres', host: 'db.example.com', dbName: 'analytics' },
+          ]),
+          validateMetabase: vi.fn(async () => ({ ok: true as const, detail: 'mapping validated' })),
+          runMapping: vi.fn(async () => 0),
+        },
+        expectedConnection: {
+          driver: 'metabase',
+          mappings: { databaseMappings: { '1': 'warehouse' } },
+        },
+      },
+      {
+        source: 'looker',
+        text: ['looker-main', 'https://looker.example.com', 'client-id', ''],
+        deps: {
+          validateLooker: vi.fn(async () => ({ ok: true as const, detail: 'mapping refreshed' })),
+          runMapping: vi.fn(async () => 0),
+        },
+        expectedConnection: {
+          driver: 'looker',
+          mappings: { connectionMappings: { warehouse: 'warehouse' } },
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const testPrompts = prompts({
+        multiselect: [[testCase.source]],
+        select: ['env', 'done'],
+        text: testCase.text,
+      });
+
+      await expect(
+        runKtxSetupSourcesStep(
+          { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+          makeIo().io,
+          {
+            prompts: testPrompts,
+            ...testCase.deps,
+          },
+        ),
+      ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: [`${testCase.source}-main`] });
+
+      expect(
+        vi.mocked(testPrompts.text).mock.calls.some(([options]) => options.message.includes('Mapped warehouse')),
+      ).toBe(false);
+      if (testCase.source === 'metabase') {
+        expect(
+          vi.mocked(testPrompts.text).mock.calls.some(([options]) => options.message.includes('Metabase database id')),
+        ).toBe(false);
+      }
+      expect((await readConfig()).connections[`${testCase.source}-main`]).toMatchObject(testCase.expectedConnection);
+    }
+  });
+
+  it('prompts for the mapped warehouse when interactive Metabase and Looker source setup has multiple choices', async () => {
+    await addPrimarySource();
+    await addConnection('analytics_warehouse', {
+      driver: 'snowflake',
+      account: 'acme',
+      database: 'analytics',
+      readonly: true,
+    });
+
+    const cases: Array<{
+      source: 'metabase' | 'looker';
+      text: string[];
+      deps: KtxSetupSourcesDeps;
+      expectedConnection: Record<string, unknown>;
+    }> = [
+      {
+        source: 'metabase',
+        text: ['metabase-main', 'https://metabase.example.com'],
+        deps: {
+          discoverMetabaseDatabases: vi.fn(async () => [
+            { id: 1, name: 'Finance', engine: 'postgres', host: 'db.example.com', dbName: 'finance' },
+            { id: 2, name: 'Analytics', engine: 'postgres', host: 'db.example.com', dbName: 'analytics' },
+          ]),
+          validateMetabase: vi.fn(async () => ({ ok: true as const, detail: 'mapping validated' })),
+          runMapping: vi.fn(async () => 0),
+        },
+        expectedConnection: {
+          driver: 'metabase',
+          mappings: { databaseMappings: { '2': 'analytics_warehouse' } },
+        },
+      },
+      {
+        source: 'looker',
+        text: ['looker-main', 'https://looker.example.com', 'client-id', 'analytics'],
+        deps: {
+          validateLooker: vi.fn(async () => ({ ok: true as const, detail: 'mapping refreshed' })),
+          runMapping: vi.fn(async () => 0),
+        },
+        expectedConnection: {
+          driver: 'looker',
+          mappings: { connectionMappings: { analytics: 'analytics_warehouse' } },
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const testPrompts = prompts({
+        multiselect: [[testCase.source]],
+        select: testCase.source === 'metabase' ? ['env', 'analytics_warehouse', '2', 'done'] : ['env', 'analytics_warehouse', 'done'],
+        text: testCase.text,
+      });
+
+      await expect(
+        runKtxSetupSourcesStep(
+          { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+          makeIo().io,
+          {
+            prompts: testPrompts,
+            ...testCase.deps,
+          },
+        ),
+      ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: [`${testCase.source}-main`] });
+
+      expect(testPrompts.select).toHaveBeenCalledWith({
+        message: 'Mapped warehouse connection',
+        options: [
+          { value: 'analytics_warehouse', label: 'analytics_warehouse (SNOWFLAKE)' },
+          { value: 'warehouse', label: 'warehouse (POSTGRESQL)' },
+          { value: 'back', label: 'Back' },
+        ],
+      });
+      if (testCase.source === 'metabase') {
+        expect(testPrompts.select).toHaveBeenCalledWith({
+          message: 'Metabase database',
+          options: [
+            { value: '1', label: '1: Finance (postgres)' },
+            { value: '2', label: '2: Analytics (postgres)' },
+            { value: 'back', label: 'Back' },
+          ],
+        });
+        expect(
+          vi.mocked(testPrompts.text).mock.calls.some(([options]) => options.message.includes('Metabase database id')),
+        ).toBe(false);
+      }
+      expect((await readConfig()).connections[`${testCase.source}-main`]).toMatchObject(testCase.expectedConnection);
+    }
+  });
+
+  it('lets visible Metabase mapping surface refresh and validation failures', async () => {
+    await addPrimarySource();
+    const runMapping = vi.fn(async (_projectDir: string, _connectionId: string, io: KtxCliIo) => {
+      io.stderr.write('1: Metabase database does not match KTX connection database\n');
+      return 1;
+    });
+    const io = makeIo();
+    const testPrompts = prompts({
+      multiselect: [['metabase']],
+      select: ['env'],
+      text: ['metabase-main', 'https://metabase.example.com'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        {
+          prompts: testPrompts,
+          discoverMetabaseDatabases: vi.fn(async () => [
+            { id: 1, name: 'Analytics', engine: 'postgres', host: 'db.example.com', dbName: 'analytics' },
+          ]),
+          runMapping,
+        },
+      ),
+    ).resolves.toEqual({ status: 'failed', projectDir });
+
+    expect(runMapping).toHaveBeenCalledWith(projectDir, 'metabase-main', io.io);
+    expect(io.stderr()).toContain('1: Metabase database does not match KTX connection database');
+    expect(io.stderr()).not.toContain('Metabase mapping validation failed');
+  });
+
   it('does not mark sources complete when validation fails', async () => {
     await addPrimarySource();
     const io = makeIo();
@@ -333,8 +524,8 @@ describe('setup sources step', () => {
     const io = makeIo();
     const testPrompts = prompts({
       multiselect: [['dbt']],
-      select: ['git'],
-      text: ['dbt-main', 'https://github.com/acme-org/private-repo', 'main', '', 'env:GITHUB_TOKEN'],
+      select: ['git', 'env'],
+      text: ['dbt-main', 'https://github.com/acme-org/private-repo', 'main', ''],
     });
 
     await expect(
@@ -350,19 +541,16 @@ describe('setup sources step', () => {
     ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
 
     expect(testGitRepo).toHaveBeenCalledWith({ repoUrl: 'https://github.com/acme-org/private-repo' });
-    expect(testPrompts.text).toHaveBeenNthCalledWith(5, {
-      message: textInputPrompt(
-        [
-          'This repo requires authentication.',
-          'Generate a token at: https://github.com/settings/tokens/new',
-          'Store it in an env var, then enter env:VARIABLE_NAME here (e.g. env:GITHUB_TOKEN).',
-          'Or use file:/absolute/path if the token is stored in a file.',
-          'Press Enter to skip and try without authentication anyway.',
-        ].join('\n'),
-      ),
-      placeholder: 'env:GITHUB_TOKEN',
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: 'This repo requires authentication.',
+      options: [
+        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
+        { value: 'paste', label: 'Paste a token and save it as a local secret file' },
+        { value: 'skip', label: 'Skip — try without authentication' },
+        { value: 'back', label: 'Back' },
+      ],
     });
-    expect(testPrompts.text).toHaveBeenCalledTimes(5);
+    expect(testPrompts.text).toHaveBeenCalledTimes(4);
   });
 
   it('enables the dbt adapter when adding a dbt source connection', async () => {
@@ -692,13 +880,11 @@ describe('setup sources step', () => {
       },
       {
         source: 'metabase',
+        select: ['back', 'env'],
         text: [
           'metabase-main',
           'https://old-metabase.example.com',
-          undefined,
           'https://metabase.example.com',
-          'env:METABASE_API_KEY',
-          'warehouse',
           '1',
         ],
         deps: {
@@ -709,14 +895,13 @@ describe('setup sources step', () => {
       },
       {
         source: 'looker',
+        select: ['env'],
         text: [
           'looker-main',
           'https://old-looker.example.com',
           undefined,
           'https://looker.example.com',
           'client-id',
-          'env:LOOKER_CLIENT_SECRET',
-          'warehouse',
           '',
         ],
         deps: {
@@ -727,10 +912,10 @@ describe('setup sources step', () => {
       },
       {
         source: 'notion',
-        select: ['back', 'all_accessible'],
-        text: ['notion-main', 'env:NOTION_TOKEN', 'env:NOTION_TOKEN'],
+        select: ['env', 'back', 'env', 'all_accessible'],
+        text: ['notion-main'],
         deps: { validateNotion: vi.fn(async () => ({ ok: true as const, detail: 'roots=0' })) },
-        repeatedTextMessage: textInputPrompt('Notion token ref'),
+        repeatedSelectMessage: 'How should KTX find your Notion integration token?',
       },
     ];
 
@@ -786,5 +971,103 @@ describe('setup sources step', () => {
     expect(testPrompts.multiselect).not.toHaveBeenCalled();
     expect(io.stdout()).toContain('Connect a primary source before adding context sources.');
     expect((await readConfig()).setup?.completed_steps ?? []).not.toContain('sources');
+  });
+
+  it('auto-detects dbt_project.yml at the root of a local path', async () => {
+    await addPrimarySource();
+    const dbtDir = join(tempDir, 'dbt-repo');
+    await mkdir(dbtDir, { recursive: true });
+    await writeFile(join(dbtDir, 'dbt_project.yml'), 'name: analytics\n');
+
+    const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
+    const io = makeIo();
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['path'],
+      text: ['dbt-main', dbtDir],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        { prompts: testPrompts, validateDbt },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
+
+    expect(testPrompts.text).toHaveBeenCalledTimes(2);
+    const config = await readConfig();
+    expect(config.connections['dbt-main']).toMatchObject({ driver: 'dbt', source_dir: dbtDir });
+    expect(config.connections['dbt-main']).not.toHaveProperty('path');
+  });
+
+  it('auto-detects dbt_project.yml in a subdirectory of a local path', async () => {
+    await addPrimarySource();
+    const dbtDir = join(tempDir, 'monorepo');
+    await mkdir(join(dbtDir, 'analytics', 'dbt'), { recursive: true });
+    await writeFile(join(dbtDir, 'analytics', 'dbt', 'dbt_project.yml'), 'name: analytics\n');
+
+    const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
+    const io = makeIo();
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['path'],
+      text: ['dbt-main', dbtDir],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        { prompts: testPrompts, validateDbt },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
+
+    expect(testPrompts.text).toHaveBeenCalledTimes(2);
+    expect(testPrompts.log).toHaveBeenCalledWith('Found dbt_project.yml in analytics/dbt/');
+    const config = await readConfig();
+    expect(config.connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      source_dir: dbtDir,
+      path: 'analytics/dbt',
+    });
+  });
+
+  it('shows a picker when multiple dbt projects are found in a local path', async () => {
+    await addPrimarySource();
+    const dbtDir = join(tempDir, 'multi-dbt');
+    await mkdir(join(dbtDir, 'analytics'), { recursive: true });
+    await mkdir(join(dbtDir, 'staging'), { recursive: true });
+    await writeFile(join(dbtDir, 'analytics', 'dbt_project.yml'), 'name: analytics\n');
+    await writeFile(join(dbtDir, 'staging', 'dbt_project.yml'), 'name: staging\n');
+
+    const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
+    const io = makeIo();
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['path', 'staging'],
+      text: ['dbt-main', dbtDir],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        { prompts: testPrompts, validateDbt },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
+
+    expect(testPrompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Multiple dbt projects found — which one should KTX use?',
+      }),
+    );
+    expect(testPrompts.text).toHaveBeenCalledTimes(2);
+    const config = await readConfig();
+    expect(config.connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      source_dir: dbtDir,
+      path: 'staging',
+    });
   });
 });

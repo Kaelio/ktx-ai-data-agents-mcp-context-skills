@@ -30,6 +30,8 @@ export interface ContextBuildViewState {
   primarySources: ContextBuildTargetState[];
   contextSources: ContextBuildTargetState[];
   frame: number;
+  startedAt: number | null;
+  totalElapsedMs: number;
 }
 
 export interface ContextBuildArgs {
@@ -79,7 +81,7 @@ function statusIcon(status: ContextBuildTargetState['status'], frame: number, st
       case 'running':
         return SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? '⠋';
       default:
-        return '·';
+        return '○';
     }
   }
   switch (status) {
@@ -90,8 +92,25 @@ function statusIcon(status: ContextBuildTargetState['status'], frame: number, st
     case 'running':
       return cyan(SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? '⠋');
     default:
-      return dim('·');
+      return dim('○');
   }
+}
+
+function extractPercent(detailLine: string | null): number | null {
+  if (!detailLine) return null;
+  const match = detailLine.match(/^\[(\d+)%\]/);
+  return match ? Number(match[1]) : null;
+}
+
+const BAR_WIDTH = 12;
+const BAR_FILLED = '█';
+const BAR_EMPTY = '░';
+
+function renderProgressBar(percent: number, styled: boolean): string {
+  const filled = Math.round((percent / 100) * BAR_WIDTH);
+  const empty = BAR_WIDTH - filled;
+  const bar = `${BAR_FILLED.repeat(filled)}${BAR_EMPTY.repeat(empty)}`;
+  return styled ? cyan(bar) : bar;
 }
 
 function targetDetail(target: ContextBuildTargetState, styled: boolean): string {
@@ -105,7 +124,17 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean): string 
     return styled ? red('failed') : 'failed';
   }
   if (target.status === 'running') {
-    return target.detailLine ?? (target.target.operation === 'scan' ? 'scanning...' : 'ingesting...');
+    const percent = extractPercent(target.detailLine);
+    const progressText = target.detailLine?.replace(/^\[\d+%\]\s*/, '')
+      ?? (target.target.operation === 'scan' ? 'scanning...' : 'ingesting...');
+    const elapsed = target.elapsedMs > 0 ? formatDuration(target.elapsedMs) : null;
+    const parts: string[] = [];
+    if (percent !== null) {
+      parts.push(`${renderProgressBar(percent, styled)} ${percent}%`);
+    }
+    parts.push(progressText);
+    if (elapsed) parts.push(styled ? dim(elapsed) : elapsed);
+    return parts.join('  ');
   }
   return styled ? dim('queued') : 'queued';
 }
@@ -140,17 +169,39 @@ export function renderContextBuildView(
 ): string {
   const styled = options.styled ?? true;
   const width = columnWidth(state);
+  const allTargets = [...state.primarySources, ...state.contextSources];
+  const doneCount = allTargets.filter((t) => t.status === 'done' || t.status === 'failed').length;
+  const totalCount = allTargets.length;
+  const hasActive = allTargets.some((t) => t.status === 'running' || t.status === 'queued');
+  const allDone = totalCount > 0 && !hasActive;
+
+  const headerParts = ['Building KTX context'];
+  if (totalCount > 0) {
+    const progressParts: string[] = [`${doneCount}/${totalCount}`];
+    if (state.totalElapsedMs > 0) progressParts.push(formatDuration(state.totalElapsedMs));
+    const progress = `(${progressParts.join(' · ')})`;
+    headerParts.push(styled ? dim(progress) : progress);
+  }
+  const header = headerParts.join('  ');
+  const headerPlainLength = header.replace(/\x1b\[[0-9;]*m/g, '').length;
+  const separator = '─'.repeat(Math.max(21, headerPlainLength));
+
   const lines: string[] = [
     '',
-    'Building KTX context',
-    '─────────────────────',
+    header,
+    separator,
     ...renderTargetGroup('Primary sources', state.primarySources, state.frame, styled, width),
     ...renderTargetGroup('Context sources', state.contextSources, state.frame, styled, width),
     '',
   ];
-  const hasActive = [...state.primarySources, ...state.contextSources].some(
-    (t) => t.status === 'running' || t.status === 'queued',
-  );
+
+  if (allDone && state.totalElapsedMs > 0) {
+    const sourcesLabel = totalCount === 1 ? '1 source' : `${totalCount} sources`;
+    const summary = `  Done in ${formatDuration(state.totalElapsedMs)} · ${sourcesLabel} processed`;
+    lines.push(styled ? green(summary) : summary);
+    lines.push('');
+  }
+
   if (options.showHint && hasActive) {
     const hint = `  d to detach · ${resumeCommand(options.projectDir)} to resume`;
     lines.push(styled ? dim(hint) : hint);
@@ -177,7 +228,7 @@ export function parseScanSummary(output: string): string | null {
 export function parseIngestSummary(output: string): string | null {
   const parts: string[] = [];
   const workUnits = output.match(/Work units: (\d+)/);
-  if (workUnits) parts.push(`${workUnits[1]} work units`);
+  if (workUnits) parts.push(`${workUnits[1]} items indexed`);
   const savedMemory = output.match(/Saved memory: (.+)/);
   if (savedMemory) parts.push(savedMemory[1]);
   return parts.length > 0 ? parts.join(' · ') : null;
@@ -289,6 +340,8 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
     primarySources: targets.filter((t) => t.operation === 'scan').map(makeTargetState),
     contextSources: targets.filter((t) => t.operation === 'source-ingest').map(makeTargetState),
     frame: 0,
+    startedAt: null,
+    totalElapsedMs: 0,
   };
 }
 
@@ -303,6 +356,8 @@ export async function runContextBuild(
   const isTTY = io.stdout.isTTY === true;
   const nowFn = deps.now ?? (() => Date.now());
 
+  state.startedAt = nowFn();
+
   const repainter = isTTY ? createRepainter(io) : null;
   const viewOpts = { styled: true, projectDir: args.projectDir };
   const paint = (hint: boolean) => repainter?.paint(renderContextBuildView(state, { ...viewOpts, showHint: hint }));
@@ -312,6 +367,9 @@ export async function runContextBuild(
   if (repainter) {
     spinnerInterval = setInterval(() => {
       state.frame++;
+      if (state.startedAt !== null) {
+        state.totalElapsedMs = nowFn() - state.startedAt;
+      }
       for (const t of [...state.primarySources, ...state.contextSources]) {
         if (t.status === 'running' && t.startedAt !== null) {
           t.elapsedMs = nowFn() - t.startedAt;
@@ -398,6 +456,10 @@ export async function runContextBuild(
   } finally {
     if (spinnerInterval) clearInterval(spinnerInterval);
     cleanupKeystroke?.();
+  }
+
+  if (state.startedAt !== null) {
+    state.totalElapsedMs = nowFn() - state.startedAt;
   }
 
   if (detached) {
