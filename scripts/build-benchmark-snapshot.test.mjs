@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
 import { buildBenchmarkSnapshot } from './build-benchmark-snapshot.mjs';
@@ -249,5 +250,14 @@ describe('buildBenchmarkSnapshot', () => {
         relationship: 'many_to_one',
       },
     ]);
+  });
+
+  it('exposes relationship benchmarks as an explicit context package script', async () => {
+    const packageJson = JSON.parse(await readFile(new URL('../packages/context/package.json', import.meta.url), 'utf8'));
+
+    assert.equal(
+      packageJson.scripts['relationships:benchmarks:test'],
+      'KTX_RUN_RELATIONSHIP_BENCHMARKS=1 vitest run src/scan/relationship-benchmarks.test.ts',
+    );
   });
 });

@@ -120,6 +120,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "relationships:benchmarks": "pnpm --silent run build && node scripts/relationship-benchmark-report.mjs",
+    "relationships:benchmarks:test": "KTX_RUN_RELATIONSHIP_BENCHMARKS=1 vitest run src/scan/relationship-benchmarks.test.ts",
     "search:pglite-spike": "node scripts/pglite-hybrid-search-spike.mjs",
     "search:pglite-owner-prototype": "node scripts/pglite-owner-process-prototype.mjs",
     "search:pglite-sl-prototype": "node scripts/pglite-sl-search-prototype.mjs",
