@@ -66,6 +66,8 @@ describe('standalone example docs', () => {
     assert.match(smoke, /assert_manifest "\$FIRST_MANIFEST" true/);
     assert.match(smoke, /assert_manifest "\$SECOND_MANIFEST" false/);
     assert.match(smoke, /assert_manifest "\$RESET_MANIFEST" true/);
+    assert.doesNotMatch(readme, /python-service/);
+    assert.doesNotMatch(smoke, /python-service|PYTHON_SERVICE|REPO_ROOT/);
   });
 
   it('lists every published TypeScript package in the package root README', async () => {

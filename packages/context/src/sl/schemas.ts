@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Literal vocabularies — kept in lockstep with the Python Pydantic model at
-// python-service/ktx-sl/semantic_layer/models.py (SourceColumn / ColumnRole /
+// python/ktx-sl/semantic_layer/models.py (SourceColumn / ColumnRole /
 // ColumnVisibility / JoinDeclaration). If these diverge, YAMLs can pass
 // TypeScript validation at ingest time but fail Python loading at query time.
 const columnTypeValues = ['string', 'number', 'time', 'boolean'] as const;

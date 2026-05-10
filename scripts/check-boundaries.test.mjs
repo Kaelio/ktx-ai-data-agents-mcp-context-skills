@@ -14,7 +14,7 @@ function lowerProductName() {
 describe('scanFileContent', () => {
   it('rejects source imports from application directories', () => {
     const serverAlias = '@' + 'server/contracts';
-    const pythonAppPath = 'python-service/' + 'app/api/endpoints/semantic_layer.py';
+    const pythonAppPath = `${['python', 'service'].join('-')}/app/api/endpoints/semantic_layer.py`;
 
     const violations = [
       ...scanFileContent('packages/context/src/index.ts', `import { orpc } from '${serverAlias}';`),

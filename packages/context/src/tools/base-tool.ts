@@ -151,7 +151,7 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
           }
         }
       },
-      // Send only markdown to LLM - frontend still receives full { markdown, structured } via stream
+      // Send only markdown to the LLM; tool callers still receive the structured output.
       toModelOutput: ({ output }) => {
         if (output && typeof output === 'object' && 'markdown' in output) {
           return { type: 'content', value: [{ type: 'text', text: output.markdown as string }] };

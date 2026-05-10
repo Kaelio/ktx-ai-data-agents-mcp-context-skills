@@ -4,46 +4,23 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXAMPLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 KTX_ROOT="$(cd "$EXAMPLE_DIR/../.." && pwd)"
-REPO_ROOT="$(cd "$KTX_ROOT/.." && pwd)"
 COMPOSE_FILE="$EXAMPLE_DIR/docker-compose.yml"
 PROJECT_PARENT="${KTX_POSTGRES_HISTORIC_PROJECT_PARENT:-$(mktemp -d)}"
 PROJECT_DIR="$PROJECT_PARENT/postgres-historic-ktx"
 KTX_BIN="$KTX_ROOT/packages/cli/dist/bin.js"
-PYTHON_SERVICE_LOG="$PROJECT_PARENT/python-service.log"
-PYTHON_SERVICE_PID=""
 
 cleanup() {
-  if [[ -n "$PYTHON_SERVICE_PID" ]]; then
-    kill "$PYTHON_SERVICE_PID" >/dev/null 2>&1 || true
-  fi
   if [[ "${KTX_POSTGRES_HISTORIC_KEEP_DOCKER:-0}" != "1" ]]; then
     docker compose -f "$COMPOSE_FILE" down -v >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
-start_sql_analysis_if_needed() {
-  if [[ -n "${KTX_SQL_ANALYSIS_URL:-}" ]]; then
+require_sql_analysis_url() {
+  if [[ -n "${KTX_SQL_ANALYSIS_URL:-}" || -n "${KTX_DAEMON_URL:-}" ]]; then
     return
   fi
-  if [[ ! -d "$REPO_ROOT/python-service/.venv" ]]; then
-    echo "Set KTX_SQL_ANALYSIS_URL or create python-service/.venv before running this smoke." >&2
-    exit 1
-  fi
-  (
-    cd "$REPO_ROOT/python-service"
-    source .venv/bin/activate
-    uvicorn app.main:app --host 127.0.0.1 --port 18081 >"$PYTHON_SERVICE_LOG" 2>&1
-  ) &
-  PYTHON_SERVICE_PID="$!"
-  export KTX_SQL_ANALYSIS_URL="http://127.0.0.1:18081"
-  for _ in $(seq 1 60); do
-    if curl -fsS "$KTX_SQL_ANALYSIS_URL/health" >/dev/null 2>&1; then
-      return
-    fi
-    sleep 1
-  done
-  echo "SQL analysis service did not become healthy. Log: $PYTHON_SERVICE_LOG" >&2
+  echo "Set KTX_SQL_ANALYSIS_URL or KTX_DAEMON_URL before running this smoke." >&2
   exit 1
 }
 
@@ -111,7 +88,7 @@ NODE
 cd "$KTX_ROOT"
 pnpm --filter @ktx/context run build
 pnpm --filter @ktx/cli run build
-start_sql_analysis_if_needed
+require_sql_analysis_url
 
 docker compose -f "$COMPOSE_FILE" up -d --wait
 "$EXAMPLE_DIR/scripts/generate-workload.sh" base
