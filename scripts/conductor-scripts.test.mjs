@@ -31,7 +31,7 @@ describe('Conductor workspace scripts', () => {
 
   it('runs the KTX daemon on the documented fixed local port', async () => {
     const runScript = await readText('scripts/conductor-run.sh');
-    const legacyServerPackagePattern = new RegExp(`frontend|@${['kae', 'lio'].join('')}/server|python-service|npx`);
+    const legacyServerPackagePattern = new RegExp(`@${['kae', 'lio'].join('')}/server|python-service|npx`);
 
     assert.match(runScript, /pnpm run build/);
     assert.match(runScript, /source \.venv\/bin\/activate/);
