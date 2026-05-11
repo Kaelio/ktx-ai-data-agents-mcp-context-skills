@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -1222,6 +1222,16 @@ function pythonExecutable(projectDir) {
     return join(projectDir, '.venv', 'Scripts', 'python.exe');
   }
   return join(projectDir, '.venv', 'bin', 'python');
+}
+
+export function npmSmokePythonEnv(projectDir, baseEnv = process.env) {
+  const binDir = process.platform === 'win32' ? join(projectDir, '.venv', 'Scripts') : join(projectDir, '.venv', 'bin');
+  const existingPath = baseEnv.PATH ?? '';
+
+  return {
+    ...baseEnv,
+    PATH: existingPath ? `${binDir}${delimiter}${existingPath}` : binDir,
+  };
 }
 
 async function buildArtifacts(layout) {
