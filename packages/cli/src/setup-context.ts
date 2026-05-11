@@ -10,7 +10,14 @@ import {
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
-import { runContextBuild } from './context-build-view.js';
+import {
+  type ContextBuildSourceProgressUpdate,
+  createRepainter,
+  defaultSetupKeystroke,
+  renderContextBuildView,
+  runContextBuild,
+  viewStateFromSourceProgress,
+} from './context-build-view.js';
 import { withMenuOptionsSpacing } from './prompt-navigation.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 
@@ -45,6 +52,7 @@ export interface KtxSetupContextState {
   retryableFailedTargets: string[];
   commands: KtxSetupContextCommands;
   failureReason?: string;
+  sourceProgress?: ContextBuildSourceProgressUpdate[];
 }
 
 export interface KtxSetupContextStatusSummary {
@@ -80,6 +88,7 @@ export interface KtxSetupContextStepArgs {
   forcePrompt?: boolean;
   allowEmpty?: boolean;
   prompt?: boolean;
+  autoWatch?: boolean;
 }
 
 export type KtxSetupContextCommandArgs =
@@ -99,6 +108,9 @@ export interface KtxSetupContextDeps {
   now?: () => Date;
   runContextBuild?: typeof runContextBuild;
   verifyContextReady?: (projectDir: string) => Promise<KtxSetupContextReadiness>;
+  sleep?: (ms: number) => Promise<void>;
+  watchIntervalMs?: number;
+  setupKeystroke?: (onDetach: () => void, onCtrlC: () => void) => (() => void) | null;
 }
 
 interface KtxSetupContextTargets {
@@ -109,6 +121,7 @@ interface KtxSetupContextTargets {
 const SETUP_CONTEXT_STATE_PATH = ['.ktx', 'setup', 'context-build.json'] as const;
 const LIVE_DATABASE_ADAPTER = 'live-database';
 const SCAN_REPORT_FILE = 'scan-report.json';
+const DEFAULT_WATCH_INTERVAL_MS = 2_000;
 
 function createPromptAdapter(): KtxSetupContextPromptAdapter {
   return {
@@ -193,7 +206,32 @@ function normalizeState(projectDir: string, value: unknown): KtxSetupContextStat
       : [],
     commands: contextBuildCommands(projectDir, runId),
     ...(typeof record.failureReason === 'string' ? { failureReason: record.failureReason } : {}),
+    ...(normalizeSourceProgress(record.sourceProgress) ? { sourceProgress: normalizeSourceProgress(record.sourceProgress) } : {}),
   };
+}
+
+const VALID_SOURCE_OPERATIONS = new Set(['scan', 'source-ingest']);
+const VALID_SOURCE_STATUSES = new Set(['queued', 'running', 'done', 'failed']);
+
+function normalizeSourceProgress(value: unknown): ContextBuildSourceProgressUpdate[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const entries: ContextBuildSourceProgressUpdate[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.connectionId !== 'string') continue;
+    if (!VALID_SOURCE_OPERATIONS.has(String(rec.operation))) continue;
+    if (!VALID_SOURCE_STATUSES.has(String(rec.status))) continue;
+    entries.push({
+      connectionId: rec.connectionId,
+      operation: rec.operation as 'scan' | 'source-ingest',
+      status: rec.status as 'queued' | 'running' | 'done' | 'failed',
+      ...(typeof rec.startedAtMs === 'number' ? { startedAtMs: rec.startedAtMs } : {}),
+      ...(typeof rec.elapsedMs === 'number' ? { elapsedMs: rec.elapsedMs } : {}),
+      ...(typeof rec.summaryText === 'string' ? { summaryText: rec.summaryText } : {}),
+    });
+  }
+  return entries.length > 0 ? entries : undefined;
 }
 
 export async function readKtxSetupContextState(projectDir: string): Promise<KtxSetupContextState> {
@@ -514,6 +552,7 @@ async function runBuild(
   };
   await writeKtxSetupContextState(args.projectDir, runningState);
 
+  let lastSourceProgress: ContextBuildSourceProgressUpdate[] | undefined;
   const contextBuild = deps.runContextBuild ?? runContextBuild;
   const buildResult = await contextBuild(
     project,
@@ -532,14 +571,39 @@ async function runBuild(
           ...runningState,
           status: 'detached',
           updatedAt: new Date().toISOString(),
+          ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
         });
         writeFileSync(statePath(resolvedDir), `${JSON.stringify(detachedState, null, 2)}\n`);
       },
+      onSourceProgress: (sources) => {
+        lastSourceProgress = sources;
+        try {
+          const resolvedDir = resolve(args.projectDir);
+          mkdirSync(join(resolvedDir, '.ktx', 'setup'), { recursive: true });
+          const progressState = normalizeState(resolvedDir, {
+            ...runningState,
+            sourceProgress: sources,
+            updatedAt: new Date().toISOString(),
+          });
+          writeFileSync(statePath(resolvedDir), `${JSON.stringify(progressState, null, 2)}\n`);
+        } catch {
+          // Progress reporting is supplementary — don't crash the build
+        }
+      },
     },
   );
+  const completedReportIds = buildResult.reportIds ?? [];
+  const completedArtifactPaths = buildResult.artifactPaths ?? [];
   if (buildResult.detached) {
     const updatedAt = now().toISOString();
-    await writeKtxSetupContextState(args.projectDir, { ...runningState, status: 'detached', updatedAt });
+    await writeKtxSetupContextState(args.projectDir, {
+      ...runningState,
+      status: 'detached',
+      updatedAt,
+      reportIds: completedReportIds,
+      artifactPaths: completedArtifactPaths,
+      ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
+    });
     return { status: 'detached', projectDir: args.projectDir, runId };
   }
   if (buildResult.exitCode !== 0) {
@@ -548,8 +612,11 @@ async function runBuild(
       ...runningState,
       status: 'failed',
       updatedAt,
+      reportIds: completedReportIds,
+      artifactPaths: completedArtifactPaths,
       retryableFailedTargets: [...targets.primarySourceConnectionIds, ...targets.contextSourceConnectionIds],
       failureReason: 'Context build failed.',
+      ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
     });
     return { status: 'failed', projectDir: args.projectDir };
   }
@@ -561,8 +628,11 @@ async function runBuild(
       ...runningState,
       status: 'failed',
       updatedAt,
+      reportIds: completedReportIds,
+      artifactPaths: completedArtifactPaths,
       retryableFailedTargets: readiness.failedTargets ?? [],
       failureReason: readiness.details.join(' '),
+      ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
     });
     io.stderr.write('KTX context build did not pass agent-readiness verification.\n');
     for (const detail of readiness.details) {
@@ -578,7 +648,10 @@ async function runBuild(
     status: 'completed',
     updatedAt: completedAt,
     completedAt,
+    reportIds: completedReportIds,
+    artifactPaths: completedArtifactPaths,
     retryableFailedTargets: [],
+    ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
   });
   writeSuccess(readiness, targets, io);
   return { status: 'ready', projectDir: args.projectDir, runId };
@@ -632,17 +705,46 @@ export async function runKtxSetupContextStep(
       (existingState.status === 'running' || existingState.status === 'detached') &&
       args.inputMode !== 'disabled'
     ) {
+      if (args.autoWatch) {
+        const watched = await watchContextStatus(
+          {
+            command: 'watch',
+            projectDir: args.projectDir,
+            ...(existingState.runId ? { runId: existingState.runId } : {}),
+            inputMode: args.inputMode,
+          },
+          existingState,
+          io,
+          deps,
+        );
+        return setupResultFromWatchedState(args.projectDir, watched.state);
+      }
       const prompts = deps.prompts ?? createPromptAdapter();
       const choice = await prompts.select({
         message:
           'A context build is running in the background.\n\n' +
-          'You can wait for it to finish, check its status, or start a fresh build.',
+          'You can watch it until it finishes, check its status once, or start a fresh build.',
         options: [
+          { value: 'watch', label: 'Watch progress' },
           { value: 'status', label: 'Check status' },
           { value: 'rebuild', label: 'Start a fresh context build' },
           { value: 'back', label: 'Back' },
         ],
       });
+      if (choice === 'watch') {
+        const watched = await watchContextStatus(
+          {
+            command: 'watch',
+            projectDir: args.projectDir,
+            ...(existingState.runId ? { runId: existingState.runId } : {}),
+            inputMode: args.inputMode,
+          },
+          existingState,
+          io,
+          deps,
+        );
+        return setupResultFromWatchedState(args.projectDir, watched.state);
+      }
       if (choice === 'status') {
         const commands = contextBuildCommands(args.projectDir, existingState.runId);
         io.stdout.write(`\nRun: ${commands.status}\n`);
@@ -698,6 +800,18 @@ function stateMatchesRunId(state: KtxSetupContextState, runId: string | undefine
   return !runId || state.runId === runId;
 }
 
+function isActiveStatus(status: KtxSetupContextBuildStatus): boolean {
+  return status === 'running' || status === 'detached';
+}
+
+function watchExitCode(status: KtxSetupContextBuildStatus): number {
+  return status === 'failed' || status === 'interrupted' || status === 'stale' ? 1 : 0;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+}
+
 function statusPayload(state: KtxSetupContextState): KtxSetupContextStatusSummary {
   return setupContextStatusFromState(state, { completedStep: state.status === 'completed' });
 }
@@ -712,6 +826,149 @@ function writeContextStatus(state: KtxSetupContextState, io: KtxCliIo): void {
   if (state.failureReason) {
     io.stdout.write(`Detail: ${state.failureReason}\n`);
   }
+}
+
+async function watchContextStatus(
+  args: Extract<KtxSetupContextCommandArgs, { command: 'watch' }>,
+  initialState: KtxSetupContextState,
+  io: KtxCliIo,
+  deps: KtxSetupContextDeps,
+): Promise<{ exitCode: number; state: KtxSetupContextState }> {
+  if (initialState.sourceProgress && initialState.sourceProgress.length > 0) {
+    return watchContextStatusWithProgressView(args, initialState, io, deps);
+  }
+  return watchContextStatusText(args, initialState, io, deps);
+}
+
+async function watchContextStatusText(
+  args: Extract<KtxSetupContextCommandArgs, { command: 'watch' }>,
+  initialState: KtxSetupContextState,
+  io: KtxCliIo,
+  deps: KtxSetupContextDeps,
+): Promise<{ exitCode: number; state: KtxSetupContextState }> {
+  const sleep = deps.sleep ?? defaultSleep;
+  const intervalMs = deps.watchIntervalMs ?? DEFAULT_WATCH_INTERVAL_MS;
+  let state = initialState;
+  let lastRenderedStatus = '';
+
+  io.stdout.write('KTX context build\n');
+  while (true) {
+    const renderedStatus = `${state.status}:${state.updatedAt ?? ''}:${state.completedAt ?? ''}:${state.failureReason ?? ''}`;
+    if (renderedStatus !== lastRenderedStatus) {
+      writeContextStatus(state, io);
+      lastRenderedStatus = renderedStatus;
+    }
+
+    if (!isActiveStatus(state.status)) {
+      return { exitCode: watchExitCode(state.status), state };
+    }
+
+    await sleep(intervalMs);
+    state = await readKtxSetupContextState(args.projectDir);
+    if (!stateMatchesRunId(state, args.runId)) {
+      io.stderr.write(`KTX setup context run "${args.runId}" was not found.\n`);
+      return { exitCode: 1, state };
+    }
+  }
+}
+
+async function watchContextStatusWithProgressView(
+  args: Extract<KtxSetupContextCommandArgs, { command: 'watch' }>,
+  initialState: KtxSetupContextState,
+  io: KtxCliIo,
+  deps: KtxSetupContextDeps,
+): Promise<{ exitCode: number; state: KtxSetupContextState }> {
+  const sleep = deps.sleep ?? defaultSleep;
+  const intervalMs = deps.watchIntervalMs ?? DEFAULT_WATCH_INTERVAL_MS;
+  const isTTY = io.stdout.isTTY === true;
+  const repainter = isTTY ? createRepainter(io) : null;
+  const projectDir = resolve(args.projectDir);
+  const viewOpts = { styled: isTTY, showHint: true, projectDir };
+  let state = initialState;
+  let lastProgressKey = '';
+  let detached = false;
+
+  let viewState = viewStateFromSourceProgress(state.sourceProgress ?? [], Date.now(),
+    state.startedAt ? new Date(state.startedAt).getTime() : undefined);
+
+  const cleanupKeystroke = (isTTY || deps.setupKeystroke)
+    ? (deps.setupKeystroke ?? defaultSetupKeystroke)(
+        () => { detached = true; },
+        () => { detached = true; },
+      )
+    : null;
+
+  let spinnerInterval: ReturnType<typeof setInterval> | null = null;
+  if (repainter) {
+    repainter.paint(renderContextBuildView(viewState, viewOpts));
+    spinnerInterval = setInterval(() => {
+      viewState.frame++;
+      const now = Date.now();
+      viewState.totalElapsedMs = viewState.startedAt !== null ? now - viewState.startedAt : 0;
+      for (const t of [...viewState.primarySources, ...viewState.contextSources]) {
+        if (t.status === 'running' && t.startedAt !== null) {
+          t.elapsedMs = now - t.startedAt;
+        }
+      }
+      repainter.paint(renderContextBuildView(viewState, viewOpts));
+    }, 140);
+  }
+
+  try {
+    while (true) {
+      if (!repainter) {
+        const currentKey = JSON.stringify(state.sourceProgress?.map((s) => s.status));
+        if (currentKey !== lastProgressKey || !isActiveStatus(state.status)) {
+          io.stdout.write(renderContextBuildView(viewState, viewOpts));
+          lastProgressKey = currentKey;
+        }
+      }
+
+      if (!isActiveStatus(state.status)) {
+        return { exitCode: watchExitCode(state.status), state };
+      }
+      if (detached) break;
+
+      await sleep(intervalMs);
+      if (detached) break;
+
+      try {
+        state = await readKtxSetupContextState(args.projectDir);
+      } catch {
+        continue;
+      }
+
+      if (!stateMatchesRunId(state, args.runId)) {
+        io.stderr.write(`KTX setup context run "${args.runId}" was not found.\n`);
+        return { exitCode: 1, state };
+      }
+
+      const now = Date.now();
+      const startedAtMs = state.startedAt ? new Date(state.startedAt).getTime() : undefined;
+      viewState = viewStateFromSourceProgress(state.sourceProgress ?? [], now, startedAtMs);
+    }
+  } finally {
+    if (spinnerInterval) clearInterval(spinnerInterval);
+    cleanupKeystroke?.();
+  }
+
+  io.stdout.write('\n\nContext build continuing in the background.\n');
+  io.stdout.write(`Resume: ktx setup --project-dir ${projectDir}\n`);
+  io.stdout.write(`Status: ktx setup context status --project-dir ${projectDir}\n`);
+  return { exitCode: 0, state };
+}
+
+function setupResultFromWatchedState(projectDir: string, state: KtxSetupContextState): KtxSetupContextResult {
+  if (state.status === 'completed') {
+    return { status: 'ready', projectDir, runId: state.runId ?? 'setup-context-completed' };
+  }
+  if (state.status === 'paused') {
+    return { status: 'paused', projectDir, runId: state.runId ?? '' };
+  }
+  if (state.status === 'running' || state.status === 'detached') {
+    return { status: 'detached', projectDir, runId: state.runId ?? '' };
+  }
+  return { status: 'failed', projectDir };
 }
 
 export async function runKtxSetupContextCommand(
@@ -744,9 +1001,7 @@ export async function runKtxSetupContextCommand(
   }
 
   if (args.command === 'watch') {
-    io.stdout.write('KTX context build\n');
-    writeContextStatus(state, io);
-    return 0;
+    return (await watchContextStatus(args, state, io, deps)).exitCode;
   }
 
   const updatedAt = new Date().toISOString();

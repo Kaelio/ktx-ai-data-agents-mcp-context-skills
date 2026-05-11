@@ -30,6 +30,7 @@
     "relationships:verify-orbit": "node scripts/relationship-orbit-verification.mjs",
     "smoke": "pnpm run build && pnpm --filter @ktx/cli run smoke",
     "test": "node --test scripts/*.test.mjs && pnpm --filter './packages/*' run test",
+    "test:slow": "pnpm --filter @ktx/context run test:slow && pnpm --filter @ktx/cli run test:slow",
     "type-check": "pnpm --filter './packages/*' run type-check"
   },
   "devDependencies": {

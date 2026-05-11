@@ -962,10 +962,95 @@ describe('setup databases step', () => {
     });
   });
 
+  it('prompts for discovered Postgres schemas before the first scan', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['url'],
+      textValues: ['', 'env:DATABASE_URL'],
+      multiselectValues: [['orbit_analytics', 'orbit_raw']],
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async asyncScanProjectDir => {
+      const config = parseKtxProjectConfig(await readFile(join(asyncScanProjectDir, 'ktx.yaml'), 'utf-8'));
+      expect(config.connections['postgres-warehouse']).toMatchObject({
+        schemas: ['orbit_analytics', 'orbit_raw'],
+      });
+      return 0;
+    });
+    const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseDrivers: ['postgres'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { prompts, testConnection, scanConnection, listSchemas },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(listSchemas).toHaveBeenCalledWith(tempDir, 'postgres-warehouse');
+    expect(prompts.multiselect).toHaveBeenCalledWith({
+      message: expect.stringContaining('PostgreSQL schemas to scan'),
+      options: [
+        { value: 'orbit_analytics', label: 'orbit_analytics' },
+        { value: 'orbit_raw', label: 'orbit_raw' },
+        { value: 'public', label: 'public' },
+      ],
+      initialValues: ['orbit_analytics', 'orbit_raw'],
+      required: true,
+    });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections['postgres-warehouse']).toMatchObject({
+      schemas: ['orbit_analytics', 'orbit_raw'],
+    });
+    expect(io.stdout()).toContain('Schemas: orbit_analytics, orbit_raw');
+  });
+
+  it('auto-selects all discovered Postgres schemas in non-interactive setup', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({});
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async asyncScanProjectDir => {
+      const config = parseKtxProjectConfig(await readFile(join(asyncScanProjectDir, 'ktx.yaml'), 'utf-8'));
+      expect(config.connections.warehouse).toMatchObject({
+        schemas: ['orbit_analytics', 'orbit_raw', 'public'],
+      });
+      return 0;
+    });
+    const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { prompts, testConnection, scanConnection, listSchemas },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.multiselect).not.toHaveBeenCalled();
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      schemas: ['orbit_analytics', 'orbit_raw', 'public'],
+    });
+    expect(io.stdout()).toContain('Schemas: orbit_analytics, orbit_raw, public');
+  });
+
   it('adds one non-interactive Postgres URL connection, tests it, scans it, and marks databases complete', async () => {
     const io = makeIo();
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -978,10 +1063,11 @@ describe('setup databases step', () => {
         skipDatabases: false,
       },
       io.io,
-      { testConnection, scanConnection },
+      { testConnection, scanConnection, listSchemas },
     );
 
     expect(result.status).toBe('ready');
+    expect(listSchemas).not.toHaveBeenCalled();
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
     expect(scanConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));

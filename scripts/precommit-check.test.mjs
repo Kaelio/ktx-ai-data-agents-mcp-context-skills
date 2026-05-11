@@ -9,7 +9,7 @@ function commandKeys(files) {
 
 describe('precommit-check', () => {
   it('skips files outside ktx', () => {
-    assert.deepEqual(commandKeys(['server/src/app.ts']), []);
+    assert.deepEqual(commandKeys(['outside-workspace/src/app.ts']), []);
   });
 
   it('runs only the touched package checks for package code', () => {

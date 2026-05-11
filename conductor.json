@@ -1,5 +1,7 @@
 {
   "scripts": {
-    "setup": "sh scripts/setup-conductor-workspace.sh"
-  }
+    "setup": "bash scripts/conductor-setup.sh",
+    "run": "bash scripts/conductor-run.sh"
+  },
+  "runScriptMode": "nonconcurrent"
 }

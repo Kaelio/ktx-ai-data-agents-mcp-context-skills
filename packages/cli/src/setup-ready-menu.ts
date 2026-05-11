@@ -14,16 +14,19 @@ export interface KtxSetupReadyMenuDeps {
   prompts?: KtxSetupReadyMenuPromptAdapter;
 }
 
-export function isKtxSetupReady(status: KtxSetupStatus): boolean {
+export function isKtxPreAgentSetupReady(status: KtxSetupStatus): boolean {
   return (
     status.project.ready &&
     status.llm.ready &&
     status.embeddings.ready &&
     status.databases.every((database) => database.ready) &&
     status.sources.every((source) => source.ready) &&
-    status.context.ready &&
-    status.agents.some((agent) => agent.ready)
+    status.context.ready
   );
+}
+
+export function isKtxSetupReady(status: KtxSetupStatus): boolean {
+  return isKtxPreAgentSetupReady(status) && status.agents.some((agent) => agent.ready);
 }
 
 function createPromptAdapter(): KtxSetupReadyMenuPromptAdapter {

@@ -17,7 +17,6 @@ export const NPM_ARTIFACT_PACKAGES = [
   { name: '@ktx/connector-clickhouse', packageRoot: 'packages/connector-clickhouse' },
   { name: '@ktx/connector-mysql', packageRoot: 'packages/connector-mysql' },
   { name: '@ktx/connector-postgres', packageRoot: 'packages/connector-postgres' },
-  { name: '@ktx/connector-posthog', packageRoot: 'packages/connector-posthog' },
   { name: '@ktx/connector-snowflake', packageRoot: 'packages/connector-snowflake' },
   { name: '@ktx/connector-sqlite', packageRoot: 'packages/connector-sqlite' },
   { name: '@ktx/connector-sqlserver', packageRoot: 'packages/connector-sqlserver' },
@@ -516,7 +515,6 @@ const bigqueryConnector = await import('@ktx/connector-bigquery');
 const clickhouseConnector = await import('@ktx/connector-clickhouse');
 const mysqlConnector = await import('@ktx/connector-mysql');
 const postgresConnector = await import('@ktx/connector-postgres');
-const posthogConnector = await import('@ktx/connector-posthog');
 const snowflakeConnector = await import('@ktx/connector-snowflake');
 const sqliteConnector = await import('@ktx/connector-sqlite');
 const sqlserverConnector = await import('@ktx/connector-sqlserver');
@@ -587,7 +585,6 @@ const connectorExports = [
   ['@ktx/connector-clickhouse', clickhouseConnector.KtxClickHouseScanConnector, clickhouseConnector.KtxClickHouseDialect],
   ['@ktx/connector-mysql', mysqlConnector.KtxMysqlScanConnector, mysqlConnector.KtxMysqlDialect],
   ['@ktx/connector-postgres', postgresConnector.KtxPostgresScanConnector, postgresConnector.KtxPostgresDialect],
-  ['@ktx/connector-posthog', posthogConnector.KtxPostHogScanConnector, posthogConnector.KtxPostHogDialect],
   ['@ktx/connector-snowflake', snowflakeConnector.KtxSnowflakeScanConnector, snowflakeConnector.KtxSnowflakeDialect],
   ['@ktx/connector-sqlite', sqliteConnector.KtxSqliteScanConnector, sqliteConnector.KtxSqliteDialect],
   ['@ktx/connector-sqlserver', sqlserverConnector.KtxSqlServerScanConnector, sqlserverConnector.KtxSqlServerDialect],

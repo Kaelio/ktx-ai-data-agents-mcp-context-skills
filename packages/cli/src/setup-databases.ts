@@ -52,6 +52,7 @@ export interface KtxSetupDatabasesPromptAdapter {
     message: string;
     options: Array<{ value: string; label: string }>;
     required?: boolean;
+    initialValues?: string[];
   }): Promise<string[]>;
   select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
   text(options: { message: string; placeholder?: string; initialValue?: string }): Promise<string | undefined>;
@@ -76,6 +77,7 @@ export interface KtxSetupDatabasesDeps {
   prompts?: KtxSetupDatabasesPromptAdapter;
   testConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
   scanConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
+  listSchemas?: (projectDir: string, connectionId: string) => Promise<string[]>;
   historicSqlProbe?: KtxSetupHistoricSqlProbe;
 }
 
@@ -252,6 +254,21 @@ async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Pr
     return { ok: false, lines: historicSqlProbeFailureLines(error) };
   } finally {
     await client.cleanup();
+  }
+}
+
+async function defaultListSchemas(projectDir: string, connectionId: string): Promise<string[]> {
+  const project = await loadKtxProject({ projectDir });
+  const connection = project.config.connections[connectionId];
+  const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('@ktx/connector-postgres');
+  if (!isKtxPostgresConnectionConfig(connection)) {
+    return [];
+  }
+  const connector = new KtxPostgresScanConnector({ connectionId, connection });
+  try {
+    return await connector.listSchemas();
+  } finally {
+    await connector.cleanup();
   }
 }
 
@@ -814,6 +831,113 @@ async function writeConnectionConfig(input: {
   }
 }
 
+function configuredSchemas(connection: KtxProjectConnectionConfig | undefined): string[] {
+  if (!connection) return [];
+  if (Array.isArray(connection.schemas)) {
+    return connection.schemas
+      .filter((schema): schema is string => typeof schema === 'string' && schema.trim().length > 0)
+      .map((schema) => schema.trim());
+  }
+  return typeof connection.schema === 'string' && connection.schema.trim().length > 0 ? [connection.schema.trim()] : [];
+}
+
+function defaultSchemaSelection(schemas: string[]): string[] {
+  const nonPublic = schemas.filter((schema) => schema !== 'public');
+  return nonPublic.length > 0 ? nonPublic : schemas;
+}
+
+async function writeConnectionSchemas(input: {
+  projectDir: string;
+  connectionId: string;
+  schemas: string[];
+}): Promise<void> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const connection = project.config.connections[input.connectionId];
+  if (!connection) return;
+  const { schema: _schema, ...connectionWithoutLegacySchema } = connection;
+  await writeConnectionConfig({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    connection: {
+      ...connectionWithoutLegacySchema,
+      schemas: unique(input.schemas),
+    },
+  });
+}
+
+async function maybeConfigurePostgresSchemas(input: {
+  projectDir: string;
+  connectionId: string;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+  deps: KtxSetupDatabasesDeps;
+  io: KtxCliIo;
+}): Promise<boolean> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const connection = project.config.connections[input.connectionId];
+  if (normalizeDriver(connection?.driver) !== 'postgres') {
+    return true;
+  }
+
+  if (configuredSchemas(connection).length > 0) {
+    return true;
+  }
+
+  if (input.args.databaseSchemas.length > 0) {
+    await writeConnectionSchemas({
+      projectDir: input.projectDir,
+      connectionId: input.connectionId,
+      schemas: input.args.databaseSchemas,
+    });
+    return true;
+  }
+
+  let discoveredSchemas: string[];
+  try {
+    discoveredSchemas = unique(
+      await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId),
+    );
+  } catch (error) {
+    input.io.stderr.write(
+      `Could not discover PostgreSQL schemas for ${input.connectionId}; continuing with existing schema scope. ` +
+        `Pass --database-schema to set it explicitly. ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    return true;
+  }
+  if (discoveredSchemas.length === 0) {
+    return true;
+  }
+
+  let selectedSchemas: string[];
+  if (input.args.inputMode === 'disabled' || discoveredSchemas.length === 1) {
+    selectedSchemas = discoveredSchemas;
+  } else {
+    const initialValues = defaultSchemaSelection(discoveredSchemas);
+    const choices = await input.prompts.multiselect({
+      message: withMultiselectNavigation(
+        'PostgreSQL schemas to scan\nKTX found multiple non-system schemas. Select every schema agents should use.',
+      ),
+      options: discoveredSchemas.map((schema) => ({ value: schema, label: schema })),
+      initialValues,
+      required: true,
+    });
+    if (choices.includes('back')) {
+      return false;
+    }
+    selectedSchemas = choices.length > 0 ? choices : initialValues;
+  }
+
+  await writeConnectionSchemas({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    schemas: selectedSchemas,
+  });
+  writeSetupSection(input.io, `Selecting schemas for ${input.connectionId}`, [
+    `Schemas: ${selectedSchemas.join(', ')}`,
+  ]);
+  return true;
+}
+
 async function ensureHistoricSqlAdapterEnabled(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
   if (project.config.ingest.adapters.includes('historic-sql')) {
@@ -902,6 +1026,8 @@ async function validateAndScanConnection(input: {
   connectionId: string;
   io: KtxCliIo;
   deps: KtxSetupDatabasesDeps;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
 }): Promise<boolean> {
   const testConnection = input.deps.testConnection ?? defaultTestConnection;
   const scanConnection = input.deps.scanConnection ?? defaultScanConnection;
@@ -922,6 +1048,10 @@ async function validateAndScanConnection(input: {
   const testLines = ['✓ Connection test passed'];
   testLines.push(`Driver: ${driverDisplay}${Number.isFinite(tableCount) ? ` · Tables: ${tableCount}` : ''}`);
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
+
+  if (!(await maybeConfigurePostgresSchemas(input))) {
+    return false;
+  }
 
   await maybeRunHistoricSqlSetupProbe({
     projectDir: input.projectDir,
@@ -1069,7 +1199,7 @@ export async function runKtxSetupDatabasesStep(
         prompts,
       });
       if (historicSqlResult === 'back') return { status: 'back', projectDir: args.projectDir };
-      if (!(await validateAndScanConnection({ projectDir: args.projectDir, connectionId, io, deps }))) {
+      if (!(await validateAndScanConnection({ projectDir: args.projectDir, connectionId, io, deps, args, prompts }))) {
         return { status: 'failed', projectDir: args.projectDir };
       }
       selectedConnectionIds.push(connectionId);
@@ -1209,6 +1339,8 @@ export async function runKtxSetupDatabasesStep(
           connectionId: connectionChoice.connectionId,
           io,
           deps,
+          args,
+          prompts,
         }))
       ) {
         if (args.inputMode === 'disabled') return { status: 'failed', projectDir: args.projectDir };

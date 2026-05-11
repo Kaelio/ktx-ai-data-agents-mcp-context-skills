@@ -53,6 +53,12 @@ const CHECKED_IN_FIXTURE_ORIGINS = {
   semantic_embedding_aliases_no_declared_constraints: 'synthetic',
 } as const;
 
+function runAdHocRelationshipBenchmarks(): boolean {
+  return process.env.KTX_RUN_RELATIONSHIP_BENCHMARKS === '1';
+}
+
+const adHocRelationshipBenchmarkIt = runAdHocRelationshipBenchmarks() ? it : it.skip;
+
 function snapshot(): KtxSchemaSnapshot {
   return {
     connectionId: 'warehouse',
@@ -644,7 +650,7 @@ describe('relationship benchmarks', () => {
     expect(fixture.expected.expectedLinks).toHaveLength(1900);
   });
 
-  it('runs the scale stress fixture inside the benchmark validation budget', async () => {
+  adHocRelationshipBenchmarkIt('runs the scale stress fixture inside the benchmark validation budget', async () => {
     const fixtureRoot = new URL('../../test/fixtures/relationship-benchmarks/', import.meta.url);
     const fixture = await loadKtxRelationshipBenchmarkFixture(
       join(fixtureRoot.pathname, 'scale_stress_no_declared_constraints'),

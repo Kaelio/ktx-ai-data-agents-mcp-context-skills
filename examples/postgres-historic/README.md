@@ -13,8 +13,8 @@ generates query workload under separate users, runs `ktx setup` with
 
 - Docker with Compose v2
 - Node and pnpm matching the KTX workspace
-- `python-service/.venv` already created, or `KTX_SQL_ANALYSIS_URL` pointing at
-  a running service that exposes `/api/sql/analyze-for-fingerprint`
+- `KTX_SQL_ANALYSIS_URL` or `KTX_DAEMON_URL` pointing at a running SQL-analysis
+  service that exposes `/api/sql/analyze-for-fingerprint`
 
 ## Run
 
@@ -111,5 +111,5 @@ The manifest should have `dialect: "postgres"`, `degraded: true`,
 - Missing grants: confirm `GRANT pg_read_all_stats TO ktx_reader;`.
 - Empty templates: rerun `scripts/generate-workload.sh base` and keep
   `--historic-sql-min-calls 2` for the smoke.
-- SQL-analysis failures: set `KTX_SQL_ANALYSIS_URL` to the running service URL
-  or create `python-service/.venv` before running `scripts/smoke.sh`.
+- SQL-analysis failures: set `KTX_SQL_ANALYSIS_URL` or `KTX_DAEMON_URL` to a
+  running service URL before running `scripts/smoke.sh`.

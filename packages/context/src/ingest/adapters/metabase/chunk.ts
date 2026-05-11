@@ -66,7 +66,7 @@ function cardMatchesSyncConfig(card: StagedCardFile, config: StagedSyncConfig): 
   if (card.archived) {
     return false;
   }
-  if (config.syncMode === 'ALL') {
+  if (config.syncMode === 'ALL' || (config.syncMode === 'ONLY' && config.selections.length === 0)) {
     return true;
   }
   const selectedCollections = new Set(

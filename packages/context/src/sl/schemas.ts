@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Literal vocabularies — kept in lockstep with the Python Pydantic model at
-// python-service/ktx-sl/semantic_layer/models.py (SourceColumn / ColumnRole /
+// python/ktx-sl/semantic_layer/models.py (SourceColumn / ColumnRole /
 // ColumnVisibility / JoinDeclaration). If these diverge, YAMLs can pass
 // TypeScript validation at ingest time but fail Python loading at query time.
 const columnTypeValues = ['string', 'number', 'time', 'boolean'] as const;
@@ -22,6 +22,8 @@ const segmentDefinitionSchema = z.object({
   expr: z.string().min(1),
   description: z.string().optional(),
 });
+
+const descriptionsSchema = z.record(z.string(), z.string().min(1));
 
 const defaultTimeDimensionDbtSchema = z.object({
   dbt: z.string().optional(),
@@ -77,6 +79,7 @@ const sourceColumnSchema = z.object({
   role: z.enum(columnRoleValues).optional(),
   visibility: z.enum(columnVisibilityValues).optional(),
   description: z.string().optional(),
+  descriptions: descriptionsSchema.optional(),
   expr: z.string().optional(),
   constraints: sourceKeyedColumnConstraintsSchema.optional(),
   enum_values: sourceKeyedStringArraySchema.optional(),
@@ -91,6 +94,7 @@ const overlayColumnSchema = z
     role: z.enum(columnRoleValues).optional(),
     visibility: z.enum(columnVisibilityValues).optional(),
     description: z.string().optional(),
+    descriptions: descriptionsSchema.optional(),
     expr: z.string().optional(),
   })
   .refine((col) => !col.type || col.expr, {
@@ -102,6 +106,7 @@ export const sourceDefinitionSchema = z
   .object({
     name: z.string().min(1),
     description: z.string().optional(),
+    descriptions: descriptionsSchema.optional(),
     // Accepted for documentation parity with the Python spec; behavior is driven
     // by the `table` / `sql` fields, not by this discriminator.
     source_type: z.enum(['table', 'sql']).optional(),

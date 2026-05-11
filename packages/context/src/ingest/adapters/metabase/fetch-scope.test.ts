@@ -57,13 +57,9 @@ describe('computeFetchScope', () => {
     });
   });
 
-  it('returns empty explicit scope for ONLY with no selections', () => {
+  it('treats generated ONLY with no selections as all', () => {
     const scope = computeFetchScope({ ...BASE_CONFIG, syncMode: 'ONLY', selections: [] });
-    expect(scope).toEqual({
-      kind: 'explicit',
-      includeCardIds: new Set(),
-      includeCollectionIds: new Set(),
-    });
+    expect(scope).toEqual({ kind: 'all' });
   });
 });
 

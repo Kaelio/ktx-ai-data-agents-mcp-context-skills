@@ -34,7 +34,6 @@ const CONNECTOR_PACKAGE_NAMES = [
   '@ktx/connector-clickhouse',
   '@ktx/connector-mysql',
   '@ktx/connector-postgres',
-  '@ktx/connector-posthog',
   '@ktx/connector-snowflake',
   '@ktx/connector-sqlite',
   '@ktx/connector-sqlserver',
@@ -517,7 +516,6 @@ describe('verification snippets', () => {
     assert.match(source, /KtxPostgresScanConnector/);
     assert.match(source, /KtxBigQueryScanConnector/);
     assert.match(source, /KtxSnowflakeScanConnector/);
-    assert.match(source, /KtxPostHogScanConnector/);
   });
 
   it('asserts installed hybrid search exports and CLI smoke coverage', () => {

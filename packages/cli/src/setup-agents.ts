@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cancel, isCancel, multiselect, select } from '@clack/prompts';
 import { loadKtxProject, markKtxSetupStepComplete, serializeKtxProjectConfig } from '@ktx/context/project';
@@ -38,7 +38,10 @@ export interface KtxAgentInstallManifest {
   projectDir: string;
   installedAt: string;
   installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>;
-  entries: Array<{ kind: 'file'; path: string } | { kind: 'json-key'; path: string; jsonPath: string[] }>;
+  entries: Array<
+    | { kind: 'file'; path: string; role?: 'skill' | 'rule' }
+    | { kind: 'json-key'; path: string; jsonPath: string[] }
+  >;
 }
 
 type InstallEntry = KtxAgentInstallManifest['entries'][number];
@@ -60,11 +63,17 @@ export function plannedKtxAgentFiles(input: {
 }): InstallEntry[] {
   if (input.scope === 'global') {
     if (input.target === 'claude-code') {
-      return [{ kind: 'file', path: join(process.env.HOME ?? '', '.claude/skills/ktx/SKILL.md') }];
+      const home = process.env.HOME ?? '';
+      return [
+        { kind: 'file', path: join(home, '.claude/skills/ktx/SKILL.md'), role: 'skill' as const },
+        { kind: 'file', path: join(home, '.claude/rules/ktx.md'), role: 'rule' as const },
+      ];
     }
     if (input.target === 'codex') {
+      const codexHome = process.env.CODEX_HOME ?? join(process.env.HOME ?? '', '.codex');
       return [
-        { kind: 'file', path: join(process.env.CODEX_HOME ?? join(process.env.HOME ?? '', '.codex'), 'skills/ktx/SKILL.md') },
+        { kind: 'file', path: join(codexHome, 'skills/ktx/SKILL.md'), role: 'skill' as const },
+        { kind: 'file', path: join(codexHome, 'instructions/ktx.md'), role: 'rule' as const },
       ];
     }
     throw new Error(`Global ${input.target} installation is not supported; use --project.`);
@@ -72,11 +81,15 @@ export function plannedKtxAgentFiles(input: {
 
   const root = resolve(input.projectDir);
   const cliEntries: Partial<Record<KtxAgentTarget, InstallEntry>> = {
-    'claude-code': { kind: 'file', path: join(root, '.claude/skills/ktx/SKILL.md') },
-    codex: { kind: 'file', path: join(root, '.agents/skills/ktx/SKILL.md') },
+    'claude-code': { kind: 'file', path: join(root, '.claude/skills/ktx/SKILL.md'), role: 'skill' },
+    codex: { kind: 'file', path: join(root, '.agents/skills/ktx/SKILL.md'), role: 'skill' },
     cursor: { kind: 'file', path: join(root, '.cursor/rules/ktx.mdc') },
     opencode: { kind: 'file', path: join(root, '.opencode/commands/ktx.md') },
     universal: { kind: 'file', path: join(root, '.agents/skills/ktx/SKILL.md') },
+  };
+  const ruleEntries: Partial<Record<KtxAgentTarget, InstallEntry>> = {
+    'claude-code': { kind: 'file', path: join(root, '.claude/rules/ktx.md'), role: 'rule' },
+    codex: { kind: 'file', path: join(root, '.codex/instructions/ktx.md'), role: 'rule' },
   };
   const mcpEntries: Record<KtxAgentTarget, InstallEntry> = {
     'claude-code': { kind: 'json-key', path: join(root, '.mcp.json'), jsonPath: ['mcpServers', 'ktx'] },
@@ -86,7 +99,7 @@ export function plannedKtxAgentFiles(input: {
     universal: { kind: 'json-key', path: join(root, '.agents/mcp/ktx.json'), jsonPath: ['mcpServers', 'ktx'] },
   };
   return [
-    ...(input.mode === 'cli' || input.mode === 'both' ? [cliEntries[input.target]] : []),
+    ...(input.mode === 'cli' || input.mode === 'both' ? [cliEntries[input.target], ruleEntries[input.target]] : []),
     ...(input.mode === 'mcp' || input.mode === 'both' ? [mcpEntries[input.target]] : []),
   ].filter((entry): entry is InstallEntry => entry !== undefined);
 }
@@ -159,6 +172,17 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
     ])}\``,
     '',
     'SQL execution is read-only, requires an explicit row limit, and should use the smallest useful limit.',
+    '',
+  ].join('\n');
+}
+
+function ruleInstructionContent(input: { projectDir: string }): string {
+  return [
+    `Use the \`ktx\` CLI to query local semantic context, wiki knowledge, and execute safe SQL for this project (\`--project-dir ${input.projectDir}\`).`,
+    '',
+    'Use when the user asks about data schemas, metrics, dimensions, database structure, or wants to run SQL queries.',
+    '',
+    'Do not use for general programming, code review, or tasks unrelated to data and analytics.',
     '',
   ].join('\n');
 }
@@ -295,6 +319,55 @@ function createPromptAdapter(): KtxSetupAgentsPromptAdapter {
   };
 }
 
+const targetDisplayNames: Record<KtxAgentTarget, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  cursor: 'Cursor',
+  opencode: 'OpenCode',
+  universal: 'Universal .agents',
+};
+
+const fileEntryLabels: Record<KtxAgentTarget, string> = {
+  'claude-code': 'Skill installed',
+  codex: 'Skill installed',
+  cursor: 'Rule installed',
+  opencode: 'Command installed',
+  universal: 'Skill installed',
+};
+
+export function formatInstallSummary(
+  installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>,
+  entries: InstallEntry[],
+  projectDir: string,
+): string {
+  const entriesByTarget = new Map<KtxAgentTarget, InstallEntry[]>();
+  let idx = 0;
+  for (const install of installs) {
+    const planned = plannedKtxAgentFiles({ projectDir, ...install });
+    entriesByTarget.set(install.target, entries.slice(idx, idx + planned.length));
+    idx += planned.length;
+  }
+
+  const lines: string[] = [];
+  for (const install of installs) {
+    const targetEntries = entriesByTarget.get(install.target) ?? [];
+    lines.push(`  ${targetDisplayNames[install.target]}`);
+    for (const entry of targetEntries) {
+      const displayPath =
+        install.scope === 'global' ? entry.path : relative(projectDir, entry.path);
+      if (entry.kind === 'file') {
+        const label = entry.role === 'rule' ? 'Rule installed' : fileEntryLabels[install.target];
+        lines.push(`    + ${label}`);
+        lines.push(`      ${displayPath}`);
+      } else {
+        lines.push(`    + MCP config added`);
+        lines.push(`      ${displayPath}`);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
 async function installTarget(input: {
   projectDir: string;
   target: KtxAgentTarget;
@@ -305,8 +378,12 @@ async function installTarget(input: {
   const launcher = ktxCliLauncher();
   for (const entry of entries) {
     if (entry.kind === 'file') {
+      const content =
+        entry.role === 'rule'
+          ? ruleInstructionContent({ projectDir: input.projectDir })
+          : cliInstructionContent({ projectDir: input.projectDir, launcher });
       await mkdir(dirname(entry.path), { recursive: true });
-      await writeFile(entry.path, cliInstructionContent({ projectDir: input.projectDir, launcher }), 'utf-8');
+      await writeFile(entry.path, content, 'utf-8');
     } else {
       await writeJsonKey(entry.path, entry.jsonPath, mcpConfig(input.projectDir, launcher));
     }
@@ -362,7 +439,6 @@ export async function runKtxSetupAgentsStep(
               { value: 'cursor', label: 'Cursor' },
               { value: 'opencode', label: 'OpenCode' },
               { value: 'universal', label: 'Universal .agents' },
-              { value: 'back', label: 'Back' },
             ],
             required: true,
           })) as KtxAgentTarget[]);
@@ -378,7 +454,7 @@ export async function runKtxSetupAgentsStep(
     for (const install of installs) entries.push(...(await installTarget({ projectDir: args.projectDir, ...install })));
     await writeManifest(args.projectDir, mergeManifest(args.projectDir, await readKtxAgentInstallManifest(args.projectDir), installs, entries));
     await markAgentsComplete(args.projectDir);
-    io.stdout.write(`Agent integration installed for ${installs.map((install) => install.target).join(', ')}.\n`);
+    io.stdout.write(`\nAgent integration complete\n\n${formatInstallSummary(installs, entries, args.projectDir)}\n`);
     return { status: 'ready', projectDir: args.projectDir, installs };
   } catch (error) {
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

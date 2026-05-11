@@ -95,29 +95,6 @@ describe('createKtxCliScanConnector', () => {
     ]);
   });
 
-  it('does not create a standalone PostHog scan connector', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
-    await writeFile(
-      join(tempDir, 'ktx.yaml'),
-      [
-        'project: warehouse',
-        'connections:',
-        '  product:',
-        '    driver: posthog',
-        '    api_key: phx_test',
-        '    project_id: "157881"',
-        '    readonly: true',
-        '',
-      ].join('\n'),
-      'utf-8',
-    );
-    const project = await loadKtxProject({ projectDir: tempDir });
-
-    await expect(createKtxCliScanConnector(project, 'product')).rejects.toThrow(
-      'Connection "product" uses driver "posthog", which has no native standalone KTX scan connector',
-    );
-  });
-
   it('throws for structural daemon-only fallback configs', async () => {
     await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     await writeFile(

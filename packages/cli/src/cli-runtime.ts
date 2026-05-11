@@ -22,7 +22,7 @@ export interface KtxCliPackageInfo {
 }
 
 export interface KtxCliIo {
-  stdout: { isTTY?: boolean; write(chunk: string): void };
+  stdout: { isTTY?: boolean; columns?: number; write(chunk: string): void };
   stderr: { write(chunk: string): void };
 }
 
