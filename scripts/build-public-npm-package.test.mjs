@@ -191,6 +191,10 @@ describe('collectPublicDependencies', () => {
 });
 
 describe('publicNpmPackageJson', () => {
+  it('does not bundle the removed PostHog connector package', () => {
+    assert.equal(PUBLIC_BUNDLED_WORKSPACE_PACKAGES.includes('@ktx/connector-posthog'), false);
+  });
+
   it('describes the public @kaelio/ktx binary package', () => {
     const packageJson = publicNpmPackageJson(
       {
