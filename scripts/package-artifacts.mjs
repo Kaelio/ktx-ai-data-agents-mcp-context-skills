@@ -7,8 +7,20 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import {
+  RUNTIME_WHEEL_DISTRIBUTION_NAME,
+  RUNTIME_WHEEL_NORMALIZED_NAME,
+  RUNTIME_WHEEL_PACKAGE_VERSION,
+} from './build-python-runtime-wheel.mjs';
+
 const PACKAGE_VERSION = '0.0.0-private';
 const PYTHON_PACKAGE_VERSION = '0.1.0';
+
+export {
+  RUNTIME_WHEEL_DISTRIBUTION_NAME,
+  RUNTIME_WHEEL_NORMALIZED_NAME,
+  RUNTIME_WHEEL_PACKAGE_VERSION,
+};
 
 export const NPM_ARTIFACT_PACKAGES = [
   { name: '@ktx/context', packageRoot: 'packages/context' },
@@ -23,6 +35,8 @@ export const NPM_ARTIFACT_PACKAGES = [
   { name: '@ktx/connector-sqlserver', packageRoot: 'packages/connector-sqlserver' },
   { name: '@ktx/cli', packageRoot: 'packages/cli' },
 ];
+
+export const CLI_PYTHON_ASSET_MANIFEST = 'manifest.json';
 
 const CONNECTOR_PACKAGE_NAMES = NPM_ARTIFACT_PACKAGES
   .map((packageInfo) => packageInfo.name)
@@ -90,7 +104,11 @@ export function buildArtifactCommands(layout) {
 
   return [
     ...npmBuildCommands,
-    ...npmPackCommands,
+    {
+      command: process.execPath,
+      args: ['scripts/build-python-runtime-wheel.mjs'],
+      cwd: layout.rootDir,
+    },
     {
       command: 'uv',
       args: ['build', '--package', 'ktx-sl', '--out-dir', layout.pythonDir],
@@ -101,6 +119,7 @@ export function buildArtifactCommands(layout) {
       args: ['build', '--package', 'ktx-daemon', '--out-dir', layout.pythonDir],
       cwd: layout.rootDir,
     },
+    ...npmPackCommands,
   ];
 }
 
@@ -123,9 +142,9 @@ function normalizePythonDistributionName(name) {
   return name.replaceAll('-', '_');
 }
 
-function findOne(files, distributionName, suffix, label, pythonDir) {
+function findOne(files, distributionName, suffix, label, pythonDir, version = PYTHON_PACKAGE_VERSION) {
   const normalized = normalizePythonDistributionName(distributionName);
-  const found = files.find((file) => file.startsWith(`${normalized}-${PYTHON_PACKAGE_VERSION}`) && file.endsWith(suffix));
+  const found = files.find((file) => file.startsWith(`${normalized}-${version}`) && file.endsWith(suffix));
   if (!found) {
     throw new Error(`Missing Python artifact: ${label}`);
   }
@@ -136,6 +155,14 @@ export async function findPythonArtifacts(pythonDir) {
   const files = await readdir(pythonDir);
 
   return {
+    runtimeWheel: findOne(
+      files,
+      RUNTIME_WHEEL_DISTRIBUTION_NAME,
+      '.whl',
+      'kaelio-ktx runtime wheel',
+      pythonDir,
+      RUNTIME_WHEEL_PACKAGE_VERSION,
+    ),
     ktxSlWheel: findOne(files, 'ktx-sl', '.whl', 'ktx-sl wheel', pythonDir),
     ktxSlSdist: findOne(files, 'ktx-sl', '.tar.gz', 'ktx-sl source distribution', pythonDir),
     ktxDaemonWheel: findOne(files, 'ktx-daemon', '.whl', 'ktx-daemon wheel', pythonDir),
@@ -242,6 +269,13 @@ export async function packageReleaseMetadata(rootDir = scriptRootDir()) {
       packageVersion: ktxDaemonPackage.version,
       privatePackage: false,
     }),
+    releaseMetadataEntry({
+      ecosystem: 'python',
+      packageName: RUNTIME_WHEEL_DISTRIBUTION_NAME,
+      packageRoot: 'python/runtime-wheel',
+      packageVersion: RUNTIME_WHEEL_PACKAGE_VERSION,
+      privatePackage: false,
+    }),
   ];
 }
 
@@ -267,6 +301,11 @@ function artifactPackageRecords(layout, pythonArtifacts, packages) {
 
   return [
     ...npmRecords,
+    {
+      artifactKind: 'wheel',
+      artifactPath: pythonArtifacts.runtimeWheel,
+      metadata: requirePackageMetadata(packagesByName, RUNTIME_WHEEL_DISTRIBUTION_NAME),
+    },
     {
       artifactKind: 'wheel',
       artifactPath: pythonArtifacts.ktxSlWheel,
@@ -429,15 +468,45 @@ export async function verifyArtifactManifest(layout, options = {}) {
   return manifest;
 }
 
+function runtimeWheelAssetName(runtimeWheelPath) {
+  return runtimeWheelPath.split(sep).at(-1);
+}
+
+export async function copyRuntimeWheelAssets(layout, pythonArtifacts) {
+  const assetDir = join(layout.rootDir, 'packages', 'cli', 'assets', 'python');
+  const wheelFile = runtimeWheelAssetName(pythonArtifacts.runtimeWheel);
+  if (!wheelFile) {
+    throw new Error(`Unable to determine runtime wheel filename: ${pythonArtifacts.runtimeWheel}`);
+  }
+  const wheelContents = await readFile(pythonArtifacts.runtimeWheel);
+  await rm(assetDir, { recursive: true, force: true });
+  await mkdir(assetDir, { recursive: true });
+  const wheelPath = join(assetDir, wheelFile);
+  const manifestPath = join(assetDir, CLI_PYTHON_ASSET_MANIFEST);
+  await writeFile(wheelPath, wheelContents);
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        distributionName: RUNTIME_WHEEL_DISTRIBUTION_NAME,
+        normalizedName: RUNTIME_WHEEL_NORMALIZED_NAME,
+        version: RUNTIME_WHEEL_PACKAGE_VERSION,
+        wheel: {
+          file: wheelFile,
+          sha256: createHash('sha256').update(wheelContents).digest('hex'),
+          bytes: wheelContents.byteLength,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return { assetDir, wheelPath, manifestPath };
+}
+
 export function pythonArtifactInstallArgs(python, pythonArtifacts) {
-  return [
-    'pip',
-    'install',
-    '--python',
-    python,
-    pythonArtifacts.ktxSlWheel,
-    pythonArtifacts.ktxDaemonWheel,
-  ];
+  return ['pip', 'install', '--python', python, pythonArtifacts.runtimeWheel];
 }
 
 function runCommand(command, args, options = {}) {
@@ -1513,11 +1582,11 @@ try {
 export function pythonVerifySource() {
   return `
 import importlib.metadata
-import ktx_daemon
-import semantic_layer
 
-assert importlib.metadata.version("ktx-sl") == "0.1.0"
-assert importlib.metadata.version("ktx-daemon") == "0.1.0"
+import semantic_layer
+import ktx_daemon
+
+assert importlib.metadata.version("kaelio-ktx") == "0.1.0"
 assert semantic_layer is not None
 assert ktx_daemon.PACKAGE_NAME == "ktx-daemon"
 `;
@@ -1544,14 +1613,25 @@ async function buildArtifacts(layout) {
   await mkdir(layout.npmDir, { recursive: true });
   await mkdir(layout.pythonDir, { recursive: true });
 
-  for (const command of buildArtifactCommands(layout)) {
+  const commands = buildArtifactCommands(layout);
+  const npmBuildCount = NPM_ARTIFACT_PACKAGES.length;
+  const npmPackStart = commands.length - NPM_ARTIFACT_PACKAGES.length;
+
+  for (const command of commands.slice(0, npmBuildCount)) {
+    await runCommand(command.command, command.args, { cwd: command.cwd });
+  }
+  for (const command of commands.slice(npmBuildCount, npmPackStart)) {
+    await runCommand(command.command, command.args, { cwd: command.cwd });
+  }
+  const pythonArtifacts = await findPythonArtifacts(layout.pythonDir);
+  await copyRuntimeWheelAssets(layout, pythonArtifacts);
+  for (const command of commands.slice(npmPackStart)) {
     await runCommand(command.command, command.args, { cwd: command.cwd });
   }
 
   for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
     await assertPathExists(layout.npmTarballs[packageInfo.name], `${packageInfo.name} tarball`);
   }
-  await findPythonArtifacts(layout.pythonDir);
   await writeArtifactManifest(layout);
   await assertPathExists(artifactManifestPath(layout), 'artifact manifest');
 }

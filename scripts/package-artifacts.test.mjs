@@ -6,8 +6,13 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import {
+  CLI_PYTHON_ASSET_MANIFEST,
+  RUNTIME_WHEEL_DISTRIBUTION_NAME,
+  RUNTIME_WHEEL_NORMALIZED_NAME,
+  RUNTIME_WHEEL_PACKAGE_VERSION,
   artifactManifestPath,
   buildArtifactCommands,
+  copyRuntimeWheelAssets,
   findPythonArtifacts,
   NPM_ARTIFACT_PACKAGES,
   npmDemoSmokeSource,
@@ -82,6 +87,10 @@ async function writeUploadableArtifactFixtures(layout) {
       layout.npmTarballs[packageInfo.name],
       `${packageInfo.name}-tarball`,
     ]),
+    [
+      join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+      'kaelio-ktx-runtime-wheel',
+    ],
     [join(layout.pythonDir, 'ktx_sl-0.1.0-py3-none-any.whl'), 'ktx-sl-wheel'],
     [join(layout.pythonDir, 'ktx_sl-0.1.0.tar.gz'), 'ktx-sl-sdist'],
     [join(layout.pythonDir, 'ktx_daemon-0.1.0-py3-none-any.whl'), 'ktx-daemon-wheel'],
@@ -128,19 +137,29 @@ describe('buildArtifactCommands', () => {
     );
     assert.deepEqual(
       commands
-        .slice(NPM_ARTIFACT_PACKAGES.length, NPM_ARTIFACT_PACKAGES.length * 2)
+        .slice(NPM_ARTIFACT_PACKAGES.length, NPM_ARTIFACT_PACKAGES.length + 3)
         .map((command) => [command.command, command.args]),
+      [
+        [
+          process.execPath,
+          ['scripts/build-python-runtime-wheel.mjs'],
+        ],
+        [
+          'uv',
+          ['build', '--package', 'ktx-sl', '--out-dir', '/repo/ktx/dist/artifacts/python'],
+        ],
+        [
+          'uv',
+          ['build', '--package', 'ktx-daemon', '--out-dir', '/repo/ktx/dist/artifacts/python'],
+        ],
+      ],
+    );
+    assert.deepEqual(
+      commands.slice(NPM_ARTIFACT_PACKAGES.length + 3).map((command) => [command.command, command.args]),
       NPM_ARTIFACT_PACKAGES.map((packageInfo) => [
         'pnpm',
         ['--filter', packageInfo.name, 'pack', '--out', layout.npmTarballs[packageInfo.name]],
       ]),
-    );
-    assert.deepEqual(
-      commands.slice(NPM_ARTIFACT_PACKAGES.length * 2).map((command) => [command.command, command.args]),
-      [
-        ['uv', ['build', '--package', 'ktx-sl', '--out-dir', '/repo/ktx/dist/artifacts/python']],
-        ['uv', ['build', '--package', 'ktx-daemon', '--out-dir', '/repo/ktx/dist/artifacts/python']],
-      ],
     );
   });
 });
@@ -176,6 +195,14 @@ describe('packageReleaseMetadata', () => {
           private: false,
           releaseMode: 'ci-artifact-only',
         },
+        {
+          ecosystem: 'python',
+          packageName: 'kaelio-ktx',
+          packageRoot: 'python/runtime-wheel',
+          packageVersion: '0.1.0',
+          private: false,
+          releaseMode: 'ci-artifact-only',
+        },
       ]);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -187,12 +214,14 @@ describe('findPythonArtifacts', () => {
   it('finds one wheel and one source distribution for each Python package', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-test-'));
     try {
+      await writeFile(join(root, 'kaelio_ktx-0.1.0-py3-none-any.whl'), '');
       await writeFile(join(root, 'ktx_sl-0.1.0-py3-none-any.whl'), '');
       await writeFile(join(root, 'ktx_sl-0.1.0.tar.gz'), '');
       await writeFile(join(root, 'ktx_daemon-0.1.0-py3-none-any.whl'), '');
       await writeFile(join(root, 'ktx_daemon-0.1.0.tar.gz'), '');
 
       assert.deepEqual(await findPythonArtifacts(root), {
+        runtimeWheel: join(root, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
         ktxSlWheel: join(root, 'ktx_sl-0.1.0-py3-none-any.whl'),
         ktxSlSdist: join(root, 'ktx_sl-0.1.0.tar.gz'),
         ktxDaemonWheel: join(root, 'ktx_daemon-0.1.0-py3-none-any.whl'),
@@ -206,7 +235,7 @@ describe('findPythonArtifacts', () => {
   it('throws when a required Python artifact is missing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-test-'));
     try {
-      await assert.rejects(() => findPythonArtifacts(root), /Missing Python artifact: ktx-sl wheel/);
+      await assert.rejects(() => findPythonArtifacts(root), /Missing Python artifact: kaelio-ktx runtime wheel/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -259,6 +288,14 @@ describe('artifact manifest', () => {
             private: false,
             releaseMode: 'ci-artifact-only',
           },
+          {
+            ecosystem: 'python',
+            packageName: 'kaelio-ktx',
+            packageRoot: 'python/runtime-wheel',
+            packageVersion: '0.1.0',
+            private: false,
+            releaseMode: 'ci-artifact-only',
+          },
         ],
       );
       assert.deepEqual(
@@ -291,6 +328,13 @@ describe('artifact manifest', () => {
             path: file.path,
           })),
         [
+          {
+            artifactKind: 'wheel',
+            ecosystem: 'python',
+            packageName: 'kaelio-ktx',
+            packageVersion: '0.1.0',
+            path: 'python/kaelio_ktx-0.1.0-py3-none-any.whl',
+          },
           {
             artifactKind: 'wheel',
             ecosystem: 'python',
@@ -352,7 +396,7 @@ describe('verifyArtifactManifest', () => {
 
       assert.equal(manifest.schemaVersion, 2);
       assert.equal(manifest.sourceRevision, 'abc123');
-      assert.equal(manifest.files.length, NPM_ARTIFACT_PACKAGES.length + 4);
+      assert.equal(manifest.files.length, NPM_ARTIFACT_PACKAGES.length + 5);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -419,9 +463,53 @@ describe('verifyArtifactManifest', () => {
   });
 });
 
+describe('copyRuntimeWheelAssets', () => {
+  it('copies the runtime wheel and checksum manifest into CLI assets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-runtime-assets-test-'));
+    const layout = packageArtifactLayout(root);
+    try {
+      await mkdir(layout.pythonDir, { recursive: true });
+      await writeFile(
+        join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+        'kaelio-ktx-runtime-wheel',
+      );
+
+      const assets = await copyRuntimeWheelAssets(layout, {
+        runtimeWheel: join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+      });
+
+      assert.equal(
+        assets.wheelPath,
+        join(root, 'packages', 'cli', 'assets', 'python', 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+      );
+      assert.equal(
+        assets.manifestPath,
+        join(root, 'packages', 'cli', 'assets', 'python', CLI_PYTHON_ASSET_MANIFEST),
+      );
+      const manifest = JSON.parse(await readFile(assets.manifestPath, 'utf8'));
+      assert.deepEqual(manifest, {
+        schemaVersion: 1,
+        distributionName: RUNTIME_WHEEL_DISTRIBUTION_NAME,
+        normalizedName: RUNTIME_WHEEL_NORMALIZED_NAME,
+        version: RUNTIME_WHEEL_PACKAGE_VERSION,
+        wheel: {
+          file: 'kaelio_ktx-0.1.0-py3-none-any.whl',
+          sha256: createHash('sha256')
+            .update('kaelio-ktx-runtime-wheel')
+            .digest('hex'),
+          bytes: Buffer.byteLength('kaelio-ktx-runtime-wheel'),
+        },
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('pythonArtifactInstallArgs', () => {
   it('installs the built Python wheels by artifact path', () => {
     const args = pythonArtifactInstallArgs('/tmp/smoke/.venv/bin/python', {
+      runtimeWheel: '/repo/ktx/dist/artifacts/python/kaelio_ktx-0.1.0-py3-none-any.whl',
       ktxSlWheel: '/repo/ktx/dist/artifacts/python/ktx_sl-0.1.0-py3-none-any.whl',
       ktxSlSdist: '/repo/ktx/dist/artifacts/python/ktx_sl-0.1.0.tar.gz',
       ktxDaemonWheel: '/repo/ktx/dist/artifacts/python/ktx_daemon-0.1.0-py3-none-any.whl',
@@ -433,10 +521,10 @@ describe('pythonArtifactInstallArgs', () => {
       'install',
       '--python',
       '/tmp/smoke/.venv/bin/python',
-      '/repo/ktx/dist/artifacts/python/ktx_sl-0.1.0-py3-none-any.whl',
-      '/repo/ktx/dist/artifacts/python/ktx_daemon-0.1.0-py3-none-any.whl',
+      '/repo/ktx/dist/artifacts/python/kaelio_ktx-0.1.0-py3-none-any.whl',
     ]);
     assert.equal(args.includes('ktx-daemon'), false);
+    assert.equal(args.includes('ktx-sl'), false);
     assert.equal(args.includes('--find-links'), false);
   });
 });
