@@ -583,6 +583,13 @@ describe('verification snippets', () => {
     assert.match(source, /ktx runtime start reuse/);
     assert.match(source, /Using existing KTX Python daemon/);
     assert.match(source, /ktx runtime stop/);
+    assert.match(source, /ktx runtime prune dry run/);
+    assert.match(source, /0\.0\.0/);
+    assert.match(source, /ktx runtime prune needs confirmation/);
+    assert.match(source, /Refusing to prune without --yes/);
+    assert.match(source, /ktx runtime prune confirmed/);
+    assert.match(source, /Removed stale KTX Python runtimes/);
+    assert.match(source, /assert\.rejects\(\(\) => access\(staleRuntimeDir\)\)/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'dev',\s*'scan',\s*'warehouse'/);
     assert.match(source, /'--mode',\s*'enriched'/);
     assert.doesNotMatch(source, /'--enrich'/);

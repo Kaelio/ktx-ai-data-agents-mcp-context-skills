@@ -992,6 +992,27 @@ try {
   requireOutput('ktx runtime stop', runtimeStop, /Stopped KTX Python daemon/);
   process.stdout.write('ktx runtime daemon lifecycle verified\\n');
 
+  const staleRuntimeDir = join(process.env.KTX_RUNTIME_ROOT, '0.0.0');
+  await mkdir(staleRuntimeDir, { recursive: true });
+
+  const runtimePruneDryRun = await run('pnpm', ['exec', 'ktx', 'runtime', 'prune', '--dry-run']);
+  requireSuccess('ktx runtime prune dry run', runtimePruneDryRun);
+  requireOutput('ktx runtime prune dry run', runtimePruneDryRun, /Stale KTX Python runtimes/);
+  requireOutput('ktx runtime prune dry run', runtimePruneDryRun, /0\\.0\\.0/);
+  await access(staleRuntimeDir);
+
+  const runtimePruneNeedsConfirmation = await run('pnpm', ['exec', 'ktx', 'runtime', 'prune']);
+  assert.equal(runtimePruneNeedsConfirmation.code, 1, 'ktx runtime prune needs confirmation');
+  assert.equal(runtimePruneNeedsConfirmation.stdout, '', 'ktx runtime prune needs confirmation wrote stdout');
+  assert.match(runtimePruneNeedsConfirmation.stderr, /Refusing to prune without --yes/);
+
+  const runtimePruneConfirmed = await run('pnpm', ['exec', 'ktx', 'runtime', 'prune', '--yes']);
+  requireSuccess('ktx runtime prune confirmed', runtimePruneConfirmed);
+  requireOutput('ktx runtime prune confirmed', runtimePruneConfirmed, /Removed stale KTX Python runtimes/);
+  requireOutput('ktx runtime prune confirmed', runtimePruneConfirmed, /0\\.0\\.0/);
+  await assert.rejects(() => access(staleRuntimeDir));
+  process.stdout.write('ktx runtime prune verified\\n');
+
   const structuralScan = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'warehouse',
     '--project-dir',
     projectDir,
