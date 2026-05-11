@@ -55,6 +55,13 @@ export type {
   ManagedPythonDaemonStatus,
   ManagedPythonDaemonStopResult,
 } from './managed-python-daemon.js';
+export {
+  ensureManagedLocalEmbeddingsDaemon,
+  managedLocalEmbeddingHealthConfig,
+  managedLocalEmbeddingProjectConfig,
+  type ManagedLocalEmbeddingsDaemon,
+  type ManagedLocalEmbeddingsOptions,
+} from './managed-local-embeddings.js';
 export type { KtxMemoryFlowTuiIo, MemoryFlowTuiLiveSession } from './memory-flow-tui.js';
 export {
   renderMemoryFlowTui,
