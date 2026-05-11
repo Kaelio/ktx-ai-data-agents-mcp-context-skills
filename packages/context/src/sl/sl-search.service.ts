@@ -71,6 +71,24 @@ export function buildSemanticLayerSourceSearchText(
     }
   }
 
+  if (source.usage) {
+    const usage = source.usage;
+    parts.push(`usage: ${usage.narrative}`);
+    parts.push(`frequency: ${usage.frequencyTier}`);
+    if (usage.commonFilters.length > 0) {
+      parts.push(`commonly filtered by: ${usage.commonFilters.join(', ')}`);
+    }
+    if (usage.commonGroupBys?.length) {
+      parts.push(`commonly grouped by: ${usage.commonGroupBys.join(', ')}`);
+    }
+    for (const join of usage.commonJoins) {
+      parts.push(`commonly joined to ${join.table} on ${join.on.join(',')}`);
+    }
+    if (usage.staleSince) {
+      parts.push(`stale since ${usage.staleSince}`);
+    }
+  }
+
   return parts.join('. ');
 }
 

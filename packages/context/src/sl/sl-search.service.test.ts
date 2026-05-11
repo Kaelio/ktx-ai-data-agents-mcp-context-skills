@@ -162,4 +162,33 @@ describe('SlSearchService', () => {
     expect(text).toContain('loaded_at=updated_at');
     expect(text).toContain('warn_after');
   });
+
+  it('includes historic SQL usage in semantic-layer search text', () => {
+    const source: SemanticLayerSource = {
+      name: 'orders',
+      descriptions: { user: 'Customer orders' },
+      table: 'public.orders',
+      grain: ['order_id'],
+      columns: [{ name: 'order_id', type: 'string' }],
+      joins: [],
+      measures: [],
+      usage: {
+        narrative: 'Analysts inspect paid and refunded order lifecycle trends by customer segment.',
+        frequencyTier: 'high',
+        commonFilters: ['status', 'created_at'],
+        commonGroupBys: ['customer_segment'],
+        commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+        staleSince: '2026-05-01T00:00:00.000Z',
+      },
+    };
+
+    const text = buildSemanticLayerSourceSearchText(source);
+
+    expect(text).toContain('usage: Analysts inspect paid and refunded order lifecycle trends by customer segment.');
+    expect(text).toContain('frequency: high');
+    expect(text).toContain('commonly filtered by: status, created_at');
+    expect(text).toContain('commonly grouped by: customer_segment');
+    expect(text).toContain('commonly joined to public.customers on customer_id');
+    expect(text).toContain('stale since 2026-05-01T00:00:00.000Z');
+  });
 });
