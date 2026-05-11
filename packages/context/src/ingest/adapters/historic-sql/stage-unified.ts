@@ -9,6 +9,7 @@ import {
   bucketP95Runtime,
   bucketRecency,
 } from './buckets.js';
+import { splitHistoricSqlPatternInputs } from './pattern-inputs.js';
 import {
   compileHistoricSqlRedactionPatterns,
   redactHistoricSqlText,
@@ -283,7 +284,13 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
   for (const [table, acc] of [...byTable.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     await writeJson(input.stagedDir, `tables/${table}.json`, toStagedTable(acc, now));
   }
-  await writeJson(input.stagedDir, 'patterns-input.json', toPatternsInput(parsedTemplates));
+  const patternsInput = toPatternsInput(parsedTemplates);
+  const patternInputSplit = splitHistoricSqlPatternInputs(patternsInput);
+  const allWarnings = [...warnings, ...patternInputSplit.warnings];
+  await writeJson(input.stagedDir, 'patterns-input.json', patternInputSplit.auditInput);
+  for (const shard of patternInputSplit.shards) {
+    await writeJson(input.stagedDir, shard.path, shard.input);
+  }
   await writeJson(input.stagedDir, 'manifest.json', {
     source: HISTORIC_SQL_SOURCE_KEY,
     connectionId: input.connectionId,
@@ -293,8 +300,8 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
     windowEnd: now.toISOString(),
     snapshotRowCount,
     touchedTableCount: byTable.size,
-    parseFailures: warnings.filter((warning) => warning.startsWith('parse_failed:')).length,
-    warnings,
+    parseFailures: allWarnings.filter((warning) => warning.startsWith('parse_failed:')).length,
+    warnings: allWarnings,
     probeWarnings: probe.warnings,
     staleArchiveAfterDays: config.staleArchiveAfterDays,
   });
