@@ -27,11 +27,12 @@ describe('Conductor workspace scripts', () => {
     assert.match(setupScript, /pnpm run native:rebuild/);
     assert.match(setupScript, /pnpm run build/);
     assert.match(setupScript, /packages\/cli\/dist\/bin\.js dev doctor setup --no-input/);
-    assert.match(setupScript, /sh scripts\/setup-conductor-workspace\.sh/);
+    assert.match(setupScript, /link_agent_overlays/);
+    assert.match(setupScript, /sh scripts\/link-agent-overlays\.sh/);
   });
 
   it('links private agent overlays when KAELIO_SKILLS_ROOT is set', async () => {
-    const workspaceScript = await readText('scripts/setup-conductor-workspace.sh');
+    const workspaceScript = await readText('scripts/link-agent-overlays.sh');
 
     assert.match(workspaceScript, /KAELIO_SKILLS_ROOT/);
     assert.match(workspaceScript, /agents_source="\$\{KAELIO_SKILLS_ROOT\}\/\.agents"/);

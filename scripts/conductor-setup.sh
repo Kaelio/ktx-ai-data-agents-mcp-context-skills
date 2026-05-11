@@ -82,31 +82,57 @@ resolve_uv_for_project() {
   printf '%s\n' "$workspace_uv"
 }
 
-echo "=== Conductor KTX workspace setup ==="
+link_agent_overlays() {
+  sh scripts/link-agent-overlays.sh
+}
 
-sh scripts/setup-conductor-workspace.sh
+link_root_env_file() {
+  if [ -n "${CONDUCTOR_ROOT_PATH:-}" ] && [ -f "$CONDUCTOR_ROOT_PATH/.env" ]; then
+    ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env
+    echo "Linked .env"
+  fi
+}
 
-if [ -n "${CONDUCTOR_ROOT_PATH:-}" ] && [ -f "$CONDUCTOR_ROOT_PATH/.env" ]; then
-  ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env
-  echo "Linked .env"
-fi
+install_python_dependencies() {
+  KTX_UV_BIN="$(resolve_uv_for_project "pyproject.toml")"
+  export PATH="$(dirname "$KTX_UV_BIN"):$PATH"
 
-KTX_UV_BIN="$(resolve_uv_for_project "pyproject.toml")"
-export PATH="$(dirname "$KTX_UV_BIN"):$PATH"
+  echo "Installing KTX Python dependencies..."
+  uv sync --all-packages --all-groups
+}
 
-echo "Installing KTX Python dependencies..."
-uv sync --all-packages --all-groups
+install_js_dependencies() {
+  echo "Installing KTX JS dependencies..."
+  pnpm install --frozen-lockfile --prefer-offline
+}
 
-echo "Installing KTX JS dependencies..."
-pnpm install --frozen-lockfile --prefer-offline
+rebuild_native_dependencies() {
+  echo "Rebuilding native JS dependencies..."
+  pnpm run native:rebuild
+}
 
-echo "Rebuilding native JS dependencies..."
-pnpm run native:rebuild
+build_workspace() {
+  echo "Building KTX packages..."
+  pnpm run build
+}
 
-echo "Building KTX packages..."
-pnpm run build
+run_setup_doctor() {
+  echo "Running KTX setup doctor..."
+  node packages/cli/dist/bin.js dev doctor setup --no-input
+}
 
-echo "Running KTX setup doctor..."
-node packages/cli/dist/bin.js dev doctor setup --no-input
+main() {
+  echo "=== Conductor KTX workspace setup ==="
 
-echo "=== Setup complete ==="
+  link_agent_overlays
+  link_root_env_file
+  install_python_dependencies
+  install_js_dependencies
+  rebuild_native_dependencies
+  build_workspace
+  run_setup_doctor
+
+  echo "=== Setup complete ==="
+}
+
+main "$@"
