@@ -292,10 +292,9 @@ describe('runKtxDoctor', () => {
       {
         id: 'historic-sql-postgres-warehouse',
         label: 'Postgres Historic SQL (warehouse)',
-        status: 'warn' as const,
+        status: 'pass' as const,
         detail:
-          'pg_stat_statements ready (PostgreSQL 16.4) with warnings: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
-        fix: `Update the Postgres parameter group or config, then rerun \`ktx dev doctor --project-dir ${tempDir}\``,
+          'pg_stat_statements ready (PostgreSQL 16.4); info: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
       },
     ]);
 
@@ -313,8 +312,9 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     expect(runHistoricSqlDoctorChecks).toHaveBeenCalledTimes(1);
-    expect(testIo.stdout()).toContain('WARN Postgres Historic SQL (warehouse): pg_stat_statements ready');
-    expect(testIo.stdout()).toContain('Fix: Update the Postgres parameter group or config');
+    expect(testIo.stdout()).toContain('PASS Postgres Historic SQL (warehouse): pg_stat_statements ready');
+    expect(testIo.stdout()).toContain('info: pg_stat_statements.max is 1000');
+    expect(testIo.stdout()).not.toContain('Fix: Update the Postgres parameter group or config');
   });
 
   it('warns when semantic-search embeddings are not configured', async () => {
