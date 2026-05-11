@@ -1,0 +1,222 @@
+---
+title: Contributing
+description: How to contribute to KTX.
+---
+
+KTX is an open-source project and welcomes contributions — bug fixes, new connectors, documentation improvements, and feature proposals. This page covers how to set up a development environment, navigate the repository, run tests, and submit changes.
+
+## Development setup
+
+### Prerequisites
+
+- **Node.js 22+** and **pnpm** — for the TypeScript workspace
+- **Python 3.11+** and **uv** — for the Python semantic layer and daemon
+- **Git** — for version control
+
+### Clone and install
+
+```bash
+git clone https://github.com/kaelio/ktx.git
+cd ktx
+pnpm install
+uv sync --all-groups
+```
+
+`pnpm install` sets up all TypeScript packages in the workspace. `uv sync --all-groups` installs Python dependencies for the semantic layer and daemon, including dev and test groups.
+
+### Build
+
+```bash
+pnpm run build
+```
+
+This builds all TypeScript packages. You can also build individual packages:
+
+```bash
+pnpm --filter @ktx/cli run build
+pnpm --filter @ktx/context run build
+```
+
+### Link the CLI for local testing
+
+```bash
+pnpm run setup:dev
+pnpm run link:dev
+```
+
+This makes the `ktx` command available globally, pointing at your local build.
+
+## Repository structure
+
+KTX is a pnpm + uv workspace. TypeScript packages live in `packages/`, Python projects in `python/`.
+
+```text
+packages/
+  cli/                  # CLI entry point and commands
+  context/              # Core context engine (scan, ingest, MCP, semantic layer)
+  llm/                  # LLM client abstraction
+  connector-postgres/   # PostgreSQL connector
+  connector-snowflake/  # Snowflake connector
+  connector-bigquery/   # BigQuery connector
+  connector-clickhouse/ # ClickHouse connector
+  connector-mysql/      # MySQL connector
+  connector-sqlserver/  # SQL Server connector
+  connector-sqlite/     # SQLite connector
+  connector-posthog/    # PostHog connector
+
+python/
+  ktx-sl/               # Semantic layer — grain-aware query planning and SQL generation
+  ktx-daemon/           # Daemon — portable API server around the semantic layer
+
+examples/               # Example projects and fixtures
+scripts/                # Workspace scripts (benchmarks, verification, release)
+docs/                   # Documentation site (Fumadocs)
+```
+
+All TypeScript packages are ESM (`"type": "module"`) and use `NodeNext` module resolution. The Python projects use `pyproject.toml` for dependency management.
+
+## Running tests
+
+### TypeScript
+
+```bash
+# Run all tests
+pnpm run test
+
+# Run tests for a specific package
+pnpm --filter @ktx/cli run test
+pnpm --filter @ktx/context run test
+
+# Type-check all packages
+pnpm run type-check
+
+# Type-check a specific package
+pnpm --filter @ktx/context run type-check
+
+# CLI smoke test
+pnpm --filter @ktx/cli run smoke
+```
+
+### Python
+
+```bash
+# Run all Python tests
+uv run pytest -q
+
+# Semantic layer tests
+uv run pytest python/ktx-sl/tests -q
+
+# Daemon tests
+uv run pytest python/ktx-daemon/tests -q
+```
+
+### Pre-commit checks
+
+After modifying Python files, run pre-commit on the changed files:
+
+```bash
+uv run pre-commit run --files python/ktx-sl/src/changed_file.py
+```
+
+### Full verification
+
+For cross-cutting changes that affect package exports or shared contracts:
+
+```bash
+pnpm run build
+pnpm run type-check
+pnpm run test
+uv run pytest -q
+```
+
+## Adding a connector
+
+Database connectors live in `packages/connector-<name>/`. Each connector implements the `KtxScanConnector` interface from `@ktx/context`.
+
+### Step 1: Scaffold the package
+
+Create a new directory at `packages/connector-<name>/` with:
+
+```text
+packages/connector-<name>/
+  package.json
+  tsconfig.json
+  src/
+    index.ts          # Public exports
+    connector.ts      # KtxScanConnector implementation
+    dialect.ts        # SQL dialect handling
+```
+
+The `package.json` should follow the pattern of existing connectors:
+
+```json
+{
+  "name": "@ktx/connector-<name>",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@ktx/context": "workspace:*"
+  }
+}
+```
+
+### Step 2: Implement the connector
+
+Your connector class must implement `KtxScanConnector`, which requires:
+
+- **`id`** — a string identifier, typically `"<driver>:<connectionId>"`
+- **`driver`** — the `KtxConnectionDriver` value for your database
+- **`capabilities`** — a `KtxConnectorCapabilities` object declaring what your connector supports: `tableSampling`, `columnSampling`, `columnStats`, `readOnlySql`, `nestedAnalysis`, `eventStreamDiscovery`, `formalForeignKeys`, `estimatedRowCounts`
+- **`introspect()`** — discovers tables, columns, types, and constraints, returning a `KtxSchemaSnapshot`
+
+Optional methods for richer scanning:
+
+- **`sampleColumn()`** — sample values from a specific column
+- **`sampleTable()`** — sample rows from a table
+- **`columnStats()`** — compute column statistics
+- **`executeReadOnly()`** — execute arbitrary read-only SQL
+
+### Step 3: Add a dialect
+
+The dialect class handles database-specific concerns: identifier quoting, type mapping (native types to normalized types), and query generation for sampling and statistics.
+
+### Step 4: Wire it up
+
+Register the new connector driver in `packages/context` so the CLI and scan engine can instantiate it. Look at how existing connectors are registered for the pattern.
+
+### Step 5: Test
+
+```bash
+pnpm --filter @ktx/connector-<name> run build
+pnpm --filter @ktx/connector-<name> run type-check
+pnpm --filter @ktx/connector-<name> run test
+```
+
+Use `packages/connector-sqlite/` as a minimal reference and `packages/connector-postgres/` as a full-featured one.
+
+## Code conventions
+
+- **TypeScript**: strict types, no `any`, no `as unknown as`. Use `zod` schemas for runtime validation at CLI and config boundaries. Follow the `camelCaseSchema` / `PascalCaseType` naming convention for Zod schemas and inferred types.
+- **Python**: type hints on all new code, `pathlib` over `os.path`, explicit exception types over broad `except Exception`, `logger.exception()` for caught exceptions. Use `sqlglot` for SQL parsing — never regex.
+- **Dependencies**: `pnpm` for Node packages (never `npm` or `bun`), `uv` for Python (never `pip`).
+- **Dead code**: remove it. Don't leave commented-out code, unused wrappers, or empty directories.
+
+## PR guidelines
+
+Before submitting a pull request:
+
+1. **Run the relevant checks** — at minimum, `pnpm run type-check` and `pnpm run test` for TypeScript changes, `uv run pytest -q` and `uv run pre-commit run --files [FILES]` for Python changes.
+2. **Build if you changed exports** — run `pnpm run build` to verify package exports and `dist/` expectations still align.
+3. **Keep changes focused** — one logical change per PR. Don't bundle unrelated refactors.
+4. **Follow existing patterns** — match the style and conventions of surrounding code. The codebase favors explicit over clever.
+5. **Don't commit artifacts** — `node_modules/`, `.venv/`, `dist/`, coverage output, and local databases should not be committed.
+
+For larger features or architectural changes, open an issue first to discuss the approach.

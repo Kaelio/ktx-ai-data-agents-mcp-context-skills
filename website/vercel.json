@@ -1,0 +1,10 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "ktx.sh" }],
+      "destination": "https://docs.ktx.sh/:path*",
+      "permanent": true
+    }
+  ]
+}

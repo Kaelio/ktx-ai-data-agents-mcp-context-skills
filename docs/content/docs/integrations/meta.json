@@ -1,0 +1,5 @@
+{
+  "title": "Integrations",
+  "defaultOpen": true,
+  "pages": ["primary-sources", "context-sources", "agent-clients"]
+}

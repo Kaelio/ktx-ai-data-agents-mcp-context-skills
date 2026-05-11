@@ -1,0 +1,26 @@
+{
+  "name": "ktx-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "fumadocs-core": "15.7.13",
+    "fumadocs-mdx": "11.10.1",
+    "fumadocs-ui": "15.7.13",
+    "next": "^15",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5.9",
+    "@tailwindcss/postcss": "^4",
+    "tailwindcss": "^4"
+  }
+}

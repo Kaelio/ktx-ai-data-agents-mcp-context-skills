@@ -1,0 +1,28 @@
+---
+title: "ktx status"
+description: "Show current project status."
+---
+
+Print the current setup status of your KTX project — which steps are complete, which need attention, and whether the project is ready for agents.
+
+## Usage
+
+```bash
+ktx status [options]
+```
+
+## Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--json` | Print JSON output | `false` |
+
+## Examples
+
+```bash
+# Show project status
+ktx status
+
+# Get status as JSON (useful for scripting)
+ktx status --json
+```

@@ -29,6 +29,8 @@ htmlcov/
 
 # Node
 node_modules/
+.next/
+.source/
 .npm/
 .pnpm-store/
 *.tsbuildinfo
@@ -49,6 +51,7 @@ yarn-error.log*
 # Private local agent overlays
 .agents/
 .claude/
+.superpowers/
 
 # Editors and OS files
 .idea/

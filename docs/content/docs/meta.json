@@ -1,0 +1,13 @@
+{
+  "root": true,
+  "title": "KTX",
+  "pages": [
+    "getting-started",
+    "concepts",
+    "guides",
+    "integrations",
+    "benchmarks",
+    "cli-reference",
+    "community"
+  ]
+}

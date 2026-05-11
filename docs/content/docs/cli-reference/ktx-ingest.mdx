@@ -1,0 +1,70 @@
+---
+title: "ktx ingest"
+description: "Build and refresh context from configured sources."
+---
+
+Ingest context from your configured sources — dbt, Looker, Metabase, MetricFlow, LookML, or Notion. The ingest process extracts metadata from your tools, then uses an LLM agent to reconcile it with existing context, writing semantic sources and knowledge pages to your project.
+
+## Usage
+
+```bash
+ktx ingest [connectionId] [options]
+ktx ingest <subcommand> [options]
+```
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `status [runId]` | Print status for the latest or selected public ingest run |
+| `watch [runId]` | Open the latest or selected public ingest visual report |
+
+## Options
+
+### `ingest` (run)
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--all` | Ingest every eligible configured source | `false` |
+| `--json` | Print JSON output | `false` |
+| `--no-input` | Disable interactive terminal input | — |
+
+### `ingest status`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--json` | Print JSON output | `false` |
+| `--no-input` | Disable interactive terminal input | — |
+
+### `ingest watch`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--json` | Print JSON output instead of the visual report | `false` |
+| `--no-input` | Disable interactive terminal input | — |
+
+## Examples
+
+```bash
+# Ingest from a specific connection
+ktx ingest my-dbt-source
+
+# Ingest from all eligible sources
+ktx ingest --all
+
+# Check the status of the latest ingest
+ktx ingest status
+
+# Check the status of a specific ingest run
+ktx ingest status run-abc123
+
+# Watch the latest ingest report
+ktx ingest watch
+
+# Get ingest status as JSON
+ktx ingest status --json
+```
+
+## Low-level ingest commands
+
+For adapter-level control, use `ktx dev ingest`. See [`ktx dev`](/docs/cli-reference/ktx-dev) for the full low-level ingest surface including `run`, `status`, `watch`, and `replay` with output mode options (`--plain`, `--json`, `--viz`).

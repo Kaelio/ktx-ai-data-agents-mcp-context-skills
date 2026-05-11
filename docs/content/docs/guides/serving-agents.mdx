@@ -1,0 +1,207 @@
+---
+title: Serving Agents
+description: Expose your context to Claude Code, Cursor, Codex, and other coding agents.
+---
+
+Once you've built and refined your context, the final step is exposing it to coding agents. KTX provides two channels: an **MCP server** for persistent integration with tools like Claude Code and Cursor, and **CLI commands** for direct terminal access.
+
+## MCP Server
+
+The MCP (Model Context Protocol) server gives agents structured access to your entire context layer — semantic sources, knowledge pages, scans, and ingestion — through a standard tool-calling interface.
+
+### Starting the server
+
+```bash
+ktx serve --mcp stdio
+```
+
+This starts an MCP server on stdio, which is how Claude Code, Cursor, and other MCP-compatible tools communicate with KTX. You typically don't run this manually — your agent's configuration handles it.
+
+### Configuration options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--mcp <mode>` | MCP transport mode (currently `stdio`) | Required |
+| `--user-id <id>` | User identifier for knowledge scoping | `local` |
+| `--semantic-compute` | Enable semantic layer planning and query execution | `false` |
+| `--semantic-compute-url <url>` | URL for the semantic compute daemon | &mdash; |
+| `--database-introspection-url <url>` | Daemon URL for live database access | &mdash; |
+| `--execute-queries` | Allow agents to execute SQL queries | `false` |
+| `--memory-capture` | Enable memory capture from conversations | `false` |
+| `--memory-model <model>` | LLM model for memory capture | &mdash; |
+
+### Available tools
+
+When an agent connects via MCP, it can call these tools:
+
+**Connections**
+
+| Tool | Description |
+|------|-------------|
+| `connection_list` | List configured data connections |
+| `connection_test` | Test a connection through the scan connector |
+
+**Semantic Layer**
+
+| Tool | Description |
+|------|-------------|
+| `sl_list_sources` | List sources, optionally filtered by connection or search query |
+| `sl_read_source` | Read a source YAML by connection and name |
+| `sl_write_source` | Create, replace, or delete a source |
+| `sl_validate` | Validate sources against the database schema |
+| `sl_query` | Execute a semantic query — returns rows, SQL, and query plan |
+
+**Knowledge**
+
+| Tool | Description |
+|------|-------------|
+| `knowledge_search` | Search knowledge pages by query, returns ranked summaries |
+| `knowledge_read` | Read a knowledge page by key |
+| `knowledge_write` | Create or replace a knowledge page |
+
+**Scanning**
+
+| Tool | Description |
+|------|-------------|
+| `scan_trigger` | Run a structural, enriched, or relationship scan |
+| `scan_status` | Check the status of a running scan |
+| `scan_report` | Read a completed scan report |
+| `scan_list_artifacts` | List files produced by a scan run |
+| `scan_read_artifact` | Read a scan artifact by path |
+
+**Ingestion**
+
+| Tool | Description |
+|------|-------------|
+| `ingest_trigger` | Trigger an ingest run for an adapter and connection |
+| `ingest_status` | Check ingest progress, including diff and work-unit summaries |
+| `ingest_report` | Read a stored ingest report |
+| `ingest_replay` | Read the memory-flow replay for a past ingest |
+
+**Memory**
+
+| Tool | Description |
+|------|-------------|
+| `memory_capture` | Capture knowledge and semantic updates from a conversation |
+| `memory_capture_status` | Check the status of a memory capture run |
+
+### How agents use these tools
+
+A typical agent interaction flows like this:
+
+1. Agent calls `connection_list` to see available databases
+2. Agent calls `sl_list_sources` to discover what semantic sources exist
+3. Agent calls `knowledge_search` to find business context relevant to the user's question
+4. Agent calls `sl_query` with measures, dimensions, and filters to get data
+5. Agent presents results with the business context it found
+
+Agents should use the semantic layer for analytics questions because it enforces correct joins, grain-aware aggregation, and consistent metric definitions. If SQL execution is enabled, KTX only allows read-only SQL with row limits.
+
+## CLI Commands
+
+For agents that work through the terminal rather than MCP, KTX provides a set of machine-readable commands under `ktx agent`. These return JSON output designed for programmatic consumption.
+
+### Available commands
+
+```bash
+# List available tools and their descriptions
+ktx agent tools --json
+
+# Get project context for planning
+ktx agent context --json
+```
+
+**Semantic layer:**
+
+```bash
+# List sources
+ktx agent sl list --json
+ktx agent sl list --json --connection-id my-postgres
+
+# Read a source
+ktx agent sl read orders --json --connection-id my-postgres
+
+# Run a query from a JSON file
+ktx agent sl query --json \
+  --connection-id my-postgres \
+  --query-file query.json \
+  --execute \
+  --max-rows 100
+```
+
+**Knowledge:**
+
+```bash
+# Search knowledge pages
+ktx agent wiki search "revenue recognition" --json --limit 10
+
+# Read a specific page
+ktx agent wiki read order-status-definitions --json
+```
+
+**SQL execution:**
+
+```bash
+# Execute read-only SQL with a row limit
+ktx agent sql execute --json \
+  --connection-id my-postgres \
+  --sql-file query.sql \
+  --max-rows 500
+```
+
+### When to use CLI vs MCP
+
+| | MCP | CLI |
+|---|-----|-----|
+| **Best for** | Persistent agent integrations | Terminal-based workflows, scripting |
+| **Protocol** | Structured tool calls over stdio | Shell commands with JSON output |
+| **Used by** | Claude Code, Cursor, Codex | Shell scripts, custom agents, debugging |
+| **State** | Server runs continuously | Stateless per invocation |
+
+Most users should set up MCP — it gives agents richer context and a more natural interaction model. The CLI commands are useful for scripting, debugging, and agents that operate through terminal tools.
+
+## Setting Up Your Agent
+
+The fastest way to connect an agent is through the setup wizard:
+
+```bash
+ktx setup
+```
+
+The agents step auto-detects installed tools and generates the right configuration. For manual setup or per-tool details, see the [Agent Clients](/docs/integrations/agent-clients) integration page.
+
+### Quick manual setup
+
+**Claude Code** — add to `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "ktx": {
+      "command": "ktx",
+      "args": ["serve", "--mcp", "stdio", "--semantic-compute", "--execute-queries"],
+      "env": {
+        "KTX_PROJECT_DIR": "/path/to/your/ktx/project"
+      }
+    }
+  }
+}
+```
+
+**Cursor** — add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "ktx": {
+      "command": "ktx",
+      "args": ["serve", "--mcp", "stdio", "--semantic-compute", "--execute-queries"],
+      "env": {
+        "KTX_PROJECT_DIR": "/path/to/your/ktx/project"
+      }
+    }
+  }
+}
+```
+
+After configuration, the agent can immediately start calling KTX tools — listing sources, searching knowledge, and querying your semantic layer.
