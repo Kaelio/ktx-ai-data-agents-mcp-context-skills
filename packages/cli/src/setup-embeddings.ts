@@ -10,6 +10,13 @@ import {
 } from '@ktx/context/project';
 import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
+import {
+  ensureManagedLocalEmbeddingsDaemon,
+  managedLocalEmbeddingHealthConfig,
+  managedLocalEmbeddingProjectConfig,
+  type ManagedLocalEmbeddingsDaemon,
+} from './managed-local-embeddings.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 import { envCredentialReference, writeProjectLocalSecretReference } from './setup-secrets.js';
@@ -19,6 +26,8 @@ export type KtxSetupEmbeddingBackend = 'openai' | 'sentence-transformers';
 export interface KtxSetupEmbeddingsArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
+  cliVersion: string;
+  runtimeInstallPolicy: KtxManagedPythonInstallPolicy;
   embeddingBackend?: KtxSetupEmbeddingBackend;
   embeddingApiKeyEnv?: string;
   embeddingApiKeyFile?: string;
@@ -44,6 +53,11 @@ export interface KtxSetupEmbeddingsDeps {
   env?: NodeJS.ProcessEnv;
   prompts?: KtxSetupEmbeddingsPromptAdapter;
   healthCheck?: (config: KtxEmbeddingConfig) => Promise<KtxEmbeddingHealthCheckResult>;
+  ensureLocalEmbeddings?: (options: {
+    cliVersion: string;
+    installPolicy: KtxManagedPythonInstallPolicy;
+    io: KtxCliIo;
+  }) => Promise<ManagedLocalEmbeddingsDaemon>;
 }
 
 type BackendChoice = KtxSetupEmbeddingBackend | 'back';
@@ -62,9 +76,6 @@ const DEFAULTS: Record<
 };
 
 const LOCAL_EMBEDDING_BACKEND: KtxSetupEmbeddingBackend = 'sentence-transformers';
-const LOCAL_EMBEDDING_DAEMON_COMMAND = 'ktx-daemon serve-http --host 127.0.0.1 --port 8765';
-const LOCAL_EMBEDDING_DAEMON_DEV_COMMAND =
-  'cd ktx && source .venv/bin/activate && uv run ktx-daemon serve-http --host 127.0.0.1 --port 8765';
 const EMBEDDING_OPTION_PROMPT_CONTEXT =
   'KTX uses embeddings for semantic search over semantic-layer sources, wiki context, schema metadata, ' +
   'and relationship evidence.';
@@ -302,10 +313,10 @@ async function chooseEmbeddingBackend(
 function localEmbeddingSetupMessage(message: string): string {
   return [
     `Local embedding health check failed: ${message}`,
-    'Local embeddings use the KTX Python daemon. KTX can call ktx-daemon automatically when it is on PATH.',
-    `For repeated inference, start the HTTP daemon in another terminal with: ${LOCAL_EMBEDDING_DAEMON_COMMAND}`,
-    `From the KTX repo, use: ${LOCAL_EMBEDDING_DAEMON_DEV_COMMAND}`,
-    'The first run may download the all-MiniLM-L6-v2 model, so it can take a minute.',
+    'Local embeddings use the KTX-managed Python runtime.',
+    'Prepare the runtime with: ktx runtime start --feature local-embeddings',
+    'Use --yes with setup to install and start the runtime without prompting.',
+    'The first run may download Python packages and the all-MiniLM-L6-v2 model.',
   ].join('\n');
 }
 
@@ -432,12 +443,34 @@ export async function runKtxSetupEmbeddingsStep(
       credentialValue = credential.value;
     }
 
-    const healthConfig = buildHealthConfig({
-      backend: selectedBackend,
-      model,
-      dimensions,
-      credentialValue,
-    });
+    let managedLocalEmbeddings: ManagedLocalEmbeddingsDaemon | undefined;
+    if (selectedBackend === LOCAL_EMBEDDING_BACKEND) {
+      const ensureLocalEmbeddings = deps.ensureLocalEmbeddings ?? ensureManagedLocalEmbeddingsDaemon;
+      try {
+        managedLocalEmbeddings = await ensureLocalEmbeddings({
+          cliVersion: args.cliVersion,
+          installPolicy: args.runtimeInstallPolicy,
+          io,
+        });
+      } catch (error) {
+        io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+    }
+
+    const healthConfig =
+      selectedBackend === LOCAL_EMBEDDING_BACKEND && managedLocalEmbeddings
+        ? managedLocalEmbeddingHealthConfig({
+            baseUrl: managedLocalEmbeddings.baseUrl,
+            model,
+            dimensions,
+          })
+        : buildHealthConfig({
+            backend: selectedBackend,
+            model,
+            dimensions,
+            credentialValue,
+          });
     const progress = startHealthCheckProgress(io, healthCheckStartText(selectedBackend, model, dimensions));
     let health: KtxEmbeddingHealthCheckResult;
     try {
@@ -450,12 +483,14 @@ export async function runKtxSetupEmbeddingsStep(
       progress.succeed(`Embedding test passed (${model}, ${dimensions} dimensions)`);
       await persistEmbeddingConfig(
         args.projectDir,
-        buildProjectEmbeddingConfig({
-          backend: selectedBackend,
-          model,
-          dimensions,
-          credentialRef,
-        }),
+        selectedBackend === LOCAL_EMBEDDING_BACKEND
+          ? managedLocalEmbeddingProjectConfig({ model, dimensions })
+          : buildProjectEmbeddingConfig({
+              backend: selectedBackend,
+              model,
+              dimensions,
+              credentialRef,
+            }),
       );
       io.stdout.write(`Embeddings ready: yes (${model}, ${dimensions} dimensions)\n`);
       return { status: 'ready', projectDir: args.projectDir };

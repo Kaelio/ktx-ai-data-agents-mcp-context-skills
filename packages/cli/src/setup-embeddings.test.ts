@@ -46,6 +46,15 @@ function makePromptAdapter(options: {
   };
 }
 
+function managedDaemon(baseUrl = 'http://127.0.0.1:61234') {
+  return {
+    baseUrl,
+    env: {
+      KTX_MANAGED_SENTENCE_TRANSFORMERS_BASE_URL: baseUrl,
+    },
+  };
+}
+
 describe('setup embeddings step', () => {
   let tempDir: string;
 
@@ -67,6 +76,8 @@ describe('setup embeddings step', () => {
       {
         projectDir: tempDir,
         inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
@@ -94,10 +105,12 @@ describe('setup embeddings step', () => {
       {
         projectDir: tempDir,
         inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
-      { prompts, env: {}, healthCheck },
+      { prompts, env: {}, healthCheck, ensureLocalEmbeddings: vi.fn(async () => managedDaemon()) },
     );
 
     expect(result.status).toBe('ready');
@@ -106,7 +119,7 @@ describe('setup embeddings step', () => {
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { baseURL: 'http://127.0.0.1:8765', pathPrefix: '' },
+      sentenceTransformers: { baseURL: 'http://127.0.0.1:61234', pathPrefix: '' },
     });
     expect(vi.mocked(prompts.select).mock.calls.map((call) => call[0].message)).toEqual([
       EMBEDDING_OPTION_PROMPT_MESSAGE,
@@ -119,30 +132,38 @@ describe('setup embeddings step', () => {
     const io = makeIo();
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
     const prompts = makePromptAdapter({ selectValues: ['sentence-transformers'] });
+    const ensureLocalEmbeddings = vi.fn(async () => managedDaemon());
 
     const result = await runKtxSetupEmbeddingsStep(
       {
         projectDir: tempDir,
         inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
-      { prompts, env: {}, healthCheck },
+      { prompts, env: {}, healthCheck, ensureLocalEmbeddings },
     );
 
     expect(result.status).toBe('ready');
+    expect(ensureLocalEmbeddings).toHaveBeenCalledWith({
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io: io.io,
+    });
     expect(healthCheck).toHaveBeenCalledWith({
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { baseURL: 'http://127.0.0.1:8765', pathPrefix: '' },
+      sentenceTransformers: { baseURL: 'http://127.0.0.1:61234', pathPrefix: '' },
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.ingest.embeddings).toMatchObject({
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { base_url: 'http://127.0.0.1:8765', pathPrefix: '' },
+      sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
     expect(config.setup?.completed_steps).toContain('embeddings');
@@ -167,10 +188,12 @@ describe('setup embeddings step', () => {
       {
         projectDir: tempDir,
         inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
-      { prompts, env: {}, healthCheck },
+      { prompts, env: {}, healthCheck, ensureLocalEmbeddings: vi.fn(async () => managedDaemon()) },
     );
 
     await vi.waitFor(() => {
@@ -192,10 +215,12 @@ describe('setup embeddings step', () => {
       {
         projectDir: tempDir,
         inputMode: 'disabled',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
-      { env: {}, healthCheck },
+      { env: {}, healthCheck, ensureLocalEmbeddings: vi.fn(async () => managedDaemon()) },
     );
 
     expect(result.status).toBe('ready');
@@ -203,17 +228,43 @@ describe('setup embeddings step', () => {
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { baseURL: 'http://127.0.0.1:8765', pathPrefix: '' },
+      sentenceTransformers: { baseURL: 'http://127.0.0.1:61234', pathPrefix: '' },
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.ingest.embeddings).toMatchObject({
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { base_url: 'http://127.0.0.1:8765', pathPrefix: '' },
+      sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
     expect(config.setup?.completed_steps).toContain('embeddings');
+  });
+
+  it('fails non-interactive local setup when the managed local embeddings runtime is missing', async () => {
+    const io = makeIo();
+    const ensureLocalEmbeddings = vi.fn(async () => {
+      throw new Error(
+        'KTX Python runtime is required for this command. Run: ktx runtime install --feature local-embeddings --yes',
+      );
+    });
+
+    const result = await runKtxSetupEmbeddingsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'never',
+        skipEmbeddings: false,
+      },
+      io.io,
+      { env: {}, ensureLocalEmbeddings },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).toContain(
+      'KTX Python runtime is required for this command. Run: ktx runtime install --feature local-embeddings --yes',
+    );
   });
 
   it('does not persist embedding completion when the health check fails', async () => {
@@ -222,11 +273,14 @@ describe('setup embeddings step', () => {
       {
         projectDir: tempDir,
         inputMode: 'disabled',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
       {
         env: {},
+        ensureLocalEmbeddings: vi.fn(async () => managedDaemon()),
         healthCheck: vi.fn(async () => ({ ok: false as const, message: '401 invalid api key [redacted]' })),
       },
     );
@@ -236,7 +290,7 @@ describe('setup embeddings step', () => {
     expect(config.setup?.completed_steps ?? []).not.toContain('embeddings');
     expect(config.ingest.embeddings.backend).toBe('deterministic');
     expect(io.stderr()).toContain('Local embedding health check failed: 401 invalid api key [redacted]');
-    expect(io.stderr()).toContain('ktx-daemon serve-http --host 127.0.0.1 --port 8765');
+    expect(io.stderr()).toContain('Prepare the runtime with: ktx runtime start --feature local-embeddings');
     expect(io.stderr()).not.toContain('skip for now');
   });
 
@@ -250,6 +304,8 @@ describe('setup embeddings step', () => {
         inputMode: 'disabled',
         embeddingBackend: 'openai',
         embeddingApiKeyEnv: 'OPENAI_API_KEY',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
@@ -285,9 +341,20 @@ describe('setup embeddings step', () => {
       .mockResolvedValueOnce({ ok: true as const });
 
     const result = await runKtxSetupEmbeddingsStep(
-      { projectDir: tempDir, inputMode: 'auto', skipEmbeddings: false },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+        skipEmbeddings: false,
+      },
       io.io,
-      { prompts, env: { OPENAI_API_KEY: 'sk-openai-test' }, healthCheck },
+      {
+        prompts,
+        env: { OPENAI_API_KEY: 'sk-openai-test' },
+        healthCheck,
+        ensureLocalEmbeddings: vi.fn(async () => managedDaemon()),
+      },
     );
 
     expect(result.status).toBe('ready');
@@ -295,7 +362,7 @@ describe('setup embeddings step', () => {
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { baseURL: 'http://127.0.0.1:8765', pathPrefix: '' },
+      sentenceTransformers: { baseURL: 'http://127.0.0.1:61234', pathPrefix: '' },
     });
     expect(healthCheck).toHaveBeenNthCalledWith(2, {
       backend: 'openai',
@@ -320,7 +387,13 @@ describe('setup embeddings step', () => {
 
   it('leaves setup incomplete when skipped', async () => {
     const result = await runKtxSetupEmbeddingsStep(
-      { projectDir: tempDir, inputMode: 'disabled', skipEmbeddings: true },
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+        skipEmbeddings: true,
+      },
       makeIo().io,
     );
 
@@ -333,9 +406,20 @@ describe('setup embeddings step', () => {
   it('returns back without writing config when the local health check fails and Back is selected', async () => {
     const prompts = makePromptAdapter({ selectValues: ['sentence-transformers', 'back'] });
     const result = await runKtxSetupEmbeddingsStep(
-      { projectDir: tempDir, inputMode: 'auto', skipEmbeddings: false },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+        skipEmbeddings: false,
+      },
       makeIo().io,
-      { prompts, env: {}, healthCheck: vi.fn(async () => ({ ok: false as const, message: 'daemon unavailable' })) },
+      {
+        prompts,
+        env: {},
+        ensureLocalEmbeddings: vi.fn(async () => managedDaemon()),
+        healthCheck: vi.fn(async () => ({ ok: false as const, message: 'daemon unavailable' })),
+      },
     );
 
     expect(result.status).toBe('back');
@@ -371,10 +455,20 @@ describe('setup embeddings step', () => {
 
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
     await expect(
-      runKtxSetupEmbeddingsStep({ projectDir: tempDir, inputMode: 'disabled', skipEmbeddings: false }, makeIo().io, {
-        env: { OPENAI_API_KEY: 'sk-openai-test' },
-        healthCheck,
-      }),
+      runKtxSetupEmbeddingsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+          skipEmbeddings: false,
+        },
+        makeIo().io,
+        {
+          env: { OPENAI_API_KEY: 'sk-openai-test' },
+          healthCheck,
+        },
+      ),
     ).resolves.toMatchObject({ status: 'ready' });
     expect(healthCheck).not.toHaveBeenCalled();
   });
