@@ -56,6 +56,8 @@ import {
   type KnowledgeIndexPort,
   KnowledgeWikiService,
   searchLocalKnowledgePages,
+  SqliteKnowledgeIndex,
+  type SqliteKnowledgeIndexPage,
   WikiListTagsTool,
   WikiReadTool,
   WikiRemoveTool,
@@ -257,6 +259,17 @@ function parseWiki(raw: string): { summary: string; content: string } {
   };
 }
 
+function parseWikiTags(raw: string): string[] {
+  const match = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) {
+    return [];
+  }
+  const frontmatter = (YAML.parse(match[1]) ?? {}) as Record<string, unknown>;
+  return Array.isArray(frontmatter.tags)
+    ? frontmatter.tags.filter((tag): tag is string => typeof tag === 'string')
+    : [];
+}
+
 function scoreText(text: string, query: string): number {
   const normalized = query.toLowerCase().trim();
   if (!normalized) {
@@ -271,21 +284,49 @@ function scoreText(text: string, query: string): number {
 }
 
 class LocalKnowledgeIndex implements KnowledgeIndexPort {
-  constructor(private readonly project: KtxLocalProject) {}
+  private readonly sqlite: SqliteKnowledgeIndex;
 
-  async upsertPage(): Promise<void> {}
-
-  async applyDiffTransactional(): Promise<void> {}
-
-  async getExistingSearchTexts(): Promise<Map<string, { searchText: string; hasEmbedding: boolean }>> {
-    return new Map();
+  constructor(private readonly project: KtxLocalProject) {
+    this.sqlite = new SqliteKnowledgeIndex({ dbPath: ktxLocalStateDbPath(project) });
   }
 
-  async deleteStale(): Promise<void> {}
+  async upsertPage(): Promise<void> {
+    await this.syncAllPagesFromDisk();
+  }
 
-  async deleteByScope(): Promise<void> {}
+  async applyDiffTransactional(): Promise<void> {
+    await this.syncAllPagesFromDisk();
+  }
 
-  async deleteByKey(): Promise<void> {}
+  async getExistingSearchTexts(
+    scope: string,
+    scopeId: string | null,
+  ): Promise<Map<string, { searchText: string; hasEmbedding: boolean }>> {
+    const prefix = scope === 'GLOBAL' ? 'knowledge/global/' : `knowledge/user/${scopeId}/`;
+    const result = new Map<string, { searchText: string; hasEmbedding: boolean }>();
+    for (const [path, page] of this.sqlite.getExistingPages()) {
+      if (!path.startsWith(prefix)) {
+        continue;
+      }
+      result.set(path.slice(prefix.length).replace(/\.md$/, ''), {
+        searchText: page.searchText,
+        hasEmbedding: page.embedding !== null,
+      });
+    }
+    return result;
+  }
+
+  async deleteStale(): Promise<void> {
+    await this.syncAllPagesFromDisk();
+  }
+
+  async deleteByScope(): Promise<void> {
+    await this.syncAllPagesFromDisk();
+  }
+
+  async deleteByKey(): Promise<void> {
+    await this.syncAllPagesFromDisk();
+  }
 
   async findPageByKey(scope: string, scopeId: string | null, pageKey: string) {
     const path = scope === 'GLOBAL' ? `knowledge/global/${pageKey}.md` : `knowledge/user/${scopeId}/${pageKey}.md`;
@@ -344,6 +385,41 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
       .sort((left, right) => right.rrfScore - left.rrfScore || left.pageKey.localeCompare(right.pageKey))
       .slice(0, limit);
   }
+
+  private async syncAllPagesFromDisk(): Promise<void> {
+    const listed = await this.project.fileStore.listFiles('knowledge', true);
+    const pages: SqliteKnowledgeIndexPage[] = [];
+    for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
+      const parsedPath = parseKnowledgeIndexPath(file);
+      if (!parsedPath) {
+        continue;
+      }
+      const path = `knowledge/${file}`;
+      const raw = await this.project.fileStore.readFile(path);
+      const parsed = parseWiki(raw.content);
+      pages.push({
+        path,
+        key: parsedPath.pageKey,
+        scope: parsedPath.scope,
+        summary: parsed.summary,
+        content: parsed.content,
+        tags: parseWikiTags(raw.content),
+        embedding: null,
+      });
+    }
+    this.sqlite.sync(pages);
+  }
+}
+
+function parseKnowledgeIndexPath(file: string): { scope: 'GLOBAL' | 'USER'; pageKey: string } | null {
+  const segments = file.split('/');
+  if (segments.length === 2 && segments[0] === 'global') {
+    return { scope: 'GLOBAL', pageKey: segments[1].replace(/\.md$/, '') };
+  }
+  if (segments.length === 3 && segments[0] === 'user') {
+    return { scope: 'USER', pageKey: segments[2].replace(/\.md$/, '') };
+  }
+  return null;
 }
 
 class NoopKnowledgeEventPort implements KnowledgeEventPort {

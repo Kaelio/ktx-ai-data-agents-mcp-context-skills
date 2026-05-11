@@ -10,6 +10,7 @@ import {
   type SemanticLayerStructured,
   sourceDefinitionSchema,
 } from './base-semantic-layer.tool.js';
+import { normalizeSemanticLayerDescriptions } from '../description-normalization.js';
 import { slToolConnectionIdSchema } from './connection-id-schema.js';
 
 const sourceInputSchema = z.union([sourceDefinitionSchema, sourceOverlaySchema]);
@@ -154,14 +155,16 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
     semanticLayerService: SemanticLayerService,
     skipIndex: boolean,
   ): Promise<ToolOutput<SemanticLayerStructured>> {
-    const isOverlay = !('table' in source && source.table) && !('sql' in source && source.sql);
+    const normalizedSource = normalizeSemanticLayerDescriptions(source, { fillMissing: !!context.session?.ingest });
+    const isOverlay =
+      !('table' in normalizedSource && normalizedSource.table) && !('sql' in normalizedSource && normalizedSource.sql);
 
     const existing = await this.readSourceYamlFromService(semanticLayerService, connectionId, sourceName);
     const commitMessage = existing
       ? `${isOverlay ? 'Update overlay' : 'Rewrite source'}: ${sourceName}`
       : `${isOverlay ? 'Create overlay' : 'Create source'}: ${sourceName}`;
 
-    const yamlContent = YAML.stringify(source);
+    const yamlContent = YAML.stringify(normalizedSource);
 
     const orphanError = await this.rejectOrphanOverlay(semanticLayerService, connectionId, sourceName, yamlContent);
     if (orphanError) {
@@ -172,7 +175,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       return this.buildOutput(false, [shadowError], sourceName, { yaml: yamlContent });
     }
 
-    const validatedSource = source as SemanticLayerSource;
+    const validatedSource = normalizedSource as SemanticLayerSource;
     const validationResult = await semanticLayerService.validateWithProposedSource(connectionId, validatedSource);
     const validationErrors = validationResult.errors;
     const validationWarnings = [...validationResult.warnings];

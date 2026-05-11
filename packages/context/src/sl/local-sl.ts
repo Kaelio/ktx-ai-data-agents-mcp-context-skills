@@ -5,6 +5,7 @@ import type { KtxEmbeddingPort, KtxFileWriteResult } from '../core/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { HybridSearchCore, type SearchCandidateGenerator } from '../search/index.js';
 import { DEFAULT_PRIORITY, resolveDescription } from './descriptions.js';
+import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
 import { composeOverlay, type ManifestTableEntry, projectManifestEntry } from './semantic-layer.service.js';
 import type { PgliteSlSearchPrototypeOwnerOptions } from './pglite-sl-search-prototype.js';
@@ -180,14 +181,14 @@ function manifestTables(value: Record<string, unknown>): Record<string, Manifest
 
 function parsedStandaloneSource(parsed: Record<string, unknown>, name: string): SemanticLayerSource {
   const source = parsed as Partial<SemanticLayerSource>;
-  return {
+  return normalizeSemanticLayerDescriptions({
     ...source,
     name,
     grain: Array.isArray(parsed.grain) ? (parsed.grain.filter((item) => typeof item === 'string') as string[]) : [],
     columns: Array.isArray(parsed.columns) ? (parsed.columns as SemanticLayerSource['columns']) : [],
     joins: Array.isArray(parsed.joins) ? (parsed.joins as SemanticLayerSource['joins']) : [],
     measures: Array.isArray(parsed.measures) ? (parsed.measures as SemanticLayerSource['measures']) : [],
-  };
+  });
 }
 
 export async function loadLocalSlSourceRecords(

@@ -226,6 +226,39 @@ export function completedLocalBundleRun(input: RunLocalIngestOptions, jobId: str
   };
 }
 
+export function failedLocalBundleRun(input: RunLocalIngestOptions, jobId: string): LocalIngestResult {
+  const failedWorkUnit = {
+    ...bundleReportSnapshot().body.workUnits[0],
+    status: 'failed' as const,
+    reason: 'writer tool failed',
+    actions: [],
+    touchedSlSources: [],
+  };
+  const nextReport = localFakeBundleReport(jobId, {
+    id: 'report-failed-1',
+    runId: 'run-failed-1',
+    connectionId: input.connectionId,
+    sourceKey: input.adapter,
+    body: {
+      workUnits: [failedWorkUnit],
+      failedWorkUnits: [failedWorkUnit.unitKey],
+    },
+  });
+  return {
+    result: {
+      jobId,
+      runId: nextReport.runId,
+      syncId: nextReport.body.syncId,
+      diffSummary: nextReport.body.diffSummary,
+      workUnitCount: nextReport.body.workUnits.length,
+      failedWorkUnits: nextReport.body.failedWorkUnits,
+      artifactsWritten: nextReport.body.provenanceRows.length,
+      commitSha: nextReport.body.commitSha,
+    },
+    report: nextReport,
+  };
+}
+
 export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
   override runLoop = vi.fn(async (params: RunLoopParams) => {
     if (
@@ -634,7 +667,10 @@ export function makeCliLookerParser(): TestLookerTableIdentifierParser {
   };
 }
 
-export function localFakeBundleReport(jobId: string, overrides: Partial<IngestReportSnapshot> = {}): IngestReportSnapshot {
+export function localFakeBundleReport(
+  jobId: string,
+  overrides: Partial<Omit<IngestReportSnapshot, 'body'>> & { body?: Partial<IngestReportSnapshot['body']> } = {},
+): IngestReportSnapshot {
   const report = bundleReportSnapshot();
   return {
     ...report,

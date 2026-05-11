@@ -79,6 +79,21 @@ function countMemoryFlowActions(actions: MemoryAction[], target: MemoryAction['t
   return actions.filter((action) => action.target === target).length;
 }
 
+function isStructuredToolFailure(output: unknown): boolean {
+  if (!output || typeof output !== 'object') {
+    return false;
+  }
+  const structured = (output as { structured?: unknown }).structured;
+  return !!structured && typeof structured === 'object' && (structured as { success?: unknown }).success === false;
+}
+
+function isFailedToolCall(entry: ToolCallLogEntry): boolean {
+  if (entry.error) {
+    return true;
+  }
+  return (entry.toolName === 'sl_write_source' || entry.toolName === 'wiki_write') && isStructuredToolFailure(entry.output);
+}
+
 function reportIdFromCreateResult(result: unknown): string | undefined {
   if (!result || typeof result !== 'object' || !('id' in result)) {
     return undefined;
@@ -344,7 +359,7 @@ export class IngestBundleRunner {
             toolNames: new Set<string>(),
           } satisfies MutableToolTranscriptSummary);
         current.toolCallCount += 1;
-        current.errorCount += entry.error ? 1 : 0;
+        current.errorCount += isFailedToolCall(entry) ? 1 : 0;
         current.toolNames.add(entry.toolName);
         transcriptSummaries.set(entry.wuKey, current);
       };
@@ -712,6 +727,7 @@ export class IngestBundleRunner {
               sourceKey: job.sourceKey,
               connectionId: job.connectionId,
               jobId: job.jobId,
+              toolFailureCount: (unitKey) => transcriptSummaries.get(unitKey)?.errorCount ?? 0,
               onStepFinish: ({ stepIndex, stepBudget }) => {
                 memoryFlow?.emit({ type: 'work_unit_step', unitKey: wu.unitKey, stepIndex, stepBudget });
               },

@@ -67,10 +67,10 @@ describe('KTX setup config helpers', () => {
 
   it('merges setup-local gitignore entries without removing existing lines', () => {
     expect(mergeKtxSetupGitignoreEntries('cache/\ndb.sqlite\n')).toBe(
-      ['cache/', 'db.sqlite', 'secrets/', 'setup/', 'agents/', ''].join('\n'),
+      ['cache/', 'db.sqlite', 'db.sqlite-*', 'ingest-transcripts/', 'secrets/', 'setup/', 'agents/', ''].join('\n'),
     );
     expect(mergeKtxSetupGitignoreEntries('cache/\nsecrets/\n')).toBe(
-      ['cache/', 'secrets/', 'setup/', 'agents/', ''].join('\n'),
+      ['cache/', 'secrets/', 'db.sqlite', 'db.sqlite-*', 'ingest-transcripts/', 'setup/', 'agents/', ''].join('\n'),
     );
   });
 });

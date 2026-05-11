@@ -15,7 +15,6 @@ const packageNameByDir = new Map(
     'connector-clickhouse',
     'connector-mysql',
     'connector-postgres',
-    'connector-posthog',
     'connector-snowflake',
     'connector-sqlite',
     'connector-sqlserver',

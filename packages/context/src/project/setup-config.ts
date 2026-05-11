@@ -4,7 +4,15 @@ export const KTX_SETUP_STEPS = ['project', 'llm', 'embeddings', 'databases', 'so
 
 export type KtxSetupStep = (typeof KTX_SETUP_STEPS)[number];
 
-const SETUP_GITIGNORE_ENTRIES = ['secrets/', 'setup/', 'agents/'] as const;
+const SETUP_GITIGNORE_ENTRIES = [
+  'cache/',
+  'db.sqlite',
+  'db.sqlite-*',
+  'ingest-transcripts/',
+  'secrets/',
+  'setup/',
+  'agents/',
+] as const;
 
 export function markKtxSetupStepComplete(config: KtxProjectConfig, step: KtxSetupStep): KtxProjectConfig {
   const databaseConnectionIds = config.setup?.database_connection_ids ?? [];

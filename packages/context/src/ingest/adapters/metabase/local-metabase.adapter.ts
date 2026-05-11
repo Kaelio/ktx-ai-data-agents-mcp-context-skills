@@ -1,5 +1,6 @@
 import type { KtxLocalProject, KtxProjectConnectionConfig } from '../../../project/index.js';
 import { ktxLocalStateDbPath } from '../../../project/index.js';
+import { resolveKtxConfigReference } from '../../../core/config-reference.js';
 import { DEFAULT_METABASE_CLIENT_CONFIG, DefaultMetabaseConnectionClientFactory } from './client.js';
 import {
   IngestMetabaseClientFactory,
@@ -11,14 +12,6 @@ import { MetabaseSourceAdapter } from './metabase.adapter.js';
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function resolveEnvReference(ref: string, env: NodeJS.ProcessEnv): string | null {
-  if (!ref.startsWith('env:')) {
-    return null;
-  }
-  const name = ref.slice('env:'.length);
-  return stringField(env[name]);
 }
 
 function hasNetworkProxy(connection: KtxProjectConnectionConfig): boolean {
@@ -42,7 +35,7 @@ export function metabaseRuntimeConfigFromLocalConnection(
   const apiUrl = stringField(connection.api_url) ?? stringField(connection.apiUrl) ?? stringField(connection.url);
   const literalApiKey = stringField(connection.api_key) ?? stringField(connection.apiKey);
   const apiKeyRef = stringField(connection.api_key_ref) ?? stringField(connection.apiKeyRef);
-  const apiKey = literalApiKey ?? (apiKeyRef ? resolveEnvReference(apiKeyRef, env) : null);
+  const apiKey = literalApiKey ?? (apiKeyRef ? resolveKtxConfigReference(apiKeyRef, env) : null);
 
   if (!apiUrl) {
     throw new Error(`Connection "${connectionId}" is missing metabase api_url`);

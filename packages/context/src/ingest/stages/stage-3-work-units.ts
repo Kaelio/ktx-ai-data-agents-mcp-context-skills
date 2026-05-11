@@ -28,6 +28,7 @@ export interface WorkUnitExecutionDeps {
   connectionId: string;
   jobId: string;
   onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
+  toolFailureCount?: (unitKey: string) => number;
 }
 
 export interface WorkUnitOutcome {
@@ -126,6 +127,11 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
 
   if (runResult.stopReason === 'error') {
     return failWithReset(runResult.error?.message ?? 'agent loop errored');
+  }
+
+  const toolFailureCount = deps.toolFailureCount?.(wu.unitKey) ?? 0;
+  if (toolFailureCount > 0) {
+    return failWithReset(`${toolFailureCount} tool call(s) failed during WorkUnit ${wu.unitKey}`);
   }
 
   const touched = listTouchedSlSources(deps.captureSession.touchedSlSources);

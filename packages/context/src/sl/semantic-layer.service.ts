@@ -2,6 +2,7 @@ import YAML from 'yaml';
 import type { KtxFileStorePort, KtxLogger } from '../core/index.js';
 import { noopLogger } from '../core/index.js';
 import type { SlConnectionCatalogPort, SlPythonPort } from './ports.js';
+import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { isOverlaySource, sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
 import type { SemanticLayerQueryExecutionResult, SemanticLayerQueryInput, SemanticLayerSource } from './types.js';
 
@@ -101,6 +102,7 @@ export class SemanticLayerService {
     const warnings: string[] = [];
 
     if (!options?.skipValidation) {
+      source = normalizeSemanticLayerDescriptions(source);
       const sourceData: Record<string, unknown> = { ...source };
 
       if ((sourceData.table || sourceData.sql) && (await this.isManifestBacked(connectionId, source.name))) {
@@ -129,7 +131,8 @@ export class SemanticLayerService {
     }
 
     const path = this.sourcePath(connectionId, source.name);
-    const content = YAML.stringify(source, { indent: 2, lineWidth: 0 });
+    const normalizedSource = normalizeSemanticLayerDescriptions(source);
+    const content = YAML.stringify(normalizedSource, { indent: 2, lineWidth: 0 });
     const message = commitMessage ?? `Update semantic layer source: ${source.name}`;
     const result = await this.configService.writeFile(path, content, author, authorEmail, message, {
       skipLock: options?.skipLock,
@@ -199,14 +202,14 @@ export class SemanticLayerService {
           if (sources.has(name)) {
             this.logger.warn(`Standalone source '${name}' in ${filePath} overrides manifest entry of the same name`);
           }
-          let standalone: SemanticLayerSource = {
+          let standalone: SemanticLayerSource = normalizeSemanticLayerDescriptions({
             ...(data as Partial<SemanticLayerSource>),
             name,
             grain: Array.isArray(data.grain) ? (data.grain as string[]) : [],
             columns: Array.isArray(data.columns) ? (data.columns as SemanticLayerSource['columns']) : [],
             joins: Array.isArray(data.joins) ? (data.joins as SemanticLayerSource['joins']) : [],
             measures: Array.isArray(data.measures) ? (data.measures as SemanticLayerSource['measures']) : [],
-          };
+          });
           // If the source declares `inherits_columns_from`, fill any blank
           // type/descriptions/role from the matching manifest entry. Lets the
           // agent write `columns: [{name: FOO}]` without redeclaring known fields.
@@ -1005,7 +1008,8 @@ const COMPOSE_KNOWN_KEYS = new Set([
 ]);
 
 export function composeOverlay(base: SemanticLayerSource, overlay: Record<string, unknown>): SemanticLayerSource {
-  const unknownKeys = Object.keys(overlay).filter((k) => !COMPOSE_KNOWN_KEYS.has(k));
+  const normalizedOverlay = normalizeSemanticLayerDescriptions(overlay);
+  const unknownKeys = Object.keys(normalizedOverlay).filter((k) => !COMPOSE_KNOWN_KEYS.has(k));
   if (unknownKeys.length > 0) {
     throw new Error(
       `composeOverlay: overlay for '${base.name}' has unhandled keys [${unknownKeys.join(', ')}]. ` +
@@ -1015,50 +1019,47 @@ export function composeOverlay(base: SemanticLayerSource, overlay: Record<string
 
   const result = { ...base };
 
-  if (overlay.description) {
-    result.descriptions = { ...(result.descriptions ?? {}), user: overlay.description as string };
-  }
-
   // Descriptions (plural) merge keyed by source (e.g. `dbt`, `ai`, `db`). Overlay keys
   // win over matching base keys but unrelated base keys are preserved.
-  if (overlay.descriptions) {
+  if (normalizedOverlay.descriptions) {
     result.descriptions = {
       ...(result.descriptions ?? {}),
-      ...(overlay.descriptions as Record<string, string>),
+      ...(normalizedOverlay.descriptions as Record<string, string>),
     };
   }
 
   // Filter out excluded columns
-  const excluded = new Set((overlay.exclude_columns as string[] | undefined) ?? []);
+  const excluded = new Set((normalizedOverlay.exclude_columns as string[] | undefined) ?? []);
   let columns = result.columns.filter((c) => !excluded.has(c.name));
 
   // Append overlay computed columns
-  const overlayColumns = (overlay.columns as SemanticLayerSource['columns'] | undefined) ?? [];
+  const overlayColumns = (normalizedOverlay.columns as SemanticLayerSource['columns'] | undefined) ?? [];
   columns = [...columns, ...overlayColumns];
   result.columns = columns;
 
   // Measures from overlay only
-  result.measures = (overlay.measures as SemanticLayerSource['measures'] | undefined) ?? [];
+  result.measures = (normalizedOverlay.measures as SemanticLayerSource['measures'] | undefined) ?? [];
 
   // Segments: overlay-replaces semantics. Manifest tables don't carry segments today;
   // if that changes, add a union branch here.
-  if (overlay.segments !== undefined) {
-    result.segments = overlay.segments as SemanticLayerSource['segments'];
+  if (normalizedOverlay.segments !== undefined) {
+    result.segments = normalizedOverlay.segments as SemanticLayerSource['segments'];
   }
 
   // Override grain
-  if (overlay.grain) {
-    result.grain = overlay.grain as string[];
+  if (normalizedOverlay.grain) {
+    result.grain = normalizedOverlay.grain as string[];
   }
 
-  if (overlay.default_time_dimension !== undefined) {
-    result.default_time_dimension = overlay.default_time_dimension as SemanticLayerSource['default_time_dimension'];
+  if (normalizedOverlay.default_time_dimension !== undefined) {
+    result.default_time_dimension =
+      normalizedOverlay.default_time_dimension as SemanticLayerSource['default_time_dimension'];
   }
 
   // Union + dedupe joins, apply suppressions
-  const disabled = new Set(((overlay.disable_joins as string[] | undefined) ?? []).map(normalizeWs));
+  const disabled = new Set(((normalizedOverlay.disable_joins as string[] | undefined) ?? []).map(normalizeWs));
   const manifestJoins = result.joins.filter((j) => !disabled.has(normalizeWs(j.on)));
-  const overlayJoins = (overlay.joins as SemanticLayerSource['joins'] | undefined) ?? [];
+  const overlayJoins = (normalizedOverlay.joins as SemanticLayerSource['joins'] | undefined) ?? [];
   const existingKeys = new Set(manifestJoins.map((j) => `${j.to}::${normalizeWs(j.on)}`));
   const newJoins = overlayJoins.filter((j) => !existingKeys.has(`${j.to}::${normalizeWs(j.on)}`));
   result.joins = [...manifestJoins, ...newJoins];

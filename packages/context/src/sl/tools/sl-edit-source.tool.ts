@@ -2,6 +2,7 @@ import YAML from 'yaml';
 import { z } from 'zod';
 import { addTouchedSlSource, type ToolContext, type ToolOutput } from '../../tools/index.js';
 import { applySqlEdits } from '../../tools/sql-edit-replacer.js';
+import { normalizeSemanticLayerDescriptions } from '../description-normalization.js';
 import type { SemanticLayerSource } from '../types.js';
 import {
   BaseSemanticLayerTool,
@@ -147,6 +148,7 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
     } catch (e) {
       return this.buildOutput(false, [`YAML parse error after edits: ${e}`], sourceName);
     }
+    source = normalizeSemanticLayerDescriptions(source, { fillMissing: !!context.session?.ingest });
 
     // Re-serialize and write
     const updatedYaml = YAML.stringify(source, { indent: 2, lineWidth: 0 });

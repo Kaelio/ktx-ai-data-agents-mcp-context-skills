@@ -111,6 +111,16 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
 }
 
 function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIngestIo): void {
+  const counts = result.children.reduce(
+    (acc, child) => {
+      const childCounts = reportActionCounts(child.report);
+      return {
+        wikiCount: acc.wikiCount + childCounts.wikiCount,
+        slCount: acc.slCount + childCounts.slCount,
+      };
+    },
+    { wikiCount: 0, slCount: 0 },
+  );
   io.stdout.write(`Metabase fan-out: ${result.status}\n`);
   io.stdout.write(`Source: ${result.metabaseConnectionId}\n`);
   io.stdout.write(`Children: ${result.children.length}\n`);
@@ -118,10 +128,11 @@ function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIng
     io.stdout.write(`Work units: ${result.totals.workUnits}\n`);
     io.stdout.write(`Failed work units: ${result.totals.failedWorkUnits}\n`);
   }
+  io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   for (const child of result.children) {
     const status = reportStatus(child.report);
     io.stdout.write(
-      `- target=${child.targetConnectionId} database=${child.metabaseDatabaseId} status=${status} job=${child.jobId}\n`,
+      `- target=${child.targetConnectionId} database=${child.metabaseDatabaseId} status=${status} job=${child.jobId} report=${child.report.id}\n`,
     );
   }
 }
@@ -326,7 +337,7 @@ export async function runKtxIngest(
         } else {
           writeMetabaseFanoutStatus(result, io);
         }
-        return 0;
+        return result.status === 'all_succeeded' ? 0 : 1;
       }
 
       const jobId = deps.jobIdFactory?.();
@@ -377,14 +388,14 @@ export async function runKtxIngest(
           liveTui?.close();
           liveTui = null;
           io.stdout.write(formatMemoryFlowFinalSummary(latestMemoryFlowSnapshot));
-          return 0;
+          return reportStatus(result.report) === 'done' ? 0 : 1;
         }
         await writeReportRecord(result.report, runOutputMode, io, {
           interactive: (args.inputMode ?? 'auto') === 'auto',
           renderStoredMemoryFlow: deps.renderStoredMemoryFlow,
           env,
         });
-        return 0;
+        return reportStatus(result.report) === 'done' ? 0 : 1;
       } finally {
         liveTui?.close();
       }

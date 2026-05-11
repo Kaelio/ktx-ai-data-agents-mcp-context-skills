@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  formatInstallSummary,
   plannedKtxAgentFiles,
   readKtxAgentInstallManifest,
   removeKtxAgentInstall,
@@ -37,11 +38,13 @@ describe('setup agents', () => {
 
   it('plans project-scoped CLI and MCP files for every target', () => {
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'claude-code', scope: 'project', mode: 'both' })).toEqual([
-      { kind: 'file', path: join(tempDir, '.claude/skills/ktx/SKILL.md') },
+      { kind: 'file', path: join(tempDir, '.claude/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(tempDir, '.claude/rules/ktx.md'), role: 'rule' },
       { kind: 'json-key', path: join(tempDir, '.mcp.json'), jsonPath: ['mcpServers', 'ktx'] },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'codex', scope: 'project', mode: 'cli' })).toEqual([
-      { kind: 'file', path: join(tempDir, '.agents/skills/ktx/SKILL.md') },
+      { kind: 'file', path: join(tempDir, '.agents/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(tempDir, '.codex/instructions/ktx.md'), role: 'rule' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'cursor', scope: 'project', mode: 'mcp' })).toEqual([
       { kind: 'json-key', path: join(tempDir, '.cursor/mcp.json'), jsonPath: ['mcpServers', 'ktx'] },
@@ -83,7 +86,7 @@ describe('setup agents', () => {
     const skill = await readFile(join(tempDir, '.agents/skills/ktx/SKILL.md'), 'utf-8');
     expect(skill).toContain(`--project-dir ${tempDir}`);
     expect(skill).toContain('must not print secrets');
-    expect(skill).toContain('ktx agent sql execute');
+    expect(skill).toContain('agent sql execute');
     expect(await readKtxAgentInstallManifest(tempDir)).toMatchObject({
       version: 1,
       projectDir: tempDir,
@@ -91,6 +94,47 @@ describe('setup agents', () => {
     });
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('agents');
     expect(io.stderr()).toBe('');
+  });
+
+  it('writes PATH-independent launcher commands for skills and MCP configs', async () => {
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: true,
+          agents: true,
+          target: 'universal',
+          scope: 'project',
+          mode: 'both',
+          skipAgents: false,
+        },
+        io.io,
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const skill = await readFile(join(tempDir, '.agents/skills/ktx/SKILL.md'), 'utf-8');
+    expect(skill).not.toContain('`ktx agent');
+    expect(skill).toContain('agent context --json');
+    expect(skill).toContain('agent sql execute');
+
+    const mcp = JSON.parse(await readFile(join(tempDir, '.agents/mcp/ktx.json'), 'utf-8')) as {
+      mcpServers?: { ktx?: { command?: string; args?: string[] } };
+    };
+    expect(mcp.mcpServers?.ktx?.command).toBe(process.execPath);
+    expect(mcp.mcpServers?.ktx?.args?.[0]).toMatch(/packages\/cli\/(src|dist)\/bin\.(ts|js)$/);
+    expect(mcp.mcpServers?.ktx?.args).toEqual([
+      expect.stringMatching(/packages\/cli\/(src|dist)\/bin\.(ts|js)$/),
+      '--project-dir',
+      tempDir,
+      'serve',
+      '--mcp',
+      'stdio',
+      '--semantic-compute',
+      '--execute-queries',
+    ]);
   });
 
   it('removes only manifest-listed files and JSON keys', async () => {
@@ -113,6 +157,7 @@ describe('setup agents', () => {
     await expect(removeKtxAgentInstall(tempDir, io.io)).resolves.toBe(0);
 
     await expect(stat(join(tempDir, '.claude/skills/ktx/SKILL.md'))).rejects.toThrow();
+    await expect(stat(join(tempDir, '.claude/rules/ktx.md'))).rejects.toThrow();
     await expect(stat(join(tempDir, '.claude/skills/ktx/keep.txt'))).resolves.toBeDefined();
     await expect(readKtxAgentInstallManifest(tempDir)).resolves.toEqual(null);
   });
@@ -172,5 +217,72 @@ describe('setup agents', () => {
           'Which agent targets should KTX install?\nUse Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
       }),
     );
+  });
+
+  it('prints per-agent install summary after successful installation', async () => {
+    const io = makeIo();
+
+    await runKtxSetupAgentsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        yes: true,
+        agents: true,
+        target: 'claude-code',
+        scope: 'project',
+        mode: 'both',
+        skipAgents: false,
+      },
+      io.io,
+    );
+
+    const output = io.stdout();
+    expect(output).toContain('Agent integration complete');
+    expect(output).toContain('Claude Code');
+    expect(output).toContain('+ Skill installed');
+    expect(output).toContain('.claude/skills/ktx/SKILL.md');
+    expect(output).toContain('+ Rule installed');
+    expect(output).toContain('.claude/rules/ktx.md');
+    expect(output).toContain('+ MCP config added');
+    expect(output).toContain('.mcp.json');
+  });
+
+  it('formats summary with relative paths for project scope', () => {
+    const summary = formatInstallSummary(
+      [{ target: 'cursor', scope: 'project', mode: 'both' }],
+      [
+        { kind: 'file', path: join(tempDir, '.cursor/rules/ktx.mdc') },
+        { kind: 'json-key', path: join(tempDir, '.cursor/mcp.json'), jsonPath: ['mcpServers', 'ktx'] },
+      ],
+      tempDir,
+    );
+
+    expect(summary).toContain('Cursor');
+    expect(summary).toContain('+ Rule installed');
+    expect(summary).toContain('.cursor/rules/ktx.mdc');
+    expect(summary).toContain('+ MCP config added');
+    expect(summary).toContain('.cursor/mcp.json');
+    expect(summary).not.toContain(tempDir);
+  });
+
+  it('formats summary with multiple agent targets', () => {
+    const summary = formatInstallSummary(
+      [
+        { target: 'claude-code', scope: 'project', mode: 'cli' },
+        { target: 'codex', scope: 'project', mode: 'mcp' },
+      ],
+      [
+        { kind: 'file', path: join(tempDir, '.claude/skills/ktx/SKILL.md'), role: 'skill' },
+        { kind: 'file', path: join(tempDir, '.claude/rules/ktx.md'), role: 'rule' },
+        { kind: 'json-key', path: join(tempDir, '.agents/mcp/ktx.json'), jsonPath: ['mcpServers', 'ktx'] },
+      ],
+      tempDir,
+    );
+
+    expect(summary).toContain('Claude Code');
+    expect(summary).toContain('+ Skill installed');
+    expect(summary).toContain('+ Rule installed');
+    expect(summary).toContain('Codex');
+    expect(summary).toContain('+ MCP config added');
   });
 });

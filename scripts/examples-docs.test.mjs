@@ -79,7 +79,6 @@ describe('standalone example docs', () => {
     assert.match(rootReadme, /`packages\/connector-clickhouse`/);
     assert.match(rootReadme, /`packages\/connector-mysql`/);
     assert.match(rootReadme, /`packages\/connector-postgres`/);
-    assert.match(rootReadme, /`packages\/connector-posthog`/);
     assert.match(rootReadme, /`packages\/connector-snowflake`/);
     assert.match(rootReadme, /`packages\/connector-sqlite`/);
     assert.match(rootReadme, /`packages\/connector-sqlserver`/);

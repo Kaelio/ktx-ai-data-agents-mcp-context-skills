@@ -5,7 +5,6 @@ export type KtxConnectionDriver =
   | 'sqlserver'
   | 'bigquery'
   | 'snowflake'
-  | 'posthog'
   | 'mysql'
   | 'clickhouse';
 

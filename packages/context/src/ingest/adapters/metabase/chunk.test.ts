@@ -284,6 +284,18 @@ describe('chunkMetabaseStagedDir — syncMode enum coverage', () => {
     expect(allRawFiles).not.toContain('cards/200.json');
   });
 
+  it('ONLY with no selections includes every matching card for old generated configs', async () => {
+    await writeInline(dir, 'sync-config.json', {
+      ...BASE_SYNC,
+      syncMode: 'ONLY',
+      selections: [],
+    });
+    const result = await chunkMetabaseStagedDir(dir);
+    const allRawFiles = result.workUnits.flatMap((wu) => wu.rawFiles);
+    expect(allRawFiles).toContain('cards/100.json');
+    expect(allRawFiles).toContain('cards/200.json');
+  });
+
   it('EXCEPT excludes cards in selected collections; includes the rest', async () => {
     await writeInline(dir, 'sync-config.json', {
       ...BASE_SYNC,

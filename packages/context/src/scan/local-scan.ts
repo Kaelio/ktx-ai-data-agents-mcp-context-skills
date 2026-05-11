@@ -103,13 +103,12 @@ function normalizeDriver(driver: string | undefined): KtxConnectionDriver {
     normalized === 'clickhouse' ||
     normalized === 'sqlserver' ||
     normalized === 'bigquery' ||
-    normalized === 'snowflake' ||
-    normalized === 'posthog'
+    normalized === 'snowflake'
   ) {
     return normalized === 'sqlite3' ? 'sqlite' : normalized;
   }
   throw new Error(
-    `Standalone ktx scan supports postgres/postgresql/sqlite/mysql/clickhouse/sqlserver/bigquery/snowflake/posthog in this phase, received "${driver ?? 'unknown'}"`,
+    `Standalone ktx scan supports postgres/postgresql/sqlite/mysql/clickhouse/sqlserver/bigquery/snowflake in this phase, received "${driver ?? 'unknown'}"`,
   );
 }
 

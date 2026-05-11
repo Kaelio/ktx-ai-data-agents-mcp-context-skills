@@ -39,7 +39,6 @@
     "@ktx/connector-clickhouse": "workspace:*",
     "@ktx/connector-mysql": "workspace:*",
     "@ktx/connector-postgres": "workspace:*",
-    "@ktx/connector-posthog": "workspace:*",
     "@ktx/connector-snowflake": "workspace:*",
     "@ktx/connector-sqlite": "workspace:*",
     "@ktx/connector-sqlserver": "workspace:*",
