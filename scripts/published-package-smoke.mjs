@@ -23,6 +23,26 @@ export {
 const execFileAsync = promisify(execFile);
 const SMOKE_TIMEOUT_MS = 180_000;
 
+const VERSION_LABELS = new Set([
+  'published package npx version',
+  'published package local version',
+  'published package global version',
+]);
+
+const SEMANTIC_QUERY_LABELS = new Set([
+  'published package npx sl query',
+  'published package local sl query',
+  'published package global sl query',
+]);
+
+export function isPublishedPackageVersionLabel(label) {
+  return VERSION_LABELS.has(label);
+}
+
+export function isPublishedPackageSemanticQueryLabel(label) {
+  return SEMANTIC_QUERY_LABELS.has(label);
+}
+
 function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
@@ -77,14 +97,10 @@ export async function runPublishedPackageSmoke(config) {
         env: isGlobalCommand ? { ...globalEnv, ...command.env } : command.env,
       });
       requireSuccess(command.label, result);
-      if (
-        command.label === 'published package version' ||
-        command.label === 'published package local binary' ||
-        command.label === 'published package global binary'
-      ) {
+      if (isPublishedPackageVersionLabel(command.label)) {
         assert.match(result.stdout, /@kaelio\/ktx /);
       }
-      if (command.label === 'published package sl query') {
+      if (isPublishedPackageSemanticQueryLabel(command.label)) {
         assert.match(result.stdout, /SELECT/i);
         assert.match(result.stdout, /contracts/i);
       }

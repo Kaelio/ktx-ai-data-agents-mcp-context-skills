@@ -5,6 +5,8 @@ import { describe, it } from 'node:test';
 import {
   buildPublishedPackageNpxCommand,
   buildPublishedPackageSmokeCommands,
+  isPublishedPackageSemanticQueryLabel,
+  isPublishedPackageVersionLabel,
   publishedPackageSpec,
   readPublishedPackageSmokeConfig,
 } from './published-package-smoke.mjs';
@@ -143,6 +145,20 @@ describe('published package smoke config', () => {
         ),
       /KTX_PUBLISHED_KTX_REGISTRY must be an http\(s\) URL/,
     );
+  });
+});
+
+describe('published package smoke output validation labels', () => {
+  it('classifies version and semantic query commands', () => {
+    assert.equal(isPublishedPackageVersionLabel('published package npx version'), true);
+    assert.equal(isPublishedPackageVersionLabel('published package local version'), true);
+    assert.equal(isPublishedPackageVersionLabel('published package global version'), true);
+    assert.equal(isPublishedPackageVersionLabel('published package setup demo'), false);
+
+    assert.equal(isPublishedPackageSemanticQueryLabel('published package npx sl query'), true);
+    assert.equal(isPublishedPackageSemanticQueryLabel('published package local sl query'), true);
+    assert.equal(isPublishedPackageSemanticQueryLabel('published package global sl query'), true);
+    assert.equal(isPublishedPackageSemanticQueryLabel('published package local install'), false);
   });
 });
 
