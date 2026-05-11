@@ -36,6 +36,7 @@ import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
 describe('runKtxIngest', () => {
   let tempDir: string;
   let originalTerm: string | undefined;
+  const interactiveEnv = (): NodeJS.ProcessEnv => ({ ...process.env, CI: 'false' });
 
   beforeEach(async () => {
     resetVizFallbackWarningsForTest();
@@ -897,6 +898,7 @@ describe('runKtxIngest', () => {
         },
         io.io,
         {
+          env: interactiveEnv(),
           createAdapters,
           runLocalIngest: runLocal,
           jobIdFactory: () => 'historic-progress-job',

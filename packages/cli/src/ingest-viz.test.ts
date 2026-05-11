@@ -22,6 +22,7 @@ import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
 describe('runKtxIngest viz and replay', () => {
   let tempDir: string;
   let originalTerm: string | undefined;
+  const interactiveEnv = (): NodeJS.ProcessEnv => ({ ...process.env, CI: 'false' });
 
   beforeEach(async () => {
     resetVizFallbackWarningsForTest();
@@ -325,7 +326,7 @@ describe('runKtxIngest viz and replay', () => {
           outputMode: 'plain',
         },
         io.io,
-        { runLocalIngest: runLocal },
+        { env: interactiveEnv(), runLocalIngest: runLocal },
       ),
     ).resolves.toBe(0);
 
@@ -396,6 +397,7 @@ describe('runKtxIngest viz and replay', () => {
         },
         io.io,
         {
+          env: interactiveEnv(),
           runLocalIngest: runLocal,
           startLiveMemoryFlow,
           jobIdFactory: () => 'raw-missing-viz-run',
