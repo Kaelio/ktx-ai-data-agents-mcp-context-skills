@@ -10,6 +10,7 @@ import {
   packageArtifactLayout,
   writeArtifactManifest,
 } from './package-artifacts.mjs';
+import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
 import { readReleasePolicy, releasePolicyPath, releaseReadinessReport } from './release-readiness.mjs';
 
 async function writeJson(path, value) {
@@ -69,6 +70,8 @@ function releasePolicy(overrides = {}) {
     npm: {
       publish: false,
       registry: null,
+      access: 'public',
+      tag: 'latest',
       packages: ['@kaelio/ktx'],
       ...npmOverrides,
     },
@@ -144,6 +147,7 @@ describe('release readiness policy', () => {
           version: 'latest',
           registry: null,
         },
+        npmPublish: null,
         blockedPublishingDecisions: [
           'Choose public release version.',
           'Configure registry credentials outside source control.',
@@ -217,8 +221,126 @@ describe('release readiness policy', () => {
           version: '2026.5.8',
           registry: 'https://registry.npmjs.org/',
         },
+        npmPublish: null,
         blockedPublishingDecisions: [],
       });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts the npm public release ready policy', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-npm-public-ready-test-'));
+    try {
+      await writeReadyFixture(root, {
+        policy: releasePolicy({
+          releaseMode: 'npm-public-release-ready',
+          npm: {
+            publish: true,
+            registry: null,
+            access: 'public',
+            tag: 'latest',
+          },
+          publishedPackageSmoke: {
+            packageName: '@kaelio/ktx',
+            version: PUBLIC_NPM_PACKAGE_VERSION,
+            registry: null,
+          },
+          requiredBeforePublishing: [],
+        }),
+      });
+
+      const report = await releaseReadinessReport(root);
+
+      assert.deepEqual(report, {
+        schemaVersion: 1,
+        releaseMode: 'npm-public-release-ready',
+        sourceRevision: 'abc123',
+        npmPublishEnabled: true,
+        pythonPublishEnabled: false,
+        packageNames: ['@kaelio/ktx', 'ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
+        publishedPackageSmokeGate: {
+          status: 'required',
+          script: 'pnpm run release:published-smoke',
+          reason: 'Run the published package smoke after the npm package is published.',
+          configSource: 'release-policy',
+          packageName: '@kaelio/ktx',
+          version: PUBLIC_NPM_PACKAGE_VERSION,
+          registry: null,
+        },
+        npmPublish: {
+          packageName: '@kaelio/ktx',
+          version: PUBLIC_NPM_PACKAGE_VERSION,
+          access: 'public',
+          tag: 'latest',
+          registry: null,
+        },
+        blockedPublishingDecisions: [],
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects npm public release ready mode when npm publish is disabled', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-npm-public-ready-disabled-test-'));
+    try {
+      await writeReadyFixture(root, {
+        policy: releasePolicy({
+          releaseMode: 'npm-public-release-ready',
+          npm: {
+            publish: false,
+            registry: null,
+            access: 'public',
+            tag: 'latest',
+          },
+          publishedPackageSmoke: {
+            packageName: '@kaelio/ktx',
+            version: PUBLIC_NPM_PACKAGE_VERSION,
+            registry: null,
+          },
+          requiredBeforePublishing: [],
+        }),
+      });
+
+      await assert.rejects(
+        () => releaseReadinessReport(root),
+        /npm-public-release-ready policy requires npm.publish true/,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects npm public release ready mode when Python publishing is enabled', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-npm-public-ready-python-test-'));
+    try {
+      await writeReadyFixture(root, {
+        policy: releasePolicy({
+          releaseMode: 'npm-public-release-ready',
+          npm: {
+            publish: true,
+            registry: null,
+            access: 'public',
+            tag: 'latest',
+          },
+          python: {
+            publish: true,
+            repository: 'pypi',
+          },
+          publishedPackageSmoke: {
+            packageName: '@kaelio/ktx',
+            version: PUBLIC_NPM_PACKAGE_VERSION,
+            registry: null,
+          },
+          requiredBeforePublishing: [],
+        }),
+      });
+
+      await assert.rejects(
+        () => releaseReadinessReport(root),
+        /npm-public-release-ready policy keeps python.publish false/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

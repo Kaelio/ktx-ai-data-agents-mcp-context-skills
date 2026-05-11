@@ -1,9 +1,11 @@
 {
   "schemaVersion": 1,
-  "releaseMode": "ci-artifact-only",
+  "releaseMode": "npm-public-release-ready",
   "npm": {
-    "publish": false,
+    "publish": true,
     "registry": null,
+    "access": "public",
+    "tag": "latest",
     "packages": ["@kaelio/ktx"]
   },
   "python": {
@@ -13,12 +15,8 @@
   },
   "publishedPackageSmoke": {
     "packageName": "@kaelio/ktx",
-    "version": "latest",
+    "version": "0.1.0",
     "registry": null
   },
-  "requiredBeforePublishing": [
-    "Choose public release version.",
-    "Configure registry credentials outside source control.",
-    "Choose release tag and provenance policy."
-  ]
+  "requiredBeforePublishing": []
 }
