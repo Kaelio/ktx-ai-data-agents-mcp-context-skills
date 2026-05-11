@@ -4,14 +4,18 @@ The package artifact smoke checks create temporary projects instead of storing
 sample projects in this directory. Run the checks from `ktx/`:
 
 ```bash
-source .venv/bin/activate
 pnpm run artifacts:check
 ```
 
-The npm smoke project installs the generated `@ktx/context` and `@ktx/cli`
-tarballs, imports public package entry points, and runs installed `ktx`
-commands against a generated local project.
+The npm smoke project installs the generated public `@kaelio/ktx` tarball,
+imports the package entry point, and runs installed `ktx` commands against a
+generated local project.
 
-The Python smoke project installs `ktx-daemon` through the local artifact
-directory, imports `semantic_layer` and `ktx_daemon`, and runs
-`python -m ktx_daemon semantic-validate`.
+The managed Python runtime smoke isolates `KTX_RUNTIME_ROOT`, verifies
+`ktx runtime status`, runs `ktx sl query --yes` to install the core runtime from
+the bundled wheel, checks `ktx runtime doctor`, starts and reuses the managed
+daemon, and stops it.
+
+The Python smoke project still installs the Python artifacts directly because
+it verifies the standalone Python distributions that feed the bundled runtime
+wheel.

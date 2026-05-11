@@ -13,8 +13,8 @@ generates query workload under separate users, runs `ktx setup` with
 
 - Docker with Compose v2
 - Node and pnpm matching the KTX workspace
-- `python-service/.venv` already created, or `KTX_SQL_ANALYSIS_URL` pointing at
-  a running service that exposes `/api/sql/analyze-for-fingerprint`
+- `uv` on `PATH` so the KTX-managed Python runtime can install the bundled
+  runtime wheel
 
 ## Run
 
@@ -24,8 +24,9 @@ From the KTX repository root:
 examples/postgres-historic/scripts/smoke.sh
 ```
 
-The smoke creates a temporary KTX project, starts Postgres on
-`127.0.0.1:55432`, and uses this connection URL:
+The smoke creates a temporary KTX project, isolates the managed Python runtime
+under the temporary project parent, starts Postgres on `127.0.0.1:55432`, and
+uses this connection URL:
 
 ```bash
 postgresql://ktx_reader:ktx_reader@127.0.0.1:55432/analytics # pragma: allowlist secret
@@ -83,10 +84,11 @@ Historic SQL (warehouse)` when `pg_stat_statements` is installed,
 Run local historic-SQL ingest:
 
 ```bash
-node packages/cli/dist/bin.js --project-dir /tmp/ktx-postgres-historic dev ingest run \
+pnpm run ktx -- dev ingest run --project-dir /tmp/ktx-postgres-historic \
   --connection-id warehouse \
   --adapter historic-sql \
   --plain \
+  --yes \
   --no-input
 ```
 
@@ -111,5 +113,6 @@ The manifest should have `dialect: "postgres"`, `degraded: true`,
 - Missing grants: confirm `GRANT pg_read_all_stats TO ktx_reader;`.
 - Empty templates: rerun `scripts/generate-workload.sh base` and keep
   `--historic-sql-min-calls 2` for the smoke.
-- SQL-analysis failures: set `KTX_SQL_ANALYSIS_URL` to the running service URL
-  or create `python-service/.venv` before running `scripts/smoke.sh`.
+- SQL-analysis failures: run `pnpm run ktx -- runtime doctor` from the KTX
+  repository root and confirm `uv`, the bundled Python wheel, and the managed
+  runtime all pass.

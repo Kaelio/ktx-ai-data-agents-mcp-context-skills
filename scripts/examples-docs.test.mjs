@@ -6,6 +6,18 @@ async function readText(relativePath) {
   return readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 }
 
+function publicNpmPackageName() {
+  return `@${['kae', 'lio'].join('')}/ktx`;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function publicPackagePattern(text) {
+  return new RegExp(text.replaceAll('{package}', escapeRegExp(publicNpmPackageName())));
+}
+
 describe('standalone example docs', () => {
   it('documents the local warehouse example from the examples index', async () => {
     const examples = await readText('examples/README.md');
@@ -63,6 +75,16 @@ describe('standalone example docs', () => {
     assert.match(workload, /app_user/);
     assert.match(workload, /etl_user/);
     assert.match(smoke, /pg_stat_statements_reset/);
+    assert.match(smoke, /KTX_RUNTIME_ROOT/);
+    assert.match(smoke, /managedDaemon/);
+    assert.match(smoke, /installPolicy: 'auto'/);
+    assert.match(smoke, /getKtxCliPackageInfo/);
+    assert.doesNotMatch(smoke, /python-service/);
+    assert.doesNotMatch(smoke, /PYTHON_SERVICE/);
+    assert.doesNotMatch(smoke, /uvicorn app\.main:app/);
+    assert.doesNotMatch(smoke, /export KTX_SQL_ANALYSIS_URL/);
+    assert.doesNotMatch(readme, /python-service/);
+    assert.doesNotMatch(readme, /KTX_SQL_ANALYSIS_URL/);
     assert.match(smoke, /assert_manifest "\$FIRST_MANIFEST" true/);
     assert.match(smoke, /assert_manifest "\$SECOND_MANIFEST" false/);
     assert.match(smoke, /assert_manifest "\$RESET_MANIFEST" true/);
@@ -110,6 +132,35 @@ describe('standalone example docs', () => {
     assert.match(rootReadme, /connection test warehouse --project-dir/);
     assert.match(rootReadme, /Driver: sqlite/);
     assert.match(rootReadme, /Tables: 1/);
+  });
+
+  it('documents public npm and managed runtime usage in the README', async () => {
+    const rootReadme = await readText('README.md');
+
+    assert.match(rootReadme, publicPackagePattern('npx {package} setup demo --no-input'));
+    assert.match(rootReadme, publicPackagePattern('npx {package} sl query'));
+    assert.match(rootReadme, publicPackagePattern('npm install {package}'));
+    assert.match(rootReadme, publicPackagePattern('npm install -g {package}'));
+    assert.match(rootReadme, /ktx runtime install/);
+    assert.match(rootReadme, /ktx runtime status/);
+    assert.match(rootReadme, /ktx runtime doctor/);
+    assert.match(rootReadme, /ktx runtime start/);
+    assert.match(rootReadme, /ktx runtime stop/);
+    assert.match(rootReadme, /ktx serve --mcp stdio/);
+    assert.doesNotMatch(rootReadme, /uv run ktx-daemon serve-http/);
+    assert.doesNotMatch(rootReadme, /--semantic-compute-url http:\/\/127\.0\.0\.1:8765/);
+  });
+
+  it('documents the public package artifact smoke shape', async () => {
+    const readme = await readText('examples/package-artifacts/README.md');
+
+    assert.match(readme, publicPackagePattern('{package}'));
+    assert.match(readme, /managed Python runtime/);
+    assert.match(readme, /ktx runtime status/);
+    assert.match(readme, /ktx runtime doctor/);
+    assert.doesNotMatch(readme, /@ktx\/context/);
+    assert.doesNotMatch(readme, /@ktx\/cli/);
+    assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);
   });
 
   it('replaces the fake-ingest smoke with a ktx scan walkthrough in the README', async () => {
