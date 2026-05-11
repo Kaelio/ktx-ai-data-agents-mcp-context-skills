@@ -452,11 +452,15 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "requests" },
-    { name = "sentence-transformers" },
     { name = "sqlglot" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+local-embeddings = [
+    { name = "sentence-transformers" },
     { name = "torch", version = "2.11.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
@@ -476,11 +480,12 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "sentence-transformers", specifier = ">=5.1.1" },
+    { name = "sentence-transformers", marker = "extra == 'local-embeddings'", specifier = ">=5.1.1" },
     { name = "sqlglot", specifier = ">=26" },
-    { name = "torch", specifier = ">=2.2.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "extra == 'local-embeddings'", specifier = ">=2.2.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
+provides-extras = ["local-embeddings"]
 
 [package.metadata.requires-dev]
 dev = [

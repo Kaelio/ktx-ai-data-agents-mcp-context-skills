@@ -15,14 +15,18 @@ dependencies = [
     "psycopg[binary]>=3.2.0",
     "pydantic>=2.9.0",
     "requests>=2.32.0",
-    "sentence-transformers>=5.1.1",
     "sqlglot>=26",
-    "torch>=2.2.0",
     "uvicorn[standard]>=0.32.0",
 ]
 
 [project.scripts]
 ktx-daemon = "ktx_daemon.__main__:main"
+
+[project.optional-dependencies]
+local-embeddings = [
+    "sentence-transformers>=5.1.1",
+    "torch>=2.2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/kaelio/ktx"
