@@ -82,6 +82,38 @@ describe('setup status', () => {
     });
   });
 
+  it.each([
+    {
+      backend: 'vertex',
+      providerLines: ['    backend: vertex', '    vertex:', '      project: kaelio-dev', '      location: us-east5'],
+      model: 'claude-sonnet-4-6',
+    },
+    {
+      backend: 'gateway',
+      providerLines: ['    backend: gateway', '    gateway:', '      api_key: env:AI_GATEWAY_API_KEY'],
+      model: 'anthropic/claude-sonnet-4-6',
+    },
+  ])('reports configured $backend llm backends as setup-ready', async (fixture) => {
+    await mkdir(tempDir, { recursive: true });
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'llm:',
+        '  provider:',
+        ...fixture.providerLines,
+        '  models:',
+        `    default: ${fixture.model}`,
+        'connections: {}',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
+      llm: { backend: fixture.backend, ready: true, model: fixture.model },
+    });
+  });
+
   it('uses setup database connection ids when present', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -1172,6 +1204,77 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources']);
+  });
+
+  it.each([
+    {
+      backend: 'vertex',
+      providerLines: ['    backend: vertex', '    vertex:', '      project: kaelio-dev', '      location: us-east5'],
+      model: 'claude-sonnet-4-6',
+    },
+    {
+      backend: 'gateway',
+      providerLines: ['    backend: gateway', '    gateway:', '      api_key: env:AI_GATEWAY_API_KEY'],
+      model: 'anthropic/claude-sonnet-4-6',
+    },
+  ])('adds a dbt source in non-interactive setup with existing $backend llm config', async (fixture) => {
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '  completed_steps:',
+        '    - project',
+        '    - databases',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_URL',
+        'llm:',
+        '  provider:',
+        ...fixture.providerLines,
+        '  models:',
+        `    default: ${fixture.model}`,
+      ].join('\n'),
+      'utf-8',
+    );
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          source: 'dbt',
+          sourceConnectionId: 'dbt-main',
+          sourceGitUrl: 'https://github.com/Kaelio/klo-dbt-demo',
+          sourceBranch: 'main',
+          sourceProjectName: 'orbit_analytics',
+          sourceWarehouseConnectionId: 'warehouse',
+          skipSources: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          sourcesDeps: { validateDbt: vi.fn(async () => ({ ok: true as const, detail: 'dbt project valid' })) },
+          context: vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir, runId: 'setup-context-test' })),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).not.toContain('Anthropic');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('dbt-main:');
   });
 
   it('does not fail context build when prerequisites were explicitly skipped and agents are skipped', async () => {
