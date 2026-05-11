@@ -2,6 +2,7 @@ import { Option, type Command } from '@commander-js/extra-typings';
 import type { KtxAgentArgs } from '../agent.js';
 import type { KtxCliCommandContext } from '../cli-program.js';
 import { parsePositiveIntegerOption, resolveCommandProjectDir } from '../cli-program.js';
+import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 
 async function runAgent(context: KtxCliCommandContext, args: KtxAgentArgs): Promise<void> {
   const runner = context.deps.agent ?? (await import('../agent.js')).runKtxAgent;
@@ -73,10 +74,19 @@ export function registerAgentCommands(program: Command, context: KtxCliCommandCo
     .requiredOption('--connection-id <id>', 'Connection id for execution')
     .requiredOption('--query-file <path>', 'JSON semantic-layer query file')
     .option('--execute', 'Execute the compiled query against the connection', false)
+    .option('--yes', 'Install the managed Python runtime without prompting when required', false)
+    .option('--no-input', 'Disable interactive managed runtime installation')
     .option('--max-rows <number>', 'Maximum rows to return when executing', parsePositiveIntegerOption)
     .action(
       async (
-        options: { connectionId: string; queryFile: string; execute: boolean; maxRows?: number },
+        options: {
+          connectionId: string;
+          queryFile: string;
+          execute: boolean;
+          maxRows?: number;
+          yes?: boolean;
+          input?: boolean;
+        },
         command,
       ) => {
         await runAgent(context, {
@@ -86,6 +96,8 @@ export function registerAgentCommands(program: Command, context: KtxCliCommandCo
           connectionId: options.connectionId,
           queryFile: options.queryFile,
           execute: options.execute,
+          cliVersion: context.packageInfo.version,
+          runtimeInstallPolicy: runtimeInstallPolicyFromFlags(options),
           ...(options.maxRows !== undefined ? { maxRows: options.maxRows } : {}),
         });
       },

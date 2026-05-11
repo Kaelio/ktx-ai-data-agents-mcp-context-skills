@@ -105,4 +105,48 @@ describe('agent runtime helpers', () => {
       queryExecutor,
     });
   });
+
+  it('creates managed semantic compute when no test override is injected', async () => {
+    const project = {
+      projectDir: tempDir,
+      configPath: join(tempDir, 'ktx.yaml'),
+      config: { project: 'revenue', connections: {} },
+      coreConfig: {},
+      git: {},
+      fileStore: {},
+    } as never;
+    const ports = { semanticLayer: {} } as never;
+    const semanticLayerCompute = { query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() };
+    const loadProject = vi.fn(async () => project);
+    const createContextTools = vi.fn(() => ports);
+    const createManagedSemanticLayerCompute = vi.fn(async () => semanticLayerCompute);
+    const { io } = makeIo();
+
+    await expect(
+      createKtxAgentRuntime(
+        {
+          projectDir: tempDir,
+          enableSemanticCompute: true,
+          enableQueryExecution: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+          io,
+        },
+        {
+          loadProject,
+          createContextTools,
+          createManagedSemanticLayerCompute,
+        },
+      ),
+    ).resolves.toMatchObject({ project, ports, semanticLayerCompute });
+
+    expect(createManagedSemanticLayerCompute).toHaveBeenCalledWith({
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io,
+    });
+    expect(createContextTools).toHaveBeenCalledWith(project, {
+      semanticLayerCompute,
+    });
+  });
 });

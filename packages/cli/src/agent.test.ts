@@ -231,6 +231,8 @@ describe('runKtxAgent', () => {
           queryFile,
           execute: true,
           maxRows: 100,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'never',
         },
         io.io,
         { createRuntime: async () => runtime() },
@@ -238,6 +240,39 @@ describe('runKtxAgent', () => {
     ).resolves.toBe(0);
 
     expect(JSON.parse(io.stdout())).toMatchObject({ sql: 'select 1', rows: [[1]] });
+  });
+
+  it('passes managed runtime options into default SL query runtime creation', async () => {
+    const queryFile = join(tempDir, 'sl-query.json');
+    const io = makeIo();
+    const createRuntime = vi.fn(async () => runtime());
+    await writeFile(queryFile, '{"measures":["total_revenue"],"dimensions":[]}', 'utf-8');
+
+    await expect(
+      runKtxAgent(
+        {
+          command: 'sl-query',
+          projectDir: tempDir,
+          json: true,
+          connectionId: 'warehouse',
+          queryFile,
+          execute: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        io.io,
+        { createRuntime },
+      ),
+    ).resolves.toBe(0);
+
+    expect(createRuntime).toHaveBeenCalledWith({
+      projectDir: tempDir,
+      enableSemanticCompute: true,
+      enableQueryExecution: false,
+      cliVersion: '0.2.0',
+      runtimeInstallPolicy: 'auto',
+      io: io.io,
+    });
   });
 
   it('executes read-only SQL from a SQL file with an explicit row limit', async () => {

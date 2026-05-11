@@ -17,6 +17,7 @@ import {
   noIndexedSourcesSlSearchReadiness,
   type KtxAgentSlSearchReadinessDetail,
 } from './agent-search-readiness.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { readKtxSetupStatus, type KtxSetupStatus } from './setup.js';
 
 export type KtxAgentArgs =
@@ -32,6 +33,8 @@ export type KtxAgentArgs =
       queryFile: string;
       execute: boolean;
       maxRows?: number;
+      cliVersion: string;
+      runtimeInstallPolicy: KtxManagedPythonInstallPolicy;
     }
   | { command: 'wiki-search'; projectDir: string; json: true; query: string; limit: number }
   | { command: 'wiki-read'; projectDir: string; json: true; pageId: string }
@@ -42,6 +45,9 @@ export interface KtxAgentDeps extends KtxAgentRuntimeDeps {
     projectDir: string;
     enableSemanticCompute: boolean;
     enableQueryExecution: boolean;
+    cliVersion?: string;
+    runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
+    io?: KtxCliIo;
   }) => Promise<KtxAgentRuntime>;
   readSetupStatus?: (
     projectDir: string,
@@ -68,23 +74,22 @@ function writeAgentSlSearchReadinessError(io: KtxCliIo, detail: KtxAgentSlSearch
   writeAgentJsonError(io, detail.message, { code: detail.code, nextSteps: detail.nextSteps });
 }
 
-async function runtimeFor(args: KtxAgentArgs, deps: KtxAgentDeps): Promise<KtxAgentRuntime> {
+async function runtimeFor(args: KtxAgentArgs, deps: KtxAgentDeps, io: KtxCliIo): Promise<KtxAgentRuntime> {
   const needsSemanticCompute = args.command === 'sl-query';
   const needsQueryExecution = args.command === 'sql-execute' || (args.command === 'sl-query' && args.execute);
-  return deps.createRuntime
-    ? deps.createRuntime({
-        projectDir: args.projectDir,
-        enableSemanticCompute: needsSemanticCompute,
-        enableQueryExecution: needsQueryExecution,
-      })
-    : createKtxAgentRuntime(
-        {
-          projectDir: args.projectDir,
-          enableSemanticCompute: needsSemanticCompute,
-          enableQueryExecution: needsQueryExecution,
-        },
-        deps,
-      );
+  const runtimeOptions = {
+    projectDir: args.projectDir,
+    enableSemanticCompute: needsSemanticCompute,
+    enableQueryExecution: needsQueryExecution,
+    ...(args.command === 'sl-query'
+      ? {
+          cliVersion: args.cliVersion,
+          runtimeInstallPolicy: args.runtimeInstallPolicy,
+          io,
+        }
+      : {}),
+  };
+  return deps.createRuntime ? deps.createRuntime(runtimeOptions) : createKtxAgentRuntime(runtimeOptions, deps);
 }
 
 function connectionIdForSource(runtime: KtxAgentRuntime, requested: string | undefined): string {
@@ -101,7 +106,7 @@ export async function runKtxAgent(args: KtxAgentArgs, io: KtxCliIo, deps: KtxAge
       return 0;
     }
 
-    const runtime = await runtimeFor(args, deps);
+    const runtime = await runtimeFor(args, deps, io);
 
     if (args.command === 'context') {
       const [status, connections, semanticLayer] = await Promise.all([

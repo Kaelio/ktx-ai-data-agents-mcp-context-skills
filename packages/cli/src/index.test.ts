@@ -1401,6 +1401,8 @@ describe('runKtxCli', () => {
           queryFile: '/tmp/query.json',
           execute: true,
           maxRows: 100,
+          cliVersion: '0.0.0-private',
+          runtimeInstallPolicy: 'prompt',
         },
       },
       {
@@ -1447,6 +1449,104 @@ describe('runKtxCli', () => {
     const helpIo = makeIo();
     await expect(runKtxCli(['--help'], helpIo.io, { agent })).resolves.toBe(0);
     expect(helpIo.stdout()).not.toContain('agent ');
+  });
+
+  it('routes hidden agent SL query managed runtime policies', async () => {
+    const autoIo = makeIo();
+    const neverIo = makeIo();
+    const conflictIo = makeIo();
+    const agent = vi.fn(async () => 0);
+
+    await expect(
+      runKtxCli(
+        [
+          '--project-dir',
+          tempDir,
+          'agent',
+          'sl',
+          'query',
+          '--json',
+          '--connection-id',
+          'warehouse',
+          '--query-file',
+          '/tmp/query.json',
+          '--yes',
+        ],
+        autoIo.io,
+        { agent },
+      ),
+    ).resolves.toBe(0);
+
+    await expect(
+      runKtxCli(
+        [
+          '--project-dir',
+          tempDir,
+          'agent',
+          'sl',
+          'query',
+          '--json',
+          '--connection-id',
+          'warehouse',
+          '--query-file',
+          '/tmp/query.json',
+          '--no-input',
+        ],
+        neverIo.io,
+        { agent },
+      ),
+    ).resolves.toBe(0);
+
+    await expect(
+      runKtxCli(
+        [
+          '--project-dir',
+          tempDir,
+          'agent',
+          'sl',
+          'query',
+          '--json',
+          '--connection-id',
+          'warehouse',
+          '--query-file',
+          '/tmp/query.json',
+          '--yes',
+          '--no-input',
+        ],
+        conflictIo.io,
+        { agent },
+      ),
+    ).resolves.toBe(1);
+
+    expect(agent).toHaveBeenNthCalledWith(
+      1,
+      {
+        command: 'sl-query',
+        projectDir: tempDir,
+        json: true,
+        connectionId: 'warehouse',
+        queryFile: '/tmp/query.json',
+        execute: false,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'auto',
+      },
+      autoIo.io,
+    );
+    expect(agent).toHaveBeenNthCalledWith(
+      2,
+      {
+        command: 'sl-query',
+        projectDir: tempDir,
+        json: true,
+        connectionId: 'warehouse',
+        queryFile: '/tmp/query.json',
+        execute: false,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'never',
+      },
+      neverIo.io,
+    );
+    expect(conflictIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
   });
 
   it('prints semantic-layer hybrid search metadata from the hidden agent sl list command', async () => {
