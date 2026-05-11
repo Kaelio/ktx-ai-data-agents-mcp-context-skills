@@ -5,12 +5,27 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import {
+  PUBLIC_NPM_PACKAGE_NAME,
+  PUBLIC_NPM_PACKAGE_VERSION,
+} from './build-public-npm-package.mjs';
+
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT_DIR = resolve(SCRIPT_DIR, '..');
 const PUBLIC_NPM_ARTIFACT_DIR = join('dist', 'artifacts', 'npm');
 const OPT_IN_MESSAGE =
   'Set KTX_RUN_LOCAL_EMBEDDINGS_SMOKE=1 or pass --force to run the local embeddings smoke.';
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function expectedPublicKtxVersionPattern() {
+  return new RegExp(
+    `${escapeRegExp(PUBLIC_NPM_PACKAGE_NAME)} ${escapeRegExp(PUBLIC_NPM_PACKAGE_VERSION)}`,
+  );
+}
 
 export function localEmbeddingsSmokeOptIn(env = process.env, args = process.argv.slice(2)) {
   if (env.KTX_RUN_LOCAL_EMBEDDINGS_SMOKE === '1' || args.includes('--force')) {
@@ -264,7 +279,7 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
       timeoutMs: commands[0].timeoutMs,
     });
     requireSuccess(commands[0].label, version);
-    requireOutput(commands[0].label, version, /@kaelio\/ktx 0\.0\.0-private/);
+    requireOutput(commands[0].label, version, expectedPublicKtxVersionPattern());
 
     const missingStatus = parseJsonStdout(
       commands[1].label,

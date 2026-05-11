@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 
 import {
   buildLocalEmbeddingsSmokeEnv,
+  expectedPublicKtxVersionPattern,
   localEmbeddingsSmokeCommands,
   localEmbeddingsSmokeOptIn,
   parseDaemonBaseUrl,
@@ -52,6 +53,15 @@ describe('publicKtxTarballName', () => {
       () => publicKtxTarballName(['kaelio-ktx-0.1.0.tgz', 'kaelio-ktx-0.2.0.tgz']),
       /Expected exactly one @kaelio\/ktx tarball/,
     );
+  });
+});
+
+describe('expectedPublicKtxVersionPattern', () => {
+  it('matches the public package version and rejects the private workspace version', () => {
+    const pattern = expectedPublicKtxVersionPattern();
+
+    assert.match('@kaelio/ktx 0.1.0\n', pattern);
+    assert.doesNotMatch('@kaelio/ktx 0.0.0-private\n', pattern);
   });
 });
 
