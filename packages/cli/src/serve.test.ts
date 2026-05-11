@@ -162,6 +162,9 @@ describe('runKtxServeStdio', () => {
       expect.objectContaining({
         localIngest: expect.objectContaining({
           adapters: expect.any(Array),
+          pullConfigOptions: {
+            databaseIntrospectionUrl: 'http://127.0.0.1:8765',
+          },
         }),
         localScan: expect.objectContaining({
           adapters: createdAdapters,
@@ -172,6 +175,61 @@ describe('runKtxServeStdio', () => {
     expect(createIngestAdapters).toHaveBeenCalledWith(project, {
       databaseIntrospectionUrl: 'http://127.0.0.1:8765',
     });
+  });
+
+  it('passes managed daemon options to MCP local ingest adapters and pull-config options', async () => {
+    const project = { projectDir: '/tmp/ktx-project', config: { connections: {} } } as never;
+    const adapters = [{ source: 'looker', skillNames: [] }];
+    const createIngestAdapters = vi.fn(() => adapters);
+    const createContextTools = vi.fn(() => ({ connections: { list: async () => [] } }));
+    const managedRuntimeIo = makeManagedRuntimeIo();
+
+    await expect(
+      runKtxServeStdio(
+        {
+          mcp: 'stdio',
+          projectDir: '/tmp/ktx-project',
+          userId: 'agent',
+          semanticCompute: false,
+          semanticComputeUrl: undefined,
+          databaseIntrospectionUrl: undefined,
+          executeQueries: false,
+          memoryCapture: false,
+          memoryModel: undefined,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        {
+          loadProject: async () => project,
+          createContextTools,
+          createIngestAdapters,
+          managedRuntimeIo: managedRuntimeIo.io,
+          createServer: vi.fn(() => ({ connect: vi.fn(async () => undefined) }) as never),
+          createTransport: vi.fn(() => ({}) as never),
+          stderr: { write: vi.fn() },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const expectedManagedDaemon = {
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io: managedRuntimeIo.io,
+    };
+    expect(createIngestAdapters).toHaveBeenCalledWith(project, {
+      managedDaemon: expectedManagedDaemon,
+    });
+    expect(createContextTools).toHaveBeenCalledWith(
+      project,
+      expect.objectContaining({
+        localIngest: expect.objectContaining({
+          adapters,
+          pullConfigOptions: {
+            managedDaemon: expectedManagedDaemon,
+          },
+        }),
+      }),
+    );
   });
 
   it('uses CLI-native local ingest adapters for standalone scan tools', async () => {

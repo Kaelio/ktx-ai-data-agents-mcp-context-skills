@@ -21,6 +21,7 @@ import {
   createManagedPythonSemanticLayerComputePort,
   type KtxManagedPythonInstallPolicy,
 } from './managed-python-command.js';
+import type { ManagedPythonCoreDaemonOptions } from './managed-python-http.js';
 import { profileMark } from './startup-profile.js';
 
 profileMark('module:serve');
@@ -57,7 +58,7 @@ interface KtxServeDeps {
   createManagedSemanticLayerCompute?: typeof createManagedPythonSemanticLayerComputePort;
   managedRuntimeIo?: KtxCliIo;
   createHttpSemanticLayerCompute?: (baseUrl: string) => KtxSemanticLayerComputePort;
-  createIngestAdapters?: typeof createDefaultLocalIngestAdapters;
+  createIngestAdapters?: typeof createKtxCliLocalIngestAdapters;
   createQueryExecutor?: () => KtxSqlQueryExecutorPort;
   createMemoryCapture?: typeof createLocalProjectMemoryCapture;
   createServer?: typeof createDefaultKtxMcpServer;
@@ -70,6 +71,20 @@ function requiredManagedRuntimeCliVersion(args: KtxServeArgs): string {
     throw new Error('Managed Python semantic compute requires a CLI version.');
   }
   return args.cliVersion;
+}
+
+function managedDaemonOptionsForServe(
+  args: KtxServeArgs,
+  deps: KtxServeDeps,
+): ManagedPythonCoreDaemonOptions | undefined {
+  if (args.databaseIntrospectionUrl || !args.cliVersion) {
+    return undefined;
+  }
+  return {
+    cliVersion: args.cliVersion,
+    installPolicy: args.runtimeInstallPolicy ?? 'prompt',
+    io: deps.managedRuntimeIo ?? process,
+  };
 }
 
 async function createServeSemanticLayerCompute(
@@ -109,9 +124,12 @@ export async function runKtxServeStdio(args: KtxServeArgs, deps: KtxServeDeps = 
     ? (deps.createQueryExecutor ?? createDefaultLocalQueryExecutor)()
     : undefined;
   const createIngestAdapters = deps.createIngestAdapters ?? createKtxCliLocalIngestAdapters;
-  const localAdapters = createIngestAdapters(project, {
-    databaseIntrospectionUrl: args.databaseIntrospectionUrl,
-  });
+  const managedDaemon = managedDaemonOptionsForServe(args, deps);
+  const localAdapterOptions = {
+    ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
+    ...(managedDaemon ? { managedDaemon } : {}),
+  };
+  const localAdapters = createIngestAdapters(project, localAdapterOptions);
   const llmProvider = args.memoryCapture
     ? (createLocalKtxLlmProviderFromConfig(project.config.llm) ?? undefined)
     : undefined;
@@ -123,6 +141,7 @@ export async function runKtxServeStdio(args: KtxServeArgs, deps: KtxServeDeps = 
     : undefined;
   const localIngest: LocalIngestMcpOptions = {
     adapters: localAdapters,
+    pullConfigOptions: localAdapterOptions,
     ...(semanticLayerCompute ? { semanticLayerCompute } : {}),
     ...(queryExecutor ? { queryExecutor } : {}),
   };
