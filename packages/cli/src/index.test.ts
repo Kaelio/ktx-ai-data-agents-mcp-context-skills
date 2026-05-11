@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { initKtxProject } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -281,6 +282,22 @@ describe('runKtxCli', () => {
 
     expect(sl).not.toHaveBeenCalled();
     expect(io.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
+  });
+
+  it('keeps representative JSON command stdout parseable', async () => {
+    await initKtxProject({ projectDir: tempDir, projectName: 'json-safety' });
+    const commands = [
+      ['--project-dir', tempDir, 'setup', 'status', '--json'],
+      ['--project-dir', tempDir, 'sl', 'list', '--json'],
+    ];
+
+    for (const argv of commands) {
+      const testIo = makeIo();
+      await runKtxCli(argv, testIo.io);
+
+      expect(() => JSON.parse(testIo.stdout())).not.toThrow();
+      expect(testIo.stderr()).toBe('');
+    }
   });
 
   it('exposes demo under setup help instead of root help', async () => {
