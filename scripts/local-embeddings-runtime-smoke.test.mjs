@@ -35,8 +35,8 @@ describe('localEmbeddingsSmokeOptIn', () => {
 describe('publicKtxTarballName', () => {
   it('selects the public @kaelio/ktx tarball name', () => {
     assert.equal(
-      publicKtxTarballName(['kaelio-ktx-0.0.0-private.tgz', 'ignore-me.tgz']),
-      'kaelio-ktx-0.0.0-private.tgz',
+      publicKtxTarballName(['kaelio-ktx-0.1.0.tgz', 'ignore-me.tgz']),
+      'kaelio-ktx-0.1.0.tgz',
     );
   });
 

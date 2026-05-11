@@ -93,7 +93,7 @@ describe('packageArtifactLayout', () => {
     assert.equal(layout.artifactDir, '/repo/ktx/dist/artifacts');
     assert.equal(layout.npmDir, '/repo/ktx/dist/artifacts/npm');
     assert.equal(layout.pythonDir, '/repo/ktx/dist/artifacts/python');
-    assert.equal(layout.cliTarball, '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.0.0-private.tgz');
+    assert.equal(layout.cliTarball, '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz');
     assert.deepEqual(Object.keys(layout.npmTarballs), ['@kaelio/ktx']);
   });
 });
@@ -136,7 +136,7 @@ describe('packageReleaseMetadata', () => {
           ecosystem: 'npm',
           packageName: '@kaelio/ktx',
           packageRoot: 'packages/cli',
-          packageVersion: '0.0.0-private',
+          packageVersion: '0.1.0',
           private: false,
           releaseMode: 'ci-artifact-only',
         },
@@ -226,7 +226,7 @@ describe('artifact manifest', () => {
             ecosystem: 'npm',
             packageName: '@kaelio/ktx',
             packageRoot: 'packages/cli',
-            packageVersion: '0.0.0-private',
+            packageVersion: '0.1.0',
             private: false,
             releaseMode: 'ci-artifact-only',
           },
@@ -277,8 +277,8 @@ describe('artifact manifest', () => {
             artifactKind: 'tarball',
             ecosystem: 'npm',
             packageName: '@kaelio/ktx',
-            packageVersion: '0.0.0-private',
-            path: 'npm/kaelio-ktx-0.0.0-private.tgz',
+            packageVersion: '0.1.0',
+            path: 'npm/kaelio-ktx-0.1.0.tgz',
           },
         ],
       );
@@ -331,7 +331,7 @@ describe('artifact manifest', () => {
         ],
       );
 
-      const npmEntry = manifest.files.find((file) => file.path === 'npm/kaelio-ktx-0.0.0-private.tgz');
+      const npmEntry = manifest.files.find((file) => file.path === 'npm/kaelio-ktx-0.1.0.tgz');
       assert.ok(npmEntry);
       assert.equal(npmEntry.bytes, Buffer.byteLength('@kaelio/ktx-tarball'));
       assert.equal(npmEntry.sha256, createHash('sha256').update('@kaelio/ktx-tarball').digest('hex'));
@@ -547,7 +547,7 @@ describe('verification snippets', () => {
     const source = npmRuntimeSmokeSource();
 
     assert.match(source, /ktx public package version/);
-    assert.match(source, /@kaelio\\\/ktx 0\\\.0\\\.0-private/);
+    assert.match(source, /@kaelio\\\/ktx 0\\\.1\\\.0/);
     assert.match(source, /'ktx', 'sl', 'query'/);
     assert.doesNotMatch(source, /@ktx\/context/);
     assert.doesNotMatch(source, /@modelcontextprotocol/);

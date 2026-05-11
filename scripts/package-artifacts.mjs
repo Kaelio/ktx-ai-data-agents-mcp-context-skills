@@ -14,7 +14,8 @@ import {
 } from './build-python-runtime-wheel.mjs';
 import {
   PUBLIC_NPM_PACKAGE_NAME,
-  PUBLIC_NPM_PACKAGE_TARBALL,
+  PUBLIC_NPM_PACKAGE_VERSION,
+  publicNpmPackageTarballName,
 } from './build-public-npm-package.mjs';
 
 const PACKAGE_VERSION = '0.0.0-private';
@@ -69,7 +70,7 @@ function scriptRootDir() {
 
 function npmPackageTarballName(packageName) {
   if (packageName === PUBLIC_NPM_PACKAGE_NAME) {
-    return PUBLIC_NPM_PACKAGE_TARBALL;
+    return publicNpmPackageTarballName(PUBLIC_NPM_PACKAGE_VERSION);
   }
   return `${packageName.replace('@ktx/', 'ktx-')}-${PACKAGE_VERSION}.tgz`;
 }
@@ -254,12 +255,13 @@ async function readNpmPackageMetadata(rootDir, packageInfo) {
       `Unexpected package name in ${packageInfo.packageRoot}/package.json: expected ${expectedSourceName}, got ${packageJson.name}`,
     );
   }
+  const isPublicKtxPackage = packageInfo.name === PUBLIC_NPM_PACKAGE_NAME;
   return releaseMetadataEntry({
     ecosystem: 'npm',
     packageName: packageInfo.name,
     packageRoot: packageInfo.packageRoot,
-    packageVersion: packageJson.version,
-    privatePackage: packageInfo.name === PUBLIC_NPM_PACKAGE_NAME ? false : packageJson.private === true,
+    packageVersion: isPublicKtxPackage ? PUBLIC_NPM_PACKAGE_VERSION : packageJson.version,
+    privatePackage: isPublicKtxPackage ? false : packageJson.private === true,
   });
 }
 
@@ -692,7 +694,7 @@ try {
 
   const version = await run('pnpm', ['exec', 'ktx', '--version']);
   requireSuccess('ktx public package version', version);
-  requireOutput('ktx public package version', version, /@kaelio\\/ktx 0\\.0\\.0-private/);
+  requireOutput('ktx public package version', version, /@kaelio\\/ktx 0\\.1\\.0/);
 
   const runtimeStatusBefore = parseJsonResult(
     'ktx runtime status missing',

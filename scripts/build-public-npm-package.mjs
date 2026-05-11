@@ -9,8 +9,11 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 export const PUBLIC_NPM_PACKAGE_NAME = '@kaelio/ktx';
-export const PUBLIC_NPM_PACKAGE_VERSION = '0.0.0-private';
-export const PUBLIC_NPM_PACKAGE_TARBALL = 'kaelio-ktx-0.0.0-private.tgz';
+export const PUBLIC_NPM_PACKAGE_VERSION = '0.1.0';
+
+export function publicNpmPackageTarballName(version = PUBLIC_NPM_PACKAGE_VERSION) {
+  return `kaelio-ktx-${version}.tgz`;
+}
 
 export const PUBLIC_BUNDLED_WORKSPACE_PACKAGES = [
   '@ktx/llm',
@@ -42,13 +45,14 @@ function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
 
-export function publicNpmPackageLayout(rootDir = scriptRootDir()) {
+export function publicNpmPackageLayout(rootDir = scriptRootDir(), version = PUBLIC_NPM_PACKAGE_VERSION) {
   return {
     rootDir,
+    packageVersion: version,
     cliPackageRoot: join(rootDir, 'packages', 'cli'),
     packRoot: join(rootDir, 'dist', 'public-npm-package'),
     npmDir: join(rootDir, 'dist', 'artifacts', 'npm'),
-    tarballPath: join(rootDir, 'dist', 'artifacts', 'npm', PUBLIC_NPM_PACKAGE_TARBALL),
+    tarballPath: join(rootDir, 'dist', 'artifacts', 'npm', publicNpmPackageTarballName(version)),
   };
 }
 
@@ -114,10 +118,10 @@ export function collectPublicDependencies(packageJsons) {
   return sortedObject(dependencies);
 }
 
-export function publicNpmPackageJson(cliPackageJson, dependencies) {
+export function publicNpmPackageJson(cliPackageJson, dependencies, version = PUBLIC_NPM_PACKAGE_VERSION) {
   return {
     name: PUBLIC_NPM_PACKAGE_NAME,
-    version: cliPackageJson.version ?? PUBLIC_NPM_PACKAGE_VERSION,
+    version,
     description: 'Standalone KTX context layer for database agents',
     private: false,
     type: 'module',
@@ -178,7 +182,10 @@ async function copyPackageFileEntries(sourceRoot, targetRoot, packageJson) {
 
 async function copyCliPackage(layout, cliPackageJson, dependencies) {
   await copyPackageFileEntries(layout.cliPackageRoot, layout.packRoot, cliPackageJson);
-  await writeJson(join(layout.packRoot, 'package.json'), publicNpmPackageJson(cliPackageJson, dependencies));
+  await writeJson(
+    join(layout.packRoot, 'package.json'),
+    publicNpmPackageJson(cliPackageJson, dependencies, layout.packageVersion),
+  );
 }
 
 async function copyBundledWorkspacePackage(rootDir, packageName, packageJson) {
@@ -219,7 +226,7 @@ export async function createPublicNpmPackageTree(layout = publicNpmPackageLayout
 
   return {
     layout,
-    packageJson: publicNpmPackageJson(cliPackageJson, dependencies),
+    packageJson: publicNpmPackageJson(cliPackageJson, dependencies, layout.packageVersion),
     bundledPackages: PUBLIC_BUNDLED_WORKSPACE_PACKAGES,
   };
 }
