@@ -10,6 +10,7 @@ import { PostgresPgssReader } from './adapters/historic-sql/postgres-pgss-reader
 import {
   HISTORIC_SQL_SOURCE_KEY,
   historicSqlUnifiedPullConfigSchema,
+  type HistoricSqlReader,
   type KtxPostgresQueryClient,
 } from './adapters/historic-sql/types.js';
 import {
@@ -42,7 +43,9 @@ export interface DefaultLocalIngestAdaptersOptions {
   databaseIntrospection?: Omit<DaemonLiveDatabaseIntrospectionOptions, 'connections' | 'baseUrl'>;
   historicSql?: {
     sqlAnalysis: SqlAnalysisPort;
-    postgresQueryClient: KtxPostgresQueryClient;
+    reader?: HistoricSqlReader;
+    queryClient?: unknown;
+    postgresQueryClient?: KtxPostgresQueryClient;
     postgresBaselineRootDir?: string;
     now?: () => Date;
   };
@@ -90,11 +93,15 @@ export function createDefaultLocalIngestAdapters(
   ];
 
   if (options.historicSql) {
+    const queryClient = options.historicSql.queryClient ?? options.historicSql.postgresQueryClient;
+    if (!queryClient) {
+      throw new Error('Historic SQL local adapter requires queryClient or postgresQueryClient');
+    }
     adapters.push(
       new HistoricSqlSourceAdapter({
         sqlAnalysis: options.historicSql.sqlAnalysis,
-        reader: new PostgresPgssReader(),
-        queryClient: options.historicSql.postgresQueryClient,
+        reader: options.historicSql.reader ?? new PostgresPgssReader(),
+        queryClient,
         legacyPostgresBaselineRootDir: options.historicSql.postgresBaselineRootDir,
         now: options.historicSql.now,
       }),

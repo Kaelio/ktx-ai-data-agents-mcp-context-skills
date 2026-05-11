@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import type { SqlAnalysisPort } from '../sql-analysis/index.js';
+import type { HistoricSqlReader } from './adapters/historic-sql/types.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
 import { createDefaultLocalIngestAdapters, localPullConfigForAdapter } from './local-adapters.js';
 
@@ -110,6 +111,44 @@ describe('local ingest adapters', () => {
 
     expect(adapters.map((adapter) => adapter.source)).toContain('historic-sql');
     expect(adapters.find((adapter) => adapter.source === 'historic-sql')?.fetch).toBeTypeOf('function');
+    expect(adapters.find((adapter) => adapter.source === 'historic-sql')?.skillNames).toEqual([
+      'historic_sql_table_digest',
+      'historic_sql_patterns',
+    ]);
+  });
+
+  it('registers historic-sql with an injected non-Postgres reader and query client', () => {
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {},
+    };
+    const queryClient = { executeQuery: async () => ({ headers: [], rows: [], totalRows: 0 }) };
+
+    const adapters = createDefaultLocalIngestAdapters(project, {
+      historicSql: {
+        sqlAnalysis: {
+          async analyzeForFingerprint(sql) {
+            return {
+              fingerprint: 'fp',
+              normalizedSql: sql,
+              tablesTouched: [],
+              literalSlots: [],
+            };
+          },
+          async analyzeBatch() {
+            return new Map();
+          },
+        },
+        reader,
+        queryClient,
+      },
+    });
+
+    const adapter = adapters.find((candidate) => candidate.source === 'historic-sql');
+    expect(adapter).toBeDefined();
+    expect(adapter?.fetch).toBeTypeOf('function');
   });
 
   it('builds Postgres historic-sql pull config from a local connection', async () => {
