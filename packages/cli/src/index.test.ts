@@ -178,6 +178,71 @@ describe('runKtxCli', () => {
     );
   });
 
+  it('routes sl query managed runtime install policies', async () => {
+    const sl = vi.fn(async () => 0);
+
+    const promptIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'sl', 'query', '--measure', 'orders.order_count'], promptIo.io, { sl }),
+    ).resolves.toBe(0);
+    expect(sl).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: 'query',
+        projectDir: tempDir,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'prompt',
+        query: expect.objectContaining({ measures: ['orders.order_count'], dimensions: [] }),
+      }),
+      promptIo.io,
+    );
+
+    const autoIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'sl', 'query', '--measure', 'orders.order_count', '--yes'], autoIo.io, {
+        sl,
+      }),
+    ).resolves.toBe(0);
+    expect(sl).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'auto',
+      }),
+      autoIo.io,
+    );
+
+    const noInputIo = makeIo();
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'sl', 'query', '--measure', 'orders.order_count', '--no-input'],
+        noInputIo.io,
+        { sl },
+      ),
+    ).resolves.toBe(0);
+    expect(sl).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'never',
+      }),
+      noInputIo.io,
+    );
+  });
+
+  it('rejects conflicting sl query runtime install flags', async () => {
+    const io = makeIo();
+    const sl = vi.fn(async () => 0);
+
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'sl', 'query', '--measure', 'orders.order_count', '--yes', '--no-input'],
+        io.io,
+        { sl },
+      ),
+    ).resolves.toBe(1);
+
+    expect(sl).not.toHaveBeenCalled();
+    expect(io.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
+  });
+
   it('exposes demo under setup help instead of root help', async () => {
     const testIo = makeIo();
 

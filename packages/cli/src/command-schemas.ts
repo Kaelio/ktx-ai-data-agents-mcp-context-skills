@@ -64,6 +64,8 @@ export const slQueryCommandSchema = z.object({
   }),
   format: z.enum(['json', 'sql']),
   execute: z.boolean(),
+  cliVersion: z.string().min(1),
+  runtimeInstallPolicy: z.enum(['prompt', 'auto', 'never']),
   maxRows: z.number().int().positive().optional(),
 });
 
