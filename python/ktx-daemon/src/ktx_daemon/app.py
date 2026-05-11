@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -80,7 +81,11 @@ def create_app(
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "healthy"}
+        response = {"status": "healthy"}
+        version = os.environ.get("KTX_DAEMON_VERSION")
+        if version:
+            response["version"] = version
+        return response
 
     @app.post("/database/introspect", response_model=DatabaseIntrospectionResponse)
     async def database_introspect(

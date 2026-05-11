@@ -58,6 +58,15 @@ describe('managedPythonRuntimeLayout', () => {
     expect(layout.daemonPath).toBe(
       '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/.venv/bin/ktx-daemon',
     );
+    expect(layout.daemonStatePath).toBe(
+      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/daemon.json',
+    );
+    expect(layout.daemonStdoutPath).toBe(
+      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/daemon.stdout.log',
+    );
+    expect(layout.daemonStderrPath).toBe(
+      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/daemon.stderr.log',
+    );
     expect(layout.assetManifestPath).toBe('/repo/packages/cli/assets/python/manifest.json');
   });
 

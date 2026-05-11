@@ -44,6 +44,9 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          daemonStatePath: '/runtime/0.2.0/daemon.json',
+          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
+          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
         asset: {
           wheelPath: '/assets/python/kaelio_ktx-0.1.0-py3-none-any.whl',
@@ -120,6 +123,9 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          daemonStatePath: '/runtime/0.2.0/daemon.json',
+          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
+          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
       })),
     };
@@ -187,6 +193,9 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          daemonStatePath: '/runtime/0.2.0/daemon.json',
+          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
+          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
       })),
       pruneRuntime: vi.fn(async () => ({

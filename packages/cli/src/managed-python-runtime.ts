@@ -61,6 +61,9 @@ export interface ManagedPythonRuntimeLayout {
   assetManifestPath: string;
   pythonPath: string;
   daemonPath: string;
+  daemonStatePath: string;
+  daemonStdoutPath: string;
+  daemonStderrPath: string;
 }
 
 export interface ManagedRuntimeAsset {
@@ -152,6 +155,9 @@ export function managedPythonRuntimeLayout(options: ManagedPythonRuntimeLayoutOp
     assetManifestPath: join(assetDir, 'manifest.json'),
     pythonPath: executablePath(venvDir, platform, 'python'),
     daemonPath: executablePath(venvDir, platform, 'ktx-daemon'),
+    daemonStatePath: join(versionDir, 'daemon.json'),
+    daemonStdoutPath: join(versionDir, 'daemon.stdout.log'),
+    daemonStderrPath: join(versionDir, 'daemon.stderr.log'),
   };
 }
 

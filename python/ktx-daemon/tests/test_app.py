@@ -69,6 +69,16 @@ def test_health_endpoint_returns_healthy() -> None:
     assert response.json() == {"status": "healthy"}
 
 
+def test_health_endpoint_returns_managed_runtime_version(monkeypatch) -> None:
+    monkeypatch.setenv("KTX_DAEMON_VERSION", "0.2.0")
+    client = TestClient(create_app())
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "healthy", "version": "0.2.0"}
+
+
 def test_database_introspect_endpoint_returns_snapshot() -> None:
     calls = []
 
