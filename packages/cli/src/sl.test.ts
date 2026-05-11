@@ -129,6 +129,8 @@ joins: []
           query: { measures: ['orders.order_count'], dimensions: [] },
           format: 'sql',
           execute: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
         },
         { stdout, stderr },
         { loadProject, createSemanticLayerCompute },
@@ -137,6 +139,67 @@ joins: []
 
     expect(stdout.write).toHaveBeenCalledWith('select count(*) as order_count from public.orders\n');
     expect(stderr.write).not.toHaveBeenCalled();
+  });
+
+  it('creates default sl query compute through the managed runtime helper', async () => {
+    const projectDir = join(tempDir, 'project');
+    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = { driver: 'postgres', readonly: true };
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      `name: orders
+table: public.orders
+grain: [id]
+columns:
+  - name: id
+    type: number
+measures:
+  - name: order_count
+    expr: count(*)
+joins: []
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add orders source',
+    );
+
+    const stdout = { write: vi.fn() };
+    const stderr = { write: vi.fn() };
+    const compute = {
+      query: vi.fn(async () => ({
+        sql: 'select count(*) as order_count from public.orders',
+        dialect: 'postgres',
+        columns: [{ name: 'orders.order_count' }],
+        plan: {},
+      })),
+      validateSources: vi.fn(),
+      generateSources: vi.fn(),
+    };
+    const createManagedSemanticLayerCompute = vi.fn(async () => compute);
+
+    await expect(
+      runKtxSl(
+        {
+          command: 'query',
+          projectDir,
+          connectionId: 'warehouse',
+          query: { measures: ['orders.order_count'], dimensions: [] },
+          format: 'sql',
+          execute: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        { stdout, stderr },
+        { createManagedSemanticLayerCompute },
+      ),
+    ).resolves.toBe(0);
+
+    expect(createManagedSemanticLayerCompute).toHaveBeenCalledWith({
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io: { stdout, stderr },
+    });
+    expect(stdout.write).toHaveBeenCalledWith('select count(*) as order_count from public.orders\n');
   });
 
   it('executes sl query through the injected query executor', async () => {
@@ -194,6 +257,8 @@ joins: []
           format: 'json',
           execute: true,
           maxRows: 20,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
         },
         { stdout, stderr },
         {
@@ -292,6 +357,8 @@ joins: []
         format: 'json',
         execute: true,
         maxRows: 20,
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
       },
       { stdout, stderr },
       { createSemanticLayerCompute },

@@ -1,5 +1,5 @@
 import { createDefaultLocalQueryExecutor, type KtxSqlQueryExecutorPort } from '@ktx/context/connections';
-import { createPythonSemanticLayerComputePort, type KtxSemanticLayerComputePort } from '@ktx/context/daemon';
+import type { KtxSemanticLayerComputePort } from '@ktx/context/daemon';
 import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
 import {
   compileLocalSlQuery,
@@ -9,6 +9,10 @@ import {
   writeLocalSlSource,
   type SemanticLayerQueryInput,
 } from '@ktx/context/sl';
+import {
+  createManagedPythonSemanticLayerComputePort,
+  type KtxManagedPythonInstallPolicy,
+} from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
 
 profileMark('module:sl');
@@ -28,6 +32,8 @@ export type KtxSlArgs =
       format: SlQueryFormat;
       execute: boolean;
       maxRows?: number;
+      cliVersion: string;
+      runtimeInstallPolicy: KtxManagedPythonInstallPolicy;
     };
 
 interface KtxSlIo {
@@ -38,6 +44,11 @@ interface KtxSlIo {
 interface KtxSlDeps {
   loadProject?: typeof loadKtxProject;
   createSemanticLayerCompute?: () => KtxSemanticLayerComputePort;
+  createManagedSemanticLayerCompute?: (options: {
+    cliVersion: string;
+    installPolicy: KtxManagedPythonInstallPolicy;
+    io: KtxSlIo;
+  }) => Promise<KtxSemanticLayerComputePort>;
   createQueryExecutor?: () => KtxSqlQueryExecutorPort;
 }
 
@@ -97,7 +108,13 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       return 0;
     }
     if (args.command === 'query') {
-      const compute = (deps.createSemanticLayerCompute ?? createPythonSemanticLayerComputePort)();
+      const compute = deps.createSemanticLayerCompute
+        ? deps.createSemanticLayerCompute()
+        : await (deps.createManagedSemanticLayerCompute ?? createManagedPythonSemanticLayerComputePort)({
+            cliVersion: args.cliVersion,
+            installPolicy: args.runtimeInstallPolicy,
+            io,
+          });
       const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createDefaultLocalQueryExecutor)() : undefined;
       const result = await compileLocalSlQuery(project as KtxLocalProject, {
         connectionId: args.connectionId,
