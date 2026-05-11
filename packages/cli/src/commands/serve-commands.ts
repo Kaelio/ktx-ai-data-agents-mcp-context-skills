@@ -1,5 +1,6 @@
 import { type Command, InvalidArgumentError } from '@commander-js/extra-typings';
 import { type KtxCliCommandContext, resolveCommandProjectDir } from '../cli-program.js';
+import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 import type { KtxServeArgs } from '../serve.js';
 import { profileMark } from '../startup-profile.js';
 
@@ -20,6 +21,8 @@ export function registerServeCommands(program: Command, context: KtxCliCommandCo
     .option('--user-id <id>', 'Local user id', 'local')
     .option('--semantic-compute', 'Enable semantic-layer compute', false)
     .option('--semantic-compute-url <url>', 'HTTP semantic-layer compute URL')
+    .option('--yes', 'Install the managed Python runtime without prompting when required', false)
+    .option('--no-input', 'Disable interactive managed runtime installation')
     .option('--database-introspection-url <url>', 'Daemon URL for live-database introspection')
     .option('--execute-queries', 'Allow semantic-layer query execution', false)
     .option('--memory-capture', 'Enable memory capture', false)
@@ -40,6 +43,8 @@ export function registerServeCommands(program: Command, context: KtxCliCommandCo
         executeQueries: options.executeQueries === true,
         memoryCapture: options.memoryCapture === true,
         memoryModel: options.memoryModel,
+        cliVersion: context.packageInfo.version,
+        runtimeInstallPolicy: runtimeInstallPolicyFromFlags(options),
       };
       const runner = context.deps.serveStdio ?? (await import('../serve.js')).runKtxServeStdio;
       context.setExitCode(await runner(args));

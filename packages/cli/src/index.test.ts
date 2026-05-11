@@ -599,6 +599,8 @@ describe('runKtxCli', () => {
       executeQueries: false,
       memoryCapture: false,
       memoryModel: undefined,
+      cliVersion: '0.0.0-private',
+      runtimeInstallPolicy: 'prompt',
     });
   });
 
@@ -2098,8 +2100,63 @@ describe('runKtxCli', () => {
       executeQueries: true,
       memoryCapture: true,
       memoryModel: 'openai/gpt-5.2',
+      cliVersion: '0.0.0-private',
+      runtimeInstallPolicy: 'prompt',
     });
     expect(serveIo.stderr()).toBe('');
+  });
+
+  it('routes serve managed runtime install policies', async () => {
+    const autoIo = makeIo();
+    const neverIo = makeIo();
+    const conflictIo = makeIo();
+    const serveStdio = vi.fn(async () => 0);
+
+    await expect(
+      runKtxCli(['serve', '--mcp', 'stdio', '--project-dir', tempDir, '--semantic-compute', '--yes'], autoIo.io, {
+        serveStdio,
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      runKtxCli(['serve', '--mcp', 'stdio', '--project-dir', tempDir, '--semantic-compute', '--no-input'], neverIo.io, {
+        serveStdio,
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      runKtxCli(
+        ['serve', '--mcp', 'stdio', '--project-dir', tempDir, '--semantic-compute', '--yes', '--no-input'],
+        conflictIo.io,
+        { serveStdio },
+      ),
+    ).resolves.toBe(1);
+
+    expect(serveStdio).toHaveBeenNthCalledWith(1, {
+      mcp: 'stdio',
+      projectDir: tempDir,
+      userId: 'local',
+      semanticCompute: true,
+      semanticComputeUrl: undefined,
+      databaseIntrospectionUrl: undefined,
+      executeQueries: false,
+      memoryCapture: false,
+      memoryModel: undefined,
+      cliVersion: '0.0.0-private',
+      runtimeInstallPolicy: 'auto',
+    });
+    expect(serveStdio).toHaveBeenNthCalledWith(2, {
+      mcp: 'stdio',
+      projectDir: tempDir,
+      userId: 'local',
+      semanticCompute: true,
+      semanticComputeUrl: undefined,
+      databaseIntrospectionUrl: undefined,
+      executeQueries: false,
+      memoryCapture: false,
+      memoryModel: undefined,
+      cliVersion: '0.0.0-private',
+      runtimeInstallPolicy: 'never',
+    });
+    expect(conflictIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
   });
 
   it('prints dev help for bare dev commands', async () => {
