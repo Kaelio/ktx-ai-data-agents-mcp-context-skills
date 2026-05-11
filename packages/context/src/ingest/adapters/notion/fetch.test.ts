@@ -89,12 +89,13 @@ describe('fetchNotionSnapshot', () => {
   });
 
   it('logs skipped page materialization failures', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const logger = { warn: vi.fn() };
     (client.retrievePage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Notion API failed'));
 
     const manifest = await fetchNotionSnapshot({
       client,
       stagedDir,
+      logger,
       config: {
         authToken: 'secret',
         crawlMode: 'selected_roots',
@@ -109,7 +110,7 @@ describe('fetchNotionSnapshot', () => {
     });
 
     expect(manifest.skipped).toEqual([{ externalId: 'page-1', reason: 'Notion API failed' }]);
-    expect(warn).toHaveBeenCalledWith('Skipping Notion page page-1: Notion API failed');
+    expect(logger.warn).toHaveBeenCalledWith('Skipping Notion page page-1: Notion API failed');
   });
 
   it('recursively fetches selected-root child pages and derives scoped links', async () => {
@@ -191,7 +192,7 @@ describe('fetchNotionSnapshot', () => {
   });
 
   it('truncates deeply nested block trees and records a warning', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const logger = { warn: vi.fn() };
     (client.listBlockChildren as ReturnType<typeof vi.fn>).mockImplementation((blockId: string) => {
       const currentDepth = blockId === 'page-1' ? 0 : Number(blockId.replace('block-', ''));
       const nextDepth = currentDepth + 1;
@@ -215,6 +216,7 @@ describe('fetchNotionSnapshot', () => {
     await fetchNotionSnapshot({
       client,
       stagedDir,
+      logger,
       config: {
         authToken: 'secret',
         crawlMode: 'selected_roots',
@@ -232,11 +234,11 @@ describe('fetchNotionSnapshot', () => {
     const manifest = JSON.parse(await readFile(join(stagedDir, 'manifest.json'), 'utf-8'));
     expect(blocks).toHaveLength(10);
     expect(manifest.warnings).toContain('maxBlockDepth reached for page page-1 at depth 10');
-    expect(warnSpy).toHaveBeenCalledWith('maxBlockDepth reached for page page-1 at depth 10');
+    expect(logger.warn).toHaveBeenCalledWith('maxBlockDepth reached for page page-1 at depth 10');
   });
 
   it('truncates pages at the per-page block cap and records a warning', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const logger = { warn: vi.fn() };
     (client.listBlockChildren as ReturnType<typeof vi.fn>).mockResolvedValue({
       results: Array.from({ length: 2001 }, (_, index) => ({
         id: `block-${index}`,
@@ -250,6 +252,7 @@ describe('fetchNotionSnapshot', () => {
     await fetchNotionSnapshot({
       client,
       stagedDir,
+      logger,
       config: {
         authToken: 'secret',
         crawlMode: 'selected_roots',
@@ -267,7 +270,7 @@ describe('fetchNotionSnapshot', () => {
     const manifest = JSON.parse(await readFile(join(stagedDir, 'manifest.json'), 'utf-8'));
     expect(blocks).toHaveLength(2000);
     expect(manifest.warnings).toContain('maxBlocksPerPage reached for page page-1 at 2000 blocks');
-    expect(warnSpy).toHaveBeenCalledWith('maxBlocksPerPage reached for page page-1 at 2000 blocks');
+    expect(logger.warn).toHaveBeenCalledWith('maxBlocksPerPage reached for page page-1 at 2000 blocks');
   });
 
   it('uses all_accessible search for pages and data sources', async () => {

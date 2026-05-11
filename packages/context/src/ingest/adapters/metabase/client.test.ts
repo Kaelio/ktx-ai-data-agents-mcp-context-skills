@@ -72,6 +72,27 @@ describe('MetabaseClient retry exhaustion', () => {
     vi.restoreAllMocks();
   });
 
+  it('does not warn to console when retrying by default', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    const client = new MetabaseClient(
+      { apiUrl: 'https://metabase.example.test', apiKey: 'key' },
+      {
+        ...DEFAULT_METABASE_CLIENT_CONFIG,
+        baseDelayMs: 0,
+        maxRetries: 1,
+      },
+    );
+
+    await client.getDatabases();
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('wraps an exhausted ECONNRESET retry chain with method, path, attempt count, and original cause', async () => {
     const sysErr = Object.assign(new Error('read ECONNRESET'), {
       code: 'ECONNRESET',
