@@ -318,7 +318,7 @@ export async function startManagedPythonDaemon(
   if (options.force !== true && status.kind === 'running' && hasFeatures(status.state, features)) {
     return { status: 'reused', layout, state: status.state, baseUrl: status.baseUrl };
   }
-  if (status.state) {
+  if ('state' in status && status.state) {
     await stopRecordedDaemon({ layout, state: status.state, processAlive, killProcess });
   } else {
     await removeState(layout);
