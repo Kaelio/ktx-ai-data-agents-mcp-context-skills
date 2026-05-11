@@ -1,4 +1,10 @@
 import { cancel, confirm, isCancel } from '@clack/prompts';
+import {
+  DEFAULT_METABASE_CLIENT_CONFIG,
+  DefaultMetabaseConnectionClientFactory,
+  type MetabaseRuntimeClient,
+  metabaseRuntimeConfigFromLocalConnection,
+} from '@ktx/context/ingest';
 import { type KtxLocalProject, loadKtxProject, serializeKtxProjectConfig } from '@ktx/context/project';
 import type { KtxScanConnector } from '@ktx/context/scan';
 import type { KtxConnectionMappingArgs } from './commands/connection-mapping.js';
@@ -61,6 +67,7 @@ interface KtxConnectionIo extends KtxCliIo {
 
 interface KtxConnectionDeps {
   createScanConnector?: typeof createKtxCliScanConnector;
+  createMetabaseClient?: typeof createDefaultMetabaseClient;
   runMapping?: (argv: string[], io: KtxCliIo) => Promise<number>;
   prompts?: KtxConnectionPromptAdapter;
 }
@@ -104,6 +111,12 @@ async function cleanupConnector(connector: KtxScanConnector | null): Promise<voi
   }
 }
 
+function normalizedConnectionDriver(project: KtxLocalProject, connectionId: string): string {
+  return String(project.config.connections[connectionId]?.driver ?? '')
+    .trim()
+    .toLowerCase();
+}
+
 async function testNativeConnection(
   project: KtxLocalProject,
   connectionId: string,
@@ -128,6 +141,48 @@ async function testNativeConnection(
     };
   } finally {
     await cleanupConnector(connector);
+  }
+}
+
+async function createDefaultMetabaseClient(
+  project: KtxLocalProject,
+  connectionId: string,
+): Promise<Pick<MetabaseRuntimeClient, 'testConnection' | 'getDatabases' | 'cleanup'>> {
+  const factory = new DefaultMetabaseConnectionClientFactory(
+    (metabaseConnectionId) =>
+      metabaseRuntimeConfigFromLocalConnection(
+        metabaseConnectionId,
+        project.config.connections[metabaseConnectionId],
+      ),
+    DEFAULT_METABASE_CLIENT_CONFIG,
+  );
+  return factory.createClient(connectionId);
+}
+
+async function testMetabaseConnection(
+  project: KtxLocalProject,
+  connectionId: string,
+  createMetabaseClient: typeof createDefaultMetabaseClient,
+): Promise<{ driver: 'metabase'; databaseCount: number }> {
+  let client: Pick<MetabaseRuntimeClient, 'testConnection' | 'getDatabases' | 'cleanup'> | null = null;
+  try {
+    client = await createMetabaseClient(project, connectionId);
+    const testResult = await client.testConnection();
+    if (!testResult.success) {
+      throw new Error(
+        `Metabase connection test failed: ${testResult.error ?? testResult.message ?? 'unknown error'}`,
+      );
+    }
+
+    const databases = await client.getDatabases();
+    const databaseCount = databases.filter((database) => database.is_sample !== true).length;
+    if (databaseCount === 0) {
+      throw new Error('Metabase auth worked but no usable databases were returned');
+    }
+
+    return { driver: 'metabase', databaseCount };
+  } finally {
+    await client?.cleanup();
   }
 }
 
@@ -396,6 +451,18 @@ export async function runKtxConnection(
       );
       io.stdout.write('Connection removed from ktx.yaml.\n');
       io.stdout.write('Ingested artifacts from this connection remain in .ktx/. Run ktx dev artifacts to inspect.\n');
+      return 0;
+    }
+
+    if (normalizedConnectionDriver(project, args.connectionId) === 'metabase') {
+      const result = await testMetabaseConnection(
+        project,
+        args.connectionId,
+        deps.createMetabaseClient ?? createDefaultMetabaseClient,
+      );
+      io.stdout.write(`Connection test passed: ${args.connectionId}\n`);
+      io.stdout.write(`Driver: ${result.driver}\n`);
+      io.stdout.write(`Databases: ${result.databaseCount}\n`);
       return 0;
     }
 
