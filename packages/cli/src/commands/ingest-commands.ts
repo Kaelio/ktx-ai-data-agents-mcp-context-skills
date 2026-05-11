@@ -3,6 +3,7 @@ import { type Command, Option } from '@commander-js/extra-typings';
 import { type KtxCliCommandContext, type OutputModeOptions, resolveCommandProjectDir } from '../cli-program.js';
 import type { KtxCliDeps, KtxCliIo } from '../index.js';
 import type { KtxIngestArgs, KtxIngestOutputMode } from '../ingest.js';
+import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 import { profileMark } from '../startup-profile.js';
 
 profileMark('module:commands/ingest-commands');
@@ -75,6 +76,7 @@ export function registerIngestCommands(
     .addOption(new Option('--plain', 'Print plain text output').conflicts(['json', 'viz']))
     .addOption(new Option('--json', 'Print JSON output').conflicts(['plain', 'viz']))
     .addOption(new Option('--viz', 'Render memory-flow TUI output').conflicts(['plain', 'json']))
+    .option('--yes', 'Install the managed Python runtime without prompting when required', false)
     .option('--no-input', 'Disable interactive terminal input for visualization')
     .action(async (options, command) => {
       if (options.reportFile) {
@@ -89,6 +91,8 @@ export function registerIngestCommands(
           adapter: options.adapter,
           sourceDir: options.sourceDir ? resolve(options.sourceDir) : undefined,
           databaseIntrospectionUrl: options.databaseIntrospectionUrl || undefined,
+          cliVersion: context.packageInfo.version,
+          runtimeInstallPolicy: runtimeInstallPolicyFromFlags(options),
           ...(options.debugLlmRequestFile ? { debugLlmRequestFile: resolve(options.debugLlmRequestFile) } : {}),
           outputMode: outputMode(options),
           ...inputMode(options),

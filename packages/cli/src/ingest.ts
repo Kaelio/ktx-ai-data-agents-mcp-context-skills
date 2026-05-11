@@ -17,6 +17,7 @@ import {
 import { loadKtxProject } from '@ktx/context/project';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { type KtxMemoryFlowStdin, renderMemoryFlowInteractively } from './memory-flow-interactive.js';
 import {
   type KtxMemoryFlowTuiIo,
@@ -40,6 +41,8 @@ export type KtxIngestArgs =
       adapter: string;
       sourceDir?: string;
       databaseIntrospectionUrl?: string;
+      cliVersion?: string;
+      runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
       debugLlmRequestFile?: string;
       outputMode: KtxIngestOutputMode;
       inputMode?: KtxIngestInputMode;
@@ -245,6 +248,20 @@ function initialRunMemoryFlowInput(
   };
 }
 
+function managedDaemonOptionsForIngestRun(
+  args: Extract<KtxIngestArgs, { command: 'run' }>,
+  io: KtxIngestIo,
+) {
+  if (args.databaseIntrospectionUrl || !args.cliVersion || !args.runtimeInstallPolicy) {
+    return undefined;
+  }
+  return {
+    cliVersion: args.cliVersion,
+    installPolicy: args.runtimeInstallPolicy,
+    io,
+  };
+}
+
 async function writeReportRecord(
   report: IngestReportSnapshot,
   outputMode: KtxIngestOutputMode,
@@ -300,9 +317,11 @@ export async function runKtxIngest(
       const createAdapters = deps.createAdapters ?? createKtxCliLocalIngestAdapters;
       const executeLocalIngest = deps.runLocalIngest ?? runLocalIngest;
       const localIngestOptions = deps.localIngestOptions ?? {};
+      const managedDaemon = managedDaemonOptionsForIngestRun(args, io);
       const adapterOptions = {
         ...(localIngestOptions.pullConfigOptions ?? {}),
         ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
+        ...(managedDaemon ? { managedDaemon } : {}),
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
       };
       if (args.adapter === 'metabase' && args.sourceDir) {
@@ -369,6 +388,7 @@ export async function runKtxIngest(
           trigger: 'manual_resync',
           jobId,
           ...localIngestOptions,
+          pullConfigOptions: adapterOptions,
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),
           ...(memoryFlow ? { memoryFlow } : {}),
         });

@@ -919,6 +919,8 @@ describe('runKtxCli', () => {
         adapter: 'fake',
         sourceDir: tempDir,
         databaseIntrospectionUrl: undefined,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'never',
         debugLlmRequestFile: `${tempDir}/debug.jsonl`,
         outputMode: 'json',
         inputMode: 'disabled',
@@ -930,6 +932,60 @@ describe('runKtxCli', () => {
     expect(doctorIo.stderr()).toBe('');
     expect(ingestRunIo.stderr()).toBe('');
     expect(ingestReplayHelpIo.stderr()).toBe('');
+  });
+
+  it('routes ingest managed runtime install policies', async () => {
+    const autoIo = makeIo();
+    const conflictIo = makeIo();
+    const ingest = vi.fn(async () => 0);
+
+    await expect(
+      runKtxCli(
+        [
+          'dev',
+          'ingest',
+          'run',
+          '--project-dir',
+          tempDir,
+          '--connection-id',
+          'warehouse',
+          '--adapter',
+          'looker',
+          '--yes',
+        ],
+        autoIo.io,
+        { ingest },
+      ),
+    ).resolves.toBe(0);
+    await expect(
+      runKtxCli(
+        [
+          'dev',
+          'ingest',
+          'run',
+          '--project-dir',
+          tempDir,
+          '--connection-id',
+          'warehouse',
+          '--adapter',
+          'looker',
+          '--yes',
+          '--no-input',
+        ],
+        conflictIo.io,
+        { ingest },
+      ),
+    ).resolves.toBe(1);
+
+    expect(ingest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'auto',
+      }),
+      autoIo.io,
+    );
+    expect(conflictIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
   });
 
   it('dispatches public connection through the existing connection implementation', async () => {

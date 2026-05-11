@@ -661,6 +661,8 @@ describe('dev Commander tree', () => {
         adapter: 'metabase',
         sourceDir: undefined,
         databaseIntrospectionUrl: undefined,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'prompt',
         outputMode: 'json',
       },
       io.io,

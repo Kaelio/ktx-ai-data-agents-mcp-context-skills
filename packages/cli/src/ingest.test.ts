@@ -1214,6 +1214,59 @@ describe('runKtxIngest', () => {
         adapters: createdAdapters,
         adapter: 'fake',
         connectionId: 'warehouse',
+        pullConfigOptions: {
+          databaseIntrospectionUrl: 'http://127.0.0.1:8765',
+        },
+      }),
+    );
+  });
+
+  it('passes managed daemon options to adapters and pull-config options when no explicit daemon URL is set', async () => {
+    const projectDir = join(tempDir, 'managed-daemon-ingest-project');
+    await initKtxProject({ projectDir, projectName: 'managed-daemon-ingest-project' });
+    await writeWarehouseConfig(projectDir);
+    const createdAdapters: SourceAdapter[] = [
+      { source: 'fake', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+    ];
+    const createAdapters = vi.fn(() => createdAdapters as never);
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) =>
+      completedLocalBundleRun(input, input.jobId ?? 'local-job-1'),
+    );
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+          outputMode: 'plain',
+        } satisfies KtxIngestArgs,
+        io.io,
+        {
+          createAdapters,
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'local-job-1',
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const expectedManagedDaemon = {
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io: io.io,
+    };
+    expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
+      managedDaemon: expectedManagedDaemon,
+    });
+    expect(runLocal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pullConfigOptions: {
+          managedDaemon: expectedManagedDaemon,
+        },
       }),
     );
   });
