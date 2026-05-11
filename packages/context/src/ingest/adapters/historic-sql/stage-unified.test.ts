@@ -38,7 +38,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     const stagedDir = await tempDir();
     const reader: HistoricSqlReader = {
       async probe() {
-        return { warnings: ['pg_stat_statements.max is low; aggregation still proceeds'] };
+        return { warnings: ['pg_stat_statements.track is none; aggregation still proceeds'], info: [] };
       },
       async *fetchAggregated() {
         yield aggregate({
@@ -123,7 +123,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       touchedTableCount: 2,
       parseFailures: 1,
       warnings: ['parse_failed:bad-parse'],
-      probeWarnings: ['pg_stat_statements.max is low; aggregation still proceeds'],
+      probeWarnings: ['pg_stat_statements.track is none; aggregation still proceeds'],
       staleArchiveAfterDays: 90,
     });
 

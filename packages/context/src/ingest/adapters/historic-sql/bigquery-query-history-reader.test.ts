@@ -33,7 +33,7 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
     const client = queryClient([{ headers: ['1'], rows: [[1]], totalRows: 1 }]);
     const reader = new BigQueryHistoricSqlQueryHistoryReader({ projectId: 'project-1', region: 'US' });
 
-    await expect(reader.probe(client)).resolves.toBeUndefined();
+    await expect(reader.probe(client)).resolves.toEqual({ warnings: [], info: [] });
 
     expect(client.executeQuery).toHaveBeenCalledWith(
       'SELECT 1 FROM `project-1.region-us.INFORMATION_SCHEMA.JOBS_BY_PROJECT` LIMIT 1',

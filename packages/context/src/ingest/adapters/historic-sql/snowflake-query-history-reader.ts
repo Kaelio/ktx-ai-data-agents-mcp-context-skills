@@ -169,7 +169,7 @@ function mapAggregatedRow(row: unknown[], indexes: Map<string, number>): Aggrega
 }
 
 export class SnowflakeHistoricSqlQueryHistoryReader {
-  async probe(client: unknown): Promise<void> {
+  async probe(client: unknown): Promise<{ warnings: string[]; info: string[] }> {
     let result: QueryResultLike;
     try {
       result = await queryClient(client).executeQuery(PROBE_SQL);
@@ -179,6 +179,7 @@ export class SnowflakeHistoricSqlQueryHistoryReader {
     if (result.error) {
       throw grantsError(result.error);
     }
+    return { warnings: [], info: [] };
   }
 
   async *fetchAggregated(

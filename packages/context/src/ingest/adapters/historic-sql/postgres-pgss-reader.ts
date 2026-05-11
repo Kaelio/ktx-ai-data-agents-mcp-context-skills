@@ -247,16 +247,17 @@ export class PostgresPgssReader {
     const pgssMax = nullableInteger(value(maxRow, maxHeaders, 'max'));
 
     const warnings: string[] = [];
+    const info: string[] = [];
     if (track === 'none') {
       warnings.push('pg_stat_statements.track is none; set it to top or all in the Postgres parameter group or config');
     }
     if (pgssMax !== null && pgssMax < RECOMMENDED_PGSS_MAX) {
-      warnings.push(
+      info.push(
         `pg_stat_statements.max is ${pgssMax}; set it to at least ${RECOMMENDED_PGSS_MAX} to reduce query-template eviction churn`,
       );
     }
 
-    return { pgServerVersion, warnings };
+    return { pgServerVersion, warnings, info };
   }
 
   async *fetchAggregated(

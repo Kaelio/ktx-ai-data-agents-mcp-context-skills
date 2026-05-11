@@ -195,7 +195,7 @@ export class BigQueryHistoricSqlQueryHistoryReader {
     this.viewPath = `\`${projectId}.region-${region}.INFORMATION_SCHEMA.JOBS_BY_PROJECT\``;
   }
 
-  async probe(client: unknown): Promise<void> {
+  async probe(client: unknown): Promise<{ warnings: string[]; info: string[] }> {
     let result: QueryResultLike;
     try {
       result = await queryClient(client).executeQuery(`SELECT 1 FROM ${this.viewPath} LIMIT 1`);
@@ -205,6 +205,7 @@ export class BigQueryHistoricSqlQueryHistoryReader {
     if (result.error) {
       throw grantsError(result.error);
     }
+    return { warnings: [], info: [] };
   }
 
   async *fetchAggregated(

@@ -126,6 +126,7 @@ export type StagedManifest = z.infer<typeof stagedManifestSchema>;
 
 export interface HistoricSqlProbeResult {
   warnings: string[];
+  info?: string[];
 }
 
 export interface HistoricSqlReader {
@@ -146,9 +147,10 @@ export interface KtxPostgresQueryClient {
   executeQuery(sql: string, params?: unknown[]): Promise<{ headers: string[]; rows: unknown[][]; totalRows?: number }>;
 }
 
-export interface PostgresPgssProbeResult {
+export interface PostgresPgssProbeResult extends HistoricSqlProbeResult {
   pgServerVersion: string;
   warnings: string[];
+  info: string[];
 }
 
 export interface HistoricSqlSourceAdapterDeps {

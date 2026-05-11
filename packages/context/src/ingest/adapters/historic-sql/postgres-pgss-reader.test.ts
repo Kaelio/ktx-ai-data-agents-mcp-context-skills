@@ -52,6 +52,7 @@ describe('PostgresPgssReader aggregate path', () => {
     await expect(reader.probe(client)).resolves.toEqual({
       pgServerVersion: 'PostgreSQL 16.4 on x86_64-apple-darwin',
       warnings: [],
+      info: [],
     });
 
     expect(executedSql(client, 0)).toContain("current_setting('server_version_num')::int");
@@ -159,10 +160,11 @@ describe('PostgresPgssReader aggregate path', () => {
       warnings: [
         "pg_stat_statements.track is none; set it to top or all in the Postgres parameter group or config",
       ],
+      info: [],
     });
   });
 
-  it('warns when pg_stat_statements.max is below the recommended floor', async () => {
+  it('returns an info note when pg_stat_statements.max is below the recommended floor', async () => {
     const client = queryClient([
       {
         headers: ['server_version_num', 'server_version'],
@@ -177,7 +179,8 @@ describe('PostgresPgssReader aggregate path', () => {
 
     await expect(reader.probe(client)).resolves.toEqual({
       pgServerVersion: 'PostgreSQL 16.4',
-      warnings: [
+      warnings: [],
+      info: [
         'pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
       ],
     });

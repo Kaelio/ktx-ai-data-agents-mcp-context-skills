@@ -22,7 +22,7 @@ const sqlAnalysis: SqlAnalysisPort = {
 
 const reader: HistoricSqlReader = {
   async probe() {
-    return { warnings: [] };
+    return { warnings: [], info: [] };
   },
   async *fetchAggregated() {},
 };
@@ -42,7 +42,7 @@ describe('HistoricSqlSourceAdapter', () => {
     const stagedDir = await tempDir();
     const aggregateReader: HistoricSqlReader = {
       async probe() {
-        return { warnings: [] };
+        return { warnings: [], info: [] };
       },
       async *fetchAggregated() {
         yield {

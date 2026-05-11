@@ -33,7 +33,7 @@ describe('SnowflakeHistoricSqlQueryHistoryReader', () => {
     const client = queryClient([{ headers: ['1'], rows: [[1]], totalRows: 1 }]);
     const reader = new SnowflakeHistoricSqlQueryHistoryReader();
 
-    await expect(reader.probe(client)).resolves.toBeUndefined();
+    await expect(reader.probe(client)).resolves.toEqual({ warnings: [], info: [] });
 
     expect(client.executeQuery).toHaveBeenCalledWith(
       'SELECT 1 FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY LIMIT 1',
