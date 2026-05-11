@@ -19,7 +19,6 @@ import {
   npmDemoSmokeSource,
   npmRuntimeSmokeSource,
   npmSmokePackageJson,
-  npmSmokePythonEnv,
   npmVerifySource,
   packageArtifactLayout,
   packageReleaseMetadata,
@@ -495,12 +494,18 @@ describe('pythonArtifactInstallArgs', () => {
   });
 });
 
-describe('npmSmokePythonEnv', () => {
-  it('prepends the npm smoke virtualenv bin directory to PATH', () => {
-    const env = npmSmokePythonEnv('/tmp/ktx-npm-smoke', { PATH: '/usr/bin' });
+describe('verifyNpmArtifacts', () => {
+  it('does not prepare an external Python environment for the npm smoke', async () => {
+    const source = await readFile(new URL('./package-artifacts.mjs', import.meta.url), 'utf8');
+    const start = source.indexOf('async function verifyNpmArtifacts');
+    const end = source.indexOf('async function verifyNpmDemoArtifacts');
+    assert.ok(start > 0, 'verifyNpmArtifacts function must exist');
+    assert.ok(end > start, 'verifyNpmDemoArtifacts must follow verifyNpmArtifacts');
 
-    assert.match(env.PATH, /^\/tmp\/ktx-npm-smoke\/\.venv\/(bin|Scripts)/);
-    assert.match(env.PATH, /\/usr\/bin$/);
+    const body = source.slice(start, end);
+    assert.doesNotMatch(body, /uv', \['venv', '\.venv'\]/);
+    assert.doesNotMatch(body, /pythonArtifactInstallArgs/);
+    assert.doesNotMatch(body, /npmSmokePythonEnv/);
   });
 });
 
@@ -557,6 +562,23 @@ describe('verification snippets', () => {
     assert.match(source, /"mode": "compile_only"/);
     assert.match(source, /"mode": "executed"/);
     assert.match(source, /ktx sl query sqlite execute/);
+    assert.match(source, /import Database from 'better-sqlite3'/);
+    assert.doesNotMatch(source, /run\('python'/);
+    assert.match(source, /KTX_RUNTIME_ROOT/);
+    assert.match(source, /managed-runtime/);
+    assert.match(source, /ktx runtime status missing/);
+    assert.match(source, /runtimeStatusBefore\.kind, 'missing'/);
+    assert.match(source, /Installing KTX Python runtime \(core\) with uv/);
+    assert.match(source, /KTX Python runtime ready:/);
+    assert.match(source, /ktx runtime status ready/);
+    assert.match(source, /runtimeStatusAfter\.kind, 'ready'/);
+    assert.match(source, /runtimeStatusAfter\.manifest\.features/);
+    assert.match(source, /ktx runtime doctor/);
+    assert.match(source, /PASS Managed Python runtime/);
+    assert.match(source, /ktx runtime start/);
+    assert.match(source, /ktx runtime start reuse/);
+    assert.match(source, /Using existing KTX Python daemon/);
+    assert.match(source, /ktx runtime stop/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'dev',\s*'scan',\s*'warehouse'/);
     assert.match(source, /'--mode',\s*'enriched'/);
     assert.doesNotMatch(source, /'--enrich'/);

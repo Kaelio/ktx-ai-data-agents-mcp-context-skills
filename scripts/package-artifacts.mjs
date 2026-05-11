@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -591,6 +591,7 @@ if (typeof cli.runKtxCli !== 'function') {
 export function npmRuntimeSmokeSource() {
   return `
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -626,6 +627,15 @@ function requireSuccess(label, result) {
   assert.equal(result.stderr, '', label + ' wrote unexpected stderr');
 }
 
+function requireSuccessWithStderr(label, result, stderrPattern) {
+  assert.equal(
+    result.code,
+    0,
+    label + ' failed with code ' + result.code + '\\nstdout:\\n' + result.stdout + '\\nstderr:\\n' + result.stderr,
+  );
+  assert.match(result.stderr, stderrPattern, label + ' stderr did not match ' + stderrPattern);
+}
+
 function requireOutput(label, result, text) {
   assert.match(result.stdout, text, label + ' output did not match ' + text);
 }
@@ -653,30 +663,26 @@ function getRunId(stdout) {
 }
 
 async function writeSqliteWarehouse(projectDir) {
-  const createDb = await run('python', [
-    '-c',
-    [
-      'import sqlite3',
-      'import sys',
-      'db_path = sys.argv[1]',
-      'conn = sqlite3.connect(db_path)',
-      'conn.executescript("""',
-      'DROP TABLE IF EXISTS orders;',
-      'CREATE TABLE orders (',
-      '  id INTEGER PRIMARY KEY,',
-      '  status TEXT NOT NULL,',
-      '  amount INTEGER NOT NULL',
-      ');',
-      "INSERT INTO orders (status, amount) VALUES ('paid', 20), ('paid', 30), ('open', 10);",
-      '""")',
-      'conn.close()',
-    ].join('\\n'),
-    join(projectDir, 'warehouse.db'),
-  ]);
-  requireSuccess('create sqlite warehouse', createDb);
+  const database = new Database(join(projectDir, 'warehouse.db'));
+  try {
+    database.exec(\`
+DROP TABLE IF EXISTS orders;
+CREATE TABLE orders (
+  id INTEGER PRIMARY KEY,
+  status TEXT NOT NULL,
+  amount INTEGER NOT NULL
+);
+INSERT INTO orders (status, amount) VALUES ('paid', 20), ('paid', 30), ('open', 10);
+\`);
+  } finally {
+    database.close();
+  }
 }
 
 const root = await mkdtemp(join(tmpdir(), 'ktx-installed-cli-smoke-'));
+const previousRuntimeRoot = process.env.KTX_RUNTIME_ROOT;
+process.env.KTX_RUNTIME_ROOT = join(root, 'managed-runtime');
+let daemonStarted = false;
 try {
   const projectDir = join(root, 'project');
   const sourceDir = join(root, 'source');
@@ -684,6 +690,14 @@ try {
   const version = await run('pnpm', ['exec', 'ktx', '--version']);
   requireSuccess('ktx public package version', version);
   requireOutput('ktx public package version', version, /@kaelio\\/ktx 0\\.0\\.0-private/);
+
+  const runtimeStatusBefore = parseJsonResult(
+    'ktx runtime status missing',
+    await run('pnpm', ['exec', 'ktx', 'runtime', 'status', '--json']),
+  );
+  assert.equal(runtimeStatusBefore.kind, 'missing');
+  assert.equal(runtimeStatusBefore.layout.runtimeRoot, process.env.KTX_RUNTIME_ROOT);
+  process.stdout.write('ktx managed runtime starts missing in isolated root\\n');
 
   const missingProjectDir = join(root, 'missing-project');
   await mkdir(missingProjectDir, { recursive: true });
@@ -910,9 +924,22 @@ try {
     '--project-dir',
     projectDir,
   ]);
-  requireSuccess('ktx sl query', slQuery);
-  requireOutput('ktx sl query', slQuery, /"mode": "compile_only"/);
-  requireOutput('ktx sl query', slQuery, /orders/);
+  requireSuccessWithStderr(
+    'ktx sl query first managed runtime install',
+    slQuery,
+    /Installing KTX Python runtime \(core\) with uv[\\s\\S]*KTX Python runtime ready:/,
+  );
+  requireOutput('ktx sl query first managed runtime install', slQuery, /"mode": "compile_only"/);
+  requireOutput('ktx sl query first managed runtime install', slQuery, /orders/);
+
+  const runtimeStatusAfter = parseJsonResult(
+    'ktx runtime status ready',
+    await run('pnpm', ['exec', 'ktx', 'runtime', 'status', '--json']),
+  );
+  assert.equal(runtimeStatusAfter.kind, 'ready');
+  assert.deepEqual(runtimeStatusAfter.manifest.features, ['core']);
+  assert.equal(runtimeStatusAfter.layout.runtimeRoot, process.env.KTX_RUNTIME_ROOT);
+  process.stdout.write('ktx managed runtime lazy install verified\\n');
 
   const sqliteSlQuery = await run('pnpm', ['exec', 'ktx', 'sl', 'query',
     '--connection-id',
@@ -934,6 +961,31 @@ try {
   requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"driver": "sqlite"/);
   requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"rows": \\[\\s*\\[\\s*3\\s*\\]\\s*\\]/);
   process.stdout.write('ktx sl query sqlite execute verified\\n');
+
+  const runtimeDoctor = await run('pnpm', ['exec', 'ktx', 'runtime', 'doctor']);
+  requireSuccess('ktx runtime doctor', runtimeDoctor);
+  requireOutput('ktx runtime doctor', runtimeDoctor, /PASS uv/);
+  requireOutput('ktx runtime doctor', runtimeDoctor, /PASS Bundled Python wheel/);
+  requireOutput('ktx runtime doctor', runtimeDoctor, /PASS Managed Python runtime/);
+  process.stdout.write('ktx runtime doctor verified\\n');
+
+  const runtimeStart = await run('pnpm', ['exec', 'ktx', 'runtime', 'start']);
+  requireSuccess('ktx runtime start', runtimeStart);
+  daemonStarted = true;
+  requireOutput('ktx runtime start', runtimeStart, /Started KTX Python daemon/);
+  requireOutput('ktx runtime start', runtimeStart, /url: http:\\/\\/127\\.0\\.0\\.1:\\d+/);
+  requireOutput('ktx runtime start', runtimeStart, /features: core/);
+
+  const runtimeStartReuse = await run('pnpm', ['exec', 'ktx', 'runtime', 'start']);
+  requireSuccess('ktx runtime start reuse', runtimeStartReuse);
+  requireOutput('ktx runtime start reuse', runtimeStartReuse, /Using existing KTX Python daemon/);
+  requireOutput('ktx runtime start reuse', runtimeStartReuse, /features: core/);
+
+  const runtimeStop = await run('pnpm', ['exec', 'ktx', 'runtime', 'stop']);
+  requireSuccess('ktx runtime stop', runtimeStop);
+  daemonStarted = false;
+  requireOutput('ktx runtime stop', runtimeStop, /Stopped KTX Python daemon/);
+  process.stdout.write('ktx runtime daemon lifecycle verified\\n');
 
   const structuralScan = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'warehouse',
     '--project-dir',
@@ -1016,6 +1068,14 @@ try {
   await access(join(projectDir, '.ktx', 'db.sqlite'));
   process.stdout.write('ktx dev ingest provider guard verified\\n');
 } finally {
+  if (daemonStarted) {
+    await run('pnpm', ['exec', 'ktx', 'runtime', 'stop']);
+  }
+  if (previousRuntimeRoot === undefined) {
+    delete process.env.KTX_RUNTIME_ROOT;
+  } else {
+    process.env.KTX_RUNTIME_ROOT = previousRuntimeRoot;
+  }
   await rm(root, { recursive: true, force: true });
 }
 `;
@@ -1161,15 +1221,6 @@ function pythonExecutable(projectDir) {
   return join(projectDir, '.venv', 'bin', 'python');
 }
 
-export function npmSmokePythonEnv(projectDir, baseEnv = process.env) {
-  const binDir = process.platform === 'win32' ? join(projectDir, '.venv', 'Scripts') : join(projectDir, '.venv', 'bin');
-  const existingPath = baseEnv.PATH ?? '';
-
-  return Object.assign({}, baseEnv, {
-    PATH: existingPath ? `${binDir}${delimiter}${existingPath}` : binDir,
-  });
-}
-
 async function buildArtifacts(layout) {
   await rm(layout.artifactDir, { recursive: true, force: true });
   await mkdir(layout.npmDir, { recursive: true });
@@ -1202,10 +1253,8 @@ async function verifyNpmArtifacts(layout, tmpRoot) {
   for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
     await assertPathExists(layout.npmTarballs[packageInfo.name], `${packageInfo.name} tarball`);
   }
-  const pythonArtifacts = await findPythonArtifacts(layout.pythonDir);
 
   const projectDir = join(tmpRoot, 'npm-clean-install');
-  const python = pythonExecutable(projectDir);
   await mkdir(projectDir, { recursive: true });
   await writeFile(
     join(projectDir, 'package.json'),
@@ -1217,20 +1266,10 @@ async function verifyNpmArtifacts(layout, tmpRoot) {
 
   await runCommand('pnpm', ['install'], { cwd: projectDir });
   await runCommand('pnpm', ['rebuild', 'better-sqlite3'], { cwd: projectDir });
-  await runCommand('uv', ['venv', '.venv'], { cwd: projectDir });
-  await runCommand('uv', pythonArtifactInstallArgs(python, pythonArtifacts), {
-    cwd: projectDir,
-  });
   await runCommand('node', ['verify-npm.mjs'], { cwd: projectDir });
   await runCommand('pnpm', ['exec', 'ktx', '--version'], { cwd: projectDir });
-  await runCommand('node', ['verify-installed-cli.mjs'], {
-    cwd: projectDir,
-    env: npmSmokePythonEnv(projectDir),
-  });
-  await runCommand('node', ['verify-installed-demo.mjs'], {
-    cwd: projectDir,
-    env: npmSmokePythonEnv(projectDir),
-  });
+  await runCommand('node', ['verify-installed-cli.mjs'], { cwd: projectDir });
+  await runCommand('node', ['verify-installed-demo.mjs'], { cwd: projectDir });
 }
 
 async function verifyNpmDemoArtifacts(layout, tmpRoot) {
