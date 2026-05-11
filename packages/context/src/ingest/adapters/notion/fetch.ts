@@ -12,7 +12,7 @@ import {
   type NotionPullConfig,
 } from './types.js';
 
-interface NotionFetchLogger {
+export interface NotionFetchLogger {
   warn(message: string): void;
 }
 

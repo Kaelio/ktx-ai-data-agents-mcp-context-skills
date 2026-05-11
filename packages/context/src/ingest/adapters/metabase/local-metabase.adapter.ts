@@ -1,12 +1,13 @@
 import type { KtxLocalProject, KtxProjectConnectionConfig } from '../../../project/index.js';
 import { ktxLocalStateDbPath } from '../../../project/index.js';
 import { resolveKtxConfigReference } from '../../../core/config-reference.js';
-import { DEFAULT_METABASE_CLIENT_CONFIG, DefaultMetabaseConnectionClientFactory } from './client.js';
+import { DEFAULT_METABASE_CLIENT_CONFIG, DefaultMetabaseConnectionClientFactory, type MetabaseClientLogger } from './client.js';
 import {
   IngestMetabaseClientFactory,
   type MetabaseClientConfig,
   type MetabaseClientRuntimeConfig,
 } from './client-port.js';
+import type { MetabaseFetchLogger } from './fetch.js';
 import { LocalMetabaseSourceStateReader } from './local-source-state-store.js';
 import { MetabaseSourceAdapter } from './metabase.adapter.js';
 
@@ -50,6 +51,7 @@ export function metabaseRuntimeConfigFromLocalConnection(
 interface CreateLocalMetabaseSourceAdapterOptions {
   env?: NodeJS.ProcessEnv;
   defaultClientConfig?: MetabaseClientConfig;
+  logger?: MetabaseClientLogger & MetabaseFetchLogger;
 }
 
 export function createLocalMetabaseSourceAdapter(
@@ -63,11 +65,13 @@ export function createLocalMetabaseSourceAdapter(
         metabaseConnectionId,
         project.config.connections[metabaseConnectionId],
         options.env,
-      ),
+    ),
     options.defaultClientConfig ?? DEFAULT_METABASE_CLIENT_CONFIG,
+    options.logger,
   );
   return new MetabaseSourceAdapter({
     clientFactory: new IngestMetabaseClientFactory(connectionFactory),
     sourceStateReader,
+    ...(options.logger ? { logger: options.logger } : {}),
   });
 }

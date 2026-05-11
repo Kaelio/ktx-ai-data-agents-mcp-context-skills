@@ -21,7 +21,7 @@ class IngestInputError extends Error {
   }
 }
 
-interface MetabaseFetchLogger {
+export interface MetabaseFetchLogger {
   log(message: string): void;
   warn(message: string): void;
 }

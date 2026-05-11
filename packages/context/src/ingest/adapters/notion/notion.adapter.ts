@@ -14,7 +14,7 @@ import type {
 import { chunkNotionStagedDir, describeNotionScope } from './chunk.js';
 import { clusterNotionWorkUnits } from './cluster.js';
 import { detectNotionStagedDir } from './detect.js';
-import { fetchNotionSnapshot } from './fetch.js';
+import { fetchNotionSnapshot, type NotionFetchLogger } from './fetch.js';
 import { NotionClient } from './notion-client.js';
 import { parseNotionPullConfig } from './pull-config.js';
 import { type NotionMetadata, notionManifestSchema, notionMetadataSchema } from './types.js';
@@ -31,6 +31,7 @@ interface NotionPullSucceededContext {
 
 export interface NotionSourceAdapterDeps {
   onPullSucceeded?: (ctx: NotionPullSucceededContext) => Promise<void>;
+  logger?: NotionFetchLogger;
 }
 
 export class NotionSourceAdapter implements SourceAdapter {
@@ -48,7 +49,12 @@ export class NotionSourceAdapter implements SourceAdapter {
 
   async fetch(pullConfig: unknown, stagedDir: string, _ctx: FetchContext): Promise<void> {
     const config = parseNotionPullConfig(pullConfig);
-    await fetchNotionSnapshot({ client: new NotionClient(config.authToken), config, stagedDir });
+    await fetchNotionSnapshot({
+      client: new NotionClient(config.authToken),
+      config,
+      stagedDir,
+      ...(this.deps.logger ? { logger: this.deps.logger } : {}),
+    });
   }
 
   chunk(stagedDir: string, diffSet?: DiffSet): Promise<ChunkResult> {

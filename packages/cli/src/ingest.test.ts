@@ -483,6 +483,39 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).toBe('');
   });
 
+  it('keeps metabase JSON stdout free of operational adapter logs', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          runLocalMetabaseIngest: async (input) => {
+            input.adapters.find((adapter) => adapter.source === 'metabase');
+            return {
+              metabaseConnectionId: 'prod-metabase',
+              status: 'all_succeeded',
+              totals: { workUnits: 0, failedWorkUnits: 0 },
+              children: [],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(() => JSON.parse(io.stdout())).not.toThrow();
+    expect(io.stderr()).toBe('');
+  });
+
   it('rejects source-dir uploads through the metabase fan-out route', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
@@ -696,15 +729,17 @@ describe('runKtxIngest', () => {
 
     expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
       databaseIntrospectionUrl: 'http://127.0.0.1:8765',
+      logger: expect.any(Object),
     });
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
         adapters: createdAdapters,
         adapter: 'fake',
         connectionId: 'warehouse',
-        pullConfigOptions: {
+        pullConfigOptions: expect.objectContaining({
           databaseIntrospectionUrl: 'http://127.0.0.1:8765',
-        },
+          logger: expect.any(Object),
+        }),
       }),
     );
   });
@@ -749,12 +784,14 @@ describe('runKtxIngest', () => {
     };
     expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
       managedDaemon: expectedManagedDaemon,
+      logger: expect.any(Object),
     });
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
-        pullConfigOptions: {
+        pullConfigOptions: expect.objectContaining({
           managedDaemon: expectedManagedDaemon,
-        },
+          logger: expect.any(Object),
+        }),
       }),
     );
   });
@@ -810,6 +847,7 @@ describe('runKtxIngest', () => {
 
     expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
       historicSqlConnectionId: 'warehouse',
+      logger: expect.any(Object),
     });
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -962,11 +1000,15 @@ describe('runKtxIngest', () => {
       looker: {
         parser: pullConfigOptions.looker.parser,
       },
+      logger: expect.any(Object),
     });
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
         agentRunner,
-        pullConfigOptions,
+        pullConfigOptions: expect.objectContaining({
+          ...pullConfigOptions,
+          logger: expect.any(Object),
+        }),
       }),
     );
   });

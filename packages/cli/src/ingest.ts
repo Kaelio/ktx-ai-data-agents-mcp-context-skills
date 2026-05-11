@@ -27,6 +27,7 @@ import {
   renderMemoryFlowTui,
   startLiveMemoryFlowTui,
 } from './memory-flow-tui.js';
+import { createCliOperationalLogger } from './io/logger.js';
 import { resolveVizFallback, warnVizFallbackOnce } from './viz-fallback.js';
 import { profileMark } from './startup-profile.js';
 
@@ -435,11 +436,13 @@ export async function runKtxIngest(
       const executeLocalIngest = deps.runLocalIngest ?? runLocalIngest;
       const localIngestOptions = deps.localIngestOptions ?? {};
       const managedDaemon = managedDaemonOptionsForIngestRun(args, io);
+      const operationalLogger = createCliOperationalLogger(io, args.outputMode);
       const adapterOptions = {
         ...(localIngestOptions.pullConfigOptions ?? {}),
         ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
         ...(managedDaemon ? { managedDaemon } : {}),
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
+        logger: operationalLogger,
       };
       if (args.adapter === 'metabase' && args.sourceDir) {
         throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
