@@ -17,49 +17,26 @@ describe('Conductor workspace scripts', () => {
     assert.equal(manifest.runScriptMode, 'nonconcurrent');
   });
 
-  it('orchestrates setup through focused step scripts', async () => {
+  it('sets up exact uv, local files, Python packages, JS packages, and the built CLI', async () => {
     const setupScript = await readText('scripts/conductor-setup.sh');
 
-    assert.match(setupScript, /sh scripts\/conductor\/link-agent-overlays\.sh/);
-    assert.match(setupScript, /sh scripts\/conductor\/link-root-env-file\.sh/);
-    assert.match(setupScript, /source scripts\/conductor\/activate-workspace-uv\.sh/);
-    assert.match(setupScript, /sh scripts\/conductor\/install-python-dependencies\.sh/);
-    assert.match(setupScript, /sh scripts\/conductor\/install-js-dependencies\.sh/);
-    assert.match(setupScript, /sh scripts\/conductor\/rebuild-native-dependencies\.sh/);
-    assert.match(setupScript, /sh scripts\/conductor\/build-workspace\.sh/);
-    assert.match(setupScript, /sh scripts\/conductor\/run-setup-doctor\.sh/);
-    assert.doesNotMatch(setupScript, /read_required_uv_version\(\)/);
-    assert.doesNotMatch(setupScript, /uv sync --all-packages --all-groups/);
-    assert.doesNotMatch(setupScript, /pnpm install --frozen-lockfile --prefer-offline/);
-    assert.doesNotMatch(setupScript, /packages\/cli\/dist\/bin\.js dev doctor setup --no-input/);
-  });
-
-  it('keeps concrete setup commands in step scripts', async () => {
-    const resolveUvScript = await readText('scripts/conductor/resolve-uv.sh');
-    const activateUvScript = await readText('scripts/conductor/activate-workspace-uv.sh');
-    const pythonScript = await readText('scripts/conductor/install-python-dependencies.sh');
-    const jsScript = await readText('scripts/conductor/install-js-dependencies.sh');
-    const nativeScript = await readText('scripts/conductor/rebuild-native-dependencies.sh');
-    const buildScript = await readText('scripts/conductor/build-workspace.sh');
-    const doctorScript = await readText('scripts/conductor/run-setup-doctor.sh');
-
-    assert.match(resolveUvScript, /read_required_uv_version\(\)/);
-    assert.match(resolveUvScript, /\.context\/bin\/uv-\$required_version/);
-    assert.match(activateUvScript, /bash scripts\/conductor\/resolve-uv\.sh pyproject\.toml/);
-    assert.match(activateUvScript, /export PATH="\$\(dirname "\$KTX_UV_BIN"\):\$PATH"/);
-    assert.match(pythonScript, /uv sync --all-packages --all-groups/);
-    assert.match(jsScript, /pnpm install --frozen-lockfile --prefer-offline/);
-    assert.match(nativeScript, /pnpm run native:rebuild/);
-    assert.match(buildScript, /pnpm run build/);
-    assert.match(doctorScript, /packages\/cli\/dist\/bin\.js dev doctor setup --no-input/);
+    assert.match(setupScript, /read_required_uv_version\(\)/);
+    assert.match(setupScript, /\.context\/bin\/uv-\$required_version/);
+    assert.match(setupScript, /link_agent_overlays/);
+    assert.match(setupScript, /CONDUCTOR_ROOT_PATH/);
+    assert.match(setupScript, /uv sync --all-packages --all-groups/);
+    assert.match(setupScript, /pnpm install --frozen-lockfile --prefer-offline/);
+    assert.match(setupScript, /pnpm run native:rebuild/);
+    assert.match(setupScript, /pnpm run build/);
+    assert.match(setupScript, /packages\/cli\/dist\/bin\.js dev doctor setup --no-input/);
+    assert.doesNotMatch(setupScript, /scripts\/conductor\//);
   });
 
   it('links private agent overlays when KAELIO_SKILLS_ROOT is set', async () => {
-    const workspaceScript = await readText('scripts/conductor/link-agent-overlays.sh');
+    const workspaceScript = await readText('scripts/conductor-setup.sh');
 
     assert.match(workspaceScript, /KAELIO_SKILLS_ROOT/);
-    assert.match(workspaceScript, /agents_source="\$\{KAELIO_SKILLS_ROOT\}\/\.agents"/);
-    assert.match(workspaceScript, /ln -s "\$\{agents_source\}" \.agents/);
+    assert.match(workspaceScript, /ln -s "\$\{KAELIO_SKILLS_ROOT\}\/\.agents" \.agents/);
   });
 
   it('runs the KTX daemon on the documented fixed local port', async () => {
