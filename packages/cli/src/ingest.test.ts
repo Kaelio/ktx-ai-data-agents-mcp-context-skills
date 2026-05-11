@@ -32,6 +32,7 @@ import {
   writeWarehouseConfig,
 } from './ingest.test-utils.js';
 import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
+import { runKtxSetup } from './setup.js';
 
 describe('runKtxIngest', () => {
   let tempDir: string;
@@ -103,6 +104,75 @@ describe('runKtxIngest', () => {
     expect(statusIo.stdout()).toContain('Status: done');
     expect(statusIo.stdout()).toContain('Diff: +2/~0/-0/=0');
     expect(statusIo.stderr()).toBe('');
+  });
+
+  it('prints provider setup guidance when a skip-llm setup project runs dev ingest', async () => {
+    const projectDir = join(tempDir, 'project');
+    const setupIo = makeIo();
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir,
+          mode: 'new',
+          agents: false,
+          agentScope: 'project',
+          agentInstallMode: 'cli',
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.0.0-test',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseDrivers: ['postgres'],
+          databaseConnectionId: 'warehouse',
+          databaseUrl: 'env:WAREHOUSE_URL',
+          databaseSchemas: [],
+          enableHistoricSql: true,
+          skipDatabases: false,
+          skipSources: true,
+        },
+        setupIo.io,
+        {
+          databasesDeps: {
+            testConnection: async (_projectDir, _connectionId, io) => {
+              io.stdout.write('Driver: postgres\nTables: 1\n');
+              return 0;
+            },
+            scanConnection: async () => 0,
+            historicSqlProbe: async () => ({ ok: true, lines: ['PASS Historic SQL probe skipped in test'] }),
+          },
+          context: async () => ({ status: 'skipped', projectDir }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+
+    const runIo = makeIo();
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          sourceDir,
+          outputMode: 'plain',
+        },
+        runIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(runIo.stdout()).toBe('');
+    expect(runIo.stderr()).toContain(
+      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+    );
+    expect(runIo.stderr()).toContain(
+      `ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+    );
   });
 
   it('routes metabase scheduled pulls to the fan-out runner and prints child summaries', async () => {
