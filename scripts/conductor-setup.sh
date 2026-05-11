@@ -83,7 +83,7 @@ resolve_uv_for_project() {
 }
 
 link_agent_overlays() {
-  if [ -z "${KAELIO_SKILLS_ROOT:-}" ] || [ ! -d "${KAELIO_SKILLS_ROOT}/.agents" ]; then
+  if [ -z "${KTX_AGENT_OVERLAYS_ROOT:-}" ] || [ ! -d "${KTX_AGENT_OVERLAYS_ROOT}/.agents" ]; then
     return 0
   fi
 
@@ -96,7 +96,7 @@ link_agent_overlays() {
     return 0
   fi
 
-  ln -s "${KAELIO_SKILLS_ROOT}/.agents" .agents
+  ln -s "${KTX_AGENT_OVERLAYS_ROOT}/.agents" .agents
 }
 
 echo "=== Conductor KTX workspace setup ==="
