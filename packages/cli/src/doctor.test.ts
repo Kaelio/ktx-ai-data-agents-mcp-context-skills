@@ -266,6 +266,27 @@ describe('runKtxDoctor', () => {
     expect(testIo.stdout()).toContain('PASS Connections: 1 configured');
   });
 
+  it('points project config failures at setup instead of removed init', async () => {
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {
+          runSetupChecks: async () => [
+            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
+          ],
+          runHistoricSqlDoctorChecks: async () => [],
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(testIo.stdout()).toContain('FAIL Project config:');
+    expect(testIo.stdout()).toContain(`Fix: Run: ktx setup --new --project-dir ${tempDir}`);
+    expect(testIo.stdout()).not.toContain('ktx init');
+  });
+
   it('includes Postgres historic-SQL readiness in project doctor output', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),

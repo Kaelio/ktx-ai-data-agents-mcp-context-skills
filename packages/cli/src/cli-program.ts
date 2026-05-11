@@ -42,6 +42,20 @@ interface KtxGlobalOptionValues {
   debug?: boolean;
 }
 
+const ROOT_COMMANDS = new Set([
+  'setup',
+  'connection',
+  'ingest',
+  'wiki',
+  'sl',
+  'runtime',
+  'serve',
+  'status',
+  'help',
+  'dev',
+  'agent',
+]);
+
 export interface CommandWithGlobalOptions {
   opts: () => object;
   optsWithGlobals?: () => object;
@@ -158,6 +172,88 @@ function formatCliError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function shouldUseErrorStyle(io: KtxCliIo): boolean {
+  return io.stdout.isTTY === true && !process.env.NO_COLOR && process.env.TERM !== 'dumb' && !process.env.CI;
+}
+
+function ansi(text: string, open: string, close: string, enabled: boolean): string {
+  return enabled ? `\u001b[${open}m${text}\u001b[${close}m` : text;
+}
+
+function formatErrorLabel(enabled: boolean): string {
+  return ansi('error', '31', '39', enabled);
+}
+
+function formatCommandToken(command: string, enabled: boolean): string {
+  return enabled ? ansi(command, '1', '22', true) : `\`${command}\``;
+}
+
+function formatHint(text: string, enabled: boolean): string {
+  return ansi(text, '2', '22', enabled);
+}
+
+function findRootCommandToken(argv: string[]): string | null | undefined {
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (!arg) {
+      continue;
+    }
+    if (arg === '--') {
+      return null;
+    }
+    if (arg === '--project-dir') {
+      const value = argv[i + 1];
+      if (!value || value.startsWith('-')) {
+        return undefined;
+      }
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--project-dir=')) {
+      continue;
+    }
+    if (arg === '--debug' || arg === '--help' || arg === '-h' || arg === '--version' || arg === '-v') {
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      return undefined;
+    }
+    return arg;
+  }
+  return null;
+}
+
+function writeRemovedInitCommandError(io: KtxCliIo): void {
+  const styled = shouldUseErrorStyle(io);
+  const command = (value: string) => formatCommandToken(value, styled);
+  io.stderr.write(`${formatErrorLabel(styled)}: ${command('ktx init')} is no longer a public command.\n\n`);
+  io.stderr.write('Create or resume a KTX project:\n');
+  io.stderr.write(`  ${command('ktx setup')}\n`);
+  io.stderr.write(`  ${command('ktx setup --new --project-dir <path>')}\n\n`);
+  io.stderr.write('Developer scaffolding:\n');
+  io.stderr.write(`  ${command('ktx dev init [path] --name <project-name>')}\n\n`);
+  io.stderr.write(`${formatHint('Run `ktx --help` to see all commands.', styled)}\n`);
+}
+
+function writeUnknownRootCommandError(commandName: string, io: KtxCliIo): void {
+  const styled = shouldUseErrorStyle(io);
+  io.stderr.write(`${formatErrorLabel(styled)}: unknown command ${formatCommandToken(commandName, styled)}\n\n`);
+  io.stderr.write(`${formatHint('Run `ktx --help` to see available commands.', styled)}\n`);
+}
+
+function writeRootCommandPreflightError(argv: string[], io: KtxCliIo): boolean {
+  const commandName = findRootCommandToken(argv);
+  if (commandName === undefined || commandName === null || ROOT_COMMANDS.has(commandName)) {
+    return false;
+  }
+  if (commandName === 'init') {
+    writeRemovedInitCommandError(io);
+    return true;
+  }
+  writeUnknownRootCommandError(commandName, io);
+  return true;
+}
+
 async function runBareInteractiveCommand(
   program: Command,
   io: KtxCliIo,
@@ -259,6 +355,10 @@ export async function runCommanderKtxCli(
     }
     program.outputHelp();
     return 0;
+  }
+
+  if (writeRootCommandPreflightError(argv, io)) {
+    return 1;
   }
 
   try {

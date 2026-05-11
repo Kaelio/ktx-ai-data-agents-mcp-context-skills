@@ -99,12 +99,33 @@ describe('memory-flow renderer exports', () => {
 
 describe('runKtxCli', () => {
   let tempDir: string;
+  let previousCi: string | undefined;
+  let previousNoColor: string | undefined;
+  let previousTerm: string | undefined;
 
   beforeEach(async () => {
+    previousCi = process.env.CI;
+    previousNoColor = process.env.NO_COLOR;
+    previousTerm = process.env.TERM;
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-'));
   });
 
   afterEach(async () => {
+    if (previousCi === undefined) {
+      delete process.env.CI;
+    } else {
+      process.env.CI = previousCi;
+    }
+    if (previousNoColor === undefined) {
+      delete process.env.NO_COLOR;
+    } else {
+      process.env.NO_COLOR = previousNoColor;
+    }
+    if (previousTerm === undefined) {
+      delete process.env.TERM;
+    } else {
+      process.env.TERM = previousTerm;
+    }
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -2402,7 +2423,58 @@ describe('runKtxCli', () => {
 
     await expect(runKtxCli(['init'], testIo.io)).resolves.toBe(1);
 
-    expect(testIo.stderr()).toContain("error: unknown command 'init'");
+    expect(testIo.stdout()).toBe('');
+    expect(testIo.stderr()).toContain('error: `ktx init` is no longer a public command.');
+    expect(testIo.stderr()).toContain('ktx setup');
+    expect(testIo.stderr()).toContain('ktx setup --new --project-dir <path>');
+    expect(testIo.stderr()).toContain('ktx dev init [path] --name <project-name>');
+    expect(testIo.stderr()).not.toContain('Did you mean');
+    expect(testIo.stderr()).not.toContain('Usage: ktx');
+    expect(testIo.stderr()).not.toContain('\u001b[');
+  });
+
+  it('recognizes removed init after global options', async () => {
+    const testIo = makeIo();
+
+    await expect(runKtxCli(['--project-dir', tempDir, 'init'], testIo.io)).resolves.toBe(1);
+
+    expect(testIo.stderr()).toContain('error: `ktx init` is no longer a public command.');
+    expect(testIo.stderr()).toContain('ktx setup --new --project-dir <path>');
+    expect(testIo.stderr()).not.toContain('Usage: ktx');
+  });
+
+  it('lets Commander handle malformed global options', async () => {
+    const testIo = makeIo();
+
+    await expect(runKtxCli(['--project-dir'], testIo.io)).resolves.toBe(1);
+
+    expect(testIo.stderr()).toContain("option '--project-dir <path>' argument missing");
+    expect(testIo.stderr()).not.toContain('no longer a public command');
+  });
+
+  it('uses restrained terminal styling for removed-command guidance in TTY output', async () => {
+    delete process.env.CI;
+    delete process.env.NO_COLOR;
+    process.env.TERM = 'xterm-256color';
+    const testIo = makeIo({ stdoutIsTty: true });
+
+    await expect(runKtxCli(['init'], testIo.io)).resolves.toBe(1);
+
+    expect(testIo.stderr()).toContain('\u001b[31merror\u001b[39m');
+    expect(testIo.stderr()).toContain('\u001b[1mktx setup\u001b[22m');
+    expect(testIo.stderr()).toContain('\u001b[2mRun `ktx --help` to see all commands.\u001b[22m');
+  });
+
+  it('honors NO_COLOR for removed-command guidance', async () => {
+    delete process.env.CI;
+    process.env.NO_COLOR = '1';
+    process.env.TERM = 'xterm-256color';
+    const testIo = makeIo({ stdoutIsTty: true });
+
+    await expect(runKtxCli(['init'], testIo.io)).resolves.toBe(1);
+
+    expect(testIo.stderr()).toContain('error: `ktx init` is no longer a public command.');
+    expect(testIo.stderr()).not.toContain('\u001b[');
   });
 
   it('returns an error code for unknown commands', async () => {
@@ -2410,6 +2482,9 @@ describe('runKtxCli', () => {
 
     await expect(runKtxCli(['unknown'], testIo.io)).resolves.toBe(1);
 
-    expect(testIo.stderr()).toContain("error: unknown command 'unknown'");
+    expect(testIo.stdout()).toBe('');
+    expect(testIo.stderr()).toContain('error: unknown command `unknown`');
+    expect(testIo.stderr()).toContain('Run `ktx --help` to see available commands.');
+    expect(testIo.stderr()).not.toContain('Usage: ktx');
   });
 });

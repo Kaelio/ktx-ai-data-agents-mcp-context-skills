@@ -9,6 +9,7 @@ import {
   buildPostgresUrl,
   buildPostgresReadyArgs,
   buildSeedSql,
+  buildSetupNewProjectArgs,
   smokeContainerName,
 } from './installed-live-database-smoke.mjs';
 
@@ -99,6 +100,20 @@ describe('installed live-database artifact smoke helpers', () => {
   });
 
   it('builds installed CLI live-database ingest and status commands', () => {
+    assert.deepEqual(buildSetupNewProjectArgs('/tmp/project'), [
+      'exec',
+      'ktx',
+      'setup',
+      '--new',
+      '--project-dir',
+      '/tmp/project',
+      '--skip-llm',
+      '--skip-embeddings',
+      '--skip-databases',
+      '--skip-sources',
+      '--no-input',
+    ]);
+
     assert.deepEqual(buildLiveDatabaseIngestArgs('/tmp/project', 'http://127.0.0.1:8765'), [
       'exec',
       'ktx',

@@ -339,7 +339,7 @@ async function runProjectChecks(projectDir: string, deps: KtxDoctorDeps = {}): P
         'project-config',
         'Project config',
         failureMessage(error),
-        `Run: ktx init ${projectDir} --name <project-name>`,
+        `Run: ktx setup --new --project-dir ${projectDir}`,
       ),
     );
   }

@@ -120,6 +120,22 @@ export function buildLiveDatabaseIngestArgs(projectDir, databaseIntrospectionUrl
   ];
 }
 
+export function buildSetupNewProjectArgs(projectDir) {
+  return [
+    'exec',
+    'ktx',
+    'setup',
+    '--new',
+    '--project-dir',
+    projectDir,
+    '--skip-llm',
+    '--skip-embeddings',
+    '--skip-databases',
+    '--skip-sources',
+    '--no-input',
+  ];
+}
+
 export function buildLiveDatabaseStatusArgs(projectDir, runId) {
   return ['exec', 'ktx', 'ingest', 'status', '--project-dir', projectDir, runId];
 }
@@ -308,11 +324,11 @@ async function main() {
     await prepareCleanInstall(layout, cleanInstallDir);
 
     await mkdir(projectDir, { recursive: true });
-    const init = await run('pnpm', ['exec', 'ktx', 'init', projectDir, '--name', 'artifact-live-database'], {
+    const setup = await run('pnpm', buildSetupNewProjectArgs(projectDir), {
       cwd: cleanInstallDir,
       timeout: 30_000,
     });
-    requireSuccess('ktx init', init);
+    requireSuccess('ktx setup --new', setup);
     await writeFile(join(projectDir, 'ktx.yaml'), buildKtxYaml(postgresUrl), 'utf8');
 
     const databaseIntrospectionUrl = await startDaemon(cleanInstallDir);
