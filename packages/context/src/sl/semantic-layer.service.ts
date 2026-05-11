@@ -12,6 +12,7 @@ interface WriteSourceOptions {
 }
 
 const SL_DIR_PREFIX = 'semantic-layer';
+const CONNECTION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 
 function formatPortError(error: unknown, fallback: string): string {
   if (typeof error === 'string') {
@@ -61,11 +62,12 @@ export class SemanticLayerService {
   async listConnectionIds(): Promise<string[]> {
     try {
       const result = await this.configService.listFiles(SL_DIR_PREFIX);
-      // Directories under semantic-layer/ are connectionIds (UUIDs)
-      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      // Directories under semantic-layer/ are connectionIds. Local KTX projects use
+      // readable ids like "warehouse" and "dbt-main", not only UUIDs.
       return result.files
         .map((f) => f.replace(`${SL_DIR_PREFIX}/`, '').split('/')[0])
-        .filter((name, i, arr) => uuidPattern.test(name) && arr.indexOf(name) === i);
+        .filter((name, i, arr) => CONNECTION_ID_PATTERN.test(name) && arr.indexOf(name) === i)
+        .sort();
     } catch {
       return [];
     }

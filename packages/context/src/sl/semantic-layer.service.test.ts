@@ -38,6 +38,31 @@ const baseTable: SemanticLayerSource = {
   measures: [],
 };
 
+describe('listConnectionIdsWithNames', () => {
+  it('discovers local KTX connection ids from semantic-layer directories', async () => {
+    const configService = {
+      listFiles: vi.fn().mockResolvedValue({
+        files: [
+          'semantic-layer/warehouse/_schema/public.yaml',
+          'semantic-layer/dbt-main/orders.yaml',
+          'semantic-layer/.gitkeep',
+        ],
+      }),
+    };
+    const catalog = connectionCatalog();
+    catalog.listEnabledConnections.mockImplementation(async (ids: string[]) =>
+      ids.map((id) => ({ id, name: id, connectionType: id === 'warehouse' ? 'postgres' : 'dbt' })),
+    );
+    const service = new SemanticLayerService(configService as never, catalog, pythonPort);
+
+    await expect(service.listConnectionIdsWithNames()).resolves.toEqual([
+      { id: 'dbt-main', name: 'dbt-main', connectionType: 'dbt' },
+      { id: 'warehouse', name: 'warehouse', connectionType: 'postgres' },
+    ]);
+    expect(catalog.listEnabledConnections).toHaveBeenCalledWith(['dbt-main', 'warehouse']);
+  });
+});
+
 describe('composeOverlay', () => {
   it('carries top-level segments from overlay into the composed source', () => {
     const overlay = {
