@@ -24,6 +24,7 @@
     "setup:dev": "node scripts/setup-dev.mjs",
     "release:published-smoke": "node scripts/published-package-smoke.mjs --require-config",
     "release:local-embeddings-smoke": "node scripts/local-embeddings-runtime-smoke.mjs --require-opt-in",
+    "release:npm-publish": "node scripts/publish-public-npm-package.mjs",
     "release:readiness": "node scripts/release-readiness.mjs",
     "relationships:acquire-public-fixtures": "node scripts/acquire-public-benchmark-fixtures.mjs",
     "relationships:rebuild-public-snapshots": "node scripts/build-benchmark-snapshot.mjs --rebuild-all",
