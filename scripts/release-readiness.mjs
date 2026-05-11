@@ -103,6 +103,26 @@ function assertRequiredBeforePublishing(policy) {
   }
 }
 
+function assertRuntimeInstallerPolicy(policy) {
+  assertPlainObject(policy.runtimeInstaller, 'Release policy runtimeInstaller');
+  assertString(policy.runtimeInstaller.uvStrategy, 'Release policy runtimeInstaller.uvStrategy');
+  assertBoolean(policy.runtimeInstaller.bootstrapUv, 'Release policy runtimeInstaller.bootstrapUv');
+  assertString(
+    policy.runtimeInstaller.missingUvBehavior,
+    'Release policy runtimeInstaller.missingUvBehavior',
+  );
+
+  if (policy.runtimeInstaller.uvStrategy !== 'path-prerequisite') {
+    throw new Error('Release policy runtimeInstaller.uvStrategy must be path-prerequisite');
+  }
+  if (policy.runtimeInstaller.bootstrapUv !== false) {
+    throw new Error('Release policy runtimeInstaller.bootstrapUv must be false');
+  }
+  if (policy.runtimeInstaller.missingUvBehavior !== 'focused-error') {
+    throw new Error('Release policy runtimeInstaller.missingUvBehavior must be focused-error');
+  }
+}
+
 function assertSameMembers(actual, expected, label) {
   const sortedActual = [...actual].sort();
   const sortedExpected = [...expected].sort();
@@ -136,6 +156,7 @@ export function validateReleasePolicy(policy) {
   assertNullableString(policy.publishedPackageSmoke.registry, 'Release policy publishedPackageSmoke.registry');
   readPublishedPackageSmokeConfig({}, [], policy.publishedPackageSmoke);
   assertRequiredBeforePublishing(policy);
+  assertRuntimeInstallerPolicy(policy);
 
   return policy;
 }
@@ -277,6 +298,7 @@ export async function releaseReadinessReport(rootDir = scriptRootDir()) {
     pythonPublishEnabled: policy.python.publish,
     packageNames: metadata.map((entry) => entry.packageName),
     publishedPackageSmokeGate: publishedPackageSmokeGate(policy),
+    runtimeInstaller: policy.runtimeInstaller,
     npmPublish:
       policy.releaseMode === NPM_PUBLIC_RELEASE_READY_MODE
         ? {
@@ -309,6 +331,10 @@ async function main() {
   process.stdout.write(`Published package smoke version: ${report.publishedPackageSmokeGate.version}\n`);
   process.stdout.write(
     `Published package smoke registry: ${report.publishedPackageSmokeGate.registry ?? 'default npm registry'}\n`,
+  );
+  process.stdout.write(`Runtime uv strategy: ${report.runtimeInstaller.uvStrategy}\n`);
+  process.stdout.write(
+    `Runtime uv bootstrap: ${report.runtimeInstaller.bootstrapUv ? 'enabled' : 'disabled'}\n`,
   );
   if (report.npmPublish) {
     process.stdout.write(

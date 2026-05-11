@@ -18,5 +18,10 @@
     "version": "0.1.0",
     "registry": null
   },
+  "runtimeInstaller": {
+    "uvStrategy": "path-prerequisite",
+    "bootstrapUv": false,
+    "missingUvBehavior": "focused-error"
+  },
   "requiredBeforePublishing": []
 }

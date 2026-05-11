@@ -86,6 +86,11 @@ function releasePolicy(overrides = {}) {
       version: 'latest',
       registry: null,
     },
+    runtimeInstaller: {
+      uvStrategy: 'path-prerequisite',
+      bootstrapUv: false,
+      missingUvBehavior: 'focused-error',
+    },
     requiredBeforePublishing: [
       'Choose public release version.',
       'Configure registry credentials outside source control.',
@@ -146,6 +151,11 @@ describe('release readiness policy', () => {
           packageName: '@kaelio/ktx',
           version: 'latest',
           registry: null,
+        },
+        runtimeInstaller: {
+          uvStrategy: 'path-prerequisite',
+          bootstrapUv: false,
+          missingUvBehavior: 'focused-error',
         },
         npmPublish: null,
         blockedPublishingDecisions: [
@@ -221,6 +231,11 @@ describe('release readiness policy', () => {
           version: '2026.5.8',
           registry: 'https://registry.npmjs.org/',
         },
+        runtimeInstaller: {
+          uvStrategy: 'path-prerequisite',
+          bootstrapUv: false,
+          missingUvBehavior: 'focused-error',
+        },
         npmPublish: null,
         blockedPublishingDecisions: [],
       });
@@ -268,6 +283,11 @@ describe('release readiness policy', () => {
           version: PUBLIC_NPM_PACKAGE_VERSION,
           registry: null,
         },
+        runtimeInstaller: {
+          uvStrategy: 'path-prerequisite',
+          bootstrapUv: false,
+          missingUvBehavior: 'focused-error',
+        },
         npmPublish: {
           packageName: '@kaelio/ktx',
           version: PUBLIC_NPM_PACKAGE_VERSION,
@@ -277,6 +297,72 @@ describe('release readiness policy', () => {
         },
         blockedPublishingDecisions: [],
       });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects npm public release ready mode without a runtime installer policy', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-runtime-policy-missing-test-'));
+    try {
+      await writeReadyFixture(root, {
+        policy: releasePolicy({
+          releaseMode: 'npm-public-release-ready',
+          npm: {
+            publish: true,
+            registry: null,
+            access: 'public',
+            tag: 'latest',
+          },
+          publishedPackageSmoke: {
+            packageName: '@kaelio/ktx',
+            version: PUBLIC_NPM_PACKAGE_VERSION,
+            registry: null,
+          },
+          runtimeInstaller: undefined,
+          requiredBeforePublishing: [],
+        }),
+      });
+
+      await assert.rejects(
+        () => releaseReadinessReport(root),
+        /Release policy runtimeInstaller must be a JSON object/,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects uv bootstrap download policy for the first public npm release', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-runtime-policy-bootstrap-test-'));
+    try {
+      await writeReadyFixture(root, {
+        policy: releasePolicy({
+          releaseMode: 'npm-public-release-ready',
+          npm: {
+            publish: true,
+            registry: null,
+            access: 'public',
+            tag: 'latest',
+          },
+          publishedPackageSmoke: {
+            packageName: '@kaelio/ktx',
+            version: PUBLIC_NPM_PACKAGE_VERSION,
+            registry: null,
+          },
+          runtimeInstaller: {
+            uvStrategy: 'bootstrap-download',
+            bootstrapUv: true,
+            missingUvBehavior: 'download',
+          },
+          requiredBeforePublishing: [],
+        }),
+      });
+
+      await assert.rejects(
+        () => releaseReadinessReport(root),
+        /Release policy runtimeInstaller\.uvStrategy must be path-prerequisite/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
