@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  MISSING_UV_RUNTIME_INSTALL_MESSAGE,
   doctorManagedPythonRuntime,
   installManagedPythonRuntime,
   managedPythonRuntimeLayout,
@@ -233,6 +234,27 @@ describe('installManagedPythonRuntime', () => {
     expect(manifest.features).toEqual(['core', 'local-embeddings']);
   });
 
+  it('fails with the hard-prerequisite message when uv is missing', async () => {
+    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => {
+      commands.push({ command, args });
+      throw new Error('spawn uv ENOENT');
+    });
+
+    await expect(
+      installManagedPythonRuntime({
+        cliVersion: '0.2.0',
+        runtimeRoot: join(tempDir, 'runtime'),
+        assetDir,
+        features: ['core'],
+        exec,
+      }),
+    ).rejects.toThrow(MISSING_UV_RUNTIME_INSTALL_MESSAGE);
+
+    expect(commands).toEqual([{ command: 'uv', args: ['--version'] }]);
+  });
+
   it('reuses an existing compatible runtime when force is false', async () => {
     const { assetDir } = await writeAsset(tempDir, 'core-wheel');
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => ({
@@ -393,6 +415,28 @@ describe('doctorManagedPythonRuntime', () => {
       ['runtime', 'fail'],
     ]);
     expect(checks[2]?.fix).toBe('Run: ktx runtime install --yes');
+  });
+
+  it('reports uv as a hard prerequisite when uv is missing', async () => {
+    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const exec: ManagedPythonRuntimeExec = vi.fn(async () => {
+      throw new Error('spawn uv ENOENT');
+    });
+
+    const checks = await doctorManagedPythonRuntime({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      assetDir,
+      exec,
+    });
+
+    expect(checks[0]).toEqual({
+      id: 'uv',
+      label: 'uv',
+      status: 'fail',
+      detail: MISSING_UV_RUNTIME_INSTALL_MESSAGE,
+      fix: 'Install uv, make sure it is on PATH, and run: ktx runtime install --yes',
+    });
   });
 });
 

@@ -114,6 +114,9 @@ export interface ManagedPythonRuntimePruneResult {
   removed: string[];
 }
 
+export const MISSING_UV_RUNTIME_INSTALL_MESSAGE =
+  'uv is required to install the KTX Python runtime. KTX does not download uv automatically. Install uv, make sure it is on PATH, and retry: ktx runtime install --yes';
+
 function defaultAssetDir(): string {
   return fileURLToPath(new URL('../assets/python/', import.meta.url));
 }
@@ -268,9 +271,7 @@ async function ensureUv(exec: ManagedPythonRuntimeExec): Promise<string> {
     const result = await exec('uv', ['--version']);
     return result.stdout.trim() || 'uv available';
   } catch {
-    throw new Error(
-      'uv is required to install the KTX Python runtime. Install uv and retry: ktx runtime install --yes',
-    );
+    throw new Error(MISSING_UV_RUNTIME_INSTALL_MESSAGE);
   }
 }
 
@@ -378,7 +379,7 @@ export async function doctorManagedPythonRuntime(
         id: 'uv',
         label: 'uv',
         detail: error instanceof Error ? error.message : String(error),
-        fix: 'Install uv, then run: ktx runtime install --yes',
+        fix: 'Install uv, make sure it is on PATH, and run: ktx runtime install --yes',
       }),
     );
   }
