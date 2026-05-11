@@ -60,6 +60,7 @@ export type KtxSetupArgs =
       skipAgents?: boolean;
       inputMode: 'auto' | 'disabled';
       yes: boolean;
+      cliVersion: string;
       anthropicApiKeyEnv?: string;
       anthropicApiKeyFile?: string;
       anthropicModel?: string;
@@ -397,6 +398,13 @@ function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
   io.stderr.write(`Then install agent integration:\n  ktx setup --agents --project-dir ${resolve(projectDir)}\n`);
 }
 
+function setupRuntimeInstallPolicy(args: Extract<KtxSetupArgs, { command: 'run' }>): 'prompt' | 'auto' | 'never' {
+  if (args.yes) {
+    return 'auto';
+  }
+  return args.inputMode === 'disabled' ? 'never' : 'prompt';
+}
+
 export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
   try {
     return await runKtxSetupInner(args, io, deps);
@@ -566,6 +574,8 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
           {
             projectDir: projectResult.projectDir,
             inputMode: args.inputMode,
+            cliVersion: args.cliVersion,
+            runtimeInstallPolicy: setupRuntimeInstallPolicy(args),
             ...(args.embeddingBackend ? { embeddingBackend: args.embeddingBackend } : {}),
             ...(args.embeddingApiKeyEnv ? { embeddingApiKeyEnv: args.embeddingApiKeyEnv } : {}),
             ...(args.embeddingApiKeyFile ? { embeddingApiKeyFile: args.embeddingApiKeyFile } : {}),

@@ -179,6 +179,7 @@ async function runBareInteractiveCommand(
         skipAgents: false,
         inputMode: 'auto',
         yes: false,
+        cliVersion: context.packageInfo.version,
         skipLlm: false,
         skipEmbeddings: false,
         databaseSchemas: [],

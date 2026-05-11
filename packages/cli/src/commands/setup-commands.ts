@@ -371,6 +371,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       skipAgents: options.skipAgents === true,
       inputMode: options.input === false ? 'disabled' : 'auto',
       yes: options.yes === true,
+      cliVersion: context.packageInfo.version,
       ...(options.anthropicApiKeyEnv ? { anthropicApiKeyEnv: options.anthropicApiKeyEnv } : {}),
       ...(options.anthropicApiKeyFile ? { anthropicApiKeyFile: options.anthropicApiKeyFile } : {}),
       ...(options.anthropicModel ? { anthropicModel: options.anthropicModel } : {}),
