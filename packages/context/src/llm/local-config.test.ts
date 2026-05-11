@@ -5,6 +5,8 @@ import {
   type KtxProjectLlmConfig,
 } from '../project/config.js';
 import {
+  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
+  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV,
   createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmProviderFromConfig,
   resolveLocalKtxEmbeddingConfig,
@@ -102,6 +104,45 @@ describe('local KTX embedding config', () => {
       sentenceTransformers: { baseURL: 'http://localhost:18081', pathPrefix: '' },
       batchSize: 16,
     });
+  });
+
+  it('resolves managed sentence-transformers config from the CLI-provided daemon URL', () => {
+    const config: KtxProjectEmbeddingConfig = {
+      backend: 'sentence-transformers',
+      model: 'all-MiniLM-L6-v2',
+      dimensions: 384,
+      sentenceTransformers: {
+        base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
+        pathPrefix: '',
+      },
+      batchSize: 32,
+    };
+
+    expect(
+      resolveLocalKtxEmbeddingConfig(config, {
+        [MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV]: 'http://127.0.0.1:61234',
+      }),
+    ).toEqual({
+      backend: 'sentence-transformers',
+      model: 'all-MiniLM-L6-v2',
+      dimensions: 384,
+      sentenceTransformers: { baseURL: 'http://127.0.0.1:61234', pathPrefix: '' },
+      batchSize: 32,
+    });
+  });
+
+  it('returns null for managed sentence-transformers when no daemon URL is available', () => {
+    const config: KtxProjectEmbeddingConfig = {
+      backend: 'sentence-transformers',
+      model: 'all-MiniLM-L6-v2',
+      dimensions: 384,
+      sentenceTransformers: {
+        base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
+        pathPrefix: '',
+      },
+    };
+
+    expect(resolveLocalKtxEmbeddingConfig(config, {})).toBeNull();
   });
 
   it('constructs deterministic embeddings from the default project config', () => {

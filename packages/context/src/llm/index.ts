@@ -11,6 +11,8 @@ export {
   summarizeKtxLlmDebugRequest,
 } from './debug-request-recorder.js';
 export {
+  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
+  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV,
   createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmProviderFromConfig,
   resolveLocalKtxEmbeddingConfig,
