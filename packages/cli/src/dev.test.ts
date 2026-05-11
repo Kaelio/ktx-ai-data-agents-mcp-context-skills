@@ -234,6 +234,8 @@ describe('dev Commander tree', () => {
         detectRelationships: false,
         dryRun: true,
         databaseIntrospectionUrl: undefined,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'prompt',
       },
       scanIo.io,
     );
@@ -259,6 +261,8 @@ describe('dev Commander tree', () => {
         detectRelationships: true,
         dryRun: false,
         databaseIntrospectionUrl: undefined,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'prompt',
       },
       io.io,
     );

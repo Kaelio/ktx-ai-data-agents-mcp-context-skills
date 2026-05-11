@@ -2117,9 +2117,46 @@ describe('runKtxCli', () => {
         detectRelationships: false,
         dryRun: false,
         databaseIntrospectionUrl: undefined,
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'prompt',
       },
       testIo.io,
     );
+  });
+
+  it('routes scan managed runtime install policies', async () => {
+    const autoIo = makeIo();
+    const neverIo = makeIo();
+    const conflictIo = makeIo();
+    const scan = vi.fn().mockResolvedValue(0);
+
+    await expect(runKtxCli(['--project-dir', tempDir, 'dev', 'scan', 'warehouse', '--yes'], autoIo.io, { scan }))
+      .resolves.toBe(0);
+    await expect(runKtxCli(['--project-dir', tempDir, 'dev', 'scan', 'warehouse', '--no-input'], neverIo.io, { scan }))
+      .resolves.toBe(0);
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'dev', 'scan', 'warehouse', '--yes', '--no-input'], conflictIo.io, {
+        scan,
+      }),
+    ).resolves.toBe(1);
+
+    expect(scan).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        command: 'run',
+        runtimeInstallPolicy: 'auto',
+      }),
+      autoIo.io,
+    );
+    expect(scan).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command: 'run',
+        runtimeInstallPolicy: 'never',
+      }),
+      neverIo.io,
+    );
+    expect(conflictIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
   });
 
   it('dispatches serve public command options through Commander', async () => {

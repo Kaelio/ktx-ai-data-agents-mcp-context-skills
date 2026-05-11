@@ -33,6 +33,7 @@ import {
 import type { KtxCliIo } from './index.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
 
 profileMark('module:scan');
@@ -46,6 +47,8 @@ export type KtxScanArgs =
       detectRelationships: boolean;
       dryRun: boolean;
       databaseIntrospectionUrl?: string;
+      cliVersion?: string;
+      runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
     }
   | { command: 'status'; projectDir: string; runId: string }
   | { command: 'report'; projectDir: string; runId: string; json: boolean }
@@ -218,6 +221,17 @@ function capabilityGapMessage(gap: string): string {
 function warningLine(warning: KtxScanWarning): string {
   const location = warning.table ? `${warning.table}${warning.column ? `.${warning.column}` : ''}: ` : '';
   return `${warning.code}: ${location}${warning.message}`;
+}
+
+function managedDaemonOptionsForScanRun(args: Extract<KtxScanArgs, { command: 'run' }>, io: KtxCliIo) {
+  if (args.databaseIntrospectionUrl || !args.cliVersion || !args.runtimeInstallPolicy) {
+    return undefined;
+  }
+  return {
+    cliVersion: args.cliVersion,
+    installPolicy: args.runtimeInstallPolicy,
+    io,
+  };
 }
 
 function writeNeedsAttention(report: KtxScanReport, io: KtxCliIo): void {
@@ -704,6 +718,7 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
       return 0;
     }
 
+    const managedDaemon = managedDaemonOptionsForScanRun(args, io);
     const connector =
       args.mode !== 'structural' || args.detectRelationships
         ? await createKtxCliScanConnector(project, args.connectionId)
@@ -720,7 +735,8 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
         databaseIntrospectionUrl: args.databaseIntrospectionUrl,
         connector,
         adapters: (deps.createLocalIngestAdapters ?? createKtxCliLocalIngestAdapters)(project, {
-          databaseIntrospectionUrl: args.databaseIntrospectionUrl,
+          ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
+          ...(managedDaemon ? { managedDaemon } : {}),
         }),
         progress,
       });

@@ -1,5 +1,6 @@
 import { type Command, InvalidArgumentError, Option } from '@commander-js/extra-typings';
 import { type KtxCliCommandContext, parsePositiveIntegerOption, resolveCommandProjectDir } from '../cli-program.js';
+import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 import type { KtxScanArgs } from '../scan.js';
 import { profileMark } from '../startup-profile.js';
 
@@ -102,6 +103,8 @@ export function registerScanCommands(program: Command, context: KtxCliCommandCon
     )
     .option('--dry-run', 'Run without writing scan results', false)
     .option('--database-introspection-url <url>', 'Daemon URL for live-database introspection')
+    .option('--yes', 'Install the managed Python runtime without prompting when required', false)
+    .option('--no-input', 'Disable interactive managed runtime installation')
     .showHelpAfterError()
     .addHelpText(
       'after',
@@ -126,6 +129,8 @@ export function registerScanCommands(program: Command, context: KtxCliCommandCon
         detectRelationships: mode === 'relationships',
         dryRun: options.dryRun === true,
         databaseIntrospectionUrl: options.databaseIntrospectionUrl,
+        cliVersion: context.packageInfo.version,
+        runtimeInstallPolicy: runtimeInstallPolicyFromFlags(options),
       });
     });
 

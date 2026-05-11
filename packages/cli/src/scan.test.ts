@@ -356,6 +356,49 @@ describe('runKtxScan', () => {
     expect(io.stdout()).not.toContain('/~');
   });
 
+  it('passes managed daemon options to local ingest adapters when no explicit daemon URL is set', async () => {
+    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    const createLocalIngestAdapters = vi.fn(() => []);
+    const runLocalScan = vi.fn(
+      async (_input: RunLocalScanOptions): Promise<LocalScanRunResult> => ({
+        runId: 'scan-run-1',
+        status: 'done',
+        done: true,
+        connectionId: 'warehouse',
+        mode: 'structural',
+        dryRun: false,
+        syncId: 'sync-1',
+        report,
+      }),
+    );
+    const io = makeIo();
+
+    await expect(
+      runKtxScan(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          connectionId: 'warehouse',
+          mode: 'structural',
+          detectRelationships: false,
+          dryRun: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        io.io,
+        { runLocalScan, createLocalIngestAdapters },
+      ),
+    ).resolves.toBe(0);
+
+    expect(createLocalIngestAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir }), {
+      managedDaemon: {
+        cliVersion: '0.2.0',
+        installPolicy: 'auto',
+        io: io.io,
+      },
+    });
+  });
+
   it('explains warnings, capability gaps, and relationships in human scan summaries', async () => {
     await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     const runLocalScan = vi.fn(
