@@ -42,6 +42,7 @@ export type {
   KtxSetupSourceType,
 } from './setup-sources.js';
 export { runKtxSetupSourcesStep } from './setup-sources.js';
+export { runKtxRuntime, type KtxRuntimeArgs, type KtxRuntimeDeps } from './runtime.js';
 export type { KtxMemoryFlowTuiIo, MemoryFlowTuiLiveSession } from './memory-flow-tui.js';
 export {
   renderMemoryFlowTui,

@@ -108,7 +108,7 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('Usage: ktx [options] [command]');
-    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'serve', 'status']) {
+    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'runtime', 'serve', 'status']) {
       expect(testIo.stdout()).toContain(`${command}`);
     }
     for (const removed of ['demo', 'init', 'connect', 'scan', 'ask', 'knowledge', 'agent', 'completion']) {
@@ -122,6 +122,60 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).toContain('Advanced:');
     expect(testIo.stdout()).toContain('ktx dev');
     expect(testIo.stderr()).toBe('');
+  });
+
+  it('routes runtime management commands with the CLI package version', async () => {
+    const runtime = vi.fn(async () => 0);
+    const installIo = makeIo();
+    const statusIo = makeIo();
+    const doctorIo = makeIo();
+    const pruneIo = makeIo();
+
+    await expect(
+      runKtxCli(['runtime', 'install', '--feature', 'local-embeddings', '--force'], installIo.io, { runtime }),
+    ).resolves.toBe(0);
+    await expect(runKtxCli(['runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['runtime', 'doctor'], doctorIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(0);
+
+    expect(runtime).toHaveBeenNthCalledWith(
+      1,
+      {
+        command: 'install',
+        cliVersion: '0.0.0-private',
+        feature: 'local-embeddings',
+        force: true,
+      },
+      installIo.io,
+    );
+    expect(runtime).toHaveBeenNthCalledWith(
+      2,
+      {
+        command: 'status',
+        cliVersion: '0.0.0-private',
+        json: true,
+      },
+      statusIo.io,
+    );
+    expect(runtime).toHaveBeenNthCalledWith(
+      3,
+      {
+        command: 'doctor',
+        cliVersion: '0.0.0-private',
+        json: false,
+      },
+      doctorIo.io,
+    );
+    expect(runtime).toHaveBeenNthCalledWith(
+      4,
+      {
+        command: 'prune',
+        cliVersion: '0.0.0-private',
+        dryRun: true,
+        yes: false,
+      },
+      pruneIo.io,
+    );
   });
 
   it('exposes demo under setup help instead of root help', async () => {
