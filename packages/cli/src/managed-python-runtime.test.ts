@@ -161,6 +161,14 @@ describe('verifyRuntimeAsset', () => {
 
     await expect(verifyRuntimeAsset({ assetDir })).rejects.toThrow(/Unsafe runtime wheel filename/);
   });
+
+  it('reports the source-checkout artifact command when the bundled manifest is missing', async () => {
+    const assetDir = join(tempDir, 'packages', 'cli', 'assets', 'python');
+
+    await expect(verifyRuntimeAsset({ assetDir })).rejects.toThrow(
+      /Missing bundled Python runtime manifest.*pnpm run artifacts:build/s,
+    );
+  });
 });
 
 describe('installManagedPythonRuntime', () => {
@@ -208,6 +216,30 @@ describe('installManagedPythonRuntime', () => {
     expect(manifest.features).toEqual(['core']);
     expect(manifest.python.executable).toBe(result.layout.pythonPath);
     expect(manifest.python.daemonExecutable).toBe(result.layout.daemonPath);
+  });
+
+  it('disables repo uv config for managed runtime uv commands', async () => {
+    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const commands: Array<{ command: string; args: string[]; env?: NodeJS.ProcessEnv }> = [];
+    const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args, options) => {
+      commands.push({ command, args, env: options?.env });
+      return { stdout: command === 'uv' && args[0] === '--version' ? 'uv 0.11.13\n' : '', stderr: '' };
+    });
+
+    await installManagedPythonRuntime({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      assetDir,
+      env: { PATH: '/opt/homebrew/bin', UV_NO_CONFIG: '0' },
+      features: ['core'],
+      exec,
+    });
+
+    expect(commands.map((call) => [call.command, call.args[0], call.env?.UV_NO_CONFIG, call.env?.PATH])).toEqual([
+      ['uv', '--version', '1', '/opt/homebrew/bin'],
+      ['uv', 'venv', '1', '/opt/homebrew/bin'],
+      ['uv', 'pip', '1', '/opt/homebrew/bin'],
+    ]);
   });
 
   it('installs the local-embeddings extra when requested', async () => {
