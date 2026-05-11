@@ -143,6 +143,8 @@ describe('standalone example docs', () => {
 
     assert.match(packageJson.scripts.smoke, /src\/standalone-smoke\.test\.ts/);
     assert.match(packageJson.scripts.smoke, /src\/example-smoke\.test\.ts/);
+    assert.match(packageJson.scripts.test, /--exclude src\/standalone-smoke\.test\.ts/);
+    assert.match(packageJson.scripts.test, /--exclude src\/example-smoke\.test\.ts/);
   });
 
   it('documents daemon HTTP database, source generation, LookML, embedding, and code execution support', async () => {

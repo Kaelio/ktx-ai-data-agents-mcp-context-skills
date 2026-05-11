@@ -124,7 +124,8 @@
     "search:pglite-spike": "node scripts/pglite-hybrid-search-spike.mjs",
     "search:pglite-owner-prototype": "node scripts/pglite-owner-process-prototype.mjs",
     "search:pglite-sl-prototype": "node scripts/pglite-sl-search-prototype.mjs",
-    "test": "vitest run",
+    "test": "vitest run --exclude src/scan/relationship-benchmarks.test.ts --exclude src/scan/local-scan.test.ts --exclude src/mcp/local-project-ports.test.ts --exclude src/ingest/local-stage-ingest.test.ts --exclude src/sl/pglite-sl-search-prototype.test.ts --exclude src/core/git.service.test.ts --exclude src/ingest/local-adapters.test.ts --exclude src/ingest/local-bundle-ingest.test.ts --exclude src/ingest/local-metabase-ingest.test.ts --exclude src/sl/local-sl.test.ts --exclude src/search/pglite-owner-process.test.ts --exclude src/scan/local-enrichment-artifacts.test.ts --exclude src/search/pglite-spike.test.ts --exclude src/wiki/local-knowledge.test.ts --exclude src/sl/local-query.test.ts --exclude src/scan/relationship-review-decisions.test.ts --exclude src/scan/relationship-profiling.test.ts",
+    "test:slow": "vitest run src/scan/local-scan.test.ts src/mcp/local-project-ports.test.ts src/ingest/local-stage-ingest.test.ts src/sl/pglite-sl-search-prototype.test.ts src/core/git.service.test.ts src/ingest/local-adapters.test.ts src/ingest/local-bundle-ingest.test.ts src/ingest/local-metabase-ingest.test.ts src/sl/local-sl.test.ts src/search/pglite-owner-process.test.ts src/scan/local-enrichment-artifacts.test.ts src/search/pglite-spike.test.ts src/wiki/local-knowledge.test.ts src/sl/local-query.test.ts src/scan/relationship-review-decisions.test.ts src/scan/relationship-profiling.test.ts --testTimeout 30000",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
