@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
@@ -26,6 +27,30 @@ function assertHttpRegistry(registry, label) {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new Error(`${label} must be an http(s) URL`);
   }
+}
+
+function registryEnv(config) {
+  return config.registry ? { npm_config_registry: config.registry } : {};
+}
+
+function runtimeCommandEnv(config, runtimeRoot) {
+  return { ...registryEnv(config), KTX_RUNTIME_ROOT: runtimeRoot };
+}
+
+function semanticQueryArgs(projectDir) {
+  return [
+    'sl',
+    'query',
+    '--project-dir',
+    projectDir,
+    '--connection-id',
+    'orbit_demo',
+    '--measure',
+    'contracts.contract_count',
+    '--format',
+    'sql',
+    '--yes',
+  ];
 }
 
 function normalizePolicyConfig(policyConfig = {}) {
@@ -114,65 +139,70 @@ export function publishedPackageSpec(config) {
   return `${config.packageName}@${config.packageVersion}`;
 }
 
-export function buildPublishedPackageNpxCommand(config, args, label = 'published package command') {
-  const env = config.registry ? { npm_config_registry: config.registry } : {};
-
+export function buildPublishedPackageNpxCommand(config, args, label = 'published package command', extraEnv = {}) {
   return {
     label,
     command: 'npx',
     args: ['--yes', publishedPackageSpec(config), ...args],
-    env,
+    env: { ...registryEnv(config), ...extraEnv },
   };
 }
 
-export function buildPublishedPackageSmokeCommands(config, projectDir) {
+export function buildPublishedPackageSmokeCommands(
+  config,
+  projectDir,
+  runtimeRoot = join(dirname(projectDir), 'managed-runtime'),
+) {
+  const runtimeEnv = runtimeCommandEnv(config, runtimeRoot);
+  const packageEnv = registryEnv(config);
+  const queryArgs = semanticQueryArgs(projectDir);
+
   return [
-    buildPublishedPackageNpxCommand(config, ['--version'], 'published package version'),
+    buildPublishedPackageNpxCommand(config, ['--version'], 'published package npx version'),
     buildPublishedPackageNpxCommand(
       config,
       ['setup', 'demo', '--project-dir', projectDir, '--no-input', '--plain'],
       'published package setup demo',
+      { KTX_RUNTIME_ROOT: runtimeRoot },
     ),
-    buildPublishedPackageNpxCommand(
-      config,
-      [
-        'sl',
-        'query',
-        '--project-dir',
-        projectDir,
-        '--connection-id',
-        'orbit_demo',
-        '--measure',
-        'contracts.contract_count',
-        '--format',
-        'sql',
-        '--yes',
-      ],
-      'published package sl query',
-    ),
+    buildPublishedPackageNpxCommand(config, queryArgs, 'published package npx sl query', {
+      KTX_RUNTIME_ROOT: runtimeRoot,
+    }),
     {
       label: 'published package local install',
       command: 'pnpm',
       args: ['add', publishedPackageSpec(config)],
-      env: config.registry ? { npm_config_registry: config.registry } : {},
+      env: packageEnv,
     },
     {
-      label: 'published package local binary',
-      command: 'pnpm',
-      args: ['exec', 'ktx', '--version'],
-      env: config.registry ? { npm_config_registry: config.registry } : {},
+      label: 'published package local version',
+      command: 'npx',
+      args: ['ktx', '--version'],
+      env: packageEnv,
+    },
+    {
+      label: 'published package local sl query',
+      command: 'npx',
+      args: ['ktx', ...queryArgs],
+      env: runtimeEnv,
     },
     {
       label: 'published package global install',
       command: 'pnpm',
       args: ['add', '--global', publishedPackageSpec(config)],
-      env: config.registry ? { npm_config_registry: config.registry } : {},
+      env: packageEnv,
     },
     {
-      label: 'published package global binary',
+      label: 'published package global version',
       command: 'ktx',
       args: ['--version'],
-      env: config.registry ? { npm_config_registry: config.registry } : {},
+      env: packageEnv,
+    },
+    {
+      label: 'published package global sl query',
+      command: 'ktx',
+      args: queryArgs,
+      env: runtimeEnv,
     },
   ];
 }

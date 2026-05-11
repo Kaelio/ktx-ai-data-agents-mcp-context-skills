@@ -169,73 +169,129 @@ describe('published package smoke command construction', () => {
   });
 
   it('builds the full public package smoke command list', () => {
-    assert.deepEqual(buildPublishedPackageSmokeCommands(config, '/tmp/ktx-smoke/demo', '/tmp/ktx-smoke/empty'), [
-      {
-        label: 'published package version',
-        command: 'npx',
-        args: ['--yes', '@kaelio/ktx@latest', '--version'],
-        env: { npm_config_registry: 'https://registry.npmjs.org/' },
-      },
-      {
-        label: 'published package setup demo',
-        command: 'npx',
-        args: [
-          '--yes',
-          '@kaelio/ktx@latest',
-          'setup',
-          'demo',
-          '--project-dir',
-          '/tmp/ktx-smoke/demo',
-          '--no-input',
-          '--plain',
-        ],
-        env: { npm_config_registry: 'https://registry.npmjs.org/' },
-      },
-      {
-        label: 'published package sl query',
-        command: 'npx',
-        args: [
-          '--yes',
-          '@kaelio/ktx@latest',
-          'sl',
-          'query',
-          '--project-dir',
-          '/tmp/ktx-smoke/demo',
-          '--connection-id',
-          'orbit_demo',
-          '--measure',
-          'contracts.contract_count',
-          '--format',
-          'sql',
-          '--yes',
-        ],
-        env: { npm_config_registry: 'https://registry.npmjs.org/' },
-      },
-      {
-        label: 'published package local install',
-        command: 'pnpm',
-        args: ['add', '@kaelio/ktx@latest'],
-        env: { npm_config_registry: 'https://registry.npmjs.org/' },
-      },
-      {
-        label: 'published package local binary',
-        command: 'pnpm',
-        args: ['exec', 'ktx', '--version'],
-        env: { npm_config_registry: 'https://registry.npmjs.org/' },
-      },
-      {
-        label: 'published package global install',
-        command: 'pnpm',
-        args: ['add', '--global', '@kaelio/ktx@latest'],
-        env: { npm_config_registry: 'https://registry.npmjs.org/' },
-      },
-      {
-        label: 'published package global binary',
-        command: 'ktx',
-        args: ['--version'],
-        env: { npm_config_registry: 'https://registry.npmjs.org/' },
-      },
-    ]);
+    assert.deepEqual(
+      buildPublishedPackageSmokeCommands(
+        config,
+        '/tmp/ktx-smoke/demo',
+        '/tmp/ktx-smoke/managed-runtime',
+      ),
+      [
+        {
+          label: 'published package npx version',
+          command: 'npx',
+          args: ['--yes', '@kaelio/ktx@latest', '--version'],
+          env: { npm_config_registry: 'https://registry.npmjs.org/' },
+        },
+        {
+          label: 'published package setup demo',
+          command: 'npx',
+          args: [
+            '--yes',
+            '@kaelio/ktx@latest',
+            'setup',
+            'demo',
+            '--project-dir',
+            '/tmp/ktx-smoke/demo',
+            '--no-input',
+            '--plain',
+          ],
+          env: {
+            npm_config_registry: 'https://registry.npmjs.org/',
+            KTX_RUNTIME_ROOT: '/tmp/ktx-smoke/managed-runtime',
+          },
+        },
+        {
+          label: 'published package npx sl query',
+          command: 'npx',
+          args: [
+            '--yes',
+            '@kaelio/ktx@latest',
+            'sl',
+            'query',
+            '--project-dir',
+            '/tmp/ktx-smoke/demo',
+            '--connection-id',
+            'orbit_demo',
+            '--measure',
+            'contracts.contract_count',
+            '--format',
+            'sql',
+            '--yes',
+          ],
+          env: {
+            npm_config_registry: 'https://registry.npmjs.org/',
+            KTX_RUNTIME_ROOT: '/tmp/ktx-smoke/managed-runtime',
+          },
+        },
+        {
+          label: 'published package local install',
+          command: 'pnpm',
+          args: ['add', '@kaelio/ktx@latest'],
+          env: { npm_config_registry: 'https://registry.npmjs.org/' },
+        },
+        {
+          label: 'published package local version',
+          command: 'npx',
+          args: ['ktx', '--version'],
+          env: { npm_config_registry: 'https://registry.npmjs.org/' },
+        },
+        {
+          label: 'published package local sl query',
+          command: 'npx',
+          args: [
+            'ktx',
+            'sl',
+            'query',
+            '--project-dir',
+            '/tmp/ktx-smoke/demo',
+            '--connection-id',
+            'orbit_demo',
+            '--measure',
+            'contracts.contract_count',
+            '--format',
+            'sql',
+            '--yes',
+          ],
+          env: {
+            npm_config_registry: 'https://registry.npmjs.org/',
+            KTX_RUNTIME_ROOT: '/tmp/ktx-smoke/managed-runtime',
+          },
+        },
+        {
+          label: 'published package global install',
+          command: 'pnpm',
+          args: ['add', '--global', '@kaelio/ktx@latest'],
+          env: { npm_config_registry: 'https://registry.npmjs.org/' },
+        },
+        {
+          label: 'published package global version',
+          command: 'ktx',
+          args: ['--version'],
+          env: { npm_config_registry: 'https://registry.npmjs.org/' },
+        },
+        {
+          label: 'published package global sl query',
+          command: 'ktx',
+          args: [
+            'sl',
+            'query',
+            '--project-dir',
+            '/tmp/ktx-smoke/demo',
+            '--connection-id',
+            'orbit_demo',
+            '--measure',
+            'contracts.contract_count',
+            '--format',
+            'sql',
+            '--yes',
+          ],
+          env: {
+            npm_config_registry: 'https://registry.npmjs.org/',
+            KTX_RUNTIME_ROOT: '/tmp/ktx-smoke/managed-runtime',
+          },
+        },
+      ],
+    );
   });
 
   it('exposes the smoke through the package release script', async () => {
