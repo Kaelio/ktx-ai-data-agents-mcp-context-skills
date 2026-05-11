@@ -267,10 +267,11 @@ describe('renderContextBuildView', () => {
       { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
     ]);
     state.primarySources[0].status = 'failed';
+    state.primarySources[0].failureText = 'KTX lost its connection to PostgreSQL while scanning warehouse.';
 
     const output = renderContextBuildView(state, { styled: false });
     expect(output).toContain('✗');
-    expect(output).toContain('failed');
+    expect(output).toContain('KTX lost its connection to PostgreSQL while scanning warehouse.');
   });
 
   it('omits empty groups', () => {
@@ -382,6 +383,52 @@ describe('runContextBuild', () => {
     );
 
     expect(result).toEqual({ exitCode: 1, detached: false });
+  });
+
+  it('renders a friendly network failure when target output contains a network error code', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+    const executeTarget = vi.fn(async (target, _args, targetIo) => {
+      targetIo.stderr.write('Error: read EADDRNOTAVAIL\n');
+      return failedResult(target.connectionId, target.driver, target.operation);
+    });
+
+    const result = await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toEqual({ exitCode: 1, detached: false });
+    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while scanning warehouse.');
+    expect(io.stdout()).toContain('network address unavailable (EADDRNOTAVAIL)');
+    expect(io.stdout()).toContain('Retry: ktx setup --project-dir /tmp/project');
+    expect(io.stdout()).not.toContain('BoundPool');
+  });
+
+  it('renders a friendly network failure when target execution throws', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+    const error = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+    const executeTarget = vi.fn(async () => {
+      throw error;
+    });
+
+    const result = await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toEqual({ exitCode: 1, detached: false });
+    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while scanning warehouse.');
+    expect(io.stdout()).toContain('connection reset (ECONNRESET)');
   });
 
   it('renders final view for non-TTY output', async () => {

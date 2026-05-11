@@ -923,7 +923,13 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain(
       [
         '◇  Scanning postgres-warehouse',
-        '│  ✓ Structural scan completed',
+        '│  Running structural scan…',
+        '│',
+      ].join('\n'),
+    );
+    expect(io.stdout()).toContain(
+      [
+        '◇  Scan complete for postgres-warehouse',
         '│  Changes: 2 new tables',
         '│  Report: raw-sources/postgres-warehouse/live-database/.../scan-report.json',
         '│',

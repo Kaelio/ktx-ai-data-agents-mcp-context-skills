@@ -1008,7 +1008,8 @@ async function maybeConfigureSchemaScope(input: {
 
   let selected: string[];
   if (input.args.inputMode === 'disabled' || discovered.length === 1) {
-    selected = discovered;
+    const preconfigured = configuredScopeValues(connection, spec).filter((v) => discovered.includes(v));
+    selected = preconfigured.length > 0 ? preconfigured : discovered;
   } else {
     const preconfigured = configuredScopeValues(connection, spec).filter((v) => discovered.includes(v));
     const initialValues = preconfigured.length > 0 ? preconfigured : spec.defaultSelection(discovered);
@@ -1161,6 +1162,9 @@ async function validateAndScanConnection(input: {
     io: input.io,
     deps: input.deps,
   });
+  writeSetupSection(input.io, `Scanning ${input.connectionId}`, [
+    'Running structural scan…',
+  ]);
   const scanIo = createBufferedCommandIo();
   const scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
   if (scanCode !== 0) {
@@ -1173,9 +1177,8 @@ async function validateAndScanConnection(input: {
   const reportPath = readOutputValue(scanOutput, 'Report');
   writeSetupSection(
     input.io,
-    `Scanning ${input.connectionId}`,
+    `Scan complete for ${input.connectionId}`,
     [
-      '✓ Structural scan completed',
       `Changes: ${summarizeScanChanges(scanOutput)}`,
       ...(reportPath ? [`Report: ${shortenScanReportPath(reportPath)}`] : []),
     ],
