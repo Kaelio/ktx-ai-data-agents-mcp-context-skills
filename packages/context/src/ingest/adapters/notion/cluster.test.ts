@@ -79,6 +79,8 @@ describe('clusterNotionWorkUnits', () => {
       expect(wu.unitKey).toMatch(/^notion-cluster-\d+$/);
       expect(wu.rawFiles.length).toBeGreaterThan(0);
       expect(wu.notes).toMatch(/Synthesize/);
+      expect(wu.notes).toContain('emit_unmapped_fallback');
+      expect(wu.notes).toContain('Do not create SL sources under the Notion connection');
     }
   });
 

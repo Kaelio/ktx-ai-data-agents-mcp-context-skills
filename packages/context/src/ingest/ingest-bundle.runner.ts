@@ -8,6 +8,7 @@ import type { CaptureSession, MemoryAction } from '../memory/index.js';
 import type { SlValidationDeps } from '../sl/index.js';
 import { createTouchedSlSources, type ToolContext, type ToolSession } from '../tools/index.js';
 import { actionTargetConnectionId } from './action-identity.js';
+import { NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN } from './adapters/notion/types.js';
 import { selectRelevantCanonicalPins } from './canonical-pins.js';
 import { sanitizeMemoryFlowError } from './memory-flow/live-buffer.js';
 import type { MemoryFlowPlannedWorkUnit } from './memory-flow/types.js';
@@ -38,6 +39,11 @@ import { createReadRawSpanTool } from './tools/read-raw-span.tool.js';
 import { createStageDiffTool } from './tools/stage-diff.tool.js';
 import { createStageListTool } from './tools/stage-list.tool.js';
 import { type ToolCallLogEntry, wrapToolsWithLogger } from './tools/tool-call-logger.js';
+import {
+  createMutableToolTranscriptSummary,
+  recordToolTranscriptEntry,
+  type MutableToolTranscriptSummary,
+} from './tools/tool-transcript-summary.js';
 import type {
   EvictionUnit,
   IngestBundleJob,
@@ -46,14 +52,6 @@ import type {
   UnresolvedCardInfo,
   WorkUnit,
 } from './types.js';
-
-interface MutableToolTranscriptSummary {
-  unitKey: string;
-  path: string;
-  toolCallCount: number;
-  errorCount: number;
-  toolNames: Set<string>;
-}
 
 function workUnitToMemoryFlowPlannedWorkUnit(workUnit: WorkUnit): MemoryFlowPlannedWorkUnit {
   return {
@@ -77,21 +75,6 @@ function stageIndexWorkUnitToMemoryFlowPlannedWorkUnit(
 
 function countMemoryFlowActions(actions: MemoryAction[], target: MemoryAction['target']): number {
   return actions.filter((action) => action.target === target).length;
-}
-
-function isStructuredToolFailure(output: unknown): boolean {
-  if (!output || typeof output !== 'object') {
-    return false;
-  }
-  const structured = (output as { structured?: unknown }).structured;
-  return !!structured && typeof structured === 'object' && (structured as { success?: unknown }).success === false;
-}
-
-function isFailedToolCall(entry: ToolCallLogEntry): boolean {
-  if (entry.error) {
-    return true;
-  }
-  return (entry.toolName === 'sl_write_source' || entry.toolName === 'wiki_write') && isStructuredToolFailure(entry.output);
 }
 
 function reportIdFromCreateResult(result: unknown): string | undefined {
@@ -296,7 +279,9 @@ export class IngestBundleRunner {
         ? (bundleRef.config as Record<string, unknown>)
         : {};
     const configuredCreates =
-      typeof rawConfig.maxKnowledgeCreatesPerRun === 'number' ? rawConfig.maxKnowledgeCreatesPerRun : 5;
+      typeof rawConfig.maxKnowledgeCreatesPerRun === 'number'
+        ? rawConfig.maxKnowledgeCreatesPerRun
+        : NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN;
     const configuredUpdates =
       typeof rawConfig.maxKnowledgeUpdatesPerRun === 'number' ? rawConfig.maxKnowledgeUpdatesPerRun : 20;
     const wikiActions = stageIndex.workUnits.flatMap((wu) => wu.actions).filter((action) => action.target === 'wiki');
@@ -350,17 +335,8 @@ export class IngestBundleRunner {
       (path: string) =>
       (entry: ToolCallLogEntry): void => {
         const current =
-          transcriptSummaries.get(entry.wuKey) ??
-          ({
-            unitKey: entry.wuKey,
-            path,
-            toolCallCount: 0,
-            errorCount: 0,
-            toolNames: new Set<string>(),
-          } satisfies MutableToolTranscriptSummary);
-        current.toolCallCount += 1;
-        current.errorCount += isFailedToolCall(entry) ? 1 : 0;
-        current.toolNames.add(entry.toolName);
+          transcriptSummaries.get(entry.wuKey) ?? createMutableToolTranscriptSummary(entry.wuKey, path);
+        recordToolTranscriptEntry(current, entry);
         transcriptSummaries.set(entry.wuKey, current);
       };
     const overrideReport = await this.loadOverrideReport(job);
@@ -727,7 +703,7 @@ export class IngestBundleRunner {
               sourceKey: job.sourceKey,
               connectionId: job.connectionId,
               jobId: job.jobId,
-              toolFailureCount: (unitKey) => transcriptSummaries.get(unitKey)?.errorCount ?? 0,
+              toolFailureCount: (unitKey) => transcriptSummaries.get(unitKey)?.fatalErrorCount ?? 0,
               onStepFinish: ({ stepIndex, stepBudget }) => {
                 memoryFlow?.emit({ type: 'work_unit_step', unitKey: wu.unitKey, stepIndex, stepBudget });
               },

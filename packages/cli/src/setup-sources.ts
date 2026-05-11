@@ -36,6 +36,8 @@ import { writeProjectLocalSecretReference } from './setup-secrets.js';
 
 export type KtxSetupSourceType = 'dbt' | 'metricflow' | 'metabase' | 'looker' | 'lookml' | 'notion';
 
+const DEFAULT_NOTION_MAX_KNOWLEDGE_CREATES_PER_RUN = 25;
+
 export interface KtxSetupSourcesArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
@@ -521,7 +523,7 @@ function buildNotionConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionC
     root_database_ids: [],
     root_data_source_ids: [],
     max_pages_per_run: 1000,
-    max_knowledge_creates_per_run: 5,
+    max_knowledge_creates_per_run: DEFAULT_NOTION_MAX_KNOWLEDGE_CREATES_PER_RUN,
     max_knowledge_updates_per_run: 20,
     last_successful_cursor: null,
   };

@@ -378,7 +378,8 @@ export function createRepainter(io: KtxCliIo) {
         }
         io.stdout.write('\r');
       }
-      io.stdout.write(content.replaceAll('\n', `${ESC}[K\n`));
+      io.stdout.write(`${ESC}[2K`);
+      io.stdout.write(content.replaceAll('\n', `\n${ESC}[2K`));
       io.stdout.write(`${ESC}[J`);
       hasPainted = true;
       lastCursorUpRows = cursorUpRowsAfterWrite(content);

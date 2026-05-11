@@ -8,6 +8,8 @@ import { notionMetadataSchema } from './types.js';
 export const MIN_PAGES_TO_CLUSTER = 5;
 const CLUSTER_TEXT_BODY_CHARS = 1024;
 const CLUSTER_SEED = 42;
+const NOTION_CLUSTER_SL_WRITE_GUIDANCE =
+  'Write wiki entries directly with wiki_write. Only write or edit SL sources after sl_discover/sl_read_source confirms a mapped non-Notion target source; if no mapped target exists, emit_unmapped_fallback and keep the fact wiki-only. Do not create SL sources under the Notion connection just because a page mentions a warehouse table.';
 
 interface ClusterNotionWorkUnitsArgs {
   workUnits: WorkUnit[];
@@ -63,7 +65,7 @@ function mergeWorkUnits(bucket: WorkUnit[], clusterIndex: number): WorkUnit {
       `Synthesize durable wiki and SL knowledge from these ${bucket.length} related Notion pages. ` +
       'Read each page with read_raw_file (or read_raw_span for oversized pages). ' +
       'Search nearby evidence with context_evidence_search/_read/_neighbors when needed. ' +
-      'Write wiki entries directly with wiki_write and SL sources directly with sl_write_source. ' +
+      `${NOTION_CLUSTER_SL_WRITE_GUIDANCE} ` +
       'Do not call context_candidate_write.',
   };
 }

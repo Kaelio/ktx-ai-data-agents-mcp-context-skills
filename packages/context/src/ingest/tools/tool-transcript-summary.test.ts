@@ -1,0 +1,99 @@
+import { describe, expect, it } from 'vitest';
+import type { ToolCallLogEntry } from './tool-call-logger.js';
+import { createMutableToolTranscriptSummary, recordToolTranscriptEntry } from './tool-transcript-summary.js';
+
+function entry(overrides: Partial<ToolCallLogEntry>): ToolCallLogEntry {
+  return {
+    ts: '2026-05-11T00:00:00.000Z',
+    wuKey: 'wu-1',
+    toolName: 'wiki_write',
+    durationMs: 1,
+    input: {},
+    ...overrides,
+  };
+}
+
+describe('tool transcript summaries', () => {
+  it('keeps recovered wiki_write structured failures out of fatal failures', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        input: { key: 'orbit-customers' },
+        output: { structured: { success: false, key: 'orbit-customers' } },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        input: { key: 'orbit-customers' },
+        output: { structured: { success: true, key: 'orbit-customers' } },
+      }),
+    );
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(0);
+  });
+
+  it('keeps unrecovered structured write failures fatal', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        input: { key: 'orbit-customers' },
+        output: { structured: { success: false, key: 'orbit-customers' } },
+      }),
+    );
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(1);
+  });
+
+  it('treats a later sl_edit_source success as recovery for the same SL source', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'sl_write_source',
+        input: { connectionId: 'warehouse', sourceName: 'orbit_customers' },
+        output: { structured: { success: false, sourceName: 'orbit_customers' } },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'sl_edit_source',
+        input: { connectionId: 'warehouse', sourceName: 'orbit_customers' },
+        output: { structured: { success: true, sourceName: 'orbit_customers' } },
+      }),
+    );
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(0);
+  });
+
+  it('keeps thrown tool errors fatal even after a successful write', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        input: { key: 'orbit-customers' },
+        error: { message: 'tool crashed' },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        input: { key: 'orbit-customers' },
+        output: { structured: { success: true, key: 'orbit-customers' } },
+      }),
+    );
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(1);
+  });
+});

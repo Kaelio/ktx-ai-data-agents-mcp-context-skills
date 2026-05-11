@@ -117,7 +117,7 @@ describe('NotionSourceAdapter', () => {
         continuedFromCursor: false,
         partialSnapshot: true,
         maxPagesPerRun: 1,
-        maxKnowledgeCreatesPerRun: 5,
+        maxKnowledgeCreatesPerRun: 25,
         maxKnowledgeUpdatesPerRun: 20,
         skipped: [],
         warnings: ['maxPagesPerRun reached at 1'],
@@ -167,7 +167,7 @@ describe('NotionSourceAdapter', () => {
         continuedFromCursor: true,
         partialSnapshot: true,
         maxPagesPerRun: 100,
-        maxKnowledgeCreatesPerRun: 5,
+        maxKnowledgeCreatesPerRun: 25,
         maxKnowledgeUpdatesPerRun: 20,
         nextSuccessfulCursor: null,
         skipped: [],
@@ -218,7 +218,7 @@ describe('NotionSourceAdapter', () => {
         continuedFromCursor: false,
         partialSnapshot: false,
         maxPagesPerRun: 100,
-        maxKnowledgeCreatesPerRun: 5,
+        maxKnowledgeCreatesPerRun: 25,
         maxKnowledgeUpdatesPerRun: 20,
         skipped: [],
         warnings: [],
@@ -241,8 +241,10 @@ describe('NotionSourceAdapter', () => {
       dependencyPaths: ['manifest.json', 'pages/page-1/blocks.json'],
     });
     expect(result.workUnits[0].notes).toContain('Synthesize durable wiki and SL knowledge');
+    expect(result.workUnits[0].notes).toContain('emit_unmapped_fallback');
+    expect(result.workUnits[0].notes).toContain('Do not create SL sources under the Notion connection');
     expect(result.reconcileNotes).toEqual([
-      'Notion maxKnowledgeCreatesPerRun=5',
+      'Notion maxKnowledgeCreatesPerRun=25',
       'Notion maxKnowledgeUpdatesPerRun=20',
     ]);
     expect(result.contextReport).toEqual({ capped: false, warnings: [NOTION_ORG_KNOWLEDGE_WARNING] });

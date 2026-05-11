@@ -1,7 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { type NotionPullConfig, notionPullConfigSchema } from '../ingest/adapters/notion/types.js';
+import {
+  NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN,
+  type NotionPullConfig,
+  notionPullConfigSchema,
+} from '../ingest/adapters/notion/types.js';
 import type { KtxProjectConnectionConfig } from '../project/config.js';
 
 export const KTX_NOTION_ORG_KNOWLEDGE_WARNING =
@@ -119,7 +123,7 @@ export function parseNotionConnectionConfig(raw: unknown): KtxNotionConnectionCo
     max_pages_per_run: boundedInteger(input.max_pages_per_run, 1000, 'max_pages_per_run', 1, 10_000),
     max_knowledge_creates_per_run: boundedInteger(
       input.max_knowledge_creates_per_run,
-      5,
+      NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN,
       'max_knowledge_creates_per_run',
       0,
       25,

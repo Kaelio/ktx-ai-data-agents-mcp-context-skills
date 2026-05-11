@@ -100,6 +100,50 @@ describe('WikiWriteTool', () => {
     expect(result.markdown).toMatch(/content.*or.*replacements/i);
   });
 
+  it('updates frontmatter only on an existing page while preserving content', async () => {
+    const { tool, wikiService } = makeTool({
+      wikiService: {
+        readPage: vi.fn().mockResolvedValue({
+          pageKey: 'orbit-customers',
+          frontmatter: {
+            summary: 'Customer source details',
+            usage_mode: 'auto',
+            sort_order: 0,
+            tags: ['notion'],
+            refs: ['notion:old'],
+            sl_refs: ['postgres-warehouse/orbit_analytics.customer'],
+          },
+          content: '# Orbit Customers\n\nSource: Notion - Orbit Customers Source.',
+        }),
+      },
+    });
+
+    const result = await tool.call(
+      {
+        key: 'orbit-customers',
+        summary: 'Customer source details mapped to the warehouse customer view',
+        sl_refs: ['postgres-warehouse/orbit_analytics.customer', 'dbt-main/customer'],
+      } as any,
+      baseContext,
+    );
+
+    expect(result.structured).toEqual({ success: true, key: 'orbit-customers', action: 'updated' });
+    expect(wikiService.writePage).toHaveBeenCalledWith(
+      'USER',
+      'u',
+      'orbit-customers',
+      expect.objectContaining({
+        summary: 'Customer source details mapped to the warehouse customer view',
+        tags: ['notion'],
+        refs: ['notion:old'],
+        sl_refs: ['postgres-warehouse/orbit_analytics.customer', 'dbt-main/customer'],
+      }),
+      '# Orbit Customers\n\nSource: Notion - Orbit Customers Source.',
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
   it('writes historic-SQL frontmatter fields', async () => {
     const { tool, wikiService } = makeTool();
 

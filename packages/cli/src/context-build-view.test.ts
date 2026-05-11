@@ -327,8 +327,19 @@ describe('createRepainter', () => {
     repainter.paint('hello');
     repainter.paint('bye');
 
-    expect(io.stdout()).toContain('\rbye');
-    expect(io.stdout()).not.toContain('\u001b[1A\rbye');
+    expect(io.stdout()).toContain('bye');
+    expect(io.stdout()).not.toMatch(/\[\d+A/);
+  });
+
+  it('does not undershoot cursor-up when a line is exactly the terminal width', () => {
+    const io = makeIo({ isTTY: true, columns: 10 });
+    const repainter = createRepainter(io.io);
+
+    repainter.paint('0123456789\nsecond\n');
+    repainter.paint('0123456789\nsecond\n');
+
+    const cursorMoves = [...io.stdout().matchAll(/\[(\d+)A/g)].map((m) => Number(m[1]));
+    expect(cursorMoves).toEqual([2]);
   });
 });
 

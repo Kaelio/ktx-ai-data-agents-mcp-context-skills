@@ -77,6 +77,7 @@ export class WikiWriteTool extends BaseTool<typeof wikiWriteInputSchema> {
   get description(): string {
     return `<purpose>
 Create or update a knowledge page. Provide content for create/rewrite, or replacements for targeted edits.
+For existing pages, you may provide only frontmatter fields such as summary, tags, refs, or sl_refs to update metadata while preserving content.
 tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to clear, [values] to set.
 </purpose>`;
   }
@@ -90,16 +91,19 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
     const writesGlobal = !!context.session;
     const skipIndex = context.session?.isWorktreeScoped === true;
 
-    if (!input.content && (!input.replacements || input.replacements.length === 0)) {
+    const scope: BlockScope = writesGlobal ? 'GLOBAL' : 'USER';
+    const scopeId = scope === 'USER' ? context.userId : null;
+    const existing = await wikiService.readPage(scope, scopeId, input.key);
+
+    const content = input.content;
+    const hasContent = typeof content === 'string' && content.length > 0;
+    const hasReplacements = !!input.replacements && input.replacements.length > 0;
+    if (!existing && !hasContent && !hasReplacements) {
       return {
         markdown: 'Error: provide either content (for create/rewrite) or replacements (for edits).',
         structured: { success: false, key: input.key },
       };
     }
-
-    const scope: BlockScope = writesGlobal ? 'GLOBAL' : 'USER';
-    const scopeId = scope === 'USER' ? context.userId : null;
-    const existing = await wikiService.readPage(scope, scopeId, input.key);
 
     if (!existing && !input.content) {
       return {
@@ -140,9 +144,9 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
       fingerprints: input.fingerprints === undefined ? existingFm?.fingerprints : input.fingerprints,
     };
 
-    if (input.content) {
-      finalContent = normalizeAccidentalEscapedMarkdownNewlines(input.content);
-    } else {
+    if (hasContent) {
+      finalContent = normalizeAccidentalEscapedMarkdownNewlines(content);
+    } else if (hasReplacements) {
       const editResult = applySqlEdits(existing?.content ?? '', input.replacements ?? []);
       if (!editResult.success) {
         return {
@@ -151,6 +155,8 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
         };
       }
       finalContent = editResult.sql;
+    } else {
+      finalContent = existing?.content ?? '';
     }
 
     await wikiService.writePage(scope, scopeId, input.key, finalFm, finalContent, SYSTEM_AUTHOR, SYSTEM_EMAIL);

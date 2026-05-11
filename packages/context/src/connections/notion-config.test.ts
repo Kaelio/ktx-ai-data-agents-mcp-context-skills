@@ -36,7 +36,7 @@ describe('standalone Notion connection config', () => {
       root_database_ids: [],
       root_data_source_ids: [],
       max_pages_per_run: 1000,
-      max_knowledge_creates_per_run: 5,
+      max_knowledge_creates_per_run: 25,
       max_knowledge_updates_per_run: 20,
       last_successful_cursor: null,
     });
@@ -60,7 +60,7 @@ describe('standalone Notion connection config', () => {
       rootDatabaseIds: [],
       rootDataSourceIds: [],
       maxPagesPerRun: 80,
-      maxKnowledgeCreatesPerRun: 5,
+      maxKnowledgeCreatesPerRun: 25,
       maxKnowledgeUpdatesPerRun: 20,
       warning: 'Anything accessible to this Notion integration can become organization knowledge.',
     });
