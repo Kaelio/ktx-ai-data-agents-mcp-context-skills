@@ -150,6 +150,8 @@ describe('standalone example docs', () => {
     assert.match(rootReadme, /ktx runtime prune --yes/);
     assert.match(rootReadme, /KTX requires `uv` on `PATH`/);
     assert.match(rootReadme, /KTX doesn't download `uv` automatically/);
+    assert.match(rootReadme, /release\s+artifact manifest contains the public npm tarball and the\s+bundled `kaelio-ktx`\s+runtime wheel/);
+    assert.match(rootReadme, /source packages for\s+development, not public release artifacts/);
     assert.match(rootReadme, /ktx serve --mcp stdio/);
     assert.doesNotMatch(rootReadme, /uv run ktx-daemon serve-http/);
     assert.doesNotMatch(rootReadme, /--semantic-compute-url http:\/\/127\.0\.0\.1:8765/);
@@ -160,6 +162,10 @@ describe('standalone example docs', () => {
 
     assert.match(readme, publicPackagePattern('{package}'));
     assert.match(readme, /managed Python runtime/);
+    assert.match(readme, /public `@kaelio\/ktx` npm tarball and the\s+bundled `kaelio-ktx`\s+runtime wheel/);
+    assert.match(readme, /does not install standalone\s+Python packages directly/);
+    assert.doesNotMatch(readme, /standalone Python distributions/);
+    assert.doesNotMatch(readme, /installs the Python artifacts directly/);
     assert.match(readme, /requires `uv` on `PATH`/);
     assert.match(readme, /ktx runtime status/);
     assert.match(readme, /ktx runtime doctor/);

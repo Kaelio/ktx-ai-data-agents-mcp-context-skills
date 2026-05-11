@@ -18,6 +18,7 @@ starts and reuses the managed daemon, stops it, previews a stale runtime with
 `ktx runtime prune --dry-run`, verifies confirmation is required, and removes
 the stale runtime with `ktx runtime prune --yes`.
 
-The Python smoke project still installs the Python artifacts directly because
-it verifies the standalone Python distributions that feed the bundled runtime
-wheel.
+The artifact manifest contains the public `@kaelio/ktx` npm tarball and the
+bundled `kaelio-ktx` runtime wheel. The smoke does not install standalone
+Python packages directly; Python-backed behavior is verified through the
+managed runtime installed from the npm package.

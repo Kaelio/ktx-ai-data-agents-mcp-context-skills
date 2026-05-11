@@ -289,10 +289,13 @@ packages.
 
 ## Release status
 
-This repository builds one public npm artifact named `@kaelio/ktx`. The first
-public npm handoff is policy-gated through `release-policy.json`, which keeps
-Python package publishing disabled because KTX-owned Python code ships inside
-the npm package as a bundled wheel.
+This repository builds one public npm artifact named `@kaelio/ktx`. The release
+artifact manifest contains the public npm tarball and the bundled `kaelio-ktx`
+runtime wheel. The first public npm handoff is policy-gated through
+`release-policy.json`, which keeps Python package publishing disabled because
+KTX-owned Python code ships inside the npm package as a bundled wheel. The
+`python/ktx-sl` and `python/ktx-daemon` directories remain source packages for
+development, not public release artifacts.
 
 Build local package artifacts and verify the guarded dry-run publish path with:
 
