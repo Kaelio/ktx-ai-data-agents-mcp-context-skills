@@ -70,6 +70,19 @@ describe('managedPythonRuntimeLayout', () => {
     expect(layout.assetManifestPath).toBe('/repo/packages/cli/assets/python/manifest.json');
   });
 
+  it('honors KTX_RUNTIME_ROOT before platform defaults', () => {
+    const layout = managedPythonRuntimeLayout({
+      cliVersion: '0.2.0',
+      platform: 'darwin',
+      env: { KTX_RUNTIME_ROOT: '/tmp/ktx-runtime' },
+      homeDir: '/Users/alex',
+      assetDir: '/repo/packages/cli/assets/python',
+    });
+
+    expect(layout.runtimeRoot).toBe('/tmp/ktx-runtime');
+    expect(layout.versionDir).toBe('/tmp/ktx-runtime/0.2.0');
+  });
+
   it('honors XDG_DATA_HOME on Linux', () => {
     const layout = managedPythonRuntimeLayout({
       cliVersion: '0.2.0',

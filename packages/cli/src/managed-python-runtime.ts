@@ -119,6 +119,9 @@ function defaultAssetDir(): string {
 }
 
 function runtimeRootFor(input: Required<Pick<ManagedPythonRuntimeLayoutOptions, 'platform' | 'env' | 'homeDir'>>): string {
+  if (input.env.KTX_RUNTIME_ROOT) {
+    return input.env.KTX_RUNTIME_ROOT;
+  }
   if (input.platform === 'darwin') {
     return join(input.homeDir, 'Library', 'Application Support', 'kaelio', 'ktx', 'runtime');
   }

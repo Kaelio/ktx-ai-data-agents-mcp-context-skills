@@ -569,6 +569,9 @@ export function npmSmokePackageJson(layout) {
     dependencies: {
       '@kaelio/ktx': `file:${layout.cliTarball}`,
     },
+    devDependencies: {
+      'better-sqlite3': '^12.6.2',
+    },
     pnpm: {
       onlyBuiltDependencies: ['better-sqlite3'],
     },
@@ -927,7 +930,7 @@ try {
   requireSuccessWithStderr(
     'ktx sl query first managed runtime install',
     slQuery,
-    /Installing KTX Python runtime \(core\) with uv[\\s\\S]*KTX Python runtime ready:/,
+    /Installing KTX Python runtime \\(core\\) with uv[\\s\\S]*KTX Python runtime ready:/,
   );
   requireOutput('ktx sl query first managed runtime install', slQuery, /"mode": "compile_only"/);
   requireOutput('ktx sl query first managed runtime install', slQuery, /orders/);

@@ -513,8 +513,12 @@ describe('verification snippets', () => {
   it('pins the smoke project to the public package artifact', () => {
     const layout = packageArtifactLayout('/repo/ktx');
 
-    assert.deepEqual(npmSmokePackageJson(layout).dependencies, {
+    const packageJson = npmSmokePackageJson(layout);
+    assert.deepEqual(packageJson.dependencies, {
       '@kaelio/ktx': `file:${layout.cliTarball}`,
+    });
+    assert.deepEqual(packageJson.devDependencies, {
+      'better-sqlite3': '^12.6.2',
     });
   });
 
@@ -568,7 +572,7 @@ describe('verification snippets', () => {
     assert.match(source, /managed-runtime/);
     assert.match(source, /ktx runtime status missing/);
     assert.match(source, /runtimeStatusBefore\.kind, 'missing'/);
-    assert.match(source, /Installing KTX Python runtime \(core\) with uv/);
+    assert.ok(source.includes(String.raw`Installing KTX Python runtime \(core\) with uv`));
     assert.match(source, /KTX Python runtime ready:/);
     assert.match(source, /ktx runtime status ready/);
     assert.match(source, /runtimeStatusAfter\.kind, 'ready'/);
