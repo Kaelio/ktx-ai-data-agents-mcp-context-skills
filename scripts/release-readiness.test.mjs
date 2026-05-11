@@ -4,25 +4,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { NPM_ARTIFACT_PACKAGES, packageArtifactLayout, writeArtifactManifest } from './package-artifacts.mjs';
+import {
+  INTERNAL_NPM_WORKSPACE_PACKAGES,
+  NPM_ARTIFACT_PACKAGES,
+  packageArtifactLayout,
+  writeArtifactManifest,
+} from './package-artifacts.mjs';
 import { readReleasePolicy, releasePolicyPath, releaseReadinessReport } from './release-readiness.mjs';
 
 async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function writeReleaseMetadataInputs(root, options = {}) {
-  for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
+async function writeReleaseMetadataInputs(root) {
+  for (const packageInfo of INTERNAL_NPM_WORKSPACE_PACKAGES) {
     await mkdir(join(root, packageInfo.packageRoot), { recursive: true });
     await writeJson(join(root, packageInfo.packageRoot, 'package.json'), {
       name: packageInfo.name,
       version: '0.0.0-private',
-      private:
-        packageInfo.name === '@ktx/context'
-          ? (options.contextPrivate ?? true)
-          : packageInfo.name === '@ktx/cli'
-            ? (options.cliPrivate ?? true)
-            : true,
+      private: true,
     });
   }
 
@@ -69,7 +69,7 @@ function releasePolicy(overrides = {}) {
     npm: {
       publish: false,
       registry: null,
-      packages: NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name),
+      packages: ['@kaelio/ktx'],
       ...npmOverrides,
     },
     python: {
@@ -79,14 +79,12 @@ function releasePolicy(overrides = {}) {
       ...pythonOverrides,
     },
     publishedPackageSmoke: {
-      packageName: null,
+      packageName: '@kaelio/ktx',
       version: 'latest',
       registry: null,
     },
     requiredBeforePublishing: [
-      'Choose npm registry and package visibility.',
-      'Choose Python package repository.',
-      'Choose public release versions.',
+      'Choose public release version.',
       'Configure registry credentials outside source control.',
       'Choose release tag and provenance policy.',
     ],
@@ -99,7 +97,7 @@ async function writePolicy(root, policy = releasePolicy()) {
 }
 
 async function writeReadyFixture(root, options = {}) {
-  await writeReleaseMetadataInputs(root, options);
+  await writeReleaseMetadataInputs(root);
   await writePolicy(root, options.policy ?? releasePolicy());
   const layout = packageArtifactLayout(root);
   await writeUploadableArtifactFixtures(layout);
@@ -136,25 +134,18 @@ describe('release readiness policy', () => {
         sourceRevision: 'abc123',
         npmPublishEnabled: false,
         pythonPublishEnabled: false,
-        packageNames: [
-          ...NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name),
-          'ktx-sl',
-          'ktx-daemon',
-          'kaelio-ktx',
-        ],
+        packageNames: ['@kaelio/ktx', 'ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
         publishedPackageSmokeGate: {
           status: 'not_required',
           script: 'pnpm run release:published-smoke',
           reason: 'Published package smoke remains pending until release-policy.json enables npm registry publishing.',
-          configSource: null,
-          packageName: null,
+          configSource: 'release-policy',
+          packageName: '@kaelio/ktx',
           version: 'latest',
           registry: null,
         },
         blockedPublishingDecisions: [
-          'Choose npm registry and package visibility.',
-          'Choose Python package repository.',
-          'Choose public release versions.',
+          'Choose public release version.',
           'Configure registry credentials outside source control.',
           'Choose release tag and provenance policy.',
         ],
@@ -170,7 +161,7 @@ describe('release readiness policy', () => {
       await writeReadyFixture(root, {
         policy: releasePolicy({
           publishedPackageSmoke: {
-            packageName: '@ktx/cli-public',
+            packageName: '@kaelio/ktx',
             version: '2026.5.8',
             registry: 'https://registry.npmjs.org/',
           },
@@ -184,7 +175,7 @@ describe('release readiness policy', () => {
         script: 'pnpm run release:published-smoke',
         reason: 'Published package smoke remains pending until release-policy.json enables npm registry publishing.',
         configSource: 'release-policy',
-        packageName: '@ktx/cli-public',
+        packageName: '@kaelio/ktx',
         version: '2026.5.8',
         registry: 'https://registry.npmjs.org/',
       });
@@ -200,7 +191,7 @@ describe('release readiness policy', () => {
         policy: releasePolicy({
           releaseMode: 'published-package-smoke-required',
           publishedPackageSmoke: {
-            packageName: '@ktx/cli-public',
+            packageName: '@kaelio/ktx',
             version: '2026.5.8',
             registry: 'https://registry.npmjs.org/',
           },
@@ -216,18 +207,13 @@ describe('release readiness policy', () => {
         sourceRevision: 'abc123',
         npmPublishEnabled: false,
         pythonPublishEnabled: false,
-        packageNames: [
-          ...NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name),
-          'ktx-sl',
-          'ktx-daemon',
-          'kaelio-ktx',
-        ],
+        packageNames: ['@kaelio/ktx', 'ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
         publishedPackageSmokeGate: {
           status: 'required',
           script: 'pnpm run release:published-smoke',
           reason: 'Run the published package smoke before accepting the hybrid-search release.',
           configSource: 'release-policy',
-          packageName: '@ktx/cli-public',
+          packageName: '@kaelio/ktx',
           version: '2026.5.8',
           registry: 'https://registry.npmjs.org/',
         },
@@ -244,6 +230,11 @@ describe('release readiness policy', () => {
       await writeReadyFixture(root, {
         policy: releasePolicy({
           releaseMode: 'published-package-smoke-required',
+          publishedPackageSmoke: {
+            packageName: null,
+            version: 'latest',
+            registry: null,
+          },
           requiredBeforePublishing: [],
         }),
       });
@@ -264,7 +255,7 @@ describe('release readiness policy', () => {
         policy: releasePolicy({
           releaseMode: 'published-package-smoke-required',
           publishedPackageSmoke: {
-            packageName: '@ktx/cli-public',
+            packageName: '@kaelio/ktx',
             version: 'latest',
             registry: null,
           },
@@ -356,14 +347,20 @@ describe('release readiness policy', () => {
     }
   });
 
-  it('rejects a public npm package while releaseMode is ci-artifact-only', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'ktx-release-public-npm-test-'));
+  it('rejects release policy that still lists internal npm packages', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-release-stale-internal-npm-policy-test-'));
     try {
-      await writeReadyFixture(root, { contextPrivate: false });
+      await writeReadyFixture(root, {
+        policy: releasePolicy({
+          npm: {
+            packages: ['@kaelio/ktx', '@ktx/context'],
+          },
+        }),
+      });
 
       await assert.rejects(
         () => releaseReadinessReport(root),
-        /ci-artifact-only policy npm package @ktx\/context must remain private/,
+        /Release policy npm\.packages mismatch/,
       );
     } finally {
       await rm(root, { recursive: true, force: true });

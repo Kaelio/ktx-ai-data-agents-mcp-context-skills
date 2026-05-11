@@ -180,7 +180,12 @@ function assertNonPublishingArtifactPolicy(policy, metadata) {
       throw new Error(`Package ${entry.packageName} releaseMode must remain ci-artifact-only`);
     }
     if (entry.ecosystem === 'npm') {
-      if (entry.private !== true) {
+      const isPublicKtxPackage = entry.packageName === '@kaelio/ktx';
+      if (isPublicKtxPackage) {
+        if (entry.private !== false) {
+          throw new Error(`${policyLabel} npm package @kaelio/ktx must be publishable when npm.publish is false`);
+        }
+      } else if (entry.private !== true) {
         throw new Error(`${policyLabel} npm package ${entry.packageName} must remain private`);
       }
       if (!entry.packageVersion.endsWith('-private')) {

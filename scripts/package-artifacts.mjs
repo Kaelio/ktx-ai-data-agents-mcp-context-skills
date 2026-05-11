@@ -12,6 +12,10 @@ import {
   RUNTIME_WHEEL_NORMALIZED_NAME,
   RUNTIME_WHEEL_PACKAGE_VERSION,
 } from './build-python-runtime-wheel.mjs';
+import {
+  PUBLIC_NPM_PACKAGE_NAME,
+  PUBLIC_NPM_PACKAGE_TARBALL,
+} from './build-public-npm-package.mjs';
 
 const PACKAGE_VERSION = '0.0.0-private';
 const PYTHON_PACKAGE_VERSION = '0.1.0';
@@ -22,7 +26,7 @@ export {
   RUNTIME_WHEEL_PACKAGE_VERSION,
 };
 
-export const NPM_ARTIFACT_PACKAGES = [
+export const INTERNAL_NPM_WORKSPACE_PACKAGES = [
   { name: '@ktx/context', packageRoot: 'packages/context' },
   { name: '@ktx/llm', packageRoot: 'packages/llm' },
   { name: '@ktx/connector-bigquery', packageRoot: 'packages/connector-bigquery' },
@@ -36,9 +40,11 @@ export const NPM_ARTIFACT_PACKAGES = [
   { name: '@ktx/cli', packageRoot: 'packages/cli' },
 ];
 
+export const NPM_ARTIFACT_PACKAGES = [{ name: PUBLIC_NPM_PACKAGE_NAME, packageRoot: 'packages/cli' }];
+
 export const CLI_PYTHON_ASSET_MANIFEST = 'manifest.json';
 
-const CONNECTOR_PACKAGE_NAMES = NPM_ARTIFACT_PACKAGES
+const CONNECTOR_PACKAGE_NAMES = INTERNAL_NPM_WORKSPACE_PACKAGES
   .map((packageInfo) => packageInfo.name)
   .filter((packageName) => packageName.startsWith('@ktx/connector-'));
 
@@ -62,6 +68,9 @@ function scriptRootDir() {
 }
 
 function npmPackageTarballName(packageName) {
+  if (packageName === PUBLIC_NPM_PACKAGE_NAME) {
+    return PUBLIC_NPM_PACKAGE_TARBALL;
+  }
   return `${packageName.replace('@ktx/', 'ktx-')}-${PACKAGE_VERSION}.tgz`;
 }
 
@@ -83,17 +92,15 @@ export function packageArtifactLayout(rootDir = scriptRootDir()) {
     npmDir,
     pythonDir,
     npmTarballs,
-    contextTarball: npmTarballs['@ktx/context'],
-    cliTarball: npmTarballs['@ktx/cli'],
-    connectorTarballs: Object.fromEntries(
-      CONNECTOR_PACKAGE_NAMES.map((packageName) => [packageName, npmTarballs[packageName]]),
-    ),
+    contextTarball: npmTarballs[PUBLIC_NPM_PACKAGE_NAME],
+    cliTarball: npmTarballs[PUBLIC_NPM_PACKAGE_NAME],
+    connectorTarballs: {},
     manifestPath: join(artifactDir, 'manifest.json'),
   };
 }
 
 export function buildArtifactCommands(layout) {
-  const packagesByName = new Map(NPM_ARTIFACT_PACKAGES.map((packageInfo) => [packageInfo.name, packageInfo]));
+  const packagesByName = new Map(INTERNAL_NPM_WORKSPACE_PACKAGES.map((packageInfo) => [packageInfo.name, packageInfo]));
   const npmBuildCommands = NPM_ARTIFACT_BUILD_ORDER.map((packageName) => {
     const packageInfo = packagesByName.get(packageName);
     if (!packageInfo) {
@@ -105,11 +112,11 @@ export function buildArtifactCommands(layout) {
       cwd: layout.rootDir,
     };
   });
-  const npmPackCommands = NPM_ARTIFACT_PACKAGES.map((packageInfo) => ({
-    command: 'pnpm',
-    args: ['--filter', packageInfo.name, 'pack', '--out', layout.npmTarballs[packageInfo.name]],
+  const publicPackageCommand = {
+    command: process.execPath,
+    args: ['scripts/build-public-npm-package.mjs'],
     cwd: layout.rootDir,
-  }));
+  };
 
   return [
     ...npmBuildCommands,
@@ -128,7 +135,7 @@ export function buildArtifactCommands(layout) {
       args: ['build', '--package', 'ktx-daemon', '--out-dir', layout.pythonDir],
       cwd: layout.rootDir,
     },
-    ...npmPackCommands,
+    publicPackageCommand,
   ];
 }
 
@@ -241,17 +248,18 @@ function releaseMetadataEntry({ ecosystem, packageName, packageRoot, packageVers
 
 async function readNpmPackageMetadata(rootDir, packageInfo) {
   const packageJson = await readJson(join(rootDir, packageInfo.packageRoot, 'package.json'));
-  if (packageJson.name !== packageInfo.name) {
+  const expectedSourceName = packageInfo.name === PUBLIC_NPM_PACKAGE_NAME ? '@ktx/cli' : packageInfo.name;
+  if (packageJson.name !== expectedSourceName) {
     throw new Error(
-      `Unexpected package name in ${packageInfo.packageRoot}/package.json: expected ${packageInfo.name}, got ${packageJson.name}`,
+      `Unexpected package name in ${packageInfo.packageRoot}/package.json: expected ${expectedSourceName}, got ${packageJson.name}`,
     );
   }
   return releaseMetadataEntry({
     ecosystem: 'npm',
-    packageName: packageJson.name,
+    packageName: packageInfo.name,
     packageRoot: packageInfo.packageRoot,
     packageVersion: packageJson.version,
-    privatePackage: packageJson.private === true,
+    privatePackage: packageInfo.name === PUBLIC_NPM_PACKAGE_NAME ? false : packageJson.private === true,
   });
 }
 
@@ -1623,8 +1631,8 @@ async function buildArtifacts(layout) {
   await mkdir(layout.pythonDir, { recursive: true });
 
   const commands = buildArtifactCommands(layout);
-  const npmBuildCount = NPM_ARTIFACT_PACKAGES.length;
-  const npmPackStart = commands.length - NPM_ARTIFACT_PACKAGES.length;
+  const npmBuildCount = NPM_ARTIFACT_BUILD_ORDER.length;
+  const npmPackStart = commands.length - 1;
 
   for (const command of commands.slice(0, npmBuildCount)) {
     await runCommand(command.command, command.args, { cwd: command.cwd });

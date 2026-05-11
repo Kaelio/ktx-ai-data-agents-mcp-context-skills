@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 
 import {
   CLI_PYTHON_ASSET_MANIFEST,
+  INTERNAL_NPM_WORKSPACE_PACKAGES,
   RUNTIME_WHEEL_DISTRIBUTION_NAME,
   RUNTIME_WHEEL_NORMALIZED_NAME,
   RUNTIME_WHEEL_PACKAGE_VERSION,
@@ -34,35 +35,17 @@ async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-const CONNECTOR_PACKAGE_NAMES = [
-  '@ktx/connector-bigquery',
-  '@ktx/connector-clickhouse',
-  '@ktx/connector-mysql',
-  '@ktx/connector-postgres',
-  '@ktx/connector-posthog',
-  '@ktx/connector-snowflake',
-  '@ktx/connector-sqlite',
-  '@ktx/connector-sqlserver',
-];
-
+const INTERNAL_BUILD_PACKAGE_NAMES = INTERNAL_NPM_WORKSPACE_PACKAGES.map((packageInfo) => packageInfo.name);
+const CONNECTOR_PACKAGE_NAMES = INTERNAL_BUILD_PACKAGE_NAMES.filter((packageName) =>
+  packageName.startsWith('@ktx/connector-'),
+);
 const NPM_BUILD_PACKAGE_ORDER = ['@ktx/llm', '@ktx/context', ...CONNECTOR_PACKAGE_NAMES, '@ktx/cli'];
 
-function packageRootForName(packageName) {
-  return `packages/${packageName.replace('@ktx/', '')}`;
-}
-
-function expectedNpmArtifactPath(packageName) {
-  return `npm/${packageName.replace('@ktx/', 'ktx-')}-0.0.0-private.tgz`;
-}
-
 async function writeReleaseMetadataInputs(root) {
-  const npmPackages = ['@ktx/context', '@ktx/llm', ...CONNECTOR_PACKAGE_NAMES, '@ktx/cli'];
-
-  for (const packageName of npmPackages) {
-    const packageRoot = packageName === '@ktx/context' ? 'packages/context' : packageRootForName(packageName);
-    await mkdir(join(root, packageRoot), { recursive: true });
-    await writeJson(join(root, packageRoot, 'package.json'), {
-      name: packageName,
+  for (const packageInfo of INTERNAL_NPM_WORKSPACE_PACKAGES) {
+    await mkdir(join(root, packageInfo.packageRoot), { recursive: true });
+    await writeJson(join(root, packageInfo.packageRoot, 'package.json'), {
+      name: packageInfo.name,
       version: '0.0.0-private',
       private: true,
     });
@@ -111,20 +94,8 @@ describe('packageArtifactLayout', () => {
     assert.equal(layout.artifactDir, '/repo/ktx/dist/artifacts');
     assert.equal(layout.npmDir, '/repo/ktx/dist/artifacts/npm');
     assert.equal(layout.pythonDir, '/repo/ktx/dist/artifacts/python');
-    assert.equal(layout.contextTarball, '/repo/ktx/dist/artifacts/npm/ktx-context-0.0.0-private.tgz');
-    assert.equal(layout.cliTarball, '/repo/ktx/dist/artifacts/npm/ktx-cli-0.0.0-private.tgz');
-    assert.equal(
-      layout.connectorTarballs['@ktx/connector-sqlite'],
-      '/repo/ktx/dist/artifacts/npm/ktx-connector-sqlite-0.0.0-private.tgz',
-    );
-    assert.equal(
-      layout.connectorTarballs['@ktx/connector-postgres'],
-      '/repo/ktx/dist/artifacts/npm/ktx-connector-postgres-0.0.0-private.tgz',
-    );
-    assert.deepEqual(
-      Object.keys(layout.npmTarballs),
-      NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name),
-    );
+    assert.equal(layout.cliTarball, '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.0.0-private.tgz');
+    assert.deepEqual(Object.keys(layout.npmTarballs), ['@kaelio/ktx']);
   });
 });
 
@@ -134,34 +105,23 @@ describe('buildArtifactCommands', () => {
     const commands = buildArtifactCommands(layout);
 
     assert.deepEqual(
-      commands.slice(0, NPM_ARTIFACT_PACKAGES.length).map((command) => [command.command, command.args]),
+      commands.slice(0, NPM_BUILD_PACKAGE_ORDER.length).map((command) => [command.command, command.args]),
       NPM_BUILD_PACKAGE_ORDER.map((packageName) => ['pnpm', ['--filter', packageName, 'run', 'build']]),
     );
     assert.deepEqual(
-      commands
-        .slice(NPM_ARTIFACT_PACKAGES.length, NPM_ARTIFACT_PACKAGES.length + 3)
-        .map((command) => [command.command, command.args]),
+      commands.slice(NPM_BUILD_PACKAGE_ORDER.length, NPM_BUILD_PACKAGE_ORDER.length + 3).map((command) => [
+        command.command,
+        command.args,
+      ]),
       [
-        [
-          process.execPath,
-          ['scripts/build-python-runtime-wheel.mjs'],
-        ],
-        [
-          'uv',
-          ['build', '--package', 'ktx-sl', '--out-dir', '/repo/ktx/dist/artifacts/python'],
-        ],
-        [
-          'uv',
-          ['build', '--package', 'ktx-daemon', '--out-dir', '/repo/ktx/dist/artifacts/python'],
-        ],
+        [process.execPath, ['scripts/build-python-runtime-wheel.mjs']],
+        ['uv', ['build', '--package', 'ktx-sl', '--out-dir', '/repo/ktx/dist/artifacts/python']],
+        ['uv', ['build', '--package', 'ktx-daemon', '--out-dir', '/repo/ktx/dist/artifacts/python']],
       ],
     );
     assert.deepEqual(
-      commands.slice(NPM_ARTIFACT_PACKAGES.length + 3).map((command) => [command.command, command.args]),
-      NPM_ARTIFACT_PACKAGES.map((packageInfo) => [
-        'pnpm',
-        ['--filter', packageInfo.name, 'pack', '--out', layout.npmTarballs[packageInfo.name]],
-      ]),
+      commands.slice(NPM_BUILD_PACKAGE_ORDER.length + 3).map((command) => [command.command, command.args]),
+      [[process.execPath, ['scripts/build-public-npm-package.mjs']]],
     );
   });
 });
@@ -173,14 +133,14 @@ describe('packageReleaseMetadata', () => {
       await writeReleaseMetadataInputs(root);
 
       assert.deepEqual(await packageReleaseMetadata(root), [
-        ...NPM_ARTIFACT_PACKAGES.map((packageInfo) => ({
+        {
           ecosystem: 'npm',
-          packageName: packageInfo.name,
-          packageRoot: packageInfo.packageRoot,
+          packageName: '@kaelio/ktx',
+          packageRoot: 'packages/cli',
           packageVersion: '0.0.0-private',
-          private: true,
+          private: false,
           releaseMode: 'ci-artifact-only',
-        })),
+        },
         {
           ecosystem: 'python',
           packageName: 'ktx-sl',
@@ -262,14 +222,16 @@ describe('artifact manifest', () => {
       assert.equal(manifest.sourceRevision, 'abc123');
       assert.deepEqual(
         manifest.packages.filter((entry) => entry.ecosystem === 'npm'),
-        NPM_ARTIFACT_PACKAGES.map((packageInfo) => ({
-          ecosystem: 'npm',
-          packageName: packageInfo.name,
-          packageRoot: packageInfo.packageRoot,
-          packageVersion: '0.0.0-private',
-          private: true,
-          releaseMode: 'ci-artifact-only',
-        })),
+        [
+          {
+            ecosystem: 'npm',
+            packageName: '@kaelio/ktx',
+            packageRoot: 'packages/cli',
+            packageVersion: '0.0.0-private',
+            private: false,
+            releaseMode: 'ci-artifact-only',
+          },
+        ],
       );
       assert.deepEqual(
         manifest.packages.filter((entry) => entry.ecosystem === 'python'),
@@ -311,13 +273,15 @@ describe('artifact manifest', () => {
             path: file.path,
           }))
           .sort((left, right) => left.packageName.localeCompare(right.packageName)),
-        NPM_ARTIFACT_PACKAGES.map((packageInfo) => ({
-          artifactKind: 'tarball',
-          ecosystem: 'npm',
-          packageName: packageInfo.name,
-          packageVersion: '0.0.0-private',
-          path: expectedNpmArtifactPath(packageInfo.name),
-        })).sort((left, right) => left.packageName.localeCompare(right.packageName)),
+        [
+          {
+            artifactKind: 'tarball',
+            ecosystem: 'npm',
+            packageName: '@kaelio/ktx',
+            packageVersion: '0.0.0-private',
+            path: 'npm/kaelio-ktx-0.0.0-private.tgz',
+          },
+        ],
       );
       assert.deepEqual(
         manifest.files
@@ -368,10 +332,10 @@ describe('artifact manifest', () => {
         ],
       );
 
-      const sqliteEntry = manifest.files.find((file) => file.path === 'npm/ktx-connector-sqlite-0.0.0-private.tgz');
-      assert.ok(sqliteEntry);
-      assert.equal(sqliteEntry.bytes, Buffer.byteLength('@ktx/connector-sqlite-tarball'));
-      assert.equal(sqliteEntry.sha256, createHash('sha256').update('@ktx/connector-sqlite-tarball').digest('hex'));
+      const npmEntry = manifest.files.find((file) => file.path === 'npm/kaelio-ktx-0.0.0-private.tgz');
+      assert.ok(npmEntry);
+      assert.equal(npmEntry.bytes, Buffer.byteLength('@kaelio/ktx-tarball'));
+      assert.equal(npmEntry.sha256, createHash('sha256').update('@kaelio/ktx-tarball').digest('hex'));
 
       const writtenManifest = JSON.parse(await readFile(artifactManifestPath(layout), 'utf-8'));
       assert.deepEqual(writtenManifest, manifest);

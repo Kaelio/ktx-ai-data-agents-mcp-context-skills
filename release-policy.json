@@ -4,19 +4,7 @@
   "npm": {
     "publish": false,
     "registry": null,
-    "packages": [
-      "@ktx/cli",
-      "@ktx/connector-bigquery",
-      "@ktx/connector-clickhouse",
-      "@ktx/connector-mysql",
-      "@ktx/connector-postgres",
-      "@ktx/connector-posthog",
-      "@ktx/connector-snowflake",
-      "@ktx/connector-sqlite",
-      "@ktx/connector-sqlserver",
-      "@ktx/context",
-      "@ktx/llm"
-    ]
+    "packages": ["@kaelio/ktx"]
   },
   "python": {
     "publish": false,
@@ -24,14 +12,12 @@
     "packages": ["ktx-sl", "ktx-daemon", "kaelio-ktx"]
   },
   "publishedPackageSmoke": {
-    "packageName": null,
+    "packageName": "@kaelio/ktx",
     "version": "latest",
     "registry": null
   },
   "requiredBeforePublishing": [
-    "Choose npm registry and package visibility.",
-    "Choose Python package repository.",
-    "Choose public release versions.",
+    "Choose public release version.",
     "Configure registry credentials outside source control.",
     "Choose release tag and provenance policy."
   ]
