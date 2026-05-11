@@ -278,18 +278,22 @@ packages.
 
 ## Release status
 
-This repository builds a single public npm artifact named `@kaelio/ktx`.
-Package publishing is still disabled by `release-policy.json`; registry
-credentials, public versions, release tags, and provenance policy must be
-chosen before publishing artifacts to npm or Python package indexes.
+This repository builds one public npm artifact named `@kaelio/ktx`. The first
+public npm handoff is policy-gated through `release-policy.json`, which keeps
+Python package publishing disabled because KTX-owned Python code ships inside
+the npm package as a bundled wheel.
 
-Build local package artifacts with:
+Build local package artifacts and verify the guarded dry-run publish path with:
 
 ```bash
 source .venv/bin/activate
 pnpm run artifacts:check
 pnpm run release:readiness
+pnpm run release:npm-publish
 ```
+
+Run the live npm publish only from the manual `KTX Release` workflow with the
+`publish_live` input enabled after the `NPM_TOKEN` secret is configured.
 
 ## License
 
