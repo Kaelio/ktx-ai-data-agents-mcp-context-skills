@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "setup": "sh scripts/setup-conductor-workspace.sh"
+  }
+}
