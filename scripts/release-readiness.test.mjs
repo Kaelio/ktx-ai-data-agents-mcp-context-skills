@@ -26,18 +26,6 @@ async function writeReleaseMetadataInputs(root) {
       private: true,
     });
   }
-
-  await mkdir(join(root, 'python', 'ktx-sl'), { recursive: true });
-  await mkdir(join(root, 'python', 'ktx-daemon'), { recursive: true });
-
-  await writeFile(
-    join(root, 'python', 'ktx-sl', 'pyproject.toml'),
-    ['[project]', 'name = "ktx-sl"', 'version = "0.1.0"', ''].join('\n'),
-  );
-  await writeFile(
-    join(root, 'python', 'ktx-daemon', 'pyproject.toml'),
-    ['[project]', 'name = "ktx-daemon"', 'version = "0.1.0"', ''].join('\n'),
-  );
 }
 
 async function writeUploadableArtifactFixtures(layout) {
@@ -50,10 +38,6 @@ async function writeUploadableArtifactFixtures(layout) {
       `${packageInfo.name}-tarball`,
     ]),
     [join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'), 'kaelio-ktx-runtime-wheel'],
-    [join(layout.pythonDir, 'ktx_sl-0.1.0-py3-none-any.whl'), 'ktx-sl-wheel'],
-    [join(layout.pythonDir, 'ktx_sl-0.1.0.tar.gz'), 'ktx-sl-sdist'],
-    [join(layout.pythonDir, 'ktx_daemon-0.1.0-py3-none-any.whl'), 'ktx-daemon-wheel'],
-    [join(layout.pythonDir, 'ktx_daemon-0.1.0.tar.gz'), 'ktx-daemon-sdist'],
   ]);
 
   for (const [path, contents] of fileContents) {
@@ -78,7 +62,7 @@ function releasePolicy(overrides = {}) {
     python: {
       publish: false,
       repository: null,
-      packages: ['ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
+      packages: ['kaelio-ktx'],
       ...pythonOverrides,
     },
     publishedPackageSmoke: {
@@ -142,7 +126,7 @@ describe('release readiness policy', () => {
         sourceRevision: 'abc123',
         npmPublishEnabled: false,
         pythonPublishEnabled: false,
-        packageNames: ['@kaelio/ktx', 'ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
+        packageNames: ['@kaelio/ktx', 'kaelio-ktx'],
         publishedPackageSmokeGate: {
           status: 'not_required',
           script: 'pnpm run release:published-smoke',
@@ -221,7 +205,7 @@ describe('release readiness policy', () => {
         sourceRevision: 'abc123',
         npmPublishEnabled: false,
         pythonPublishEnabled: false,
-        packageNames: ['@kaelio/ktx', 'ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
+        packageNames: ['@kaelio/ktx', 'kaelio-ktx'],
         publishedPackageSmokeGate: {
           status: 'required',
           script: 'pnpm run release:published-smoke',
@@ -273,7 +257,7 @@ describe('release readiness policy', () => {
         sourceRevision: 'abc123',
         npmPublishEnabled: true,
         pythonPublishEnabled: false,
-        packageNames: ['@kaelio/ktx', 'ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
+        packageNames: ['@kaelio/ktx', 'kaelio-ktx'],
         publishedPackageSmokeGate: {
           status: 'required',
           script: 'pnpm run release:published-smoke',

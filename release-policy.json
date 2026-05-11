@@ -11,7 +11,7 @@
   "python": {
     "publish": false,
     "repository": null,
-    "packages": ["ktx-sl", "ktx-daemon", "kaelio-ktx"]
+    "packages": ["kaelio-ktx"]
   },
   "publishedPackageSmoke": {
     "packageName": "@kaelio/ktx",
