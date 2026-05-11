@@ -42,6 +42,16 @@ export function printList<Row extends object>(args: PrintListArgs<Row>): void {
   }
 }
 
+export interface KtxJsonResultEnvelope<T> {
+  kind: string;
+  data: T;
+  meta?: Record<string, unknown>;
+}
+
+export function writeJsonResult<T>(io: KtxCliIo, envelope: KtxJsonResultEnvelope<T>): void {
+  io.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
+}
+
 function isEmpty(value: unknown): boolean {
   return value === undefined || value === null || value === '';
 }
@@ -61,12 +71,11 @@ function printListPlain<Row extends object>(args: PrintListArgs<Row>): void {
 }
 
 function printListJson<Row extends object>(args: PrintListArgs<Row>): void {
-  const envelope = {
+  writeJsonResult(args.io, {
     kind: 'list',
     data: { items: args.rows },
     meta: { command: args.command },
-  };
-  args.io.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
+  });
 }
 
 function pluralize(count: number, singular: string): string {

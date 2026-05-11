@@ -400,6 +400,7 @@ joins: []
     expect(code).toBe(0);
 
     const parsed = JSON.parse(listIo.stdout());
+    expect(listIo.stderr()).toBe('');
     expect(parsed.kind).toBe('list');
     expect(parsed.meta).toEqual({ command: 'sl list' });
     expect(parsed.data.items).toHaveLength(1);
@@ -409,6 +410,33 @@ joins: []
       columnCount: 1,
       measureCount: 0,
       joinCount: 0,
+    });
+  });
+
+  it('prints sl list JSON as a single result envelope', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+
+    const writeIo = makeIo();
+    await runKtxSl(
+      { command: 'write', projectDir, connectionId: 'warehouse', sourceName: 'orders', yaml: ORDERS_YAML },
+      writeIo.io,
+    );
+
+    const listIo = makeIo();
+    await expect(
+      runKtxSl({ command: 'list', projectDir, connectionId: 'warehouse', json: true }, listIo.io),
+    ).resolves.toBe(0);
+
+    expect(listIo.stderr()).toBe('');
+    expect(JSON.parse(listIo.stdout())).toMatchObject({
+      kind: 'list',
+      data: {
+        items: expect.any(Array),
+      },
+      meta: {
+        command: 'sl list',
+      },
     });
   });
 

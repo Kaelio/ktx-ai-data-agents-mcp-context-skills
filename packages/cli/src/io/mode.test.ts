@@ -20,6 +20,12 @@ describe('resolveOutputMode', () => {
     expect(resolveOutputMode({ explicit: 'pretty', json: true, io: ioWith(true), env: {} })).toBe('json');
   });
 
+  it('prefers explicit JSON over every other output setting', () => {
+    expect(resolveOutputMode({ json: true, explicit: 'pretty', io: ioWith(true), env: { KTX_OUTPUT: 'plain' } })).toBe(
+      'json',
+    );
+  });
+
   it('throws on unknown explicit value', () => {
     expect(() => resolveOutputMode({ explicit: 'fancy', io: ioWith(true), env: {} })).toThrow(/Invalid --output/);
   });
@@ -32,6 +38,12 @@ describe('resolveOutputMode', () => {
 
   it('throws on unknown KTX_OUTPUT', () => {
     expect(() => resolveOutputMode({ io: ioWith(true), env: { KTX_OUTPUT: 'fancy' } })).toThrow(/Invalid KTX_OUTPUT/);
+  });
+
+  it('rejects invalid KTX_OUTPUT values', () => {
+    expect(() => resolveOutputMode({ io: ioWith(false), env: { KTX_OUTPUT: 'verbose' } })).toThrow(
+      'Invalid KTX_OUTPUT value: verbose. Expected one of pretty, plain, json.',
+    );
   });
 
   it('returns plain when CI is set to a truthy value', () => {
