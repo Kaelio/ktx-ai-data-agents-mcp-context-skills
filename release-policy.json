@@ -5,7 +5,7 @@
     "publish": true,
     "registry": null,
     "access": "public",
-    "tag": "latest",
+    "tag": "next",
     "packages": ["@kaelio/ktx"]
   },
   "python": {
@@ -15,7 +15,7 @@
   },
   "publishedPackageSmoke": {
     "packageName": "@kaelio/ktx",
-    "version": "0.1.0",
+    "version": "0.1.0-rc.0",
     "registry": null
   },
   "runtimeInstaller": {

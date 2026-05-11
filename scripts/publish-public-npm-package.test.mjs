@@ -13,9 +13,9 @@ const readyReport = {
   npmPublishEnabled: true,
   npmPublish: {
     packageName: '@kaelio/ktx',
-    version: '0.1.0',
+    version: '0.1.0-rc.0',
     access: 'public',
-    tag: 'latest',
+    tag: 'next',
     registry: null,
   },
 };
@@ -51,18 +51,18 @@ describe('requireNpmPublicReleaseReady', () => {
 describe('buildNpmPublishCommand', () => {
   it('builds a dry-run pnpm publish command by default', () => {
     assert.deepEqual(
-      buildNpmPublishCommand('/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz', readyReport.npmPublish, {
+      buildNpmPublishCommand('/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.0.tgz', readyReport.npmPublish, {
         live: false,
       }),
       {
         command: 'pnpm',
         args: [
           'publish',
-          '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz',
+          '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.0.tgz',
           '--access',
           'public',
           '--tag',
-          'latest',
+          'next',
           '--dry-run',
           '--no-git-checks',
         ],
@@ -73,16 +73,16 @@ describe('buildNpmPublishCommand', () => {
 
   it('omits dry-run only for explicit live publish', () => {
     assert.deepEqual(
-      buildNpmPublishCommand('/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz', readyReport.npmPublish, {
+      buildNpmPublishCommand('/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.0.tgz', readyReport.npmPublish, {
         live: true,
       }).args,
       [
         'publish',
-        '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz',
+        '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.0.tgz',
         '--access',
         'public',
         '--tag',
-        'latest',
+        'next',
       ],
     );
   });
@@ -94,7 +94,7 @@ describe('buildNpmPublishCommand', () => {
     };
 
     assert.deepEqual(
-      buildNpmPublishCommand('/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz', publish, { live: false }).env,
+      buildNpmPublishCommand('/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.0.tgz', publish, { live: false }).env,
       { npm_config_registry: 'https://registry.npmjs.org/' },
     );
   });

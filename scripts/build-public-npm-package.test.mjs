@@ -142,9 +142,9 @@ describe('publicNpmPackageLayout', () => {
   it('uses the first public npm release version for the tarball name', () => {
     const layout = publicNpmPackageLayout('/repo/ktx');
 
-    assert.equal(PUBLIC_NPM_PACKAGE_VERSION, '0.1.0');
-    assert.equal(publicNpmPackageTarballName(), 'kaelio-ktx-0.1.0.tgz');
-    assert.equal(layout.tarballPath, '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz');
+    assert.equal(PUBLIC_NPM_PACKAGE_VERSION, '0.1.0-rc.0');
+    assert.equal(publicNpmPackageTarballName(), 'kaelio-ktx-0.1.0-rc.0.tgz');
+    assert.equal(layout.tarballPath, '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.0.tgz');
   });
 });
 
@@ -207,7 +207,7 @@ describe('publicNpmPackageJson', () => {
     );
 
     assert.equal(packageJson.name, PUBLIC_NPM_PACKAGE_NAME);
-    assert.equal(packageJson.version, '0.1.0');
+    assert.equal(packageJson.version, '0.1.0-rc.0');
     assert.equal(packageJson.private, false);
     assert.deepEqual(packageJson.bin, { ktx: './dist/bin.js' });
     assert.deepEqual(packageJson.dependencies, { commander: '14.0.3' });
@@ -263,7 +263,7 @@ describe('publicNpmPackCommand', () => {
         '--config.node-linker=hoisted',
         'pack',
         '--out',
-        '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0.tgz',
+        '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.0.tgz',
       ],
       cwd: '/repo/ktx/dist/public-npm-package',
     });
