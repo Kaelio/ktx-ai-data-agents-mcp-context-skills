@@ -168,13 +168,37 @@ function formatDiffProgress(event: Extract<MemoryFlowEvent, { type: 'diff_comput
   return `+${event.added}/~${event.modified}/-${event.deleted}/=${event.unchanged}`;
 }
 
-function completedWorkUnitCount(snapshot: MemoryFlowReplayInput): number {
-  return snapshot.events.filter((event) => event.type === 'work_unit_finished').length;
+function workUnitEventsThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): MemoryFlowEvent[] {
+  return snapshot.events.slice(0, eventIndex + 1);
+}
+
+function completedWorkUnitCountThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): number {
+  return workUnitEventsThrough(snapshot, eventIndex).filter((event) => event.type === 'work_unit_finished').length;
+}
+
+function plannedWorkUnitCountThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): number {
+  if (snapshot.plannedWorkUnits.length > 0) {
+    return snapshot.plannedWorkUnits.length;
+  }
+  const planEvent = workUnitEventsThrough(snapshot, eventIndex)
+    .filter((event) => event.type === 'chunks_planned')
+    .at(-1);
+  return planEvent?.workUnitCount ?? completedWorkUnitCountThrough(snapshot, eventIndex);
+}
+
+function workUnitOrdinalThrough(snapshot: MemoryFlowReplayInput, eventIndex: number, unitKey: string): number {
+  const events = workUnitEventsThrough(snapshot, eventIndex);
+  const startedIndex = events.findIndex((event) => event.type === 'work_unit_started' && event.unitKey === unitKey);
+  if (startedIndex === -1) {
+    return completedWorkUnitCountThrough(snapshot, eventIndex) + 1;
+  }
+  return events.slice(0, startedIndex + 1).filter((event) => event.type === 'work_unit_started').length;
 }
 
 function plainIngestEventProgress(
   event: MemoryFlowEvent,
   snapshot: MemoryFlowReplayInput,
+  eventIndex: number,
 ): { percent: number; message: string } | null {
   switch (event.type) {
     case 'source_acquired':
@@ -196,11 +220,27 @@ function plainIngestEventProgress(
       };
     case 'stage_skipped':
       return { percent: 45, message: `Skipped ${event.stage}: ${event.reason}` };
-    case 'work_unit_started':
-      return { percent: 55, message: `Processing ${event.unitKey}` };
+    case 'work_unit_started': {
+      const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
+      const ordinal = workUnitOrdinalThrough(snapshot, eventIndex, event.unitKey);
+      const progress = total > 0 ? `${ordinal}/${total} work units: ` : '';
+      return { percent: 55, message: `Processing ${progress}${event.unitKey}` };
+    }
+    case 'work_unit_step': {
+      const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
+      const completed = completedWorkUnitCountThrough(snapshot, eventIndex);
+      const ordinal = workUnitOrdinalThrough(snapshot, eventIndex, event.unitKey);
+      const stepFraction = event.stepBudget > 0 ? Math.min(1, event.stepIndex / event.stepBudget) : 0;
+      const percent = total > 0 ? 55 + Math.ceil(((completed + stepFraction) / total) * 25) : 55;
+      const progress = total > 0 ? `${ordinal}/${total} work units: ` : '';
+      return {
+        percent,
+        message: `Processing ${progress}${event.unitKey} step ${event.stepIndex}/${event.stepBudget}`,
+      };
+    }
     case 'work_unit_finished': {
-      const total = snapshot.plannedWorkUnits.length || completedWorkUnitCount(snapshot);
-      const completed = completedWorkUnitCount(snapshot);
+      const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
+      const completed = completedWorkUnitCountThrough(snapshot, eventIndex);
       const percent = total > 0 ? 55 + Math.round((completed / total) * 25) : 80;
       return {
         percent,
@@ -225,7 +265,6 @@ function plainIngestEventProgress(
     case 'report_created':
       return { percent: 98, message: `Created ingest report ${event.reportPath ?? event.runId}` };
     case 'scope_detected':
-    case 'work_unit_step':
     case 'candidate_action':
       return null;
   }
@@ -259,11 +298,12 @@ function createPlainIngestProgressRenderer(
     },
     update(snapshot) {
       while (printedEvents < snapshot.events.length) {
+        const eventIndex = printedEvents;
         const event = snapshot.events[printedEvents++];
         if (!event) {
           continue;
         }
-        const progress = plainIngestEventProgress(event, snapshot);
+        const progress = plainIngestEventProgress(event, snapshot, eventIndex);
         if (progress) {
           write(progress.percent, progress.message);
         }
