@@ -1,19 +1,15 @@
 #!/usr/bin/env node
 
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { once } from 'node:events';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { request as httpRequest } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  findPythonArtifacts,
   npmSmokePackageJson,
-  npmSmokePythonEnv,
   packageArtifactLayout,
-  pythonArtifactInstallArgs,
 } from './package-artifacts.mjs';
 
 const POSTGRES_IMAGE = process.env.KTX_ARTIFACT_POSTGRES_IMAGE ?? 'postgres:16-alpine';
@@ -238,93 +234,37 @@ async function seedPostgres(containerName) {
   requireSuccess('seed postgres catalog', result);
 }
 
-function httpGetOk(url) {
-  return new Promise((resolve, reject) => {
-    const request = httpRequest(url, { method: 'GET' }, (response) => {
-      response.resume();
-      response.on('end', () => resolve((response.statusCode ?? 0) >= 200 && (response.statusCode ?? 0) < 300));
-    });
-    request.on('error', reject);
-    request.end();
-  });
-}
-
-function spawnLogged(command, args, options = {}) {
-  const stdout = [];
-  const stderr = [];
-  let spawnError;
-  const child = spawn(command, args, {
-    cwd: options.cwd,
-    env: options.env ?? process.env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  child.stdout.on('data', (chunk) => stdout.push(chunk));
-  child.stderr.on('data', (chunk) => stderr.push(chunk));
-  child.on('error', (error) => {
-    spawnError = error;
-  });
+function managedRuntimeEnv(cleanInstallDir) {
   return {
-    child,
-    error() {
-      return spawnError;
-    },
-    output() {
-      return {
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
-      };
-    },
+    ...process.env,
+    KTX_RUNTIME_ROOT: join(cleanInstallDir, 'managed-runtime'),
   };
 }
 
-async function waitForHttpHealth(url, daemon) {
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    if (daemon.error()) {
-      const output = daemon.output();
-      throw new Error(
-        `Failed to start ktx-daemon: ${daemon.error().message}\nstdout:\n${output.stdout}\nstderr:\n${output.stderr}`,
-      );
-    }
-    if (daemon.child.exitCode !== null || daemon.child.signalCode !== null) {
-      const output = daemon.output();
-      throw new Error(`ktx-daemon exited before health check passed\nstdout:\n${output.stdout}\nstderr:\n${output.stderr}`);
-    }
-    try {
-      if (await httpGetOk(url)) {
-        return;
-      }
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      continue;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+function parseDaemonBaseUrl(stdout) {
+  const match = stdout.match(/^url: (http:\/\/127\.0\.0\.1:\d+)$/m);
+  if (!match) {
+    throw new Error(`Daemon URL was not printed by runtime start:\n${stdout}`);
   }
-  const output = daemon.output();
-  throw new Error(`Timed out waiting for ${url}\nstdout:\n${output.stdout}\nstderr:\n${output.stderr}`);
+  return match[1];
 }
 
-async function startDaemon(port, cleanInstallDir) {
-  const daemon = spawnLogged(
-    'ktx-daemon',
-    ['serve-http', '--host', '127.0.0.1', '--port', String(port), '--log-level', 'warning'],
-    { cwd: cleanInstallDir, env: npmSmokePythonEnv(cleanInstallDir) },
-  );
-  await waitForHttpHealth(`http://127.0.0.1:${port}/health`, daemon);
-  return daemon;
+async function startDaemon(cleanInstallDir) {
+  const result = await run('pnpm', ['exec', 'ktx', 'runtime', 'start'], {
+    cwd: cleanInstallDir,
+    env: managedRuntimeEnv(cleanInstallDir),
+    timeout: 120_000,
+  });
+  requireSuccess('ktx runtime start', result);
+  return parseDaemonBaseUrl(result.stdout);
 }
 
-async function stopDaemon(daemon) {
-  if (daemon.child.exitCode !== null || daemon.child.signalCode !== null) {
-    return;
-  }
-  daemon.child.kill('SIGTERM');
-  const closed = once(daemon.child, 'close').then(() => true);
-  const timedOut = new Promise((resolve) => setTimeout(() => resolve(false), 5_000));
-  if (!(await Promise.race([closed, timedOut]))) {
-    daemon.child.kill('SIGKILL');
-    await once(daemon.child, 'close');
-  }
+async function stopDaemon(cleanInstallDir) {
+  await run('pnpm', ['exec', 'ktx', 'runtime', 'stop'], {
+    cwd: cleanInstallDir,
+    env: managedRuntimeEnv(cleanInstallDir),
+    timeout: 30_000,
+  });
 }
 
 async function assertPathExists(path, label) {
@@ -336,7 +276,6 @@ async function assertPathExists(path, label) {
 }
 
 async function prepareCleanInstall(layout, cleanInstallDir) {
-  const pythonArtifacts = await findPythonArtifacts(layout.pythonDir);
   await assertPathExists(layout.contextTarball, '@ktx/context tarball');
   await assertPathExists(layout.cliTarball, '@ktx/cli tarball');
   await mkdir(cleanInstallDir, { recursive: true });
@@ -344,34 +283,24 @@ async function prepareCleanInstall(layout, cleanInstallDir) {
   await run('pnpm', ['install'], { cwd: cleanInstallDir, timeout: 120_000 }).then((result) =>
     requireSuccess('pnpm install clean artifact project', result),
   );
-  await run('uv', ['venv', '.venv'], { cwd: cleanInstallDir, timeout: 120_000 }).then((result) =>
-    requireSuccess('uv venv clean artifact project', result),
-  );
-  await run(
-    'uv',
-    pythonArtifactInstallArgs(
-      join(cleanInstallDir, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'),
-      pythonArtifacts,
-    ),
-    {
-      cwd: cleanInstallDir,
-      timeout: 120_000,
-    },
-  ).then((result) => requireSuccess('install Python artifacts', result));
+  await run('pnpm', ['exec', 'ktx', 'runtime', 'install', '--yes'], {
+    cwd: cleanInstallDir,
+    env: managedRuntimeEnv(cleanInstallDir),
+    timeout: 120_000,
+  }).then((result) => requireSuccess('install managed runtime', result));
 }
 
 async function main() {
   const layout = packageArtifactLayout();
   const root = await mkdtemp(join(tmpdir(), 'ktx-live-db-artifact-smoke-'));
   const containerName = smokeContainerName();
-  let daemon;
+  let cleanInstallDir;
+  let daemonStarted = false;
   try {
     const postgresPort = await getAvailablePort();
-    const daemonPort = await getAvailablePort();
     const postgresUrl = buildPostgresUrl(postgresPort);
-    const cleanInstallDir = join(root, 'npm-clean-install');
+    cleanInstallDir = join(root, 'npm-clean-install');
     const projectDir = join(root, 'project');
-    const databaseIntrospectionUrl = `http://127.0.0.1:${daemonPort}`;
 
     await startPostgresContainer(containerName, postgresPort);
     await waitForPostgres(containerName);
@@ -386,11 +315,12 @@ async function main() {
     requireSuccess('ktx init', init);
     await writeFile(join(projectDir, 'ktx.yaml'), buildKtxYaml(postgresUrl), 'utf8');
 
-    daemon = await startDaemon(daemonPort, cleanInstallDir);
+    const databaseIntrospectionUrl = await startDaemon(cleanInstallDir);
+    daemonStarted = true;
 
     const ingestRun = await run('pnpm', buildLiveDatabaseIngestArgs(projectDir, databaseIntrospectionUrl), {
       cwd: cleanInstallDir,
-      env: npmSmokePythonEnv(cleanInstallDir),
+      env: managedRuntimeEnv(cleanInstallDir),
       timeout: 120_000,
     });
     requireSuccess('ktx dev ingest run live-database', ingestRun);
@@ -403,7 +333,7 @@ async function main() {
     const runId = getRunId(ingestRun.stdout);
     const ingestStatus = await run('pnpm', buildLiveDatabaseStatusArgs(projectDir, runId), {
       cwd: cleanInstallDir,
-      env: npmSmokePythonEnv(cleanInstallDir),
+      env: managedRuntimeEnv(cleanInstallDir),
       timeout: 30_000,
     });
     requireSuccess('ktx ingest status live-database', ingestStatus);
@@ -414,8 +344,8 @@ async function main() {
     await assertPathExists(join(projectDir, '.ktx', 'db.sqlite'), 'SQLite local ingest state');
     process.stdout.write(`Installed live-database artifact smoke passed: ${runId}\n`);
   } finally {
-    if (daemon) {
-      await stopDaemon(daemon);
+    if (daemonStarted && cleanInstallDir) {
+      await stopDaemon(cleanInstallDir);
     }
     await stopPostgresContainer(containerName);
     await rm(root, { recursive: true, force: true });
