@@ -226,6 +226,7 @@ export function renderContextBuildView(
 // --- IO Capture ---
 
 const ESC_K_RE = new RegExp(`${ESC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\[K`, 'g');
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 export function extractProgressMessage(chunk: string): string | null {
   const cleaned = chunk.replace(/^\r/, '').replace(ESC_K_RE, '').replace(/\n$/, '').trim();
@@ -342,16 +343,45 @@ export function viewStateFromSourceProgress(
 // --- Repaint ---
 
 export function createRepainter(io: KtxCliIo) {
-  let lastLineCount = 0;
+  let hasPainted = false;
+  let lastCursorUpRows = 0;
+
+  const terminalColumns = () => {
+    for (const columns of [io.stdout.columns, process.stdout.columns]) {
+      if (typeof columns === 'number' && Number.isFinite(columns) && columns > 0) return columns;
+    }
+    return 80;
+  };
+
+  const visualRows = (line: string, columns: number) => {
+    const plainLength = line.replace(ANSI_RE, '').length;
+    return Math.max(1, Math.ceil(plainLength / columns));
+  };
+
+  const cursorUpRowsAfterWrite = (content: string) => {
+    const columns = terminalColumns();
+    const endsWithNewline = content.endsWith('\n');
+    const lines = content.split('\n');
+    return lines.reduce((sum, line, index) => {
+      if (index === lines.length - 1) {
+        return endsWithNewline ? sum : sum + Math.max(0, visualRows(line, columns) - 1);
+      }
+      return sum + visualRows(line, columns);
+    }, 0);
+  };
 
   return {
     paint(content: string) {
-      if (lastLineCount > 0) {
-        io.stdout.write(`${ESC}[${lastLineCount}A\r`);
+      if (hasPainted) {
+        if (lastCursorUpRows > 0) {
+          io.stdout.write(`${ESC}[${lastCursorUpRows}A`);
+        }
+        io.stdout.write('\r');
       }
       io.stdout.write(content.replaceAll('\n', `${ESC}[K\n`));
       io.stdout.write(`${ESC}[J`);
-      lastLineCount = (content.match(/\n/g) ?? []).length;
+      hasPainted = true;
+      lastCursorUpRows = cursorUpRowsAfterWrite(content);
     },
   };
 }

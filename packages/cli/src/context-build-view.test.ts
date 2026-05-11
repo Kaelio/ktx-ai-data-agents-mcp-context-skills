@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KtxPublicIngestProject, KtxPublicIngestTargetResult } from './public-ingest.js';
 import {
   extractProgressMessage,
+  createRepainter,
   initViewState,
   parseIngestSummary,
   parseScanSummary,
@@ -11,13 +12,14 @@ import {
   viewStateFromSourceProgress,
 } from './context-build-view.js';
 
-function makeIo(options: { isTTY?: boolean } = {}) {
+function makeIo(options: { isTTY?: boolean; columns?: number } = {}) {
   let stdout = '';
   let stderr = '';
   return {
     io: {
       stdout: {
         isTTY: options.isTTY,
+        columns: options.columns,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -302,6 +304,31 @@ describe('renderContextBuildView', () => {
 
     const output = renderContextBuildView(state, { styled: false, showHint: true });
     expect(output).not.toContain('d to detach');
+  });
+});
+
+describe('createRepainter', () => {
+  it('moves up visual rows, not just newline count, when content wraps', () => {
+    const io = makeIo({ isTTY: true, columns: 5 });
+    const repainter = createRepainter(io.io);
+
+    repainter.paint('abcdefghijk\n');
+    repainter.paint('updated\n');
+    repainter.paint('done\n');
+
+    const cursorMoves = [...io.stdout().matchAll(/\u001b\[(\d+)A\r/g)].map((match) => Number(match[1]));
+    expect(cursorMoves).toEqual([3, 2]);
+  });
+
+  it('returns to the start of a single-line frame without moving up when content has no newline', () => {
+    const io = makeIo({ isTTY: true, columns: 80 });
+    const repainter = createRepainter(io.io);
+
+    repainter.paint('hello');
+    repainter.paint('bye');
+
+    expect(io.stdout()).toContain('\rbye');
+    expect(io.stdout()).not.toContain('\u001b[1A\rbye');
   });
 });
 

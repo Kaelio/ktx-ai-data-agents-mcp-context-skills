@@ -127,6 +127,39 @@ describe('SlEditSourceTool — session gating', () => {
     );
     expect((session.semanticLayerService as any).writeSource).toHaveBeenCalled();
   });
+
+  it('fills missing descriptions when an ingest session edits a source', async () => {
+    const { tool } = makeTool();
+    const session = makeSession({
+      ingest: { runId: 'run-1', jobId: 'job-1', syncId: 'sync-1', sourceKey: 'dbt' },
+    });
+    const context: ToolContext = { ...baseContext, session };
+
+    const result = await tool.call(
+      {
+        connectionId: session.connectionId,
+        sourceName: 'orders',
+        yaml_edits: [{ oldText: 'measures: []', newText: 'measures: []' }],
+      } as any,
+      context,
+    );
+
+    expect(result.structured.success).toBe(true);
+    expect((session.semanticLayerService as any).writeSource).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        descriptions: { ktx: expect.stringContaining('orders') },
+        columns: [
+          expect.objectContaining({
+            descriptions: { ktx: expect.stringContaining('Identifier') },
+          }),
+        ],
+      }),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+    );
+  });
 });
 
 describe('SlEditSourceTool — manifest-backed source without overlay', () => {

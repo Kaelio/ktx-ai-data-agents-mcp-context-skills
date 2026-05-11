@@ -33,6 +33,14 @@ class TestSourceColumn:
         assert col.visibility == ColumnVisibility.HIDDEN
         assert col.role == ColumnRole.TIME
 
+    def test_descriptions_map_resolves_visible_description(self):
+        col = SourceColumn(
+            name="account_id",
+            type="string",
+            descriptions={"ktx": "Identifier for the related account."},
+        )
+        assert col.description == "Identifier for the related account."
+
     def test_invalid_type(self):
         with pytest.raises(ValidationError):
             SourceColumn(name="id", type="integer")
@@ -62,6 +70,16 @@ class TestSourceDefinition:
         assert src.table is None
         assert src.is_sql_source
         assert not src.is_table_source
+
+    def test_descriptions_map_resolves_visible_description(self):
+        src = SourceDefinition(
+            name="orders",
+            descriptions={"ktx": "Semantic-layer source for orders."},
+            table="public.orders",
+            grain=["id"],
+            columns=[SourceColumn(name="id", type="number")],
+        )
+        assert src.description == "Semantic-layer source for orders."
 
     def test_table_and_sql_mutually_exclusive(self):
         with pytest.raises(ValidationError, match="mutually exclusive"):

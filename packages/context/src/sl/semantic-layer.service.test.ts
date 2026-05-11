@@ -257,12 +257,14 @@ describe('sourceDefinitionSchema', () => {
   it('preserves dbt structural metadata fields used by manifest-backed SL readers', () => {
     const result = sourceDefinitionSchema.safeParse({
       name: 'orders',
+      descriptions: { dbt: 'Order facts from dbt.' },
       table: 'public.orders',
       grain: ['id'],
       columns: [
         {
           name: 'status',
           type: 'string',
+          descriptions: { dbt: 'Order lifecycle status.' },
           constraints: { dbt: { not_null: true, unique: true } },
           enum_values: { dbt: ['placed', 'shipped'] },
           tests: {
@@ -282,7 +284,9 @@ describe('sourceDefinitionSchema', () => {
     if (!result.success) {
       return;
     }
+    expect(result.data.descriptions).toEqual({ dbt: 'Order facts from dbt.' });
     expect(result.data.columns[0]).toMatchObject({
+      descriptions: { dbt: 'Order lifecycle status.' },
       constraints: { dbt: { not_null: true, unique: true } },
       enum_values: { dbt: ['placed', 'shipped'] },
       tests: {
@@ -527,6 +531,31 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
     const sources = await service.loadAllSources('conn-1');
     const aav = sources.find((s) => s.name === 'aav_consignments');
     expect(aav?.columns).toEqual([{ name: 'FOO', type: 'string' }]);
+  });
+
+  it('normalizes legacy flat source and column descriptions when loading standalone files', async () => {
+    const standalonePath = 'semantic-layer/conn-1/orders.yaml';
+    configService.listFiles.mockResolvedValue({ files: [standalonePath] });
+    configService.readFile.mockResolvedValue({
+      content: [
+        'name: orders',
+        'description: Finance orders used for invoice reconciliation.',
+        'table: public.orders',
+        'grain: [id]',
+        'columns:',
+        '  - name: id',
+        '    type: string',
+        '    description: Stable order identifier.',
+      ].join('\n'),
+    });
+
+    const sources = await service.loadAllSources('conn-1');
+
+    expect(sources[0]).toMatchObject({
+      name: 'orders',
+      descriptions: { user: 'Finance orders used for invoice reconciliation.' },
+      columns: [{ name: 'id', type: 'string', descriptions: { user: 'Stable order identifier.' } }],
+    });
   });
 });
 
