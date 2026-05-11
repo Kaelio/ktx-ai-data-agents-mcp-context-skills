@@ -11,6 +11,15 @@ Run from the KTX workspace root:
 pnpm run relationships:verify-orbit
 ```
 
+Expected relationship summary:
+
+```text
+Accepted: 9
+Review: 0
+Rejected: 0
+Skipped: 0
+```
+
 The command refreshes:
 
 ```text
