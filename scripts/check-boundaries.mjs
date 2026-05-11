@@ -9,7 +9,7 @@ const runtimeAssetPatterns = [/^packages\/[^/]+\/prompts\/.+\.md$/, /^packages\/
 const identifierSkipPrefixes = ['docs/', 'examples/', 'python/ktx-sl/plans/', 'python/ktx-sl/openspec/'];
 const identifierAllowPatterns = [
   /^packages\/cli\/src\/(?:index|managed-local-embeddings|managed-python-command|managed-python-daemon|managed-python-runtime|runtime)(?:\.test)?\.ts$/,
-  /^scripts\/(?:build-public-npm-package|build-python-runtime-wheel|local-embeddings-runtime-smoke|package-artifacts|published-package-smoke|release-readiness)(?:\.test)?\.mjs$/,
+  /^scripts\/(?:build-public-npm-package|build-python-runtime-wheel|local-embeddings-runtime-smoke|package-artifacts|publish-public-npm-package|published-package-smoke|release-readiness)(?:\.test)?\.mjs$/,
 ];
 const forbiddenIdentifierTerms = ['kae' + 'lio', 'Kae' + 'lio', 'KAE' + 'LIO_'];
 

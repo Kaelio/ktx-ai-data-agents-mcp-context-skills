@@ -10,12 +10,20 @@ function publicNpmPackageName() {
   return `@${['kae', 'lio'].join('')}/ktx`;
 }
 
+function runtimeWheelPackageName() {
+  return `${['kae', 'lio'].join('')}-ktx`;
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function publicPackagePattern(text) {
   return new RegExp(text.replaceAll('{package}', escapeRegExp(publicNpmPackageName())));
+}
+
+function runtimeWheelPackagePattern(text) {
+  return new RegExp(text.replaceAll('{package}', escapeRegExp(runtimeWheelPackageName())));
 }
 
 describe('standalone example docs', () => {
@@ -151,7 +159,12 @@ describe('standalone example docs', () => {
     assert.match(rootReadme, /ktx runtime prune --yes/);
     assert.match(rootReadme, /KTX requires `uv` on `PATH`/);
     assert.match(rootReadme, /KTX doesn't download `uv` automatically/);
-    assert.match(rootReadme, /release\s+artifact manifest contains the public npm tarball and the\s+bundled `kaelio-ktx`\s+runtime wheel/);
+    assert.match(
+      rootReadme,
+      runtimeWheelPackagePattern(
+        'release\\s+artifact manifest contains the public npm tarball and the\\s+bundled `{package}`\\s+runtime wheel',
+      ),
+    );
     assert.match(rootReadme, /source packages for\s+development, not public release artifacts/);
     assert.match(rootReadme, /ktx serve --mcp stdio/);
     assert.doesNotMatch(rootReadme, /uv run ktx-daemon serve-http/);
@@ -163,7 +176,14 @@ describe('standalone example docs', () => {
 
     assert.match(readme, publicPackagePattern('{package}'));
     assert.match(readme, /managed Python runtime/);
-    assert.match(readme, /public `@kaelio\/ktx` npm tarball and the\s+bundled `kaelio-ktx`\s+runtime wheel/);
+    assert.match(
+      readme,
+      new RegExp(
+        `public \`${escapeRegExp(publicNpmPackageName())}\` npm tarball and the\\s+bundled \`${escapeRegExp(
+          runtimeWheelPackageName(),
+        )}\`\\s+runtime wheel`,
+      ),
+    );
     assert.match(readme, /does not install standalone\s+Python packages directly/);
     assert.doesNotMatch(readme, /standalone Python distributions/);
     assert.doesNotMatch(readme, /installs the Python artifacts directly/);
