@@ -335,6 +335,19 @@ export { SnowflakeHistoricSqlQueryHistoryReader } from './adapters/historic-sql/
 export { stageHistoricSqlAggregatedSnapshot } from './adapters/historic-sql/stage-unified.js';
 export { stageHistoricSqlTemplates } from './adapters/historic-sql/stage.js';
 export {
+  historicSqlEvidenceEnvelopeSchema,
+  historicSqlEvidencePath,
+  historicSqlPatternEvidenceSchema,
+  historicSqlTableUsageEvidenceSchema,
+  serializeHistoricSqlEvidence,
+} from './adapters/historic-sql/evidence.js';
+export type {
+  HistoricSqlEvidenceEnvelope,
+  HistoricSqlPatternEvidence,
+  HistoricSqlTableUsageEvidence,
+} from './adapters/historic-sql/evidence.js';
+export { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evidence-tool.js';
+export {
   patternOutputSchema,
   patternsArraySchema,
   tableUsageOutputSchema,

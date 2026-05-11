@@ -243,6 +243,9 @@ describe('@ktx/context package exports', () => {
     expect(ingest.historicSqlUnifiedPullConfigSchema).toBeDefined();
     expect(ingest.aggregatedTemplateSchema).toBeDefined();
     expect(ingest.stagedTableInputSchema).toBeDefined();
+    expect(ingest.historicSqlEvidenceEnvelopeSchema).toBeDefined();
+    expect(ingest.historicSqlEvidencePath).toBeTypeOf('function');
+    expect(ingest.createEmitHistoricSqlEvidenceTool).toBeTypeOf('function');
     expect(ingest.SqliteContextEvidenceStore).toBeTypeOf('function');
     expect(ingest.SqliteBundleIngestStore).toBeTypeOf('function');
     expect(ingest.CuratorPaginationService).toBeTypeOf('function');
