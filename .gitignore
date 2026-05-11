@@ -8,6 +8,7 @@ venv/
 env/
 build/
 dist/
+packages/cli/assets/python/
 *.egg-info/
 .pytest_cache/
 .coverage

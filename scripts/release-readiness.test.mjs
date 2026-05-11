@@ -48,6 +48,7 @@ async function writeUploadableArtifactFixtures(layout) {
       layout.npmTarballs[packageInfo.name],
       `${packageInfo.name}-tarball`,
     ]),
+    [join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'), 'kaelio-ktx-runtime-wheel'],
     [join(layout.pythonDir, 'ktx_sl-0.1.0-py3-none-any.whl'), 'ktx-sl-wheel'],
     [join(layout.pythonDir, 'ktx_sl-0.1.0.tar.gz'), 'ktx-sl-sdist'],
     [join(layout.pythonDir, 'ktx_daemon-0.1.0-py3-none-any.whl'), 'ktx-daemon-wheel'],
@@ -74,7 +75,7 @@ function releasePolicy(overrides = {}) {
     python: {
       publish: false,
       repository: null,
-      packages: ['ktx-sl', 'ktx-daemon'],
+      packages: ['ktx-sl', 'ktx-daemon', 'kaelio-ktx'],
       ...pythonOverrides,
     },
     publishedPackageSmoke: {
@@ -135,7 +136,12 @@ describe('release readiness policy', () => {
         sourceRevision: 'abc123',
         npmPublishEnabled: false,
         pythonPublishEnabled: false,
-        packageNames: [...NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name), 'ktx-sl', 'ktx-daemon'],
+        packageNames: [
+          ...NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name),
+          'ktx-sl',
+          'ktx-daemon',
+          'kaelio-ktx',
+        ],
         publishedPackageSmokeGate: {
           status: 'not_required',
           script: 'pnpm run release:published-smoke',
@@ -210,7 +216,12 @@ describe('release readiness policy', () => {
         sourceRevision: 'abc123',
         npmPublishEnabled: false,
         pythonPublishEnabled: false,
-        packageNames: [...NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name), 'ktx-sl', 'ktx-daemon'],
+        packageNames: [
+          ...NPM_ARTIFACT_PACKAGES.map((packageInfo) => packageInfo.name),
+          'ktx-sl',
+          'ktx-daemon',
+          'kaelio-ktx',
+        ],
         publishedPackageSmokeGate: {
           status: 'required',
           script: 'pnpm run release:published-smoke',
