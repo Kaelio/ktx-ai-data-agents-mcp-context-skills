@@ -5,6 +5,17 @@ description: How KTX's relationship detection performs on real-world schemas.
 
 KTX infers foreign key relationships between tables even when the database declares no primary keys or foreign key constraints. This is critical for analytics warehouses, where constraints are rarely enforced. This page documents the methodology, scoring pipeline, and a reproducible benchmark you can run yourself.
 
+## Agent usage notes
+
+Use this page when an agent needs to explain, tune, or verify relationship detection.
+
+| Agent task | Relevant section | Command |
+|------------|------------------|---------|
+| Explain why KTX inferred a join | Detection pipeline | `ktx dev scan relationships <run-id> --status all` |
+| Decide whether to accept or reject a candidate | Scoring and threshold configuration | `ktx dev scan relationships <run-id> --accept <candidate-id>` |
+| Tune thresholds from reviewed decisions | Broader benchmark suite and calibration | `ktx dev scan relationship-thresholds --connection <connection-id>` |
+| Reproduce the bundled benchmark | Reproducing the benchmark | `pnpm run relationships:verify-orbit` |
+
 ## What this measures
 
 Most analytics warehouses — Snowflake, BigQuery, Redshift — don't enforce referential integrity constraints. Tables like `fct_product_events` reference `dim_accounts` by convention (`account_id` → `id`), but nothing in the schema says so.

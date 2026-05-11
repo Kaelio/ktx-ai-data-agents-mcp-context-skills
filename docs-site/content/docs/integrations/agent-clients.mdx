@@ -10,6 +10,25 @@ KTX integrates with coding agents through two channels that can be used independ
 
 Run `ktx setup` and select your agent targets, or configure manually using the snippets below.
 
+## Agent setup matrix
+
+Use this table to choose the setup path before editing client-specific files.
+
+| Target | Project-scoped files | Global install | Recommended mode | Reload needed |
+|--------|----------------------|----------------|------------------|---------------|
+| Claude Code | `.claude/skills/ktx/SKILL.md`, `.mcp.json` | Yes | Both CLI skill and MCP | Skill reload is automatic; MCP starts on first use |
+| Cursor | `.cursor/rules/ktx.mdc`, `.cursor/mcp.json` | No | Both CLI rule and MCP | Reload the Cursor window after MCP config changes |
+| Codex | `.agents/skills/ktx/SKILL.md`, `.agents/mcp/ktx.json` | Yes | Both CLI skill and MCP | Start a new session after global skill changes |
+| OpenCode | `.opencode/commands/ktx.md`, `.opencode/mcp.json` | No | Both CLI command and MCP | Restart OpenCode after config changes |
+
+The safest generated command is:
+
+```bash
+ktx setup --agents --target codex --agent-install-mode both --project
+```
+
+Replace `codex` with `claude-code`, `cursor`, `opencode`, or `universal`.
+
 ## Claude Code
 
 ### Install via `ktx setup`
@@ -277,3 +296,13 @@ All agent clients connect to the same KTX MCP server. The server exposes these t
 | Global install | Yes | No | Yes | No |
 | Config location | `.mcp.json` | `.cursor/mcp.json` | `.agents/mcp/ktx.json` | `.opencode/mcp.json` |
 | Skills location | `.claude/skills/` | `.cursor/rules/` | `.agents/skills/` | `.opencode/commands/` |
+
+## Common errors
+
+| Error or symptom | Likely cause | Recovery |
+|------------------|--------------|----------|
+| Agent cannot start MCP server | The config points to a missing `ktx` binary | Run `pnpm run link:dev`, rerun `ktx setup --agents`, or use an absolute command path |
+| Agent sees MCP tools but queries fail | Server args omit `--semantic-compute` | Add `--semantic-compute`; add `--execute-queries` only when read-only execution is intended |
+| Agent reads the wrong KTX project | `--project-dir` or `KTX_PROJECT_DIR` points at another directory | Regenerate project-scoped config from the intended project directory |
+| CLI skill commands return non-JSON output | The generated command omitted `--json` or an agent changed it | Restore the generated skill/rule and ensure every `ktx agent` command includes `--json` |
+| Cursor or OpenCode does not show new tools | The client has not reloaded its MCP config | Reload the app window or restart the agent client |
