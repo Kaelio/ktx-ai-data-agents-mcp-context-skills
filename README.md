@@ -198,7 +198,12 @@ or `--url file:PATH` over literal credential URLs.
 
 KTX installs its Python runtime only when a Python-backed command needs it.
 The runtime lives outside the npm cache, is versioned by the installed CLI
-version, and is managed by `ktx runtime` commands:
+version, and is managed by `ktx runtime` commands.
+
+KTX requires `uv` on `PATH` to create the managed runtime. Install `uv` with
+your system package manager or the official installer before running Python-
+backed KTX commands. KTX doesn't download `uv` automatically; run
+`ktx runtime doctor` if runtime installation fails:
 
 ```bash
 npx ktx runtime install --yes

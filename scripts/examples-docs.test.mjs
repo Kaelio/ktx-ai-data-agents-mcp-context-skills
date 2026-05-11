@@ -148,6 +148,8 @@ describe('standalone example docs', () => {
     assert.match(rootReadme, /ktx runtime stop/);
     assert.match(rootReadme, /ktx runtime prune --dry-run/);
     assert.match(rootReadme, /ktx runtime prune --yes/);
+    assert.match(rootReadme, /KTX requires `uv` on `PATH`/);
+    assert.match(rootReadme, /KTX doesn't download `uv` automatically/);
     assert.match(rootReadme, /ktx serve --mcp stdio/);
     assert.doesNotMatch(rootReadme, /uv run ktx-daemon serve-http/);
     assert.doesNotMatch(rootReadme, /--semantic-compute-url http:\/\/127\.0\.0\.1:8765/);
@@ -158,6 +160,7 @@ describe('standalone example docs', () => {
 
     assert.match(readme, publicPackagePattern('{package}'));
     assert.match(readme, /managed Python runtime/);
+    assert.match(readme, /requires `uv` on `PATH`/);
     assert.match(readme, /ktx runtime status/);
     assert.match(readme, /ktx runtime doctor/);
     assert.match(readme, /ktx runtime prune --dry-run/);
