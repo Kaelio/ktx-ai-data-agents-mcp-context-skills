@@ -45,6 +45,8 @@ const CONNECTOR_PACKAGE_NAMES = [
   '@ktx/connector-sqlserver',
 ];
 
+const NPM_BUILD_PACKAGE_ORDER = ['@ktx/llm', '@ktx/context', ...CONNECTOR_PACKAGE_NAMES, '@ktx/cli'];
+
 function packageRootForName(packageName) {
   return `packages/${packageName.replace('@ktx/', '')}`;
 }
@@ -127,13 +129,13 @@ describe('packageArtifactLayout', () => {
 });
 
 describe('buildArtifactCommands', () => {
-  it('builds all TypeScript packages before packing npm artifacts and builds both Python packages', () => {
+  it('builds TypeScript packages in dependency order before packing npm artifacts and builds Python packages', () => {
     const layout = packageArtifactLayout('/repo/ktx');
     const commands = buildArtifactCommands(layout);
 
     assert.deepEqual(
       commands.slice(0, NPM_ARTIFACT_PACKAGES.length).map((command) => [command.command, command.args]),
-      NPM_ARTIFACT_PACKAGES.map((packageInfo) => ['pnpm', ['--filter', packageInfo.name, 'run', 'build']]),
+      NPM_BUILD_PACKAGE_ORDER.map((packageName) => ['pnpm', ['--filter', packageName, 'run', 'build']]),
     );
     assert.deepEqual(
       commands

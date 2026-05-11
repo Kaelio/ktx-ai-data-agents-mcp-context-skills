@@ -42,6 +42,8 @@ const CONNECTOR_PACKAGE_NAMES = NPM_ARTIFACT_PACKAGES
   .map((packageInfo) => packageInfo.name)
   .filter((packageName) => packageName.startsWith('@ktx/connector-'));
 
+const NPM_ARTIFACT_BUILD_ORDER = ['@ktx/llm', '@ktx/context', ...CONNECTOR_PACKAGE_NAMES, '@ktx/cli'];
+
 const ordersSource = {
   name: 'orders',
   table: 'public.orders',
@@ -91,11 +93,18 @@ export function packageArtifactLayout(rootDir = scriptRootDir()) {
 }
 
 export function buildArtifactCommands(layout) {
-  const npmBuildCommands = NPM_ARTIFACT_PACKAGES.map((packageInfo) => ({
-    command: 'pnpm',
-    args: ['--filter', packageInfo.name, 'run', 'build'],
-    cwd: layout.rootDir,
-  }));
+  const packagesByName = new Map(NPM_ARTIFACT_PACKAGES.map((packageInfo) => [packageInfo.name, packageInfo]));
+  const npmBuildCommands = NPM_ARTIFACT_BUILD_ORDER.map((packageName) => {
+    const packageInfo = packagesByName.get(packageName);
+    if (!packageInfo) {
+      throw new Error(`Unknown npm artifact build package: ${packageName}`);
+    }
+    return {
+      command: 'pnpm',
+      args: ['--filter', packageInfo.name, 'run', 'build'],
+      cwd: layout.rootDir,
+    };
+  });
   const npmPackCommands = NPM_ARTIFACT_PACKAGES.map((packageInfo) => ({
     command: 'pnpm',
     args: ['--filter', packageInfo.name, 'pack', '--out', layout.npmTarballs[packageInfo.name]],
