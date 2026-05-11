@@ -273,6 +273,15 @@ async function waitForHealth(input: {
     lastDetail = health.detail;
     await delay(input.pollIntervalMs);
   }
+  const finalHealth = await healthOk({
+    state: input.state,
+    cliVersion: input.cliVersion,
+    fetch: input.fetch,
+  });
+  if (finalHealth.ok) {
+    return;
+  }
+  lastDetail = finalHealth.detail;
   throw new Error(`KTX Python daemon failed to start: ${lastDetail}. stderr: ${input.state.stderrLog}`);
 }
 

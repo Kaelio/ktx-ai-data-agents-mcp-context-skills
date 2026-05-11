@@ -170,6 +170,41 @@ describe('managed Python daemon lifecycle', () => {
     });
   });
 
+  it('makes a final health probe before reporting startup failure', async () => {
+    const spawnDaemon = makeSpawn(5556);
+    const installRuntime = vi.fn(async () => installResult(tempDir));
+    const fetch = vi
+      .fn<ManagedPythonDaemonFetch>()
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'healthy', version: '0.2.0' }),
+        text: async () => '',
+      });
+
+    const result = await startManagedPythonDaemon({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      features: ['core'],
+      installRuntime,
+      spawnDaemon,
+      fetch,
+      allocatePort: vi.fn(async () => 61234),
+      now: () => new Date('2026-05-11T00:00:00.000Z'),
+      startupTimeoutMs: 5,
+      pollIntervalMs: 20,
+    });
+
+    expect(result.status).toBe('started');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(await readFile(layout(tempDir).daemonStatePath, 'utf8'))).toMatchObject({
+      pid: 5556,
+      port: 61234,
+      version: '0.2.0',
+    });
+  });
+
   it('reuses a healthy daemon with the requested feature set', async () => {
     await mkdir(layout(tempDir).versionDir, { recursive: true });
     await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
