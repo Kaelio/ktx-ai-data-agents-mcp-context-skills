@@ -587,6 +587,7 @@ export function createLocalProjectMcpContextPorts(
             metabaseConnectionId: input.connectionId,
             trigger: input.trigger,
             jobIdFactory: options.localIngest?.jobIdFactory,
+            pullConfigOptions: options.localIngest?.pullConfigOptions,
             agentRunner: options.localIngest?.agentRunner,
             llmProvider: options.localIngest?.llmProvider,
             memoryModel: options.localIngest?.memoryModel,
@@ -611,12 +612,14 @@ export function createLocalProjectMcpContextPorts(
           };
         }
 
-        const result = await runLocalIngest({
+        const executeLocalIngest = options.localIngest?.runLocalIngest ?? runLocalIngest;
+        const result = await executeLocalIngest({
           project,
           adapters: options.localIngest?.adapters ?? createDefaultLocalIngestAdapters(project),
           adapter: input.adapter,
           connectionId: input.connectionId,
           sourceDir,
+          pullConfigOptions: options.localIngest?.pullConfigOptions,
           trigger: input.trigger,
           jobId: options.localIngest?.jobIdFactory?.(),
           agentRunner: options.localIngest?.agentRunner,

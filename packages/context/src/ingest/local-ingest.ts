@@ -41,10 +41,17 @@ export interface RunLocalIngestOptions {
 export interface LocalIngestMcpOptions
   extends Pick<
     RunLocalIngestOptions,
-    'agentRunner' | 'llmProvider' | 'memoryModel' | 'semanticLayerCompute' | 'queryExecutor' | 'logger'
-> {
+    | 'agentRunner'
+    | 'llmProvider'
+    | 'memoryModel'
+    | 'semanticLayerCompute'
+    | 'queryExecutor'
+    | 'logger'
+    | 'pullConfigOptions'
+  > {
   adapters?: SourceAdapter[];
   jobIdFactory?: () => string;
+  runLocalIngest?: (options: RunLocalIngestOptions) => Promise<LocalIngestResult>;
   runLocalMetabaseIngest?: (options: RunLocalMetabaseIngestOptions) => Promise<LocalMetabaseFanoutResult>;
 }
 

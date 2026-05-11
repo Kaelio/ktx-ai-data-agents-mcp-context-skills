@@ -845,6 +845,63 @@ describe('createLocalProjectMcpContextPorts', () => {
     expect(agentRunner.runLoop).toHaveBeenCalledTimes(1);
   });
 
+  it('passes local ingest pull-config options into runLocalIngest', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = { driver: 'postgres' };
+    project.config.ingest.adapters = ['looker'];
+    const runLocalIngest = vi.fn(async () => ({
+      result: { ok: true },
+      report: {
+        id: 'report-1',
+        runId: 'run-1',
+        jobId: 'job-1',
+        sourceKey: 'looker',
+        connectionId: 'warehouse',
+        body: {
+          syncId: 'sync-1',
+          workUnits: [],
+          failedWorkUnits: [],
+          diffSummary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
+          provenanceRows: [],
+        },
+      },
+    }) as never);
+    const ports = createLocalProjectMcpContextPorts(project, {
+      localIngest: {
+        adapters: [{ source: 'looker', skillNames: [] }],
+        pullConfigOptions: {
+          looker: {
+            daemonBaseUrl: 'http://127.0.0.1:61234',
+          },
+        },
+        runLocalIngest,
+      },
+    });
+
+    await expect(
+      ports.ingest?.trigger({
+        adapter: 'looker',
+        connectionId: 'warehouse',
+        trigger: 'manual_resync',
+        config: {},
+      }),
+    ).resolves.toMatchObject({
+      runId: 'run-1',
+      jobId: 'job-1',
+      reportId: 'report-1',
+    });
+
+    expect(runLocalIngest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pullConfigOptions: {
+          looker: {
+            daemonBaseUrl: 'http://127.0.0.1:61234',
+          },
+        },
+      }),
+    );
+  });
+
   it('triggers fetch-capable local ingest without sourceDir config', async () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     project.config.connections.warehouse = {
