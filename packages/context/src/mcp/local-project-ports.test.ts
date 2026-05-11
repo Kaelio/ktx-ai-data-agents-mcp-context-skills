@@ -868,7 +868,9 @@ describe('createLocalProjectMcpContextPorts', () => {
     }) as never);
     const ports = createLocalProjectMcpContextPorts(project, {
       localIngest: {
-        adapters: [{ source: 'looker', skillNames: [] }],
+        adapters: [
+          { source: 'looker', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+        ],
         pullConfigOptions: {
           looker: {
             daemonBaseUrl: 'http://127.0.0.1:61234',

@@ -179,7 +179,9 @@ describe('runKtxServeStdio', () => {
 
   it('passes managed daemon options to MCP local ingest adapters and pull-config options', async () => {
     const project = { projectDir: '/tmp/ktx-project', config: { connections: {} } } as never;
-    const adapters = [{ source: 'looker', skillNames: [] }];
+    const adapters: SourceAdapter[] = [
+      { source: 'looker', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+    ];
     const createIngestAdapters = vi.fn(() => adapters);
     const createContextTools = vi.fn(() => ({ connections: { list: async () => [] } }));
     const managedRuntimeIo = makeManagedRuntimeIo();
