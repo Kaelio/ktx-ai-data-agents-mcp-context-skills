@@ -92,7 +92,7 @@ export function registerIngestCommands(
           sourceDir: options.sourceDir ? resolve(options.sourceDir) : undefined,
           databaseIntrospectionUrl: options.databaseIntrospectionUrl || undefined,
           cliVersion: context.packageInfo.version,
-          runtimeInstallPolicy: runtimeInstallPolicyFromFlags(options),
+          runtimeInstallPolicy: runtimeInstallPolicyFromFlags({ yes: options.yes }),
           ...(options.debugLlmRequestFile ? { debugLlmRequestFile: resolve(options.debugLlmRequestFile) } : {}),
           outputMode: outputMode(options),
           ...inputMode(options),

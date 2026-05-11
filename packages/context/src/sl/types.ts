@@ -1,3 +1,5 @@
+import type { TableUsageOutput } from '../ingest/adapters/historic-sql/skill-schemas.js';
+
 export interface SemanticLayerSource {
   name: string;
   descriptions?: Record<string, string>;
@@ -42,6 +44,7 @@ export interface SemanticLayerSource {
   default_time_dimension?: { dbt?: string };
   tags?: { dbt?: string[] };
   freshness?: { dbt?: { raw?: unknown; loaded_at_field?: string | null } };
+  usage?: TableUsageOutput;
 }
 
 export interface SemanticLayerQueryInput {

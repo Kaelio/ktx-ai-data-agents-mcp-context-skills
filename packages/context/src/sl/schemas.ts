@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { tableUsageOutputSchema } from '../ingest/adapters/historic-sql/skill-schemas.js';
 
 // Literal vocabularies — kept in lockstep with the Python Pydantic model at
 // python/ktx-sl/semantic_layer/models.py (SourceColumn / ColumnRole /
@@ -125,6 +126,7 @@ export const sourceDefinitionSchema = z
     default_time_dimension: defaultTimeDimensionDbtSchema.optional(),
     tags: sourceKeyedStringArraySchema.optional(),
     freshness: sourceFreshnessSchema.optional(),
+    usage: tableUsageOutputSchema.optional(),
   })
   .strict()
   .refine((s) => (s.table || s.sql) && !(s.table && s.sql), {
@@ -145,6 +147,7 @@ export const sourceOverlaySchema = z
     exclude_columns: z.array(z.string()).optional(),
     disable_joins: z.array(z.string()).optional(),
     default_time_dimension: defaultTimeDimensionDbtSchema.optional(),
+    usage: tableUsageOutputSchema.optional(),
   })
   .strict();
 

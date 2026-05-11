@@ -19,6 +19,7 @@ type SearchRow = {
   connection_id?: string;
   source_name: string;
   rank: number;
+  snippet?: string | null;
 };
 
 export interface SlSqliteLaneCandidate {
@@ -27,6 +28,7 @@ export interface SlSqliteLaneCandidate {
   sourceName: string;
   rank: number;
   rawScore: number;
+  snippet?: string;
 }
 
 export interface SlSqliteDictionaryCandidate extends SlSqliteLaneCandidate {
@@ -334,7 +336,11 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
     const rows = this.db
       .prepare(
         `
-        SELECT connection_id, source_name, bm25(local_sl_sources_fts) AS rank
+        SELECT
+          connection_id,
+          source_name,
+          bm25(local_sl_sources_fts) AS rank,
+          snippet(local_sl_sources_fts, 2, '<mark>', '</mark>', '...', 12) AS snippet
         FROM local_sl_sources_fts
         WHERE local_sl_sources_fts MATCH ?
           ${connectionPredicate}
@@ -350,6 +356,7 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
       sourceName: row.source_name,
       rank: index + 1,
       rawScore: Number(row.rank),
+      ...(typeof row.snippet === 'string' && row.snippet.length > 0 ? { snippet: row.snippet } : {}),
     }));
   }
 
@@ -499,7 +506,7 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
     queryText: string,
     limit: number,
     minRrfScore = 0,
-  ): Promise<Array<{ sourceName: string; rrfScore: number }>> {
+  ): Promise<Array<{ sourceName: string; rrfScore: number; snippet?: string }>> {
     const ftsQuery = normalizeFtsQuery(queryText);
     if (!ftsQuery) {
       return [];
@@ -508,7 +515,10 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
     const rows = this.db
       .prepare(
         `
-        SELECT source_name, bm25(local_sl_sources_fts) AS rank
+        SELECT
+          source_name,
+          bm25(local_sl_sources_fts) AS rank,
+          snippet(local_sl_sources_fts, 2, '<mark>', '</mark>', '...', 12) AS snippet
         FROM local_sl_sources_fts
         WHERE connection_id = ?
           AND local_sl_sources_fts MATCH ?
@@ -519,7 +529,11 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
       .all(connectionId, ftsQuery, Math.max(1, limit)) as SearchRow[];
 
     return rows
-      .map((row) => ({ sourceName: row.source_name, rrfScore: scoreFromRank(row.rank) }))
+      .map((row) => ({
+        sourceName: row.source_name,
+        rrfScore: scoreFromRank(row.rank),
+        ...(typeof row.snippet === 'string' && row.snippet.length > 0 ? { snippet: row.snippet } : {}),
+      }))
       .filter((row) => row.rrfScore >= minRrfScore);
   }
 

@@ -22,6 +22,7 @@ import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
 describe('runKtxIngest viz and replay', () => {
   let tempDir: string;
   let originalTerm: string | undefined;
+  const interactiveEnv = (): NodeJS.ProcessEnv => ({ ...process.env, CI: 'false' });
 
   beforeEach(async () => {
     resetVizFallbackWarningsForTest();
@@ -304,7 +305,7 @@ describe('runKtxIngest viz and replay', () => {
     expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
   });
 
-  it('does not attach a live memory-flow sink for plain run output', async () => {
+  it('attaches a plain progress memory-flow sink for interactive plain run output', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);
     const sourceDir = join(tempDir, 'source');
@@ -325,11 +326,12 @@ describe('runKtxIngest viz and replay', () => {
           outputMode: 'plain',
         },
         io.io,
-        { runLocalIngest: runLocal },
+        { env: interactiveEnv(), runLocalIngest: runLocal },
       ),
     ).resolves.toBe(0);
 
-    expect(runLocal).toHaveBeenCalledWith(expect.not.objectContaining({ memoryFlow: expect.anything() }));
+    expect(runLocal).toHaveBeenCalledWith(expect.objectContaining({ memoryFlow: expect.anything() }));
+    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: plain-run');
     expect(io.stdout()).not.toContain('KTX memory flow');
   });
@@ -395,6 +397,7 @@ describe('runKtxIngest viz and replay', () => {
         },
         io.io,
         {
+          env: interactiveEnv(),
           runLocalIngest: runLocal,
           startLiveMemoryFlow,
           jobIdFactory: () => 'raw-missing-viz-run',
@@ -403,7 +406,8 @@ describe('runKtxIngest viz and replay', () => {
     ).resolves.toBe(0);
 
     expect(startLiveMemoryFlow).not.toHaveBeenCalled();
-    expect(runLocal).toHaveBeenCalledWith(expect.not.objectContaining({ memoryFlow: expect.anything() }));
+    expect(runLocal).toHaveBeenCalledWith(expect.objectContaining({ memoryFlow: expect.anything() }));
+    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: raw-missing-viz-run');
     expect(io.stdout()).not.toContain('KTX memory flow');
     expect(io.stderr()).toContain(

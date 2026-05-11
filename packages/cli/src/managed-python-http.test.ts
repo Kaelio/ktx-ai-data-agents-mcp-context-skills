@@ -154,6 +154,37 @@ describe('managed daemon ingest ports', () => {
     });
   });
 
+  it('routes SQL batch analysis through the managed daemon runner', async () => {
+    const requestJson = vi.fn(async () => ({
+      results: {
+        orders: {
+          tables_touched: ['public.orders'],
+          columns_by_clause: { select: ['status'] },
+          error: null,
+        },
+      },
+    }));
+    const sqlAnalysis = createManagedDaemonSqlAnalysisPort({ requestJson });
+
+    await expect(sqlAnalysis.analyzeBatch([{ id: 'orders', sql: 'select status from public.orders' }], 'postgres'))
+      .resolves.toEqual(
+        new Map([
+          [
+            'orders',
+            {
+              tablesTouched: ['public.orders'],
+              columnsByClause: { select: ['status'] },
+              error: null,
+            },
+          ],
+        ]),
+      );
+    expect(requestJson).toHaveBeenCalledWith('/sql/analyze-batch', {
+      dialect: 'postgres',
+      items: [{ id: 'orders', sql: 'select status from public.orders' }],
+    });
+  });
+
   it('returns live-database daemon request options backed by the managed runner', async () => {
     const requestJson = vi.fn(async () => ({
       connection_id: 'warehouse',

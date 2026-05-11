@@ -82,6 +82,7 @@ export type KtxSetupArgs =
       enableHistoricSql?: boolean;
       disableHistoricSql?: boolean;
       historicSqlWindowDays?: number;
+      historicSqlMinExecutions?: number;
       historicSqlMinCalls?: number;
       historicSqlServiceAccountPatterns?: string[];
       historicSqlRedactionPatterns?: string[];
@@ -644,6 +645,9 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.enableHistoricSql !== undefined ? { enableHistoricSql: args.enableHistoricSql } : {}),
             ...(args.disableHistoricSql !== undefined ? { disableHistoricSql: args.disableHistoricSql } : {}),
             ...(args.historicSqlWindowDays !== undefined ? { historicSqlWindowDays: args.historicSqlWindowDays } : {}),
+            ...(args.historicSqlMinExecutions !== undefined
+              ? { historicSqlMinExecutions: args.historicSqlMinExecutions }
+              : {}),
             ...(args.historicSqlMinCalls !== undefined ? { historicSqlMinCalls: args.historicSqlMinCalls } : {}),
             ...(args.historicSqlServiceAccountPatterns
               ? { historicSqlServiceAccountPatterns: args.historicSqlServiceAccountPatterns }

@@ -14,14 +14,14 @@ const adapterSkillNames = [
   'metabase_ingest',
   'metricflow_ingest',
   'notion_synthesize',
-  'historic_sql_ingest',
+  'historic_sql_table_digest',
+  'historic_sql_patterns',
   'ingest_triage',
   'knowledge_capture',
   'sl_capture',
 ] as const;
 
 const adapterReconcileSkillNames = [
-  'historic_sql_curator',
   'ingest_triage',
   'knowledge_capture',
   'sl_capture',
@@ -58,75 +58,37 @@ describe('ingest runtime assets', () => {
     }
 
     await expect(prompts.loadPrompt('skills/page_triage_classifier')).resolves.toContain('# Page Triage Classifier');
-    await expect(prompts.loadPrompt('skills/page_triage_classifier')).resolves.toContain(
-      'signals.objectType === "historic_sql_template"',
-    );
-    await expect(prompts.loadPrompt('skills/page_triage_classifier')).resolves.toContain(
-      'service_account_only=true AND below the frequency floor',
-    );
     await expect(prompts.loadPrompt('skills/light_extraction')).resolves.toContain('# Light Context Extraction');
   });
 
-  it('packages historic-SQL WorkUnit skill guidance from KTX assets', async () => {
+  it('packages historic-SQL table digest guidance from KTX assets', async () => {
     const registry = new SkillsRegistryService({ skillsDir });
-    const skills = await registry.listSkills(['historic_sql_ingest'], 'memory_agent');
+    const skills = await registry.listSkills(['historic_sql_table_digest'], 'memory_agent');
 
-    expect(skills.map((skill) => skill.name)).toEqual(['historic_sql_ingest']);
+    expect(skills.map((skill) => skill.name)).toEqual(['historic_sql_table_digest']);
 
-    const [skill] = skills;
-    if (!skill) {
-      throw new Error('historic_sql_ingest skill missing');
-    }
-
-    expect(skill.path.startsWith(skillsDir)).toBe(true);
-
-    const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');
-    expect(body).toContain('# Historic SQL Ingest');
-    expect(body).toContain('Read exactly one historic-SQL template WorkUnit');
-    expect(body).toContain('metadata.json');
-    expect(body).toContain('page.md');
-    expect(body).toContain('usage.json');
-    expect(body).toContain('manifest.json');
-    expect(body).toContain('wiki_write');
-    expect(body).toContain('key: "queries/<intent_slug>"');
-    expect(body).toContain('"source": "historic-sql"');
-    expect(body).toContain('representative_sql');
-    expect(body).toContain('fingerprints');
-    expect(body).toContain('usage');
-    expect(body).toContain('SL proposal threshold');
-    expect(body).toContain('Do not group sibling templates');
-    expect(body).toContain('Do not copy sample bound_sql');
-    expect(body).not.toContain('store historic-SQL provenance in the markdown body');
+    const body = await readFile(join(skills[0]!.path, 'SKILL.md'), 'utf-8');
+    expect(body).toContain('# Historic SQL Table Digest');
+    expect(body).toContain('tables/<schema>.<name>.json');
+    expect(body).toContain('tableUsageOutputSchema');
+    expect(body).toContain('emit_historic_sql_evidence');
+    expect(body).toContain('Do not call wiki_write');
+    expect(body).toContain('Do not call sl_write_source');
     expect(body).not.toMatch(forbiddenProductPattern());
   });
 
-  it('packages historic-SQL curator reconcile guidance from KTX assets', async () => {
+  it('packages historic-SQL patterns guidance from KTX assets', async () => {
     const registry = new SkillsRegistryService({ skillsDir });
-    const skills = await registry.listSkills(['historic_sql_curator'], 'memory_agent');
+    const skills = await registry.listSkills(['historic_sql_patterns'], 'memory_agent');
 
-    expect(skills.map((skill) => skill.name)).toEqual(['historic_sql_curator']);
+    expect(skills.map((skill) => skill.name)).toEqual(['historic_sql_patterns']);
 
-    const [skill] = skills;
-    if (!skill) {
-      throw new Error('historic_sql_curator skill missing');
-    }
-
-    expect(skill.path.startsWith(skillsDir)).toBe(true);
-
-    const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');
-    expect(body).toContain('# Historic SQL Curator');
-    expect(body).toContain('curator pagination');
-    expect(body).toContain('stage_list');
-    expect(body).toContain('stage_diff');
-    expect(body).toContain('read_raw_span');
-    expect(body).toContain('wiki_search');
-    expect(body).toContain('wiki_read');
-    expect(body).toContain('wiki_write');
-    expect(body).toContain('emit_artifact_resolution');
-    expect(body).toContain('emit_eviction_decision');
-    expect(body).toContain('categorical sub-cluster');
-    expect(body).toContain('historic-sql-demoted');
-    expect(body).toContain('Do not call `context_candidate_write`');
+    const body = await readFile(join(skills[0]!.path, 'SKILL.md'), 'utf-8');
+    expect(body).toContain('# Historic SQL Patterns');
+    expect(body).toContain('patterns-input/part-0001.json');
+    expect(body).toContain('patternsArraySchema');
+    expect(body).toContain('emit_historic_sql_evidence');
+    expect(body).toContain('cross-table');
     expect(body).not.toMatch(forbiddenProductPattern());
   });
 });

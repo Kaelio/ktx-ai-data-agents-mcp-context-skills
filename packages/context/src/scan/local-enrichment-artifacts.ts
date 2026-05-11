@@ -6,6 +6,7 @@ import {
   type LiveDatabaseManifestJoinEntry,
   type LiveDatabaseManifestShard,
   type LiveDatabaseManifestTableData,
+  type TableUsageOutput,
 } from '../ingest/index.js';
 import type { KtxScanRelationshipConfig } from '../project/config.js';
 import type { KtxLocalProject } from '../project/index.js';
@@ -56,6 +57,7 @@ export interface WriteLocalScanEnrichmentArtifactsResult extends WriteLocalScanM
 interface ExistingManifestState {
   descriptions: Map<string, LiveDatabaseManifestExistingDescriptions>;
   preservedJoins: Map<string, LiveDatabaseManifestJoinEntry[]>;
+  usage: Map<string, TableUsageOutput>;
 }
 
 type LocalDescriptionUpdates = KtxLocalScanEnrichmentResult['descriptionUpdates'];
@@ -196,6 +198,7 @@ async function loadExistingManifestState(
 ): Promise<ExistingManifestState> {
   const descriptions = new Map<string, LiveDatabaseManifestExistingDescriptions>();
   const preservedJoins = new Map<string, LiveDatabaseManifestJoinEntry[]>();
+  const usage = new Map<string, TableUsageOutput>();
   const validTableNames = new Set(snapshot.tables.map((table) => table.name));
   const columnsByTable = validColumns(snapshot);
 
@@ -203,7 +206,7 @@ async function loadExistingManifestState(
   try {
     files = (await project.fileStore.listFiles(schemaDir(connectionId))).files.filter((file) => file.endsWith('.yaml'));
   } catch {
-    return { descriptions, preservedJoins };
+    return { descriptions, preservedJoins, usage };
   }
 
   for (const file of files) {
@@ -225,6 +228,9 @@ async function loadExistingManifestState(
             ),
           ),
         });
+        if (entry.usage) {
+          usage.set(tableName, { ...entry.usage });
+        }
         const joins = (entry.joins ?? []).filter((join) => {
           return (
             (join.source === 'manual' || join.source === 'inferred') &&
@@ -241,7 +247,7 @@ async function loadExistingManifestState(
     }
   }
 
-  return { descriptions, preservedJoins };
+  return { descriptions, preservedJoins, usage };
 }
 
 async function writeJsonArtifact(
@@ -276,6 +282,7 @@ export async function writeLocalScanManifestShards(
     joins: relationshipJoins(input.snapshot, input.relationshipUpdate),
     existingDescriptions: existing.descriptions,
     existingPreservedJoins: existing.preservedJoins,
+    existingUsage: existing.usage,
     mapColumnType: (dimensionType) => dimensionType,
   });
 

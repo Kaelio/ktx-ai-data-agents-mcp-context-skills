@@ -64,6 +64,8 @@ function textInputPrompt(message: string): string {
   return `${title}\n\n${bodyLines.join('\n')}\nPress Escape to go back.\n`;
 }
 
+const legacyHistoricSqlServiceAccountPatternsKey = ['serviceAccount', 'UserPatterns'].join('');
+
 describe('setup databases step', () => {
   let tempDir: string;
 
@@ -1240,14 +1242,21 @@ describe('setup databases step', () => {
         enabled: true,
         dialect: 'snowflake',
         windowDays: 30,
-        serviceAccountUserPatterns: ['^svc_'],
+        filters: {
+          dropTrivialProbes: true,
+          serviceAccounts: {
+            patterns: ['^svc_'],
+            mode: 'exclude',
+          },
+        },
         redactionPatterns: ['(?i)secret'],
       },
     });
+    expect(config.connections.snowflake.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
   });
 
-  it('writes Postgres Historic SQL config with minCalls and ignores window/redaction output', async () => {
+  it('writes Postgres Historic SQL config with minExecutions and ignores window/redaction output', async () => {
     const io = makeIo();
     const result = await runKtxSetupDatabasesStep(
       {
@@ -1259,7 +1268,7 @@ describe('setup databases step', () => {
         databaseSchemas: ['public'],
         enableHistoricSql: true,
         historicSqlWindowDays: 30,
-        historicSqlMinCalls: 12,
+        historicSqlMinExecutions: 12,
         historicSqlServiceAccountPatterns: ['^svc_'],
         historicSqlRedactionPatterns: ['(?i)secret'],
         skipDatabases: false,
@@ -1281,13 +1290,20 @@ describe('setup databases step', () => {
       historicSql: {
         enabled: true,
         dialect: 'postgres',
-        minCalls: 12,
-        maxTemplatesPerRun: 5000,
-        serviceAccountUserPatterns: ['^svc_'],
+        minExecutions: 12,
+        filters: {
+          dropTrivialProbes: true,
+          serviceAccounts: {
+            patterns: ['^svc_'],
+            mode: 'exclude',
+          },
+        },
       },
     });
+    expect(config.connections.warehouse.historicSql).not.toHaveProperty('minCalls');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('windowDays');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('redactionPatterns');
+    expect(config.connections.warehouse.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
     expect(io.stdout()).toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements ready');
@@ -1334,10 +1350,13 @@ describe('setup databases step', () => {
         enabled: true,
         dialect: 'bigquery',
         windowDays: 45,
-        serviceAccountUserPatterns: [],
+        filters: {
+          dropTrivialProbes: true,
+        },
         redactionPatterns: [],
       },
     });
+    expect(config.connections.analytics.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
   });
 
@@ -1364,7 +1383,7 @@ describe('setup databases step', () => {
         databaseConnectionIds: ['warehouse'],
         databaseSchemas: [],
         enableHistoricSql: true,
-        historicSqlMinCalls: 8,
+        historicSqlMinExecutions: 8,
         skipDatabases: false,
       },
       io.io,
@@ -1381,11 +1400,13 @@ describe('setup databases step', () => {
       historicSql: {
         enabled: true,
         dialect: 'postgres',
-        minCalls: 8,
-        maxTemplatesPerRun: 5000,
-        serviceAccountUserPatterns: [],
+        minExecutions: 8,
+        filters: {
+          dropTrivialProbes: true,
+        },
       },
     });
+    expect(config.connections.warehouse.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
   });
 
   it('prints a non-blocking Postgres Historic SQL probe failure after connection test succeeds', async () => {

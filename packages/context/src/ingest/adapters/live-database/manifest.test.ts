@@ -186,6 +186,62 @@ describe('buildLiveDatabaseManifestShards', () => {
     });
   });
 
+  it('preserves external usage keys while replacing historic SQL managed keys', () => {
+    const existingUsage = new Map([
+      [
+        'orders',
+        {
+          narrative: 'Old generated usage narrative.',
+          frequencyTier: 'low' as const,
+          commonFilters: ['old_status'],
+          commonJoins: [],
+          ownerNote: 'Pinned analyst note',
+        },
+      ],
+    ]);
+
+    const result = buildLiveDatabaseManifestShards({
+      connectionType: 'POSTGRESQL',
+      mapColumnType: (nativeType) => nativeType.toLowerCase(),
+      existingUsage,
+      tables: [
+        {
+          name: 'orders',
+          catalog: null,
+          db: 'public',
+          usage: {
+            narrative: 'Fresh generated usage narrative.',
+            frequencyTier: 'high',
+            commonFilters: ['status'],
+            commonGroupBys: ['created_at'],
+            commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+          },
+          columns: [{ name: 'id', type: 'INTEGER' }],
+        },
+      ],
+      joins: [],
+    });
+
+    expect(shardObject(result.shards)).toEqual({
+      public: {
+        tables: {
+          orders: {
+            table: 'public.orders',
+            usage: {
+              ownerNote: 'Pinned analyst note',
+              narrative: 'Fresh generated usage narrative.',
+              frequencyTier: 'high',
+              commonFilters: ['status'],
+              commonGroupBys: ['created_at'],
+              commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+            },
+            columns: [{ name: 'id', type: 'integer' }],
+          },
+        },
+      },
+    });
+  });
+
   it('renders ordered multi-column joins in both directions', () => {
     const result = buildLiveDatabaseManifestShards({
       connectionType: 'POSTGRESQL',

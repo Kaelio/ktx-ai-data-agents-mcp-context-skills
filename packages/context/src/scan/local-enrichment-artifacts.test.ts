@@ -742,6 +742,13 @@ describe('writeLocalScanEnrichmentArtifacts', () => {
             orders: {
               table: 'public.orders',
               descriptions: { user: 'Pinned structural description', ai: 'Old generated text' },
+              usage: {
+                narrative: 'Orders are commonly filtered by lifecycle status.',
+                frequencyTier: 'high',
+                commonFilters: ['status'],
+                commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+                ownerNote: 'Preserve analyst note',
+              },
               columns: [
                 {
                   name: 'id',
@@ -797,6 +804,7 @@ describe('writeLocalScanEnrichmentArtifacts', () => {
       tables: {
         orders: {
           descriptions: Record<string, string>;
+          usage?: Record<string, unknown>;
           columns: Array<{ name: string; descriptions?: Record<string, string> }>;
           joins: Array<{ to: string; on: string; source: string }>;
         };
@@ -806,6 +814,13 @@ describe('writeLocalScanEnrichmentArtifacts', () => {
     expect(manifest.tables.orders.descriptions).toEqual({
       user: 'Pinned structural description',
       db: 'DB orders table',
+    });
+    expect(manifest.tables.orders.usage).toEqual({
+      narrative: 'Orders are commonly filtered by lifecycle status.',
+      frequencyTier: 'high',
+      commonFilters: ['status'],
+      commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+      ownerNote: 'Preserve analyst note',
     });
     expect(manifest.tables.orders.columns.find((column) => column.name === 'id')?.descriptions).toEqual({
       user: 'Pinned structural id',

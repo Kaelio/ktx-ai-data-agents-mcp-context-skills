@@ -479,6 +479,8 @@ export function createLocalProjectMcpContextPorts(
           columnCount: source.columnCount,
           measureCount: source.measureCount,
           joinCount: source.joinCount,
+          ...(hasSlSearchMetadata(source) && source.frequencyTier ? { frequencyTier: source.frequencyTier } : {}),
+          ...(hasSlSearchMetadata(source) && source.snippet ? { snippet: source.snippet } : {}),
           ...(hasSlSearchMetadata(source) ? { score: source.score } : {}),
           ...(hasSlSearchMetadata(source) && source.matchReasons ? { matchReasons: source.matchReasons } : {}),
           ...(hasSlSearchMetadata(source) && source.dictionaryMatches

@@ -48,6 +48,11 @@ from ktx_daemon.source_generation import (
     GenerateSourcesResponse,
     generate_sources_response,
 )
+from ktx_daemon.sql_analysis import (
+    AnalyzeSqlBatchRequest,
+    AnalyzeSqlBatchResponse,
+    analyze_sql_batch_response,
+)
 from ktx_daemon.table_identifier import (
     ParseTableIdentifierBatchRequest,
     ParseTableIdentifierBatchResponse,
@@ -191,6 +196,19 @@ def create_app(
             raise HTTPException(
                 status_code=500,
                 detail=f"Table identifier parsing failed: {error}",
+            ) from error
+
+    @app.post("/sql/analyze-batch", response_model=AnalyzeSqlBatchResponse)
+    async def sql_analyze_batch(
+        request: AnalyzeSqlBatchRequest,
+    ) -> AnalyzeSqlBatchResponse:
+        try:
+            return analyze_sql_batch_response(request)
+        except Exception as error:
+            logger.exception("SQL batch analysis failed: %s", error)
+            raise HTTPException(
+                status_code=500,
+                detail=f"SQL batch analysis failed: {error}",
             ) from error
 
     @app.post(

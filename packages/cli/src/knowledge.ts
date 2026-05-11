@@ -1,3 +1,8 @@
+import {
+  createLocalKtxEmbeddingProviderFromConfig,
+  KtxIngestEmbeddingPortAdapter,
+  type KtxEmbeddingPort,
+} from '@ktx/context';
 import { loadKtxProject } from '@ktx/context/project';
 import {
   type LocalKnowledgeScope,
@@ -29,7 +34,29 @@ interface KtxKnowledgeIo {
   stderr: { write(chunk: string): void };
 }
 
-export async function runKtxKnowledge(args: KtxKnowledgeArgs, io: KtxKnowledgeIo = process): Promise<number> {
+interface KtxKnowledgeDeps {
+  embeddingService?: KtxEmbeddingPort | null;
+  createEmbeddingProvider?: typeof createLocalKtxEmbeddingProviderFromConfig;
+}
+
+function wikiSearchEmbeddingService(
+  project: Awaited<ReturnType<typeof loadKtxProject>>,
+  deps: KtxKnowledgeDeps,
+): KtxEmbeddingPort | null {
+  if ('embeddingService' in deps) {
+    return deps.embeddingService ?? null;
+  }
+  const provider = (deps.createEmbeddingProvider ?? createLocalKtxEmbeddingProviderFromConfig)(
+    project.config.ingest.embeddings,
+  );
+  return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
+}
+
+export async function runKtxKnowledge(
+  args: KtxKnowledgeArgs,
+  io: KtxKnowledgeIo = process,
+  deps: KtxKnowledgeDeps = {},
+): Promise<number> {
   try {
     const project = await loadKtxProject({ projectDir: args.projectDir });
     if (args.command === 'list') {
@@ -51,7 +78,11 @@ export async function runKtxKnowledge(args: KtxKnowledgeArgs, io: KtxKnowledgeIo
       return 0;
     }
     if (args.command === 'search') {
-      const results = await searchLocalKnowledgePages(project, { query: args.query, userId: args.userId });
+      const results = await searchLocalKnowledgePages(project, {
+        query: args.query,
+        userId: args.userId,
+        embeddingService: wikiSearchEmbeddingService(project, deps),
+      });
       if (results.length === 0) {
         const pages = await listLocalKnowledgePages(project, { userId: args.userId });
         if (pages.length === 0) {

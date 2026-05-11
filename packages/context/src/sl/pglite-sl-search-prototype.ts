@@ -554,9 +554,11 @@ export async function searchLocalSlSourcesWithPglitePrototype(
         continue;
       }
       const dictionaryMatches = dictionaryEvidence.get(result.id);
+      const frequencyTier = candidate.source.usage?.frequencyTier;
       hydrated.push({
         ...candidate.summary,
         score: result.score,
+        ...(frequencyTier ? { frequencyTier } : {}),
         matchReasons: result.matchReasons as SlSearchMatchReason[],
         ...(dictionaryMatches && dictionaryMatches.length > 0 ? { dictionaryMatches } : {}),
         lanes: fused.lanes,

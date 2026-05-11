@@ -1,4 +1,4 @@
-import type { IngestReportSnapshot, MemoryFlowReplayInput } from '../ingest/index.js';
+import type { IngestReportSnapshot, MemoryFlowReplayInput, TableUsageOutput } from '../ingest/index.js';
 import type { MemoryCaptureService } from '../memory/index.js';
 import type { KtxScanMode, KtxScanReport } from '../scan/index.js';
 import type {
@@ -131,6 +131,8 @@ export interface KtxSemanticLayerSourceSummary {
   columnCount: number;
   measureCount: number;
   joinCount: number;
+  frequencyTier?: TableUsageOutput['frequencyTier'];
+  snippet?: string;
   score?: number;
   matchReasons?: SlSearchMatchReason[];
   dictionaryMatches?: SlDictionaryMatch[];

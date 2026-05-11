@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initKtxProject } from '@ktx/context/project';
+import type { KtxEmbeddingPort } from '@ktx/context';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runKtxKnowledge } from './knowledge.js';
 
@@ -24,6 +25,19 @@ function makeIo() {
     stdout: () => stdout,
     stderr: () => stderr,
   };
+}
+
+class FakeEmbeddingPort implements KtxEmbeddingPort {
+  readonly maxBatchSize = 16;
+
+  async computeEmbedding(text: string): Promise<number[]> {
+    const lower = text.toLowerCase();
+    return lower.includes('revenue') || lower.includes('arr') ? [1, 0] : [0, 1];
+  }
+
+  async computeEmbeddingsBulk(texts: string[]): Promise<number[][]> {
+    return Promise.all(texts.map((text) => this.computeEmbedding(text)));
+  }
 }
 
 describe('runKtxKnowledge', () => {
@@ -91,5 +105,40 @@ describe('runKtxKnowledge', () => {
     expect(searchIo.stdout()).toBe('');
     expect(searchIo.stderr()).toContain('No local wiki pages found');
     expect(searchIo.stderr()).toContain('ktx wiki write');
+  });
+
+  it('uses configured embeddings for semantic wiki search', async () => {
+    const projectDir = join(tempDir, 'semantic-project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+
+    await expect(
+      runKtxKnowledge(
+        {
+          command: 'write',
+          projectDir,
+          key: 'historic-sql/active-contract-arr-open-tickets',
+          scope: 'GLOBAL',
+          userId: 'local',
+          summary: 'Active Contract ARR Ranked by Open Support Ticket Count',
+          content: 'Accounts ranked by annual recurring contract value and support ticket load.',
+          tags: ['historic-sql'],
+          refs: [],
+          slRefs: [],
+        },
+        makeIo().io,
+      ),
+    ).resolves.toBe(0);
+
+    const searchIo = makeIo();
+    await expect(
+      runKtxKnowledge(
+        { command: 'search', projectDir, query: 'revenue', userId: 'local' },
+        searchIo.io,
+        { embeddingService: new FakeEmbeddingPort() },
+      ),
+    ).resolves.toBe(0);
+
+    expect(searchIo.stdout()).toContain('historic-sql/active-contract-arr-open-tickets');
+    expect(searchIo.stderr()).toBe('');
   });
 });

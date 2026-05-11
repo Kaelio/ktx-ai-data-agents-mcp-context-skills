@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -119,14 +119,6 @@ describe('PageTriageService', () => {
   afterEach(async () => {
     await rm(stagedDir, { recursive: true, force: true });
   });
-
-  function parseSignalsFromClassifierPrompt(prompt: string): unknown {
-    const match = /<signals>\n([\s\S]*?)\n<\/signals>/.exec(prompt);
-    if (!match) {
-      throw new Error('classifier prompt did not include a <signals> block');
-    }
-    return JSON.parse(match[1]);
-  }
 
   it('writes light-lane candidates and keeps the page out of full WorkUnits', async () => {
     generateTextMock
@@ -280,163 +272,6 @@ describe('PageTriageService', () => {
 
     expect(result.report).toMatchObject({ pageCount: 1, skip: 0, light: 1, full: 0 });
     expect(repository.setDocumentTriageLane).toHaveBeenCalledWith('run-1', 'pages/page-1/page.md', 'light');
-  });
-
-  it.each([
-    {
-      name: 'skip low solo template',
-      propertyHints: {
-        executions_bucket: 'low',
-        distinct_users_bucket: 'solo',
-        error_rate_bucket: 'ok',
-        recency_bucket: 'active',
-        service_account_only: 'false',
-        slot_summary: '1 constant, 1 runtime',
-      },
-      expectedLane: 'skip',
-      expectedReport: { skip: 1, light: 0, full: 0 },
-    },
-    {
-      name: 'light service-account-only template',
-      propertyHints: {
-        executions_bucket: 'high',
-        distinct_users_bucket: 'solo',
-        error_rate_bucket: 'ok',
-        recency_bucket: 'active',
-        service_account_only: 'true',
-        slot_summary: '1 constant, 0 runtime',
-      },
-      expectedLane: 'light',
-      expectedReport: { skip: 0, light: 1, full: 0 },
-    },
-    {
-      name: 'full shared human template',
-      propertyHints: {
-        executions_bucket: 'high',
-        distinct_users_bucket: 'team',
-        error_rate_bucket: 'ok',
-        recency_bucket: 'active',
-        service_account_only: 'false',
-        slot_summary: '2 constant, 1 runtime',
-      },
-      expectedLane: 'full',
-      expectedReport: { skip: 0, light: 0, full: 1 },
-    },
-  ] as const)('triages historic-SQL synthetic signal fixture as $expectedLane for $name', async ({
-    name,
-    propertyHints,
-    expectedLane,
-    expectedReport,
-  }) => {
-    const externalId = name.replace(/[^a-z0-9]+/g, '_');
-    const templateDir = join(stagedDir, 'templates', externalId);
-    await mkdir(templateDir, { recursive: true });
-    await writeFile(
-      join(templateDir, 'metadata.json'),
-      JSON.stringify({
-        id: externalId,
-        title: `snowflake - analytics.orders [${externalId.slice(0, 6)}]`,
-        path: `templates/${externalId}/page.md`,
-        objectType: 'historic_sql_template',
-        lastEditedAt: null,
-        properties: {
-          fingerprint: externalId,
-          sub_cluster_id: null,
-          dialect: 'snowflake',
-          tables_touched: ['analytics.orders'],
-          literal_slots: [{ position: 1, type: 'string', classification: 'constant' }],
-          triage_signals: propertyHints,
-        },
-      }),
-      'utf-8',
-    );
-    await writeFile(
-      join(templateDir, 'page.md'),
-      [
-        `# ${externalId}`,
-        '',
-        '## Normalized SQL',
-        '```sql',
-        'SELECT count(*) FROM analytics.orders WHERE status = ?',
-        '```',
-        '',
-        '## Tables touched',
-        '- analytics.orders',
-      ].join('\n'),
-      'utf-8',
-    );
-
-    adapter.getTriageSignals.mockResolvedValueOnce({
-      objectType: 'historic_sql_template',
-      lastEditedAt: '2026-05-04T12:00:00.000Z',
-      propertyHints,
-    });
-    promptService.loadPrompt.mockImplementation((promptName: string) => {
-      if (promptName === 'skills/page_triage_classifier') {
-        return readFile(new URL('../../../prompts/skills/page_triage_classifier.md', import.meta.url), 'utf-8');
-      }
-      return Promise.resolve(`prompt:${promptName}`);
-    });
-    generateTextMock.mockImplementationOnce((args: any) => {
-      const prompt = args.messages[0].content as string;
-      expect(prompt).toContain('signals.objectType === "historic_sql_template"');
-      expect(prompt).toContain('executions_bucket=low AND distinct_users_bucket=solo');
-      expect(prompt).toContain('service_account_only=true AND below the frequency floor');
-      expect(prompt).toContain('shared human usage with mid or high execution volume');
-      expect(parseSignalsFromClassifierPrompt(prompt)).toEqual({
-        objectType: 'historic_sql_template',
-        lastEditedAt: '2026-05-04T12:00:00.000Z',
-        propertyHints,
-      });
-      return { text: JSON.stringify({ lane: expectedLane, reason: `${name} fixture` }) } as any;
-    });
-    if (expectedLane === 'light') {
-      generateTextMock.mockResolvedValueOnce({
-        text: JSON.stringify({
-          candidates: [
-            {
-              candidateKey: 'historic-sql-service-account-template',
-              topic: 'Historic SQL Service Account Template',
-              assertion: 'A service-account-only historic SQL template can remain as light evidence.',
-              rationale: 'The synthetic historic-SQL fixture is service-account-only and below the frequency floor.',
-              evidenceChunkIds: ['00000000-0000-0000-0000-000000000101'],
-              suggestedPageKey: 'historic-sql-service-account-template',
-              actionHint: 'create',
-              durabilityScore: 2,
-              authorityScore: 1,
-              reuseScore: 2,
-              noveltyScore: 1,
-              riskScore: 0,
-            },
-          ],
-        }),
-      } as any);
-    }
-
-    const result = await service.triageRun({
-      stagedDir,
-      runId: 'run-1',
-      connectionId: 'conn-1',
-      sourceKey: 'historic-sql',
-      syncId: 'sync-1',
-      jobId: 'job-1',
-      diffSet: {
-        added: [`templates/${externalId}/metadata.json`, `templates/${externalId}/page.md`],
-        modified: [],
-        deleted: [],
-        unchanged: [],
-      },
-      adapter: adapter as any,
-    });
-
-    expect(result.report).toMatchObject({ pageCount: 1, ...expectedReport });
-    expect(repository.setDocumentTriageLane).toHaveBeenCalledWith(
-      'run-1',
-      `templates/${externalId}/page.md`,
-      expectedLane,
-    );
-    expect(result.fullRawPaths.has(`templates/${externalId}/metadata.json`)).toBe(expectedLane === 'full');
-    expect(result.fullRawPaths.has(`templates/${externalId}/page.md`)).toBe(expectedLane === 'full');
   });
 
   it('triages Notion data-source row pages without reading data-source metadata as page markdown', async () => {

@@ -25,6 +25,23 @@ export interface SqlAnalysisFingerprintResult {
   error?: string | null;
 }
 
+export type SqlAnalysisClause = 'select' | 'where' | 'join' | 'groupBy' | 'having' | 'orderBy' | (string & {});
+
+export interface SqlAnalysisBatchItem {
+  id: string;
+  sql: string;
+}
+
+export interface SqlAnalysisBatchResult {
+  tablesTouched: string[];
+  columnsByClause: Partial<Record<SqlAnalysisClause, string[]>>;
+  error?: string | null;
+}
+
 export interface SqlAnalysisPort {
   analyzeForFingerprint(sql: string, dialect: SqlAnalysisDialect): Promise<SqlAnalysisFingerprintResult>;
+  analyzeBatch(
+    items: SqlAnalysisBatchItem[],
+    dialect: SqlAnalysisDialect,
+  ): Promise<Map<string, SqlAnalysisBatchResult>>;
 }

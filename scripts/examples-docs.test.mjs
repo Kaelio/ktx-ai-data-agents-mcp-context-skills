@@ -68,12 +68,18 @@ describe('standalone example docs', () => {
     const smoke = await readText('examples/postgres-historic/scripts/smoke.sh');
 
     assert.match(examples, /postgres-historic/);
-    assert.match(examples, /pg_stat_statements/);
+    assert.match(examples, /unified Historic SQL artifacts/);
     assert.match(readme, /--enable-historic-sql/);
-    assert.match(readme, /--historic-sql-min-calls 2/);
+    assert.match(readme, /--historic-sql-min-executions 2/);
     assert.match(readme, /ktx dev doctor --project-dir/);
     assert.match(readme, /Postgres Historic SQL/);
-    assert.match(readme, /dev ingest run/);
+    assert.match(readme, /manifest\.json/);
+    assert.match(readme, /tables\/\*\.json/);
+    assert.match(readme, /patterns-input\.json/);
+    assert.match(readme, /patterns-input\/part-\*\.json/);
+    assert.match(readme, /full audit input/);
+    assert.match(readme, /bounded pattern WorkUnit shards/);
+    assert.match(readme, /workUnitCount: 0/);
     assert.match(compose, /postgres:14/);
     assert.match(compose, /shared_preload_libraries=pg_stat_statements/);
     assert.match(compose, /pg_stat_statements.track=top/);
@@ -82,7 +88,13 @@ describe('standalone example docs', () => {
     assert.match(workload, /JOIN customers/);
     assert.match(workload, /app_user/);
     assert.match(workload, /etl_user/);
-    assert.match(smoke, /pg_stat_statements_reset/);
+    assert.match(smoke, /assert_unified_snapshot/);
+    assert.match(smoke, /assert_stage_record "\$UNCHANGED_RECORD" unchanged zero/);
+    assert.match(smoke, /assertPatternShards/);
+    assert.match(smoke, /historic-sql-patterns-part-/);
+    assert.match(smoke, /patterns-input\/part-/);
+    assert.doesNotMatch(smoke, new RegExp(["unitKey === 'historic", 'sql', "patterns'"].join('-')));
+    assert.match(smoke, /--historic-sql-min-executions 2/);
     assert.match(smoke, /KTX_RUNTIME_ROOT/);
     assert.match(smoke, /managedDaemon/);
     assert.match(smoke, /installPolicy: 'auto'/);
@@ -91,13 +103,36 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(smoke, /PYTHON_SERVICE/);
     assert.doesNotMatch(smoke, /uvicorn app\.main:app/);
     assert.doesNotMatch(smoke, /export KTX_SQL_ANALYSIS_URL/);
+    assert.doesNotMatch(
+      smoke,
+      new RegExp(
+        [
+          ['baseline', 'FirstRun'],
+          ['de', 'graded'],
+          ['stats', 'ResetAt'],
+          ['assert', '_manifest'],
+        ]
+          .map((parts) => parts.join(''))
+          .join('|'),
+      ),
+    );
     assert.doesNotMatch(readme, /python-service/);
     assert.doesNotMatch(readme, /KTX_SQL_ANALYSIS_URL/);
-    assert.match(smoke, /assert_manifest "\$FIRST_MANIFEST" true/);
-    assert.match(smoke, /assert_manifest "\$SECOND_MANIFEST" false/);
-    assert.match(smoke, /assert_manifest "\$RESET_MANIFEST" true/);
-    assert.doesNotMatch(readme, /python-service/);
-    assert.doesNotMatch(smoke, /python-service|PYTHON_SERVICE|REPO_ROOT/);
+    assert.doesNotMatch(
+      readme,
+      new RegExp(
+        [
+          ['baseline', 'FirstRun'],
+          ['de', 'graded: true'],
+          ['stats', 'ResetAt'],
+          ['fresh PGSS', ' baseline'],
+          ['delta', '-only'],
+        ]
+          .map((parts) => parts.join(''))
+          .join('|'),
+      ),
+    );
+    assert.doesNotMatch(readme, /--historic-sql-min-calls/);
   });
 
   it('lists every published TypeScript package in the package root README', async () => {

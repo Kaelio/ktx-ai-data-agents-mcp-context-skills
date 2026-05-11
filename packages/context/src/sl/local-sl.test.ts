@@ -187,6 +187,53 @@ describe('local semantic-layer helpers', () => {
     await expect(access(join(project.projectDir, '.ktx/db.sqlite'))).resolves.toBeUndefined();
   });
 
+  it('searches historic SQL usage and returns frequency tier plus FTS snippet', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      `tables:
+  orders:
+    table: public.orders
+    usage:
+      narrative: Analysts inspect paid order lifecycle by customer segment.
+      frequencyTier: high
+      commonFilters:
+        - status
+        - created_at
+      commonGroupBys:
+        - customer_segment
+      commonJoins:
+        - table: public.customers
+          on:
+            - customer_id
+    columns:
+      - name: order_id
+        type: string
+      - name: status
+        type: string
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add usage-backed manifest shard',
+    );
+
+    const results = await searchLocalSlSources(project, {
+      connectionId: 'warehouse',
+      query: 'paid lifecycle customer segment',
+    });
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'orders',
+        path: 'semantic-layer/warehouse/_schema/public.yaml#orders',
+        frequencyTier: 'high',
+        snippet: expect.stringContaining('<mark>'),
+        matchReasons: expect.arrayContaining(['lexical']),
+      }),
+    ]);
+    expect(results[0]?.snippet).toContain('lifecycle');
+  });
+
   it('searches all connections with one global hybrid ranking pass', async () => {
     await writeLocalSlSource(project, {
       connectionId: 'warehouse',

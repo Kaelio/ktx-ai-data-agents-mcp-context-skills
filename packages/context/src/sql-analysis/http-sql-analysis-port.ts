@@ -2,6 +2,8 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
 import type {
+  SqlAnalysisBatchItem,
+  SqlAnalysisBatchResult,
   SqlAnalysisDialect,
   SqlAnalysisFingerprintResult,
   SqlAnalysisLiteralSlot,
@@ -94,6 +96,14 @@ function requiredStringArray(raw: Record<string, unknown>, field: string): strin
   return value;
 }
 
+function requiredObject(raw: Record<string, unknown>, field: string): Record<string, unknown> {
+  const value = raw[field];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`sql analysis response is missing object field ${field}`);
+  }
+  return value as Record<string, unknown>;
+}
+
 function isLiteralSlotType(value: unknown): value is SqlAnalysisLiteralSlotType {
   return (
     value === 'string' ||
@@ -144,6 +154,39 @@ function mapResult(raw: Record<string, unknown>): SqlAnalysisFingerprintResult {
   };
 }
 
+function mapColumnsByClause(raw: Record<string, unknown>): SqlAnalysisBatchResult['columnsByClause'] {
+  const value = requiredObject(raw, 'columns_by_clause');
+  const result: SqlAnalysisBatchResult['columnsByClause'] = {};
+  for (const [clause, columns] of Object.entries(value)) {
+    if (!Array.isArray(columns) || columns.some((item) => typeof item !== 'string')) {
+      throw new Error(`sql analysis response is missing string[] field columns_by_clause.${clause}`);
+    }
+    result[clause] = columns;
+  }
+  return result;
+}
+
+function mapBatchResult(raw: Record<string, unknown>): SqlAnalysisBatchResult {
+  const error = optionalString(raw, 'error');
+  return {
+    tablesTouched: requiredStringArray(raw, 'tables_touched'),
+    columnsByClause: mapColumnsByClause(raw),
+    ...(error !== undefined ? { error } : {}),
+  };
+}
+
+function mapBatchResponse(raw: Record<string, unknown>): Map<string, SqlAnalysisBatchResult> {
+  const results = requiredObject(raw, 'results');
+  return new Map(
+    Object.entries(results).map(([id, value]) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error(`sql analysis response contains invalid batch result ${id}`);
+      }
+      return [id, mapBatchResult(value as Record<string, unknown>)];
+    }),
+  );
+}
+
 export function createHttpSqlAnalysisPort(options: HttpSqlAnalysisPortOptions): SqlAnalysisPort {
   const requestJson = options.requestJson ?? postJson(options.baseUrl);
 
@@ -154,6 +197,13 @@ export function createHttpSqlAnalysisPort(options: HttpSqlAnalysisPortOptions): 
         dialect,
       });
       return mapResult(raw);
+    },
+    async analyzeBatch(items: SqlAnalysisBatchItem[], dialect: SqlAnalysisDialect) {
+      const raw = await requestJson('/sql/analyze-batch', {
+        dialect,
+        items,
+      });
+      return mapBatchResponse(raw);
     },
   };
 }

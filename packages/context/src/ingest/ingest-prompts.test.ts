@@ -29,48 +29,10 @@ describe('ingest prompt assets', () => {
     expect(prompt).not.toMatch(forbiddenProductPattern());
   });
 
-  it('pins historic-SQL triage rules with synthetic signal fixtures', async () => {
+  it('does not route historic-SQL through page-triage prompt examples', async () => {
     const prompt = await readFile(new URL('../../prompts/skills/page_triage_classifier.md', import.meta.url), 'utf-8');
 
-    expect(prompt).toContain('signals.objectType === "historic_sql_template"');
-    expect(prompt).toContain('executions_bucket=low AND distinct_users_bucket=solo');
-    expect(prompt).toContain('service_account_only=true AND below the frequency floor');
-    expect(prompt).toContain('shared human usage with mid or high execution volume');
-
-    const fixtures = [
-      {
-        label: 'skip low solo template',
-        objectType: '"objectType": "historic_sql_template"',
-        executions: '"executions_bucket": "low"',
-        users: '"distinct_users_bucket": "solo"',
-        serviceAccount: '"service_account_only": "false"',
-        lane: '-> `skip`',
-      },
-      {
-        label: 'light service-account-only template',
-        objectType: '"objectType": "historic_sql_template"',
-        executions: '"executions_bucket": "high"',
-        users: '"distinct_users_bucket": "solo"',
-        serviceAccount: '"service_account_only": "true"',
-        lane: '-> `light`',
-      },
-      {
-        label: 'full shared human template',
-        objectType: '"objectType": "historic_sql_template"',
-        executions: '"executions_bucket": "high"',
-        users: '"distinct_users_bucket": "team"',
-        serviceAccount: '"service_account_only": "false"',
-        lane: '-> `full`',
-      },
-    ];
-
-    for (const fixture of fixtures) {
-      expect(prompt).toContain(fixture.label);
-      expect(prompt).toContain(fixture.objectType);
-      expect(prompt).toContain(fixture.executions);
-      expect(prompt).toContain(fixture.users);
-      expect(prompt).toContain(fixture.serviceAccount);
-      expect(prompt).toContain(fixture.lane);
-    }
+    expect(prompt).not.toContain(['historic_sql', 'template'].join('_'));
+    expect(prompt).not.toContain('service_account_only=true AND below the frequency floor');
   });
 });

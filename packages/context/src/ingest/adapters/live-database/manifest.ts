@@ -1,3 +1,5 @@
+import type { TableUsageOutput } from '../historic-sql/skill-schemas.js';
+
 const RELATIONSHIP_MAP: Record<string, string> = {
   MANY_TO_ONE: 'many_to_one',
   ONE_TO_MANY: 'one_to_many',
@@ -11,6 +13,14 @@ const RELATIONSHIP_INVERSE: Record<string, string> = {
 };
 
 const SCAN_MANAGED_DESCRIPTION_KEYS = new Set(['db', 'ai']);
+const HISTORIC_SQL_MANAGED_USAGE_KEYS = new Set([
+  'narrative',
+  'frequencyTier',
+  'commonFilters',
+  'commonGroupBys',
+  'commonJoins',
+  'staleSince',
+]);
 
 export interface LiveDatabaseManifestColumn {
   name: string;
@@ -30,6 +40,7 @@ export interface LiveDatabaseManifestJoinEntry {
 export interface LiveDatabaseManifestTableEntry {
   table: string;
   descriptions?: Record<string, string>;
+  usage?: TableUsageOutput;
   columns: LiveDatabaseManifestColumn[];
   joins?: LiveDatabaseManifestJoinEntry[];
 }
@@ -43,6 +54,7 @@ export interface LiveDatabaseManifestTableData {
   catalog: string | null;
   db: string | null;
   descriptions?: Record<string, string>;
+  usage?: TableUsageOutput;
   columns: Array<{
     name: string;
     type: string;
@@ -73,6 +85,7 @@ export interface BuildLiveDatabaseManifestShardsInput {
   mapColumnType: (nativeType: string) => string;
   existingPreservedJoins?: Map<string, LiveDatabaseManifestJoinEntry[]>;
   existingDescriptions?: Map<string, LiveDatabaseManifestExistingDescriptions>;
+  existingUsage?: Map<string, TableUsageOutput>;
 }
 
 export interface BuildLiveDatabaseManifestShardsResult {
@@ -99,6 +112,28 @@ function mergeDescriptionsPreservingExternal(
     Object.assign(result, incoming);
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+export function mergeUsagePreservingExternal(
+  existing: TableUsageOutput | undefined,
+  incoming: TableUsageOutput | undefined,
+): TableUsageOutput | undefined {
+  if (!existing && !incoming) {
+    return undefined;
+  }
+  if (!incoming) {
+    return existing ? { ...existing } : undefined;
+  }
+  const result: Record<string, unknown> = {};
+  if (existing) {
+    for (const [key, value] of Object.entries(existing)) {
+      if (!HISTORIC_SQL_MANAGED_USAGE_KEYS.has(key)) {
+        result[key] = value;
+      }
+    }
+  }
+  Object.assign(result, incoming);
+  return Object.keys(result).length > 0 ? (result as TableUsageOutput) : undefined;
 }
 
 function getShardKey(connectionType: string, catalog: string | null, db: string | null): string {
@@ -252,6 +287,11 @@ export function buildLiveDatabaseManifestShards(
     const tableDescriptions = mergeDescriptionsPreservingExternal(existingDescriptions?.table, table.descriptions);
     if (tableDescriptions) {
       entry.descriptions = tableDescriptions;
+    }
+
+    const usage = mergeUsagePreservingExternal(input.existingUsage?.get(table.name), table.usage);
+    if (usage) {
+      entry.usage = usage;
     }
 
     const tableJoins = joinsByTable.get(table.name);

@@ -15,7 +15,8 @@ const expectedSkillHeadings: Record<string, string> = {
   sl_capture: '# Semantic Layer',
 };
 const expectedAdapterSkillHeadings: Record<string, string> = {
-  historic_sql_ingest: '# Historic SQL Ingest',
+  historic_sql_patterns: '# Historic SQL Patterns',
+  historic_sql_table_digest: '# Historic SQL Table Digest',
   live_database_ingest: '# Live Database Ingest',
   looker_ingest: '# Looker Runtime Ingest',
   lookml_ingest: '# LookML to KTX Semantic Layer',

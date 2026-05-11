@@ -76,8 +76,11 @@ PostgreSQL Historic SQL mines real query patterns from `pg_stat_statements`. Thi
 
 ```yaml
 historicSql:
-  minCalls: 5           # Minimum call count to include a query template
-  maxTemplatesPerRun: 5000
+  enabled: true
+  dialect: postgres
+  minExecutions: 5
+  filters:
+    dropTrivialProbes: true
 ```
 
 ### Dialect notes
@@ -134,18 +137,27 @@ For multiple schemas:
 | Foreign keys | No | Not available in Snowflake |
 | Row count estimates | Yes | From `INFORMATION_SCHEMA.TABLES.ROW_COUNT` |
 | Column statistics | No | — |
-| Historic SQL | Configurable | Query-history settings can be stored; local CLI Historic SQL ingest currently uses the Postgres path |
+| Historic SQL | Yes | Via `SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY` when enabled |
 | Table sampling | Yes | — |
 
 ### Historic SQL
 
-Snowflake Historic SQL settings describe how query history should be sampled when that runtime path is available.
+Snowflake Historic SQL reads aggregated query-history templates from
+`SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY` and feeds the same unified staged
+artifact shape as Postgres and BigQuery.
 
 ```yaml
 historicSql:
+  enabled: true
+  dialect: snowflake
   windowDays: 90
+  minExecutions: 5
+  filters:
+    dropTrivialProbes: true
+    serviceAccounts:
+      patterns: ['^svc_']
+      mode: exclude
   redactionPatterns: []
-  serviceAccountUserPatterns: []
 ```
 
 ### Dialect notes
@@ -200,18 +212,27 @@ The project ID is extracted automatically from the service account JSON file.
 | Foreign keys | No | Not available in BigQuery |
 | Row count estimates | Yes | From table metadata |
 | Column statistics | No | — |
-| Historic SQL | Configurable | Query-history settings can be stored; local CLI Historic SQL ingest currently uses the Postgres path |
+| Historic SQL | Yes | Via region-scoped `INFORMATION_SCHEMA.JOBS_BY_PROJECT` when enabled |
 | Table sampling | Yes | — |
 
 ### Historic SQL
 
-BigQuery Historic SQL settings describe how `INFORMATION_SCHEMA.JOBS_BY_PROJECT` should be sampled when that runtime path is available.
+BigQuery Historic SQL reads aggregated query-history templates from
+region-scoped `INFORMATION_SCHEMA.JOBS_BY_PROJECT` and feeds the same unified
+staged artifact shape as Postgres and Snowflake.
 
 ```yaml
 historicSql:
+  enabled: true
+  dialect: bigquery
   windowDays: 90
+  minExecutions: 5
+  filters:
+    dropTrivialProbes: true
+    serviceAccounts:
+      patterns: ['@bot\\.']
+      mode: exclude
   redactionPatterns: []
-  serviceAccountUserPatterns: []
 ```
 
 ### Dialect notes

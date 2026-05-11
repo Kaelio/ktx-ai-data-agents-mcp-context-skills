@@ -405,44 +405,44 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
-  it('reuses document evidence indexing and page triage for historic-SQL WorkUnits', async () => {
+  it('reuses document evidence indexing and page triage for document WorkUnits', async () => {
     const deps = makeDeps();
-    deps.adapter.source = 'historic-sql';
-    deps.adapter.skillNames = ['historic_sql_ingest'];
-    deps.adapter.reconcileSkillNames = ['historic_sql_curator'];
+    deps.adapter.source = 'notion';
+    deps.adapter.skillNames = ['notion_synthesize'];
+    deps.adapter.reconcileSkillNames = [];
     deps.adapter.evidenceIndexing = 'documents';
     deps.adapter.triageSupported = true;
     deps.adapter.chunk.mockResolvedValue({
       workUnits: [
-        { unitKey: 'full', rawFiles: ['templates/full/metadata.json'], dependencyPaths: [], peerFileIndex: [] },
-        { unitKey: 'skip', rawFiles: ['templates/skip/metadata.json'], dependencyPaths: [], peerFileIndex: [] },
+        { unitKey: 'full', rawFiles: ['pages/full/metadata.json'], dependencyPaths: [], peerFileIndex: [] },
+        { unitKey: 'skip', rawFiles: ['pages/skip/metadata.json'], dependencyPaths: [], peerFileIndex: [] },
       ],
     });
     deps.diffSetService.compute.mockResolvedValue({
-      added: ['templates/full/metadata.json', 'templates/skip/metadata.json'],
+      added: ['pages/full/metadata.json', 'pages/skip/metadata.json'],
       modified: [],
       deleted: [],
       unchanged: [],
     });
     deps.pageTriage.triageRun.mockResolvedValue({
       enabled: true,
-      fullRawPaths: new Set(['templates/full/metadata.json']),
+      fullRawPaths: new Set(['pages/full/metadata.json']),
       warnings: [],
     });
     const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
       currentHashes: new Map([
-        ['templates/full/metadata.json', 'h-full'],
-        ['templates/skip/metadata.json', 'h-skip'],
+        ['pages/full/metadata.json', 'h-full'],
+        ['pages/skip/metadata.json', 'h-skip'],
       ]),
-      rawDirInWorktree: 'raw-sources/c1/historic-sql/s',
+      rawDirInWorktree: 'raw-sources/c1/notion/s',
     });
     (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
 
     const result = await runner.run({
       jobId: 'j1',
       connectionId: 'c1',
-      sourceKey: 'historic-sql',
+      sourceKey: 'notion',
       trigger: 'upload',
       bundleRef: { kind: 'upload', uploadId: 'upload-x' },
     });
@@ -1426,6 +1426,67 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(deps.semanticLayerService.loadAllSources).toHaveBeenCalledWith('warehouse-2');
     expect(deps.slSearchService.indexSources).toHaveBeenCalledWith('warehouse-2', [{ name: 'warehouse-2_source' }]);
     expect(deps.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'success');
+  });
+
+  it('includes historic-sql post-processor output in memory-flow saved counts', async () => {
+    const deps = makeDeps();
+    deps.adapter.source = 'historic-sql';
+    deps.registry.get.mockReturnValue(deps.adapter);
+    deps.adapter.chunk.mockResolvedValue({
+      workUnits: [
+        {
+          unitKey: 'historic-sql-table-public-orders',
+          rawFiles: ['tables/public/orders.json'],
+          peerFileIndex: [],
+          dependencyPaths: [],
+        },
+      ],
+    });
+    const postProcessor = {
+      run: vi.fn().mockResolvedValue({
+        result: {
+          tableUsageMerged: 2,
+          staleTablesMarked: 1,
+          patternPagesWritten: 3,
+          stalePatternPagesMarked: 1,
+          archivedPatternPages: 1,
+          legacyPagesDeleted: 1,
+        },
+        warnings: [],
+        errors: [],
+        touchedSources: [{ connectionId: 'c1', sourceName: 'orders' }],
+      }),
+    };
+    const runner = buildRunner(deps, { postProcessors: { 'historic-sql': postProcessor } });
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['tables/public/orders.json', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/historic-sql/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+    const memoryFlow = createMemoryFlowLiveBuffer(bundleReplayInput());
+
+    await runner.run(
+      {
+        jobId: 'j1',
+        connectionId: 'c1',
+        sourceKey: 'historic-sql',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+      },
+      {
+        jobId: 'j1',
+        memoryFlow,
+        startPhase: () => new TestJobContext('j1', null, () => Promise.resolve(), () => Promise.resolve()),
+      },
+    );
+
+    expect(memoryFlow.snapshot().events).toContainEqual(
+      expect.objectContaining({
+        type: 'saved',
+        wikiCount: 6,
+        slCount: 3,
+      }),
+    );
   });
 
   it('marks post-processor infrastructure failure as failed and preserves worktree cleanup state', async () => {

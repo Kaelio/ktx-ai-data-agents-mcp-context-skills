@@ -6,11 +6,11 @@ import type { SqlAnalysisPort } from '../sql-analysis/index.js';
 import { DbtSourceAdapter } from './adapters/dbt/dbt.adapter.js';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
 import { HistoricSqlSourceAdapter } from './adapters/historic-sql/historic-sql.adapter.js';
-import { PostgresPgssQueryHistoryReader } from './adapters/historic-sql/postgres-pgss-query-history-reader.js';
-import { SnowflakeHistoricSqlQueryHistoryReader } from './adapters/historic-sql/snowflake-query-history-reader.js';
+import { PostgresPgssReader } from './adapters/historic-sql/postgres-pgss-reader.js';
 import {
   HISTORIC_SQL_SOURCE_KEY,
-  historicSqlPullConfigSchema,
+  historicSqlUnifiedPullConfigSchema,
+  type HistoricSqlReader,
   type KtxPostgresQueryClient,
 } from './adapters/historic-sql/types.js';
 import {
@@ -43,7 +43,9 @@ export interface DefaultLocalIngestAdaptersOptions {
   databaseIntrospection?: Omit<DaemonLiveDatabaseIntrospectionOptions, 'connections' | 'baseUrl'>;
   historicSql?: {
     sqlAnalysis: SqlAnalysisPort;
-    postgresQueryClient: KtxPostgresQueryClient;
+    reader?: HistoricSqlReader;
+    queryClient?: unknown;
+    postgresQueryClient?: KtxPostgresQueryClient;
     postgresBaselineRootDir?: string;
     now?: () => Date;
   };
@@ -91,18 +93,16 @@ export function createDefaultLocalIngestAdapters(
   ];
 
   if (options.historicSql) {
+    const queryClient = options.historicSql.queryClient ?? options.historicSql.postgresQueryClient;
+    if (!queryClient) {
+      throw new Error('Historic SQL local adapter requires queryClient or postgresQueryClient');
+    }
     adapters.push(
       new HistoricSqlSourceAdapter({
         sqlAnalysis: options.historicSql.sqlAnalysis,
-        reader: new SnowflakeHistoricSqlQueryHistoryReader(),
-        queryClient: {
-          executeQuery: async () => {
-            throw new Error('Local historic-SQL currently supports Postgres pg_stat_statements only');
-          },
-        },
-        postgresReader: new PostgresPgssQueryHistoryReader(),
-        postgresQueryClient: options.historicSql.postgresQueryClient,
-        postgresBaselineRootDir: options.historicSql.postgresBaselineRootDir,
+        reader: options.historicSql.reader ?? new PostgresPgssReader(),
+        queryClient,
+        legacyPostgresBaselineRootDir: options.historicSql.postgresBaselineRootDir,
         now: options.historicSql.now,
       }),
     );
@@ -180,9 +180,8 @@ export async function localPullConfigForAdapter(
     if (historicSql?.enabled !== true) {
       throw new Error(`Connection "${connectionId}" does not have historicSql.enabled: true`);
     }
-    return historicSqlPullConfigSchema.parse({
+    return historicSqlUnifiedPullConfigSchema.parse({
       ...historicSql,
-      lastSuccessfulCursor: stringField(historicSql.lastSuccessfulCursor),
     });
   }
   if (adapter.source === 'looker') {

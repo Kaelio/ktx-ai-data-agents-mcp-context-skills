@@ -16,21 +16,9 @@ export async function detectHistoricSqlStagedDir(stagedDir: string): Promise<boo
   }
 
   try {
-    const entries = await readdir(join(stagedDir, 'templates'), { withFileTypes: true, recursive: true });
-    const metadataDirs = new Set<string>();
-    const pageDirs = new Set<string>();
-    for (const entry of entries) {
-      if (!entry.isFile()) {
-        continue;
-      }
-      if (entry.name === 'metadata.json') {
-        metadataDirs.add(entry.parentPath);
-      }
-      if (entry.name === 'page.md') {
-        pageDirs.add(entry.parentPath);
-      }
-    }
-    return [...metadataDirs].some((dir) => pageDirs.has(dir));
+    await readFile(join(stagedDir, 'patterns-input.json'), 'utf-8');
+    const entries = await readdir(join(stagedDir, 'tables'), { withFileTypes: true });
+    return entries.some((entry) => entry.isFile() && entry.name.endsWith('.json'));
   } catch {
     return false;
   }

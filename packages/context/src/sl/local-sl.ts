@@ -26,6 +26,8 @@ export interface LocalSlSourceSummary {
 
 export interface LocalSlSourceSearchResult extends LocalSlSourceSummary {
   score: number;
+  frequencyTier?: NonNullable<SemanticLayerSource['usage']>['frequencyTier'];
+  snippet?: string;
   matchReasons?: SlSearchMatchReason[];
   dictionaryMatches?: SlDictionaryMatch[];
   lanes?: SlSearchLaneSummary[];
@@ -367,6 +369,10 @@ function candidateKey(summary: LocalSlSourceSummary): string {
   return `${summary.connectionId}/${summary.name}`;
 }
 
+function searchResultUsageFields(source: SemanticLayerSource): Pick<LocalSlSourceSearchResult, 'frequencyTier'> {
+  return source.usage?.frequencyTier ? { frequencyTier: source.usage.frequencyTier } : {};
+}
+
 function tokenLaneCandidates(candidates: LocalSlSearchCandidate[], terms: readonly string[]) {
   if (terms.length === 0) {
     return [];
@@ -483,6 +489,7 @@ export async function searchLocalSlSources(
         ...result.candidate.summary,
         score: result.score,
         matchReasons: ['token'],
+        ...searchResultUsageFields(result.candidate.source),
       }))
       .sort(
         (left, right) =>
@@ -500,6 +507,7 @@ export async function searchLocalSlSources(
   const finalLimit = input.limit ?? candidates.length;
   const core = new HybridSearchCore();
   const dictionaryEvidence = new Map<string, SlDictionaryMatch[]>();
+  const lexicalSnippets = new Map<string, string>();
 
   const generators: SearchCandidateGenerator[] = [
     {
@@ -510,6 +518,11 @@ export async function searchLocalSlSources(
           queryText: args.queryText,
           limit: args.laneCandidatePoolLimit,
         });
+        for (const row of rows) {
+          if (row.snippet) {
+            lexicalSnippets.set(row.id, row.snippet);
+          }
+        }
         return {
           candidates: rows.map((row) => ({ id: row.id, rank: row.rank, rawScore: row.rawScore })),
         };
@@ -584,9 +597,12 @@ export async function searchLocalSlSources(
       continue;
     }
     const dictionaryMatches = dictionaryEvidence.get(fused.id);
+    const snippet = lexicalSnippets.get(fused.id);
     hydrated.push({
       ...candidate.summary,
       score: fused.score,
+      ...searchResultUsageFields(candidate.source),
+      ...(snippet ? { snippet } : {}),
       matchReasons: fused.matchReasons as SlSearchMatchReason[],
       ...(dictionaryMatches && dictionaryMatches.length > 0 ? { dictionaryMatches } : {}),
       lanes: result.lanes,

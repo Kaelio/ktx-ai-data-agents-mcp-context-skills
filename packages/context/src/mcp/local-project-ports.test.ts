@@ -520,6 +520,54 @@ describe('createLocalProjectMcpContextPorts', () => {
     });
   });
 
+  it('returns historic SQL usage frequency and snippet through semantic-layer list search', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      `tables:
+  orders:
+    table: public.orders
+    usage:
+      narrative: Analysts inspect paid order lifecycle by customer segment.
+      frequencyTier: high
+      commonFilters:
+        - status
+      commonGroupBys:
+        - customer_segment
+      commonJoins:
+        - table: public.customers
+          on:
+            - customer_id
+    columns:
+      - name: order_id
+        type: string
+      - name: status
+        type: string
+`,
+      'ktx',
+      'ktx@example.com',
+      'Seed usage-backed manifest shard',
+    );
+
+    const ports = createLocalProjectMcpContextPorts(project);
+    await expect(
+      ports.semanticLayer?.listSources({ connectionId: 'warehouse', query: 'paid order lifecycle' }),
+    ).resolves.toEqual({
+      sources: [
+        expect.objectContaining({
+          connectionId: 'warehouse',
+          connectionName: 'warehouse',
+          name: 'orders',
+          frequencyTier: 'high',
+          snippet: expect.stringContaining('<mark>'),
+          score: expect.any(Number),
+          matchReasons: expect.arrayContaining(['lexical']),
+        }),
+      ],
+      totalSources: 1,
+    });
+  });
+
   it('uses configured local embeddings for semantic-layer search when available', async () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     project.config.ingest.embeddings = { backend: 'none', dimensions: 2 };

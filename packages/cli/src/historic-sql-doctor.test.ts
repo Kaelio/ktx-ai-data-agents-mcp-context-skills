@@ -81,7 +81,39 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
     ]);
   });
 
-  it('warns when the PGSS probe succeeds with operational warnings', async () => {
+  it('passes with an informational note when only pg_stat_statements.max is below the recommended floor', async () => {
+    const checks = await runPostgresHistoricSqlDoctorChecks(
+      projectWithConnections({
+        warehouse: {
+          driver: 'postgres',
+          url: 'env:WAREHOUSE_DATABASE_URL',
+          readonly: true,
+          historicSql: { enabled: true, dialect: 'postgres' },
+        },
+      }),
+      {
+        postgresHistoricSqlProbe: async () => ({
+          pgServerVersion: 'PostgreSQL 16.4',
+          warnings: [],
+          info: [
+            'pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
+          ],
+        }),
+      },
+    );
+
+    expect(checks).toEqual([
+      {
+        id: 'historic-sql-postgres-warehouse',
+        label: 'Postgres Historic SQL (warehouse)',
+        status: 'pass',
+        detail:
+          'pg_stat_statements ready (PostgreSQL 16.4); info: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
+      },
+    ]);
+  });
+
+  it('warns when pg_stat_statements tracking is disabled', async () => {
     const checks = await runPostgresHistoricSqlDoctorChecks(
       projectWithConnections({
         warehouse: {
@@ -95,6 +127,9 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         postgresHistoricSqlProbe: async () => ({
           pgServerVersion: 'PostgreSQL 16.4',
           warnings: [
+            'pg_stat_statements.track is none; set it to top or all in the Postgres parameter group or config',
+          ],
+          info: [
             'pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
           ],
         }),
@@ -107,7 +142,7 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         label: 'Postgres Historic SQL (warehouse)',
         status: 'warn',
         detail:
-          'pg_stat_statements ready (PostgreSQL 16.4) with warnings: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
+          'pg_stat_statements ready (PostgreSQL 16.4) with warnings: pg_stat_statements.track is none; set it to top or all in the Postgres parameter group or config; info: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
         fix: 'Update the Postgres parameter group or config, then rerun `ktx dev doctor --project-dir /tmp/ktx-project`',
       },
     ]);

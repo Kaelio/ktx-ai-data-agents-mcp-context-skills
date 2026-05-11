@@ -1,6 +1,7 @@
 import YAML from 'yaml';
 import type { KtxFileStorePort, KtxLogger } from '../core/index.js';
 import { noopLogger } from '../core/index.js';
+import type { TableUsageOutput } from '../ingest/adapters/historic-sql/skill-schemas.js';
 import type { SlConnectionCatalogPort, SlPythonPort } from './ports.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { isOverlaySource, sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
@@ -884,6 +885,7 @@ export interface ManifestTableEntry {
   joins?: ManifestJoinEntry[];
   tags?: { dbt?: string[] };
   freshness?: { dbt?: { raw?: unknown; loaded_at_field?: string | null } };
+  usage?: TableUsageOutput;
 }
 
 /** Migrate legacy flat description/db_description fields to a descriptions map. */
@@ -930,6 +932,7 @@ export function projectManifestEntry(name: string, entry: ManifestTableEntry): S
     measures: [],
     ...(entry.tags?.dbt?.length ? { tags: entry.tags } : {}),
     ...(entry.freshness?.dbt ? { freshness: entry.freshness } : {}),
+    ...(entry.usage ? { usage: entry.usage } : {}),
   };
 }
 
@@ -1005,6 +1008,7 @@ const COMPOSE_KNOWN_KEYS = new Set([
   'exclude_columns',
   'disable_joins',
   'default_time_dimension',
+  'usage',
 ]);
 
 export function composeOverlay(base: SemanticLayerSource, overlay: Record<string, unknown>): SemanticLayerSource {
@@ -1026,6 +1030,10 @@ export function composeOverlay(base: SemanticLayerSource, overlay: Record<string
       ...(result.descriptions ?? {}),
       ...(normalizedOverlay.descriptions as Record<string, string>),
     };
+  }
+
+  if (normalizedOverlay.usage !== undefined) {
+    result.usage = normalizedOverlay.usage as SemanticLayerSource['usage'];
   }
 
   // Filter out excluded columns

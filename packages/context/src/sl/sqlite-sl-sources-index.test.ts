@@ -17,7 +17,7 @@ describe('SqliteSlSourcesIndex', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('creates SQLite tables and searches indexed source text', async () => {
+  it('creates SQLite tables and searches indexed source text with FTS snippets', async () => {
     const index = new SqliteSlSourcesIndex({ dbPath });
 
     await index.upsertSources('warehouse', [
@@ -34,10 +34,24 @@ describe('SqliteSlSourcesIndex', () => {
     ]);
 
     await expect(access(dbPath)).resolves.toBeUndefined();
-    expect(await index.search('warehouse', null, 'gross revenue', 10)).toEqual([
+
+    const directResults = await index.search('warehouse', null, 'gross revenue', 10);
+    expect(directResults).toEqual([
       expect.objectContaining({
         sourceName: 'orders',
         rrfScore: expect.any(Number),
+        snippet: expect.stringContaining('<mark>'),
+      }),
+    ]);
+    expect(directResults[0]?.snippet).toContain('revenue');
+
+    const lexicalCandidates = await index.searchLexicalCandidates({ queryText: 'gross revenue', limit: 10 });
+    expect(lexicalCandidates).toEqual([
+      expect.objectContaining({
+        id: 'warehouse/orders',
+        connectionId: 'warehouse',
+        sourceName: 'orders',
+        snippet: expect.stringContaining('<mark>'),
       }),
     ]);
   });

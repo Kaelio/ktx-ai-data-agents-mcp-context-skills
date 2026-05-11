@@ -45,6 +45,85 @@ describe('createHttpSqlAnalysisPort', () => {
     });
   });
 
+  it('calls the SQL batch endpoint and maps snake_case response fields into a Map', async () => {
+    const requestJson = vi.fn(async () => ({
+      results: {
+        orders: {
+          tables_touched: ['public.orders', 'public.customers'],
+          columns_by_clause: {
+            select: ['status'],
+            where: ['created_at'],
+            join: ['customer_id', 'id'],
+          },
+          error: null,
+        },
+        broken: {
+          tables_touched: [],
+          columns_by_clause: {},
+          error: 'Invalid expression / Unexpected token',
+        },
+      },
+    }));
+    const port = createHttpSqlAnalysisPort({ baseUrl: 'http://python.test', requestJson });
+
+    await expect(
+      port.analyzeBatch(
+        [
+          { id: 'orders', sql: 'select status from public.orders' },
+          { id: 'broken', sql: 'select * from where' },
+        ],
+        'postgres',
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          'orders',
+          {
+            tablesTouched: ['public.orders', 'public.customers'],
+            columnsByClause: {
+              select: ['status'],
+              where: ['created_at'],
+              join: ['customer_id', 'id'],
+            },
+            error: null,
+          },
+        ],
+        [
+          'broken',
+          {
+            tablesTouched: [],
+            columnsByClause: {},
+            error: 'Invalid expression / Unexpected token',
+          },
+        ],
+      ]),
+    );
+
+    expect(requestJson).toHaveBeenCalledWith('/sql/analyze-batch', {
+      dialect: 'postgres',
+      items: [
+        { id: 'orders', sql: 'select status from public.orders' },
+        { id: 'broken', sql: 'select * from where' },
+      ],
+    });
+  });
+
+  it('rejects malformed SQL batch responses instead of inventing defaults', async () => {
+    const requestJson = vi.fn(async () => ({
+      results: {
+        orders: {
+          tables_touched: ['public.orders'],
+          columns_by_clause: { select: ['status'], where: [42] },
+          error: null,
+        },
+      },
+    }));
+    const port = createHttpSqlAnalysisPort({ baseUrl: 'http://python.test', requestJson });
+
+    await expect(port.analyzeBatch([{ id: 'orders', sql: 'select status from public.orders' }], 'postgres')).rejects
+      .toThrow('sql analysis response is missing string[] field columns_by_clause.where');
+  });
+
   it('rejects malformed daemon responses instead of inventing defaults', async () => {
     const requestJson = vi.fn(async () => ({
       fingerprint: 'abc',

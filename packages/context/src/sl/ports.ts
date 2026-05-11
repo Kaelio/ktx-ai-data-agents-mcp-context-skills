@@ -49,5 +49,5 @@ export interface SlSourcesIndexPort {
     queryText: string,
     limit: number,
     minRrfScore?: number,
-  ): Promise<Array<{ sourceName: string; rrfScore: number }>>;
+  ): Promise<Array<{ sourceName: string; rrfScore: number; snippet?: string }>>;
 }

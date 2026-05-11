@@ -34,6 +34,7 @@ export interface KtxSetupDatabasesArgs {
   enableHistoricSql?: boolean;
   disableHistoricSql?: boolean;
   historicSqlWindowDays?: number;
+  historicSqlMinExecutions?: number;
   historicSqlMinCalls?: number;
   historicSqlServiceAccountPatterns?: string[];
   historicSqlRedactionPatterns?: string[];
@@ -276,7 +277,7 @@ async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Pr
 
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
-  const [{ PostgresPgssQueryHistoryReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
+  const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
     await Promise.all([import('@ktx/context/ingest'), import('@ktx/connector-postgres')]);
 
   const postgresConnection = connection as Parameters<typeof isKtxPostgresConnectionConfig>[0];
@@ -292,7 +293,7 @@ async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Pr
     connection: postgresConnection,
   });
   try {
-    const result = await new PostgresPgssQueryHistoryReader().probe(client);
+    const result = await new PostgresPgssReader().probe(client);
     return {
       ok: true,
       lines: [
@@ -751,20 +752,20 @@ async function maybeApplyHistoricSqlConfig(input: {
     return { ...input.connection, historicSql: { ...existing, enabled: false, dialect } };
   }
 
-  const common = {
+  const common: Record<string, unknown> = {
     ...existing,
     enabled: true,
     dialect,
-    serviceAccountUserPatterns: input.args.historicSqlServiceAccountPatterns ?? [],
+    filters: historicSqlFiltersForSetup(input.args.historicSqlServiceAccountPatterns),
   };
+  delete common[['serviceAccount', 'UserPatterns'].join('')];
 
   if (dialect === 'postgres') {
     return {
       ...input.connection,
       historicSql: {
         ...common,
-        minCalls: input.args.historicSqlMinCalls ?? 5,
-        maxTemplatesPerRun: 5000,
+        minExecutions: input.args.historicSqlMinExecutions ?? input.args.historicSqlMinCalls ?? 5,
       },
     };
   }
@@ -776,6 +777,21 @@ async function maybeApplyHistoricSqlConfig(input: {
       windowDays: input.args.historicSqlWindowDays ?? 90,
       redactionPatterns: input.args.historicSqlRedactionPatterns ?? [],
     },
+  };
+}
+
+function historicSqlFiltersForSetup(patterns: string[] | undefined) {
+  const serviceAccountPatterns = patterns ?? [];
+  return {
+    dropTrivialProbes: true,
+    ...(serviceAccountPatterns.length > 0
+      ? {
+          serviceAccounts: {
+            patterns: serviceAccountPatterns,
+            mode: 'exclude' as const,
+          },
+        }
+      : {}),
   };
 }
 

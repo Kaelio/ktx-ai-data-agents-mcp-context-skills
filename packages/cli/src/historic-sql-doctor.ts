@@ -16,6 +16,7 @@ export interface PostgresHistoricSqlDoctorProbeInput {
 export interface PostgresHistoricSqlDoctorProbeResult {
   pgServerVersion: string;
   warnings: string[];
+  info?: string[];
 }
 
 export type PostgresHistoricSqlDoctorProbe = (
@@ -72,10 +73,17 @@ function failureDetail(error: unknown): string {
   return String(error);
 }
 
+function readinessDetail(result: PostgresHistoricSqlDoctorProbeResult): string {
+  const warningText = result.warnings.length > 0 ? ` with warnings: ${result.warnings.join('; ')}` : '';
+  const info = result.info ?? [];
+  const infoText = info.length > 0 ? `; info: ${info.join('; ')}` : '';
+  return `pg_stat_statements ready (${result.pgServerVersion})${warningText}${infoText}`;
+}
+
 async function defaultPostgresHistoricSqlProbe(
   input: PostgresHistoricSqlDoctorProbeInput,
 ): Promise<PostgresHistoricSqlDoctorProbeResult> {
-  const [{ PostgresPgssQueryHistoryReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
+  const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
     await Promise.all([import('@ktx/context/ingest'), import('@ktx/connector-postgres')]);
 
   if (!isKtxPostgresConnectionConfig(input.connection)) {
@@ -88,7 +96,7 @@ async function defaultPostgresHistoricSqlProbe(
     env: input.env,
   });
   try {
-    return await new PostgresPgssQueryHistoryReader().probe(client);
+    return await new PostgresPgssReader().probe(client);
   } finally {
     await client.cleanup();
   }
@@ -134,14 +142,12 @@ export async function runPostgresHistoricSqlDoctorChecks(
             'warn',
             checkId(connectionId),
             label,
-            `pg_stat_statements ready (${result.pgServerVersion}) with warnings: ${result.warnings.join('; ')}`,
+            readinessDetail(result),
             `Update the Postgres parameter group or config, then rerun \`ktx dev doctor --project-dir ${project.projectDir}\``,
           ),
         );
       } else {
-        checks.push(
-          check('pass', checkId(connectionId), label, `pg_stat_statements ready (${result.pgServerVersion})`),
-        );
+        checks.push(check('pass', checkId(connectionId), label, readinessDetail(result)));
       }
     } catch (error) {
       checks.push(

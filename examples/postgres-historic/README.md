@@ -1,13 +1,18 @@
 # Postgres Historic SQL Example
 
-This example is a manual smoke for Postgres historic-SQL ingest through
-`pg_stat_statements`. It starts Postgres 14 with the extension preloaded,
-generates query workload under separate users, runs `ktx setup` with
-`--enable-historic-sql`, and verifies three local ingest runs:
+This example is a manual smoke for the redesigned Postgres historic-SQL ingest
+path through `pg_stat_statements`. It starts Postgres 14 with the extension
+preloaded, generates query workload under separate users, runs `ktx setup` with
+`--enable-historic-sql`, and verifies the unified staged artifacts:
 
-- first run creates a fresh PGSS baseline
-- second run emits only positive deltas
-- reset run treats `pg_stat_statements_reset()` as a fresh baseline
+- `manifest.json`
+- `tables/*.json`
+- `patterns-input.json` as the full audit input
+- `patterns-input/part-*.json` as bounded pattern WorkUnit shards
+
+The smoke also runs the same workload twice and verifies the second stage-only
+run has `workUnitCount: 0`, which proves unchanged bucketed table inputs and
+unchanged bounded pattern shards do not schedule LLM work.
 
 ## Prerequisites
 
@@ -36,8 +41,9 @@ Set `KTX_POSTGRES_HISTORIC_KEEP_DOCKER=1` to leave the container running after
 the script exits.
 
 The smoke validates the historic-SQL raw snapshot path without requiring LLM
-credentials. It uses KTX's local stage-only ingest API after `ktx setup` so the
-PGSS baseline and delta behavior can be checked independently from curation.
+credentials. It uses KTX's local stage-only ingest API after `ktx setup`, so the
+deterministic reader, batch SQL parser, stable artifact writer, and diff-based
+WorkUnit planning are checked independently from curation.
 
 ## Manual Commands
 
@@ -64,7 +70,7 @@ node packages/cli/dist/bin.js --project-dir /tmp/ktx-postgres-historic setup \
   --database-url env:WAREHOUSE_DATABASE_URL \
   --database-schema public \
   --enable-historic-sql \
-  --historic-sql-min-calls 2 \
+  --historic-sql-min-executions 2 \
   --yes \
   --no-input
 ```
@@ -75,11 +81,16 @@ node packages/cli/dist/bin.js --project-dir /tmp/ktx-postgres-historic setup \
 pnpm run ktx -- dev doctor --project-dir /tmp/ktx-postgres-historic --no-input
 ```
 
-The installed CLI form is `ktx dev doctor --project-dir
-/tmp/ktx-postgres-historic --no-input`. Expected output includes `PASS Postgres
-Historic SQL (warehouse)` when `pg_stat_statements` is installed,
-`pg_read_all_stats` is granted, tracking is enabled, and
-`pg_stat_statements.max` is at least 5000.
+The installed CLI form is:
+
+```bash
+ktx dev doctor --project-dir /tmp/ktx-postgres-historic --no-input
+```
+
+Expected output includes `PASS Postgres Historic SQL (warehouse)` when
+`pg_stat_statements` is installed, `pg_read_all_stats` is granted, and tracking
+is enabled. A low `pg_stat_statements.max` value is reported as an informational
+note, not a warning.
 
 Run local historic-SQL ingest:
 
@@ -92,7 +103,7 @@ pnpm run ktx -- dev ingest run --project-dir /tmp/ktx-postgres-historic \
   --no-input
 ```
 
-The full `dev ingest run` path also runs curation work units, so it requires a
+The full `dev ingest run` path also runs curation WorkUnits, so it requires a
 configured LLM provider.
 
 Inspect the latest manifest:
@@ -101,9 +112,12 @@ Inspect the latest manifest:
 find /tmp/ktx-postgres-historic/raw-sources/warehouse/historic-sql -name manifest.json | sort | tail -n 1
 ```
 
-The manifest should have `dialect: "postgres"`, `degraded: true`,
-`baselineFirstRun: true` on the first run, and populated `pgServerVersion` and
-`statsResetAt`.
+The manifest should have `source: "historic-sql"`, `dialect: "postgres"`,
+positive `snapshotRowCount`, positive `touchedTableCount`, numeric
+`parseFailures`, `warnings`, and `probeWarnings`. The same directory should
+contain `patterns-input.json`, at least one `patterns-input/part-*.json` pattern
+shard for cross-table candidates, and one `tables/*.json` file per touched
+table.
 
 ## Troubleshooting
 
@@ -111,8 +125,8 @@ The manifest should have `dialect: "postgres"`, `degraded: true`,
   `CREATE EXTENSION pg_stat_statements;` both happened in the `analytics`
   database.
 - Missing grants: confirm `GRANT pg_read_all_stats TO ktx_reader;`.
-- Empty templates: rerun `scripts/generate-workload.sh base` and keep
-  `--historic-sql-min-calls 2` for the smoke.
+- Empty snapshot: rerun `scripts/generate-workload.sh base` and keep
+  `--historic-sql-min-executions 2` for the smoke.
 - SQL-analysis failures: run `pnpm run ktx -- runtime doctor` from the KTX
   repository root and confirm `uv`, the bundled Python wheel, and the managed
   runtime all pass.

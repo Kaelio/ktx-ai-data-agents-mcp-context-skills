@@ -8,11 +8,13 @@ import {
   ingestReportToMemoryFlowReplay,
   type LocalMetabaseFanoutResult,
   type LocalMetabaseFanoutProgress,
+  type MemoryFlowEvent,
   type MemoryFlowReplayInput,
   type RunLocalIngestOptions,
   renderMemoryFlowReplay,
   runLocalIngest,
   runLocalMetabaseIngest,
+  savedMemoryCountsForReport,
 } from '@ktx/context/ingest';
 import { loadKtxProject } from '@ktx/context/project';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
@@ -88,16 +90,8 @@ function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
   return report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
 }
 
-function reportActionCounts(report: IngestReportSnapshot): { wikiCount: number; slCount: number } {
-  const actions = report.body.workUnits.flatMap((workUnit) => workUnit.actions);
-  return {
-    wikiCount: actions.filter((action) => action.target === 'wiki').length,
-    slCount: actions.filter((action) => action.target === 'sl').length,
-  };
-}
-
 function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void {
-  const counts = reportActionCounts(report);
+  const counts = savedMemoryCountsForReport(report);
   io.stdout.write(`Report: ${report.id}\n`);
   io.stdout.write(`Run: ${report.runId}\n`);
   io.stdout.write(`Job: ${report.jobId}\n`);
@@ -116,7 +110,7 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
 function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIngestIo): void {
   const counts = result.children.reduce(
     (acc, child) => {
-      const childCounts = reportActionCounts(child.report);
+      const childCounts = savedMemoryCountsForReport(child.report);
       return {
         wikiCount: acc.wikiCount + childCounts.wikiCount,
         slCount: acc.slCount + childCounts.slCount,
@@ -166,6 +160,118 @@ function createMetabaseFanoutProgress(
       io.stdout.write(
         `- database=${event.metabaseDatabaseId} target=${event.targetConnectionId} status=${event.status} job=${event.jobId}\n`,
       );
+    },
+  };
+}
+
+function formatDiffProgress(event: Extract<MemoryFlowEvent, { type: 'diff_computed' }>): string {
+  return `+${event.added}/~${event.modified}/-${event.deleted}/=${event.unchanged}`;
+}
+
+function completedWorkUnitCount(snapshot: MemoryFlowReplayInput): number {
+  return snapshot.events.filter((event) => event.type === 'work_unit_finished').length;
+}
+
+function plainIngestEventProgress(
+  event: MemoryFlowEvent,
+  snapshot: MemoryFlowReplayInput,
+): { percent: number; message: string } | null {
+  switch (event.type) {
+    case 'source_acquired':
+      return {
+        percent: 15,
+        message: `Fetched ${pluralize(event.fileCount, 'source file')} from ${event.adapter}`,
+      };
+    case 'raw_snapshot_written':
+      return {
+        percent: 25,
+        message: `Wrote raw snapshot ${event.syncId} with ${pluralize(event.rawFileCount, 'file')}`,
+      };
+    case 'diff_computed':
+      return { percent: 35, message: `Computed source diff ${formatDiffProgress(event)}` };
+    case 'chunks_planned':
+      return {
+        percent: 45,
+        message: `Planned ${pluralize(event.workUnitCount, 'work unit')}`,
+      };
+    case 'stage_skipped':
+      return { percent: 45, message: `Skipped ${event.stage}: ${event.reason}` };
+    case 'work_unit_started':
+      return { percent: 55, message: `Processing ${event.unitKey}` };
+    case 'work_unit_finished': {
+      const total = snapshot.plannedWorkUnits.length || completedWorkUnitCount(snapshot);
+      const completed = completedWorkUnitCount(snapshot);
+      const percent = total > 0 ? 55 + Math.round((completed / total) * 25) : 80;
+      return {
+        percent,
+        message: `Processed ${completed}/${total} work units`,
+      };
+    }
+    case 'reconciliation_finished':
+      return {
+        percent: 85,
+        message: `Reconciled results with ${pluralize(event.conflictCount, 'conflict')} and ${pluralize(
+          event.fallbackCount,
+          'fallback',
+        )}`,
+      };
+    case 'saved':
+      return {
+        percent: 90,
+        message: `Saved memory updates (${event.wikiCount} wiki, ${event.slCount} SL)`,
+      };
+    case 'provenance_recorded':
+      return { percent: 95, message: `Recorded ${pluralize(event.rowCount, 'provenance row')}` };
+    case 'report_created':
+      return { percent: 98, message: `Created ingest report ${event.reportPath ?? event.runId}` };
+    case 'scope_detected':
+    case 'work_unit_step':
+    case 'candidate_action':
+      return null;
+  }
+}
+
+function shouldWritePlainIngestProgress(
+  outputMode: KtxIngestOutputMode,
+  io: KtxIngestIo,
+  env: NodeJS.ProcessEnv,
+): boolean {
+  return outputMode === 'plain' && io.stdout.isTTY === true && env.CI !== 'true';
+}
+
+function createPlainIngestProgressRenderer(
+  args: Extract<KtxIngestArgs, { command: 'run' }>,
+  io: KtxIngestIo,
+): { start(): void; update(snapshot: MemoryFlowReplayInput): void } {
+  let printedEvents = 0;
+  let lastPercent = 0;
+  let printedCompletion = false;
+
+  const write = (percent: number, message: string) => {
+    const nextPercent = Math.max(lastPercent, Math.max(0, Math.min(100, percent)));
+    lastPercent = nextPercent;
+    io.stdout.write(`[${nextPercent}%] ${message}\n`);
+  };
+
+  return {
+    start() {
+      write(5, `Fetching source files for ${args.connectionId}/${args.adapter}`);
+    },
+    update(snapshot) {
+      while (printedEvents < snapshot.events.length) {
+        const event = snapshot.events[printedEvents++];
+        if (!event) {
+          continue;
+        }
+        const progress = plainIngestEventProgress(event, snapshot);
+        if (progress) {
+          write(progress.percent, progress.message);
+        }
+      }
+      if (!printedCompletion && snapshot.status !== 'running') {
+        printedCompletion = true;
+        write(100, snapshot.status === 'done' ? 'Ingest completed' : 'Ingest failed');
+      }
     },
   };
 }
@@ -366,10 +472,14 @@ export async function runKtxIngest(
       });
       const shouldUseLiveViz =
         runOutputMode === 'viz' && (args.inputMode ?? 'auto') === 'auto' && isInteractiveTerminal(io);
-      const initialMemoryFlow = shouldUseLiveViz ? initialRunMemoryFlowInput(args, jobId ?? 'pending') : undefined;
+      const plainProgress = shouldWritePlainIngestProgress(runOutputMode, io, env)
+        ? createPlainIngestProgressRenderer(args, io)
+        : null;
+      const initialMemoryFlow =
+        shouldUseLiveViz || plainProgress ? initialRunMemoryFlowInput(args, jobId ?? 'pending') : undefined;
       let latestMemoryFlowSnapshot: MemoryFlowReplayInput | null = initialMemoryFlow ?? null;
 
-      if (initialMemoryFlow && isTuiCapableIo(io)) {
+      if (shouldUseLiveViz && initialMemoryFlow && isTuiCapableIo(io)) {
         const startLiveMemoryFlow = deps.startLiveMemoryFlow ?? startLiveMemoryFlowTui;
         liveTui = await startLiveMemoryFlow(initialMemoryFlow, io);
       }
@@ -382,12 +492,16 @@ export async function runKtxIngest(
                 liveTui.update(snapshot);
                 return;
               }
-              if (!liveTui) {
+              if (shouldUseLiveViz && !liveTui) {
                 writeMemoryFlowInput(snapshot, io, { clear: true });
+                return;
               }
+              plainProgress?.update(snapshot);
             },
           })
         : undefined;
+
+      plainProgress?.start();
 
       try {
         const result = await executeLocalIngest({
@@ -403,7 +517,7 @@ export async function runKtxIngest(
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),
           ...(memoryFlow ? { memoryFlow } : {}),
         });
-        if (memoryFlow) {
+        if (shouldUseLiveViz && memoryFlow) {
           latestMemoryFlowSnapshot = memoryFlow.snapshot();
           liveTui?.close();
           liveTui = null;

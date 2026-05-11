@@ -318,7 +318,8 @@ export { NOTION_ORG_KNOWLEDGE_WARNING } from './adapters/notion/chunk.js';
 export { NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN } from './adapters/notion/types.js';
 export { NotionSourceAdapter, type NotionSourceAdapterDeps } from './adapters/notion/notion.adapter.js';
 export { NotionClient, type NotionApi, type NotionBotInfo } from './adapters/notion/notion-client.js';
-export { chunkHistoricSqlStagedDir, describeHistoricSqlScope } from './adapters/historic-sql/chunk.js';
+export { bucketDistinctUsers, bucketErrorRate, bucketExecutions, bucketP95Runtime, bucketRecency } from './adapters/historic-sql/buckets.js';
+export { chunkHistoricSqlUnifiedStagedDir, describeHistoricSqlUnifiedScope } from './adapters/historic-sql/chunk-unified.js';
 export { detectHistoricSqlStagedDir } from './adapters/historic-sql/detect.js';
 export {
   HistoricSqlExtensionMissingError,
@@ -328,41 +329,55 @@ export {
 export { HistoricSqlSourceAdapter } from './adapters/historic-sql/historic-sql.adapter.js';
 export { BigQueryHistoricSqlQueryHistoryReader } from './adapters/historic-sql/bigquery-query-history-reader.js';
 export type { BigQueryHistoricSqlQueryHistoryReaderOptions } from './adapters/historic-sql/bigquery-query-history-reader.js';
-export { PostgresPgssQueryHistoryReader } from './adapters/historic-sql/postgres-pgss-query-history-reader.js';
+export { PostgresPgssReader } from './adapters/historic-sql/postgres-pgss-reader.js';
 export { SnowflakeHistoricSqlQueryHistoryReader } from './adapters/historic-sql/snowflake-query-history-reader.js';
-export { stageHistoricSqlTemplates } from './adapters/historic-sql/stage.js';
+export { stageHistoricSqlAggregatedSnapshot } from './adapters/historic-sql/stage-unified.js';
 export {
-  pgssBaselinePath,
-  readPgssBaseline,
-  stagePgStatStatementsTemplates,
-  writePgssBaselineAtomic,
-} from './adapters/historic-sql/stage-pgss.js';
-export type { PgssBaseline, StagePgStatStatementsTemplatesResult } from './adapters/historic-sql/stage-pgss.js';
+  historicSqlEvidenceEnvelopeSchema,
+  historicSqlEvidencePath,
+  historicSqlPatternEvidenceSchema,
+  historicSqlTableUsageEvidenceSchema,
+  serializeHistoricSqlEvidence,
+} from './adapters/historic-sql/evidence.js';
 export type {
+  HistoricSqlEvidenceEnvelope,
+  HistoricSqlPatternEvidence,
+  HistoricSqlTableUsageEvidence,
+} from './adapters/historic-sql/evidence.js';
+export { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evidence-tool.js';
+export { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
+export { projectHistoricSqlEvidence } from './adapters/historic-sql/projection.js';
+export type { HistoricSqlProjectionInput, HistoricSqlProjectionResult } from './adapters/historic-sql/projection.js';
+export {
+  patternOutputSchema,
+  patternsArraySchema,
+  tableUsageOutputSchema,
+} from './adapters/historic-sql/skill-schemas.js';
+export type {
+  PatternOutput,
+  TableUsageOutput,
+} from './adapters/historic-sql/skill-schemas.js';
+export type {
+  AggregatedTemplate,
   HistoricSqlDialect,
-  HistoricSqlManifest,
-  HistoricSqlMetadata,
-  HistoricSqlPullConfig,
-  HistoricSqlQueryHistoryReader,
-  HistoricSqlRawQueryRow,
+  HistoricSqlProbeResult,
+  HistoricSqlReader,
   HistoricSqlSourceAdapterDeps,
   HistoricSqlTimeWindow,
-  HistoricSqlUsage,
+  HistoricSqlUnifiedPullConfig,
   KtxPostgresQueryClient,
-  PostgresPgssAggregateRow,
   PostgresPgssProbeResult,
-  PostgresPgssReader,
-  PostgresPgssRow,
-  PostgresPgssSnapshot,
+  StagedManifest,
+  StagedPatternsInput,
+  StagedTableInput,
 } from './adapters/historic-sql/types.js';
 export {
-  HISTORIC_SQL_OBJECT_TYPE,
   HISTORIC_SQL_SOURCE_KEY,
-  historicSqlManifestSchema,
-  historicSqlMetadataSchema,
-  historicSqlPullConfigSchema,
-  historicSqlRawQueryRowSchema,
-  historicSqlUsageSchema,
+  aggregatedTemplateSchema,
+  historicSqlUnifiedPullConfigSchema,
+  stagedManifestSchema,
+  stagedPatternsInputSchema,
+  stagedTableInputSchema,
 } from './adapters/historic-sql/types.js';
 export type { CanonicalPin } from './canonical-pins.js';
 export { buildCanonicalPinsPromptBlock, selectRelevantCanonicalPins } from './canonical-pins.js';

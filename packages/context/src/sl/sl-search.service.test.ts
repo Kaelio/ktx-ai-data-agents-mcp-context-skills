@@ -162,4 +162,65 @@ describe('SlSearchService', () => {
     expect(text).toContain('loaded_at=updated_at');
     expect(text).toContain('warn_after');
   });
+
+  it('includes historic SQL usage in semantic-layer search text', () => {
+    const source: SemanticLayerSource = {
+      name: 'orders',
+      descriptions: { user: 'Customer orders' },
+      table: 'public.orders',
+      grain: ['order_id'],
+      columns: [{ name: 'order_id', type: 'string' }],
+      joins: [],
+      measures: [],
+      usage: {
+        narrative: 'Analysts inspect paid and refunded order lifecycle trends by customer segment.',
+        frequencyTier: 'high',
+        commonFilters: ['status', 'created_at'],
+        commonGroupBys: ['customer_segment'],
+        commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+        staleSince: '2026-05-01T00:00:00.000Z',
+      },
+    };
+
+    const text = buildSemanticLayerSourceSearchText(source);
+
+    expect(text).toContain('usage: Analysts inspect paid and refunded order lifecycle trends by customer segment.');
+    expect(text).toContain('frequency: high');
+    expect(text).toContain('commonly filtered by: status, created_at');
+    expect(text).toContain('commonly grouped by: customer_segment');
+    expect(text).toContain('commonly joined to public.customers on customer_id');
+    expect(text).toContain('stale since 2026-05-01T00:00:00.000Z');
+  });
+
+  it('preserves FTS snippets returned by the source index', async () => {
+    const service = new SlSearchService(
+      {
+        maxBatchSize: 16,
+        computeEmbedding: vi.fn(async () => [1, 0]),
+        computeEmbeddingsBulk: vi.fn(),
+      },
+      {
+        upsertSources: vi.fn(),
+        getExistingSearchTexts: vi.fn(),
+        deleteStale: vi.fn(),
+        deleteByConnection: vi.fn(),
+        deleteByConnectionAndName: vi.fn(),
+        search: vi.fn(async () => [
+          {
+            sourceName: 'orders',
+            rrfScore: 0.75,
+            snippet: 'usage: paid <mark>order</mark> lifecycle',
+          },
+        ]),
+      },
+    );
+
+    await expect(service.search('warehouse', 'order lifecycle', 10)).resolves.toEqual([
+      {
+        sourceName: 'orders',
+        score: 0.75,
+        snippet: 'usage: paid <mark>order</mark> lifecycle',
+      },
+    ]);
+  });
 });

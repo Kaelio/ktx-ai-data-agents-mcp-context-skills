@@ -29,10 +29,10 @@ warehouse credential.
 
 ## postgres-historic
 
-`postgres-historic/` is a manual Docker-backed smoke for Postgres
-historic-SQL ingest via `pg_stat_statements`. It verifies setup, first-run
-baseline creation, delta-only follow-up ingest, and reset handling without
-requiring a managed Postgres service.
+`postgres-historic/` is a manual Docker-backed smoke for Postgres historic-SQL
+ingest via `pg_stat_statements`. It verifies setup, unified Historic SQL artifacts,
+managed daemon batch SQL analysis, bounded pattern WorkUnit shards, and
+no-WorkUnit idempotency for unchanged bucketed table inputs and pattern shards.
 
 ## package-artifacts
 

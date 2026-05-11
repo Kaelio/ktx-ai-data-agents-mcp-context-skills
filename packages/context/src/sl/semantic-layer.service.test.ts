@@ -5,6 +5,7 @@ import {
   composeOverlay,
   enrichColumnsFromManifest,
   findDanglingSegmentRefs,
+  projectManifestEntry,
   SemanticLayerService,
 } from './semantic-layer.service.js';
 import { sourceDefinitionSchema } from './schemas.js';
@@ -127,6 +128,39 @@ describe('composeOverlay', () => {
       db: 'scan-derived description',
       ai: 'AI description (overridden)',
       dbt: 'dbt description',
+    });
+  });
+
+  it('replaces manifest usage only when an overlay explicitly provides usage', () => {
+    const baseWithUsage: SemanticLayerSource = {
+      ...baseTable,
+      usage: {
+        narrative: 'Orders are commonly queried by lifecycle status.',
+        frequencyTier: 'high',
+        commonFilters: ['status'],
+        commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+      },
+    };
+
+    expect(composeOverlay(baseWithUsage, { name: 'fct_labs', measures: [] }).usage).toEqual(baseWithUsage.usage);
+
+    const composed = composeOverlay(baseWithUsage, {
+      name: 'fct_labs',
+      usage: {
+        narrative: 'Overlay-curated usage note.',
+        frequencyTier: 'mid',
+        commonFilters: ['created_at'],
+        commonGroupBys: ['created_at'],
+        commonJoins: [],
+      },
+    });
+
+    expect(composed.usage).toEqual({
+      narrative: 'Overlay-curated usage note.',
+      frequencyTier: 'mid',
+      commonFilters: ['created_at'],
+      commonGroupBys: ['created_at'],
+      commonJoins: [],
     });
   });
 });
@@ -297,6 +331,61 @@ describe('sourceDefinitionSchema', () => {
     expect(result.data.tags).toEqual({ dbt: ['mart', 'finance'] });
     expect(result.data.freshness).toEqual({
       dbt: { loaded_at_field: 'updated_at', raw: { warn_after: { count: 12, period: 'hour' } } },
+    });
+  });
+
+  it('accepts historic SQL usage on standalone sources', () => {
+    const result = sourceDefinitionSchema.safeParse({
+      name: 'orders',
+      table: 'public.orders',
+      grain: ['id'],
+      columns: [{ name: 'id', type: 'string' }],
+      joins: [],
+      measures: [],
+      usage: {
+        narrative: 'Orders are queried for fulfillment and revenue analysis.',
+        frequencyTier: 'high',
+        commonFilters: ['status', 'created_at'],
+        commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+        externalOwner: 'analytics',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+    expect(result.data.usage).toMatchObject({
+      narrative: 'Orders are queried for fulfillment and revenue analysis.',
+      frequencyTier: 'high',
+      commonFilters: ['status', 'created_at'],
+      commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+      externalOwner: 'analytics',
+    });
+  });
+});
+
+describe('projectManifestEntry', () => {
+  it('projects manifest usage onto the semantic-layer source', () => {
+    const source = projectManifestEntry('orders', {
+      table: 'public.orders',
+      usage: {
+        narrative: 'Orders are frequently filtered by status.',
+        frequencyTier: 'high',
+        commonFilters: ['status'],
+        commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
+      },
+      columns: [
+        { name: 'id', type: 'string', pk: true },
+        { name: 'status', type: 'string' },
+      ],
+    });
+
+    expect(source.usage).toEqual({
+      narrative: 'Orders are frequently filtered by status.',
+      frequencyTier: 'high',
+      commonFilters: ['status'],
+      commonJoins: [{ table: 'public.customers', on: ['customer_id'] }],
     });
   });
 });

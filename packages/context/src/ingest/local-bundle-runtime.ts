@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { KtxLlmProvider } from '@ktx/llm';
+import type { Tool } from 'ai';
 import YAML from 'yaml';
 import type { AgentRunnerService } from '../agent/index.js';
 import { AgentRunnerService as DefaultAgentRunnerService } from '../agent/index.js';
@@ -70,6 +71,8 @@ import {
   ContextCandidateCarryforwardService,
   CuratorPaginationService,
 } from './context-candidates/index.js';
+import { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evidence-tool.js';
+import { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
 import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './context-evidence/index.js';
 import { DiffSetService } from './diff-set.service.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
@@ -439,10 +442,16 @@ class NoopKnowledgeEventPort implements KnowledgeEventPort {
 }
 
 class LocalIngestToolSet implements IngestToolsetLike {
-  constructor(private readonly tools: BaseTool[]) {}
+  constructor(
+    private readonly tools: BaseTool[],
+    private readonly sourceTools: Record<string, Tool> = {},
+  ) {}
 
   toAiSdkTools(context: ToolContext) {
-    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAiSdkTool(context)]));
+    return {
+      ...Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAiSdkTool(context)])),
+      ...this.sourceTools,
+    };
   }
 }
 
@@ -510,9 +519,19 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
     ];
   }
 
-  createIngestWuToolset(_session: ToolSession, options?: { includeContextEvidenceTools?: boolean }): IngestToolsetLike {
+  createIngestWuToolset(session: ToolSession, options?: { includeContextEvidenceTools?: boolean }): IngestToolsetLike {
+    const sourceTools: Record<string, Tool> =
+      session.ingest?.sourceKey === 'historic-sql'
+        ? {
+            emit_historic_sql_evidence: createEmitHistoricSqlEvidenceTool({
+              connectionId: session.connectionId,
+              session,
+            }),
+          }
+        : {};
     return new LocalIngestToolSet(
       options?.includeContextEvidenceTools ? [...this.baseTools, ...this.contextTools] : this.baseTools,
+      sourceTools,
     );
   }
 }
@@ -668,6 +687,9 @@ export function createLocalBundleIngestRuntime(
       settings: { batchSize: 8, maxPasses: 8, stepBudgetPerPass: 60 },
       logger,
     }),
+    postProcessors: {
+      'historic-sql': new HistoricSqlProjectionPostProcessor(),
+    },
     logger,
   };
 

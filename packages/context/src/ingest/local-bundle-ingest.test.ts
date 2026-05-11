@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
+import YAML from 'yaml';
 import { AgentRunnerService } from '../agent/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import { makeLocalGitRepo } from '../test/make-local-git-repo.js';
@@ -10,6 +11,7 @@ import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
 import { createDefaultLocalIngestAdapters, localPullConfigForAdapter } from './local-adapters.js';
 import { getLocalIngestStatus, runLocalIngest } from './local-ingest.js';
+import type { ChunkResult, DiffSet, SourceAdapter } from './types.js';
 
 class TestAgentRunner extends AgentRunnerService {
   override runLoop = vi.fn().mockResolvedValue({ stopReason: 'natural' as const });
@@ -83,6 +85,70 @@ class WikiWritingAgentRunner extends AgentRunnerService {
 
   constructor() {
     super({ llmProvider: { getModel: () => ({}) as never } as never });
+  }
+}
+
+class HistoricSqlEvidenceAgentRunner extends AgentRunnerService {
+  override runLoop = vi.fn(async (params: any) => {
+    if (
+      params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
+      params.telemetryTags?.unitKey === 'historic-sql-table-public-orders'
+    ) {
+      const emitEvidence = params.toolSet.emit_historic_sql_evidence;
+      if (!emitEvidence?.execute) {
+        throw new Error('emit_historic_sql_evidence tool was not available to the historic-SQL WorkUnit');
+      }
+      const result = await emitEvidence.execute(
+        {
+          kind: 'table_usage',
+          table: 'public.orders',
+          rawPath: 'tables/public.orders.json',
+          usage: {
+            narrative: 'Orders are repeatedly queried by lifecycle status.',
+            frequencyTier: 'high',
+            commonFilters: ['status'],
+            commonJoins: [],
+            staleSince: null,
+          },
+        },
+        { toolCallId: 'historic-sql-evidence' },
+      );
+      if (!String(result).includes('Recorded historic-SQL table_usage evidence')) {
+        throw new Error(`Unexpected historic-SQL evidence result: ${String(result)}`);
+      }
+    }
+    return { stopReason: 'natural' as const };
+  });
+
+  constructor() {
+    super({ llmProvider: { getModel: () => ({}) as never } as never });
+  }
+}
+
+class HistoricSqlEvidenceTestAdapter implements SourceAdapter {
+  readonly source = 'historic-sql';
+  readonly skillNames = ['historic_sql_table_digest'];
+  readonly reconcileSkillNames: string[] = [];
+  readonly triageSupported = false;
+
+  detect(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
+  chunk(_stagedDir: string, _diffSet?: DiffSet): Promise<ChunkResult> {
+    return Promise.resolve({
+      workUnits: [
+        {
+          unitKey: 'historic-sql-table-public-orders',
+          displayLabel: 'public.orders',
+          rawFiles: ['tables/public.orders.json'],
+          peerFileIndex: [],
+          dependencyPaths: ['manifest.json'],
+          notes:
+            'Use historic_sql_table_digest. Read this table usage JSON and emit exactly one table_usage object with emit_historic_sql_evidence.',
+        },
+      ],
+    });
   }
 }
 
@@ -306,6 +372,90 @@ describe('canonical local ingest', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('runs historic-SQL evidence projection through the local bundle post-processor', async () => {
+    const projectDir = join(tempDir, 'historic-sql-project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '  embeddings:',
+        '    backend: deterministic',
+        'storage:',
+        '  state: sqlite',
+        '  search: sqlite-fts5',
+        '  git:',
+        '    auto_commit: false',
+        '    author: KTX Test <system@ktx.local>',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const historicProject = await loadKtxProject({ projectDir });
+    await historicProject.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      YAML.stringify({ tables: { orders: { table: 'public.orders', columns: [{ name: 'id', type: 'string' }] } } }),
+      'KTX Test',
+      'system@ktx.local',
+      'Seed schema shard',
+    );
+
+    const sourceDir = join(tempDir, 'historic-sql-source');
+    await mkdir(join(sourceDir, 'tables'), { recursive: true });
+    await writeFile(
+      join(sourceDir, 'manifest.json'),
+      `${JSON.stringify(
+        {
+          source: 'historic-sql',
+          connectionId: 'warehouse',
+          dialect: 'postgres',
+          fetchedAt: '2026-05-11T00:00:00.000Z',
+          windowStart: '2026-02-10T00:00:00.000Z',
+          windowEnd: '2026-05-11T00:00:00.000Z',
+          snapshotRowCount: 1,
+          touchedTableCount: 1,
+          parseFailures: 0,
+          warnings: [],
+          probeWarnings: [],
+          staleArchiveAfterDays: 90,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
+    await writeFile(join(sourceDir, 'tables/public.orders.json'), '{"table":"public.orders"}\n', 'utf-8');
+    await writeFile(join(sourceDir, 'patterns-input.json'), '{"templates":[]}\n', 'utf-8');
+    const agentRunner = new HistoricSqlEvidenceAgentRunner();
+
+    const result = await runLocalIngest({
+      project: historicProject,
+      adapters: [new HistoricSqlEvidenceTestAdapter()],
+      adapter: 'historic-sql',
+      connectionId: 'warehouse',
+      sourceDir,
+      jobId: 'historic-sql-local-projection',
+      agentRunner,
+    });
+
+    expect(result.result.failedWorkUnits).toEqual([]);
+    expect(result.report.body.postProcessor).toMatchObject({
+      sourceKey: 'historic-sql',
+      status: 'success',
+      result: { tableUsageMerged: 1 },
+      touchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
+    });
+    await expect(readFile(join(projectDir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8')).resolves.toContain(
+      'Orders are repeatedly queried by lifecycle status.',
+    );
   });
 
   it('rejects direct Metabase scheduled pulls before requiring a local ingest LLM provider', async () => {
