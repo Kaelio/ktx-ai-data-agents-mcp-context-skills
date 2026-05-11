@@ -127,13 +127,21 @@ describe('runKtxCli', () => {
   it('routes runtime management commands with the CLI package version', async () => {
     const runtime = vi.fn(async () => 0);
     const installIo = makeIo();
+    const startIo = makeIo();
+    const stopIo = makeIo();
     const statusIo = makeIo();
     const doctorIo = makeIo();
     const pruneIo = makeIo();
 
     await expect(
-      runKtxCli(['runtime', 'install', '--feature', 'local-embeddings', '--force'], installIo.io, { runtime }),
+      runKtxCli(['runtime', 'install', '--feature', 'local-embeddings', '--force', '--yes'], installIo.io, {
+        runtime,
+      }),
     ).resolves.toBe(0);
+    await expect(
+      runKtxCli(['runtime', 'start', '--feature', 'local-embeddings', '--force'], startIo.io, { runtime }),
+    ).resolves.toBe(0);
+    await expect(runKtxCli(['runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['runtime', 'doctor'], doctorIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(0);
@@ -151,6 +159,24 @@ describe('runKtxCli', () => {
     expect(runtime).toHaveBeenNthCalledWith(
       2,
       {
+        command: 'start',
+        cliVersion: '0.0.0-private',
+        feature: 'local-embeddings',
+        force: true,
+      },
+      startIo.io,
+    );
+    expect(runtime).toHaveBeenNthCalledWith(
+      3,
+      {
+        command: 'stop',
+        cliVersion: '0.0.0-private',
+      },
+      stopIo.io,
+    );
+    expect(runtime).toHaveBeenNthCalledWith(
+      4,
+      {
         command: 'status',
         cliVersion: '0.0.0-private',
         json: true,
@@ -158,7 +184,7 @@ describe('runKtxCli', () => {
       statusIo.io,
     );
     expect(runtime).toHaveBeenNthCalledWith(
-      3,
+      5,
       {
         command: 'doctor',
         cliVersion: '0.0.0-private',
@@ -167,7 +193,7 @@ describe('runKtxCli', () => {
       doctorIo.io,
     );
     expect(runtime).toHaveBeenNthCalledWith(
-      4,
+      6,
       {
         command: 'prune',
         cliVersion: '0.0.0-private',

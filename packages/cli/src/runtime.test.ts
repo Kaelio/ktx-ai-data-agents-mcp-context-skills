@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  ManagedPythonDaemonStartResult,
+  ManagedPythonDaemonStopResult,
+} from './managed-python-daemon.js';
+import type {
   ManagedPythonRuntimeDoctorCheck,
   ManagedPythonRuntimeInstallResult,
   ManagedPythonRuntimeStatus,
@@ -104,6 +108,102 @@ describe('runKtxRuntime', () => {
     expect(io.stdout()).toContain('features: core, local-embeddings');
     expect(io.stdout()).toContain('manifest: /runtime/0.2.0/manifest.json');
     expect(io.stderr()).toBe('');
+  });
+
+  it('starts the managed Python daemon and prints the base URL', async () => {
+    const io = makeIo();
+    const deps: KtxRuntimeDeps = {
+      startDaemon: vi.fn(async (): Promise<ManagedPythonDaemonStartResult> => ({
+        status: 'started',
+        baseUrl: 'http://127.0.0.1:61234',
+        layout: {
+          cliVersion: '0.2.0',
+          runtimeRoot: '/runtime',
+          versionDir: '/runtime/0.2.0',
+          venvDir: '/runtime/0.2.0/.venv',
+          manifestPath: '/runtime/0.2.0/manifest.json',
+          installLogPath: '/runtime/0.2.0/install.log',
+          assetDir: '/assets/python',
+          assetManifestPath: '/assets/python/manifest.json',
+          pythonPath: '/runtime/0.2.0/.venv/bin/python',
+          daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          daemonStatePath: '/runtime/0.2.0/daemon.json',
+          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
+          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
+        },
+        state: {
+          schemaVersion: 1,
+          pid: 4242,
+          host: '127.0.0.1',
+          port: 61234,
+          version: '0.2.0',
+          features: ['core', 'local-embeddings'],
+          startedAt: '2026-05-11T00:00:00.000Z',
+          stdoutLog: '/runtime/0.2.0/daemon.stdout.log',
+          stderrLog: '/runtime/0.2.0/daemon.stderr.log',
+        },
+      })),
+    };
+
+    await expect(
+      runKtxRuntime(
+        { command: 'start', cliVersion: '0.2.0', feature: 'local-embeddings', force: true },
+        io.io,
+        deps,
+      ),
+    ).resolves.toBe(0);
+
+    expect(deps.startDaemon).toHaveBeenCalledWith({
+      cliVersion: '0.2.0',
+      features: ['local-embeddings'],
+      force: true,
+    });
+    expect(io.stdout()).toContain('Started KTX Python daemon');
+    expect(io.stdout()).toContain('url: http://127.0.0.1:61234');
+    expect(io.stdout()).toContain('pid: 4242');
+    expect(io.stdout()).toContain('features: core, local-embeddings');
+    expect(io.stdout()).toContain('stderr: /runtime/0.2.0/daemon.stderr.log');
+  });
+
+  it('stops the managed Python daemon', async () => {
+    const io = makeIo();
+    const deps: KtxRuntimeDeps = {
+      stopDaemon: vi.fn(async (): Promise<ManagedPythonDaemonStopResult> => ({
+        status: 'stopped',
+        layout: {
+          cliVersion: '0.2.0',
+          runtimeRoot: '/runtime',
+          versionDir: '/runtime/0.2.0',
+          venvDir: '/runtime/0.2.0/.venv',
+          manifestPath: '/runtime/0.2.0/manifest.json',
+          installLogPath: '/runtime/0.2.0/install.log',
+          assetDir: '/assets/python',
+          assetManifestPath: '/assets/python/manifest.json',
+          pythonPath: '/runtime/0.2.0/.venv/bin/python',
+          daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          daemonStatePath: '/runtime/0.2.0/daemon.json',
+          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
+          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
+        },
+        state: {
+          schemaVersion: 1,
+          pid: 4242,
+          host: '127.0.0.1',
+          port: 61234,
+          version: '0.2.0',
+          features: ['core'],
+          startedAt: '2026-05-11T00:00:00.000Z',
+          stdoutLog: '/runtime/0.2.0/daemon.stdout.log',
+          stderrLog: '/runtime/0.2.0/daemon.stderr.log',
+        },
+      })),
+    };
+
+    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0' }, io.io, deps)).resolves.toBe(0);
+
+    expect(deps.stopDaemon).toHaveBeenCalledWith({ cliVersion: '0.2.0' });
+    expect(io.stdout()).toContain('Stopped KTX Python daemon');
+    expect(io.stdout()).toContain('pid: 4242');
   });
 
   it('prints runtime status as JSON', async () => {

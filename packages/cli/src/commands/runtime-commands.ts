@@ -4,9 +4,11 @@ import type { KtxRuntimeArgs } from '../runtime.js';
 
 type RuntimeFeature = Extract<KtxRuntimeArgs, { command: 'install' }>['feature'];
 
-const runtimeFeatureOption = new Option('--feature <feature>', 'Runtime feature level')
-  .choices(['core', 'local-embeddings'])
-  .default('core');
+function createRuntimeFeatureOption() {
+  return new Option('--feature <feature>', 'Runtime feature level')
+    .choices(['core', 'local-embeddings'])
+    .default('core');
+}
 
 async function runRuntimeArgs(context: KtxCliCommandContext, args: KtxRuntimeArgs): Promise<void> {
   const runner = context.deps.runtime ?? (await import('../runtime.js')).runKtxRuntime;
@@ -22,14 +24,39 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
   runtime
     .command('install')
     .description('Install the bundled Python runtime wheel into the managed runtime')
-    .addOption(runtimeFeatureOption)
+    .addOption(createRuntimeFeatureOption())
+    .option('--yes', 'Accept runtime installation without prompting', false)
     .option('--force', 'Reinstall even when the runtime already looks ready', false)
-    .action(async (options: { feature: RuntimeFeature; force?: boolean }) => {
+    .action(async (options: { feature: RuntimeFeature; yes?: boolean; force?: boolean }) => {
       await runRuntimeArgs(context, {
         command: 'install',
         cliVersion: context.packageInfo.version,
         feature: options.feature,
         force: options.force === true,
+      });
+    });
+
+  runtime
+    .command('start')
+    .description('Start the KTX-managed Python HTTP daemon')
+    .addOption(createRuntimeFeatureOption())
+    .option('--force', 'Restart even when a matching daemon is already running', false)
+    .action(async (options: { feature: RuntimeFeature; force?: boolean }) => {
+      await runRuntimeArgs(context, {
+        command: 'start',
+        cliVersion: context.packageInfo.version,
+        feature: options.feature,
+        force: options.force === true,
+      });
+    });
+
+  runtime
+    .command('stop')
+    .description('Stop the KTX-managed Python HTTP daemon')
+    .action(async () => {
+      await runRuntimeArgs(context, {
+        command: 'stop',
+        cliVersion: context.packageInfo.version,
       });
     });
 

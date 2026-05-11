@@ -1,5 +1,11 @@
 import type { KtxCliIo } from './cli-runtime.js';
 import {
+  startManagedPythonDaemon,
+  stopManagedPythonDaemon,
+  type ManagedPythonDaemonStartResult,
+  type ManagedPythonDaemonStopResult,
+} from './managed-python-daemon.js';
+import {
   doctorManagedPythonRuntime,
   installManagedPythonRuntime,
   pruneManagedPythonRuntimes,
@@ -15,12 +21,20 @@ import {
 
 export type KtxRuntimeArgs =
   | { command: 'install'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
+  | { command: 'start'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
+  | { command: 'stop'; cliVersion: string }
   | { command: 'status'; cliVersion: string; json: boolean }
   | { command: 'doctor'; cliVersion: string; json: boolean }
   | { command: 'prune'; cliVersion: string; dryRun: boolean; yes: boolean };
 
 export interface KtxRuntimeDeps {
   installRuntime?: (options: ManagedPythonRuntimeInstallOptions) => Promise<ManagedPythonRuntimeInstallResult>;
+  startDaemon?: (options: {
+    cliVersion: string;
+    features: KtxRuntimeFeature[];
+    force?: boolean;
+  }) => Promise<ManagedPythonDaemonStartResult>;
+  stopDaemon?: (options: { cliVersion: string }) => Promise<ManagedPythonDaemonStopResult>;
   readStatus?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeStatus>;
   doctorRuntime?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeDoctorCheck[]>;
   pruneRuntime?: (options: {
@@ -43,6 +57,28 @@ function writeInstallResult(io: KtxCliIo, result: ManagedPythonRuntimeInstallRes
   io.stdout.write(`daemon: ${result.manifest.python.daemonExecutable}\n`);
   io.stdout.write(`manifest: ${result.layout.manifestPath}\n`);
   io.stdout.write(`install log: ${result.layout.installLogPath}\n`);
+}
+
+function writeDaemonStart(io: KtxCliIo, result: ManagedPythonDaemonStartResult): void {
+  const verb = result.status === 'reused' ? 'Using existing' : 'Started';
+  io.stdout.write(`${verb} KTX Python daemon\n`);
+  io.stdout.write(`url: ${result.baseUrl}\n`);
+  io.stdout.write(`pid: ${result.state.pid}\n`);
+  io.stdout.write(`version: ${result.state.version}\n`);
+  io.stdout.write(`features: ${result.state.features.join(', ')}\n`);
+  io.stdout.write(`state: ${result.layout.daemonStatePath}\n`);
+  io.stdout.write(`stdout: ${result.state.stdoutLog}\n`);
+  io.stdout.write(`stderr: ${result.state.stderrLog}\n`);
+}
+
+function writeDaemonStop(io: KtxCliIo, result: ManagedPythonDaemonStopResult): void {
+  if (result.status === 'already-stopped') {
+    io.stdout.write('KTX Python daemon already stopped\n');
+    return;
+  }
+  io.stdout.write('Stopped KTX Python daemon\n');
+  io.stdout.write(`pid: ${result.state?.pid ?? 'unknown'}\n`);
+  io.stdout.write(`state: ${result.layout.daemonStatePath}\n`);
 }
 
 function writeStatus(io: KtxCliIo, status: ManagedPythonRuntimeStatus): void {
@@ -93,6 +129,22 @@ export async function runKtxRuntime(
         force: args.force,
       });
       writeInstallResult(io, result);
+      return 0;
+    }
+    if (args.command === 'start') {
+      const startDaemon = deps.startDaemon ?? startManagedPythonDaemon;
+      const result = await startDaemon({
+        cliVersion: args.cliVersion,
+        features: [args.feature],
+        force: args.force,
+      });
+      writeDaemonStart(io, result);
+      return 0;
+    }
+    if (args.command === 'stop') {
+      const stopDaemon = deps.stopDaemon ?? stopManagedPythonDaemon;
+      const result = await stopDaemon({ cliVersion: args.cliVersion });
+      writeDaemonStop(io, result);
       return 0;
     }
     if (args.command === 'status') {
