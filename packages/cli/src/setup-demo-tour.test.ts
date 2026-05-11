@@ -84,7 +84,7 @@ describe('renderDemoCompletionSummary', () => {
 
   it('includes a temp directory warning', () => {
     const plain = stripAnsi(renderDemoCompletionSummary(projectDir, true));
-    expect(plain).toContain('temporary demo directory');
+    expect(plain).toContain('temporary directory');
   });
 
   it('points to ktx setup for real data', () => {
@@ -97,9 +97,13 @@ describe('renderDemoCompletionSummary', () => {
     expect(plain).toContain('agent is connected');
   });
 
+  it('includes star headline', () => {
+    const plain = stripAnsi(renderDemoCompletionSummary(projectDir, true));
+    expect(plain).toContain('★ KTX demo is ready');
+  });
+
   it('shows manual instructions when agent not installed', () => {
     const plain = stripAnsi(renderDemoCompletionSummary(projectDir, false));
-    expect(plain).toContain('agent not installed');
     expect(plain).toContain('--agents');
     expect(plain).toContain(`--project-dir ${projectDir}`);
   });

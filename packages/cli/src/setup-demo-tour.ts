@@ -94,23 +94,27 @@ export function renderDemoAgentTransition(): string {
 }
 
 export function renderDemoCompletionSummary(projectDir: string, agentInstalled: boolean): string {
-  const lines: string[] = [''];
+  const lines: string[] = [
+    '',
+    `${cyan('★')} KTX demo is ready`,
+    '',
+  ];
 
   if (agentInstalled) {
-    lines.push('┌  Your agent is connected to a demo KTX project.');
+    lines.push('  Your agent is connected to a demo KTX project.');
   } else {
-    lines.push('┌  Demo project created (agent not installed).');
-    lines.push('│');
-    lines.push(`│  To connect an agent manually, run:`);
-    lines.push(`│  ${cyan(`ktx setup --agents --project-dir ${projectDir}`)}`);
+    lines.push('  Demo project created. Connect an agent to start using it:');
+    lines.push(`  $ ${cyan(`ktx setup --agents --project-dir ${projectDir}`)}`);
   }
 
-  lines.push('│');
-  lines.push(`│  ${dim('This is a temporary demo directory — data will not persist across sessions.')}`);
-  lines.push(`│  Run ${cyan('ktx setup')} to connect your own data sources.`);
-  lines.push('│');
-  lines.push(`│  Project: ${projectDir}`);
-  lines.push('└');
+  lines.push(
+    '',
+    `  ${dim('⚠')} This project is in a temporary directory and will be`,
+    '    cleaned up by your system. To set up KTX with your own',
+    '    data, run: ktx setup',
+    '',
+    `  Project: ${projectDir}`,
+  );
 
   return lines.join('\n');
 }
