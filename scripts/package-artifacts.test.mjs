@@ -505,16 +505,12 @@ describe('npmSmokePythonEnv', () => {
 });
 
 describe('verification snippets', () => {
-  it('pins smoke dependencies and connector packages to clean-install-safe artifacts', () => {
+  it('pins the smoke project to the public package artifact', () => {
     const layout = packageArtifactLayout('/repo/ktx');
-    const packageJson = npmSmokePackageJson(layout);
 
-    for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
-      assert.equal(packageJson.dependencies[packageInfo.name], `file:${layout.npmTarballs[packageInfo.name]}`);
-      assert.equal(packageJson.pnpm.overrides[packageInfo.name], `file:${layout.npmTarballs[packageInfo.name]}`);
-    }
-    assert.equal(packageJson.dependencies['@modelcontextprotocol/sdk'], '^1.27.1');
-    assert.deepEqual(packageJson.pnpm.onlyBuiltDependencies, ['better-sqlite3']);
+    assert.deepEqual(npmSmokePackageJson(layout).dependencies, {
+      '@kaelio/ktx': `file:${layout.cliTarball}`,
+    });
   });
 
   it('exposes manifest verification as a package artifact command', async () => {
@@ -527,116 +523,40 @@ describe('verification snippets', () => {
     assert.equal(packageJson.scripts['artifacts:verify-manifest'], 'node scripts/package-artifacts.mjs verify-manifest');
   });
 
-  it('verifies installed dbt extraction exports from @ktx/context/ingest', () => {
-    const source = npmVerifySource();
-
-    assert.match(source, /const ingest = await import\('@ktx\/context\/ingest'\);/);
-    assert.match(source, /const dbtExtractionExports = \[/);
-    assert.match(source, /throw new Error\('Missing dbt extraction export: ' \+ exportName\);/);
-
-    for (const exportName of [
-      'parseMetricflowFiles',
-      'parseMetricflowPullConfig',
-      'importMetricflowSemanticModels',
-      'parseDbtSchemaFiles',
-      'toDescriptionUpdates',
-      'toRelationshipUpdates',
-      'mergeSemanticModelTables',
-      'loadProjectInfo',
-      'loadDbtSchemaFiles',
-    ]) {
-      assert.match(source, new RegExp(`\\['${exportName}', ingest\\.${exportName}\\]`));
-    }
-  });
-
-  it('asserts the public npm and connector entry points that clean installs must expose', () => {
-    const source = npmVerifySource();
-
-    assert.match(source, /@ktx\/context/);
-    assert.match(source, /@ktx\/context\/project/);
-    assert.match(source, /@ktx\/context\/mcp/);
-    assert.match(source, /@ktx\/context\/memory/);
-    assert.match(source, /@ktx\/context\/daemon/);
-    assert.match(source, /@ktx\/cli/);
-    assert.match(source, /@ktx\/llm/);
-    assert.match(source, /createKtxLlmProvider/);
-    assert.match(source, /KtxMessageBuilder/);
-    assert.match(source, /createKtxEmbeddingProvider/);
-    assert.doesNotMatch(source, /createGatewayLlmProvider/);
-    assert.match(source, /createLocalProjectMemoryCapture/);
-    for (const packageName of CONNECTOR_PACKAGE_NAMES) {
-      assert.match(source, new RegExp(packageName.replace('/', '\\/')));
-    }
-    assert.match(source, /KtxSqliteScanConnector/);
-    assert.match(source, /KtxPostgresScanConnector/);
-    assert.match(source, /KtxBigQueryScanConnector/);
-    assert.match(source, /KtxSnowflakeScanConnector/);
-    assert.match(source, /KtxPostHogScanConnector/);
-  });
-
-  it('asserts installed hybrid search exports and CLI smoke coverage', () => {
+  it('asserts the public npm entry point that clean installs must expose', () => {
     const verifySource = npmVerifySource();
-    const runtimeSource = npmRuntimeSmokeSource();
-    const demoSource = npmDemoSmokeSource();
 
-    assert.match(verifySource, /const search = await import\('@ktx\/context\/search'\);/);
-    assert.match(verifySource, /HybridSearchCore/);
-    assert.match(verifySource, /assertSearchBackendConformanceCase/);
-    assert.match(verifySource, /assertSearchBackendCapabilities/);
-
-    assert.match(runtimeSource, /ktx agent wiki search hybrid metadata verified/);
-    assert.match(runtimeSource, /ktx agent sl list hybrid metadata verified/);
-    assert.match(runtimeSource, /agent_sl_search_missing_project/);
-    assert.match(runtimeSource, /agent_sl_search_no_connections/);
-    assert.match(runtimeSource, /agent_sl_search_no_indexed_sources/);
-
-    assert.match(demoSource, /ktx seeded demo agent wiki search verified/);
-    assert.match(demoSource, /ktx seeded demo agent sl search verified/);
+    assert.match(verifySource, /const cli = await import\('@kaelio\/ktx'\);/);
+    assert.match(verifySource, /getKtxCliPackageInfo/);
+    assert.match(verifySource, /runKtxCli/);
+    assert.doesNotMatch(verifySource, /@ktx\/context/);
+    assert.doesNotMatch(verifySource, /@ktx\/llm/);
+    assert.doesNotMatch(verifySource, /@ktx\/connector-/);
   });
 
-  it('runs installed CLI commands and MCP through an installed daemon HTTP server', () => {
+  it('runs installed CLI commands through the public package runtime', () => {
     const source = npmRuntimeSmokeSource();
 
-    assert.match(source, /@modelcontextprotocol\/sdk\/client\/index\.js/);
-    assert.match(source, /@modelcontextprotocol\/sdk\/client\/stdio\.js/);
-    assert.match(source, /spawn\(command, args/);
-    assert.match(source, /createServer/);
-    assert.match(source, /request as httpRequest/);
-    assert.match(source, /getAvailablePort/);
-    assert.match(source, /startSemanticDaemon/);
-    assert.match(source, /waitForHttpHealth/);
-    assert.match(source, /stopSemanticDaemon/);
-    assert.match(source, /'ktx-daemon'/);
-    assert.match(source, /'serve-http'/);
-    assert.match(source, /'--host'/);
-    assert.match(source, /'127\.0\.0\.1'/);
-    assert.match(source, /'--port'/);
-    assert.match(source, /\/health/);
-    assert.match(source, /--semantic-compute-url/);
-    assert.match(source, /createDaemonLookerTableIdentifierParser/);
-    assert.match(source, /LocalLookerRuntimeStore/);
-    assert.match(source, /Looker daemon table identifier parser verified/);
-    assert.match(source, /Looker local runtime store verified/);
-    assert.match(source, /semanticComputeUrl/);
+    assert.match(source, /ktx public package version/);
+    assert.match(source, /@kaelio\\\/ktx 0\\\.0\\\.0-private/);
+    assert.match(source, /'ktx', 'sl', 'query'/);
+    assert.doesNotMatch(source, /@ktx\/context/);
+    assert.doesNotMatch(source, /@modelcontextprotocol/);
+    assert.doesNotMatch(source, /startSemanticDaemon/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'setup'/);
     assert.match(source, /knowledge', 'global', 'revenue\.md'/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'agent',\s*'wiki',\s*'search'/);
     assert.match(source, /semantic-layer', 'warehouse', 'orders\.yaml'/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'agent',\s*'sl',\s*'list'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'agent',\s*'sl',\s*'query'/);
     assert.match(source, /orders\.order_count/);
     assert.match(source, /sqlite3/);
     assert.match(source, /driver: sqlite/);
     assert.match(source, /path: warehouse\.db/);
     assert.match(source, /live-database/);
     assert.match(source, /'--execute'/);
-    assert.match(source, /'--execute-queries'/);
-    assert.match(source, /slValidateResult\.success, true/);
-    assert.match(source, /slQueryResult\.dialect, 'sqlite'/);
-    assert.match(source, /slQueryResult\.plan\.execution\.driver, 'sqlite'/);
     assert.match(source, /"mode": "compile_only"/);
     assert.match(source, /"mode": "executed"/);
-    assert.match(source, /ktx agent sl query sqlite execute/);
+    assert.match(source, /ktx sl query sqlite execute/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'dev',\s*'scan',\s*'warehouse'/);
     assert.match(source, /'--mode',\s*'enriched'/);
     assert.doesNotMatch(source, /'--enrich'/);
@@ -646,28 +566,7 @@ describe('verification snippets', () => {
     assert.match(source, /scanReportJson\.artifactPaths\.enrichmentArtifacts/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
-    assert.match(source, /backend: gateway/);
-    assert.match(source, /models:/);
-    assert.match(source, /default: smoke\/provider/);
-    assert.match(source, /api_key: env:AI_GATEWAY_API_KEY/);
     assert.match(source, /run\('pnpm', \['exec', 'ktx', 'dev', 'ingest', 'run'/);
-    assert.match(source, /'serve', '--mcp', 'stdio'/);
-    assert.doesNotMatch(source, /'--semantic-compute',\n\s*'--execute-queries'/);
-    assert.match(source, /'--memory-capture', '--memory-model', 'smoke\/provider'/);
-    assert.match(source, /mcpServerStderr/);
-    assert.match(source, /ktx serve stderr/);
-    assert.match(source, /sl_validate/);
-    assert.match(source, /sl_query/);
-    assert.match(source, /memory_capture/);
-    assert.match(source, /memory_capture_status/);
-    assert.match(source, /connection_test/);
-    assert.match(source, /scan_trigger/);
-    assert.match(source, /scan_status/);
-    assert.match(source, /scan_report/);
-    assert.match(source, /scan_list_artifacts/);
-    assert.match(source, /scan_read_artifact/);
-    assert.match(source, /mcpScanArtifacts\.artifacts\.find/);
-    assert.match(source, /AI_GATEWAY_API_KEY/);
     assert.match(source, /access\(join\(projectDir, '\.ktx', 'db\.sqlite'\)\)/);
     assert.match(source, /SQLite knowledge index/);
     assert.match(source, /ktx dev ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
@@ -688,15 +587,9 @@ describe('verification snippets', () => {
       assert.match(source, /'dev', 'doctor', 'setup', '--no-input'/);
       assert.match(source, /'--plain'/);
       assert.match(source, /ktx setup demo seeded wrote unexpected stderr/);
+      assert.match(source, /Object\.keys\(packageJson\.dependencies\)/);
+      assert.match(source, /'@kaelio\/ktx'/);
     });
-  });
-
-  it('checks packaged ingest runtime assets in the installed npm smoke', () => {
-    const source = npmRuntimeSmokeSource();
-
-    assert.match(source, /notion_synthesize\/SKILL\.md/);
-    assert.match(source, /skills\/page_triage_classifier\.md/);
-    assert.match(source, /skills\/light_extraction\.md/);
   });
 
   it('asserts the Python modules that clean installs must expose', () => {

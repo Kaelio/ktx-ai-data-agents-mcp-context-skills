@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -59,78 +59,38 @@ function requireSuccess(label, result) {
   );
 }
 
-function parseJson(label, text) {
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new Error(`${label} did not produce JSON: ${error instanceof Error ? error.message : String(error)}\n${text}`);
-  }
-}
-
-function assertHybridWikiSearch(result) {
-  const payload = parseJson('published package wiki search', result.stdout);
-  assert.ok(payload.totalFound > 0, 'published package wiki search should return results');
-  assert.ok(
-    payload.results.some((entry) => Array.isArray(entry.matchReasons) && entry.matchReasons.length > 0),
-    'published package wiki search should expose match reasons',
-  );
-}
-
-function assertHybridSlSearch(result) {
-  const payload = parseJson('published package semantic-layer search', result.stdout);
-  assert.ok(payload.totalSources > 0, 'published package semantic-layer search should return sources');
-  assert.ok(
-    payload.sources.some((entry) => Array.isArray(entry.matchReasons) && entry.matchReasons.length > 0),
-    'published package semantic-layer search should expose match reasons',
-  );
-}
-
-function assertMissingProjectReadiness(result, emptyProjectDir) {
-  assert.equal(result.code, 1, 'missing-project semantic-layer search should exit 1');
-  assert.equal(result.stdout, '', 'missing-project semantic-layer search should not write JSON errors to stdout');
-
-  const payload = parseJson('published package missing-project semantic-layer search', result.stderr);
-  assert.deepEqual(payload, {
-    ok: false,
-    error: {
-      code: 'agent_sl_search_missing_project',
-      message: `Semantic-layer search needs an initialized KTX project at ${emptyProjectDir}.`,
-      nextSteps: [
-        'ktx demo',
-        `ktx setup --project-dir ${emptyProjectDir}`,
-        'ktx ingest <connection>',
-        `ktx agent sl list --json --query "revenue" --project-dir ${emptyProjectDir}`,
-      ],
-    },
-  });
-}
-
 export async function runPublishedPackageSmoke(config) {
   const root = await mkdtemp(join(tmpdir(), 'ktx-published-package-smoke-'));
   try {
     const projectDir = join(root, 'demo-project');
-    const emptyProjectDir = join(root, 'empty-project');
-    await mkdir(emptyProjectDir, { recursive: true });
 
-    const commands = buildPublishedPackageSmokeCommands(config, projectDir, emptyProjectDir);
-    for (const command of commands.slice(0, 4)) {
-      const result = await runCommand(command.command, command.args, { env: command.env });
+    const commands = buildPublishedPackageSmokeCommands(config, projectDir);
+    const pnpmHome = join(root, 'pnpm-home');
+    const globalEnv = {
+      PNPM_HOME: pnpmHome,
+      PATH: `${pnpmHome}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
+    };
+    for (const command of commands) {
+      const isGlobalCommand = command.label.includes('global');
+      const result = await runCommand(command.command, command.args, {
+        cwd: command.label.includes('local') || isGlobalCommand ? root : undefined,
+        env: isGlobalCommand ? { ...globalEnv, ...command.env } : command.env,
+      });
       requireSuccess(command.label, result);
-      if (command.label === 'published package wiki hybrid search') {
-        assertHybridWikiSearch(result);
+      if (
+        command.label === 'published package version' ||
+        command.label === 'published package local binary' ||
+        command.label === 'published package global binary'
+      ) {
+        assert.match(result.stdout, /@kaelio\/ktx /);
       }
-      if (command.label === 'published package semantic-layer hybrid search') {
-        assertHybridSlSearch(result);
+      if (command.label === 'published package sl query') {
+        assert.match(result.stdout, /SELECT/i);
+        assert.match(result.stdout, /contracts/i);
       }
     }
 
-    const missingProjectCommand = commands[4];
-    const missingProject = await runCommand(missingProjectCommand.command, missingProjectCommand.args, {
-      env: missingProjectCommand.env,
-    });
-    assertMissingProjectReadiness(missingProject, emptyProjectDir);
-
-    process.stdout.write('published package hybrid search smoke verified\n');
+    process.stdout.write('published package invocation smoke verified\n');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

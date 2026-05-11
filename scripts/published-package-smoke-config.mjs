@@ -125,28 +125,54 @@ export function buildPublishedPackageNpxCommand(config, args, label = 'published
   };
 }
 
-export function buildPublishedPackageSmokeCommands(config, projectDir, emptyProjectDir) {
+export function buildPublishedPackageSmokeCommands(config, projectDir) {
   return [
     buildPublishedPackageNpxCommand(config, ['--version'], 'published package version'),
     buildPublishedPackageNpxCommand(
       config,
-      ['demo', '--project-dir', projectDir, '--no-input', '--plain'],
-      'published package demo',
+      ['setup', 'demo', '--project-dir', projectDir, '--no-input', '--plain'],
+      'published package setup demo',
     ),
     buildPublishedPackageNpxCommand(
       config,
-      ['agent', 'wiki', 'search', 'ARR contract', '--json', '--limit', '5', '--project-dir', projectDir],
-      'published package wiki hybrid search',
+      [
+        'sl',
+        'query',
+        '--project-dir',
+        projectDir,
+        '--connection-id',
+        'orbit_demo',
+        '--measure',
+        'contracts.contract_count',
+        '--format',
+        'sql',
+        '--yes',
+      ],
+      'published package sl query',
     ),
-    buildPublishedPackageNpxCommand(
-      config,
-      ['agent', 'sl', 'list', '--json', '--query', 'ARR', '--project-dir', projectDir],
-      'published package semantic-layer hybrid search',
-    ),
-    buildPublishedPackageNpxCommand(
-      config,
-      ['agent', 'sl', 'list', '--json', '--query', 'revenue', '--project-dir', emptyProjectDir],
-      'published package missing-project readiness',
-    ),
+    {
+      label: 'published package local install',
+      command: 'pnpm',
+      args: ['add', publishedPackageSpec(config)],
+      env: config.registry ? { npm_config_registry: config.registry } : {},
+    },
+    {
+      label: 'published package local binary',
+      command: 'pnpm',
+      args: ['exec', 'ktx', '--version'],
+      env: config.registry ? { npm_config_registry: config.registry } : {},
+    },
+    {
+      label: 'published package global install',
+      command: 'pnpm',
+      args: ['add', '--global', publishedPackageSpec(config)],
+      env: config.registry ? { npm_config_registry: config.registry } : {},
+    },
+    {
+      label: 'published package global binary',
+      command: 'ktx',
+      args: ['--version'],
+      env: config.registry ? { npm_config_registry: config.registry } : {},
+    },
   ];
 }

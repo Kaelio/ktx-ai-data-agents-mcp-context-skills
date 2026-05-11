@@ -560,28 +560,16 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-function npmTarballDependencyEntries(layout) {
-  return Object.fromEntries(
-    NPM_ARTIFACT_PACKAGES.map((packageInfo) => [
-      packageInfo.name,
-      `file:${layout.npmTarballs[packageInfo.name]}`,
-    ]),
-  );
-}
-
 export function npmSmokePackageJson(layout) {
-  const npmTarballDependencies = npmTarballDependencyEntries(layout);
   return {
     name: 'ktx-artifact-npm-smoke',
     version: '0.0.0',
     private: true,
     type: 'module',
     dependencies: {
-      ...npmTarballDependencies,
-      '@modelcontextprotocol/sdk': '^1.27.1',
+      '@kaelio/ktx': `file:${layout.cliTarball}`,
     },
     pnpm: {
-      overrides: npmTarballDependencies,
       onlyBuiltDependencies: ['better-sqlite3'],
     },
   };
@@ -589,103 +577,13 @@ export function npmSmokePackageJson(layout) {
 
 export function npmVerifySource() {
   return `
-const context = await import('@ktx/context');
-const project = await import('@ktx/context/project');
-const mcp = await import('@ktx/context/mcp');
-const memory = await import('@ktx/context/memory');
-const daemon = await import('@ktx/context/daemon');
-const ingest = await import('@ktx/context/ingest');
-const search = await import('@ktx/context/search');
-const llm = await import('@ktx/llm');
-const cli = await import('@ktx/cli');
-const bigqueryConnector = await import('@ktx/connector-bigquery');
-const clickhouseConnector = await import('@ktx/connector-clickhouse');
-const mysqlConnector = await import('@ktx/connector-mysql');
-const postgresConnector = await import('@ktx/connector-postgres');
-const posthogConnector = await import('@ktx/connector-posthog');
-const snowflakeConnector = await import('@ktx/connector-snowflake');
-const sqliteConnector = await import('@ktx/connector-sqlite');
-const sqlserverConnector = await import('@ktx/connector-sqlserver');
+const cli = await import('@kaelio/ktx');
 
-if (context.ktxContextPackageInfo.name !== '@ktx/context') {
-  throw new Error('Unexpected @ktx/context package info');
+if (cli.getKtxCliPackageInfo().name !== '@kaelio/ktx') {
+  throw new Error('Unexpected @kaelio/ktx package info');
 }
-if (typeof llm.createKtxLlmProvider !== 'function') {
-  throw new Error('Missing createKtxLlmProvider export');
-}
-if (typeof llm.KtxMessageBuilder !== 'function') {
-  throw new Error('Missing KtxMessageBuilder export');
-}
-if (typeof llm.createKtxEmbeddingProvider !== 'function') {
-  throw new Error('Missing createKtxEmbeddingProvider export');
-}
-if (typeof project.initKtxProject !== 'function') {
-  throw new Error('Missing initKtxProject export');
-}
-if (typeof mcp.createDefaultKtxMcpServer !== 'function') {
-  throw new Error('Missing createDefaultKtxMcpServer export');
-}
-if (typeof memory.createLocalProjectMemoryCapture !== 'function') {
-  throw new Error('Missing createLocalProjectMemoryCapture export');
-}
-if (typeof search.HybridSearchCore !== 'function') {
-  throw new Error('Missing HybridSearchCore export from @ktx/context/search');
-}
-if (typeof search.assertSearchBackendConformanceCase !== 'function') {
-  throw new Error('Missing assertSearchBackendConformanceCase export from @ktx/context/search');
-}
-if (typeof search.assertSearchBackendCapabilities !== 'function') {
-  throw new Error('Missing assertSearchBackendCapabilities export from @ktx/context/search');
-}
-if (typeof daemon.createPythonSemanticLayerComputePort !== 'function') {
-  throw new Error('Missing createPythonSemanticLayerComputePort export');
-}
-const dbtExtractionExports = [
-  ['parseMetricflowFiles', ingest.parseMetricflowFiles],
-  ['parseMetricflowPullConfig', ingest.parseMetricflowPullConfig],
-  ['importMetricflowSemanticModels', ingest.importMetricflowSemanticModels],
-  ['parseDbtSchemaFiles', ingest.parseDbtSchemaFiles],
-  ['toDescriptionUpdates', ingest.toDescriptionUpdates],
-  ['toRelationshipUpdates', ingest.toRelationshipUpdates],
-  ['mergeSemanticModelTables', ingest.mergeSemanticModelTables],
-  ['loadProjectInfo', ingest.loadProjectInfo],
-  ['loadDbtSchemaFiles', ingest.loadDbtSchemaFiles],
-];
-
-for (const [exportName, exportValue] of dbtExtractionExports) {
-  if (typeof exportValue !== 'function') {
-    throw new Error('Missing dbt extraction export: ' + exportName);
-  }
-}
-
-const metricflowConfig = ingest.parseMetricflowPullConfig({
-  repoUrl: 'https://example.com/acme/analytics.git',
-});
-if (metricflowConfig.branch !== 'main' || metricflowConfig.path !== null) {
-  throw new Error('Unexpected MetricFlow pull-config defaults from installed @ktx/context/ingest');
-}
-if (cli.getKtxCliPackageInfo().name !== '@ktx/cli') {
-  throw new Error('Unexpected @ktx/cli package info');
-}
-
-const connectorExports = [
-  ['@ktx/connector-bigquery', bigqueryConnector.KtxBigQueryScanConnector, bigqueryConnector.KtxBigQueryDialect],
-  ['@ktx/connector-clickhouse', clickhouseConnector.KtxClickHouseScanConnector, clickhouseConnector.KtxClickHouseDialect],
-  ['@ktx/connector-mysql', mysqlConnector.KtxMysqlScanConnector, mysqlConnector.KtxMysqlDialect],
-  ['@ktx/connector-postgres', postgresConnector.KtxPostgresScanConnector, postgresConnector.KtxPostgresDialect],
-  ['@ktx/connector-posthog', posthogConnector.KtxPostHogScanConnector, posthogConnector.KtxPostHogDialect],
-  ['@ktx/connector-snowflake', snowflakeConnector.KtxSnowflakeScanConnector, snowflakeConnector.KtxSnowflakeDialect],
-  ['@ktx/connector-sqlite', sqliteConnector.KtxSqliteScanConnector, sqliteConnector.KtxSqliteDialect],
-  ['@ktx/connector-sqlserver', sqlserverConnector.KtxSqlServerScanConnector, sqlserverConnector.KtxSqlServerDialect],
-];
-
-for (const [packageName, ScanConnector, Dialect] of connectorExports) {
-  if (typeof ScanConnector !== 'function') {
-    throw new Error('Missing scan connector export from ' + packageName);
-  }
-  if (typeof Dialect !== 'function') {
-    throw new Error('Missing dialect export from ' + packageName);
-  }
+if (typeof cli.runKtxCli !== 'function') {
+  throw new Error('Missing runKtxCli export');
 }
 `;
 }
@@ -693,29 +591,13 @@ for (const [packageName, ScanConnector, Dialect] of connectorExports) {
 export function npmRuntimeSmokeSource() {
   return `
 import assert from 'node:assert/strict';
-import { spawn, execFile } from 'node:child_process';
-import { once } from 'node:events';
+import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { request as httpRequest } from 'node:http';
-import { createServer } from 'node:net';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import {
-  createDaemonLookerTableIdentifierParser,
-  LocalLookerRuntimeStore,
-} from '@ktx/context/ingest';
 
 const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const contextPackageRoot = dirname(require.resolve('@ktx/context/package.json'));
-
-async function requireContextRuntimeAsset(relativePath) {
-  await access(join(contextPackageRoot, relativePath));
-}
 
 async function run(command, args, options = {}) {
   process.stdout.write('$ ' + command + ' ' + args.join(' ') + '\\n');
@@ -770,140 +652,6 @@ function getRunId(stdout) {
   return match[1];
 }
 
-function requireToolNames(tools, expectedNames) {
-  const names = tools.tools.map((tool) => tool.name).sort();
-  for (const expectedName of expectedNames) {
-    assert.ok(names.includes(expectedName), 'MCP tool list did not include ' + expectedName + ': ' + names.join(', '));
-  }
-}
-
-function structuredContent(result) {
-  assert.ok(result.structuredContent, 'MCP result did not include structuredContent');
-  return result.structuredContent;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function getAvailablePort() {
-  const server = createServer();
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    server.close();
-    throw new Error('expected TCP server address for daemon smoke');
-  }
-  const port = address.port;
-  server.close();
-  await once(server, 'close');
-  return port;
-}
-
-function httpGetOk(url) {
-  return new Promise((resolve, reject) => {
-    const request = httpRequest(url, { method: 'GET' }, (response) => {
-      response.resume();
-      response.on('end', () => resolve((response.statusCode ?? 0) >= 200 && (response.statusCode ?? 0) < 300));
-    });
-    request.on('error', reject);
-    request.end();
-  });
-}
-
-function spawnLogged(command, args, options = {}) {
-  const stdout = [];
-  const stderr = [];
-  let spawnError;
-  const child = spawn(command, args, {
-    cwd: options.cwd,
-    env: options.env ?? process.env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  child.stdout.on('data', (chunk) => stdout.push(chunk));
-  child.stderr.on('data', (chunk) => stderr.push(chunk));
-  child.on('error', (error) => {
-    spawnError = error;
-  });
-  return {
-    child,
-    error() {
-      return spawnError;
-    },
-    output() {
-      return {
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
-      };
-    },
-  };
-}
-
-async function waitForHttpHealth(url, daemon) {
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    if (daemon.error()) {
-      const output = daemon.output();
-      throw new Error(
-        'Failed to start ktx-daemon serve-http: ' +
-          daemon.error().message +
-          '\\nstdout:\\n' +
-          output.stdout +
-          '\\nstderr:\\n' +
-          output.stderr,
-      );
-    }
-    if (daemon.child.exitCode !== null || daemon.child.signalCode !== null) {
-      const output = daemon.output();
-      throw new Error(
-        'ktx-daemon serve-http exited before health check passed\\nstdout:\\n' +
-          output.stdout +
-          '\\nstderr:\\n' +
-          output.stderr,
-      );
-    }
-    try {
-      if (await httpGetOk(url)) {
-        return;
-      }
-    } catch {
-      await sleep(100);
-      continue;
-    }
-    await sleep(100);
-  }
-  const output = daemon.output();
-  throw new Error('Timed out waiting for ' + url + '\\nstdout:\\n' + output.stdout + '\\nstderr:\\n' + output.stderr);
-}
-
-async function startSemanticDaemon(port) {
-  const daemon = spawnLogged('ktx-daemon', [
-    'serve-http',
-    '--host',
-    '127.0.0.1',
-    '--port',
-    String(port),
-    '--log-level',
-    'warning',
-  ]);
-  await waitForHttpHealth('http://127.0.0.1:' + port + '/health', daemon);
-  return daemon;
-}
-
-async function stopSemanticDaemon(daemon) {
-  if (daemon.child.exitCode !== null || daemon.child.signalCode !== null) {
-    return;
-  }
-  daemon.child.kill('SIGTERM');
-  const closed = once(daemon.child, 'close').then(() => true);
-  const timedOut = sleep(5_000).then(() => false);
-  if (!(await Promise.race([closed, timedOut]))) {
-    daemon.child.kill('SIGKILL');
-    await once(daemon.child, 'close');
-  }
-}
-
 async function writeSqliteWarehouse(projectDir) {
   const createDb = await run('python', [
     '-c',
@@ -928,15 +676,14 @@ async function writeSqliteWarehouse(projectDir) {
   requireSuccess('create sqlite warehouse', createDb);
 }
 
-await requireContextRuntimeAsset('skills/notion_synthesize/SKILL.md');
-await requireContextRuntimeAsset('prompts/skills/page_triage_classifier.md');
-await requireContextRuntimeAsset('prompts/skills/light_extraction.md');
-process.stdout.write('packaged ingest runtime assets verified\\n');
-
 const root = await mkdtemp(join(tmpdir(), 'ktx-installed-cli-smoke-'));
 try {
   const projectDir = join(root, 'project');
   const sourceDir = join(root, 'source');
+
+  const version = await run('pnpm', ['exec', 'ktx', '--version']);
+  requireSuccess('ktx public package version', version);
+  requireOutput('ktx public package version', version, /@kaelio\\/ktx 0\\.0\\.0-private/);
 
   const missingProjectDir = join(root, 'missing-project');
   await mkdir(missingProjectDir, { recursive: true });
@@ -1043,22 +790,6 @@ try {
     'utf-8',
   );
   await writeSqliteWarehouse(projectDir);
-
-  const lookerStore = new LocalLookerRuntimeStore({ dbPath: join(projectDir, '.ktx', 'db.sqlite') });
-  await lookerStore.setCursors('prod-looker', {
-    dashboardsLastSyncedAt: null,
-    looksLastSyncedAt: null,
-  });
-  await lookerStore.upsertConnectionMapping({
-    lookerConnectionId: 'prod-looker',
-    lookerConnectionName: 'analytics',
-    ktxConnectionId: 'warehouse',
-    source: 'cli',
-  });
-  const lookerMappings = await lookerStore.readMappings('prod-looker');
-  assert.equal(lookerMappings.length, 1);
-  assert.equal(lookerMappings[0].ktxConnectionId, 'warehouse');
-  process.stdout.write('Looker local runtime store verified\\n');
 
   await mkdir(join(projectDir, 'knowledge', 'global'), { recursive: true });
   await writeFile(
@@ -1168,40 +899,41 @@ try {
   requireIncludes(agentSlSearchJson.sources[0].matchReasons, 'lexical', 'agent sl search match reasons');
   process.stdout.write('ktx agent sl list hybrid metadata verified\\n');
 
-  const slQueryFile = join(projectDir, 'sl-query.json');
-  await writeFile(slQueryFile, '{"measures":["orders.order_count"],"dimensions":[]}\\n', 'utf-8');
-
-  const slQuery = await run('pnpm', ['exec', 'ktx', 'agent', 'sl', 'query',
-    '--json',
+  const slQuery = await run('pnpm', ['exec', 'ktx', 'sl', 'query',
     '--connection-id',
     'warehouse',
-    '--query-file',
-    slQueryFile,
+    '--measure',
+    'orders.order_count',
+    '--format',
+    'json',
+    '--yes',
     '--project-dir',
     projectDir,
   ]);
-  requireSuccess('ktx agent sl query', slQuery);
-  requireOutput('ktx agent sl query', slQuery, /"mode": "compile_only"/);
-  requireOutput('ktx agent sl query', slQuery, /orders/);
+  requireSuccess('ktx sl query', slQuery);
+  requireOutput('ktx sl query', slQuery, /"mode": "compile_only"/);
+  requireOutput('ktx sl query', slQuery, /orders/);
 
-  const sqliteSlQuery = await run('pnpm', ['exec', 'ktx', 'agent', 'sl', 'query',
-    '--json',
+  const sqliteSlQuery = await run('pnpm', ['exec', 'ktx', 'sl', 'query',
     '--connection-id',
     'warehouse',
-    '--query-file',
-    slQueryFile,
+    '--measure',
+    'orders.order_count',
+    '--format',
+    'json',
     '--execute',
     '--max-rows',
     '100',
+    '--yes',
     '--project-dir',
     projectDir,
   ]);
-  requireSuccess('ktx agent sl query sqlite execute', sqliteSlQuery);
-  requireOutput('ktx agent sl query sqlite execute', sqliteSlQuery, /"dialect": "sqlite"/);
-  requireOutput('ktx agent sl query sqlite execute', sqliteSlQuery, /"mode": "executed"/);
-  requireOutput('ktx agent sl query sqlite execute', sqliteSlQuery, /"driver": "sqlite"/);
-  requireOutput('ktx agent sl query sqlite execute', sqliteSlQuery, /"rows": \\[\\s*\\[\\s*3\\s*\\]\\s*\\]/);
-  process.stdout.write('ktx agent sl query sqlite execute verified\\n');
+  requireSuccess('ktx sl query sqlite execute', sqliteSlQuery);
+  requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"dialect": "sqlite"/);
+  requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"mode": "executed"/);
+  requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"driver": "sqlite"/);
+  requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"rows": \\[\\s*\\[\\s*3\\s*\\]\\s*\\]/);
+  process.stdout.write('ktx sl query sqlite execute verified\\n');
 
   const structuralScan = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'warehouse',
     '--project-dir',
@@ -1283,195 +1015,6 @@ try {
 
   await access(join(projectDir, '.ktx', 'db.sqlite'));
   process.stdout.write('ktx dev ingest provider guard verified\\n');
-
-  await writeFile(
-    join(projectDir, 'ktx.yaml'),
-    [
-      'project: warehouse',
-      'connections:',
-      '  warehouse:',
-      '    driver: sqlite',
-      '    path: warehouse.db',
-      '    readonly: true',
-      'storage:',
-      '  state: sqlite',
-      '  search: sqlite-fts5',
-      'scan:',
-      '  enrichment:',
-      '    mode: deterministic',
-      'llm:',
-      '  provider:',
-      '    backend: gateway',
-      '    gateway:',
-      '      api_key: env:AI_GATEWAY_API_KEY',
-      '  models:',
-      '    default: smoke/provider',
-      'ingest:',
-      '  adapters:',
-      '    - fake',
-      '    - live-database',
-      '',
-    ].join('\\n'),
-    'utf-8',
-  );
-
-  const daemonPort = await getAvailablePort();
-  const semanticComputeUrl = 'http://127.0.0.1:' + daemonPort;
-  process.stdout.write('ktx-daemon serve-http --host 127.0.0.1 --port ' + daemonPort + '\\n');
-  const daemon = await startSemanticDaemon(daemonPort);
-  const lookerParser = createDaemonLookerTableIdentifierParser({ baseUrl: semanticComputeUrl });
-  const parsedLookerTables = await lookerParser.parse([
-    { key: 'orders', sql_table_name: 'orders', dialect: 'sqlite' },
-  ]);
-  assert.equal(parsedLookerTables.orders.ok, true);
-  assert.equal(parsedLookerTables.orders.name, 'orders');
-  assert.equal(parsedLookerTables.orders.canonical_table, 'orders');
-  process.stdout.write('Looker daemon table identifier parser verified\\n');
-  const client = new Client({ name: 'ktx-artifact-smoke-client', version: '0.0.0' });
-  process.stdout.write('ktx serve --mcp stdio --semantic-compute-url ' + semanticComputeUrl + ' --execute-queries\\n');
-  const transport = new StdioClientTransport({
-    command: 'pnpm',
-    args: [
-      'exec',
-      'ktx',
-      'serve', '--mcp', 'stdio',
-      '--project-dir',
-      projectDir,
-      '--user-id',
-      'artifact-smoke-user',
-      '--semantic-compute-url',
-      semanticComputeUrl,
-      '--execute-queries',
-      '--memory-capture', '--memory-model', 'smoke/provider',
-    ],
-    cwd: process.cwd(),
-    stderr: 'pipe',
-    env: {
-      ...process.env,
-      AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY ?? 'artifact-smoke-token',
-    },
-  });
-  const mcpServerStderr = [];
-  transport.stderr?.on('data', (chunk) => mcpServerStderr.push(chunk));
-
-  try {
-    await client.connect(transport);
-    const tools = await client.listTools();
-    requireToolNames(tools, [
-      'connection_list',
-      'connection_test',
-      'ingest_status',
-      'ingest_trigger',
-      'knowledge_read',
-      'knowledge_search',
-      'knowledge_write',
-      'memory_capture',
-      'memory_capture_status',
-      'scan_list_artifacts',
-      'scan_read_artifact',
-      'scan_report',
-      'scan_status',
-      'scan_trigger',
-      'sl_list_sources',
-      'sl_query',
-      'sl_read_source',
-      'sl_validate',
-      'sl_write_source',
-    ]);
-    const slValidateResult = structuredContent(await client.callTool({
-      name: 'sl_validate',
-      arguments: {
-        connectionId: 'warehouse',
-        names: ['orders'],
-      },
-    }));
-    assert.equal(slValidateResult.success, true);
-    assert.deepEqual(slValidateResult.errors, []);
-    const slQueryResult = structuredContent(await client.callTool({
-      name: 'sl_query',
-      arguments: {
-        connectionId: 'warehouse',
-        measures: ['orders.order_count'],
-        limit: 5,
-      },
-    }));
-    assert.equal(slQueryResult.connectionId, 'warehouse');
-    assert.equal(slQueryResult.dialect, 'sqlite');
-    assert.match(slQueryResult.sql, /orders/);
-    assert.deepEqual(slQueryResult.headers, ['order_count']);
-    assert.deepEqual(slQueryResult.rows, [[3]]);
-    assert.equal(slQueryResult.totalRows, 1);
-    assert.equal(slQueryResult.plan.execution.mode, 'executed');
-    assert.equal(slQueryResult.plan.execution.driver, 'sqlite');
-
-    const connectionTest = structuredContent(await client.callTool({
-      name: 'connection_test',
-      arguments: {
-        connectionId: 'warehouse',
-      },
-    }));
-    assert.equal(connectionTest.id, 'warehouse');
-    assert.equal(connectionTest.ok, true);
-
-    const mcpScanTrigger = structuredContent(await client.callTool({
-      name: 'scan_trigger',
-      arguments: {
-        connectionId: 'warehouse',
-        mode: 'structural',
-      },
-    }));
-    assert.equal(mcpScanTrigger.connectionId, 'warehouse');
-    assert.equal(mcpScanTrigger.report.mode, 'structural');
-    assert.equal(mcpScanTrigger.report.manifestShardsWritten, 1);
-
-    const mcpScanStatus = structuredContent(await client.callTool({
-      name: 'scan_status',
-      arguments: {
-        runId: mcpScanTrigger.runId,
-      },
-    }));
-    assert.equal(mcpScanStatus.runId, mcpScanTrigger.runId);
-    assert.equal(mcpScanStatus.status, 'done');
-
-    const mcpScanReport = structuredContent(await client.callTool({
-      name: 'scan_report',
-      arguments: {
-        runId: mcpScanTrigger.runId,
-      },
-    }));
-    assert.equal(mcpScanReport.runId, mcpScanTrigger.runId);
-    assert.deepEqual(mcpScanReport.artifactPaths.manifestShards, ['semantic-layer/warehouse/_schema/public.yaml']);
-
-    const mcpScanArtifacts = structuredContent(await client.callTool({
-      name: 'scan_list_artifacts',
-      arguments: {
-        runId: mcpScanTrigger.runId,
-      },
-    }));
-    const manifestArtifact = mcpScanArtifacts.artifacts.find((artifact) => artifact.type === 'manifest_shard');
-    assert.ok(manifestArtifact, 'scan_list_artifacts did not include a manifest shard');
-    assert.equal(manifestArtifact.path, 'semantic-layer/warehouse/_schema/public.yaml');
-
-    const mcpManifestRead = structuredContent(await client.callTool({
-      name: 'scan_read_artifact',
-      arguments: {
-        runId: mcpScanTrigger.runId,
-        path: manifestArtifact.path,
-      },
-    }));
-    assert.equal(mcpManifestRead.path, 'semantic-layer/warehouse/_schema/public.yaml');
-    assert.equal(mcpManifestRead.type, 'manifest_shard');
-    assert.match(mcpManifestRead.content, /orders:/);
-  } catch (error) {
-    const stderr = Buffer.concat(mcpServerStderr).toString('utf8');
-    if (stderr) {
-      error.message += '\\nktx serve stderr:\\n' + stderr;
-    }
-    throw error;
-  } finally {
-    await client.close();
-    await stopSemanticDaemon(daemon);
-  }
 } finally {
   await rm(root, { recursive: true, force: true });
 }
@@ -1482,7 +1025,7 @@ export function npmDemoSmokeSource() {
   return `
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -1523,6 +1066,8 @@ function requireStdout(label, result, pattern) {
 const root = await mkdtemp(join(tmpdir(), 'ktx-packed-demo-smoke-'));
 try {
   const projectDir = join(root, 'demo-project');
+  const packageJson = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8'));
+  assert.deepEqual(Object.keys(packageJson.dependencies), ['@kaelio/ktx']);
 
   const help = await run('pnpm', ['exec', 'ktx', '--help']);
   requireSuccess('ktx --help', help);
