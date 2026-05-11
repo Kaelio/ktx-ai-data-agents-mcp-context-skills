@@ -7,6 +7,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py']);
 const runtimeAssetPatterns = [/^packages\/[^/]+\/prompts\/.+\.md$/, /^packages\/[^/]+\/skills\/.+\.md$/];
 const identifierSkipPrefixes = ['docs/', 'examples/', 'python/ktx-sl/plans/', 'python/ktx-sl/openspec/'];
+const identifierAllowPatterns = [
+  /^packages\/cli\/src\/(?:index|managed-local-embeddings|managed-python-command|managed-python-daemon|managed-python-runtime|runtime)(?:\.test)?\.ts$/,
+  /^scripts\/(?:build-public-npm-package|build-python-runtime-wheel|local-embeddings-runtime-smoke|package-artifacts|published-package-smoke|release-readiness)(?:\.test)?\.mjs$/,
+];
 const forbiddenIdentifierTerms = ['kae' + 'lio', 'Kae' + 'lio', 'KAE' + 'LIO_'];
 
 const appImportPatterns = [
@@ -98,6 +102,10 @@ function skipsIdentifierScan(relativePath) {
   return identifierSkipPrefixes.some((prefix) => relativePath.startsWith(prefix));
 }
 
+function allowsForbiddenIdentifier(relativePath) {
+  return identifierAllowPatterns.some((pattern) => pattern.test(relativePath));
+}
+
 export function scanFileContent(relativePath, content) {
   const normalizedPath = normalizePath(relativePath);
   const violations = [];
@@ -138,7 +146,11 @@ export function scanFileContent(relativePath, content) {
     }
   }
 
-  if (scansForForbiddenIdentifiers(normalizedPath) && !skipsIdentifierScan(normalizedPath)) {
+  if (
+    scansForForbiddenIdentifiers(normalizedPath) &&
+    !skipsIdentifierScan(normalizedPath) &&
+    !allowsForbiddenIdentifier(normalizedPath)
+  ) {
     for (const term of forbiddenIdentifierTerms) {
       if (content.includes(term)) {
         violations.push({

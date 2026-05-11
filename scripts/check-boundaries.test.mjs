@@ -65,6 +65,14 @@ describe('scanFileContent', () => {
     assert.equal(scanFileContent('python/ktx-sl/openspec/specs/semantic-layer/spec.md', name).length, 0);
   });
 
+  it('allows public package identifiers in release packaging and managed runtime source', () => {
+    const name = lowerProductName();
+
+    assert.equal(scanFileContent('scripts/local-embeddings-runtime-smoke.mjs', `@${name}/ktx`).length, 0);
+    assert.equal(scanFileContent('scripts/package-artifacts.test.mjs', `${name}-ktx`).length, 0);
+    assert.equal(scanFileContent('packages/cli/src/managed-python-runtime.ts', `${name}_ktx`).length, 0);
+  });
+
   it('allows clean source files and clean runtime prompt assets', () => {
     assert.deepEqual(
       scanFileContent('packages/context/src/index.ts', "export const packageName = '@ktx/context';"),
