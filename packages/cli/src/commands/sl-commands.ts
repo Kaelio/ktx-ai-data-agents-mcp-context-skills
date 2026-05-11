@@ -6,7 +6,7 @@ import {
   resolveCommandProjectDir,
 } from '../cli-program.js';
 import { slQueryCommandSchema } from '../command-schemas.js';
-import type { KtxManagedPythonInstallPolicy } from '../managed-python-command.js';
+import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 import type { KtxSlArgs } from '../sl.js';
 import { profileMark } from '../startup-profile.js';
 
@@ -31,16 +31,6 @@ function collectOrderBy(
   previous: Array<string | { field: string; direction?: string }> = [],
 ): Array<string | { field: string; direction?: string }> {
   return [...previous, parseOrderBy(value)];
-}
-
-function runtimeInstallPolicy(options: { yes?: boolean; input?: boolean }): KtxManagedPythonInstallPolicy {
-  if (options.yes === true && options.input === false) {
-    throw new Error('Choose only one runtime install mode: --yes or --no-input');
-  }
-  if (options.yes === true) {
-    return 'auto';
-  }
-  return options.input === false ? 'never' : 'prompt';
 }
 
 async function runSlArgs(context: KtxCliCommandContext, args: KtxSlArgs): Promise<void> {
@@ -155,7 +145,7 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
         format: options.format,
         execute: options.execute === true,
         cliVersion: context.packageInfo.version,
-        runtimeInstallPolicy: runtimeInstallPolicy(options),
+        runtimeInstallPolicy: runtimeInstallPolicyFromFlags(options),
         ...(options.maxRows !== undefined ? { maxRows: options.maxRows } : {}),
       });
       await runSlArgs(context, args);

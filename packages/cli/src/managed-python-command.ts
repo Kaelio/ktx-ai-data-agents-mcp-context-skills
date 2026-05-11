@@ -15,6 +15,19 @@ import {
 
 export type KtxManagedPythonInstallPolicy = 'prompt' | 'auto' | 'never';
 
+export function runtimeInstallPolicyFromFlags(options: {
+  yes?: boolean;
+  input?: boolean;
+}): KtxManagedPythonInstallPolicy {
+  if (options.yes === true && options.input === false) {
+    throw new Error('Choose only one runtime install mode: --yes or --no-input');
+  }
+  if (options.yes === true) {
+    return 'auto';
+  }
+  return options.input === false ? 'never' : 'prompt';
+}
+
 export interface ManagedPythonCommandRuntime {
   layout: ManagedPythonRuntimeLayout;
   manifest: InstalledKtxRuntimeManifest;

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createManagedPythonSemanticLayerComputePort,
   managedRuntimeInstallCommand,
+  runtimeInstallPolicyFromFlags,
 } from './managed-python-command.js';
 import type {
   InstalledKtxRuntimeManifest,
@@ -110,6 +111,21 @@ describe('managedRuntimeInstallCommand', () => {
     expect(managedRuntimeInstallCommand('core')).toBe('ktx runtime install --yes');
     expect(managedRuntimeInstallCommand('local-embeddings')).toBe(
       'ktx runtime install --feature local-embeddings --yes',
+    );
+  });
+});
+
+describe('runtimeInstallPolicyFromFlags', () => {
+  it('maps command flags to managed runtime install policies', () => {
+    expect(runtimeInstallPolicyFromFlags({})).toBe('prompt');
+    expect(runtimeInstallPolicyFromFlags({ yes: false })).toBe('prompt');
+    expect(runtimeInstallPolicyFromFlags({ yes: true })).toBe('auto');
+    expect(runtimeInstallPolicyFromFlags({ input: false })).toBe('never');
+  });
+
+  it('rejects conflicting runtime install flags', () => {
+    expect(() => runtimeInstallPolicyFromFlags({ yes: true, input: false })).toThrow(
+      'Choose only one runtime install mode: --yes or --no-input',
     );
   });
 });
