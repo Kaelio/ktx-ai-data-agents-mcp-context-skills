@@ -767,6 +767,9 @@ export async function runKtxSetupContextStep(
 
     const missing = missingCapabilities(project);
     if (missing.length > 0) {
+      if (args.allowEmpty === true) {
+        return { status: 'skipped', projectDir: args.projectDir };
+      }
       writeMissingCapabilities(missing, io);
       return { status: 'missing-input', projectDir: args.projectDir };
     }

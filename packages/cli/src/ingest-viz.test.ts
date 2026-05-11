@@ -304,7 +304,7 @@ describe('runKtxIngest viz and replay', () => {
     expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
   });
 
-  it('does not attach a live memory-flow sink for plain run output', async () => {
+  it('attaches a plain progress memory-flow sink for interactive plain run output', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);
     const sourceDir = join(tempDir, 'source');
@@ -329,7 +329,8 @@ describe('runKtxIngest viz and replay', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(runLocal).toHaveBeenCalledWith(expect.not.objectContaining({ memoryFlow: expect.anything() }));
+    expect(runLocal).toHaveBeenCalledWith(expect.objectContaining({ memoryFlow: expect.anything() }));
+    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: plain-run');
     expect(io.stdout()).not.toContain('KTX memory flow');
   });
@@ -403,7 +404,8 @@ describe('runKtxIngest viz and replay', () => {
     ).resolves.toBe(0);
 
     expect(startLiveMemoryFlow).not.toHaveBeenCalled();
-    expect(runLocal).toHaveBeenCalledWith(expect.not.objectContaining({ memoryFlow: expect.anything() }));
+    expect(runLocal).toHaveBeenCalledWith(expect.objectContaining({ memoryFlow: expect.anything() }));
+    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: raw-missing-viz-run');
     expect(io.stdout()).not.toContain('KTX memory flow');
     expect(io.stderr()).toContain(

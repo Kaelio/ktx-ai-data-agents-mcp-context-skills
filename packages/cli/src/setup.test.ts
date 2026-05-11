@@ -1174,6 +1174,66 @@ describe('setup status', () => {
     expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources']);
   });
 
+  it('does not fail context build when prerequisites were explicitly skipped and agents are skipped', async () => {
+    const calls: string[] = [];
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DEMO_DATABASE_URL',
+        '    readonly: true',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          skipSources: true,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          model: async () => {
+            calls.push('model');
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          embeddings: async () => {
+            calls.push('embeddings');
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          databases: async () => {
+            calls.push('databases');
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          sources: async () => {
+            calls.push('sources');
+            return { status: 'skipped', projectDir: tempDir };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources']);
+    expect(io.stderr()).not.toContain('KTX cannot build agent-ready context yet.');
+  });
+
   it('runs context after sources and before agents in full setup', async () => {
     const calls: string[] = [];
     const io = makeIo();

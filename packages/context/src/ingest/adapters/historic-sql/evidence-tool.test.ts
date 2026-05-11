@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
+import { asSchema } from 'ai';
 import { createEmitHistoricSqlEvidenceTool } from './evidence-tool.js';
 
 describe('emit_historic_sql_evidence tool', () => {
+  it('exposes an AI SDK v6 tool input schema with top-level object type', async () => {
+    const tool = createEmitHistoricSqlEvidenceTool();
+
+    expect(await asSchema(tool.inputSchema).jsonSchema).toMatchObject({
+      type: 'object',
+    });
+  });
+
   it('writes table usage evidence to the ignored run evidence directory', async () => {
     const writeFile = vi.fn(async () => ({ success: true, commitHash: null }));
     const tool = createEmitHistoricSqlEvidenceTool();

@@ -3,6 +3,7 @@ from __future__ import annotations
 from ktx_daemon.sql_analysis import (
     AnalyzeSqlBatchItem,
     AnalyzeSqlBatchRequest,
+    _columns_from_nodes,
     analyze_sql_batch_response,
 )
 
@@ -51,3 +52,7 @@ def test_analyze_sql_batch_returns_per_item_parse_errors() -> None:
     assert result.tables_touched == []
     assert result.columns_by_clause == {}
     assert result.error is not None
+
+
+def test_columns_from_nodes_ignores_non_expression_clause_values() -> None:
+    assert _columns_from_nodes([True, False, None]) == []

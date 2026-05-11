@@ -57,6 +57,8 @@ export interface KtxPostgresConnectionConfig {
   schema?: string;
   schemas?: string[];
   ssl?: boolean;
+  sslmode?: string;
+  sslMode?: string;
   rejectUnauthorized?: boolean;
   readonly?: boolean;
   [key: string]: unknown;
@@ -253,13 +255,20 @@ function numberValue(value: unknown): number | undefined {
 
 function parsePostgresUrl(url: string): Partial<KtxPostgresConnectionConfig> {
   const parsed = new URL(url);
+  const sslmode = parsed.searchParams.get('sslmode') ?? undefined;
   return {
     host: parsed.hostname,
     port: parsed.port ? Number(parsed.port) : undefined,
     database: parsed.pathname.replace(/^\/+/, '') || undefined,
     username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
     password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+    ...(sslmode ? { sslmode } : {}),
   };
+}
+
+function normalizedSslMode(connection: KtxPostgresConnectionConfig): string | undefined {
+  const value = connection.sslmode ?? connection.sslMode;
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : undefined;
 }
 
 function schemasFromConnection(connection: KtxPostgresConnectionConfig): string[] {
@@ -299,6 +308,7 @@ export function postgresPoolConfigFromConfig(input: {
   const database = stringConfigValue(merged, 'database', env);
   const user = stringConfigValue(merged, 'username', env) ?? stringConfigValue(merged, 'user', env);
   const password = stringConfigValue(merged, 'password', env);
+  const sslmode = normalizedSslMode(merged);
 
   if (!referencedUrl && !host) {
     throw new Error(`Native PostgreSQL connector requires connections.${input.connectionId}.host or url`);
@@ -314,7 +324,7 @@ export function postgresPoolConfigFromConfig(input: {
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-    ...(referencedUrl
+    ...(referencedUrl && sslmode !== 'prefer' && sslmode !== 'disable'
       ? { connectionString: referencedUrl }
       : { host, port: numberValue(merged.port) ?? 5432, database, user, password }),
   };
@@ -322,7 +332,7 @@ export function postgresPoolConfigFromConfig(input: {
   if (searchPathSchemas.length > 0) {
     config.options = `-c search_path=${searchPathSchemas.join(',')}`;
   }
-  if (merged.ssl) {
+  if (merged.ssl && sslmode !== 'prefer' && sslmode !== 'disable') {
     config.ssl = { rejectUnauthorized: merged.rejectUnauthorized ?? true };
   }
   return config;

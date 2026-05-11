@@ -129,6 +129,25 @@ describe('KtxPostgresScanConnector', () => {
       options: '-c search_path=analytics,public',
       ssl: { rejectUnauthorized: false },
     });
+    const libpqPreferConfig = postgresPoolConfigFromConfig({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'postgres',
+        url: 'env:DEMO_DATABASE_URL',
+        readonly: true,
+      },
+      env: {
+        DEMO_DATABASE_URL: 'postgresql://reader@start.kaelio.com:5432/demo?sslmode=prefer',
+      },
+    });
+    expect(libpqPreferConfig).toMatchObject({
+      host: 'start.kaelio.com',
+      port: 5432,
+      database: 'demo',
+      user: 'reader',
+    });
+    expect(libpqPreferConfig).not.toHaveProperty('connectionString');
+    expect(libpqPreferConfig).not.toHaveProperty('ssl');
     expect(() =>
       postgresPoolConfigFromConfig({
         connectionId: 'warehouse',

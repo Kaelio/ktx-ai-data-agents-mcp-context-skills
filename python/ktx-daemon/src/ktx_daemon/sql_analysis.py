@@ -61,10 +61,10 @@ def _column_name(column: exp.Column) -> str:
     return str(column.name)
 
 
-def _columns_from_nodes(nodes: list[exp.Expression | None]) -> list[str]:
+def _columns_from_nodes(nodes: list[object]) -> list[str]:
     names: list[str] = []
     for node in nodes:
-        if node is None:
+        if not isinstance(node, exp.Expression):
             continue
         names.extend(_column_name(column) for column in node.find_all(exp.Column))
     return _ordered_unique(names)
