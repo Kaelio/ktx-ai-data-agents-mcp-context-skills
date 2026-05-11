@@ -47,6 +47,22 @@ interface WikiWriteStructured {
   action?: 'created' | 'updated';
 }
 
+function looksLikeEscapedMarkdown(content: string): boolean {
+  const withoutInlineCode = content.replace(/`[^`]*`/g, '');
+  return /\\n\\n|(?:^|\\n)#{1,6}\s|\\n[-*]\s|\\n\d+\.\s|\\n```|\\n\|/.test(withoutInlineCode);
+}
+
+function normalizeAccidentalEscapedMarkdownNewlines(content: string): string {
+  const escapedBreaks = content.match(/\\[rn]/g)?.length ?? 0;
+  if (escapedBreaks < 2) return content;
+
+  const actualBreaks = content.match(/\r?\n/g)?.length ?? 0;
+  if (actualBreaks > 0 && escapedBreaks <= actualBreaks * 4) return content;
+  if (!looksLikeEscapedMarkdown(content)) return content;
+
+  return content.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n');
+}
+
 export class WikiWriteTool extends BaseTool<typeof wikiWriteInputSchema> {
   readonly name = 'wiki_write';
 
@@ -125,7 +141,7 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
     };
 
     if (input.content) {
-      finalContent = input.content;
+      finalContent = normalizeAccidentalEscapedMarkdownNewlines(input.content);
     } else {
       const editResult = applySqlEdits(existing?.content ?? '', input.replacements ?? []);
       if (!editResult.success) {

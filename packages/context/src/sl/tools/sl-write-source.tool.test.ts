@@ -175,6 +175,89 @@ describe('SlWriteSourceTool — session gating', () => {
     );
     expect((session.semanticLayerService as any).writeSource).toHaveBeenCalled();
   });
+
+  it('normalizes flat source and column descriptions before writing', async () => {
+    const { tool, semanticLayerService } = makeTool();
+    const result = await tool.call(
+      {
+        connectionId: '11111111-1111-1111-1111-111111111111',
+        sourceName: 'orders',
+        source: {
+          name: 'orders',
+          description: 'Finance orders used for invoice reconciliation.',
+          table: 'public.orders',
+          grain: ['id'],
+          columns: [{ name: 'id', type: 'string', description: 'Stable order identifier.' }],
+          measures: [],
+          joins: [],
+        } as any,
+      } as any,
+      baseContext,
+    );
+
+    expect(result.structured.success).toBe(true);
+    expect(semanticLayerService.writeSource).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        descriptions: { user: 'Finance orders used for invoice reconciliation.' },
+        columns: [expect.objectContaining({ descriptions: { user: 'Stable order identifier.' } })],
+      }),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it('fills missing descriptions for ingest-written overlays and columns', async () => {
+    const session = makeSession({
+      ingest: { runId: 'run-1', jobId: 'job-1', syncId: 'sync-1', sourceKey: 'metabase' },
+      semanticLayerService: {
+        loadSource: vi.fn().mockResolvedValue(null),
+        loadAllSources: vi.fn().mockResolvedValue([]),
+        validateWithProposedSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }),
+        writeSource: vi.fn().mockResolvedValue({ commitHash: 'c1' }),
+        deleteSource: vi.fn().mockResolvedValue(undefined),
+        listManifestSourceNames: vi.fn().mockResolvedValue(['mart_account_segments']),
+        isManifestBacked: vi.fn().mockResolvedValue(false),
+        readSourceFile: vi.fn().mockRejectedValue(new Error('not found')),
+        findManifestEntryByTableRef: vi.fn().mockResolvedValue(null),
+      } as any,
+    });
+    const { tool } = makeTool();
+
+    const result = await tool.call(
+      {
+        connectionId: session.connectionId,
+        sourceName: 'mart_account_segments',
+        source: {
+          name: 'mart_account_segments',
+          columns: [{ name: 'is_large_contract', type: 'boolean', expr: 'contract_arr_cents >= 20000000' }],
+          measures: [{ name: 'account_count', expr: 'count(account_id)' }],
+        } as any,
+      } as any,
+      { ...baseContext, session },
+    );
+
+    expect(result.structured.success).toBe(true);
+    expect((session.semanticLayerService as any).writeSource).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        descriptions: {
+          ktx: expect.stringContaining('mart_account_segments'),
+        },
+        columns: [
+          expect.objectContaining({
+            descriptions: {
+              ktx: expect.stringContaining('is large contract'),
+            },
+          }),
+        ],
+      }),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+    );
+  });
 });
 
 describe('SlWriteSourceTool — disconnected-components warning in markdown', () => {

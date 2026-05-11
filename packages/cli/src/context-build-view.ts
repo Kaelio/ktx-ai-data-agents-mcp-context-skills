@@ -30,6 +30,8 @@ export interface ContextBuildViewState {
   primarySources: ContextBuildTargetState[];
   contextSources: ContextBuildTargetState[];
   frame: number;
+  startedAt: number | null;
+  totalElapsedMs: number;
 }
 
 export interface ContextBuildArgs {
@@ -42,6 +44,17 @@ export interface ContextBuildArgs {
 export interface ContextBuildResult {
   exitCode: number;
   detached: boolean;
+  reportIds?: string[];
+  artifactPaths?: string[];
+}
+
+export interface ContextBuildSourceProgressUpdate {
+  connectionId: string;
+  operation: 'scan' | 'source-ingest';
+  status: 'queued' | 'running' | 'done' | 'failed';
+  startedAtMs?: number;
+  elapsedMs?: number;
+  summaryText?: string;
 }
 
 export interface ContextBuildDeps {
@@ -49,6 +62,7 @@ export interface ContextBuildDeps {
   now?: () => number;
   setupKeystroke?: (onDetach: () => void, onCtrlC: () => void) => (() => void) | null;
   onDetach?: () => void;
+  onSourceProgress?: (sources: ContextBuildSourceProgressUpdate[]) => void;
 }
 
 // --- Rendering ---
@@ -79,7 +93,7 @@ function statusIcon(status: ContextBuildTargetState['status'], frame: number, st
       case 'running':
         return SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? '⠋';
       default:
-        return '·';
+        return '○';
     }
   }
   switch (status) {
@@ -90,8 +104,25 @@ function statusIcon(status: ContextBuildTargetState['status'], frame: number, st
     case 'running':
       return cyan(SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? '⠋');
     default:
-      return dim('·');
+      return dim('○');
   }
+}
+
+function extractPercent(detailLine: string | null): number | null {
+  if (!detailLine) return null;
+  const match = detailLine.match(/^\[(\d+)%\]/);
+  return match ? Number(match[1]) : null;
+}
+
+const BAR_WIDTH = 12;
+const BAR_FILLED = '█';
+const BAR_EMPTY = '░';
+
+function renderProgressBar(percent: number, styled: boolean): string {
+  const filled = Math.round((percent / 100) * BAR_WIDTH);
+  const empty = BAR_WIDTH - filled;
+  const bar = `${BAR_FILLED.repeat(filled)}${BAR_EMPTY.repeat(empty)}`;
+  return styled ? cyan(bar) : bar;
 }
 
 function targetDetail(target: ContextBuildTargetState, styled: boolean): string {
@@ -105,7 +136,17 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean): string 
     return styled ? red('failed') : 'failed';
   }
   if (target.status === 'running') {
-    return target.detailLine ?? (target.target.operation === 'scan' ? 'scanning...' : 'ingesting...');
+    const percent = extractPercent(target.detailLine);
+    const progressText = target.detailLine?.replace(/^\[\d+%\]\s*/, '')
+      ?? (target.target.operation === 'scan' ? 'scanning...' : 'ingesting...');
+    const elapsed = target.elapsedMs > 0 ? `(${formatDuration(target.elapsedMs)})` : null;
+    const parts: string[] = [];
+    if (percent !== null) {
+      parts.push(`${renderProgressBar(percent, styled)} ${percent}%`);
+    }
+    parts.push(progressText);
+    if (elapsed) parts.push(styled ? dim(elapsed) : elapsed);
+    return parts.join('  ');
   }
   return styled ? dim('queued') : 'queued';
 }
@@ -136,23 +177,46 @@ function resumeCommand(projectDir?: string): string {
 
 export function renderContextBuildView(
   state: ContextBuildViewState,
-  options: { styled?: boolean; showHint?: boolean; projectDir?: string } = {},
+  options: { styled?: boolean; showHint?: boolean; hintText?: string; projectDir?: string } = {},
 ): string {
   const styled = options.styled ?? true;
   const width = columnWidth(state);
+  const allTargets = [...state.primarySources, ...state.contextSources];
+  const doneCount = allTargets.filter((t) => t.status === 'done' || t.status === 'failed').length;
+  const totalCount = allTargets.length;
+  const hasActive = allTargets.some((t) => t.status === 'running' || t.status === 'queued');
+  const allDone = totalCount > 0 && !hasActive;
+
+  const headerParts = ['Building KTX context'];
+  if (totalCount > 0) {
+    const progressParts: string[] = [`${doneCount}/${totalCount}`];
+    if (state.totalElapsedMs > 0) progressParts.push(formatDuration(state.totalElapsedMs));
+    const progress = `(${progressParts.join(' · ')})`;
+    headerParts.push(styled ? dim(progress) : progress);
+  }
+  const header = headerParts.join('  ');
+  const headerPlainLength = header.replace(/\x1b\[[0-9;]*m/g, '').length;
+  const separator = '─'.repeat(Math.max(21, headerPlainLength));
+
   const lines: string[] = [
     '',
-    'Building KTX context',
-    '─────────────────────',
+    header,
+    separator,
     ...renderTargetGroup('Primary sources', state.primarySources, state.frame, styled, width),
     ...renderTargetGroup('Context sources', state.contextSources, state.frame, styled, width),
     '',
   ];
-  const hasActive = [...state.primarySources, ...state.contextSources].some(
-    (t) => t.status === 'running' || t.status === 'queued',
-  );
+
+  if (allDone && state.totalElapsedMs > 0) {
+    const sourcesLabel = totalCount === 1 ? '1 source' : `${totalCount} sources`;
+    const summary = `  Done in ${formatDuration(state.totalElapsedMs)} · ${sourcesLabel} processed`;
+    lines.push(styled ? green(summary) : summary);
+    lines.push('');
+  }
+
   if (options.showHint && hasActive) {
-    const hint = `  d to detach · ${resumeCommand(options.projectDir)} to resume`;
+    const hintContent = options.hintText ?? `d to detach · ${resumeCommand(options.projectDir)} to resume`;
+    const hint = `  ${hintContent}`;
     lines.push(styled ? dim(hint) : hint);
     lines.push('');
   }
@@ -162,6 +226,7 @@ export function renderContextBuildView(
 // --- IO Capture ---
 
 const ESC_K_RE = new RegExp(`${ESC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\[K`, 'g');
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 export function extractProgressMessage(chunk: string): string | null {
   const cleaned = chunk.replace(/^\r/, '').replace(ESC_K_RE, '').replace(/\n$/, '').trim();
@@ -175,12 +240,41 @@ export function parseScanSummary(output: string): string | null {
 }
 
 export function parseIngestSummary(output: string): string | null {
-  const parts: string[] = [];
-  const workUnits = output.match(/Work units: (\d+)/);
-  if (workUnits) parts.push(`${workUnits[1]} work units`);
   const savedMemory = output.match(/Saved memory: (.+)/);
-  if (savedMemory) parts.push(savedMemory[1]);
-  return parts.length > 0 ? parts.join(' · ') : null;
+  if (savedMemory) return savedMemory[1];
+  const workUnits = output.match(/Work units: (\d+)/);
+  if (workUnits) return `${workUnits[1]} work units`;
+  return null;
+}
+
+function collectOutputMetadata(
+  output: string,
+  operation: KtxPublicIngestPlanTarget['operation'],
+): { reportIds: string[]; artifactPaths: string[] } {
+  const reportIds = new Set<string>();
+  const artifactPaths = new Set<string>();
+  for (const line of output.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const reportLine = trimmed.match(/^Report:\s*(.+)$/);
+    if (reportLine) {
+      const value = reportLine[1].trim();
+      if (value && value !== 'none') {
+        if (operation === 'scan') artifactPaths.add(value);
+        else reportIds.add(value);
+      }
+    }
+    const rawSourcesLine = trimmed.match(/^Raw sources:\s*(.+)$/);
+    if (rawSourcesLine) {
+      const value = rawSourcesLine[1].trim();
+      if (value && value !== 'none') artifactPaths.add(value);
+    }
+    if (operation === 'source-ingest') {
+      for (const match of trimmed.matchAll(/\breport=([^\s]+)/g)) {
+        reportIds.add(match[1]);
+      }
+    }
+  }
+  return { reportIds: [...reportIds], artifactPaths: [...artifactPaths] };
 }
 
 interface CapturedIo {
@@ -210,19 +304,84 @@ function createCaptureIo(onProgress: (message: string) => void, isTTY: boolean):
   };
 }
 
+// --- Source progress helpers ---
+
+function collectSourceProgress(targets: ContextBuildTargetState[]): ContextBuildSourceProgressUpdate[] {
+  return targets.map((t) => ({
+    connectionId: t.target.connectionId,
+    operation: t.target.operation,
+    status: t.status,
+    ...(t.startedAt !== null ? { startedAtMs: t.startedAt } : {}),
+    ...(t.elapsedMs > 0 ? { elapsedMs: t.elapsedMs } : {}),
+    ...(t.summaryText ? { summaryText: t.summaryText } : {}),
+  }));
+}
+
+export function viewStateFromSourceProgress(
+  sources: ContextBuildSourceProgressUpdate[],
+  now: number,
+  startedAtMs?: number,
+): ContextBuildViewState {
+  const makeTarget = (s: ContextBuildSourceProgressUpdate): ContextBuildTargetState => ({
+    target: { connectionId: s.connectionId, driver: '', operation: s.operation, debugCommand: '', steps: [] },
+    status: s.status,
+    detailLine: null,
+    summaryText: s.summaryText ?? null,
+    startedAt: s.startedAtMs ?? null,
+    elapsedMs: s.status === 'running' && s.startedAtMs ? now - s.startedAtMs : (s.elapsedMs ?? 0),
+  });
+
+  return {
+    primarySources: sources.filter((s) => s.operation === 'scan').map(makeTarget),
+    contextSources: sources.filter((s) => s.operation === 'source-ingest').map(makeTarget),
+    frame: 0,
+    startedAt: startedAtMs ?? null,
+    totalElapsedMs: startedAtMs ? now - startedAtMs : 0,
+  };
+}
+
 // --- Repaint ---
 
-function createRepainter(io: KtxCliIo) {
-  let lastLineCount = 0;
+export function createRepainter(io: KtxCliIo) {
+  let hasPainted = false;
+  let lastCursorUpRows = 0;
+
+  const terminalColumns = () => {
+    for (const columns of [io.stdout.columns, process.stdout.columns]) {
+      if (typeof columns === 'number' && Number.isFinite(columns) && columns > 0) return columns;
+    }
+    return 80;
+  };
+
+  const visualRows = (line: string, columns: number) => {
+    const plainLength = line.replace(ANSI_RE, '').length;
+    return Math.max(1, Math.ceil(plainLength / columns));
+  };
+
+  const cursorUpRowsAfterWrite = (content: string) => {
+    const columns = terminalColumns();
+    const endsWithNewline = content.endsWith('\n');
+    const lines = content.split('\n');
+    return lines.reduce((sum, line, index) => {
+      if (index === lines.length - 1) {
+        return endsWithNewline ? sum : sum + Math.max(0, visualRows(line, columns) - 1);
+      }
+      return sum + visualRows(line, columns);
+    }, 0);
+  };
 
   return {
     paint(content: string) {
-      if (lastLineCount > 0) {
-        io.stdout.write(`${ESC}[${lastLineCount}A\r`);
+      if (hasPainted) {
+        if (lastCursorUpRows > 0) {
+          io.stdout.write(`${ESC}[${lastCursorUpRows}A`);
+        }
+        io.stdout.write('\r');
       }
-      io.stdout.write(content);
+      io.stdout.write(content.replaceAll('\n', `${ESC}[K\n`));
       io.stdout.write(`${ESC}[J`);
-      lastLineCount = (content.match(/\n/g) ?? []).length;
+      hasPainted = true;
+      lastCursorUpRows = cursorUpRowsAfterWrite(content);
     },
   };
 }
@@ -258,7 +417,7 @@ function spawnBackgroundBuild(projectDir: string): { logPath: string } | null {
 
 // --- Keystroke handling ---
 
-function defaultSetupKeystroke(onDetach: () => void, onCtrlC: () => void): (() => void) | null {
+export function defaultSetupKeystroke(onDetach: () => void, onCtrlC: () => void): (() => void) | null {
   const stdin = process.stdin;
   if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
     return null;
@@ -289,6 +448,8 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
     primarySources: targets.filter((t) => t.operation === 'scan').map(makeTargetState),
     contextSources: targets.filter((t) => t.operation === 'source-ingest').map(makeTargetState),
     frame: 0,
+    startedAt: null,
+    totalElapsedMs: 0,
   };
 }
 
@@ -303,6 +464,8 @@ export async function runContextBuild(
   const isTTY = io.stdout.isTTY === true;
   const nowFn = deps.now ?? (() => Date.now());
 
+  state.startedAt = nowFn();
+
   const repainter = isTTY ? createRepainter(io) : null;
   const viewOpts = { styled: true, projectDir: args.projectDir };
   const paint = (hint: boolean) => repainter?.paint(renderContextBuildView(state, { ...viewOpts, showHint: hint }));
@@ -312,6 +475,9 @@ export async function runContextBuild(
   if (repainter) {
     spinnerInterval = setInterval(() => {
       state.frame++;
+      if (state.startedAt !== null) {
+        state.totalElapsedMs = nowFn() - state.startedAt;
+      }
       for (const t of [...state.primarySources, ...state.contextSources]) {
         if (t.status === 'running' && t.startedAt !== null) {
           t.elapsedMs = nowFn() - t.startedAt;
@@ -323,6 +489,8 @@ export async function runContextBuild(
 
   const orderedTargets = [...state.primarySources, ...state.contextSources];
   const execTarget = deps.executeTarget ?? executePublicIngestTarget;
+  const reportIds = new Set<string>();
+  const artifactPaths = new Set<string>();
 
   let detached = false;
   let cleanupKeystroke: (() => void) | null = null;
@@ -339,8 +507,8 @@ export async function runContextBuild(
         const bg = spawnBackgroundBuild(args.projectDir);
         io.stdout.write('\n\nContext build continuing in the background.\n');
         if (bg) io.stdout.write(`Log: ${bg.logPath}\n`);
-        io.stdout.write(`Status: ktx setup context status --project-dir ${resolve(args.projectDir)}\n`);
         io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
+        io.stdout.write(`Status: ktx setup context status --project-dir ${resolve(args.projectDir)}\n`);
         process.exit(0);
       },
       () => {
@@ -370,6 +538,7 @@ export async function runContextBuild(
       targetState.status = 'running';
       targetState.startedAt = nowFn();
       paint(true);
+      deps.onSourceProgress?.(collectSourceProgress(orderedTargets));
 
       const capture = createCaptureIo(
         (message) => {
@@ -386,18 +555,27 @@ export async function runContextBuild(
       targetState.status = failed ? 'failed' : 'done';
       targetState.detailLine = null;
       if (!failed) {
+        const capturedOutput = capture.captured();
+        const metadata = collectOutputMetadata(capturedOutput, targetState.target.operation);
+        for (const reportId of metadata.reportIds) reportIds.add(reportId);
+        for (const artifactPath of metadata.artifactPaths) artifactPaths.add(artifactPath);
         targetState.summaryText =
           targetState.target.operation === 'scan'
-            ? parseScanSummary(capture.captured())
-            : parseIngestSummary(capture.captured());
+            ? parseScanSummary(capturedOutput)
+            : parseIngestSummary(capturedOutput);
       }
       if (failed) hasFailure = true;
 
       paint(true);
+      deps.onSourceProgress?.(collectSourceProgress(orderedTargets));
     }
   } finally {
     if (spinnerInterval) clearInterval(spinnerInterval);
     cleanupKeystroke?.();
+  }
+
+  if (state.startedAt !== null) {
+    state.totalElapsedMs = nowFn() - state.startedAt;
   }
 
   if (detached) {
@@ -410,5 +588,10 @@ export async function runContextBuild(
     paint(false);
   }
 
-  return { exitCode: hasFailure ? 1 : 0, detached: false };
+  return {
+    exitCode: hasFailure ? 1 : 0,
+    detached: false,
+    ...(reportIds.size > 0 ? { reportIds: [...reportIds] } : {}),
+    ...(artifactPaths.size > 0 ? { artifactPaths: [...artifactPaths] } : {}),
+  };
 }

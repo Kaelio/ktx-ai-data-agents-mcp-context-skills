@@ -18,7 +18,6 @@ export const connectionTypeSchema = z.enum([
   'METABASE',
   'LOOKER',
   'NOTION',
-  'POSTHOG',
   'MYSQL',
   'CLICKHOUSE',
   'PLAIN',

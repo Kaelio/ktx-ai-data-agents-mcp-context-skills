@@ -80,13 +80,6 @@ describe('buildPublicIngestPlan', () => {
     );
   });
 
-  it('does not plan PostHog connections as CLI ingest targets', () => {
-    const project = projectWithConnections({ product: { driver: 'posthog' } });
-
-    expect(() =>
-      buildPublicIngestPlan(project, { projectDir: '/tmp/project', targetConnectionId: 'product', all: false }),
-    ).toThrow('Connection "product" uses unsupported public ingest driver "posthog"');
-  });
 });
 
 describe('runKtxPublicIngest', () => {

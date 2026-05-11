@@ -106,6 +106,21 @@ describe('Stage 3 — executeWorkUnit', () => {
     expect(deps.resetHardTo).toHaveBeenCalledWith('pre');
   });
 
+  it('tool failures reset to the pre-WU SHA and mark WU failed even when the loop ends naturally', async () => {
+    const deps = makeDeps();
+    deps.sessionWorktreeGit.revParseHead = vi.fn().mockResolvedValueOnce('pre').mockResolvedValueOnce('post');
+    deps.agentRunner.runLoop = vi.fn().mockResolvedValue({ stopReason: 'natural' });
+    deps.toolFailureCount = vi.fn().mockReturnValue(2);
+
+    const outcome = await executeWorkUnit(deps, makeWu());
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.reason).toContain('2 tool call(s) failed');
+    expect(outcome.actions).toEqual([]);
+    expect(outcome.touchedSlSources).toEqual([]);
+    expect(deps.resetHardTo).toHaveBeenCalledWith('pre');
+  });
+
   it('runner loop thrown exception resets to the pre-WU SHA and marks WU failed', async () => {
     const deps = makeDeps();
     deps.sessionWorktreeGit.revParseHead = vi.fn().mockResolvedValueOnce('pre').mockResolvedValueOnce('post');

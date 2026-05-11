@@ -327,6 +327,40 @@ describe('MetabaseClient.getResolvedSql', () => {
     expect(result?.resolvedSql).toBe('SELECT * FROM (SELECT a, b FROM base) t ');
   });
 
+  it('inlines native-query snippets before checking for remaining variables', async () => {
+    const requestSpy = vi.fn().mockResolvedValue([
+      {
+        id: 1,
+        name: 'account_join',
+        content: 'LEFT JOIN accounts a ON a.account_id = mart.account_id',
+      },
+    ]);
+    const requestWithCustomRetrySpy = vi.fn();
+    const client = makeClient((client) => {
+      Reflect.set(client, 'request', requestSpy);
+      Reflect.set(client, 'requestWithCustomRetry', requestWithCustomRetrySpy);
+    });
+    const card = nativeCard('SELECT a.account_name FROM mart {{snippet: account_join}}', {
+      'snippet: account_join': {
+        id: 'snippet-tag',
+        name: 'snippet: account_join',
+        type: 'snippet',
+        'snippet-name': 'account_join',
+        'snippet-id': 1,
+      },
+    });
+
+    const result = await client.getResolvedSql(card);
+
+    expect(requestSpy).toHaveBeenCalledWith('GET', '/api/native-query-snippet');
+    expect(requestWithCustomRetrySpy).not.toHaveBeenCalled();
+    expect(result?.resolutionStatus).toBe('resolved');
+    expect(result?.resolvedSql).toBe(
+      'SELECT a.account_name FROM mart LEFT JOIN accounts a ON a.account_id = mart.account_id',
+    );
+    expect(result?.resolvedSql).not.toContain('{{snippet:');
+  });
+
   it('uses /api/dataset/native for naked variables and prepends a warning comment', async () => {
     const requestSpy = vi.fn().mockResolvedValue({ query: "SELECT * WHERE id = 'placeholder' AND n = 1" });
     const client = makeClient((client) => {

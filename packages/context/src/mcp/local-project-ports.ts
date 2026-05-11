@@ -116,8 +116,7 @@ function normalizeScanDriver(driver: string | undefined): KtxConnectionDriver {
     normalized === 'clickhouse' ||
     normalized === 'sqlserver' ||
     normalized === 'bigquery' ||
-    normalized === 'snowflake' ||
-    normalized === 'posthog'
+    normalized === 'snowflake'
   ) {
     return normalized === 'sqlite3' ? 'sqlite' : normalized;
   }

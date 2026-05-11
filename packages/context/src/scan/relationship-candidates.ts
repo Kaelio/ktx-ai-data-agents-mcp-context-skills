@@ -7,6 +7,7 @@ import type {
 } from './enrichment-types.js';
 import { localCandidateTables } from './relationship-locality.js';
 import {
+  type KtxRelationshipNormalizedName,
   normalizeKtxRelationshipName,
   pluralizeKtxRelationshipToken,
   singularizeKtxRelationshipToken,
@@ -97,9 +98,22 @@ const REFERENCE_SUFFIXES: Array<{ suffix: string; reason: string }> = [
   { suffix: '_uuid', reason: 'foreign_key_uuid_suffix' },
 ];
 const RELATIONSHIP_KEY_TARGET_SUFFIXES = ['_id', '_key', '_code', '_uuid'] as const;
+const tableAliasesCache = new WeakMap<KtxEnrichedTable, Set<string>>();
+const parentTableNameAliasesCache = new WeakMap<KtxEnrichedTable, Set<string>>();
+const normalizedColumnNameCache = new WeakMap<KtxEnrichedColumn, KtxRelationshipNormalizedName>();
+
+function normalizedColumnName(column: KtxEnrichedColumn): KtxRelationshipNormalizedName {
+  const cached = normalizedColumnNameCache.get(column);
+  if (cached) {
+    return cached;
+  }
+  const normalized = normalizeKtxRelationshipName(column.name);
+  normalizedColumnNameCache.set(column, normalized);
+  return normalized;
+}
 
 function isRelationshipKeyShapedTarget(column: KtxEnrichedColumn): boolean {
-  const normalized = normalizeKtxRelationshipName(column.name);
+  const normalized = normalizedColumnName(column);
   return (
     normalized.tokens.length >= 2 &&
     RELATIONSHIP_KEY_TARGET_SUFFIXES.some((suffix) => normalized.normalized.endsWith(suffix))
@@ -107,8 +121,8 @@ function isRelationshipKeyShapedTarget(column: KtxEnrichedColumn): boolean {
 }
 
 function columnSuffixMatchesTarget(input: { fromColumn: KtxEnrichedColumn; toColumn: KtxEnrichedColumn }): boolean {
-  const source = normalizeKtxRelationshipName(input.fromColumn.name).normalized;
-  const target = normalizeKtxRelationshipName(input.toColumn.name).normalized;
+  const source = normalizedColumnName(input.fromColumn).normalized;
+  const target = normalizedColumnName(input.toColumn).normalized;
   return source !== target && target.length > 0 && source.endsWith(`_${target}`);
 }
 
@@ -160,7 +174,7 @@ function hasUsableEmbedding(column: KtxEnrichedColumn): boolean {
 }
 
 function sourceColumnReference(column: KtxEnrichedColumn): KtxRelationshipSourceColumnReference | null {
-  const normalized = normalizeKtxRelationshipName(column.name);
+  const normalized = normalizedColumnName(column);
   if (SELF_REFERENCE_NAMES.has(normalized.normalized)) {
     return { base: normalized.normalized.replace(/_id$/u, ''), reason: 'foreign_key_suffix' };
   }
@@ -192,6 +206,11 @@ function addNormalizedTableAlias(aliases: Set<string>, name: string): void {
 }
 
 function tableAliases(table: KtxEnrichedTable): Set<string> {
+  const cached = tableAliasesCache.get(table);
+  if (cached) {
+    return cached;
+  }
+
   const normalized = normalizeKtxRelationshipName(table.ref.name);
   const aliases = new Set([normalized.normalized, normalized.singular, normalized.plural]);
   if (normalized.tokens.length > 1) {
@@ -203,6 +222,7 @@ function tableAliases(table: KtxEnrichedTable): Set<string> {
       aliases.add(pluralizeKtxRelationshipToken(singularLastToken));
     }
   }
+  tableAliasesCache.set(table, aliases);
   return aliases;
 }
 
@@ -212,13 +232,19 @@ function finalTableNamePart(table: KtxEnrichedTable): string {
 }
 
 function parentTableNameAliases(table: KtxEnrichedTable): Set<string> {
-  const aliases = tableAliases(table);
+  const cached = parentTableNameAliasesCache.get(table);
+  if (cached) {
+    return cached;
+  }
+
+  const aliases = new Set(tableAliases(table));
   addNormalizedTableAlias(aliases, finalTableNamePart(table));
+  parentTableNameAliasesCache.set(table, aliases);
   return aliases;
 }
 
 function targetKeyScore(table: KtxEnrichedTable, column: KtxEnrichedColumn): number {
-  const columnName = normalizeKtxRelationshipName(column.name).normalized;
+  const columnName = normalizedColumnName(column).normalized;
   const tableKeyBases = parentTableNameAliases(table);
   if (column.primaryKey) {
     return 1;
@@ -338,7 +364,7 @@ function candidateParentTables(input: {
     maxParentTables,
   }).map((item) => item.table);
 
-  const normalizedColumn = normalizeKtxRelationshipName(input.fromColumn.name).normalized;
+  const normalizedColumn = normalizedColumnName(input.fromColumn).normalized;
   if (!SELF_REFERENCE_NAMES.has(normalizedColumn) || ranked.some((table) => table.id === input.fromTable.id)) {
     return ranked;
   }
@@ -364,7 +390,7 @@ function targetKeyEvidence(
     return { score: 0, reasons: [] };
   }
 
-  const columnName = normalizeKtxRelationshipName(column.name).normalized;
+  const columnName = normalizedColumnName(column).normalized;
   if (columnName === 'code' || columnName.endsWith('_code') || columnName === 'key' || columnName.endsWith('_key')) {
     return { score: 0.86, reasons: ['profile_unique_target'] };
   }
@@ -500,7 +526,7 @@ function createCandidate(input: {
     evidence: {
       sourceColumnBase: input.sourceBase,
       targetTableBase: input.targetBase,
-      targetColumnBase: normalizeKtxRelationshipName(input.toColumn.name).normalized,
+      targetColumnBase: normalizedColumnName(input.toColumn).normalized,
       targetKeyScore: input.targetKeyScore,
       nameScore: input.nameScore,
       reasons: input.reasons,
@@ -553,7 +579,7 @@ function generateKtxEmbeddingRelationshipCandidates(
             continue;
           }
 
-          const sourceBase = normalizeKtxRelationshipName(fromColumn.name).normalized;
+          const sourceBase = normalizedColumnName(fromColumn).normalized;
           const targetBase = normalizeKtxRelationshipName(toTable.ref.name).singular;
           const reasons = ['embedding_similarity', ...keyEvidence.reasons];
           const candidate = createCandidate({
@@ -620,7 +646,7 @@ export function generateKtxRelationshipDiscoveryCandidates(
         const sameTable = fromTable.id === toTable.id;
         const nameMatchesTarget = strictAliases.has(sourceBase);
         const parentTableNameMatcher = !sameTable && !nameMatchesTarget && parentAliases.has(sourceBase);
-        const selfReference = sameTable && SELF_REFERENCE_NAMES.has(normalizeKtxRelationshipName(fromColumn.name).normalized);
+        const selfReference = sameTable && SELF_REFERENCE_NAMES.has(normalizedColumnName(fromColumn).normalized);
         const strictTableMatcher = (!sameTable && nameMatchesTarget) || selfReference;
 
         for (const toColumn of toTable.columns) {
@@ -675,7 +701,7 @@ export function generateKtxRelationshipDiscoveryCandidates(
           if (
             !suffixMatcher &&
             !parentTableNameMatcher &&
-            normalizeKtxRelationshipName(fromColumn.name).normalized === normalizeKtxRelationshipName(toColumn.name).normalized
+            normalizedColumnName(fromColumn).normalized === normalizedColumnName(toColumn).normalized
           ) {
             reasons.push('exact_column_name');
             nameScore = Math.max(nameScore, 0.9);

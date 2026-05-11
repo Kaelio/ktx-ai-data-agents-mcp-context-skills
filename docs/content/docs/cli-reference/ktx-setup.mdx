@@ -1,0 +1,174 @@
+---
+title: "ktx setup"
+description: "Set up or resume a local KTX project."
+---
+
+Interactive wizard that walks you through configuring LLM credentials, embeddings, database connections, context sources, and agent integrations. When run without flags in a directory that has no `ktx.yaml`, it launches the full guided flow. When run in an existing project, it resumes from the first incomplete step.
+
+## Usage
+
+```bash
+ktx setup [options]
+```
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `setup demo` | Run the packaged KTX demo from setup |
+| `setup demo init` | Initialize the packaged demo project |
+| `setup demo reset` | Reset the packaged demo project |
+| `setup demo replay` | Replay the packaged demo memory-flow |
+| `setup demo scan` | Run the packaged demo scan |
+| `setup demo inspect` | Inspect packaged demo outputs |
+| `setup demo doctor` | Check packaged demo readiness |
+| `setup demo ingest` | Run packaged demo ingest |
+| `setup context build` | Build agent-ready KTX context for setup |
+| `setup context watch [runId]` | Watch a setup-managed context build |
+| `setup context status [runId]` | Print setup-managed context build status |
+| `setup context stop [runId]` | Request a pause for a setup-managed context build |
+| `setup remove` | Remove setup-managed local integrations |
+| `setup status` | Show setup readiness for the resolved KTX project |
+
+## Options
+
+### General
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--project-dir <path>` | KTX project directory | `KTX_PROJECT_DIR`, nearest `ktx.yaml`, or cwd |
+| `--new` | Create a new KTX project before setup | `false` |
+| `--existing` | Use an existing KTX project | `false` |
+| `--yes` | Accept safe defaults in non-interactive setup | `false` |
+| `--no-input` | Disable interactive terminal input | — |
+
+### Agent Integration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--agents` | Install agent integration only | `false` |
+| `--target <target>` | Agent target (`claude-code`, `codex`, `cursor`, `opencode`, `universal`) | — |
+| `--agent-scope <scope>` | Agent install scope (`project` or `global`) | `project` |
+| `--agent-install-mode <mode>` | Agent install mode (`cli`, `mcp`, or `both`) | `cli` |
+| `--project` | Install agent integration into the project scope | `false` |
+| `--global` | Install agent integration into the global target scope (Claude Code and Codex only) | `false` |
+| `--skip-agents` | Leave agent integration incomplete for now | `false` |
+
+### LLM Configuration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key | — |
+| `--anthropic-api-key-file <path>` | File containing the Anthropic API key | — |
+| `--anthropic-model <model>` | Anthropic model ID to validate and save | — |
+| `--skip-llm` | Leave LLM setup incomplete for now | `false` |
+
+### Embedding Configuration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--embedding-backend <backend>` | Embedding backend (`openai` or `sentence-transformers`) | — |
+| `--embedding-api-key-env <name>` | Environment variable containing the embedding provider API key | — |
+| `--embedding-api-key-file <path>` | File containing the embedding provider API key | — |
+| `--skip-embeddings` | Leave embedding setup incomplete for now | `false` |
+
+### Database Configuration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--database <driver>` | Database driver to configure; repeatable (`sqlite`, `postgres`, `mysql`, `clickhouse`, `sqlserver`, `bigquery`, `snowflake`) | — |
+| `--database-connection-id <id>` | Existing or new connection id; repeatable | — |
+| `--new-database-connection-id <id>` | Connection id for one new database connection | — |
+| `--database-url <url>` | URL, `env:NAME`, or `file:/path` for one new URL-style database connection | — |
+| `--database-schema <schema>` | Database schema to include; repeatable | — |
+| `--skip-databases` | Leave database setup incomplete | `false` |
+
+### Historic SQL
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--enable-historic-sql` | Enable Historic SQL when the selected database supports it | `false` |
+| `--disable-historic-sql` | Disable Historic SQL for the selected database | `false` |
+| `--historic-sql-window-days <number>` | Historic SQL query-history window in days | — |
+| `--historic-sql-min-calls <number>` | Postgres `pg_stat_statements` minimum calls floor | — |
+| `--historic-sql-service-account-pattern <pattern>` | Historic SQL service-account regex; repeatable | — |
+| `--historic-sql-redaction-pattern <pattern>` | Historic SQL SQL-literal redaction regex; repeatable | — |
+
+### Context Source Configuration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--source <type>` | Source connector type (`dbt`, `metricflow`, `metabase`, `looker`, `lookml`, `notion`) | — |
+| `--source-connection-id <id>` | Connection id for source setup | — |
+| `--source-path <path>` | Local source path for dbt, MetricFlow, or LookML | — |
+| `--source-git-url <url>` | Git URL for dbt, MetricFlow, or LookML | — |
+| `--source-branch <branch>` | Git branch for source setup | — |
+| `--source-subpath <path>` | Repo subpath for source setup | — |
+| `--source-auth-token-ref <ref>` | `env:` or `file:` credential ref for source repo auth | — |
+| `--source-url <url>` | Source service URL for Metabase or Looker | — |
+| `--source-api-key-ref <ref>` | `env:` or `file:` API key ref for Metabase or Notion | — |
+| `--source-client-id <id>` | Looker client id | — |
+| `--source-client-secret-ref <ref>` | `env:` or `file:` Looker client secret ref | — |
+| `--source-warehouse-connection-id <id>` | Mapped warehouse connection id | — |
+| `--source-project-name <name>` | dbt project name override | — |
+| `--source-profiles-path <path>` | dbt profiles path | — |
+| `--source-target <target>` | dbt target or source-specific mapping target | — |
+| `--metabase-database-id <id>` | Metabase database id to map | — |
+| `--notion-crawl-mode <mode>` | Notion crawl mode (`all_accessible` or `selected_roots`) | — |
+| `--notion-root-page-id <id>` | Notion root page id; repeatable | — |
+| `--skip-initial-source-ingest` | Validate source setup without building source context during setup | `false` |
+| `--skip-sources` | Mark optional source setup complete with no sources | `false` |
+
+### Subcommand Options
+
+| Flag | Subcommand | Description | Default |
+|------|-----------|-------------|---------|
+| `--json` | `status`, `context status` | Print JSON output | `false` |
+| `--no-input` | `context build`, `context watch` | Disable interactive terminal input | — |
+| `--force` | `context stop` | Request the pause without interactive confirmation | `false` |
+| `--agents` | `remove` | Remove setup-managed agent integration files | `false` |
+| `--mode <mode>` | `demo` | Demo mode: `seeded`, `replay`, or `full` | `seeded` |
+| `--plain` | `demo` | Print plain text output | `false` |
+
+## Examples
+
+```bash
+# Run the interactive setup wizard
+ktx setup
+
+# Create a new project and run setup
+ktx setup --new
+
+# Resume setup in an existing project
+ktx setup --existing
+
+# Non-interactive setup with Anthropic key from environment
+ktx setup --yes --anthropic-api-key-env ANTHROPIC_API_KEY
+
+# Set up a Postgres connection
+ktx setup --database postgres --database-url "env:DATABASE_URL"
+
+# Install agent integration for Claude Code only
+ktx setup --agents --target claude-code
+
+# Install agent integration globally for Codex
+ktx setup --agents --target codex --global
+
+# Add a dbt source from a local path
+ktx setup --source dbt --source-path ./my-dbt-project
+
+# Skip optional steps for a minimal setup
+ktx setup --skip-sources --skip-agents
+
+# Check setup readiness
+ktx setup status
+
+# Build context after setup
+ktx setup context build
+
+# Watch a running context build
+ktx setup context watch
+
+# Run the packaged demo
+ktx setup demo
+```

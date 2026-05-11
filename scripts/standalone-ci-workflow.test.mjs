@@ -27,6 +27,8 @@ describe('standalone KTX CI workflow', () => {
       'cache-dependency-path: "pnpm-lock.yaml"',
       'pnpm install --frozen-lockfile',
       'pnpm run check',
+      'pnpm run test:slow',
+      'pnpm run smoke',
       'actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405',
       'python-version: "3.13"',
       'astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b',

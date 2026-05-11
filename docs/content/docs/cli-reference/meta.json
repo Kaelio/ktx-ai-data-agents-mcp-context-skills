@@ -1,0 +1,16 @@
+{
+  "title": "CLI Reference",
+  "defaultOpen": true,
+  "pages": [
+    "ktx-setup",
+    "ktx-connection",
+    "ktx-scan",
+    "ktx-ingest",
+    "ktx-sl",
+    "ktx-wiki",
+    "ktx-serve",
+    "ktx-status",
+    "ktx-agent",
+    "ktx-dev"
+  ]
+}

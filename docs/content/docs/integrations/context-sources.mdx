@@ -1,0 +1,353 @@
+---
+title: Context Sources
+description: Ingest semantic context from dbt, MetricFlow, LookML, Metabase, Looker, and Notion.
+---
+
+Context sources feed your existing analytics tooling into KTX. During ingestion, KTX extracts metadata from each source and uses an LLM agent to reconcile it with your existing semantic layer and knowledge base — merging intelligently rather than overwriting.
+
+All context sources are configured in `ktx.yaml` under `connections` with their respective `driver` value.
+
+## dbt
+
+Ingests schema definitions, model descriptions, column metadata, and test coverage from a dbt project.
+
+### What it provides
+
+- Model and source definitions from `schema.yml` files
+- Column descriptions and types
+- Test coverage signals
+- Semantic model references (if using dbt semantic layer)
+- Data lineage between models
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-dbt:
+    driver: dbt
+    source_dir: /path/to/dbt/project
+    readonly: true
+```
+
+For a Git-hosted project:
+
+```yaml title="ktx.yaml"
+connections:
+  my-dbt:
+    driver: dbt
+    repo_url: https://github.com/org/dbt-repo
+    branch: main
+    path: analytics/dbt          # For monorepos
+    auth_token_ref: env:GITHUB_TOKEN
+    readonly: true
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Local path | `source_dir: /absolute/path/to/dbt/project` |
+| Public repo | `repo_url: https://github.com/org/repo` |
+| Private repo | `repo_url` + `auth_token_ref: env:GITHUB_TOKEN` |
+
+**Optional fields:**
+
+| Field | Description |
+|-------|-------------|
+| `profiles_path` | Path to `profiles.yml` (if non-standard location) |
+| `target` | dbt target name (e.g., `dev`, `prod`) |
+| `project_name` | Override auto-detected project name |
+
+### What gets ingested
+
+- YAML semantic sources generated from dbt schema files
+- One work unit per model file (for projects with >25 YAML files) or all at once for smaller projects
+- Column descriptions, tests, and relationships are preserved
+
+---
+
+## MetricFlow
+
+Ingests MetricFlow semantic models and metric definitions. Useful when your team defines metrics in MetricFlow's YAML format.
+
+### What it provides
+
+- Semantic model definitions (entities, dimensions, measures)
+- Cross-model metric definitions
+- Dimension and entity relationships between models
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-metricflow:
+    driver: metricflow
+    metricflow:
+      repoUrl: https://github.com/org/metricflow-repo
+      branch: main
+      path: dbt_metrics           # Subdirectory for monorepos
+      auth_token_ref: env:GITHUB_TOKEN
+    readonly: true
+```
+
+For a local path:
+
+```yaml
+    metricflow:
+      repoUrl: file:///absolute/path/to/project
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Public repo | `repoUrl: https://github.com/org/repo` |
+| Private repo | `repoUrl` + `auth_token_ref: env:GITHUB_TOKEN` |
+| Local path | `repoUrl: file:///path/to/project` |
+
+### What gets ingested
+
+- Semantic models with their entities, dimensions, and measures
+- Metric definitions with their expressions and filters
+- Work units organized by connected component (metrics + related semantic models grouped together)
+
+---
+
+## LookML
+
+Ingests LookML view and model definitions from a Git repository. Extracts field definitions, SQL table references, and join relationships.
+
+### What it provides
+
+- View definitions (dimensions, measures, derived tables)
+- Model explore definitions and joins
+- SQL table name references
+- Field-level descriptions and labels
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-lookml:
+    driver: lookml
+    repoUrl: https://github.com/org/lookml-repo
+    branch: main
+    path: analytics                # Subdirectory for monorepos
+    auth_token_ref: env:GITHUB_TOKEN
+    readonly: true
+```
+
+For a local path:
+
+```yaml
+    repoUrl: file:///absolute/path/to/lookml
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Public repo | `repoUrl: https://github.com/org/repo` |
+| Private repo | `repoUrl` + `auth_token_ref: env:GITHUB_TOKEN` |
+| Local path | `repoUrl: file:///path/to/project` |
+
+### What gets ingested
+
+- View and model definitions organized by connected component
+- LookML field types mapped to semantic layer column types
+- Join definitions and relationship cardinalities
+- SQL table references for warehouse mapping validation
+
+### Warehouse mapping
+
+Optionally validate that LookML references match your expected Looker connection:
+
+```yaml
+    mappings:
+      expectedLookerConnectionName: postgres_connection
+```
+
+This validates that LookML model `connection:` declarations match expectations, flagging mismatches during ingestion.
+
+---
+
+## Metabase
+
+Ingests dashboards, questions, and their underlying SQL queries from a Metabase instance. Maps Metabase databases to your KTX warehouse connections.
+
+### What it provides
+
+- Dashboard metadata and organization
+- Question/query definitions (native SQL and structured queries)
+- Table and column usage patterns from queries
+- Database-to-warehouse relationship mapping
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-metabase:
+    driver: metabase
+    api_url: https://metabase.company.com
+    api_key_ref: env:METABASE_API_KEY
+    mappings:
+      databaseMappings:
+        "3": postgres-main         # Metabase DB ID → KTX connection
+      syncEnabled:
+        "3": true
+      syncMode: ONLY               # Only ingest mapped databases
+    readonly: true
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| API key | `api_key_ref: env:METABASE_API_KEY` |
+
+Generate an API key in Metabase: **Admin > Settings > Authentication > API Keys**.
+
+### What gets ingested
+
+- Semantic sources generated from SQL queries in questions
+- Knowledge pages for dashboards (purpose, key metrics, relationships)
+- Work units per dashboard and per question
+
+### Warehouse mapping
+
+Metabase databases must be mapped to KTX connections so ingested context links to the correct warehouse:
+
+```yaml
+mappings:
+  databaseMappings:
+    "<metabase_db_id>": "<ktx_connection_id>"
+  syncEnabled:
+    "<metabase_db_id>": true
+  syncMode: ONLY    # ONLY = restrict to mapped DBs
+```
+
+Find Metabase database IDs in **Admin > Databases** — the ID is in the URL when editing a database.
+
+---
+
+## Looker
+
+Ingests explores, looks, and dashboards from a Looker instance via the Looker API. Maps Looker connections to your KTX warehouse connections.
+
+### What it provides
+
+- Explore definitions and field metadata
+- Dashboard and look configurations
+- Query patterns and usage signals
+- Looker folder structure for organization context
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-looker:
+    driver: looker
+    base_url: https://looker.company.com
+    client_id: your-looker-client-id
+    client_secret_ref: env:LOOKER_CLIENT_SECRET
+    mappings:
+      connectionMappings:
+        postgres_connection: postgres-main   # Looker conn → KTX conn
+    readonly: true
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| OAuth client credentials | `client_id` + `client_secret_ref: env:LOOKER_CLIENT_SECRET` |
+
+Generate API credentials in Looker: **Admin > Users > Edit > API Keys**.
+
+### What gets ingested
+
+- Semantic sources from explore field definitions
+- Knowledge pages for dashboards (purpose, audience, key metrics)
+- Triage signals for automated content classification
+- Work units per explore and per dashboard
+
+### Warehouse mapping
+
+Map Looker connection names to KTX connections so explores link to the correct warehouse:
+
+```yaml
+mappings:
+  connectionMappings:
+    "<looker_connection_name>": "<ktx_connection_id>"
+```
+
+Find Looker connection names in **Admin > Database > Connections**.
+
+---
+
+## Notion
+
+Ingests pages and databases from a Notion workspace as knowledge pages. Useful for capturing business definitions, data dictionaries, and team documentation that agents need for context.
+
+### What it provides
+
+- Knowledge pages synthesized from Notion content
+- Page hierarchy and relationships
+- Database schemas (when Notion databases describe data sources)
+- Semantic clustering for organized ingestion
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-notion:
+    driver: notion
+    auth_token_ref: env:NOTION_TOKEN
+    crawl_mode: selected_roots
+    root_page_ids:
+      - "abc123def456..."
+    readonly: true
+```
+
+For crawling all accessible pages:
+
+```yaml title="ktx.yaml"
+connections:
+  my-notion:
+    driver: notion
+    auth_token_ref: env:NOTION_TOKEN
+    crawl_mode: all_accessible
+    readonly: true
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Internal integration token | `auth_token_ref: env:NOTION_TOKEN` |
+
+Create an integration at [notion.so/my-integrations](https://www.notion.so/my-integrations), then share target pages with the integration.
+
+### Configuration options
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `crawl_mode` | `all_accessible` or `selected_roots` | — |
+| `root_page_ids` | Page IDs to crawl from (for `selected_roots`) | `[]` |
+| `root_database_ids` | Database IDs to include | `[]` |
+| `max_pages_per_run` | Pages processed per sync | `1000` |
+| `max_knowledge_creates_per_run` | New pages created per sync | `5` |
+| `max_knowledge_updates_per_run` | Pages updated per sync | `20` |
+
+### What gets ingested
+
+- Knowledge pages synthesized from Notion content (not raw copies)
+- Domain context extracted and organized by topic
+- Triage signals for classifying page relevance
+- Work units clustered by semantic similarity for efficient processing
+
+### Notes
+
+- Notion is knowledge-only — it does not produce semantic layer sources
+- Rate limits apply; large workspaces may require multiple ingestion runs
+- `last_successful_cursor` is auto-managed for incremental sync

@@ -1,0 +1,147 @@
+---
+title: "ktx dev"
+description: "Low-level diagnostics, scans, adapter commands, and mapping tools."
+---
+
+Hidden commands for low-level project management, diagnostics, direct adapter control, and shell completion. Most users interact with these through higher-level commands like [`ktx ingest`](/docs/cli-reference/ktx-ingest) and [`ktx setup`](/docs/cli-reference/ktx-setup), but `ktx dev` provides direct access when you need fine-grained control.
+
+## Usage
+
+```bash
+ktx dev <subcommand> [options]
+```
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `init [directory]` | Initialize a Git-backed KTX project directory |
+| `doctor` | Check KTX setup, project, and demo readiness |
+| `doctor setup` | Check KTX install, build, and local runtime readiness |
+| `scan` | Run or inspect standalone connection scans |
+| `ingest run` | Run local ingest for one configured connection and source adapter |
+| `ingest status [runId]` | Print status for a stored local ingest run |
+| `ingest watch [runId]` | Open a stored ingest visual report |
+| `ingest replay <runId>` | Replay a stored ingest run through memory-flow output |
+| `mapping` | Manage Metabase warehouse mappings (same as `ktx connection mapping`) |
+| `completion zsh` | Generate zsh completion script |
+
+## Options
+
+### `dev init`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--name <name>` | Project name written to `ktx.yaml` | — |
+| `--force` | Rewrite `ktx.yaml` and scaffold files in an existing project | `false` |
+
+### `dev doctor`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--json` | Print JSON output | `false` |
+| `--no-input` | Disable interactive terminal input | — |
+
+### `dev doctor setup`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--json` | Print JSON output | `false` |
+| `--no-input` | Disable interactive terminal input | — |
+
+### `dev scan`
+
+See [`ktx scan`](/docs/cli-reference/ktx-scan) for the full scan command reference.
+
+### `dev ingest run`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <connectionId>` | KTX connection id (required) | — |
+| `--adapter <adapter>` | Ingest source adapter name (required) | — |
+| `--source-dir <path>` | Directory containing source files | — |
+| `--database-introspection-url <url>` | Daemon URL for live-database introspection | — |
+| `--debug-llm-request-file <path>` | Write sanitized LLM request structure to a JSONL file | — |
+| `--plain` | Print plain text output | `false` |
+| `--json` | Print JSON output | `false` |
+| `--viz` | Render memory-flow TUI output | `false` |
+| `--no-input` | Disable interactive terminal input for visualization | — |
+
+### `dev ingest status`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--report-file <path>` | Bundle ingest report JSON file to render | — |
+| `--plain` | Print plain text output | `false` |
+| `--json` | Print JSON output | `false` |
+| `--viz` | Render memory-flow TUI output | `false` |
+| `--no-input` | Disable interactive terminal input for visualization | — |
+
+### `dev ingest watch`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--report-file <path>` | Bundle ingest report JSON file to render | — |
+| `--plain` | Print plain text output | `false` |
+| `--json` | Print JSON output | `false` |
+| `--viz` | Render memory-flow TUI output (the default unless `--plain` or `--json` is set) | `true` |
+| `--no-input` | Disable interactive terminal input for visualization | — |
+
+### `dev ingest replay`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--report-file <path>` | Bundle ingest report JSON file to render | — |
+| `--plain` | Print plain text output | `false` |
+| `--json` | Print JSON output | `false` |
+| `--viz` | Render memory-flow TUI output | `false` |
+| `--no-input` | Disable interactive terminal input for visualization | — |
+
+### `dev completion zsh`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--install` | Install zsh completion into `~/.zfunc` and update `~/.zshrc` | `false` |
+
+## Examples
+
+```bash
+# Initialize a new KTX project
+ktx dev init
+
+# Initialize in a specific directory with a project name
+ktx dev init ./my-project --name "Analytics Context"
+
+# Re-initialize an existing project
+ktx dev init --force
+
+# Check project readiness
+ktx dev doctor
+
+# Check CLI install readiness
+ktx dev doctor setup
+
+# Run a low-level ingest with a specific adapter
+ktx dev ingest run --connection-id my-dbt --adapter dbt
+
+# Run ingest from a specific source directory
+ktx dev ingest run \
+  --connection-id my-dbt \
+  --adapter dbt \
+  --source-dir ./dbt-project
+
+# View ingest status with the visual TUI
+ktx dev ingest watch run-abc123
+
+# Replay a stored ingest session
+ktx dev ingest replay run-abc123
+
+# View ingest status from a report file
+ktx dev ingest status --report-file /tmp/ingest-report.json
+
+# Generate zsh completions
+ktx dev completion zsh
+
+# Install zsh completions
+ktx dev completion zsh --install
+```

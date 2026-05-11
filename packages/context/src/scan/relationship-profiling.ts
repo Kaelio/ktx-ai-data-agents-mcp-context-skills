@@ -71,7 +71,7 @@ const SAMPLE_VALUE_DELIMITER = '\u001f';
 type QuoteStyle = 'double' | 'backtick' | 'bracket';
 
 function quoteStyle(driver: KtxConnectionDriver): QuoteStyle {
-  if (driver === 'mysql' || driver === 'clickhouse' || driver === 'posthog') {
+  if (driver === 'mysql' || driver === 'clickhouse') {
     return 'backtick';
   }
   if (driver === 'sqlserver') {
@@ -93,7 +93,7 @@ export function quoteKtxRelationshipIdentifier(driver: KtxConnectionDriver, iden
 
 export function formatKtxRelationshipTableRef(driver: KtxConnectionDriver, table: KtxTableRef): string {
   const parts =
-    driver === 'sqlite' || driver === 'posthog'
+    driver === 'sqlite'
       ? [table.name]
       : [table.catalog, table.db, table.name].filter((value): value is string => Boolean(value));
   return parts.map((part) => quoteKtxRelationshipIdentifier(driver, part)).join('.');
@@ -109,7 +109,7 @@ function textLengthExpression(driver: KtxConnectionDriver, columnSql: string): s
   if (driver === 'bigquery') {
     return `LENGTH(CAST(${columnSql} AS STRING))`;
   }
-  if (driver === 'clickhouse' || driver === 'posthog') {
+  if (driver === 'clickhouse') {
     return `length(toString(${columnSql}))`;
   }
   return `LENGTH(CAST(${columnSql} AS TEXT))`;
@@ -223,7 +223,7 @@ function sampleAggregateSql(driver: KtxConnectionDriver, innerSql: string): stri
   if (driver === 'sqlserver') {
     return `(SELECT STRING_AGG(CAST(value AS NVARCHAR(MAX)), CHAR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
   }
-  if (driver === 'clickhouse' || driver === 'posthog') {
+  if (driver === 'clickhouse') {
     return `(SELECT arrayStringConcat(groupArray(toString(value)), '\\x1F') FROM (${innerSql}) AS relationship_profile_values)`;
   }
   return `(SELECT GROUP_CONCAT(CAST(value AS TEXT), char(31)) FROM (${innerSql}) AS relationship_profile_values)`;

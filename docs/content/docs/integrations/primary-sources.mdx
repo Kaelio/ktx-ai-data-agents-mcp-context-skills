@@ -1,0 +1,469 @@
+---
+title: Primary Sources
+description: Connect KTX to PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, or SQLite.
+---
+
+KTX connects to your data warehouse or database to scan schemas, discover relationships, and execute semantic layer queries. Each connection is defined in `ktx.yaml` under the `connections` key.
+
+All connectors share these conventions:
+
+- Sensitive values support `env:VAR_NAME` (read from environment) and `file:/path/to/secret` (read from file) references
+- Connections are read-only — KTX never writes to your database
+- Schema scanning discovers tables, columns, types, and constraints automatically
+
+## PostgreSQL
+
+The most full-featured connector. Supports schema introspection, foreign key detection, column statistics, and historic SQL via `pg_stat_statements`.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-postgres:
+    driver: postgres
+    url: postgresql://user:password@host:5432/database
+    schema: public
+    readonly: true
+```
+
+Or with individual fields:
+
+```yaml title="ktx.yaml"
+connections:
+  my-postgres:
+    driver: postgres
+    host: localhost
+    port: 5432
+    database: analytics
+    username: ktx_reader
+    password: env:PG_PASSWORD
+    schemas:
+      - public
+      - analytics
+    ssl: true
+    readonly: true
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Password | `password: env:PG_PASSWORD` or `password: file:/path/to/secret` |
+| Connection URL | `url: env:DATABASE_URL` |
+| SSL | `ssl: true`, optionally `rejectUnauthorized: false` for self-signed certs |
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `pg_catalog` |
+| Primary keys | Yes | Via `information_schema.table_constraints` |
+| Foreign keys | Yes | Full constraint detection |
+| Row count estimates | Yes | Via `pg_class.reltuples` |
+| Column statistics | Yes | Requires `pg_read_all_stats` role |
+| Historic SQL | Yes | Via `pg_stat_statements` extension |
+| Table sampling | Yes | `TABLESAMPLE SYSTEM` |
+
+### Historic SQL
+
+PostgreSQL Historic SQL mines real query patterns from `pg_stat_statements`. This is the most mature local Historic SQL path and helps KTX understand how your team actually queries the data.
+
+**Requirements:**
+- `pg_stat_statements` extension enabled
+- `pg_read_all_stats` role granted to the KTX user
+
+**Config options:**
+
+```yaml
+historicSql:
+  minCalls: 5           # Minimum call count to include a query template
+  maxTemplatesPerRun: 5000
+```
+
+### Dialect notes
+
+- SQL generation uses `LIMIT/OFFSET` pagination
+- Named parameters converted to positional (`$1`, `$2`, ...)
+- Supports `COUNT(*) FILTER (WHERE ...)` for null analysis
+- Full support for PostgreSQL types: `uuid`, `jsonb`, `timestamptz`, `numeric`, `text[]`, etc.
+
+---
+
+## Snowflake
+
+Connects via the Snowflake SDK. Supports multi-schema scanning, RSA key authentication, and Historic SQL configuration for Snowflake query history.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-snowflake:
+    driver: snowflake
+    account: xy12345
+    warehouse: ANALYTICS_WH
+    database: PROD
+    schema_name: PUBLIC
+    username: KTX_SERVICE
+    password: env:SNOWFLAKE_PASSWORD
+    role: ANALYST
+    readonly: true
+```
+
+For multiple schemas:
+
+```yaml
+    schema_names:
+      - PUBLIC
+      - ANALYTICS
+      - STAGING
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Password | `password: env:SNOWFLAKE_PASSWORD` |
+| RSA key pair | `authMethod: rsa`, `privateKey: file:~/.ssh/snowflake_key.pem`, optional `passphrase` |
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `INFORMATION_SCHEMA.TABLES` |
+| Primary keys | Yes | Via table constraints |
+| Foreign keys | No | Not available in Snowflake |
+| Row count estimates | Yes | From `INFORMATION_SCHEMA.TABLES.ROW_COUNT` |
+| Column statistics | No | — |
+| Historic SQL | Configurable | Query-history settings can be stored; local CLI Historic SQL ingest currently uses the Postgres path |
+| Table sampling | Yes | — |
+
+### Historic SQL
+
+Snowflake Historic SQL settings describe how query history should be sampled when that runtime path is available.
+
+```yaml
+historicSql:
+  windowDays: 90
+  redactionPatterns: []
+  serviceAccountUserPatterns: []
+```
+
+### Dialect notes
+
+- All identifiers are uppercase by default (case-insensitive matching)
+- Connection context set per query (`USE ROLE`, `USE WAREHOUSE`, `USE DATABASE`, `USE SCHEMA`)
+- Parameter binding uses positional `?` placeholders
+- Date values normalized to ISO 8601 strings
+
+---
+
+## BigQuery
+
+Authenticates via GCP service account credentials. Supports multi-dataset scanning and Historic SQL configuration for `INFORMATION_SCHEMA.JOBS_BY_PROJECT`.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-bigquery:
+    driver: bigquery
+    credentials_json: file:~/.config/gcloud/bq-service-account.json
+    dataset_id: analytics
+    location: US
+    readonly: true
+```
+
+For multiple datasets:
+
+```yaml
+    dataset_ids:
+      - analytics
+      - marketing
+      - finance
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Service account JSON | `credentials_json: file:/path/to/key.json` |
+| Environment variable | `credentials_json: env:GCP_CREDENTIALS_JSON` |
+
+The project ID is extracted automatically from the service account JSON file.
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Including materialized views and external tables |
+| Primary keys | No | — |
+| Foreign keys | No | Not available in BigQuery |
+| Row count estimates | Yes | From table metadata |
+| Column statistics | No | — |
+| Historic SQL | Configurable | Query-history settings can be stored; local CLI Historic SQL ingest currently uses the Postgres path |
+| Table sampling | Yes | — |
+
+### Historic SQL
+
+BigQuery Historic SQL settings describe how `INFORMATION_SCHEMA.JOBS_BY_PROJECT` should be sampled when that runtime path is available.
+
+```yaml
+historicSql:
+  windowDays: 90
+  redactionPatterns: []
+  serviceAccountUserPatterns: []
+```
+
+### Dialect notes
+
+- Parameter binding uses named `@param` syntax
+- Arrays flattened to comma-separated strings in results
+- Location specified at query execution time
+- Supports `maxBytesBilled` and `jobTimeoutMs` limits
+
+---
+
+## ClickHouse
+
+Connects over HTTP (port 8123) or HTTPS (port 8443). Supports the ClickHouse native type system including `Nullable`, `LowCardinality`, and `Array` wrappers.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-clickhouse:
+    driver: clickhouse
+    url: http://localhost:8123/analytics
+    readonly: true
+```
+
+Or with individual fields:
+
+```yaml title="ktx.yaml"
+connections:
+  my-clickhouse:
+    driver: clickhouse
+    host: clickhouse.internal
+    port: 8123
+    database: analytics
+    username: default
+    password: env:CH_PASSWORD
+    ssl: false
+    readonly: true
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Basic auth | `username` + `password` (HTTP basic auth) |
+| No auth | Default user `default` with no password |
+| HTTPS | Set `ssl: true` (uses port 8443 by default) |
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `system.tables`, engine-based detection |
+| Primary keys | Yes | Via `system.columns` |
+| Foreign keys | No | Not a ClickHouse concept |
+| Row count estimates | Yes | Via `system.parts` aggregation |
+| Column statistics | No | — |
+| Historic SQL | No | — |
+| Table sampling | Yes | — |
+
+### Dialect notes
+
+- Parameter binding uses `{param:Type}` syntax (e.g., `{database:String}`)
+- Detects views vs. tables by engine name (`View`, `MaterializedView`)
+- Handles `Nullable(T)` and `LowCardinality(Nullable(T))` type wrappers
+- Dictionary tables are excluded from scanning
+- Results returned in JSONCompact or JSONEachRow format
+
+---
+
+## MySQL
+
+Standard MySQL/MariaDB connector with full foreign key support and schema introspection.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-mysql:
+    driver: mysql
+    url: mysql://user:password@host:3306/database
+    readonly: true
+```
+
+Or with individual fields:
+
+```yaml title="ktx.yaml"
+connections:
+  my-mysql:
+    driver: mysql
+    host: mysql.internal
+    port: 3306
+    database: analytics
+    username: ktx_reader
+    password: env:MYSQL_PASSWORD
+    ssl: true
+    readonly: true
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Password | `password: env:MYSQL_PASSWORD` or `password: file:/path/to/secret` |
+| SSL | `ssl: true` or `ssl: { rejectUnauthorized: false }` |
+| URL parameters | `?ssl=true` or `?sslmode=required` in connection URL |
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `INFORMATION_SCHEMA.TABLES` |
+| Primary keys | Yes | Via `KEY_COLUMN_USAGE` |
+| Foreign keys | Yes | Via `REFERENTIAL_CONSTRAINTS` |
+| Row count estimates | Yes | From `TABLE_ROWS` (InnoDB estimate) |
+| Column statistics | No | — |
+| Historic SQL | No | — |
+| Table sampling | Yes | Uses `RAND()` filter |
+
+### Dialect notes
+
+- Parameter binding uses positional `?` placeholders
+- Uses `LIMIT X OFFSET Y` for pagination
+- Single database per connection (no multi-schema)
+- Supports 20+ MySQL types including `enum`, `json`, `datetime`, `decimal`
+- Table comments extracted with InnoDB metadata prefix stripping
+
+---
+
+## SQL Server
+
+Connects to Microsoft SQL Server and Azure SQL. Supports multi-schema scanning with `dbo` as the default schema.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-sqlserver:
+    driver: sqlserver
+    url: mssql://user:password@host:1433/database?trustServerCertificate=true
+    readonly: true
+```
+
+Or with individual fields:
+
+```yaml title="ktx.yaml"
+connections:
+  my-sqlserver:
+    driver: sqlserver
+    host: sql.internal
+    port: 1433
+    database: Analytics
+    username: ktx_reader
+    password: env:MSSQL_PASSWORD
+    schema: dbo
+    trustServerCertificate: true
+    readonly: true
+```
+
+For multiple schemas:
+
+```yaml
+    schemas:
+      - dbo
+      - analytics
+      - staging
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| SQL Server auth | `username` + `password` |
+| Encrypted connection | Always enabled, `trustServerCertificate: true` for self-signed |
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `INFORMATION_SCHEMA.TABLES` |
+| Primary keys | Yes | Via `TABLE_CONSTRAINTS` and `KEY_COLUMN_USAGE` |
+| Foreign keys | Yes | Via `REFERENTIAL_CONSTRAINTS` |
+| Row count estimates | Yes | Via `sys.dm_db_partition_stats` |
+| Column statistics | No | — |
+| Historic SQL | No | — |
+| Table sampling | Yes | — |
+| Nested analysis | No | — |
+
+### Dialect notes
+
+- Parameter binding uses `@paramName` syntax
+- Row limiting uses `SELECT TOP N * FROM (query) AS ktx_query_result`
+- Encryption is always required; certificate validation is optional
+- Multi-schema support with per-schema isolation
+
+---
+
+## SQLite
+
+File-based connector using `better-sqlite3`. Ideal for local development, embedded analytics, or testing.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-sqlite:
+    driver: sqlite
+    path: ./data/warehouse.sqlite
+    readonly: true
+```
+
+Path supports multiple formats:
+
+```yaml
+# Relative path (resolved against project directory)
+path: ./warehouse.sqlite
+
+# Absolute path
+path: /var/data/analytics.db
+
+# Home directory expansion
+path: ~/data/warehouse.sqlite
+
+# Environment variable
+path: env:SQLITE_DB_PATH
+
+# URL format
+url: sqlite:///path/to/db.sqlite
+```
+
+### Authentication
+
+No authentication required — SQLite is file-based. The file must be readable by the process running KTX.
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `sqlite_master` |
+| Primary keys | Yes | Via `PRAGMA table_info()` |
+| Foreign keys | Yes | Via `PRAGMA foreign_key_list()` (requires `PRAGMA foreign_keys = ON`) |
+| Row count estimates | Yes | Exact count via `SELECT COUNT(*)` |
+| Column statistics | No | — |
+| Historic SQL | No | — |
+| Table sampling | Yes | — |
+| Nested analysis | No | — |
+
+### Dialect notes
+
+- Synchronous query execution (no connection pooling)
+- Parameter binding uses `:paramName` syntax
+- Uses `LIMIT X OFFSET Y` for pagination
+- SQLite type affinity system: `TEXT`, `NUMERIC`, `INTEGER`, `REAL`, `BLOB`
+- Foreign key enforcement requires explicit `PRAGMA foreign_keys = ON`
+- In-memory databases supported with `path: ":memory:"` (for testing)

@@ -32,6 +32,8 @@ describe('KTX local project runtime', () => {
     const gitignore = await readFile(join(projectDir, '.ktx/.gitignore'), 'utf-8');
     expect(gitignore).toContain('cache/');
     expect(gitignore).toContain('db.sqlite');
+    expect(gitignore).toContain('db.sqlite-*');
+    expect(gitignore).toContain('ingest-transcripts/');
     expect(gitignore).toContain('secrets/');
     expect(gitignore).toContain('setup/');
     expect(gitignore).toContain('agents/');

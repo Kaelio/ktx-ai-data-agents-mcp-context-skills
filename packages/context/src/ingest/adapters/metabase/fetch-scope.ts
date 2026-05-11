@@ -11,7 +11,7 @@ export type FetchScope =
  * union the fetcher switches on. Pure function; no I/O, no side effects.
  */
 export function computeFetchScope(syncConfig: StagedSyncConfig): FetchScope {
-  if (syncConfig.syncMode === 'ALL') {
+  if (syncConfig.syncMode === 'ALL' || (syncConfig.syncMode === 'ONLY' && syncConfig.selections.length === 0)) {
     return { kind: 'all' };
   }
   const cardIds = new Set<number>();

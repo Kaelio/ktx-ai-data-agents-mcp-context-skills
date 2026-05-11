@@ -256,6 +256,31 @@ describe('GitService', () => {
       await service.removeWorktree(wtDir).catch(() => undefined);
       await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
     });
+
+    it('serializes concurrent commits from scoped services targeting the same worktree', async () => {
+      const { commitHash } = await writeAndCommit('seed.md', 'seed');
+      const parent = await realpath(join(tempDir, '..'));
+      const wtDir = join(parent, `wt-${Date.now()}-fw-concurrent`);
+      await service.addWorktree(wtDir, 'session/concurrent', commitHash);
+
+      const first = service.forWorktree(wtDir);
+      const second = service.forWorktree(wtDir);
+      await writeFile(join(wtDir, 'a.md'), 'a\n', 'utf-8');
+      await writeFile(join(wtDir, 'b.md'), 'b\n', 'utf-8');
+
+      const [a, b] = await Promise.all([
+        first.commitFile('a.md', 'add a', 'System User', 'system@example.com'),
+        second.commitFile('b.md', 'add b', 'System User', 'system@example.com'),
+      ]);
+
+      expect(a.commitHash).toMatch(/^[0-9a-f]{40}$/);
+      expect(b.commitHash).toMatch(/^[0-9a-f]{40}$/);
+      await expect(first.getFileAtCommit('a.md', a.commitHash)).resolves.toBe('a\n');
+      await expect(second.getFileAtCommit('b.md', b.commitHash)).resolves.toBe('b\n');
+
+      await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
   });
 
   describe('squashMergeIntoMain', () => {

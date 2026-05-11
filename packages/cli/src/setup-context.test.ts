@@ -166,7 +166,12 @@ describe('setup context build state', () => {
   it('runs setup context build, verifies readiness, and marks context complete', async () => {
     await writeReadyProject(tempDir);
     const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0, detached: false }));
+    const runContextBuildMock = vi.fn(async () => ({
+      exitCode: 0,
+      detached: false,
+      reportIds: ['report-docs-1'],
+      artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
+    }));
     const verifyContextReady = vi.fn(async () => ({
       ready: true,
       agentContextReady: true,
@@ -204,6 +209,8 @@ describe('setup context build state', () => {
       runId: 'setup-context-local-abc123',
       status: 'completed',
       completedAt: '2026-05-09T10:00:00.000Z',
+      reportIds: ['report-docs-1'],
+      artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
     });
     expect(io.stdout()).toContain('KTX context is ready for agents.');
   });
@@ -340,6 +347,207 @@ describe('setup context build state', () => {
     expect(io.stderr()).toContain('No primary or context sources are configured for a KTX context build.');
   });
 
+  it('watches an already-running setup context build from the resume prompt', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-resume-watch',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: ['docs'],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-resume-watch'),
+    });
+    const io = makeIo();
+    const completeRun = async () => {
+      await writeKtxSetupContextState(tempDir, {
+        runId: 'setup-context-local-resume-watch',
+        status: 'completed',
+        startedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: '2026-05-09T10:02:00.000Z',
+        completedAt: '2026-05-09T10:02:00.000Z',
+        primarySourceConnectionIds: ['warehouse'],
+        contextSourceConnectionIds: ['docs'],
+        reportIds: [],
+        artifactPaths: [],
+        retryableFailedTargets: [],
+        commands: contextBuildCommands(tempDir, 'setup-context-local-resume-watch'),
+      });
+    };
+    const select = vi.fn(async (options: { options: Array<{ value: string; label: string }> }) => {
+      expect(options.options.map((option) => option.label)).toContain('Watch progress');
+      return 'watch';
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto' },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          sleep: completeRun,
+          watchIntervalMs: 1,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-resume-watch' });
+    expect(io.stdout()).toContain('KTX context built: detached');
+    expect(io.stdout()).toContain('KTX context built: yes');
+  });
+
+  it('auto-watches a running build without prompting when autoWatch is true', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-auto-watch',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-auto-watch'),
+    });
+    const io = makeIo();
+    const completeRun = async () => {
+      await writeKtxSetupContextState(tempDir, {
+        runId: 'setup-context-local-auto-watch',
+        status: 'completed',
+        startedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: '2026-05-09T10:02:00.000Z',
+        completedAt: '2026-05-09T10:02:00.000Z',
+        primarySourceConnectionIds: ['warehouse'],
+        contextSourceConnectionIds: [],
+        reportIds: [],
+        artifactPaths: [],
+        retryableFailedTargets: [],
+        commands: contextBuildCommands(tempDir, 'setup-context-local-auto-watch'),
+      });
+    };
+    const select = vi.fn(async () => {
+      throw new Error('should not prompt when autoWatch is true');
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          sleep: completeRun,
+          watchIntervalMs: 1,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-auto-watch' });
+    expect(select).not.toHaveBeenCalled();
+    expect(io.stdout()).toContain('KTX context built: yes');
+  });
+
+  it('renders the progress view when watching a build with sourceProgress', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-progress',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: ['docs'],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-progress'),
+      sourceProgress: [
+        { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 30000 },
+        { connectionId: 'docs', operation: 'source-ingest' as const, status: 'running' as const, startedAtMs: Date.now() - 5000 },
+      ],
+    });
+    const io = makeIo();
+    const completeRun = async () => {
+      await writeKtxSetupContextState(tempDir, {
+        runId: 'setup-context-local-progress',
+        status: 'completed',
+        startedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: '2026-05-09T10:02:00.000Z',
+        completedAt: '2026-05-09T10:02:00.000Z',
+        primarySourceConnectionIds: ['warehouse'],
+        contextSourceConnectionIds: ['docs'],
+        reportIds: [],
+        artifactPaths: [],
+        retryableFailedTargets: [],
+        commands: contextBuildCommands(tempDir, 'setup-context-local-progress'),
+        sourceProgress: [
+          { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 30000 },
+          { connectionId: 'docs', operation: 'source-ingest' as const, status: 'done' as const, elapsedMs: 60000 },
+        ],
+      });
+    };
+    const select = vi.fn(async () => 'watch');
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto' },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          sleep: completeRun,
+          watchIntervalMs: 1,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-progress' });
+
+    const output = io.stdout();
+    expect(output).toContain('Building KTX context');
+    expect(output).toContain('Primary sources:');
+    expect(output).toContain('warehouse');
+    expect(output).toContain('Context sources:');
+    expect(output).toContain('docs');
+    expect(output).not.toContain('KTX context built: detached');
+  });
+
+  it('supports d to detach from the progress watch view', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-detach',
+      status: 'running',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-detach'),
+      sourceProgress: [
+        { connectionId: 'warehouse', operation: 'scan' as const, status: 'running' as const, startedAtMs: Date.now() },
+      ],
+    });
+    const io = makeIo();
+    let triggerDetach: (() => void) | null = null;
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
+        io.io,
+        {
+          sleep: async () => { triggerDetach?.(); },
+          watchIntervalMs: 1,
+          setupKeystroke: (onDetach) => {
+            triggerDetach = onDetach;
+            return () => {};
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'detached' });
+
+    const output = io.stdout();
+    expect(output).toContain('Building KTX context');
+    expect(output).toContain('Context build continuing in the background.');
+    expect(output).toContain('Resume: ktx setup --project-dir');
+  });
+
   it('prints JSON setup context command status with watch and resume commands', async () => {
     await mkdir(join(tempDir, '.ktx', 'setup'), { recursive: true });
     await writeKtxSetupContextState(tempDir, {
@@ -370,6 +578,48 @@ describe('setup context build state', () => {
       watchCommand: `ktx setup context watch setup-context-local-abc123 --project-dir ${tempDir}`,
       statusCommand: `ktx setup context status setup-context-local-abc123 --project-dir ${tempDir}`,
     });
+  });
+
+  it('watches setup context command status until the run reaches a terminal state', async () => {
+    await mkdir(join(tempDir, '.ktx', 'setup'), { recursive: true });
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-watch',
+      status: 'running',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: ['docs'],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-watch'),
+    });
+    const io = makeIo();
+    const completeRun = async () => {
+      await writeKtxSetupContextState(tempDir, {
+        runId: 'setup-context-local-watch',
+        status: 'completed',
+        startedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: '2026-05-09T10:02:00.000Z',
+        completedAt: '2026-05-09T10:02:00.000Z',
+        primarySourceConnectionIds: ['warehouse'],
+        contextSourceConnectionIds: ['docs'],
+        reportIds: [],
+        artifactPaths: [],
+        retryableFailedTargets: [],
+        commands: contextBuildCommands(tempDir, 'setup-context-local-watch'),
+      });
+    };
+
+    await expect(
+      runKtxSetupContextCommand(
+        { command: 'watch', projectDir: tempDir, runId: 'setup-context-local-watch', inputMode: 'disabled' },
+        io.io,
+        { sleep: completeRun, watchIntervalMs: 1 },
+      ),
+    ).resolves.toBe(0);
+    expect(io.stdout()).toContain('KTX context built: running');
+    expect(io.stdout()).toContain('KTX context built: yes');
   });
 
   it('runs direct build commands without asking for setup confirmation first', async () => {

@@ -36,6 +36,22 @@ class SourceColumnTests(BaseModel):
     dbt_by_package: dict[str, list[str]] | None = None
 
 
+_DEFAULT_DESCRIPTION_PRIORITY = ["user", "ai", "dbt", "db"]
+
+
+def _resolve_description_map(descriptions: dict[str, str] | None) -> str | None:
+    if not descriptions:
+        return None
+    for source in _DEFAULT_DESCRIPTION_PRIORITY:
+        text = descriptions.get(source)
+        if text:
+            return text
+    for text in descriptions.values():
+        if text:
+            return text
+    return None
+
+
 class FreshnessDbt(BaseModel):
     raw: Any | None = None
     loaded_at_field: str | None = None
@@ -47,11 +63,18 @@ class SourceColumn(BaseModel):
     visibility: ColumnVisibility = ColumnVisibility.PUBLIC
     role: ColumnRole = ColumnRole.DEFAULT
     description: str | None = None
+    descriptions: dict[str, str] | None = None
     expr: str | None = None
     natural_granularity: str | None = None
     constraints: dict[str, ColumnDbtConstraints] | None = None
     enum_values: dict[str, list[str]] | None = None
     tests: SourceColumnTests | None = None
+
+    @model_validator(mode="after")
+    def resolve_description(self) -> SourceColumn:
+        if self.description is None:
+            self.description = _resolve_description_map(self.descriptions)
+        return self
 
 
 class JoinDeclaration(BaseModel):
@@ -84,6 +107,7 @@ class DefaultTimeDimensionDbt(BaseModel):
 class SourceDefinition(BaseModel):
     name: str
     description: str | None = None
+    descriptions: dict[str, str] | None = None
     table: str | None = None
     sql: str | None = None
     grain: list[str]
@@ -97,6 +121,8 @@ class SourceDefinition(BaseModel):
 
     @model_validator(mode="after")
     def validate_source(self) -> SourceDefinition:
+        if self.description is None:
+            self.description = _resolve_description_map(self.descriptions)
         if self.table and self.sql:
             raise ValueError("'table' and 'sql' are mutually exclusive")
         if not self.grain:

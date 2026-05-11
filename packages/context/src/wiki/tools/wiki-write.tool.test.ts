@@ -37,6 +37,42 @@ describe('WikiWriteTool', () => {
     expect(result.markdown).toMatch(/created/i);
   });
 
+  it('normalizes accidentally escaped markdown newlines before writing', async () => {
+    const { tool, wikiService } = makeTool();
+
+    await tool.call(
+      {
+        key: 'large-contract-requesters',
+        summary: 'Cross-schema Metabase query',
+        content:
+          '# Large Contract Requesters\\n\\n**Source card:** Metabase #110\\n\\n## SQL\\n\\n```sql\\nselect * from orbit_analytics.mart_account_segments\\n```\\n',
+      } as any,
+      baseContext,
+    );
+
+    expect(wikiService.writePage.mock.calls[0][4]).toBe(
+      '# Large Contract Requesters\n\n**Source card:** Metabase #110\n\n## SQL\n\n```sql\nselect * from orbit_analytics.mart_account_segments\n```\n',
+    );
+    expect(wikiService.syncSinglePage.mock.calls[0][4]).toBe(
+      '# Large Contract Requesters\n\n**Source card:** Metabase #110\n\n## SQL\n\n```sql\nselect * from orbit_analytics.mart_account_segments\n```\n',
+    );
+  });
+
+  it('preserves intentional escaped newline examples in inline code', async () => {
+    const { tool, wikiService } = makeTool();
+
+    await tool.call(
+      {
+        key: 'newline-token',
+        summary: 'Escaped newline token',
+        content: 'Use `\\n\\n` when documenting the literal separator.',
+      } as any,
+      baseContext,
+    );
+
+    expect(wikiService.writePage.mock.calls[0][4]).toBe('Use `\\n\\n` when documenting the literal separator.');
+  });
+
   it('skips syncSinglePage when session is worktree-scoped', async () => {
     const { tool, wikiService } = makeTool();
     const session: ToolSession = {

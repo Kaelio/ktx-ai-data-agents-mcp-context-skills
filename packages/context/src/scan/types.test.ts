@@ -150,14 +150,14 @@ describe('KTX scan contract types', () => {
     };
 
     const connector: KtxScanConnector = {
-      id: 'posthog:product',
-      driver: 'posthog',
+      id: 'clickhouse:product',
+      driver: 'clickhouse',
       capabilities: createKtxConnectorCapabilities({ eventStreamDiscovery: true }),
       eventStreamDiscovery: discovery,
       async introspect() {
         return {
           connectionId: 'product',
-          driver: 'posthog',
+          driver: 'clickhouse',
           extractedAt: '2026-04-29T00:00:00.000Z',
           scope: { catalogs: ['157881'] },
           metadata: {},

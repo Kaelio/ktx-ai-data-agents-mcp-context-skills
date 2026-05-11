@@ -1367,6 +1367,142 @@ describe('setup status', () => {
     expect(calls).toEqual(['context']);
   });
 
+  it('resumes an active context build before prompting for earlier setup steps', async () => {
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-active',
+      status: 'running',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-active'),
+    });
+    const context = vi.fn(async () => ({
+      status: 'detached' as const,
+      projectDir: tempDir,
+      runId: 'setup-context-local-active',
+    }));
+    const databases = vi.fn(async () => {
+      throw new Error('database setup should not run while context build is active');
+    });
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          inputMode: 'auto',
+          yes: false,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: false,
+          skipDatabases: false,
+          skipSources: false,
+          skipAgents: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        { context, databases },
+      ),
+    ).resolves.toBe(0);
+
+    expect(context).toHaveBeenCalledWith(
+      { projectDir: tempDir, inputMode: 'auto', allowEmpty: true },
+      io.io,
+    );
+    expect(databases).not.toHaveBeenCalled();
+  });
+
+  it('skips entry menu and auto-watches when context build is active and showEntryMenu is true', async () => {
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-active',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-active'),
+    });
+    const context = vi.fn(async () => ({
+      status: 'detached' as const,
+      projectDir: tempDir,
+      runId: 'setup-context-local-active',
+    }));
+    const entryMenuSelect = vi.fn(async () => 'exit');
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          inputMode: 'auto',
+          yes: false,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: false,
+          skipDatabases: false,
+          skipSources: false,
+          skipAgents: false,
+          databaseSchemas: [],
+          showEntryMenu: true,
+        },
+        io.io,
+        {
+          context,
+          entryMenuDeps: { prompts: { select: entryMenuSelect, cancel: vi.fn() } },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(entryMenuSelect).not.toHaveBeenCalled();
+    expect(context).toHaveBeenCalledWith(
+      { projectDir: tempDir, inputMode: 'auto', allowEmpty: true, autoWatch: true },
+      io.io,
+    );
+  });
+
   it('routes a ready project menu selection to agent setup', async () => {
     const calls: string[] = [];
     const io = makeIo();
@@ -1476,6 +1612,103 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
+    expect(calls).toEqual(['agents']);
+  });
+
+  it('skips to agent setup when context is ready but agents are not configured', async () => {
+    const calls: string[] = [];
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'setup:',
+        '  completed_steps:',
+        '    - project',
+        '    - llm',
+        '    - embeddings',
+        '    - sources',
+        '    - context',
+        '  database_connection_ids: []',
+        'connections: {}',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        'ingest:',
+        '  embeddings:',
+        '    backend: openai',
+        '    model: text-embedding-3-small',
+        '    dimensions: 1536',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-ready',
+      status: 'completed',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:02:00.000Z',
+      completedAt: '2026-05-09T10:02:00.000Z',
+      primarySourceConnectionIds: [],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-ready'),
+    });
+
+    const readyMenuSelect = vi.fn();
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          inputMode: 'auto',
+          yes: false,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: false,
+          skipDatabases: false,
+          skipSources: false,
+          skipAgents: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          readyMenuDeps: { prompts: { select: readyMenuSelect, cancel: vi.fn() } },
+          model: async (args) => {
+            expect(args.skipLlm).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          embeddings: async (args) => {
+            expect(args.skipEmbeddings).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          databases: async (args) => {
+            expect(args.skipDatabases).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          sources: async (args) => {
+            expect(args.skipSources).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          agents: async () => {
+            calls.push('agents');
+            return {
+              status: 'ready',
+              projectDir: tempDir,
+              installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(readyMenuSelect).not.toHaveBeenCalled();
     expect(calls).toEqual(['agents']);
   });
 

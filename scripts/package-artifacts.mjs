@@ -31,7 +31,6 @@ export const INTERNAL_NPM_WORKSPACE_PACKAGES = [
   { name: '@ktx/connector-clickhouse', packageRoot: 'packages/connector-clickhouse' },
   { name: '@ktx/connector-mysql', packageRoot: 'packages/connector-mysql' },
   { name: '@ktx/connector-postgres', packageRoot: 'packages/connector-postgres' },
-  { name: '@ktx/connector-posthog', packageRoot: 'packages/connector-posthog' },
   { name: '@ktx/connector-snowflake', packageRoot: 'packages/connector-snowflake' },
   { name: '@ktx/connector-sqlite', packageRoot: 'packages/connector-sqlite' },
   { name: '@ktx/connector-sqlserver', packageRoot: 'packages/connector-sqlserver' },

@@ -12,7 +12,7 @@ artifacts. You can inspect them, commit them, and serve them to any MCP client.
 
 - Durable warehouse memory with semantic-layer sources and knowledge pages.
 - Native scan connectors for SQLite, Postgres, MySQL, ClickHouse, SQL Server,
-  BigQuery, Snowflake, and PostHog.
+  BigQuery, and Snowflake.
 - Agentic ingest with provenance links, tool transcripts, and replay metadata.
 - Local semantic-layer query planning and optional query execution.
 - A stdio MCP server with tools for connections, knowledge, semantic-layer
@@ -258,7 +258,6 @@ The MCP server exposes `connection_list`, `knowledge_search`,
 - `packages/connector-clickhouse`: ClickHouse scan connector.
 - `packages/connector-mysql`: MySQL scan connector.
 - `packages/connector-postgres`: Postgres scan connector.
-- `packages/connector-posthog`: PostHog scan connector.
 - `packages/connector-snowflake`: Snowflake scan connector.
 - `packages/connector-sqlite`: SQLite scan connector.
 - `packages/connector-sqlserver`: SQL Server scan connector.

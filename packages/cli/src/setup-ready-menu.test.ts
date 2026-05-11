@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isKtxSetupReady, runKtxSetupReadyChangeMenu } from './setup-ready-menu.js';
+import { isKtxPreAgentSetupReady, isKtxSetupReady, runKtxSetupReadyChangeMenu } from './setup-ready-menu.js';
 import type { KtxSetupStatus } from './setup.js';
 
 const readyStatus: KtxSetupStatus = {
@@ -18,6 +18,13 @@ describe('setup ready menu', () => {
     expect(isKtxSetupReady({ ...readyStatus, embeddings: { ready: false } })).toBe(false);
     expect(isKtxSetupReady({ ...readyStatus, context: { ready: false, status: 'not_started' } })).toBe(false);
     expect(isKtxSetupReady({ ...readyStatus, agents: [] })).toBe(false);
+  });
+
+  it('recognizes pre-agent readiness without requiring agents', () => {
+    expect(isKtxPreAgentSetupReady(readyStatus)).toBe(true);
+    expect(isKtxPreAgentSetupReady({ ...readyStatus, agents: [] })).toBe(true);
+    expect(isKtxPreAgentSetupReady({ ...readyStatus, embeddings: { ready: false } })).toBe(false);
+    expect(isKtxPreAgentSetupReady({ ...readyStatus, context: { ready: false, status: 'not_started' } })).toBe(false);
   });
 
   it('maps ready-project menu choices to setup sections', async () => {

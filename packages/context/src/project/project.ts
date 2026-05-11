@@ -35,7 +35,10 @@ export interface InitKtxProjectResult extends KtxLocalProject {
 }
 
 const TRACKED_SCAFFOLD_FILES: Array<{ path: string; content: string }> = [
-  { path: '.ktx/.gitignore', content: 'cache/\ndb.sqlite\nsecrets/\nsetup/\nagents/\n' },
+  {
+    path: '.ktx/.gitignore',
+    content: 'cache/\ndb.sqlite\ndb.sqlite-*\ningest-transcripts/\nsecrets/\nsetup/\nagents/\n',
+  },
   { path: '.ktx/prompts/.gitkeep', content: '' },
   { path: '.ktx/skills/.gitkeep', content: '' },
   { path: 'knowledge/global/.gitkeep', content: '' },

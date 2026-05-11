@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createHttpSqlAnalysisPort } from './http-sql-analysis-port.js';
 
 describe('createHttpSqlAnalysisPort', () => {
-  it('calls the python-service fingerprint endpoint and maps snake_case response fields', async () => {
+  it('calls the SQL-analysis fingerprint endpoint and maps snake_case response fields', async () => {
     const requestJson = vi.fn(async () => ({
       fingerprint: 'fingerprint-template',
       normalized_sql: 'SELECT * FROM analytics.orders WHERE status = ?',
@@ -26,7 +26,7 @@ describe('createHttpSqlAnalysisPort', () => {
     });
   });
 
-  it('preserves python-service parse errors in the mapped result', async () => {
+  it('preserves SQL-analysis parse errors in the mapped result', async () => {
     const requestJson = vi.fn(async () => ({
       fingerprint: '',
       normalized_sql: '',

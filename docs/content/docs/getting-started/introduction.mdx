@@ -1,0 +1,59 @@
+---
+title: Introduction
+description: What KTX is and who it's for.
+---
+
+Data agents can write SQL. The hard part is making sure they write the SQL your analytics team would have written.
+
+KTX is the agent-native context layer for analytics engineering. At its core is a semantic layer: YAML sources that define tables, columns, measures, joins, grain, filters, segments, and computed fields. Around that core, KTX adds the context analytics agents need to work safely: warehouse scans, knowledge pages, ingestion from existing tools, provenance, validation, and MCP access.
+
+KTX projects are plain files — YAML, Markdown, and SQLite — that you commit to git and review in PRs, just like dbt models. Agents can read them, edit them, validate them, query through them, and leave behind a diff your team can review.
+
+## Who KTX is for
+
+KTX is built for analytics engineers and data teams who want data agents to work on real analytics systems, not just generate one-off SQL.
+
+Use KTX when you want agents to:
+
+- Generate SQL from approved measures, dimensions, and joins
+- Repair or extend semantic definitions through reviewable git diffs
+- Explain where a metric definition came from and what business rules shape it
+- Use warehouse scans and relationship evidence instead of guessing join paths
+- Work alongside **dbt**, **LookML**, **MetricFlow**, **Looker**, **Metabase**, **Notion**, and BI platforms
+- Work with warehouses like **PostgreSQL**, **Snowflake**, **BigQuery**, **ClickHouse**, **MySQL**, or **SQL Server**
+
+If you've ever watched an agent confidently generate a query that joins on the wrong key or invents a metric that doesn't exist, KTX is the fix.
+
+## What KTX gives agents
+
+- **A semantic layer they can edit** — plain YAML sources with measures, dimensions, joins, grain, segments, filters, and computed columns
+- **Safe query planning** — grain-aware SQL generation, fan-out detection, chasm-trap handling, and dialect transpilation
+- **Business context** — Markdown knowledge pages for definitions, rules, exceptions, and data quality notes
+- **Schema evidence** — warehouse scans with table metadata, column stats, constraints, and inferred relationships
+- **Provenance** — ingest transcripts and replay metadata that explain where context came from and why it changed
+- **An agent-facing API** — MCP and CLI tools for reading, writing, validating, searching, and querying context
+
+## How these docs are organized
+
+<Cards>
+  <Card title="Quickstart" href="/docs/getting-started/quickstart">
+    Set up KTX and build your first context in under 10 minutes.
+  </Card>
+  <Card title="Concepts" href="/docs/concepts/the-context-layer">
+    Understand what a context layer is, why agents need one, and how KTX compares to other semantic layers.
+  </Card>
+  <Card title="Guides" href="/docs/guides/building-context">
+    Hands-on workflows for scanning, ingesting, writing semantic sources, and serving agents.
+  </Card>
+  <Card title="Integrations" href="/docs/integrations/primary-sources">
+    Setup details for every supported database, context source, and agent client.
+  </Card>
+  <Card title="CLI Reference" href="/docs/cli-reference/ktx-setup">
+    Exhaustive flag and subcommand reference for every KTX command.
+  </Card>
+</Cards>
+
+## Next steps
+
+- **Get hands-on** — follow the [Quickstart](/docs/getting-started/quickstart) to set up KTX with your own database in under 10 minutes.
+- **Understand the theory** — read [The Context Layer](/docs/concepts/the-context-layer) to learn why schema access alone breaks on real analytics and how KTX addresses it.

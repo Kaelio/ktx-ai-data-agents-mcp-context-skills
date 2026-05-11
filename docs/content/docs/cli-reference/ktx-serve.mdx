@@ -1,0 +1,51 @@
+---
+title: "ktx serve"
+description: "Run the MCP stdio server."
+---
+
+Start a Model Context Protocol (MCP) server that exposes your KTX project's context to coding agents. The server runs over stdio and provides tools for querying semantic sources, searching knowledge, managing connections, and running ingests.
+
+## Usage
+
+```bash
+ktx serve --mcp stdio [options]
+```
+
+## Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--mcp <mode>` | MCP transport mode (required; only `stdio` is supported) | — |
+| `--user-id <id>` | Local user id | `local` |
+| `--semantic-compute` | Enable semantic-layer compute | `false` |
+| `--semantic-compute-url <url>` | HTTP semantic-layer compute URL | — |
+| `--database-introspection-url <url>` | Daemon URL for live-database introspection | — |
+| `--execute-queries` | Allow semantic-layer query execution (requires `--semantic-compute`) | `false` |
+| `--memory-capture` | Enable memory capture | `false` |
+| `--memory-model <model>` | Memory capture model | — |
+
+## Examples
+
+```bash
+# Start the MCP server over stdio
+ktx serve --mcp stdio
+
+# Start with semantic-layer compute enabled
+ktx serve --mcp stdio --semantic-compute
+
+# Start with query execution enabled
+ktx serve --mcp stdio --semantic-compute --execute-queries
+
+# Start with a remote semantic compute backend
+ktx serve --mcp stdio --semantic-compute-url http://localhost:8080
+
+# Start with memory capture
+ktx serve --mcp stdio --memory-capture
+
+# Use a specific project directory
+ktx serve --mcp stdio --project-dir /path/to/my-project
+```
+
+## Agent integration
+
+The MCP server is typically configured through `ktx setup --agents` rather than started manually. See the [Serving Agents](/docs/guides/serving-agents) guide and [Agent Clients](/docs/integrations/agent-clients) integration page for per-tool configuration.

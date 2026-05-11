@@ -39,6 +39,13 @@ interface TemplateTagInfo {
   dummyValue: string | null;
 }
 
+interface NativeQuerySnippet {
+  id: number;
+  name: string;
+  content: string;
+  archived?: boolean | null;
+}
+
 interface CreateCardParams {
   name: string;
   databaseId: number;
@@ -100,6 +107,43 @@ function collectRemainingPlaceholderNames(sql: string): Set<string> {
   return names;
 }
 
+function collectRemainingSnippetNames(sql: string): Set<string> {
+  const names = new Set<string>();
+  for (const match of sql.matchAll(/\{\{\s*snippet:\s*([^}]+?)\s*\}\}/gi)) {
+    names.add(match[1].trim());
+  }
+  return names;
+}
+
+function normalizeSnippetName(name: string | null | undefined): string {
+  return (name ?? '').replace(/^snippet:\s*/i, '').trim().toLowerCase();
+}
+
+function parseNativeQuerySnippets(value: unknown): NativeQuerySnippet[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === 'object' && value !== null && Array.isArray((value as { data?: unknown }).data)
+      ? (value as { data: unknown[] }).data
+      : [];
+  const snippets: NativeQuerySnippet[] = [];
+  for (const item of rawItems) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      continue;
+    }
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.id !== 'number' || typeof rec.name !== 'string' || typeof rec.content !== 'string') {
+      continue;
+    }
+    snippets.push({
+      id: rec.id,
+      name: rec.name,
+      content: rec.content,
+      ...(typeof rec.archived === 'boolean' ? { archived: rec.archived } : {}),
+    });
+  }
+  return snippets;
+}
+
 function injectNativeSql(datasetQuery: MetabaseDatasetQuery, sql: string): MetabaseDatasetQuery {
   if (datasetQuery?.stages?.[0]?.native !== undefined) {
     const stages = [...(datasetQuery.stages ?? [])];
@@ -148,6 +192,7 @@ export class MetabaseClient implements MetabaseRuntimeClient {
   private readonly logger: MetabaseClientLogger;
   private readonly baseUrl: string;
   private readonly config: MetabaseClientConfig;
+  private snippetCache: Promise<NativeQuerySnippet[]> | null = null;
 
   constructor(
     runtime: MetabaseClientRuntimeConfig,
@@ -261,6 +306,63 @@ export class MetabaseClient implements MetabaseRuntimeClient {
     return this.request<MetabaseCardSummary[]>('GET', '/api/card/?f=all');
   }
 
+  private getNativeQuerySnippets(): Promise<NativeQuerySnippet[]> {
+    this.snippetCache ??= this.request<unknown>('GET', '/api/native-query-snippet').then(parseNativeQuerySnippets);
+    return this.snippetCache;
+  }
+
+  private async inlineNativeQuerySnippets(
+    sql: string,
+    templateTags: MetabaseTemplateTag[],
+    cardId: number,
+  ): Promise<{ sql: string; unresolved: string[] }> {
+    const names = collectRemainingSnippetNames(sql);
+    if (names.size === 0) {
+      return { sql, unresolved: [] };
+    }
+
+    let snippets: NativeQuerySnippet[];
+    try {
+      snippets = await this.getNativeQuerySnippets();
+    } catch (error) {
+      this.logger.warn(
+        `[metabase] failed to load native query snippets for card ${cardId}; leaving snippet placeholders unresolved: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { sql, unresolved: [...names] };
+    }
+
+    const snippetsById = new Map<number, NativeQuerySnippet>();
+    const snippetsByName = new Map<string, NativeQuerySnippet>();
+    for (const snippet of snippets) {
+      if (snippet.archived === true) {
+        continue;
+      }
+      snippetsById.set(snippet.id, snippet);
+      snippetsByName.set(normalizeSnippetName(snippet.name), snippet);
+    }
+
+    const snippetTags = templateTags.filter((tag) => tag.type === 'snippet');
+    const unresolved = new Set<string>();
+    const inlinedSql = sql.replace(/\{\{\s*snippet:\s*([^}]+?)\s*\}\}/gi, (match, rawName: string) => {
+      const normalizedName = normalizeSnippetName(rawName);
+      const tag = snippetTags.find(
+        (candidate) =>
+          normalizeSnippetName(candidate['snippet-name']) === normalizedName ||
+          normalizeSnippetName(candidate.name) === normalizedName,
+      );
+      const snippet =
+        (typeof tag?.['snippet-id'] === 'number' ? snippetsById.get(tag['snippet-id']) : undefined) ??
+        snippetsByName.get(normalizedName);
+      if (!snippet) {
+        unresolved.add(rawName.trim());
+        return match;
+      }
+      return snippet.content;
+    });
+
+    return { sql: inlinedSql, unresolved: [...unresolved] };
+  }
+
   async convertMbqlToNative(datasetQuery: MetabaseDatasetQuery): Promise<MetabaseNativeQueryResult> {
     return this.request<MetabaseNativeQueryResult>('POST', '/api/dataset/native', {
       ...datasetQuery,
@@ -351,7 +453,18 @@ export class MetabaseClient implements MetabaseRuntimeClient {
     // silently filter rows out — see incident with auction_seller_bidder_pair_suspicion).
     let processedSql = stripOptionalClauses(nativeQuery);
 
-    // Step 2: inline {{#CARD_ID}} card references locally. Recursively strip optional
+    // Step 2: inline native-query snippets. Metabase's substitution endpoint does not
+    // always expand {{snippet: name}} for fetched card SQL, but the snippets API does.
+    const snippetResult = await this.inlineNativeQuerySnippets(processedSql, templateTagEntries, card.id);
+    processedSql = snippetResult.sql;
+    if (snippetResult.unresolved.length > 0) {
+      this.logger.warn(
+        `[metabase] card ${card.id} has unresolved SQL snippets: ${snippetResult.unresolved.join(', ')}`,
+      );
+      return { resolvedSql: processedSql, templateTags, resolutionStatus: 'fallback' };
+    }
+
+    // Step 3: inline {{#CARD_ID}} card references locally. Recursively strip optional
     // clauses in referenced cards too — the same reasoning applies all the way down.
     try {
       processedSql = await expandCardReferences(processedSql, {
@@ -361,7 +474,17 @@ export class MetabaseClient implements MetabaseRuntimeClient {
           if (!referencedNative) {
             throw new Error(`referenced card ${id} has no native query`);
           }
-          return { native_query: stripOptionalClauses(referencedNative) };
+          const referencedSnippetResult = await this.inlineNativeQuerySnippets(
+            stripOptionalClauses(referencedNative),
+            Object.values(this.getTemplateTags(referenced)),
+            referenced.id,
+          );
+          if (referencedSnippetResult.unresolved.length > 0) {
+            throw new Error(
+              `referenced card ${id} has unresolved SQL snippets: ${referencedSnippetResult.unresolved.join(', ')}`,
+            );
+          }
+          return { native_query: referencedSnippetResult.sql };
         },
       });
     } catch (err) {
@@ -372,7 +495,7 @@ export class MetabaseClient implements MetabaseRuntimeClient {
       throw err;
     }
 
-    // Step 3: collect template tags that still appear in the SQL after strip + inline.
+    // Step 4: collect template tags that still appear in the SQL after strip + inline.
     // Anything bracketed-only is gone now; anything card-referenced is inlined.
     const remainingNames = collectRemainingPlaceholderNames(processedSql);
     const remainingTags = templateTagEntries.filter((tag) => tag.type !== 'snippet' && remainingNames.has(tag.name));
@@ -381,7 +504,7 @@ export class MetabaseClient implements MetabaseRuntimeClient {
       return { resolvedSql: processedSql, templateTags, resolutionStatus: 'resolved' };
     }
 
-    // Step 4: dummy-substitute the remaining naked {{ var }} placeholders via Metabase's
+    // Step 5: dummy-substitute the remaining naked {{ var }} placeholders via Metabase's
     // substitution endpoint. Only required because we can't translate dimension-tag
     // bindings to warehouse columns ourselves. Prepend a SQL comment listing every
     // dummy substitution so downstream consumers (the metabase_ingest LLM) know which

@@ -1,6 +1,7 @@
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
 import { noopLogger } from '../core/index.js';
 import { DEFAULT_PRIORITY, resolveDescription } from './descriptions.js';
+import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import type { SlSourcesIndexPort } from './ports.js';
 import type { SemanticLayerSource } from './types.js';
 
@@ -8,6 +9,7 @@ export function buildSemanticLayerSourceSearchText(
   source: SemanticLayerSource,
   priority: string[] = DEFAULT_PRIORITY,
 ): string {
+  source = normalizeSemanticLayerDescriptions(source);
   const config = { priority };
   const parts: string[] = [source.name.replace(/_/g, ' ')];
 

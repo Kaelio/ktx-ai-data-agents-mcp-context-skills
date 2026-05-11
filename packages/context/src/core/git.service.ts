@@ -32,6 +32,8 @@ export type SquashMergeResult =
   | { ok: false; conflict: true; conflictPaths: string[] };
 
 export class GitService {
+  private static readonly mutationQueues = new Map<string, Promise<void>>();
+
   private readonly logger: KtxLogger;
   private git!: SimpleGit;
   private configDir: string;
@@ -88,6 +90,15 @@ export class GitService {
   }
 
   async commitFile(
+    filePath: string,
+    commitMessage: string,
+    author: string,
+    authorEmail: string,
+  ): Promise<GitCommitInfo> {
+    return this.withMutationQueue(() => this.commitFileUnlocked(filePath, commitMessage, author, authorEmail));
+  }
+
+  private async commitFileUnlocked(
     filePath: string,
     commitMessage: string,
     author: string,
@@ -167,6 +178,15 @@ export class GitService {
     author: string,
     authorEmail: string,
   ): Promise<GitCommitInfo> {
+    return this.withMutationQueue(() => this.commitFilesUnlocked(filePaths, commitMessage, author, authorEmail));
+  }
+
+  private async commitFilesUnlocked(
+    filePaths: string[],
+    commitMessage: string,
+    author: string,
+    authorEmail: string,
+  ): Promise<GitCommitInfo> {
     try {
       for (const filePath of filePaths) {
         await this.git.add(filePath);
@@ -231,6 +251,10 @@ export class GitService {
     if (filePaths.length === 0) {
       return;
     }
+    return this.withMutationQueue(() => this.checkoutFilesUnlocked(filePaths));
+  }
+
+  private async checkoutFilesUnlocked(filePaths: string[]): Promise<void> {
     try {
       await this.git.checkout(['--', ...filePaths]);
     } catch (error) {
@@ -292,6 +316,10 @@ export class GitService {
     if (!trimmed) {
       return;
     }
+    return this.withMutationQueue(() => this.addNoteUnlocked(commitHash, trimmed));
+  }
+
+  private async addNoteUnlocked(commitHash: string, trimmed: string): Promise<void> {
     try {
       await this.git.raw(['notes', 'add', '-f', '-m', trimmed, commitHash]);
     } catch (error) {
@@ -339,6 +367,15 @@ export class GitService {
   }
 
   async deleteFile(
+    filePath: string,
+    commitMessage: string,
+    author: string,
+    authorEmail: string,
+  ): Promise<GitCommitInfo> {
+    return this.withMutationQueue(() => this.deleteFileUnlocked(filePath, commitMessage, author, authorEmail));
+  }
+
+  private async deleteFileUnlocked(
     filePath: string,
     commitMessage: string,
     author: string,
@@ -486,6 +523,13 @@ export class GitService {
     preHead: string,
     options: { message: string; author: string; authorEmail: string; expectedAuthor?: string },
   ): Promise<{ squashed: boolean; commitHash: string | null; reason?: string; squashedCount?: number }> {
+    return this.withMutationQueue(() => this.squashToUnlocked(preHead, options));
+  }
+
+  private async squashToUnlocked(
+    preHead: string,
+    options: { message: string; author: string; authorEmail: string; expectedAuthor?: string },
+  ): Promise<{ squashed: boolean; commitHash: string | null; reason?: string; squashedCount?: number }> {
     const { message, author, authorEmail } = options;
     const expectedAuthor = options.expectedAuthor ?? author;
 
@@ -561,6 +605,15 @@ export class GitService {
     authorEmail: string,
     commitMessage: string,
   ): Promise<SquashMergeResult> {
+    return this.withMutationQueue(() => this.squashMergeIntoMainUnlocked(branch, author, authorEmail, commitMessage));
+  }
+
+  private async squashMergeIntoMainUnlocked(
+    branch: string,
+    author: string,
+    authorEmail: string,
+    commitMessage: string,
+  ): Promise<SquashMergeResult> {
     // Diff of HEAD..branch (two dots) lists commits/files reachable from `branch` that
     // aren't on HEAD — i.e. exactly what the squash would apply. Three dots (HEAD...branch)
     // is symmetric difference and would mis-classify cases where main moved ahead.
@@ -615,7 +668,7 @@ export class GitService {
    * range, which can pause the sequencer on conflicts.
    */
   async resetHardTo(targetSha: string): Promise<void> {
-    await this.git.raw(['reset', '--hard', targetSha]);
+    await this.withMutationQueue(() => this.git.raw(['reset', '--hard', targetSha]));
   }
 
   /**
@@ -667,6 +720,10 @@ export class GitService {
    * Used by the memory agent to isolate per-session writes from interactive saves on main.
    */
   async addWorktree(path: string, branch: string, startSha: string): Promise<void> {
+    await this.withMutationQueue(() => this.addWorktreeUnlocked(path, branch, startSha));
+  }
+
+  private async addWorktreeUnlocked(path: string, branch: string, startSha: string): Promise<void> {
     try {
       await this.git.raw(['worktree', 'add', '-b', branch, path, startSha]);
     } catch (error) {
@@ -679,6 +736,10 @@ export class GitService {
    * worktrees are ktx-internal — a clean working tree is not required.
    */
   async removeWorktree(path: string): Promise<void> {
+    await this.withMutationQueue(() => this.removeWorktreeUnlocked(path));
+  }
+
+  private async removeWorktreeUnlocked(path: string): Promise<void> {
     try {
       await this.git.raw(['worktree', 'remove', '--force', path]);
     } catch (error) {
@@ -724,7 +785,7 @@ export class GitService {
   }
 
   async deleteBranch(branch: string, force = false): Promise<void> {
-    await this.git.raw(['branch', force ? '-D' : '-d', branch]);
+    await this.withMutationQueue(() => this.git.raw(['branch', force ? '-D' : '-d', branch]));
   }
 
   /**
@@ -741,6 +802,15 @@ export class GitService {
   }
 
   async deleteDirectory(
+    directoryPath: string,
+    commitMessage: string,
+    author: string,
+    authorEmail: string,
+  ): Promise<GitCommitInfo> {
+    return this.withMutationQueue(() => this.deleteDirectoryUnlocked(directoryPath, commitMessage, author, authorEmail));
+  }
+
+  private async deleteDirectoryUnlocked(
     directoryPath: string,
     commitMessage: string,
     author: string,
@@ -791,6 +861,17 @@ export class GitService {
    * paths were actually removed.
    */
   async deleteDirectories(
+    directoryPaths: string[],
+    commitMessage: string,
+    author: string,
+    authorEmail: string,
+  ): Promise<GitCommitInfo> {
+    return this.withMutationQueue(() =>
+      this.deleteDirectoriesUnlocked(directoryPaths, commitMessage, author, authorEmail),
+    );
+  }
+
+  private async deleteDirectoriesUnlocked(
     directoryPaths: string[],
     commitMessage: string,
     author: string,
@@ -851,5 +932,28 @@ export class GitService {
       committedDate: new Date(commit.date).toISOString(),
       created: true,
     };
+  }
+
+  private async withMutationQueue<T>(operation: () => Promise<T>): Promise<T> {
+    const key = this.configDir;
+    const previous = GitService.mutationQueues.get(key) ?? Promise.resolve();
+    let release: () => void = () => {};
+    const current = previous.catch(() => undefined).then(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    GitService.mutationQueues.set(key, current);
+
+    await previous.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (GitService.mutationQueues.get(key) === current) {
+        GitService.mutationQueues.delete(key);
+      }
+    }
   }
 }

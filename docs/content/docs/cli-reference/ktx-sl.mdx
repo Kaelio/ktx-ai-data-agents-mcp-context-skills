@@ -1,0 +1,122 @@
+---
+title: "ktx sl"
+description: "List, read, validate, query, or write semantic-layer sources."
+---
+
+Interact with your project's semantic layer. Semantic sources are YAML definitions that describe your tables, columns, measures, joins, and grain — the vocabulary agents use to generate correct SQL.
+
+## Usage
+
+```bash
+ktx sl <subcommand> [options]
+```
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `list` | List semantic-layer sources |
+| `read <sourceName>` | Read a semantic-layer source |
+| `validate <sourceName>` | Validate a semantic-layer source against the database schema |
+| `write <sourceName>` | Write a semantic-layer source |
+| `query` | Compile or execute a semantic-layer query |
+
+## Options
+
+### `sl list`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <id>` | Filter by KTX connection id | — |
+| `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
+| `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
+
+### `sl read`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <id>` | KTX connection id (required) | — |
+
+### `sl validate`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <id>` | KTX connection id (required) | — |
+
+### `sl write`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <id>` | KTX connection id (required) | — |
+| `--yaml <yaml>` | Semantic-layer source YAML content (required) | — |
+
+### `sl query`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <id>` | KTX connection id | — |
+| `--measure <measure>` | Measure to query; repeatable (at least one required) | — |
+| `--dimension <dimension>` | Dimension to include; repeatable | — |
+| `--filter <filter>` | Filter expression; repeatable | — |
+| `--segment <segment>` | Segment to include; repeatable | — |
+| `--order-by <field[:direction]>` | Order field, optionally suffixed with `:asc` or `:desc`; repeatable | — |
+| `--limit <n>` | Query limit | — |
+| `--include-empty` | Include empty rows | `false` |
+| `--format <format>` | Output format: `json` or `sql` | `json` |
+| `--execute` | Execute the compiled query against the database | `false` |
+| `--max-rows <n>` | Maximum rows to return when executing | — |
+
+## Examples
+
+```bash
+# List all semantic sources
+ktx sl list
+
+# List sources for a specific connection
+ktx sl list --connection-id my-warehouse
+
+# List sources as JSON
+ktx sl list --json
+
+# Read a source definition
+ktx sl read orders --connection-id my-warehouse
+
+# Validate a source against the live schema
+ktx sl validate orders --connection-id my-warehouse
+
+# Write a new source from YAML
+ktx sl write customers --connection-id my-warehouse --yaml "$(cat sources/customers.yaml)"
+
+# Compile a query and view the generated SQL
+ktx sl query \
+  --connection-id my-warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.created_date \
+  --format sql
+
+# Execute a query with filters
+ktx sl query \
+  --connection-id my-warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.status \
+  --filter "orders.created_date >= '2024-01-01'" \
+  --execute \
+  --max-rows 100
+
+# Query with ordering and limit
+ktx sl query \
+  --connection-id my-warehouse \
+  --measure orders.total_revenue \
+  --dimension customers.country \
+  --order-by total_revenue:desc \
+  --limit 10 \
+  --execute
+
+# Execute and cap the result set
+ktx sl query \
+  --connection-id my-warehouse \
+  --measure orders.count \
+  --dimension orders.created_date \
+  --execute \
+  --max-rows 1000
+```

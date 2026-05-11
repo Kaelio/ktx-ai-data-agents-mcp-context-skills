@@ -1,0 +1,273 @@
+---
+title: Writing Context
+description: Write and refine semantic sources and knowledge pages.
+---
+
+After building context through scanning and ingestion, you'll want to refine it — edit semantic sources to match your business logic, add knowledge pages that capture tribal knowledge, and query your data through the semantic layer to verify everything works.
+
+## Semantic Sources
+
+Semantic sources are YAML files that describe your tables, columns, measures, and joins. They're the core of the context layer — the structured definitions that agents use to generate correct SQL.
+
+### Listing sources
+
+```bash
+# List all sources across connections
+ktx sl list
+
+# List sources for a specific connection
+ktx sl list --connection-id my-postgres
+
+# Output as JSON
+ktx sl list --json
+```
+
+### Reading a source
+
+```bash
+ktx sl read orders --connection-id my-postgres
+```
+
+This prints the full YAML definition for the source.
+
+### The source schema
+
+A semantic source defines a single queryable entity — usually a table or a SQL expression. Here's a fully annotated example:
+
+```yaml
+name: orders
+description: Customer orders with line-item totals
+table: public.orders          # or use `sql:` for a custom SQL expression
+grain:
+  - order_id                  # columns that uniquely identify a row
+
+columns:
+  - name: order_id
+    type: string              # string | number | time | boolean
+    description: Unique order identifier
+
+  - name: order_date
+    type: time
+    role: time                # marks this as the default time dimension
+    description: Date the order was placed
+
+  - name: status
+    type: string
+    visibility: public        # public (default) | internal | hidden
+    description: Current order status
+
+  - name: _etl_loaded_at
+    type: time
+    visibility: hidden        # hidden columns are excluded from agent queries
+    description: Internal ETL timestamp
+
+  - name: total_amount
+    type: number
+    description: Order total in USD
+
+measures:
+  - name: total_revenue
+    expr: SUM(total_amount)
+    description: Sum of all order values
+  - name: order_count
+    expr: COUNT(DISTINCT order_id)
+    description: Number of distinct orders
+  - name: avg_order_value
+    expr: AVG(total_amount)
+    description: Average order value
+  - name: high_value_revenue
+    expr: SUM(total_amount)
+    filter: total_amount > 100
+    description: Revenue from orders over $100
+
+segments:
+  - name: us_orders
+    expr: country = 'US'
+    description: Orders from US customers
+
+joins:
+  - to: customers
+    on: orders.customer_id = customers.customer_id
+    relationship: many_to_one   # many_to_one | one_to_many | one_to_one
+  - to: order_items
+    on: orders.order_id = order_items.order_id
+    relationship: one_to_many
+    alias: items                # optional alias for the joined source
+```
+
+Key fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Source identifier (lowercase, underscores) |
+| `table` or `sql` | Yes | Database table or custom SQL expression (exactly one) |
+| `grain` | Yes | Columns that define row uniqueness |
+| `columns` | No | Column definitions with type, role, visibility |
+| `measures` | No | Aggregation expressions (SUM, COUNT, AVG, etc.) |
+| `joins` | No | Relationships to other sources |
+| `segments` | No | Named filter conditions |
+| `inherits_columns_from` | No | Inherit column metadata from a manifest entry |
+
+Column visibility controls what agents see:
+
+| Visibility | Behavior |
+|------------|----------|
+| `public` | Included in agent queries and listings (default) |
+| `internal` | Available for joins and measures but not shown to agents |
+| `hidden` | Excluded entirely — useful for ETL columns |
+
+### Writing a source
+
+```bash
+ktx sl write orders --connection-id my-postgres --yaml '
+name: orders
+table: public.orders
+grain: [order_id]
+columns:
+  - name: order_id
+    type: string
+  - name: total_amount
+    type: number
+measures:
+  - name: total_revenue
+    expr: SUM(total_amount)
+'
+```
+
+You can also edit source files directly — they live at `semantic-layer/<connection-id>/<source-name>.yaml` in your project directory.
+
+### Validating sources
+
+Validation checks a source definition against the actual database schema:
+
+```bash
+ktx sl validate orders --connection-id my-postgres
+```
+
+This catches mismatches — columns that don't exist in the table, type mismatches, invalid join targets — before an agent tries to use the source.
+
+### Querying
+
+The semantic layer compiles your measures and dimensions into SQL, optionally executing it against the database:
+
+```bash
+# Compile a query to SQL
+ktx sl query \
+  --connection-id my-postgres \
+  --measure total_revenue \
+  --measure order_count \
+  --dimension "order_date" \
+  --filter "status = 'completed'" \
+  --order-by order_date:desc \
+  --limit 10 \
+  --format sql
+```
+
+This outputs the compiled SQL without executing it. To run the query:
+
+```bash
+# Execute and return results
+ktx sl query \
+  --connection-id my-postgres \
+  --measure total_revenue \
+  --dimension "order_date" \
+  --execute \
+  --max-rows 100
+```
+
+Query flags:
+
+| Flag | Description |
+|------|-------------|
+| `--measure <name>` | Measure to query (repeatable, at least one required) |
+| `--dimension <name>` | Dimension to group by (repeatable) |
+| `--filter <expr>` | Filter expression (repeatable) |
+| `--segment <name>` | Named segment to apply (repeatable) |
+| `--order-by <field[:dir]>` | Sort field, optionally with `:asc` or `:desc` (repeatable) |
+| `--limit <n>` | Maximum rows in the compiled query |
+| `--format <mode>` | Output format: `json` (default) or `sql` |
+| `--execute` | Execute the query against the database |
+| `--max-rows <n>` | Maximum rows to return when executing |
+| `--include-empty` | Include empty/null rows in results |
+
+The query planner is grain-aware — it understands the cardinality of joins and avoids chasm traps (double-counting caused by many-to-many fan-outs). When you query measures that span multiple sources, KTX generates sub-queries at the correct grain before joining.
+
+## Knowledge Pages
+
+Knowledge pages are Markdown files that capture business context — definitions, rules, gotchas, and anything an agent needs to understand beyond what the schema tells it.
+
+### What they are
+
+When an agent asks "what counts as an active user?" or "why do revenue numbers differ between the dashboard and the SQL query?", the answer isn't in the schema. It's tribal knowledge that lives in Slack threads, Notion pages, or someone's head. Knowledge pages make that context searchable and available to agents.
+
+### Organization
+
+Knowledge pages are organized by scope:
+
+```
+knowledge/
+├── global/                          # Cross-cutting definitions
+│   ├── order-status-definitions.md
+│   ├── revenue-recognition-rules.md
+│   └── data-freshness-sla.md
+└── user/
+    └── local/                       # User-scoped context
+        ├── schema-conventions.md
+        └── known-data-issues.md
+```
+
+- **Global pages** apply across all connections — business definitions, metric standards, company terminology.
+- **User-scoped pages** are private to a user ID — personal notes, local gotchas, or context you do not want shared globally.
+
+### Writing pages
+
+```bash
+ktx wiki write order-status-definitions \
+  --scope global \
+  --summary "Business definitions for order status values" \
+  --content "## Order Statuses
+
+- **pending**: Order placed but not yet processed
+- **confirmed**: Payment received, awaiting fulfillment
+- **shipped**: Order dispatched to carrier
+- **delivered**: Order received by customer
+- **cancelled**: Order cancelled before shipment
+
+Orders in pending status for more than 48 hours are flagged for review." \
+  --tag orders \
+  --tag definitions \
+  --sl-ref orders
+```
+
+Write flags:
+
+| Flag | Description |
+|------|-------------|
+| `--scope <scope>` | `global` (default) or `user` |
+| `--summary <text>` | Short description for search results (required) |
+| `--content <text>` | Full Markdown content (required) |
+| `--tag <tag>` | Categorization tag (repeatable) |
+| `--ref <ref>` | Reference to external resources (repeatable) |
+| `--sl-ref <ref>` | Link to a semantic source (repeatable) |
+
+You can also create and edit knowledge pages directly as Markdown files in the `knowledge/` directory.
+
+### Listing pages
+
+```bash
+ktx wiki list
+```
+
+### Reading a page
+
+```bash
+ktx wiki read order-status-definitions
+```
+
+### Searching
+
+```bash
+ktx wiki search "revenue recognition"
+```
+
+Search uses both full-text matching and semantic similarity — it finds relevant pages even when the exact terms don't match. Agents call this automatically when they need business context to answer a question.

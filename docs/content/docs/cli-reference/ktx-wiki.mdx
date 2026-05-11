@@ -1,0 +1,92 @@
+---
+title: "ktx wiki"
+description: "List, read, search, or write knowledge pages."
+---
+
+Manage knowledge pages in your KTX project. Knowledge pages are Markdown documents that capture business definitions, rules, and gotchas. Agents search them for context when answering questions about your data.
+
+## Usage
+
+```bash
+ktx wiki <subcommand> [options]
+```
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `list` | List local wiki pages |
+| `read <key>` | Read one local wiki page |
+| `search <query>` | Search local wiki pages |
+| `write <key>` | Write one local wiki page |
+
+## Options
+
+### `wiki list`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--user-id <id>` | Local user id | `local` |
+
+### `wiki read`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--user-id <id>` | Local user id | `local` |
+
+### `wiki search`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--user-id <id>` | Local user id | `local` |
+
+### `wiki write`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--user-id <id>` | Local user id | `local` |
+| `--scope <scope>` | Scope: `global` or `user` | `global` |
+| `--summary <summary>` | Wiki page summary (required) | — |
+| `--content <content>` | Wiki page content (required) | — |
+| `--tag <tag>` | Wiki tag; repeatable | — |
+| `--ref <ref>` | Wiki ref; repeatable | — |
+| `--sl-ref <ref>` | Semantic-layer ref; repeatable | — |
+
+## Examples
+
+```bash
+# List all wiki pages
+ktx wiki list
+
+# Read a specific wiki page
+ktx wiki read revenue-definitions
+
+# Search wiki pages
+ktx wiki search "monthly recurring revenue"
+
+# Write a global knowledge page
+ktx wiki write revenue-definitions \
+  --summary "Canonical revenue metric definitions" \
+  --content "## MRR\nMonthly Recurring Revenue is calculated as..."
+
+# Write a user-scoped knowledge page
+ktx wiki write my-notes \
+  --scope user \
+  --summary "Personal analysis notes" \
+  --content "Things to check when revenue numbers look off..."
+
+# Write a page with tags and references
+ktx wiki write churn-rules \
+  --summary "Churn calculation business rules" \
+  --content "A customer is considered churned when..." \
+  --tag finance \
+  --tag retention \
+  --sl-ref customers \
+  --sl-ref subscriptions
+
+# Write a page with external references
+ktx wiki write data-freshness \
+  --summary "Data pipeline SLAs and freshness guarantees" \
+  --content "The orders table refreshes every 15 minutes..." \
+  --ref "https://wiki.example.com/data-pipelines"
+```

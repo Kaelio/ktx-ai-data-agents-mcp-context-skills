@@ -1,0 +1,241 @@
+---
+title: Building Context
+description: Scan your database schema and ingest context from dbt, Looker, Metabase, and more.
+---
+
+Building context is a two-step process. First, you **scan** your database to discover its structure — tables, columns, types, constraints, and relationships. Then you **ingest** from your existing tools to enrich that structure with semantic meaning — metric definitions, business descriptions, join logic, and knowledge that agents need to generate correct analytics.
+
+## Scanning
+
+Scanning connects to your database and extracts structural metadata. KTX stores the results locally so agents can understand your schema without querying the database directly.
+
+### Running a scan
+
+```bash
+ktx dev scan <connection-id>
+```
+
+This runs a structural scan by default. You can control what the scan does with the `--mode` flag:
+
+| Mode | What it does |
+|------|-------------|
+| `structural` | Tables, columns, types, constraints, row counts (default) |
+| `enriched` | Structural scan plus LLM-generated column descriptions |
+| `relationships` | Structural scan plus foreign key relationship detection |
+
+```bash
+# Scan with relationship detection
+ktx dev scan my-postgres --mode relationships
+
+# Preview without writing results
+ktx dev scan my-postgres --dry-run
+```
+
+### Checking scan status
+
+Every scan produces a run ID. Use it to check progress or review results:
+
+```bash
+# Check status of a scan run
+ktx dev scan status <run-id>
+
+# Print the full scan report
+ktx dev scan report <run-id>
+
+# Get the report as JSON for scripting
+ktx dev scan report <run-id> --json
+```
+
+### Relationship detection
+
+Many databases lack declared foreign keys. KTX infers relationships by scoring column pairs across seven signals — name similarity, type compatibility, value overlap, embedding similarity, profile uniqueness, null rate, and structural priors. The weighted score determines each candidate's status:
+
+| Score range | Status | Meaning |
+|-------------|--------|---------|
+| &ge; 0.85 | `accepted` | High confidence — applied automatically |
+| 0.55 &ndash; 0.84 | `review` | Plausible — needs human review |
+| &lt; 0.55 | `rejected` | Low confidence — not applied |
+
+After a relationship scan, review the candidates:
+
+```bash
+# Show candidates pending review (default)
+ktx dev scan relationships <run-id>
+
+# Show all candidates regardless of status
+ktx dev scan relationships <run-id> --status all
+
+# Accept a specific candidate
+ktx dev scan relationships <run-id> --accept <candidate-id>
+
+# Reject a candidate with a note
+ktx dev scan relationships <run-id> --reject <candidate-id> --note "These columns share a name but are unrelated"
+```
+
+Once you've reviewed candidates, apply the accepted ones as joins in your semantic layer:
+
+```bash
+# Apply all accepted relationships
+ktx dev scan relationship-apply <run-id> --all-accepted
+
+# Preview what would be applied
+ktx dev scan relationship-apply <run-id> --all-accepted --dry-run
+
+# Apply a specific candidate
+ktx dev scan relationship-apply <run-id> --candidate <candidate-id>
+```
+
+### Calibrating thresholds
+
+As you review more relationships, KTX can evaluate whether the default thresholds (0.85 accept, 0.55 review) are optimal for your schema:
+
+```bash
+# See how your feedback aligns with current thresholds
+ktx dev scan relationship-calibration --connection my-postgres
+
+# Get threshold recommendations (needs 20+ labels, 5+ accepted, 5+ rejected)
+ktx dev scan relationship-thresholds --connection my-postgres
+
+# Export your review decisions as calibration labels
+ktx dev scan relationship-feedback --connection my-postgres
+```
+
+## Ingestion
+
+Ingestion pulls semantic context from your existing analytics tools — dbt projects, Looker models, Metabase questions, and more — and writes it into your KTX project as semantic sources and knowledge pages.
+
+### How it works
+
+Each ingest run follows this flow:
+
+1. An **adapter** extracts metadata from your tool (dbt manifest, LookML files, Metabase API, etc.)
+2. An **LLM agent** reconciles the extracted metadata with your existing context — it merges intelligently rather than overwriting
+3. **Semantic sources** (YAML) and **knowledge pages** (Markdown) are written to your project directory
+
+### Running an ingest
+
+```bash
+# Ingest one configured context source
+ktx ingest my-dbt-source
+
+# Ingest every configured context source
+ktx ingest --all
+```
+
+The public `ktx ingest` command uses the source configuration in `ktx.yaml`, including the source `driver` and any adapter-specific paths or credentials.
+
+For adapter-level debugging, use the low-level `ktx dev ingest run` command:
+
+```bash
+ktx dev ingest run --connection-id my-dbt-source --adapter dbt
+```
+
+Useful low-level flags:
+
+| Flag | Description |
+|------|-------------|
+| `--source-dir <path>` | Directory containing source files (e.g., your dbt project) |
+| `--viz` | Render the memory-flow TUI for real-time progress |
+| `--json` | Output as JSON |
+| `--plain` | Plain text output |
+
+### Watching progress
+
+```bash
+# Check status of the latest ingest
+ktx ingest status
+
+# Check a specific run
+ktx ingest status <run-id>
+
+# Open the visual ingest report (TUI)
+ktx ingest watch
+
+# Replay a past ingest run
+ktx dev ingest replay <run-id>
+```
+
+The `watch` command opens an interactive TUI that shows the memory-flow output — every tool call, LLM decision, and artifact written during the ingest.
+
+### Available adapters
+
+| Adapter | Source | What gets ingested |
+|---------|--------|--------------------|
+| `dbt` | dbt project | Model definitions, column descriptions, tests, tags |
+| `metricflow` | MetricFlow semantic models | Metrics, dimensions, entities, semantic joins |
+| `lookml` | LookML files | Views, explores, dimensions, measures, joins |
+| `looker` | Looker API | Explores, looks, dashboard metadata |
+| `metabase` | Metabase API | Questions, dashboards, table metadata |
+| `notion` | Notion API | Database pages, knowledge articles |
+| `historic-sql` | Query history | Frequent queries, usage patterns, runtime stats |
+| `live-database` | Direct DB connection | Live schema introspection |
+
+See [Context Sources](/docs/integrations/context-sources) for adapter-specific setup and auth configuration.
+
+### What gets generated
+
+A typical dbt ingest produces semantic sources and knowledge pages in your project:
+
+**Semantic source** (`semantic-layer/my-postgres/orders.yaml`):
+
+```yaml title="semantic-layer/my-postgres/orders.yaml"
+name: orders
+table: public.orders
+grain:
+  - order_id
+columns:
+  - name: order_id
+    type: string
+    description: Unique order identifier
+  - name: customer_id
+    type: string
+    description: Foreign key to customers table
+  - name: order_date
+    type: time
+    role: time
+    description: Date the order was placed
+  - name: total_amount
+    type: number
+    description: Total order value in USD
+measures:
+  - name: total_revenue
+    expr: SUM(total_amount)
+    description: Sum of all order values
+  - name: order_count
+    expr: COUNT(DISTINCT order_id)
+    description: Number of distinct orders
+joins:
+  - to: customers
+    on: orders.customer_id = customers.customer_id
+    relationship: many_to_one
+```
+
+**Knowledge page** (`knowledge/global/order-status-definitions.md`):
+
+```markdown
+---
+summary: Business definitions for order status values
+tags: [orders, definitions]
+sl_refs: [orders]
+---
+
+## Order Statuses
+
+- **pending**: Order placed but not yet processed
+- **confirmed**: Payment received, awaiting fulfillment
+- **shipped**: Order dispatched to carrier
+- **delivered**: Order received by customer
+- **cancelled**: Order cancelled before shipment
+
+Orders in "pending" status for more than 48 hours are flagged for review.
+```
+
+### Deterministic replay
+
+Every ingest session records a full transcript — tool calls, LLM responses, and write decisions. You can replay any session to debug why a source was written a certain way:
+
+```bash
+ktx dev ingest replay <run-id> --viz
+```
+
+This opens the same TUI view as the original run, letting you step through the agent's reasoning.

@@ -1,0 +1,255 @@
+---
+title: Quickstart
+description: Set up KTX and build your first context in under 10 minutes.
+---
+
+This guide walks you through `ktx setup` — an interactive wizard that configures your LLM provider, connects your database, optionally ingests from your existing tools, builds context, and installs agent integration.
+
+## Prerequisites
+
+- **Node.js 22+** and **pnpm**
+- An **Anthropic API key** for LLM-powered enrichment and ingestion
+- A **database connection** — PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, or SQLite
+- Optionally, a **dbt project**, **LookML repo**, **Metabase instance**, or other context source
+
+## Install and run setup
+
+KTX is currently used from a local checkout or linked workspace CLI. Build and link the CLI first:
+
+```bash
+git clone https://github.com/kaelio/ktx.git
+cd ktx
+pnpm install
+pnpm run setup:dev
+pnpm run link:dev
+```
+
+Then run the setup wizard in the directory where you want your KTX project:
+
+```bash
+ktx setup
+```
+
+The wizard walks through six steps. You can go back at any point, and if you exit early, running `ktx setup` again resumes where you left off.
+
+## Step 1: Configure LLM
+
+KTX uses an Anthropic model to enrich schema descriptions, generate semantic sources during ingestion, and reconcile metadata from your tools.
+
+The wizard asks how to find your API key:
+
+```
+◆  How should KTX find your Anthropic API key?
+│  ○ Use ANTHROPIC_API_KEY from the environment
+│  ○ Paste a key and save it as a local secret file
+```
+
+If you choose to paste a key, KTX saves it in `.ktx/secrets/anthropic-api-key` with local file permissions. Your `ktx.yaml` stores a `file:` reference, never the raw key.
+
+Next, choose a model:
+
+```
+◆  Which Anthropic model should KTX use?
+│  ○ Claude Sonnet 4.6 (recommended)
+│  ○ Claude Opus 4.6
+│  ○ Claude Haiku 4.5
+│  ○ Enter a model ID manually
+```
+
+KTX runs a health check to verify your key and model work before saving.
+
+## Step 2: Configure embeddings
+
+KTX uses embeddings for semantic search over sources, wiki content, schema metadata, and relationship evidence.
+
+```
+◆  Which embedding option should KTX use?
+│  ○ Local sentence-transformers embeddings
+│  ○ OpenAI embeddings (recommended)
+```
+
+**OpenAI embeddings** use `text-embedding-3-small` (1536 dimensions) and require an `OPENAI_API_KEY`.
+
+**Local embeddings** use `all-MiniLM-L6-v2` (384 dimensions) via the KTX Python daemon. No API key is needed. If you run the daemon as a long-lived HTTP service, start it with:
+
+```bash
+ktx-daemon serve-http --host 127.0.0.1 --port 8765
+```
+
+## Step 3: Connect a database
+
+Select one or more databases for KTX to scan. The wizard supports SQLite, PostgreSQL, MySQL, ClickHouse, SQL Server, BigQuery, and Snowflake.
+
+For PostgreSQL, you can enter connection details field by field or paste a connection URL:
+
+```
+◆  How do you want to connect to PostgreSQL?
+│  ○ Enter connection details (host, port, database, user)
+│  ○ Paste a connection URL
+```
+
+If your URL contains credentials, KTX saves it to `.ktx/secrets/` and writes a `file:` reference in `ktx.yaml`. You can also use `env:DATABASE_URL` to reference an environment variable.
+
+After connecting, KTX automatically runs a connection test and a structural scan:
+
+```
+◇  Testing postgres-warehouse
+│  ✓ Connection test passed
+│  Driver: PostgreSQL · Tables: 42
+│
+◇  Scanning postgres-warehouse
+│  ✓ Structural scan completed
+│  Changes: 42 new tables
+│
+◇  Primary source ready
+│  postgres-warehouse · PostgreSQL · structural scan complete
+```
+
+For Snowflake and BigQuery, the wizard offers **Historic SQL** configuration for query history views. For PostgreSQL, enable Historic SQL with `--enable-historic-sql` when `pg_stat_statements` is configured.
+
+## Step 4: Add context sources
+
+Context sources let KTX ingest metadata from your existing analytics tools. This step is optional — you can skip it and add sources later.
+
+```
+◆  Which context sources should KTX ingest?
+│  ◻ dbt
+│  ◻ MetricFlow
+│  ◻ Metabase
+│  ◻ Looker
+│  ◻ LookML
+│  ◻ Notion
+```
+
+For **dbt**, point KTX at a local path or git URL. KTX reads your `dbt_project.yml` and schema files to extract model metadata:
+
+```
+◆  dbt source location
+│  ○ Local path
+│  ○ Git URL
+```
+
+For **Metabase** and **Looker**, you provide an API URL and credentials. KTX maps BI databases to your KTX primary source connections so it knows which warehouse tables the BI metadata refers to.
+
+Context sources are saved to `ktx.yaml` and built during the next step.
+
+## Step 5: Build context
+
+This is where KTX does the heavy lifting. It runs an enriched scan of your database (generating AI-powered column and table descriptions) and ingests metadata from any configured context sources.
+
+```
+◆  Build KTX context for agents?
+│  ○ Build context now (recommended)
+│  ○ Leave context unbuilt and exit setup
+```
+
+The build scans each primary source with LLM enrichment, detects table relationships, and runs ingestion agents that reconcile metadata from your context sources into semantic-layer YAML files and knowledge pages.
+
+For a small database (under 50 tables), this takes a few minutes. Larger warehouses can take longer. You can press <kbd>d</kbd> to detach and let it run in the background:
+
+```
+KTX context build
+Run: setup-context-local-abc123
+Project: /home/user/analytics
+
+Detach: press d to leave this running.
+Resume: ktx setup context watch setup-context-local-abc123
+Status: ktx setup context status setup-context-local-abc123
+```
+
+When the build completes, KTX verifies that agent-ready context was produced:
+
+```
+KTX context is ready for agents.
+
+Primary sources:
+  postgres-warehouse: enriched scan complete
+
+Context sources:
+  dbt-main: memory update complete
+
+Verification:
+  Agent context: ready
+  Semantic search: ready
+```
+
+## Step 6: Install agent integration
+
+The final step connects KTX to your coding agent. Choose how agents should access the project:
+
+```
+◆  How should agents use this KTX project?
+│  ○ CLI tools and skills
+│  ○ MCP server config
+│  ○ Both
+```
+
+Then select which agents to install for:
+
+```
+◆  Which agent targets should KTX install?
+│  ◻ Claude Code
+│  ◻ Codex
+│  ◻ Cursor
+│  ◻ OpenCode
+```
+
+**CLI mode** writes a skill file (e.g., `.claude/skills/ktx/SKILL.md`) that teaches the agent to call KTX commands directly.
+
+**MCP mode** writes an MCP server configuration (e.g., `.mcp.json`) that lets the agent call KTX tools like `sl_query`, `knowledge_search`, and `sl_write_source` over the Model Context Protocol.
+
+## Verify it worked
+
+Check your project status:
+
+```bash
+ktx status
+```
+
+```
+KTX project: /home/user/analytics
+Project ready: yes
+LLM ready: yes (claude-sonnet-4-6)
+Embeddings ready: yes (text-embedding-3-small)
+Primary sources configured: yes (postgres-warehouse)
+Context sources configured: yes (dbt-main)
+KTX context built: yes
+Agent integration ready: yes (claude-code:project)
+```
+
+List your semantic sources:
+
+```bash
+ktx sl list
+```
+
+Query through the semantic layer:
+
+```bash
+ktx sl query \
+  --connection-id postgres-warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.status \
+  --order-by orders.total_revenue:desc \
+  --limit 5 \
+  --format sql
+```
+
+This outputs the generated SQL. Add `--execute` to run it against your warehouse:
+
+```bash
+ktx sl query \
+  --connection-id postgres-warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.status \
+  --order-by orders.total_revenue:desc \
+  --limit 5 \
+  --execute --max-rows 10
+```
+
+## Next steps
+
+- **Build more context** — learn about [scanning](/docs/guides/building-context), relationship detection, and ingestion workflows in the Building Context guide.
+- **Refine your semantic layer** — the [Writing Context](/docs/guides/writing-context) guide covers source YAML, measures, joins, and knowledge pages.
+- **Understand the architecture** — read [The Context Layer](/docs/concepts/the-context-layer) to learn why a context layer is more than a semantic layer.
+- **Connect more agents** — see the [Agent Clients](/docs/integrations/agent-clients) integration page for per-tool setup details.

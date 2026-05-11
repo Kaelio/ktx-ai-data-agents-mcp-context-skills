@@ -18,20 +18,28 @@ export interface LocalKtxRelationshipCandidateTablesInput {
 
 const DEFAULT_MAX_PARENT_TABLES = 20;
 const RELATIONSHIP_SUFFIX_TOKENS = new Set(['id', 'ids', 'key', 'keys', 'code', 'codes', 'uuid', 'uuids']);
+const normalizedTokenVariantsCache = new Map<string, string[]>();
 
 function roundedScore(value: number): number {
   return Number(Math.max(0, Math.min(1, value)).toFixed(3));
 }
 
 function normalizedTokenVariants(name: string): string[] {
+  const cached = normalizedTokenVariantsCache.get(name);
+  if (cached) {
+    return cached;
+  }
+
   const normalized = normalizeKtxRelationshipName(name);
-  return Array.from(
+  const variants = Array.from(
     new Set([
       ...normalized.tokens,
       ...tokenizeKtxRelationshipName(normalized.singular),
       ...tokenizeKtxRelationshipName(normalized.plural),
     ]),
   ).filter(Boolean);
+  normalizedTokenVariantsCache.set(name, variants);
+  return variants;
 }
 
 function childColumnLocalityTokens(column: KtxEnrichedColumn): string[] {
@@ -91,24 +99,29 @@ function parentEmbeddingScore(childColumn: KtxEnrichedColumn, parentTable: KtxEn
 }
 
 function tableTokenScore(input: {
-  childTable: KtxEnrichedTable;
-  childColumn: KtxEnrichedColumn;
+  childTableId: string;
+  childTableTokens: readonly string[];
+  childColumnTokens: readonly string[];
   parentTable: KtxEnrichedTable;
 }): number {
-  const childTableTokens = normalizedTokenVariants(input.childTable.ref.name);
-  const childColumnTokens = childColumnLocalityTokens(input.childColumn);
   const parentTokens = normalizedTokenVariants(input.parentTable.ref.name);
-  const columnOnlyScore = jaccard(childColumnTokens, parentTokens);
-  if (input.parentTable.id === input.childTable.id) {
+  const columnOnlyScore = jaccard(input.childColumnTokens, parentTokens);
+  if (parentTokens.length === 0) {
+    return 0;
+  }
+  if (input.parentTable.id === input.childTableId) {
     return columnOnlyScore;
   }
-  const columnAndTableScore = jaccard(uniqueTokens([...childTableTokens, ...childColumnTokens]), parentTokens);
+  const columnAndTableScore = jaccard(uniqueTokens([...input.childTableTokens, ...input.childColumnTokens]), parentTokens);
   return Math.max(columnOnlyScore, columnAndTableScore * 0.6);
 }
 
 function localityScore(input: {
   childTable: KtxEnrichedTable;
+  childTableId: string;
+  childTableTokens: readonly string[];
   childColumn: KtxEnrichedColumn;
+  childColumnTokens: readonly string[];
   parentTable: KtxEnrichedTable;
 }): Omit<KtxRelationshipLocalityCandidateTable, 'table'> {
   const tokenScore = roundedScore(tableTokenScore(input));
@@ -143,12 +156,18 @@ export function localCandidateTables(
     return [];
   }
 
+  const childTableTokens = normalizedTokenVariants(input.childTable.ref.name);
+  const childColumnTokens = childColumnLocalityTokens(input.childColumn);
+
   return input.parentTables
     .map((table) => ({
       table,
       ...localityScore({
         childTable: input.childTable,
+        childTableId: input.childTable.id,
+        childTableTokens,
         childColumn: input.childColumn,
+        childColumnTokens,
         parentTable: table,
       }),
     }))

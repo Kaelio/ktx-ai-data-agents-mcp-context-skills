@@ -17,7 +17,7 @@ interface BuiltMocks {
   appSettings: any;
   llmProvider: any;
   prompt: any;
-  posthog: any;
+  eventTracker: any;
   telemetry: any;
   skillsRegistry: any;
   wikiService: any;
@@ -64,7 +64,7 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
     },
     llmProvider: { getModel: vi.fn().mockReturnValue({}) },
     prompt: { loadPrompt: vi.fn().mockResolvedValue('base framing') },
-    posthog: { trackEvent: vi.fn(), createTelemetryIntegration: vi.fn().mockReturnValue(undefined) },
+    eventTracker: { trackEvent: vi.fn(), createTelemetryIntegration: vi.fn().mockReturnValue(undefined) },
     telemetry: {
       isEnabled: () => false,
       appSettingsService: { settings: { telemetry: { recordInputs: false, recordOutputs: false } } },
@@ -177,7 +177,7 @@ const buildService = (mocks: BuiltMocks): MemoryAgentService =>
     slValidator: mocks.slValidator,
     toolsetFactory: mocks.toolsetFactory,
     telemetry: {
-      trackMemoryIngestion: mocks.posthog.trackEvent,
+      trackMemoryIngestion: mocks.eventTracker.trackEvent,
     },
   });
 
