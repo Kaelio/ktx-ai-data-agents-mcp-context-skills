@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   getKtxCliPackageInfo,
+  packageInfoFromJson,
   rendererUnavailableVizFallback,
   renderMemoryFlowTui,
   resolveVizFallback,
@@ -54,6 +55,19 @@ describe('getKtxCliPackageInfo', () => {
     expect(packageJson).toMatchObject({
       name: '@ktx/cli',
       version: '0.0.0-private',
+    });
+  });
+
+  it('normalizes public package metadata from package.json contents', () => {
+    expect(
+      packageInfoFromJson({
+        name: '@kaelio/ktx',
+        version: '0.1.0',
+      }),
+    ).toEqual({
+      name: '@kaelio/ktx',
+      version: '0.1.0',
+      contextPackageName: '@ktx/context',
     });
   });
 });

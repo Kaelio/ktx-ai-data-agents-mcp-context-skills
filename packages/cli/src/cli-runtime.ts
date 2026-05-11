@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 import type { KtxConnectionMetabaseSetupArgs } from './commands/connection-metabase-setup.js';
 import type { KtxConnectionNotionArgs } from './commands/connection-notion.js';
 import type { KtxAgentArgs } from './agent.js';
@@ -16,9 +18,11 @@ import { profileMark, profileSpan } from './startup-profile.js';
 
 profileMark('module:cli-runtime');
 
+const requirePackageJson = createRequire(import.meta.url);
+
 export interface KtxCliPackageInfo {
-  name: '@ktx/cli';
-  version: '0.0.0-private';
+  name: string;
+  version: string;
   contextPackageName: '@ktx/context';
 }
 
@@ -45,9 +49,24 @@ export interface KtxCliDeps {
 }
 
 export function getKtxCliPackageInfo(): KtxCliPackageInfo {
+  return packageInfoFromJson(requirePackageJson('../package.json'));
+}
+
+export function packageInfoFromJson(packageJson: unknown): KtxCliPackageInfo {
+  if (
+    typeof packageJson !== 'object' ||
+    packageJson === null ||
+    !('name' in packageJson) ||
+    !('version' in packageJson) ||
+    typeof packageJson.name !== 'string' ||
+    typeof packageJson.version !== 'string'
+  ) {
+    throw new Error('Invalid KTX CLI package metadata');
+  }
+
   return {
-    name: '@ktx/cli',
-    version: '0.0.0-private',
+    name: packageJson.name,
+    version: packageJson.version,
     contextPackageName: '@ktx/context',
   };
 }

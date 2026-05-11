@@ -2,6 +2,7 @@ import { profileMark } from './startup-profile.js';
 
 export {
   getKtxCliPackageInfo,
+  packageInfoFromJson,
   runInitForCommander,
   runKtxCli,
   type KtxCliDeps,
