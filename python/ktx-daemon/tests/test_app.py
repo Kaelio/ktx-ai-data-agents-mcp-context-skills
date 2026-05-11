@@ -280,6 +280,37 @@ def test_sql_parse_table_identifier_endpoint() -> None:
     assert body["results"]["template"]["reason"] == "looker_template_unresolved"
 
 
+def test_sql_analyze_batch_endpoint_returns_per_item_results() -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/sql/analyze-batch",
+        json={
+            "dialect": "postgres",
+            "max_workers": 1,
+            "items": [
+                {
+                    "id": "orders",
+                    "sql": "select status from public.orders where created_at is not null",
+                },
+                {"id": "broken", "sql": "select * from where"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["results"]["orders"]["tables_touched"] == ["public.orders"]
+    assert body["results"]["orders"]["columns_by_clause"] == {
+        "select": ["status"],
+        "where": ["created_at"],
+    }
+    assert body["results"]["orders"]["error"] is None
+    assert body["results"]["broken"]["tables_touched"] == []
+    assert body["results"]["broken"]["columns_by_clause"] == {}
+    assert body["results"]["broken"]["error"] is not None
+
+
 def test_semantic_query_endpoint_returns_sql() -> None:
     client = TestClient(create_app())
 
