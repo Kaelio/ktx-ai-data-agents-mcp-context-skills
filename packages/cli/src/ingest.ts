@@ -14,6 +14,7 @@ import {
   renderMemoryFlowReplay,
   runLocalIngest,
   runLocalMetabaseIngest,
+  savedMemoryCountsForReport,
 } from '@ktx/context/ingest';
 import { loadKtxProject } from '@ktx/context/project';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
@@ -89,16 +90,8 @@ function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
   return report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
 }
 
-function reportActionCounts(report: IngestReportSnapshot): { wikiCount: number; slCount: number } {
-  const actions = report.body.workUnits.flatMap((workUnit) => workUnit.actions);
-  return {
-    wikiCount: actions.filter((action) => action.target === 'wiki').length,
-    slCount: actions.filter((action) => action.target === 'sl').length,
-  };
-}
-
 function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void {
-  const counts = reportActionCounts(report);
+  const counts = savedMemoryCountsForReport(report);
   io.stdout.write(`Report: ${report.id}\n`);
   io.stdout.write(`Run: ${report.runId}\n`);
   io.stdout.write(`Job: ${report.jobId}\n`);
@@ -117,7 +110,7 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
 function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIngestIo): void {
   const counts = result.children.reduce(
     (acc, child) => {
-      const childCounts = reportActionCounts(child.report);
+      const childCounts = savedMemoryCountsForReport(child.report);
       return {
         wikiCount: acc.wikiCount + childCounts.wikiCount,
         slCount: acc.slCount + childCounts.slCount,

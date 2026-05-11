@@ -15,6 +15,7 @@ import type { ContextEvidenceIndexSummary, IngestBundleRunnerDeps, PageTriageRun
 import { buildSyncId, rawSourcesDirForSync } from './raw-sources-paths.js';
 import {
   buildStageIndexFromReportBody,
+  postProcessorSavedMemoryCounts,
   type IngestReportPostProcessorOutcome,
   type IngestReportSnapshot,
 } from './reports.js';
@@ -1111,11 +1112,12 @@ export class IngestBundleRunner {
       }
       const commitSha = mergeResult.touchedPaths.length === 0 ? null : mergeResult.squashSha;
       const memoryFlowSavedActions = stageIndex.workUnits.flatMap((wu) => wu.actions).concat(reconcileActions);
+      const postProcessorMemoryCounts = postProcessorSavedMemoryCounts(postProcessorOutcome);
       memoryFlow?.emit({
         type: 'saved',
         commitSha,
-        wikiCount: countMemoryFlowActions(memoryFlowSavedActions, 'wiki'),
-        slCount: countMemoryFlowActions(memoryFlowSavedActions, 'sl'),
+        wikiCount: countMemoryFlowActions(memoryFlowSavedActions, 'wiki') + postProcessorMemoryCounts.wikiCount,
+        slCount: countMemoryFlowActions(memoryFlowSavedActions, 'sl') + postProcessorMemoryCounts.slCount,
       });
       await stage6?.updateProgress(1.0, commitSha ? `Saved changes (${commitSha.slice(0, 8)})` : 'No changes to save');
 

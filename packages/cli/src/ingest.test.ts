@@ -544,6 +544,63 @@ describe('runKtxIngest', () => {
     expect(io.stdout()).toContain('Diff: +2/~0/-0/=0\n');
   });
 
+  it('includes historic-sql projection output in saved memory counts', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) => {
+      const result = completedLocalBundleRun(input, 'historic-sql-projection');
+      return {
+        ...result,
+        report: localFakeBundleReport('historic-sql-projection', {
+          sourceKey: 'historic-sql',
+          body: {
+            workUnits: [],
+            postProcessor: {
+              sourceKey: 'historic-sql',
+              status: 'success',
+              result: {
+                tableUsageMerged: 56,
+                staleTablesMarked: 1,
+                patternPagesWritten: 30,
+                stalePatternPagesMarked: 2,
+                archivedPatternPages: 3,
+                legacyPagesDeleted: 4,
+              },
+              errors: [],
+              warnings: [],
+              touchedSources: [],
+            },
+          },
+        }),
+      };
+    });
+
+    const io = makeIo();
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalIngest: runLocal,
+          createAdapters: vi.fn(() => [
+            { source: 'historic-sql', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+          ]),
+          jobIdFactory: () => 'historic-sql-projection',
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).toBe('');
+    expect(io.stdout()).toContain('Adapter: historic-sql\n');
+    expect(io.stdout()).toContain('Saved memory: 39 wiki, 57 SL\n');
+  });
+
   it('returns a non-zero code when local ingest reports failed work units', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);

@@ -1428,6 +1428,67 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(deps.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'success');
   });
 
+  it('includes historic-sql post-processor output in memory-flow saved counts', async () => {
+    const deps = makeDeps();
+    deps.adapter.source = 'historic-sql';
+    deps.registry.get.mockReturnValue(deps.adapter);
+    deps.adapter.chunk.mockResolvedValue({
+      workUnits: [
+        {
+          unitKey: 'historic-sql-table-public-orders',
+          rawFiles: ['tables/public/orders.json'],
+          peerFileIndex: [],
+          dependencyPaths: [],
+        },
+      ],
+    });
+    const postProcessor = {
+      run: vi.fn().mockResolvedValue({
+        result: {
+          tableUsageMerged: 2,
+          staleTablesMarked: 1,
+          patternPagesWritten: 3,
+          stalePatternPagesMarked: 1,
+          archivedPatternPages: 1,
+          legacyPagesDeleted: 1,
+        },
+        warnings: [],
+        errors: [],
+        touchedSources: [{ connectionId: 'c1', sourceName: 'orders' }],
+      }),
+    };
+    const runner = buildRunner(deps, { postProcessors: { 'historic-sql': postProcessor } });
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['tables/public/orders.json', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/historic-sql/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+    const memoryFlow = createMemoryFlowLiveBuffer(bundleReplayInput());
+
+    await runner.run(
+      {
+        jobId: 'j1',
+        connectionId: 'c1',
+        sourceKey: 'historic-sql',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+      },
+      {
+        jobId: 'j1',
+        memoryFlow,
+        startPhase: () => new TestJobContext('j1', null, () => Promise.resolve(), () => Promise.resolve()),
+      },
+    );
+
+    expect(memoryFlow.snapshot().events).toContainEqual(
+      expect.objectContaining({
+        type: 'saved',
+        wikiCount: 6,
+        slCount: 3,
+      }),
+    );
+  });
+
   it('marks post-processor infrastructure failure as failed and preserves worktree cleanup state', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'metricflow';

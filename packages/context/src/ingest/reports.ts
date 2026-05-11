@@ -79,6 +79,50 @@ export interface IngestReportSnapshot {
   createdAt: string;
 }
 
+export interface IngestSavedMemoryCounts {
+  wikiCount: number;
+  slCount: number;
+}
+
+function numericResultField(result: Record<string, unknown>, field: string): number {
+  const value = result[field];
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+export function postProcessorSavedMemoryCounts(
+  postProcessor: IngestReportPostProcessorOutcome | undefined,
+): IngestSavedMemoryCounts {
+  if (!postProcessor || postProcessor.sourceKey !== 'historic-sql') {
+    return { wikiCount: 0, slCount: 0 };
+  }
+  const result = postProcessor.result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return { wikiCount: 0, slCount: 0 };
+  }
+  const record = result as Record<string, unknown>;
+  return {
+    wikiCount:
+      numericResultField(record, 'patternPagesWritten') +
+      numericResultField(record, 'stalePatternPagesMarked') +
+      numericResultField(record, 'archivedPatternPages') +
+      numericResultField(record, 'legacyPagesDeleted'),
+    slCount: numericResultField(record, 'tableUsageMerged') + numericResultField(record, 'staleTablesMarked'),
+  };
+}
+
+export function savedMemoryCountsForReport(report: IngestReportSnapshot): IngestSavedMemoryCounts {
+  const actions = report.body.workUnits.flatMap((workUnit) => workUnit.actions);
+  const directCounts = {
+    wikiCount: actions.filter((action) => action.target === 'wiki').length,
+    slCount: actions.filter((action) => action.target === 'sl').length,
+  };
+  const postProcessorCounts = postProcessorSavedMemoryCounts(report.body.postProcessor);
+  return {
+    wikiCount: directCounts.wikiCount + postProcessorCounts.wikiCount,
+    slCount: directCounts.slCount + postProcessorCounts.slCount,
+  };
+}
+
 export function buildStageIndexFromReportBody(jobId: string, connectionId: string, body: IngestReportBody): StageIndex {
   return {
     jobId,
