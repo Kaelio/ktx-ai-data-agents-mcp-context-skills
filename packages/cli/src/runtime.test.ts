@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import type {
+  ManagedPythonRuntimeDoctorCheck,
+  ManagedPythonRuntimeInstallResult,
+  ManagedPythonRuntimeStatus,
+} from './managed-python-runtime.js';
 import { runKtxRuntime, type KtxRuntimeDeps } from './runtime.js';
 
 function makeIo() {
@@ -26,7 +31,7 @@ describe('runKtxRuntime', () => {
   it('installs the requested runtime feature and prints the manifest path', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
-      installRuntime: vi.fn(async () => ({
+      installRuntime: vi.fn(async (): Promise<ManagedPythonRuntimeInstallResult> => ({
         status: 'installed',
         layout: {
           cliVersion: '0.2.0',
@@ -101,7 +106,7 @@ describe('runKtxRuntime', () => {
   it('prints runtime status as JSON', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
-      readStatus: vi.fn(async () => ({
+      readStatus: vi.fn(async (): Promise<ManagedPythonRuntimeStatus> => ({
         kind: 'missing',
         detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
         layout: {
@@ -131,7 +136,7 @@ describe('runKtxRuntime', () => {
   it('returns failure for doctor when any check fails', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
-      doctorRuntime: vi.fn(async () => [
+      doctorRuntime: vi.fn(async (): Promise<ManagedPythonRuntimeDoctorCheck[]> => [
         { id: 'uv', label: 'uv', status: 'pass', detail: 'uv 0.9.5' },
         {
           id: 'runtime',
@@ -168,7 +173,7 @@ describe('runKtxRuntime', () => {
   it('prints stale directories during prune dry-run', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
-      readStatus: vi.fn(async () => ({
+      readStatus: vi.fn(async (): Promise<ManagedPythonRuntimeStatus> => ({
         kind: 'missing',
         detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
         layout: {
