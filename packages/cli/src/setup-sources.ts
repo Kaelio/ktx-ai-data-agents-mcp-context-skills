@@ -1187,10 +1187,10 @@ async function promptForInteractiveSource(
     },
     async (currentState) => {
       const crawlMode = await prompts.select({
-        message: 'Notion crawl mode',
+        message: 'Which Notion pages should KTX ingest?',
         options: [
-          { value: 'selected_roots', label: 'Selected roots' },
-          { value: 'all_accessible', label: 'All accessible pages' },
+          { value: 'all_accessible', label: 'All pages the integration can access' },
+          { value: 'selected_roots', label: 'Specific pages and their subpages (you\'ll paste page IDs)' },
           { value: 'back', label: 'Back' },
         ],
       });
@@ -1205,8 +1205,8 @@ async function promptForInteractiveSource(
       ? [
           async (currentState: SourcePromptState) => {
             const roots = await promptText(prompts, {
-              message: 'Notion root page ids',
-              placeholder: 'comma-separated ids',
+              message: 'Notion page IDs to ingest (each page includes all its subpages)',
+              placeholder: 'page-id-1, page-id-2',
             });
             if (roots === undefined) return 'back';
             currentState.notionRootPageIds = roots

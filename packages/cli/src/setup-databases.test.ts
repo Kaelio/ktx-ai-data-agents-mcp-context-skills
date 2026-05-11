@@ -532,8 +532,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'add', label: 'Add another primary source' },
         { value: 'continue', label: 'Continue to knowledge sources' },
+        { value: 'add', label: 'Add another primary source' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -583,8 +583,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'add', label: 'Add another primary source' },
         { value: 'continue', label: 'Continue to knowledge sources' },
+        { value: 'add', label: 'Add another primary source' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -618,8 +618,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
-        { value: 'add', label: 'Add another primary source' },
         { value: 'continue', label: 'Continue to knowledge sources' },
+        { value: 'add', label: 'Add another primary source' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -653,8 +653,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
-        { value: 'add', label: 'Add another primary source' },
         { value: 'continue', label: 'Continue to knowledge sources' },
+        { value: 'add', label: 'Add another primary source' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -696,8 +696,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'add', label: 'Add another primary source' },
         { value: 'continue', label: 'Continue to knowledge sources' },
+        { value: 'add', label: 'Add another primary source' },
         { value: 'back', label: 'Back' },
       ],
     });

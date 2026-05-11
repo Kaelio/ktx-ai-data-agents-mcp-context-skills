@@ -394,8 +394,8 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
   return {
     message: `Primary sources already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
-      { value: 'add', label: 'Add another primary source' },
       { value: 'continue', label: 'Continue to knowledge sources' },
+      { value: 'add', label: 'Add another primary source' },
       { value: 'back', label: 'Back' },
     ],
   };
