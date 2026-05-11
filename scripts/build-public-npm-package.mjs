@@ -227,7 +227,7 @@ export async function createPublicNpmPackageTree(layout = publicNpmPackageLayout
 export function publicNpmPackCommand(layout = publicNpmPackageLayout()) {
   return {
     command: 'pnpm',
-    args: ['pack', '--out', layout.tarballPath],
+    args: ['--config.node-linker=hoisted', 'pack', '--out', layout.tarballPath],
     cwd: layout.packRoot,
   };
 }

@@ -257,7 +257,12 @@ describe('publicNpmPackCommand', () => {
 
     assert.deepEqual(publicNpmPackCommand(layout), {
       command: 'pnpm',
-      args: ['pack', '--out', '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.0.0-private.tgz'],
+      args: [
+        '--config.node-linker=hoisted',
+        'pack',
+        '--out',
+        '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.0.0-private.tgz',
+      ],
       cwd: '/repo/ktx/dist/public-npm-package',
     });
   });
