@@ -43,7 +43,8 @@ export class WikiReadTool extends BaseTool<typeof WikiReadInputSchema> {
   }
 
   async call(input: WikiReadInput, context: ToolContext): Promise<ToolOutput<WikiReadStructured>> {
-    const page = await this.wikiService.readPageForUser(context.userId, input.key);
+    const wikiService = context.session?.wikiService ?? this.wikiService;
+    const page = await wikiService.readPageForUser(context.userId, input.key);
 
     if (!page) {
       return {

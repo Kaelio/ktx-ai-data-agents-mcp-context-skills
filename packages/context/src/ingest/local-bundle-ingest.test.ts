@@ -300,8 +300,8 @@ describe('canonical local ingest', () => {
     expect(result.result.failedWorkUnits).toEqual([]);
     const db = new Database(join(project.projectDir, '.ktx', 'db.sqlite'), { readonly: true });
     try {
-      expect(db.prepare('SELECT key, summary FROM knowledge_pages ORDER BY key').all()).toEqual([
-        { key: 'orders_context', summary: 'Orders source context' },
+      expect(db.prepare('SELECT key, summary, embedding_json IS NOT NULL AS has_embedding FROM knowledge_pages ORDER BY key').all()).toEqual([
+        { key: 'orders_context', summary: 'Orders source context', has_embedding: 1 },
       ]);
     } finally {
       db.close();

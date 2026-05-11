@@ -242,6 +242,7 @@ describe('NotionSourceAdapter', () => {
     });
     expect(result.workUnits[0].notes).toContain('Synthesize durable wiki and SL knowledge');
     expect(result.workUnits[0].notes).toContain('emit_unmapped_fallback');
+    expect(result.workUnits[0].notes).toContain('use reason no_physical_table rather than no_connection_mapping');
     expect(result.workUnits[0].notes).toContain('Do not create SL sources under the Notion connection');
     expect(result.reconcileNotes).toEqual([
       'Notion maxKnowledgeCreatesPerRun=25',

@@ -36,6 +36,23 @@ describe('tool transcript summaries', () => {
     expect(summary.fatalErrorCount).toBe(0);
   });
 
+  it('counts unrecovered wiki_remove structured failures as fatal transcript errors', () => {
+    const summary = createMutableToolTranscriptSummary('reconcile', '/tmp/reconcile.jsonl');
+
+    recordToolTranscriptEntry(summary, {
+      ts: '2026-05-11T00:00:00.000Z',
+      wuKey: 'reconcile',
+      toolCallId: 'remove-1',
+      toolName: 'wiki_remove',
+      durationMs: 1,
+      input: { key: 'duplicate-page' },
+      output: { structured: { success: false, key: 'duplicate-page' } },
+    });
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(1);
+  });
+
   it('keeps unrecovered structured write failures fatal', () => {
     const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
 

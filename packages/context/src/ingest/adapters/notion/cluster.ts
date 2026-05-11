@@ -9,7 +9,7 @@ export const MIN_PAGES_TO_CLUSTER = 5;
 const CLUSTER_TEXT_BODY_CHARS = 1024;
 const CLUSTER_SEED = 42;
 const NOTION_CLUSTER_SL_WRITE_GUIDANCE =
-  'Write wiki entries directly with wiki_write. Only write or edit SL sources after sl_discover/sl_read_source confirms a mapped non-Notion target source; if no mapped target exists, emit_unmapped_fallback and keep the fact wiki-only. Do not create SL sources under the Notion connection just because a page mentions a warehouse table.';
+  'Write wiki entries directly with wiki_write. Only write or edit SL sources after sl_discover/sl_read_source confirms a mapped non-Notion target source; if no mapped target exists, emit_unmapped_fallback and keep the fact wiki-only. If a warehouse/dbt connection exists but the named table or source is absent, use reason no_physical_table rather than no_connection_mapping. Do not create SL sources under the Notion connection just because a page mentions a warehouse table.';
 
 interface ClusterNotionWorkUnitsArgs {
   workUnits: WorkUnit[];

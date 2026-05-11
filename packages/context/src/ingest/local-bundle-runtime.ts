@@ -52,6 +52,7 @@ import {
   type ToolSession,
 } from '../tools/index.js';
 import {
+  buildKnowledgeSearchText,
   type KnowledgeEventPort,
   type KnowledgeIndexPort,
   KnowledgeWikiService,
@@ -286,7 +287,10 @@ function scoreText(text: string, query: string): number {
 class LocalKnowledgeIndex implements KnowledgeIndexPort {
   private readonly sqlite: SqliteKnowledgeIndex;
 
-  constructor(private readonly project: KtxLocalProject) {
+  constructor(
+    private readonly project: KtxLocalProject,
+    private readonly embedding: KtxEmbeddingPort,
+  ) {
     this.sqlite = new SqliteKnowledgeIndex({ dbPath: ktxLocalStateDbPath(project) });
   }
 
@@ -388,6 +392,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
 
   private async syncAllPagesFromDisk(): Promise<void> {
     const listed = await this.project.fileStore.listFiles('knowledge', true);
+    const existingPages = this.sqlite.getExistingPages();
     const pages: SqliteKnowledgeIndexPage[] = [];
     for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
       const parsedPath = parseKnowledgeIndexPath(file);
@@ -397,14 +402,21 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
       const path = `knowledge/${file}`;
       const raw = await this.project.fileStore.readFile(path);
       const parsed = parseWiki(raw.content);
+      const tags = parseWikiTags(raw.content);
+      const searchText = buildKnowledgeSearchText(parsedPath.pageKey, parsed.summary, parsed.content, tags);
+      const existing = existingPages.get(path);
+      const embedding =
+        existing?.searchText === searchText && existing.embedding
+          ? existing.embedding
+          : await this.embedding.computeEmbedding(searchText).catch(() => null);
       pages.push({
         path,
         key: parsedPath.pageKey,
         scope: parsedPath.scope,
         summary: parsed.summary,
         content: parsed.content,
-        tags: parseWikiTags(raw.content),
-        embedding: null,
+        tags,
+        embedding,
       });
     }
     this.sqlite.sync(pages);
@@ -566,7 +578,7 @@ export function createLocalBundleIngestRuntime(
   );
   const slSourcesRepository = new SqliteSlSourcesIndex({ dbPath });
   const slSearchService = new SlSearchService(embedding, slSourcesRepository, logger);
-  const knowledgeIndex = new LocalKnowledgeIndex(options.project);
+  const knowledgeIndex = new LocalKnowledgeIndex(options.project, embedding);
   const knowledgeEvents = new NoopKnowledgeEventPort();
   const wikiService = new KnowledgeWikiService(rootFileStore, embedding, knowledgeIndex, options.project.git, logger);
   const { agentRunner, llmProvider } = resolveAgentRunner(options);

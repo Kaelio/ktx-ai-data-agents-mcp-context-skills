@@ -62,7 +62,7 @@ function recoverableStructuredFailureKey(entry: ToolCallLogEntry): string | null
   if (!isStructuredToolFailure(entry.output)) {
     return null;
   }
-  if (entry.toolName === 'wiki_write') {
+  if (entry.toolName === 'wiki_write' || entry.toolName === 'wiki_remove') {
     return wikiTargetKey(entry);
   }
   if (entry.toolName === 'sl_write_source') {
@@ -75,7 +75,7 @@ function recoverableStructuredSuccessKey(entry: ToolCallLogEntry): string | null
   if (!isStructuredToolSuccess(entry.output)) {
     return null;
   }
-  if (entry.toolName === 'wiki_write') {
+  if (entry.toolName === 'wiki_write' || entry.toolName === 'wiki_remove') {
     return wikiTargetKey(entry);
   }
   if (entry.toolName === 'sl_write_source' || entry.toolName === 'sl_edit_source') {

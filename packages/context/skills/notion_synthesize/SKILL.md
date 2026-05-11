@@ -62,6 +62,7 @@ If a clustered WorkUnit includes several related pages, synthesize the shared ru
 - Prefer overlays on manifest-backed sources over standalone SQL.
 - If Notion describes a dashboard or metric but does not define executable logic, write a wiki page and attach `sl_refs` only after confirming the referenced source exists.
 - Do not create SL sources under the Notion connection just because a page mentions a warehouse, dbt, Looker, or Metabase object. Use the mapped warehouse/source connection after discovery, or emit an unmapped fallback and write wiki-only.
+- Distinguish fallback reasons precisely: if a non-Notion warehouse/dbt connection exists but `sl_discover` cannot find the named table/source, use `no_physical_table`; reserve `no_connection_mapping` for cases where there is no plausible non-Notion target connection at all.
 
 ## Tools
 

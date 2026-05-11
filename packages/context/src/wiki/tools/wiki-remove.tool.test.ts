@@ -24,6 +24,7 @@ describe('WikiRemoveTool', () => {
 
   it('skips deleteFromIndex when session is worktree-scoped', async () => {
     const wikiService = {
+      readPage: vi.fn().mockResolvedValue({ pageKey: 'old', frontmatter: { summary: 'Old' }, content: 'body' }),
       deletePage: vi.fn().mockResolvedValue(undefined),
       deleteFromIndex: vi.fn().mockResolvedValue(undefined),
     };
@@ -45,6 +46,35 @@ describe('WikiRemoveTool', () => {
     expect(wikiService.deletePage).toHaveBeenCalledTimes(1);
     expect(wikiService.deleteFromIndex).not.toHaveBeenCalled();
     expect(session.actions).toContainEqual(expect.objectContaining({ target: 'wiki', type: 'removed', key: 'old' }));
+  });
+
+  it('finds pages through the session wiki service even when the shared index has not seen the worktree write', async () => {
+    const wikiService = {
+      readPage: vi.fn().mockResolvedValue({ pageKey: 'staged', frontmatter: { summary: 'Staged' }, content: 'body' }),
+      deletePage: vi.fn().mockResolvedValue(undefined),
+      deleteFromIndex: vi.fn().mockResolvedValue(undefined),
+    };
+    const pagesRepository = { findPageByKey: vi.fn().mockResolvedValue(null) };
+    const knowledgeRepository = { createEvent: vi.fn().mockResolvedValue(undefined) };
+    const tool = new WikiRemoveTool(wikiService as any, pagesRepository as any, knowledgeRepository as any);
+    const session: ToolSession = {
+      connectionId: 'c',
+      isWorktreeScoped: true,
+      preHead: null,
+      touchedSlSources: createTouchedSlSources(),
+      actions: [],
+      semanticLayerService: {} as any,
+      wikiService: wikiService as any,
+      configService: {} as any,
+      gitService: {} as any,
+    };
+
+    const result = await tool.call({ key: 'staged' } as any, { ...baseContext, session });
+
+    expect(pagesRepository.findPageByKey).not.toHaveBeenCalled();
+    expect(wikiService.readPage).toHaveBeenCalledWith('GLOBAL', null, 'staged');
+    expect(wikiService.deletePage).toHaveBeenCalledTimes(1);
+    expect(result.structured).toEqual({ success: true, key: 'staged' });
   });
 
   it('returns a friendly message when the page does not exist', async () => {

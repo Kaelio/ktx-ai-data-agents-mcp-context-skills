@@ -46,7 +46,9 @@ export class WikiRemoveTool extends BaseTool<typeof wikiRemoveInputSchema> {
     const scope: BlockScope = writesGlobal ? 'GLOBAL' : 'USER';
     const scopeId = scope === 'USER' ? context.userId : null;
 
-    const existing = await this.pagesRepository.findPageByKey(scope, scopeId, input.key);
+    const existing = context.session
+      ? await wikiService.readPage(scope, scopeId, input.key)
+      : await this.pagesRepository.findPageByKey(scope, scopeId, input.key);
     if (!existing) {
       return {
         markdown: `Page "${input.key}" not found.`,
