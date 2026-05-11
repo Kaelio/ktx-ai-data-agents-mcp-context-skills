@@ -157,6 +157,11 @@ function isLegacyQueryPage(page: HistoricSqlPatternPage): boolean {
   return page.frontmatter.source === 'historic-sql' && tags.includes('query-pattern') && !tags.includes('pattern');
 }
 
+function isArchivedPatternPage(page: HistoricSqlPatternPage): boolean {
+  const tags = Array.isArray(page.frontmatter.tags) ? page.frontmatter.tags : [];
+  return page.key.startsWith('_archived/') || tags.includes('archived');
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
@@ -274,7 +279,8 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
   const wikiRoot = join(input.workdir, 'knowledge/global/historic-sql');
   await mkdir(wikiRoot, { recursive: true });
   const allPages = await loadPatternPages(wikiRoot);
-  const patternPages = allPages.filter(isHistoricPatternPage);
+  const activePages = allPages.filter((page) => !isArchivedPatternPage(page));
+  const patternPages = activePages.filter(isHistoricPatternPage);
   const writtenKeys = new Set<string>();
 
   for (const pattern of patternEvidence) {

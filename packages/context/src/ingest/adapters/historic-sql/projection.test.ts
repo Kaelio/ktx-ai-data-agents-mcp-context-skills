@@ -171,4 +171,124 @@ describe('projectHistoricSqlEvidence', () => {
       'stale_since: "2026-05-11T00:00:00.000Z"',
     );
   });
+
+  it('writes a reappearing pattern to the active slug instead of reusing an archived page key', async () => {
+    const workdir = await tempWorkdir();
+    await writeJson(workdir, 'raw-sources/warehouse/historic-sql/sync-1/manifest.json', {
+      source: 'historic-sql',
+      connectionId: 'warehouse',
+      dialect: 'postgres',
+      fetchedAt: '2026-05-11T00:00:00.000Z',
+      windowStart: '2026-02-10T00:00:00.000Z',
+      windowEnd: '2026-05-11T00:00:00.000Z',
+      snapshotRowCount: 2,
+      touchedTableCount: 2,
+      parseFailures: 0,
+      warnings: [],
+      probeWarnings: [],
+      staleArchiveAfterDays: 30,
+    });
+    await writeJson(workdir, 'raw-sources/warehouse/historic-sql/sync-1/tables/public.orders.json', { table: 'public.orders' });
+    await writeJson(workdir, 'raw-sources/warehouse/historic-sql/sync-1/tables/public.customers.json', { table: 'public.customers' });
+    await writeText(
+      workdir,
+      'knowledge/global/historic-sql/_archived/order-lifecycle-analysis.md',
+      [
+        '---',
+        YAML.stringify({
+          summary: 'Archived order lifecycle page',
+          tags: ['historic-sql', 'pattern', 'archived'],
+          refs: [],
+          sl_refs: ['orders'],
+          usage_mode: 'auto',
+          source: 'historic-sql',
+          tables: ['public.orders', 'public.customers'],
+          fingerprints: ['pg:1'],
+          stale_since: '2026-01-01T00:00:00.000Z',
+        }).trimEnd(),
+        '---',
+        '',
+        'Archived body',
+        '',
+      ].join('\n'),
+    );
+    await writeJson(workdir, '.ktx/ingest-evidence/historic-sql/run-1/pattern.json', {
+      kind: 'pattern',
+      connectionId: 'warehouse',
+      rawPath: 'patterns-input.json',
+      pattern: {
+        slug: 'order-lifecycle-analysis',
+        title: 'Order Lifecycle Analysis',
+        narrative: 'Analysts compare order status with customer segment again.',
+        definitionSql: 'select * from public.orders join public.customers on customers.id = orders.customer_id',
+        tablesInvolved: ['public.orders', 'public.customers'],
+        slRefs: ['orders', 'customers'],
+        constituentTemplateIds: ['pg:1', 'pg:2'],
+      },
+    });
+
+    const result = await projectHistoricSqlEvidence({ workdir, connectionId: 'warehouse', syncId: 'sync-1', runId: 'run-1' });
+
+    expect(result.patternPagesWritten).toBe(1);
+    await expect(readFile(join(workdir, 'knowledge/global/historic-sql/order-lifecycle-analysis.md'), 'utf-8')).resolves.toContain(
+      'Order Lifecycle Analysis',
+    );
+    await expect(readFile(join(workdir, 'knowledge/global/historic-sql/_archived/order-lifecycle-analysis.md'), 'utf-8')).resolves.toContain(
+      'Archived body',
+    );
+    await expect(
+      readFile(join(workdir, 'knowledge/global/historic-sql/_archived/_archived/order-lifecycle-analysis.md'), 'utf-8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('leaves already archived pattern pages stable when they are still absent', async () => {
+    const workdir = await tempWorkdir();
+    await writeJson(workdir, 'raw-sources/warehouse/historic-sql/sync-1/manifest.json', {
+      source: 'historic-sql',
+      connectionId: 'warehouse',
+      dialect: 'postgres',
+      fetchedAt: '2026-05-11T00:00:00.000Z',
+      windowStart: '2026-02-10T00:00:00.000Z',
+      windowEnd: '2026-05-11T00:00:00.000Z',
+      snapshotRowCount: 0,
+      touchedTableCount: 0,
+      parseFailures: 0,
+      warnings: [],
+      probeWarnings: [],
+      staleArchiveAfterDays: 30,
+    });
+    await writeText(
+      workdir,
+      'knowledge/global/historic-sql/_archived/retired-pattern.md',
+      [
+        '---',
+        YAML.stringify({
+          summary: 'Retired pattern',
+          tags: ['historic-sql', 'pattern', 'archived'],
+          refs: [],
+          sl_refs: [],
+          usage_mode: 'auto',
+          source: 'historic-sql',
+          tables: ['public.tickets'],
+          fingerprints: ['pg:9'],
+          stale_since: '2026-01-01T00:00:00.000Z',
+        }).trimEnd(),
+        '---',
+        '',
+        'Archived retired body',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await projectHistoricSqlEvidence({ workdir, connectionId: 'warehouse', syncId: 'sync-1', runId: 'run-1' });
+
+    expect(result.archivedPatternPages).toBe(0);
+    expect(result.stalePatternPagesMarked).toBe(0);
+    await expect(readFile(join(workdir, 'knowledge/global/historic-sql/_archived/retired-pattern.md'), 'utf-8')).resolves.toContain(
+      'Archived retired body',
+    );
+    await expect(readFile(join(workdir, 'knowledge/global/historic-sql/_archived/_archived/retired-pattern.md'), 'utf-8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
 });
