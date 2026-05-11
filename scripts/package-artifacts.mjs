@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -17,9 +17,6 @@ import {
   PUBLIC_NPM_PACKAGE_VERSION,
   publicNpmPackageTarballName,
 } from './build-public-npm-package.mjs';
-
-const PACKAGE_VERSION = '0.0.0-private';
-const PYTHON_PACKAGE_VERSION = '0.1.0';
 
 export {
   RUNTIME_WHEEL_DISTRIBUTION_NAME,
@@ -51,28 +48,15 @@ const CONNECTOR_PACKAGE_NAMES = INTERNAL_NPM_WORKSPACE_PACKAGES
 
 const NPM_ARTIFACT_BUILD_ORDER = ['@ktx/llm', '@ktx/context', ...CONNECTOR_PACKAGE_NAMES, '@ktx/cli'];
 
-const ordersSource = {
-  name: 'orders',
-  table: 'public.orders',
-  grain: ['id'],
-  columns: [
-    { name: 'id', type: 'number' },
-    { name: 'status', type: 'string' },
-    { name: 'amount', type: 'number' },
-  ],
-  measures: [{ name: 'order_count', expr: 'count(*)' }],
-  joins: [],
-};
-
 function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
 
 function npmPackageTarballName(packageName) {
-  if (packageName === PUBLIC_NPM_PACKAGE_NAME) {
-    return publicNpmPackageTarballName(PUBLIC_NPM_PACKAGE_VERSION);
+  if (packageName !== PUBLIC_NPM_PACKAGE_NAME) {
+    throw new Error(`Unsupported npm artifact package: ${packageName}`);
   }
-  return `${packageName.replace('@ktx/', 'ktx-')}-${PACKAGE_VERSION}.tgz`;
+  return publicNpmPackageTarballName(PUBLIC_NPM_PACKAGE_VERSION);
 }
 
 function npmPackageTarballs(npmDir) {
@@ -126,16 +110,6 @@ export function buildArtifactCommands(layout) {
       args: ['scripts/build-python-runtime-wheel.mjs'],
       cwd: layout.rootDir,
     },
-    {
-      command: 'uv',
-      args: ['build', '--package', 'ktx-sl', '--out-dir', layout.pythonDir],
-      cwd: layout.rootDir,
-    },
-    {
-      command: 'uv',
-      args: ['build', '--package', 'ktx-daemon', '--out-dir', layout.pythonDir],
-      cwd: layout.rootDir,
-    },
     publicPackageCommand,
   ];
 }
@@ -159,7 +133,7 @@ function normalizePythonDistributionName(name) {
   return name.replaceAll('-', '_');
 }
 
-function findOne(files, distributionName, suffix, label, pythonDir, version = PYTHON_PACKAGE_VERSION) {
+function findOne(files, distributionName, suffix, label, pythonDir, version) {
   const normalized = normalizePythonDistributionName(distributionName);
   const found = files.find((file) => file.startsWith(`${normalized}-${version}`) && file.endsWith(suffix));
   if (!found) {
@@ -180,10 +154,6 @@ export async function findPythonArtifacts(pythonDir) {
       pythonDir,
       RUNTIME_WHEEL_PACKAGE_VERSION,
     ),
-    ktxSlWheel: findOne(files, 'ktx-sl', '.whl', 'ktx-sl wheel', pythonDir),
-    ktxSlSdist: findOne(files, 'ktx-sl', '.tar.gz', 'ktx-sl source distribution', pythonDir),
-    ktxDaemonWheel: findOne(files, 'ktx-daemon', '.whl', 'ktx-daemon wheel', pythonDir),
-    ktxDaemonSdist: findOne(files, 'ktx-daemon', '.tar.gz', 'ktx-daemon source distribution', pythonDir),
   };
 }
 
@@ -193,47 +163,6 @@ export function artifactManifestPath(layout) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf-8'));
-}
-
-function readProjectBlock(toml, sourcePath) {
-  const lines = toml.split(/\r?\n/);
-  const block = [];
-  let inProject = false;
-
-  for (const line of lines) {
-    if (/^\[project\]\s*$/.test(line)) {
-      inProject = true;
-      continue;
-    }
-    if (inProject && /^\[.*\]\s*$/.test(line)) {
-      break;
-    }
-    if (inProject) {
-      block.push(line);
-    }
-  }
-
-  if (!inProject) {
-    throw new Error(`Missing [project] table in ${sourcePath}`);
-  }
-  return block.join('\n');
-}
-
-function readTomlStringField(projectBlock, fieldName, sourcePath) {
-  const match = projectBlock.match(new RegExp(`^${fieldName}\\s*=\\s*"([^"]+)"\\s*$`, 'm'));
-  if (!match) {
-    throw new Error(`Missing project.${fieldName} in ${sourcePath}`);
-  }
-  return match[1];
-}
-
-async function readPyprojectMetadata(path) {
-  const toml = await readFile(path, 'utf-8');
-  const projectBlock = readProjectBlock(toml, path);
-  return {
-    name: readTomlStringField(projectBlock, 'name', path),
-    version: readTomlStringField(projectBlock, 'version', path),
-  };
 }
 
 function releaseMetadataEntry({ ecosystem, packageName, packageRoot, packageVersion, privatePackage }) {
@@ -269,25 +198,9 @@ export async function packageReleaseMetadata(rootDir = scriptRootDir()) {
   const npmPackages = await Promise.all(
     NPM_ARTIFACT_PACKAGES.map((packageInfo) => readNpmPackageMetadata(rootDir, packageInfo)),
   );
-  const ktxSlPackage = await readPyprojectMetadata(join(rootDir, 'python', 'ktx-sl', 'pyproject.toml'));
-  const ktxDaemonPackage = await readPyprojectMetadata(join(rootDir, 'python', 'ktx-daemon', 'pyproject.toml'));
 
   return [
     ...npmPackages,
-    releaseMetadataEntry({
-      ecosystem: 'python',
-      packageName: ktxSlPackage.name,
-      packageRoot: 'python/ktx-sl',
-      packageVersion: ktxSlPackage.version,
-      privatePackage: false,
-    }),
-    releaseMetadataEntry({
-      ecosystem: 'python',
-      packageName: ktxDaemonPackage.name,
-      packageRoot: 'python/ktx-daemon',
-      packageVersion: ktxDaemonPackage.version,
-      privatePackage: false,
-    }),
     releaseMetadataEntry({
       ecosystem: 'python',
       packageName: RUNTIME_WHEEL_DISTRIBUTION_NAME,
@@ -324,26 +237,6 @@ function artifactPackageRecords(layout, pythonArtifacts, packages) {
       artifactKind: 'wheel',
       artifactPath: pythonArtifacts.runtimeWheel,
       metadata: requirePackageMetadata(packagesByName, RUNTIME_WHEEL_DISTRIBUTION_NAME),
-    },
-    {
-      artifactKind: 'wheel',
-      artifactPath: pythonArtifacts.ktxSlWheel,
-      metadata: requirePackageMetadata(packagesByName, 'ktx-sl'),
-    },
-    {
-      artifactKind: 'sdist',
-      artifactPath: pythonArtifacts.ktxSlSdist,
-      metadata: requirePackageMetadata(packagesByName, 'ktx-sl'),
-    },
-    {
-      artifactKind: 'wheel',
-      artifactPath: pythonArtifacts.ktxDaemonWheel,
-      metadata: requirePackageMetadata(packagesByName, 'ktx-daemon'),
-    },
-    {
-      artifactKind: 'sdist',
-      artifactPath: pythonArtifacts.ktxDaemonSdist,
-      metadata: requirePackageMetadata(packagesByName, 'ktx-daemon'),
     },
   ];
 }
@@ -522,10 +415,6 @@ export async function copyRuntimeWheelAssets(layout, pythonArtifacts) {
     )}\n`,
   );
   return { assetDir, wheelPath, manifestPath };
-}
-
-export function pythonArtifactInstallArgs(python, pythonArtifacts) {
-  return ['pip', 'install', '--python', python, pythonArtifacts.runtimeWheel];
 }
 
 function runCommand(command, args, options = {}) {
@@ -1227,36 +1116,6 @@ try {
 `;
 }
 
-export function pythonVerifySource() {
-  return `
-import importlib.metadata
-
-import semantic_layer
-import ktx_daemon
-
-assert importlib.metadata.version("kaelio-ktx") == "0.1.0"
-assert semantic_layer is not None
-assert ktx_daemon.PACKAGE_NAME == "ktx-daemon"
-`;
-}
-
-function pythonExecutable(projectDir) {
-  if (process.platform === 'win32') {
-    return join(projectDir, '.venv', 'Scripts', 'python.exe');
-  }
-  return join(projectDir, '.venv', 'bin', 'python');
-}
-
-export function npmSmokePythonEnv(projectDir, baseEnv = process.env) {
-  const binDir = process.platform === 'win32' ? join(projectDir, '.venv', 'Scripts') : join(projectDir, '.venv', 'bin');
-  const existingPath = baseEnv.PATH ?? '';
-
-  return {
-    ...baseEnv,
-    PATH: existingPath ? `${binDir}${delimiter}${existingPath}` : binDir,
-  };
-}
-
 async function buildArtifacts(layout) {
   await rm(layout.artifactDir, { recursive: true, force: true });
   await mkdir(layout.npmDir, { recursive: true });
@@ -1322,32 +1181,12 @@ async function verifyNpmDemoArtifacts(layout, tmpRoot) {
   await runCommand('node', ['verify-installed-demo.mjs'], { cwd: projectDir });
 }
 
-async function verifyPythonArtifacts(layout, tmpRoot) {
-  const pythonArtifacts = await findPythonArtifacts(layout.pythonDir);
-
-  const projectDir = join(tmpRoot, 'python-clean-install');
-  await mkdir(projectDir, { recursive: true });
-  const python = pythonExecutable(projectDir);
-  await writeFile(join(projectDir, 'verify_python.py'), pythonVerifySource());
-
-  await runCommand('uv', ['venv', '.venv'], { cwd: projectDir });
-  await runCommand('uv', pythonArtifactInstallArgs(python, pythonArtifacts), {
-    cwd: projectDir,
-  });
-  await runCommand(python, ['verify_python.py'], { cwd: projectDir });
-  await runCommand(python, ['-m', 'ktx_daemon', 'semantic-validate'], {
-    cwd: projectDir,
-    input: `${JSON.stringify({ sources: [ordersSource], dialect: 'postgres' })}\n`,
-  });
-}
-
 async function verifyArtifacts(layout) {
   await verifyArtifactManifest(layout);
 
   const tmpRoot = await mkdtemp(join(tmpdir(), 'ktx-artifacts-'));
   try {
     await verifyNpmArtifacts(layout, tmpRoot);
-    await verifyPythonArtifacts(layout, tmpRoot);
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }

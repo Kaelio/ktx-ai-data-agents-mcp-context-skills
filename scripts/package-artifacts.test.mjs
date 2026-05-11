@@ -22,8 +22,6 @@ import {
   npmVerifySource,
   packageArtifactLayout,
   packageReleaseMetadata,
-  pythonArtifactInstallArgs,
-  pythonVerifySource,
   verifyArtifactManifest,
   writeArtifactManifest,
 } from './package-artifacts.mjs';
@@ -49,17 +47,6 @@ async function writeReleaseMetadataInputs(root) {
       private: true,
     });
   }
-
-  await mkdir(join(root, 'python', 'ktx-sl'), { recursive: true });
-  await mkdir(join(root, 'python', 'ktx-daemon'), { recursive: true });
-  await writeFile(
-    join(root, 'python', 'ktx-sl', 'pyproject.toml'),
-    ['[project]', 'name = "ktx-sl"', 'version = "0.1.0"', ''].join('\n'),
-  );
-  await writeFile(
-    join(root, 'python', 'ktx-daemon', 'pyproject.toml'),
-    ['[project]', 'name = "ktx-daemon"', 'version = "0.1.0"', ''].join('\n'),
-  );
 }
 
 async function writeUploadableArtifactFixtures(layout) {
@@ -75,10 +62,6 @@ async function writeUploadableArtifactFixtures(layout) {
       join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
       'kaelio-ktx-runtime-wheel',
     ],
-    [join(layout.pythonDir, 'ktx_sl-0.1.0-py3-none-any.whl'), 'ktx-sl-wheel'],
-    [join(layout.pythonDir, 'ktx_sl-0.1.0.tar.gz'), 'ktx-sl-sdist'],
-    [join(layout.pythonDir, 'ktx_daemon-0.1.0-py3-none-any.whl'), 'ktx-daemon-wheel'],
-    [join(layout.pythonDir, 'ktx_daemon-0.1.0.tar.gz'), 'ktx-daemon-sdist'],
   ]);
 
   for (const [path, contents] of fileContents) {
@@ -99,7 +82,7 @@ describe('packageArtifactLayout', () => {
 });
 
 describe('buildArtifactCommands', () => {
-  it('builds TypeScript packages in dependency order before packing npm artifacts and builds Python packages', () => {
+  it('builds TypeScript packages and the runtime wheel before packing npm artifacts', () => {
     const layout = packageArtifactLayout('/repo/ktx');
     const commands = buildArtifactCommands(layout);
 
@@ -108,18 +91,14 @@ describe('buildArtifactCommands', () => {
       NPM_BUILD_PACKAGE_ORDER.map((packageName) => ['pnpm', ['--filter', packageName, 'run', 'build']]),
     );
     assert.deepEqual(
-      commands.slice(NPM_BUILD_PACKAGE_ORDER.length, NPM_BUILD_PACKAGE_ORDER.length + 3).map((command) => [
+      commands.slice(NPM_BUILD_PACKAGE_ORDER.length, NPM_BUILD_PACKAGE_ORDER.length + 1).map((command) => [
         command.command,
         command.args,
       ]),
-      [
-        [process.execPath, ['scripts/build-python-runtime-wheel.mjs']],
-        ['uv', ['build', '--package', 'ktx-sl', '--out-dir', '/repo/ktx/dist/artifacts/python']],
-        ['uv', ['build', '--package', 'ktx-daemon', '--out-dir', '/repo/ktx/dist/artifacts/python']],
-      ],
+      [[process.execPath, ['scripts/build-python-runtime-wheel.mjs']]],
     );
     assert.deepEqual(
-      commands.slice(NPM_BUILD_PACKAGE_ORDER.length + 3).map((command) => [command.command, command.args]),
+      commands.slice(NPM_BUILD_PACKAGE_ORDER.length + 1).map((command) => [command.command, command.args]),
       [[process.execPath, ['scripts/build-public-npm-package.mjs']]],
     );
   });
@@ -142,22 +121,6 @@ describe('packageReleaseMetadata', () => {
         },
         {
           ecosystem: 'python',
-          packageName: 'ktx-sl',
-          packageRoot: 'python/ktx-sl',
-          packageVersion: '0.1.0',
-          private: false,
-          releaseMode: 'ci-artifact-only',
-        },
-        {
-          ecosystem: 'python',
-          packageName: 'ktx-daemon',
-          packageRoot: 'python/ktx-daemon',
-          packageVersion: '0.1.0',
-          private: false,
-          releaseMode: 'ci-artifact-only',
-        },
-        {
-          ecosystem: 'python',
           packageName: 'kaelio-ktx',
           packageRoot: 'python/runtime-wheel',
           packageVersion: '0.1.0',
@@ -172,21 +135,13 @@ describe('packageReleaseMetadata', () => {
 });
 
 describe('findPythonArtifacts', () => {
-  it('finds one wheel and one source distribution for each Python package', async () => {
+  it('finds the bundled runtime wheel only', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-test-'));
     try {
       await writeFile(join(root, 'kaelio_ktx-0.1.0-py3-none-any.whl'), '');
-      await writeFile(join(root, 'ktx_sl-0.1.0-py3-none-any.whl'), '');
-      await writeFile(join(root, 'ktx_sl-0.1.0.tar.gz'), '');
-      await writeFile(join(root, 'ktx_daemon-0.1.0-py3-none-any.whl'), '');
-      await writeFile(join(root, 'ktx_daemon-0.1.0.tar.gz'), '');
 
       assert.deepEqual(await findPythonArtifacts(root), {
         runtimeWheel: join(root, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
-        ktxSlWheel: join(root, 'ktx_sl-0.1.0-py3-none-any.whl'),
-        ktxSlSdist: join(root, 'ktx_sl-0.1.0.tar.gz'),
-        ktxDaemonWheel: join(root, 'ktx_daemon-0.1.0-py3-none-any.whl'),
-        ktxDaemonSdist: join(root, 'ktx_daemon-0.1.0.tar.gz'),
       });
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -237,22 +192,6 @@ describe('artifact manifest', () => {
         [
           {
             ecosystem: 'python',
-            packageName: 'ktx-sl',
-            packageRoot: 'python/ktx-sl',
-            packageVersion: '0.1.0',
-            private: false,
-            releaseMode: 'ci-artifact-only',
-          },
-          {
-            ecosystem: 'python',
-            packageName: 'ktx-daemon',
-            packageRoot: 'python/ktx-daemon',
-            packageVersion: '0.1.0',
-            private: false,
-            releaseMode: 'ci-artifact-only',
-          },
-          {
-            ecosystem: 'python',
             packageName: 'kaelio-ktx',
             packageRoot: 'python/runtime-wheel',
             packageVersion: '0.1.0',
@@ -300,34 +239,6 @@ describe('artifact manifest', () => {
             packageVersion: '0.1.0',
             path: 'python/kaelio_ktx-0.1.0-py3-none-any.whl',
           },
-          {
-            artifactKind: 'wheel',
-            ecosystem: 'python',
-            packageName: 'ktx-daemon',
-            packageVersion: '0.1.0',
-            path: 'python/ktx_daemon-0.1.0-py3-none-any.whl',
-          },
-          {
-            artifactKind: 'sdist',
-            ecosystem: 'python',
-            packageName: 'ktx-daemon',
-            packageVersion: '0.1.0',
-            path: 'python/ktx_daemon-0.1.0.tar.gz',
-          },
-          {
-            artifactKind: 'wheel',
-            ecosystem: 'python',
-            packageName: 'ktx-sl',
-            packageVersion: '0.1.0',
-            path: 'python/ktx_sl-0.1.0-py3-none-any.whl',
-          },
-          {
-            artifactKind: 'sdist',
-            ecosystem: 'python',
-            packageName: 'ktx-sl',
-            packageVersion: '0.1.0',
-            path: 'python/ktx_sl-0.1.0.tar.gz',
-          },
         ],
       );
 
@@ -361,7 +272,7 @@ describe('verifyArtifactManifest', () => {
 
       assert.equal(manifest.schemaVersion, 2);
       assert.equal(manifest.sourceRevision, 'abc123');
-      assert.equal(manifest.files.length, NPM_ARTIFACT_PACKAGES.length + 5);
+      assert.equal(manifest.files.length, NPM_ARTIFACT_PACKAGES.length + 1);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -471,29 +382,6 @@ describe('copyRuntimeWheelAssets', () => {
   });
 });
 
-describe('pythonArtifactInstallArgs', () => {
-  it('installs the built Python wheels by artifact path', () => {
-    const args = pythonArtifactInstallArgs('/tmp/smoke/.venv/bin/python', {
-      runtimeWheel: '/repo/ktx/dist/artifacts/python/kaelio_ktx-0.1.0-py3-none-any.whl',
-      ktxSlWheel: '/repo/ktx/dist/artifacts/python/ktx_sl-0.1.0-py3-none-any.whl',
-      ktxSlSdist: '/repo/ktx/dist/artifacts/python/ktx_sl-0.1.0.tar.gz',
-      ktxDaemonWheel: '/repo/ktx/dist/artifacts/python/ktx_daemon-0.1.0-py3-none-any.whl',
-      ktxDaemonSdist: '/repo/ktx/dist/artifacts/python/ktx_daemon-0.1.0.tar.gz',
-    });
-
-    assert.deepEqual(args, [
-      'pip',
-      'install',
-      '--python',
-      '/tmp/smoke/.venv/bin/python',
-      '/repo/ktx/dist/artifacts/python/kaelio_ktx-0.1.0-py3-none-any.whl',
-    ]);
-    assert.equal(args.includes('ktx-daemon'), false);
-    assert.equal(args.includes('ktx-sl'), false);
-    assert.equal(args.includes('--find-links'), false);
-  });
-});
-
 describe('verifyNpmArtifacts', () => {
   it('does not prepare an external Python environment for the npm smoke', async () => {
     const source = await readFile(new URL('./package-artifacts.mjs', import.meta.url), 'utf8');
@@ -506,6 +394,20 @@ describe('verifyNpmArtifacts', () => {
     assert.doesNotMatch(body, /uv', \['venv', '\.venv'\]/);
     assert.doesNotMatch(body, /pythonArtifactInstallArgs/);
     assert.doesNotMatch(body, /npmSmokePythonEnv/);
+  });
+});
+
+describe('standalone Python artifact cleanup', () => {
+  it('does not build or verify standalone Python package artifacts', async () => {
+    const source = await readFile(new URL('./package-artifacts.mjs', import.meta.url), 'utf8');
+
+    assert.doesNotMatch(source, /uv', \['build', '--package', 'ktx-sl'/);
+    assert.doesNotMatch(source, /uv', \['build', '--package', 'ktx-daemon'/);
+    assert.doesNotMatch(source, /async function verifyPythonArtifacts/);
+    assert.doesNotMatch(source, /pythonArtifactInstallArgs/);
+    assert.doesNotMatch(source, /pythonVerifySource/);
+    assert.doesNotMatch(source, /ktx_sl-0\.1\.0/);
+    assert.doesNotMatch(source, /ktx_daemon-0\.1\.0/);
   });
 });
 
@@ -623,13 +525,5 @@ describe('verification snippets', () => {
       assert.match(source, /Object\.keys\(packageJson\.dependencies\)/);
       assert.match(source, /'@kaelio\/ktx'/);
     });
-  });
-
-  it('asserts the Python modules that clean installs must expose', () => {
-    const source = pythonVerifySource();
-
-    assert.match(source, /semantic_layer/);
-    assert.match(source, /ktx_daemon/);
-    assert.match(source, /importlib.metadata/);
   });
 });
