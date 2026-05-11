@@ -31,7 +31,7 @@ assert_unified_snapshot() {
   local manifest_path="$1"
   node - "$manifest_path" <<'NODE'
 const { dirname, join } = require('node:path');
-const { readFileSync, readdirSync } = require('node:fs');
+const { existsSync, readFileSync, readdirSync } = require('node:fs');
 
 const manifestPath = process.argv[2];
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -57,6 +57,28 @@ for (const legacyKey of legacyKeys) {
   assert(!(legacyKey in manifest), `Legacy manifest key is still present: ${legacyKey}`);
 }
 
+function assertPatternShards(root) {
+  const shardDir = join(root, 'patterns-input');
+  assert(existsSync(shardDir), 'Expected patterns-input shard directory');
+  const shardFiles = readdirSync(shardDir)
+    .filter((file) => /^part-\d{4}\.json$/.test(file))
+    .sort()
+    .map((file) => `patterns-input/${file}`);
+  assert(shardFiles.length > 0, 'Expected at least one pattern shard file');
+
+  for (const shardFile of shardFiles) {
+    const shard = JSON.parse(readFileSync(join(root, shardFile), 'utf8'));
+    assert(Array.isArray(shard.templates), `${shardFile}: expected templates array`);
+    assert(shard.templates.length > 0, `${shardFile}: expected at least one template`);
+    assert(
+      shard.templates.every((template) => Array.isArray(template.tablesTouched) && template.tablesTouched.length >= 2),
+      `${shardFile}: expected only cross-table pattern candidates`,
+    );
+  }
+
+  return shardFiles;
+}
+
 const root = dirname(manifestPath);
 const tableDir = join(root, 'tables');
 const tableFiles = readdirSync(tableDir).filter((file) => file.endsWith('.json')).sort();
@@ -70,10 +92,15 @@ assert(Array.isArray(firstTable.observedJoins), 'Expected observedJoins array');
 assert(Array.isArray(firstTable.topTemplates) && firstTable.topTemplates.length > 0, 'Expected topTemplates');
 
 const patterns = JSON.parse(readFileSync(join(root, 'patterns-input.json'), 'utf8'));
-assert(Array.isArray(patterns.templates) && patterns.templates.length > 0, 'Expected patterns-input templates');
+assert(Array.isArray(patterns.templates) && patterns.templates.length > 0, 'Expected patterns-input audit templates');
 assert(
   patterns.templates.every((template) => Array.isArray(template.tablesTouched) && template.tablesTouched.length > 0),
-  'Expected every pattern template to have touched tables',
+  'Expected every audit pattern template to have touched tables',
+);
+const shardFiles = assertPatternShards(root);
+assert(
+  shardFiles.length <= patterns.templates.length,
+  `Expected shard count ${shardFiles.length} to be no greater than audit template count ${patterns.templates.length}`,
 );
 NODE
 }
@@ -96,7 +123,7 @@ function assert(condition, message) {
 assert(record.status === 'done', `${label}: expected status done, got ${record.status}`);
 assert(record.adapter === 'historic-sql', `${label}: expected historic-sql adapter`);
 assert(record.connectionId === 'warehouse', `${label}: expected warehouse connection`);
-assert(record.rawFileCount >= 3, `${label}: expected manifest, patterns input, and at least one table file`);
+assert(record.rawFileCount >= 4, `${label}: expected manifest, audit patterns input, pattern shard, and at least one table file`);
 assert(Array.isArray(record.errors) && record.errors.length === 0, `${label}: expected no errors`);
 
 if (expectedWorkUnits === 'zero') {
@@ -104,7 +131,18 @@ if (expectedWorkUnits === 'zero') {
   assert(Array.isArray(record.workUnits) && record.workUnits.length === 0, `${label}: expected empty workUnits`);
 } else if (expectedWorkUnits === 'nonzero') {
   assert(record.workUnitCount > 0, `${label}: expected nonzero WorkUnits`);
-  assert(record.workUnits.some((unit) => unit.unitKey === 'historic-sql-patterns'), `${label}: expected patterns WorkUnit`);
+  const patternUnits = record.workUnits.filter((unit) => /^historic-sql-patterns-part-\d{4}$/.test(unit.unitKey));
+  assert(patternUnits.length > 0, `${label}: expected sharded patterns WorkUnit`);
+  for (const unit of patternUnits) {
+    assert(
+      unit.rawFiles.some((rawFile) => /^patterns-input\/part-\d{4}\.json$/.test(rawFile)),
+      `${label}: expected ${unit.unitKey} to read a pattern shard`,
+    );
+    assert(
+      !unit.rawFiles.includes('patterns-input.json'),
+      `${label}: expected ${unit.unitKey} not to schedule the full audit patterns input`,
+    );
+  }
   assert(record.workUnits.some((unit) => unit.unitKey.startsWith('historic-sql-table-')), `${label}: expected table WorkUnit`);
 } else {
   throw new Error(`${label}: unknown expected work unit mode ${expectedWorkUnits}`);
