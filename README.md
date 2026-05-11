@@ -206,7 +206,13 @@ npx ktx runtime status
 npx ktx runtime doctor
 npx ktx runtime start
 npx ktx runtime stop
+npx ktx runtime prune --dry-run
+npx ktx runtime prune --yes
 ```
+
+Use `runtime prune --dry-run` to preview stale runtime directories from older
+CLI versions. Add `--yes` to remove those stale directories after daemon
+processes are stopped.
 
 Commands such as `npx @kaelio/ktx sl query ... --yes` can install the core
 runtime lazily from the bundled wheel. Local embeddings remain lazy; prepare

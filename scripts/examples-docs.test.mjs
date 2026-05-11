@@ -146,6 +146,8 @@ describe('standalone example docs', () => {
     assert.match(rootReadme, /ktx runtime doctor/);
     assert.match(rootReadme, /ktx runtime start/);
     assert.match(rootReadme, /ktx runtime stop/);
+    assert.match(rootReadme, /ktx runtime prune --dry-run/);
+    assert.match(rootReadme, /ktx runtime prune --yes/);
     assert.match(rootReadme, /ktx serve --mcp stdio/);
     assert.doesNotMatch(rootReadme, /uv run ktx-daemon serve-http/);
     assert.doesNotMatch(rootReadme, /--semantic-compute-url http:\/\/127\.0\.0\.1:8765/);
@@ -158,6 +160,8 @@ describe('standalone example docs', () => {
     assert.match(readme, /managed Python runtime/);
     assert.match(readme, /ktx runtime status/);
     assert.match(readme, /ktx runtime doctor/);
+    assert.match(readme, /ktx runtime prune --dry-run/);
+    assert.match(readme, /ktx runtime prune --yes/);
     assert.doesNotMatch(readme, /@ktx\/context/);
     assert.doesNotMatch(readme, /@ktx\/cli/);
     assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);

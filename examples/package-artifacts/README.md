@@ -14,7 +14,9 @@ generated local project.
 The managed Python runtime smoke isolates `KTX_RUNTIME_ROOT`, verifies
 `ktx runtime status`, runs `ktx sl query --yes` to install the core runtime from
 the bundled wheel, checks `ktx runtime doctor`, starts and reuses the managed
-daemon, and stops it.
+daemon, stops it, previews a stale runtime with `ktx runtime prune --dry-run`,
+verifies confirmation is required, and removes the stale runtime with
+`ktx runtime prune --yes`.
 
 The Python smoke project still installs the Python artifacts directly because
 it verifies the standalone Python distributions that feed the bundled runtime
