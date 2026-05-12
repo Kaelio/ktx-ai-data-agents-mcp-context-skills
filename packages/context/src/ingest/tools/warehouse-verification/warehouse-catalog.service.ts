@@ -245,7 +245,11 @@ export class WarehouseCatalogService {
       comment: table.comment,
       description: table.description ?? firstDescription(table.descriptions),
       rowCount: profileTable?.rowCount ?? table.estimatedRows ?? null,
-      columns: table.columns.map((column) => {
+      columns: table.columns.map((rawColumn) => {
+        const column = rawColumn as KtxSchemaColumn & {
+          description?: string | null;
+          descriptions?: Record<string, string>;
+        };
         const profileColumn =
           profileColumns[columnKey(table, column.name)] ??
           Object.entries(profileColumns).find(

@@ -9,7 +9,7 @@ const discoverDataInputSchema = z.object({
   sourceName: z.string().optional(),
 });
 
-type DiscoverDataInput = z.infer<typeof discoverDataInputSchema>;
+type DiscoverDataInput = z.input<typeof discoverDataInputSchema>;
 
 export interface DiscoverDataStructured {
   wiki: unknown | null;

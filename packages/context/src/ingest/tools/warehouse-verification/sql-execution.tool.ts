@@ -9,7 +9,7 @@ const sqlExecutionInputSchema = z.object({
   rowLimit: z.number().int().positive().max(1000).optional().default(100),
 });
 
-type SqlExecutionInput = z.infer<typeof sqlExecutionInputSchema>;
+type SqlExecutionInput = z.input<typeof sqlExecutionInputSchema>;
 
 export interface SqlExecutionStructured {
   headers: string[];
