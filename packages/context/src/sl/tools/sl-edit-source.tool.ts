@@ -1,6 +1,6 @@
 import YAML from 'yaml';
 import { z } from 'zod';
-import { addTouchedSlSource, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { addTouchedSlSource, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
 import { applySqlEdits } from '../../tools/sql-edit-replacer.js';
 import { normalizeSemanticLayerDescriptions } from '../description-normalization.js';
 import type { SemanticLayerSource } from '../types.js';
@@ -25,6 +25,10 @@ const slEditSourceInputSchema = z.object({
     .optional()
     .describe('Targeted exact-match search/replace edits on the raw YAML content.'),
   delete: z.boolean().optional().describe('Set to true to delete this source entirely'),
+  rawPaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('In ingest sessions, raw source file paths that directly support this SL action.'),
 });
 
 type SlEditSourceInput = z.infer<typeof slEditSourceInputSchema>;
@@ -75,6 +79,10 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
 
     const semanticLayerService = context.session?.semanticLayerService ?? this.semanticLayerService;
     const skipIndex = context.session?.isWorktreeScoped === true;
+    const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
+    if (!rawPathValidation.ok) {
+      return this.buildOutput(false, [rawPathValidation.error], sourceName);
+    }
 
     // Handle delete
     if (input.delete) {
@@ -88,6 +96,7 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
             key: sourceName,
             detail: 'Deleted source',
             targetConnectionId: actionTargetConnectionId(context.session.connectionId, connectionId),
+            ...(rawPathValidation.rawPaths ? { rawPaths: rawPathValidation.rawPaths } : {}),
           });
         }
         return this.buildOutput(true, [], sourceName, { yaml: undefined, commitHash: undefined });
@@ -184,6 +193,7 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
           key: sourceName,
           detail: `Applied ${editCount} edit(s)`,
           targetConnectionId: actionTargetConnectionId(context.session.connectionId, connectionId),
+          ...(rawPathValidation.rawPaths ? { rawPaths: rawPathValidation.rawPaths } : {}),
         });
       }
 

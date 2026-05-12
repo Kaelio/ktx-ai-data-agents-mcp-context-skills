@@ -46,6 +46,8 @@ If nothing is worth capturing, respond without calling any tool.
 4. `wiki_write` to create or update. Prefer merging into an existing page over creating a new one.
 5. `wiki_remove` only when a page is truly obsolete — not to replace stale content (update it instead).
 
+For bundle/external ingest, include `rawPaths` on every `wiki_write`/`wiki_remove` call with only the raw files that directly support that wiki action. This keeps ingest provenance tied to the actual source file, not every file in the WorkUnit.
+
 ## Keys, summaries, and content
 
 - **Keys** are short kebab-case topic identifiers: `leads-source-filter`, `revenue-definition`, `churn-calculation`. No namespacing, no prefixes.

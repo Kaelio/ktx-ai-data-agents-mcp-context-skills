@@ -201,6 +201,27 @@ describe('reconciliation emit tools', () => {
     expect(stageIndex.unmappedFallbacks).toEqual([]);
   });
 
+  it('rejects missing-table fallback decisions when the table resolves to an existing semantic source', async () => {
+    const stageIndex = makeStageIndex();
+    const tool = createEmitUnmappedFallbackTool({
+      stageIndex,
+      allowedPaths: new Set(['cards/revenue.json']),
+      tableRefExists: async (tableRef) => tableRef === 'orbit_analytics.mart_revenue_daily',
+    });
+
+    const output = await executeTool(tool, {
+      rawPath: 'cards/revenue.json',
+      reason: 'no_physical_table',
+      tableRef: 'orbit_analytics.mart_revenue_daily',
+      fallback: 'wiki_only',
+    });
+
+    expect(output).toContain(
+      'Error: tableRef "orbit_analytics.mart_revenue_daily" already resolves to a semantic source',
+    );
+    expect(stageIndex.unmappedFallbacks).toEqual([]);
+  });
+
   it('records explicit artifact resolutions for provenance rows', async () => {
     const stageIndex = makeStageIndex();
     const tool = createEmitArtifactResolutionTool({

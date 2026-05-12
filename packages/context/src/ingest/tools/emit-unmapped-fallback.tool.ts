@@ -5,6 +5,7 @@ import type { StageIndex, UnmappedFallbackRecord, UnmappedFallbackReason } from 
 interface EmitUnmappedFallbackDeps {
   stageIndex: StageIndex;
   allowedPaths: ReadonlySet<string>;
+  tableRefExists?: (tableRef: string) => Promise<boolean>;
 }
 
 const unmappedFallbackReasonSchema = z.enum([
@@ -49,6 +50,10 @@ function canonicalDetail(reason: UnmappedFallbackReason, tableRef: string | unde
   }
 }
 
+function requiresMissingTableValidation(reason: UnmappedFallbackReason): boolean {
+  return reason === 'no_physical_table' || reason === 'missing_target_table';
+}
+
 export function createEmitUnmappedFallbackTool(deps: EmitUnmappedFallbackDeps) {
   return tool({
     description:
@@ -69,6 +74,12 @@ export function createEmitUnmappedFallbackTool(deps: EmitUnmappedFallbackDeps) {
     execute: async (input): Promise<string> => {
       if (!deps.allowedPaths.has(input.rawPath)) {
         return `Error: rawPath "${input.rawPath}" is not available to this ingest stage`;
+      }
+      if (input.tableRef && requiresMissingTableValidation(input.reason) && deps.tableRefExists) {
+        const exists = await deps.tableRefExists(input.tableRef);
+        if (exists) {
+          return `Error: tableRef "${input.tableRef}" already resolves to a semantic source; do not record ${input.reason} for an existing table.`;
+        }
       }
 
       const base = canonicalDetail(input.reason, input.tableRef);

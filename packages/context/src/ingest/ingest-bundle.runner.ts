@@ -5,7 +5,7 @@ import pLimit from 'p-limit';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../core/index.js';
 import type { CaptureSession, MemoryAction } from '../memory/index.js';
-import type { SlValidationDeps } from '../sl/index.js';
+import type { SemanticLayerService, SemanticLayerSource, SlValidationDeps } from '../sl/index.js';
 import { createTouchedSlSources, type ToolContext, type ToolSession } from '../tools/index.js';
 import { actionTargetConnectionId } from './action-identity.js';
 import { NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN } from './adapters/notion/types.js';
@@ -84,6 +84,47 @@ function reportIdFromCreateResult(result: unknown): string | undefined {
   }
   const id = (result as { id?: unknown }).id;
   return typeof id === 'string' && id.length > 0 ? id : undefined;
+}
+
+function normalizeTableReference(value: string): string {
+  return value
+    .trim()
+    .replace(/["`]/g, '')
+    .replace(/[\[\]]/g, '')
+    .toLowerCase();
+}
+
+function finalReferenceSegment(value: string): string {
+  const parts = value.split('.').filter((part) => part.length > 0);
+  return parts.at(-1) ?? value;
+}
+
+function semanticSourceMatchesTableRef(source: SemanticLayerSource, tableRef: string): boolean {
+  const normalizedRef = normalizeTableReference(tableRef);
+  if (!normalizedRef) {
+    return false;
+  }
+
+  const normalizedSourceName = normalizeTableReference(source.name);
+  if (normalizedSourceName === normalizedRef) {
+    return true;
+  }
+
+  const table = typeof source.table === 'string' ? normalizeTableReference(source.table) : '';
+  if (table && table === normalizedRef) {
+    return true;
+  }
+
+  const refIsQualified = normalizedRef.includes('.');
+  if (refIsQualified && normalizedSourceName === finalReferenceSegment(normalizedRef)) {
+    return true;
+  }
+
+  return false;
+}
+
+function rawPathsForAction(action: MemoryAction, fallbackRawPaths: string[]): string[] {
+  return action.rawPaths && action.rawPaths.length > 0 ? [...new Set(action.rawPaths)] : fallbackRawPaths;
 }
 
 export class IngestBundleRunner {
@@ -279,6 +320,24 @@ export class IngestBundleRunner {
       }),
     );
     return blocks.join('\n\n');
+  }
+
+  private async tableRefExistsInSemanticLayer(
+    semanticLayerService: SemanticLayerService,
+    connectionIds: string[],
+    tableRef: string,
+  ): Promise<boolean> {
+    for (const connectionId of connectionIds) {
+      try {
+        const sources = await semanticLayerService.loadAllSources(connectionId);
+        if (sources.some((source) => semanticSourceMatchesTableRef(source, tableRef))) {
+          return true;
+        }
+      } catch {
+        // Fallback diagnostics should not fail an ingest stage if an index lookup is temporarily unavailable.
+      }
+    }
+    return false;
   }
 
   private resolveContextCuratorBudget(
@@ -603,6 +662,7 @@ export class IngestBundleRunner {
             preHead: sessionWorktree.baseSha,
             touchedSlSources: session.touchedSlSources,
             actions: sessionActions,
+            allowedRawPaths: new Set(wu.rawFiles),
             semanticLayerService: scopedSemanticLayerService,
             wikiService: scopedWikiService,
             configService: sessionWorktree.config,
@@ -667,6 +727,8 @@ export class IngestBundleRunner {
             emit_unmapped_fallback: createEmitUnmappedFallbackTool({
               stageIndex,
               allowedPaths: new Set(wu.rawFiles),
+              tableRefExists: (tableRef) =>
+                this.tableRefExistsInSemanticLayer(scopedSemanticLayerService, slConnectionIds, tableRef),
             }),
           };
 
@@ -825,6 +887,10 @@ export class IngestBundleRunner {
       const reconcileActions: MemoryAction[] = [];
       const rcScopedWiki = this.deps.wikiService.forWorktree(sessionWorktree.workdir);
       const rcScopedSl = this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir);
+      const reconciliationAllowedRawPaths = new Set<string>([
+        ...currentHashes.keys(),
+        ...(eviction?.deletedRawPaths ?? []),
+      ]);
 
       const rcToolSession: ToolSession = {
         connectionId: job.connectionId,
@@ -832,6 +898,7 @@ export class IngestBundleRunner {
         preHead: reconcileSession.preHead,
         touchedSlSources: reconcileSession.touchedSlSources,
         actions: reconcileActions,
+        allowedRawPaths: reconciliationAllowedRawPaths,
         semanticLayerService: rcScopedSl,
         wikiService: rcScopedWiki,
         configService: sessionWorktree.config,
@@ -896,6 +963,7 @@ export class IngestBundleRunner {
         emit_unmapped_fallback: createEmitUnmappedFallbackTool({
           stageIndex,
           allowedPaths: allStagedPaths,
+          tableRefExists: (tableRef) => this.tableRefExistsInSemanticLayer(rcScopedSl, slConnectionIds, tableRef),
         }),
       };
 
@@ -1153,24 +1221,32 @@ export class IngestBundleRunner {
         return a.type === 'created' ? 'source_created' : 'measure_added';
       };
       const producedPaths = new Set<string>();
+      const pushActionProvenance = (rawPath: string, action: MemoryAction): void => {
+        const hash = currentHashes.get(rawPath) ?? 'unknown';
+        provenanceRows.push({
+          connectionId: job.connectionId,
+          sourceKey: job.sourceKey,
+          syncId,
+          rawPath,
+          rawContentHash: hash,
+          artifactKind: action.target,
+          artifactKey: action.key,
+          targetConnectionId: action.target === 'sl' ? actionTargetConnectionId(action, job.connectionId) : null,
+          artifactContentHash: null,
+          actionType: actionToType(action),
+        });
+        producedPaths.add(rawPath);
+      };
       for (const wu of stageIndex.workUnits) {
-        for (const rawPath of wu.rawFiles) {
-          const hash = currentHashes.get(rawPath) ?? 'unknown';
-          for (const action of wu.actions) {
-            provenanceRows.push({
-              connectionId: job.connectionId,
-              sourceKey: job.sourceKey,
-              syncId,
-              rawPath,
-              rawContentHash: hash,
-              artifactKind: action.target,
-              artifactKey: action.key,
-              targetConnectionId: action.target === 'sl' ? (action.targetConnectionId ?? null) : null,
-              artifactContentHash: null,
-              actionType: actionToType(action),
-            });
-            producedPaths.add(rawPath);
+        for (const action of wu.actions) {
+          for (const rawPath of rawPathsForAction(action, wu.rawFiles)) {
+            pushActionProvenance(rawPath, action);
           }
+        }
+      }
+      for (const action of reconcileActions) {
+        for (const rawPath of action.rawPaths ?? []) {
+          pushActionProvenance(rawPath, action);
         }
       }
       for (const resolution of stageIndex.artifactResolutions ?? []) {

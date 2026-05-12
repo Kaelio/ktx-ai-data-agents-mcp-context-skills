@@ -16,6 +16,7 @@ const ingestActionSchema = z.object({
   key: z.string(),
   detail: z.string(),
   targetConnectionId: z.string().nullable().default(null),
+  rawPaths: z.array(z.string()).optional(),
 });
 
 const touchedSlSourceSchema = z.object({

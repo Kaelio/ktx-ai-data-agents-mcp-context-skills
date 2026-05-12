@@ -34,6 +34,7 @@ export interface MemoryAction {
   key: string;
   detail: string;
   targetConnectionId?: string | null;
+  rawPaths?: string[];
 }
 
 export interface MemoryAgentResult {

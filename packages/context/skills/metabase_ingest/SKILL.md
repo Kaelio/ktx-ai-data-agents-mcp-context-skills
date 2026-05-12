@@ -49,7 +49,8 @@ Use `resultMetadata` to:
 For each card:
 1. Analyze `resolvedSql` + `resultMetadata`: identify base tables, aggregations, joins, filters, column types.
 2. **REQUIRED before any write**: call `sl_discover` for every candidate target source name. The response tells you whether the name is manifest-backed (`Type: table` or `Type: sql`). For manifest-backed names you MUST use the overlay shape (`name:` + `measures:`/`segments:`/`description:` only — no `sql:`, `table:`, `grain:`, or `columns:`); the tool will reject a standalone write and you'll have wasted the call. If `sl_discover` returns nothing for the name, you can write a standalone source. Also call `sl_read_source` on existing sources you intend to extend so you don't duplicate measures.
-3. Decide:
+3. Include `rawPaths: ["cards/<id>.json"]` on every `sl_write_source`, `sl_edit_source`, and `wiki_write` call. If one artifact generalizes multiple near-duplicate cards, include each contributing card path and no unrelated cards.
+4. Decide:
    - Simple aggregation on a table that already has a source → `sl_edit_source` to add a measure.
    - Join between tables that should be linked in the SL graph → `sl_edit_source` to add a join.
    - Complex derived SQL (CTEs, multi-layer aggregation, scoring models) → `sl_write_source` with `source_type: sql`. When the SQL projects/filters from a single manifest-backed base table, set `inherits_columns_from: <manifest_key>` so columns inherit type and description from the manifest — see `sl_capture` skill for the slim form. Use `sl_discover` to discover the manifest key from the table reference in the SQL (it accepts `MARTS.CONSIGNMENTS`, `ANALYTICS.MARTS.CONSIGNMENTS`, or `CONSIGNMENTS`).
@@ -164,7 +165,7 @@ After Steps A and B, your SQL must:
 - Reference no aliases that aren't defined inside the SQL itself.
 - Be valid as a standalone subquery (the validator runs `SELECT * FROM (your_sql) LIMIT 1`).
 
-If `resolutionStatus: "fallback"` and the SQL is still complex enough that you can't confidently translate it, **skip the card** rather than writing broken SQL. Call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "parse_error"`, `detail: "metabase_sql_untranslated"`, and `fallback: "flagged"`.
+If `resolutionStatus: "fallback"` and the SQL is still complex enough that you can't confidently translate it, **skip the card** rather than writing broken SQL. Call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "parse_error"`, `clarification: "metabase_sql_untranslated"`, and `fallback: "flagged"`.
 
 ## Join-graph connectivity
 
@@ -175,7 +176,7 @@ For `source_type: table`:
 For `source_type: sql`:
 - The validator parses your SQL and rejects the write when a referenced manifest table has a viable projected local key but no declared `joins:` entry. Add the join only after confirming the output key and target grain match.
 - If `sl_discover` resolves the table, it is not outside the manifest. Do not write an `unmapped-table-*` fallback for resolved `orbit_raw`, `mart`, or other manifest-backed sources just because they appear inside card SQL.
-- If `sl_discover` cannot resolve a referenced table at all, write a single-line `wiki_write` with key `unmapped-table-<table_name>` so the gap is documented, then call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "missing_target_table"`, and `fallback: "wiki_only"`.
+- If `sl_discover` cannot resolve a referenced table at all, write a single-line `wiki_write` with key `unmapped-table-<table_name>` and `rawPaths: ["cards/<id>.json"]` so the gap is documented, then call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "missing_target_table"`, `tableRef: "<table_name>"`, and `fallback: "wiki_only"`. Do not use this fallback if `sl_discover` resolved the table/source.
 
 Joins on manifest-backed names compose: the manifest's joins are inherited automatically, and any overlay `joins:` are merged on top (deduped by `to` + `on`). Use `disable_joins: ["<on-clause>"]` in the overlay to suppress a specific manifest join. If `sl_discover` shows a manifest-backed source with `Joins: 0` and the warehouse FK metadata is genuinely absent, declaring application-level joins via the overlay is fair game — bootstrap with `sl_write_source` (overlay shape above), then refine via `sl_edit_source`.
 

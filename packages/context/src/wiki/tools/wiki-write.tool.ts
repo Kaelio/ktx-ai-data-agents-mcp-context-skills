@@ -4,7 +4,7 @@ import type { KnowledgeEventPort } from '../ports.js';
 type BlockScope = 'GLOBAL' | 'USER';
 import { KnowledgeWikiService, type WikiFrontmatter } from '../index.js';
 import { applySqlEdits } from '../../tools/sql-edit-replacer.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
 
 const MAX_USER_BLOCKS = 100;
 const SYSTEM_AUTHOR = 'System User';
@@ -37,6 +37,10 @@ const wikiWriteInputSchema = z.object({
   representative_sql: z.string().optional(),
   usage: historicSqlUsageFrontmatterSchema.optional(),
   fingerprints: z.array(z.string()).optional(),
+  rawPaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('In ingest sessions, raw source file paths that directly support this wiki action.'),
 });
 
 type WikiWriteInput = z.infer<typeof wikiWriteInputSchema>;
@@ -156,6 +160,13 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
     const wikiService = context.session?.wikiService ?? this.wikiService;
     const writesGlobal = !!context.session;
     const skipIndex = context.session?.isWorktreeScoped === true;
+    const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
+    if (!rawPathValidation.ok) {
+      return {
+        markdown: `Error: ${rawPathValidation.error}`,
+        structured: { success: false, key: input.key },
+      };
+    }
 
     const scope: BlockScope = writesGlobal ? 'GLOBAL' : 'USER';
     const scopeId = scope === 'USER' ? context.userId : null;
@@ -261,7 +272,13 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
 
     const action = existing ? 'updated' : 'created';
     if (context.session) {
-      context.session.actions.push({ target: 'wiki', type: action, key: input.key, detail: input.summary });
+      context.session.actions.push({
+        target: 'wiki',
+        type: action,
+        key: input.key,
+        detail: input.summary,
+        ...(rawPathValidation.rawPaths ? { rawPaths: rawPathValidation.rawPaths } : {}),
+      });
     }
 
     // When the LLM used `replacements` (edit mode), it doesn't have the

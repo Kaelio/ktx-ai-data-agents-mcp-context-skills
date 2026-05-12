@@ -43,6 +43,7 @@ When SL is allowed:
 - **Overlay** when the view is a thin wrapper over a manifest table (`sql_table_name:` matches a manifest entry). Do not repeat base columns or grain.
 - **Standalone** when the view uses `derived_table:` or `sql_always_where:`. `sl_write_source` rejects overlays whose name has no manifest entry; that error points here.
 - **Skip** a view with only `view:`, `sql_table_name:`, and bare `dimension:` entries (no `measure:`, `description:`, `derived_table:`, `sql_always_where:`, `join:`). The pre-filter already short-circuits those.
+- Include `rawPaths` on every `sl_write_source`/`sl_edit_source` call with the exact LookML raw file(s) that support the action.
 
 ## Preflight: never guess column names
 

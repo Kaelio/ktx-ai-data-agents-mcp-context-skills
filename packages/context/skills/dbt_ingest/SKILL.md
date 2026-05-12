@@ -27,6 +27,8 @@ For dbt context-source ingest, the dbt connection is usually not the warehouse c
 
 If a `models:` entry has no `columns:` block, or the available raw files do not confirm the physical column names, do **not** synthesize a full standalone source. Write a wiki note or a description-only overlay for the resolved manifest table instead. If a business metric is described but its referenced column is not confirmed in the warehouse schema, omit the measure and capture the unresolved intent in the wiki.
 
+Include `rawPaths` on every `wiki_write`, `sl_write_source`, and `sl_edit_source` call with only the dbt YAML files that directly support the action.
+
 After every `sl_write_source`, call `sl_validate`. A validation error saying a declared column or measure reference is absent from the physical table is a hard stop: re-read the warehouse-backed source and rewrite with confirmed names, or remove the invalid SL fields.
 
 ## 1.1 test hints (descriptions / meta)
