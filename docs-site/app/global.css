@@ -262,6 +262,74 @@ figure[data-rehype-pretty-code-figure]:has(.ktx-code) {
   color: #c8c3bc !important;
 }
 
+/* ── Mode D: Output preview (wizard prompts, status output) ── */
+.ktx-code-output {
+  background: var(--color-fd-muted);
+  border: 1px solid var(--color-fd-border);
+  border-left: 3px solid color-mix(in oklch, var(--color-fd-primary) 50%, var(--color-fd-border));
+  position: relative;
+  box-shadow: 0 1px 2px rgba(27, 27, 24, 0.02);
+}
+
+.dark .ktx-code-output {
+  background: #111a1e;
+  border-color: rgba(255, 255, 255, 0.05);
+  border-left-color: rgba(34, 211, 238, 0.25);
+}
+
+.ktx-code-output:hover {
+  border-color: color-mix(in oklch, var(--color-fd-primary) 25%, var(--color-fd-border));
+  border-left-color: var(--color-fd-primary);
+}
+
+.dark .ktx-code-output:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+  border-left-color: rgba(34, 211, 238, 0.45);
+}
+
+.ktx-code-output-label {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-fd-muted-foreground);
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ktx-code-output-copy {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.2s var(--ktx-ease), transform 0.2s var(--ktx-ease);
+  z-index: 2;
+}
+
+.ktx-code-output:hover .ktx-code-output-copy {
+  opacity: 0.5;
+  transform: translateY(0);
+}
+
+.ktx-code-output:hover .ktx-code-output-label {
+  opacity: 0;
+}
+
+.ktx-code-body-output {
+  background: transparent !important;
+  color: var(--ktx-ink-soft) !important;
+}
+
+.dark .ktx-code-body-output {
+  color: #8a9da6 !important;
+}
+
 /* ── Mode B: VS Code tab (filename) ───────── */
 .ktx-code-tab {
   background: var(--color-fd-card);
@@ -495,14 +563,20 @@ th {
   opacity: 0.7;
 }
 
+/* Hide the vertical indicator lines in sidebar sections */
+#nd-sidebar div[data-state]::before,
+#nd-sidebar a[data-active]::before {
+  content: none !important;
+  display: none !important;
+}
+
 /* Page link items */
 #nd-sidebar a[data-active] {
   font-size: 14px;
   padding: 6px 12px;
   border-radius: 6px;
   margin-left: 0;
-  border-left: 2px solid transparent;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 #nd-sidebar a[data-active="false"]:hover {
@@ -512,7 +586,6 @@ th {
 
 #nd-sidebar a[data-active="true"] {
   background: color-mix(in oklch, var(--color-fd-primary) 8%, transparent) !important;
-  border-left-color: var(--color-fd-primary) !important;
   color: var(--color-fd-primary) !important;
   font-weight: 500;
 }

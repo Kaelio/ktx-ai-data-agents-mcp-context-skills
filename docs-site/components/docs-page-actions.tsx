@@ -11,7 +11,7 @@ type Props = {
 
 export function DocsPageActions({ markdownUrl, mdxSource }: Props) {
   return (
-    <div className="not-prose mt-4 mb-8 flex flex-wrap items-center gap-2 border-b border-fd-border pb-6 text-xs">
+    <div className="not-prose flex flex-wrap items-center gap-2 text-xs">
       <CopyMarkdownButton markdownUrl={markdownUrl} />
       <a
         href={markdownUrl}

@@ -52,12 +52,11 @@ export function CodeBlock(props: Props) {
   const language = detectLanguage(props, children);
   const codeText = extractText(children);
 
-  const isTerminal =
-    (language !== null && TERMINAL_LANGS.has(language)) ||
-    WIZARD_GLYPHS.test(codeText);
+  const isTerminal = language !== null && TERMINAL_LANGS.has(language);
+  const isOutput = !isTerminal && WIZARD_GLYPHS.test(codeText);
   const hasTitle = typeof title === "string" && title.length > 0;
 
-  // Mode A — Terminal
+  // Mode A — Terminal (commands the user types)
   if (isTerminal) {
     return (
       <div className="not-prose ktx-code ktx-code-terminal group">
@@ -74,6 +73,19 @@ export function CodeBlock(props: Props) {
           />
         </div>
         <pre {...rest} className="ktx-code-body ktx-code-body-terminal">
+          {children}
+        </pre>
+      </div>
+    );
+  }
+
+  // Mode D — Output preview (wizard prompts, terminal output)
+  if (isOutput) {
+    return (
+      <div className="not-prose ktx-code ktx-code-output group relative">
+        <span className="ktx-code-output-label">output</span>
+        <CopyButton text={codeText} className="ktx-code-output-copy" />
+        <pre {...rest} className="ktx-code-body ktx-code-body-output">
           {children}
         </pre>
       </div>

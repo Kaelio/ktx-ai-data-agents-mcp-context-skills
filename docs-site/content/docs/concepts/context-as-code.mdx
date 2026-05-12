@@ -29,27 +29,37 @@ This reconciliation step is what separates auto-ingestion from a simple sync. A 
 
 Auto-ingestion is designed to plug into a PR-based workflow. Run ingestion on a branch, review the changed YAML and Markdown files, and merge them the same way you merge dbt models or application code.
 
-```
-  dbt / Looker / Metabase         KTX project repo
-  ┌──────────────┐               ┌──────────────────────┐
-  │  Metadata    │───ingestion──▶│  Branch: ingest/...  │
-  │  changes     │               │                      │
-  └──────────────┘               │  + 3 new sources     │
-                                 │  ~ 2 updated joins   │
-                                 │  + 1 knowledge page  │
-                                 │                      │
-                                 │  ──── Open PR ────   │
-                                 │                      │
-                                 │  Review semantic diff │
-                                 │  Approve & merge      │
-                                 └──────────────────────┘
-                                           │
-                                           ▼
-                                  Agents see updated
-                                  context immediately
+```text
+dbt / Looker / Metabase / Notion
+            |
+            v
+     metadata changes
+            |
+            v
+  nightly cron or CI ingest
+            |
+            v
+  branch: ingest/nightly
+            |
+            |  + 3 new sources
+            |  ~ 2 updated joins
+            |  + 1 knowledge page
+            v
+        open PR
+            |
+            v
+  review semantic diff
+            |
+            v
+     approve & merge
+            |
+            v
+  agents see updated context
 ```
 
 A typical branch shows a semantic diff: "this ingest added 3 new sources from dbt, updated 2 join definitions based on schema changes, and created 1 knowledge page from a Notion doc." Analytics engineers review the diff, verify that the new sources look correct, and merge.
+
+Teams usually run this on demand while setting up a source, then schedule it once the source is stable. A cron job or CI schedule can run `ktx ingest --all --no-input` overnight on an ingest branch so the latest dbt manifests, BI metadata, and documentation updates are ready for review each morning.
 
 Once merged, agents querying through KTX's MCP server or CLI see the updated context immediately. No deployment step, no cache invalidation, no restart. The files are the source of truth, and agents read them on every request.
 
@@ -57,15 +67,13 @@ This workflow gives you the same review guarantees you have for dbt models. No s
 
 ## Feedback loops
 
-Context improves over time through three feedback channels.
+Context improves over time through two feedback channels.
 
 **Analyst corrections.** When an analytics engineer spots something wrong — a measure formula that doesn't match the business definition, a join that should be `many_to_one` instead of `one_to_many`, a knowledge page that's out of date — they edit the YAML or Markdown directly and commit. These corrections become part of the project's git history, and the next ingestion run respects them. If you manually fix a measure definition, KTX won't overwrite it on the next ingest.
 
-**Agent feedback.** When an agent queries the semantic layer and gets unexpected results — a query that returns no rows because of a bad filter, a join path that produces duplicated results — it can flag the issue. These signals feed back into the context: knowledge pages can note known data quality issues, source definitions can be tightened with better filters or grain declarations, and relationship thresholds can be adjusted.
+**Agent feedback.** When an agent queries the semantic layer and gets unexpected results — a query that returns no rows because of a bad filter, a join path that produces duplicated results — it can flag the issue. These signals feed back into the context: knowledge pages can note known data quality issues, and source definitions can be tightened with better filters, join paths, or grain declarations.
 
-**Relationship calibration.** KTX infers foreign key relationships between tables automatically, even when the database has no declared constraints. It does this by analyzing column names, types, value distributions, and asking the LLM for proposals. Each inferred relationship gets a confidence score. You control two thresholds: `acceptThreshold` (relationships above this score are accepted automatically, default 0.85) and `reviewThreshold` (relationships between review and accept are flagged for human review, default 0.55). As you accept or reject proposals, the system learns which patterns match your schema conventions.
-
-Each of these channels makes the next ingestion cycle better. Analyst corrections teach the system what your team considers authoritative. Agent feedback surfaces gaps in coverage. Relationship calibration tunes the discovery process to your warehouse's conventions. Context is not a static artifact — it's a living system that converges toward accuracy with every iteration.
+Each of these channels makes the next ingestion cycle better. Analyst corrections teach the system what your team considers authoritative. Agent feedback surfaces gaps in coverage. Context is not a static artifact — it's a living system that converges toward accuracy with every iteration.
 
 ## Deterministic replay
 
@@ -89,5 +97,5 @@ Use this page when an agent needs to explain review workflows, ingestion diffs, 
 |------------|------------------|-----------|
 | Explain how generated context should be reviewed | The git workflow | [Building Context](/docs/guides/building-context) |
 | Diagnose why ingestion changed a semantic source | Auto-ingestion and Deterministic replay | [ktx ingest](/docs/cli-reference/ktx-ingest) |
-| Explain how context improves over time | Feedback loops | [Link Detection](/docs/benchmarks/link-detection) |
+| Explain how context improves over time | Feedback loops | [Building Context](/docs/guides/building-context) |
 | Tell a user what to commit | The git workflow | [Writing Context](/docs/guides/writing-context) |
