@@ -22,7 +22,7 @@ test('runSetupDev runs phased setup without global linking', async () => {
       ['pnpm', ['install', '--frozen-lockfile']],
       ['pnpm', ['run', 'native:rebuild']],
       ['pnpm', ['run', 'build']],
-      [process.execPath, ['packages/cli/dist/bin.js', 'dev', 'doctor', 'setup', '--no-input']],
+      [process.execPath, ['packages/cli/dist/bin.js', 'status', '--no-input']],
     ],
   );
   assert.equal(calls.some((call) => call.args.includes('link')), false);
