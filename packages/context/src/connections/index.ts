@@ -21,6 +21,7 @@ export {
   notionConnectionToPullConfig,
   parseNotionConnectionConfig,
   redactNotionConnectionConfig,
+  resolveNotionConnectionAuthToken,
   resolveNotionAuthToken,
   type KtxNotionConnectionConfig,
   type RedactedKtxNotionConnectionConfig,

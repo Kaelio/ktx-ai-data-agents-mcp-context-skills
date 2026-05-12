@@ -15,7 +15,8 @@ type KtxNotionCrawlMode = 'all_accessible' | 'selected_roots';
 
 export interface KtxNotionConnectionConfig extends KtxProjectConnectionConfig {
   driver: 'notion';
-  auth_token_ref: string;
+  auth_token: string | null;
+  auth_token_ref: string | null;
   crawl_mode: KtxNotionCrawlMode;
   root_page_ids: string[];
   root_database_ids: string[];
@@ -93,11 +94,12 @@ export function parseNotionConnectionConfig(raw: unknown): KtxNotionConnectionCo
   if (input.driver !== 'notion') {
     throw new Error('Notion connection config requires driver: notion');
   }
-  const authTokenRef = stringValue(input.auth_token_ref, '');
-  if (!authTokenRef) {
-    throw new Error('Notion connection config requires auth_token_ref');
+  const authToken = optionalString(input.auth_token);
+  const authTokenRef = optionalString(input.auth_token_ref);
+  if (!authToken && !authTokenRef) {
+    throw new Error('Notion connection config requires auth_token or auth_token_ref');
   }
-  if (!authTokenRef.startsWith('env:') && !authTokenRef.startsWith('file:')) {
+  if (authTokenRef && !authTokenRef.startsWith('env:') && !authTokenRef.startsWith('file:')) {
     throw new Error('Notion auth_token_ref must use env:NAME or file:/path');
   }
 
@@ -115,6 +117,7 @@ export function parseNotionConnectionConfig(raw: unknown): KtxNotionConnectionCo
   return {
     ...input,
     driver: 'notion',
+    auth_token: authToken,
     auth_token_ref: authTokenRef,
     crawl_mode: crawlMode,
     root_page_ids: rootPageIds,
@@ -142,7 +145,7 @@ export function parseNotionConnectionConfig(raw: unknown): KtxNotionConnectionCo
 export function redactNotionConnectionConfig(config: KtxNotionConnectionConfig): RedactedKtxNotionConnectionConfig {
   return {
     driver: 'notion',
-    hasAuthToken: Boolean(config.auth_token_ref),
+    hasAuthToken: Boolean(config.auth_token ?? config.auth_token_ref),
     crawlMode: config.crawl_mode,
     rootPageIds: config.root_page_ids,
     rootDatabaseIds: config.root_database_ids,
@@ -182,12 +185,20 @@ export async function resolveNotionAuthToken(
   throw new Error('Notion auth_token_ref must use env:NAME or file:/path');
 }
 
+export async function resolveNotionConnectionAuthToken(
+  config: Pick<KtxNotionConnectionConfig, 'auth_token' | 'auth_token_ref'>,
+  options: ResolveNotionTokenOptions = {},
+): Promise<string> {
+  return config.auth_token ?? (await resolveNotionAuthToken(config.auth_token_ref ?? '', options));
+}
+
 export async function notionConnectionToPullConfig(
   config: KtxNotionConnectionConfig,
   options: ResolveNotionTokenOptions = {},
 ): Promise<NotionPullConfig> {
+  const authToken = await resolveNotionConnectionAuthToken(config, options);
   return notionPullConfigSchema.parse({
-    authToken: await resolveNotionAuthToken(config.auth_token_ref, options),
+    authToken,
     crawlMode: config.crawl_mode,
     rootPageIds: config.root_page_ids,
     rootDatabaseIds: config.root_database_ids,

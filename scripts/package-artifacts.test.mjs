@@ -517,7 +517,7 @@ describe('verification snippets', () => {
       assert.match(source, /Mode: seeded/);
       assert.match(source, /Source: packaged demo project/);
       assert.match(source, /LLM calls: none/);
-      assert.match(source, /ktx serve --mcp stdio/);
+      assert.match(source, /ktx agent context --json/);
       assert.doesNotMatch(source, new RegExp(["'demo'", "'--mode'", "'deterministic'"].join(', ')));
       assert.match(source, /'dev', 'doctor', 'setup', '--no-input'/);
       assert.match(source, /'--plain'/);

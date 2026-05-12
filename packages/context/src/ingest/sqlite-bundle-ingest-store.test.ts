@@ -66,6 +66,27 @@ function reportBody(syncId: string, supersededBy: string | null = null): IngestR
   };
 }
 
+function emptyReportBody(syncId: string, overrides: Partial<IngestReportBody> = {}): IngestReportBody {
+  return {
+    syncId,
+    diffSummary: diffSummary({ added: 0, modified: 0, deleted: 0, unchanged: 1 }),
+    commitSha: null,
+    workUnits: [],
+    failedWorkUnits: [],
+    reconciliationSkipped: true,
+    conflictsResolved: [],
+    evictionsApplied: [],
+    unmappedFallbacks: [],
+    evictionInputs: [],
+    unresolvedCards: [],
+    supersededBy: null,
+    overrideOf: null,
+    provenanceRows: [],
+    toolTranscripts: [],
+    ...overrides,
+  };
+}
+
 describe('SqliteBundleIngestStore', () => {
   let tempDir: string;
   let dbPath: string;
@@ -224,6 +245,204 @@ describe('SqliteBundleIngestStore', () => {
         }),
       ]),
     );
+  });
+
+  it('does not baseline skipped provenance from failed work units or zero-work retry runs', async () => {
+    const store = new SqliteBundleIngestStore({ dbPath });
+    const rawHashes = new Map([
+      ['pages/page-1/metadata.json', 'hash-metadata'],
+      ['pages/page-1/page.md', 'hash-page'],
+    ]);
+
+    const failedRun = await store.create(runArgs({ jobId: 'job-failed-review', syncId: 'sync-failed-review' }));
+    await store.insertMany(
+      [...rawHashes].map(([rawPath, rawContentHash]) => ({
+        connectionId: 'docs',
+        sourceKey: 'notion',
+        syncId: 'sync-failed-review',
+        rawPath,
+        rawContentHash,
+        artifactKind: null,
+        artifactKey: null,
+        artifactContentHash: null,
+        actionType: 'skipped' as const,
+      })),
+    );
+    await store.markCompleted(failedRun.id, diffSummary({ added: 2 }));
+    await store.create({
+      runId: failedRun.id,
+      jobId: 'job-failed-review',
+      connectionId: 'docs',
+      sourceKey: 'notion',
+      body: emptyReportBody('sync-failed-review', {
+        workUnits: [
+          {
+            unitKey: 'notion-page-page-1',
+            rawFiles: [...rawHashes.keys()],
+            status: 'failed',
+            reason: 'invalid_grant',
+            actions: [],
+            touchedSlSources: [],
+          },
+        ],
+        failedWorkUnits: ['notion-page-page-1'],
+      }),
+    });
+
+    const noWorkRun = await store.create(runArgs({ jobId: 'job-no-work', syncId: 'sync-no-work' }));
+    await store.insertMany(
+      [...rawHashes].map(([rawPath, rawContentHash]) => ({
+        connectionId: 'docs',
+        sourceKey: 'notion',
+        syncId: 'sync-no-work',
+        rawPath,
+        rawContentHash,
+        artifactKind: null,
+        artifactKey: null,
+        artifactContentHash: null,
+        actionType: 'skipped' as const,
+      })),
+    );
+    await store.markCompleted(noWorkRun.id, diffSummary({ unchanged: 2 }));
+    await store.create({
+      runId: noWorkRun.id,
+      jobId: 'job-no-work',
+      connectionId: 'docs',
+      sourceKey: 'notion',
+      body: emptyReportBody('sync-no-work', { workUnits: [], failedWorkUnits: [] }),
+    });
+
+    await expect(store.findLatestHashesForCompletedSyncs('docs', 'notion')).resolves.toEqual(new Map());
+    await expect(new DiffSetService(store).compute('docs', 'notion', rawHashes)).resolves.toEqual({
+      added: ['pages/page-1/metadata.json', 'pages/page-1/page.md'],
+      modified: [],
+      deleted: [],
+      unchanged: [],
+    });
+  });
+
+  it('baselines skipped provenance from successful no-output work unit runs', async () => {
+    const store = new SqliteBundleIngestStore({ dbPath });
+    const run = await store.create(runArgs({ jobId: 'job-reviewed-no-output', syncId: 'sync-reviewed-no-output' }));
+
+    await store.insertMany([
+      {
+        connectionId: 'docs',
+        sourceKey: 'notion',
+        syncId: 'sync-reviewed-no-output',
+        rawPath: 'pages/page-1/page.md',
+        rawContentHash: 'hash-reviewed',
+        artifactKind: null,
+        artifactKey: null,
+        artifactContentHash: null,
+        actionType: 'skipped',
+      },
+    ]);
+    await store.markCompleted(run.id, diffSummary({ added: 1 }));
+    await store.create({
+      runId: run.id,
+      jobId: 'job-reviewed-no-output',
+      connectionId: 'docs',
+      sourceKey: 'notion',
+      body: emptyReportBody('sync-reviewed-no-output', {
+        workUnits: [
+          {
+            unitKey: 'notion-page-page-1',
+            rawFiles: ['pages/page-1/page.md'],
+            status: 'success',
+            actions: [],
+            touchedSlSources: [],
+          },
+        ],
+        failedWorkUnits: [],
+      }),
+    });
+
+    await expect(store.findLatestHashesForCompletedSyncs('docs', 'notion')).resolves.toEqual(
+      new Map([['pages/page-1/page.md', 'hash-reviewed']]),
+    );
+    await expect(
+      new DiffSetService(store).compute('docs', 'notion', new Map([['pages/page-1/page.md', 'hash-reviewed']])),
+    ).resolves.toMatchObject({
+      added: [],
+      unchanged: ['pages/page-1/page.md'],
+    });
+  });
+
+  it('baselines artifact provenance in partial failures but not skipped-only failed paths', async () => {
+    const store = new SqliteBundleIngestStore({ dbPath });
+    const run = await store.create(runArgs({ jobId: 'job-partial', syncId: 'sync-partial' }));
+
+    await store.insertMany([
+      {
+        connectionId: 'docs',
+        sourceKey: 'notion',
+        syncId: 'sync-partial',
+        rawPath: 'pages/success/page.md',
+        rawContentHash: 'hash-success',
+        artifactKind: 'wiki',
+        artifactKey: 'knowledge/notion/success.md',
+        artifactContentHash: 'artifact-success',
+        actionType: 'wiki_written',
+      },
+      {
+        connectionId: 'docs',
+        sourceKey: 'notion',
+        syncId: 'sync-partial',
+        rawPath: 'pages/failed/page.md',
+        rawContentHash: 'hash-failed',
+        artifactKind: null,
+        artifactKey: null,
+        artifactContentHash: null,
+        actionType: 'skipped',
+      },
+    ]);
+    await store.markCompleted(run.id, diffSummary({ added: 2 }));
+    await store.create({
+      runId: run.id,
+      jobId: 'job-partial',
+      connectionId: 'docs',
+      sourceKey: 'notion',
+      body: emptyReportBody('sync-partial', {
+        workUnits: [
+          {
+            unitKey: 'notion-page-success',
+            rawFiles: ['pages/success/page.md'],
+            status: 'success',
+            actions: [],
+            touchedSlSources: [],
+          },
+          {
+            unitKey: 'notion-page-failed',
+            rawFiles: ['pages/failed/page.md'],
+            status: 'failed',
+            reason: 'invalid_grant',
+            actions: [],
+            touchedSlSources: [],
+          },
+        ],
+        failedWorkUnits: ['notion-page-failed'],
+      }),
+    });
+
+    await expect(store.findLatestHashesForCompletedSyncs('docs', 'notion')).resolves.toEqual(
+      new Map([['pages/success/page.md', 'hash-success']]),
+    );
+    await expect(
+      new DiffSetService(store).compute(
+        'docs',
+        'notion',
+        new Map([
+          ['pages/success/page.md', 'hash-success'],
+          ['pages/failed/page.md', 'hash-failed'],
+        ]),
+      ),
+    ).resolves.toEqual({
+      added: ['pages/failed/page.md'],
+      modified: [],
+      deleted: [],
+      unchanged: ['pages/success/page.md'],
+    });
   });
 
   it('returns the latest stored report across bundle ingest runs', async () => {

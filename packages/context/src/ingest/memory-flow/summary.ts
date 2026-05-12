@@ -1,6 +1,7 @@
 import { sanitizeMemoryFlowError } from './live-buffer.js';
 import type { MemoryFlowEvent, MemoryFlowReplayInput } from './types.js';
 import { buildMemoryFlowViewModel } from './view-model.js';
+import { isNotionAuthorizationExpired, notionAuthorizationFixSuggestions } from './known-errors.js';
 
 function latest<T extends MemoryFlowEvent['type']>(
   events: MemoryFlowEvent[],
@@ -42,6 +43,14 @@ function humanizeSummaryText(value: string): string {
     .replace(/\bSL\b/g, 'semantic layer');
 }
 
+function fixSuggestions(input: MemoryFlowReplayInput): string[] {
+  const workUnitReasons = eventsOf(input.events, 'work_unit_finished').map((event) => event.reason);
+  const hasNotionAuthFailure = [...workUnitReasons, ...input.errors].some((reason) =>
+    isNotionAuthorizationExpired(input, reason),
+  );
+  return hasNotionAuthFailure ? notionAuthorizationFixSuggestions(input.connectionId) : [];
+}
+
 export function formatMemoryFlowFinalSummary(input: MemoryFlowReplayInput): string {
   const sources = eventsOf(input.events, 'source_acquired');
   const source = sources.at(-1);
@@ -81,6 +90,14 @@ export function formatMemoryFlowFinalSummary(input: MemoryFlowReplayInput): stri
     lines.push(`Trust issues: ${view.trustIssues.length}`);
     for (const issue of view.trustIssues.slice(0, 3)) {
       lines.push(`- ${humanizeSummaryText(issue.title)}: ${humanizeSummaryText(issue.detail)}`);
+    }
+  }
+
+  const suggestions = fixSuggestions(input);
+  if (suggestions.length > 0) {
+    lines.push('Fix suggestions:');
+    for (const suggestion of suggestions) {
+      lines.push(`- ${suggestion}`);
     }
   }
 

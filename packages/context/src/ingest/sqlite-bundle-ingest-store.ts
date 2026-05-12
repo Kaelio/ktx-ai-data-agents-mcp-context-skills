@@ -46,6 +46,13 @@ interface ProvenanceRow {
   action_type: string;
 }
 
+interface ProvenanceHashCandidateRow {
+  raw_path: string;
+  raw_content_hash: string;
+  action_type: string;
+  report_body_json: string | null;
+}
+
 function parseArtifactKind(kind: string | null): IngestProvenanceRow['artifact_kind'] {
   if (kind === null || kind === 'sl' || kind === 'wiki') {
     return kind;
@@ -91,6 +98,31 @@ function toPortProvenanceRow(row: ProvenanceRow): IngestProvenanceRow {
     artifact_content_hash: row.artifact_content_hash,
     action_type: parseActionType(row.action_type),
   };
+}
+
+function recordValue(value: unknown, key: string): unknown {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function isSuccessfulNoOutputSkippedBaseline(reportBodyJson: string | null): boolean {
+  if (reportBodyJson === null) {
+    return true;
+  }
+  const body = JSON.parse(reportBodyJson) as unknown;
+  const workUnits = recordValue(body, 'workUnits');
+  const failedWorkUnits = recordValue(body, 'failedWorkUnits');
+  return (
+    Array.isArray(workUnits) &&
+    workUnits.length > 0 &&
+    Array.isArray(failedWorkUnits) &&
+    failedWorkUnits.length === 0
+  );
+}
+
+function isProcessedHashBaseline(row: ProvenanceHashCandidateRow): boolean {
+  return row.action_type !== 'skipped' || isSuccessfulNoOutputSkippedBaseline(row.report_body_json);
 }
 
 function placeholders(values: readonly unknown[]): string {
@@ -275,23 +307,34 @@ export class SqliteBundleIngestStore
     const rows = this.db
       .prepare(
         `
-        SELECT p.raw_path, p.raw_content_hash
+        SELECT
+          p.raw_path,
+          p.raw_content_hash,
+          p.action_type,
+          br.body_json AS report_body_json
         FROM bundle_ingest_provenance p
         INNER JOIN bundle_ingest_runs r
           ON r.connection_id = p.connection_id
           AND r.source_key = p.source_key
           AND r.sync_id = p.sync_id
+        LEFT JOIN bundle_ingest_reports br
+          ON br.run_id = r.id
         WHERE p.connection_id = ?
           AND p.source_key = ?
           AND r.status = 'completed'
         ORDER BY r.completed_at DESC, r.rowid DESC, p.created_at DESC, p.rowid DESC
       `,
       )
-      .all(connectionId, sourceKey) as Array<{ raw_path: string; raw_content_hash: string }>;
+      .all(connectionId, sourceKey) as ProvenanceHashCandidateRow[];
 
     const latest = new Map<string, string>();
+    const seen = new Set<string>();
     for (const row of rows) {
-      if (!latest.has(row.raw_path)) {
+      if (seen.has(row.raw_path)) {
+        continue;
+      }
+      seen.add(row.raw_path);
+      if (isProcessedHashBaseline(row)) {
         latest.set(row.raw_path, row.raw_content_hash);
       }
     }

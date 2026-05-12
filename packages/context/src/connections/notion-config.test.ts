@@ -30,6 +30,7 @@ describe('standalone Notion connection config', () => {
 
     expect(parsed).toEqual({
       driver: 'notion',
+      auth_token: null,
       auth_token_ref: 'env:NOTION_TOKEN',
       crawl_mode: 'selected_roots',
       root_page_ids: ['page-1'],
@@ -39,6 +40,23 @@ describe('standalone Notion connection config', () => {
       max_knowledge_creates_per_run: 25,
       max_knowledge_updates_per_run: 20,
       last_successful_cursor: null,
+    });
+  });
+
+  it('parses inline Notion auth tokens without requiring auth_token_ref', () => {
+    const parsed = parseNotionConnectionConfig({
+      driver: 'notion',
+      auth_token: '  ntn_inline_token  ',
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['page-1'],
+    });
+
+    expect(parsed).toMatchObject({
+      driver: 'notion',
+      auth_token: 'ntn_inline_token',
+      auth_token_ref: null,
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['page-1'],
     });
   });
 
@@ -116,5 +134,24 @@ describe('standalone Notion connection config', () => {
       maxKnowledgeUpdatesPerRun: 7,
       lastSuccessfulCursor: '{"phase":"all_accessible_pages","cursor":"cursor-1"}',
     });
+  });
+
+  it('uses inline Notion auth_token when building adapter pull config', async () => {
+    const pullConfig = await notionConnectionToPullConfig(
+      parseNotionConnectionConfig({
+        driver: 'notion',
+        auth_token: 'ntn_inline_token',
+        auth_token_ref: 'env:STALE_NOTION_TOKEN',
+        crawl_mode: 'all_accessible',
+      }),
+      {
+        env: {},
+        readTextFile: async () => {
+          throw new Error('readTextFile should not be called for inline auth_token');
+        },
+      },
+    );
+
+    expect(pullConfig.authToken).toBe('ntn_inline_token');
   });
 });

@@ -60,6 +60,36 @@ describe('formatMemoryFlowFinalSummary', () => {
     ).toContain('Trust issues: 3');
   });
 
+  it('explains expired Notion authorization with fix suggestions', () => {
+    const rawReason =
+      'notion-cluster-1 failed: {"error":"invalid_grant","error_description":"reauth related error (invalid_rapt)","error_uri":"https://accounts.example/reauth"}';
+    const summary = formatMemoryFlowFinalSummary(
+      input({
+        connectionId: 'notion-main',
+        adapter: 'notion',
+        status: 'error',
+        events: [
+          { type: 'source_acquired', adapter: 'notion', trigger: 'manual_resync', fileCount: 37 },
+          { type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 },
+          { type: 'work_unit_finished', unitKey: 'notion-cluster-1', status: 'failed', reason: rawReason },
+        ],
+      }),
+    );
+
+    expect(summary).toContain('Memory-flow summary: error');
+    expect(summary).toContain(
+      'Notion authorization expired: notion-cluster-1 could not read Notion because the saved OAuth grant expired or requires reauthentication (invalid_grant / invalid_rapt).',
+    );
+    expect(summary).toContain('Fix suggestions:');
+    expect(summary).toContain(
+      '- Refresh the Notion token referenced by auth_token_ref for notion-main. If it uses env:NAME, export a fresh token in that variable; if it uses file:/path, replace that file.',
+    );
+    expect(summary).toContain(
+      '- Run ktx connection notion pick notion-main to confirm Notion access, then rerun ktx ingest notion-main.',
+    );
+    expect(summary).not.toContain('error_uri');
+  });
+
   it('labels replay source metadata in final summaries', () => {
     const summary = formatMemoryFlowFinalSummary({
       metadata: {

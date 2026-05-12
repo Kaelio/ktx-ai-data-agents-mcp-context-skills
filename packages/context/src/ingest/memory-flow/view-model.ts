@@ -9,6 +9,7 @@ import type {
   MemoryFlowViewModel,
 } from './types.js';
 import { sanitizeMemoryFlowError } from './live-buffer.js';
+import { formatNotionAuthorizationExpiredDetail, isNotionAuthorizationExpired } from './known-errors.js';
 
 function latest<T extends MemoryFlowEvent['type']>(
   events: MemoryFlowEvent[],
@@ -109,7 +110,7 @@ function errorDetails(input: MemoryFlowReplayInput): string[] {
 }
 
 function isValidationFailure(reason: string | undefined): boolean {
-  return /semantic-layer|validation|invalid/i.test(reason ?? '');
+  return /semantic-layer|validation/i.test(reason ?? '');
 }
 
 function failedWorkUnitDetails(failed: Array<Extract<MemoryFlowEvent, { type: 'work_unit_finished' }>>): string[] {
@@ -180,11 +181,14 @@ function buildMemoryFlowTrustIssues(input: MemoryFlowReplayInput): MemoryFlowTru
 
   for (const event of failed) {
     const reason = sanitizeMemoryFlowError(event.reason ?? 'failed');
+    const knownNotionAuthFailure = isNotionAuthorizationExpired(input, event.reason);
     issues.push({
       id: `work-unit-failed:${event.unitKey}`,
       severity: 'failed',
-      title: 'WorkUnit failed',
-      detail: `${event.unitKey} failed: ${reason}`,
+      title: knownNotionAuthFailure ? 'Notion authorization expired' : 'WorkUnit failed',
+      detail: knownNotionAuthFailure
+        ? formatNotionAuthorizationExpiredDetail(event.unitKey)
+        : `${event.unitKey} failed: ${reason}`,
       columnId: 'workUnits',
       targetLabel: event.unitKey,
     });

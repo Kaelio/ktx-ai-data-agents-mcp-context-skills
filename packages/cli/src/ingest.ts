@@ -306,7 +306,7 @@ function createPlainIngestProgressRenderer(
     if (!hasPendingTransient) {
       return;
     }
-    io.stdout.write('\n');
+    io.stderr.write('\n');
     hasPendingTransient = false;
   };
 
@@ -315,12 +315,12 @@ function createPlainIngestProgressRenderer(
     lastPercent = nextPercent;
     const line = `[${nextPercent}%] ${message}`;
     if (options?.transient === true) {
-      io.stdout.write(`\r${line}\u001b[K`);
+      io.stderr.write(`\r${line}\u001b[K`);
       hasPendingTransient = true;
       return;
     }
     flush();
-    io.stdout.write(`${line}\n`);
+    io.stderr.write(`${line}\n`);
   };
 
   return {
@@ -434,6 +434,21 @@ function initialRunMemoryFlowInput(
     events: [],
     plannedWorkUnits: [],
     details: { actions: [], provenance: [], transcripts: [] },
+  };
+}
+
+function finalRunMemoryFlowInput(snapshot: MemoryFlowReplayInput, report: IngestReportSnapshot): MemoryFlowReplayInput {
+  const status = reportStatus(report);
+  return {
+    ...snapshot,
+    runId: report.runId,
+    connectionId: report.connectionId,
+    adapter: report.sourceKey,
+    status,
+    syncId: report.body.syncId,
+    reportId: report.id,
+    reportPath: report.id,
+    errors: status === 'error' ? report.body.failedWorkUnits : snapshot.errors,
   };
 }
 
@@ -592,7 +607,7 @@ export async function runKtxIngest(
           ...(memoryFlow ? { memoryFlow } : {}),
         });
         if (shouldUseLiveViz && memoryFlow) {
-          latestMemoryFlowSnapshot = memoryFlow.snapshot();
+          latestMemoryFlowSnapshot = finalRunMemoryFlowInput(memoryFlow.snapshot(), result.report);
           liveTui?.close();
           liveTui = null;
           io.stdout.write(formatMemoryFlowFinalSummary(latestMemoryFlowSnapshot));
