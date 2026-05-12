@@ -147,4 +147,19 @@ describe('memory runtime assets', () => {
       expect(body).not.toContain('sl_describe_table');
     }
   });
+
+  it('ships only the KTX connectionName sql_execution call shape in writer guidance', async () => {
+    const shared = await readFile(join(skillsDir, '_shared', 'identifier-verification.md'), 'utf-8');
+
+    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT DISTINCT');
+    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT 1 FROM');
+
+    for (const skillName of verificationWriterSkills) {
+      const body = await readFile(join(skillsDir, skillName, 'SKILL.md'), 'utf-8');
+      expect(body).toContain('sql_execution({connectionName');
+      expect(body).not.toContain('sql_execution({ sql');
+      expect(body).not.toContain('session shape');
+      expect(body).not.toContain('connection is already pinned by the ingest session');
+    }
+  });
 });

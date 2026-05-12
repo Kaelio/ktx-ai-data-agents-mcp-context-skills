@@ -193,11 +193,11 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 3. For literal values from the source, such as status codes or plan tiers,
    check whether they appear in `entity_details` sampleValues for the relevant
    column. If sampleValues is short or the sample may have missed real values,
-   run a `sql_execution` probe:
-   `SELECT DISTINCT <col> FROM <ref> LIMIT 50`.
+   run a `sql_execution` probe with the same warehouse connection name:
+   `sql_execution({connectionName, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
 4. If the candidate identifier still does not resolve, do one of:
-   - Use `sql_execution` with `SELECT 1 FROM <ref> LIMIT 0`. If it errors, the
-     identifier is fictional.
+   - Use `sql_execution({connectionName, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
+     If it errors, the identifier is fictional.
    - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
      citing the exact raw path that mentioned it.
    - When recording `emit_unmapped_fallback` with `no_physical_table`, include
@@ -212,7 +212,7 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 3. `sl_read_source({ sourceName })` — read the raw YAML before editing.
 4. For modifications: `sl_edit_source({ sourceName, old_string, new_string })` with exact-string replacements. `old_string` must match exactly and be unique in the file.
 5. For new sources or full rewrites: `sl_write_source({ sourceName, content })` with the full YAML content.
-6. For join discovery: `sql_execution({ sql })` to verify the join key exists in both tables and assess cardinality before declaring the join.
+6. For join discovery: use `sql_execution({connectionName: "warehouse", sql: "SELECT count(*) FROM public.orders o JOIN public.customers c ON c.id = o.customer_id LIMIT 20"})` with the target warehouse connection name and dialect-correct table names to verify the join key exists in both tables and assess cardinality before declaring the join.
 7. Cross-reference knowledge: author the edge once on the **wiki** side via `sl_refs: [source_name]` in the page's front-matter. The reverse edge (wiki pages that cite an SL source) is derived automatically by the reconciler — do not add a `knowledge_refs:` field to SL YAMLs.
 8. `sl_validate` — run after writing or editing to surface schema issues, duplicate measure names, and cross-source validation errors. Read-only; the writes are already committed (the squash-at-end flow will collapse them into one commit).
 

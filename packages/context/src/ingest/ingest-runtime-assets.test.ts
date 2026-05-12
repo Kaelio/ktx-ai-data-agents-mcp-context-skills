@@ -98,5 +98,7 @@ describe('ingest runtime assets', () => {
     expect(shared).toContain('discover_data');
     expect(shared).toContain('entity_details');
     expect(shared).toContain('sql_execution');
+    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT DISTINCT');
+    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT 1 FROM');
   });
 });
