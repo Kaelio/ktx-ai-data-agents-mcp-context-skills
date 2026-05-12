@@ -1,3 +1,5 @@
+![KTX mascot](assets/ktx-mascot.png)
+
 # KTX
 
 KTX is a workspace-first context layer for database agents. It stores warehouse
