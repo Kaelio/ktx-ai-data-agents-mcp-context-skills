@@ -462,10 +462,11 @@ export function npmSmokePackageJson(layout) {
     devDependencies: {
       'better-sqlite3': '^12.6.2',
     },
-    pnpm: {
-      onlyBuiltDependencies: ['better-sqlite3'],
-    },
   };
+}
+
+export function npmSmokePnpmWorkspaceYaml() {
+  return ['packages:', '  - "."', 'allowBuilds:', '  better-sqlite3: true', ''].join('\n');
 }
 
 export function npmVerifySource() {
@@ -1172,6 +1173,7 @@ async function verifyNpmArtifacts(layout, tmpRoot) {
     join(projectDir, 'package.json'),
     `${JSON.stringify(npmSmokePackageJson(layout), null, 2)}\n`,
   );
+  await writeFile(join(projectDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());
   await writeFile(join(projectDir, 'verify-npm.mjs'), npmVerifySource());
   await writeFile(join(projectDir, 'verify-installed-cli.mjs'), npmRuntimeSmokeSource());
   await writeFile(join(projectDir, 'verify-installed-demo.mjs'), npmDemoSmokeSource());
@@ -1192,6 +1194,7 @@ async function verifyNpmDemoArtifacts(layout, tmpRoot) {
   const projectDir = join(tmpRoot, 'npm-demo-clean-install');
   await mkdir(projectDir, { recursive: true });
   await writeFile(join(projectDir, 'package.json'), `${JSON.stringify(npmSmokePackageJson(layout), null, 2)}\n`);
+  await writeFile(join(projectDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());
   await writeFile(join(projectDir, 'verify-installed-demo.mjs'), npmDemoSmokeSource());
 
   await runCommand('pnpm', ['install'], { cwd: projectDir });
