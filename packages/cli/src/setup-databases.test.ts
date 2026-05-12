@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type KtxSetupDatabaseDriver,
@@ -1091,8 +1091,9 @@ describe('setup databases step', () => {
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: ['databases'],
+      completed_steps: [],
     });
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
     expect(io.stdout()).toContain('Primary source ready');
     expect(io.stdout()).not.toContain('DATABASE_URL=');
   });
@@ -1129,8 +1130,9 @@ describe('setup databases step', () => {
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: ['databases'],
+      completed_steps: [],
     });
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
 
   it('selects multiple existing connections and validates each before recording setup ids', async () => {
@@ -1178,7 +1180,8 @@ describe('setup databases step', () => {
     expect(scanConnection).toHaveBeenCalledTimes(2);
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup?.database_connection_ids).toEqual(['warehouse', 'analytics']);
-    expect(config.setup?.completed_steps).toContain('databases');
+    expect(config.setup?.completed_steps).toEqual([]);
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
 
   it('keeps the connection config but does not mark databases complete when scanning fails', async () => {

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BUNDLED_ANTHROPIC_MODELS,
@@ -160,7 +160,8 @@ describe('setup Anthropic model step', () => {
       promptCaching: { enabled: true },
     });
     expect(config.scan.enrichment.mode).toBe('llm');
-    expect(config.setup?.completed_steps).toContain('llm');
+    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
     expect(io.stdout()).toContain('LLM ready: yes');
     expect(io.stdout()).not.toContain('sk-ant-test');
   });
@@ -198,7 +199,8 @@ describe('setup Anthropic model step', () => {
       },
       models: { default: 'claude-sonnet-4-6' },
     });
-    expect(config.setup?.completed_steps).toContain('llm');
+    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
     expect(io.stdout()).not.toContain('sk-ant-file');
   });
 
@@ -551,7 +553,8 @@ describe('setup Anthropic model step', () => {
     expect(io.stderr()).toContain('Choose a different credential source or model, or Back.');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.llm.models.default).toBe('claude-sonnet-4-6');
-    expect(config.setup?.completed_steps).toContain('llm');
+    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
     expect(io.stderr()).not.toContain('sk-ant-test');
   });
 

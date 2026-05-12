@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type KtxSetupProjectPromptAdapter, runKtxSetupProjectStep } from './setup-project.js';
 
@@ -60,7 +60,8 @@ describe('setup project step', () => {
     expect(result.status).toBe('ready');
     expect(result.projectDir).toBe(projectDir);
     const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps).toEqual(['project']);
+    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
     await expect(stat(join(projectDir, '.git'))).resolves.toBeDefined();
     await expect(readFile(join(projectDir, '.ktx/.gitignore'), 'utf-8')).resolves.toContain('secrets/');
     expect(testIo.stdout()).toContain(`Project: ${projectDir}`);
@@ -93,8 +94,9 @@ describe('setup project step', () => {
     const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: ['llm', 'project'],
+      completed_steps: [],
     });
+    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['llm', 'project'] });
   });
 
   it('creates a missing auto-mode project only when --yes is present in no-input mode', async () => {
@@ -150,7 +152,8 @@ describe('setup project step', () => {
     );
     expect(prompts.text).not.toHaveBeenCalled();
     const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps).toEqual(['project']);
+    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
   });
 
   it('offers an absolute default destination for a new project folder', async () => {

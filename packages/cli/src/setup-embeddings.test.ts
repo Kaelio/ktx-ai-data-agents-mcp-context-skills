@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type KtxSetupEmbeddingsPromptAdapter, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
 
@@ -166,7 +166,8 @@ describe('setup embeddings step', () => {
       sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
-    expect(config.setup?.completed_steps).toContain('embeddings');
+    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');
     expect(io.stdout()).toContain(
       'Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
     );
@@ -238,7 +239,8 @@ describe('setup embeddings step', () => {
       sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
-    expect(config.setup?.completed_steps).toContain('embeddings');
+    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');
   });
 
   it('fails non-interactive local setup when the managed local embeddings runtime is missing', async () => {

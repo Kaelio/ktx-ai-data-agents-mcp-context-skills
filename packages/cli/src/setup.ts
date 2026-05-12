@@ -2,7 +2,13 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { cancel, isCancel, select } from '@clack/prompts';
 import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
-import { ktxLocalStateDbPath, loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import {
+  ktxLocalStateDbPath,
+  ktxSetupCompletedSteps,
+  loadKtxProject,
+  readKtxSetupState,
+  type KtxLocalProject,
+} from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { formatSetupNextStepLines } from './next-steps.js';
 import { isKtxSetupExitError, withSetupInterruptConfirmation } from './setup-interrupt.js';
@@ -291,7 +297,7 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
   };
   embeddings.ready = embeddingsReady(embeddings);
 
-  const completedSteps = project.config.setup?.completed_steps ?? [];
+  const completedSteps = ktxSetupCompletedSteps(project.config, await readKtxSetupState(resolvedProjectDir));
   const contextState = await readKtxSetupContextState(resolvedProjectDir);
   const setupContextStatus = setupContextStatusFromState(contextState, {
     completedStep: completedSteps.includes('context'),

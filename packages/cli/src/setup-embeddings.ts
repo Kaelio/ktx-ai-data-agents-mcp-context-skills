@@ -4,9 +4,12 @@ import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   type KtxProjectConfig,
   type KtxProjectEmbeddingConfig,
+  ktxSetupCompletedSteps,
   loadKtxProject,
-  markKtxSetupStepComplete,
+  markKtxSetupStateStepComplete,
+  readKtxSetupState,
   serializeKtxProjectConfig,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -111,9 +114,9 @@ function createPromptAdapter(): KtxSetupEmbeddingsPromptAdapter {
   };
 }
 
-function hasCompletedEmbeddings(config: KtxProjectConfig): boolean {
+async function hasCompletedEmbeddings(projectDir: string, config: KtxProjectConfig): Promise<boolean> {
   return (
-    config.setup?.completed_steps.includes('embeddings') === true &&
+    ktxSetupCompletedSteps(config, await readKtxSetupState(projectDir)).includes('embeddings') &&
     config.ingest.embeddings.backend !== 'none' &&
     config.ingest.embeddings.backend !== 'deterministic' &&
     typeof config.ingest.embeddings.model === 'string' &&
@@ -187,7 +190,7 @@ function embeddingBackendDisplayName(backend: KtxSetupEmbeddingBackend): string 
 
 async function persistEmbeddingConfig(projectDir: string, embeddings: KtxProjectEmbeddingConfig): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = markKtxSetupStepComplete(
+  const config = stripKtxSetupCompletedSteps(
     {
       ...project.config,
       ingest: {
@@ -202,9 +205,9 @@ async function persistEmbeddingConfig(projectDir: string, embeddings: KtxProject
         },
       },
     },
-    'embeddings',
   );
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'embeddings');
 }
 
 async function chooseCredentialRef(
@@ -400,7 +403,7 @@ export async function runKtxSetupEmbeddingsStep(
   const project = await loadKtxProject({ projectDir: args.projectDir });
   if (
     args.forcePrompt !== true &&
-    hasCompletedEmbeddings(project.config) &&
+    (await hasCompletedEmbeddings(args.projectDir, project.config)) &&
     !args.embeddingBackend &&
     !args.embeddingApiKeyEnv &&
     !args.embeddingApiKeyFile

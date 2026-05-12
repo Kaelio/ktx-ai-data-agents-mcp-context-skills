@@ -75,7 +75,7 @@ export interface KtxProjectConnectionConfig {
 
 export interface KtxProjectSetupConfig {
   database_connection_ids: string[];
-  completed_steps: string[];
+  completed_steps?: string[];
 }
 
 export interface KtxProjectConfig {

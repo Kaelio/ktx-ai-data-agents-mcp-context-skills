@@ -4,8 +4,10 @@ import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
   type KtxProjectConnectionConfig,
   loadKtxProject,
+  markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
   setKtxSetupDatabaseConnectionIds,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnection } from './connection.js';
@@ -923,7 +925,7 @@ async function writeConnectionConfig(input: {
       [input.connectionId]: input.connection,
     },
   };
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
 
   const historicSql =
     typeof input.connection.historicSql === 'object' &&
@@ -1076,25 +1078,28 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
   }
   await writeFile(
     project.configPath,
-    serializeKtxProjectConfig({
-      ...project.config,
-      ingest: {
-        ...project.config.ingest,
-        adapters,
-        workUnits: {
-          ...project.config.ingest.workUnits,
-          maxConcurrency,
+    serializeKtxProjectConfig(
+      stripKtxSetupCompletedSteps({
+        ...project.config,
+        ingest: {
+          ...project.config.ingest,
+          adapters,
+          workUnits: {
+            ...project.config.ingest.workUnits,
+            maxConcurrency,
+          },
         },
-      },
-    }),
+      }),
+    ),
     'utf-8',
   );
 }
 
 async function markDatabasesComplete(projectDir: string, connectionIds: string[]): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds), { complete: true });
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds));
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'databases');
 }
 
 async function maybeRunHistoricSqlSetupProbe(input: {

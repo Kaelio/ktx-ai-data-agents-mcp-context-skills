@@ -23,8 +23,9 @@ import {
   type KtxProjectConfig,
   type KtxProjectConnectionConfig,
   loadKtxProject,
-  markKtxSetupStepComplete,
+  markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnectionMapping } from './commands/connection-mapping.js';
@@ -333,7 +334,7 @@ function fileRepoUrl(sourceDir: string): string {
 
 async function writeProjectConfig(projectDir: string, config: KtxProjectConfig): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
 }
 
 async function writeSourceConnection(
@@ -360,7 +361,7 @@ async function writeSourceConnection(
         : [...project.config.ingest.adapters, adapter],
     },
   };
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
   return async () => {
     const latest = await loadKtxProject({ projectDir });
     const connections = { ...latest.config.connections };
@@ -399,11 +400,8 @@ async function ensureSourceAdapterEnabled(projectDir: string, source: KtxSetupSo
 
 async function markSourcesComplete(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  await writeFile(
-    project.configPath,
-    serializeKtxProjectConfig(markKtxSetupStepComplete(project.config, 'sources')),
-    'utf-8',
-  );
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(project.config)), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'sources');
 }
 
 function hasPrimarySource(config: KtxProjectConfig): boolean {
