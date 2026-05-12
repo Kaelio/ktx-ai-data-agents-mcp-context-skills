@@ -15,9 +15,9 @@ sl_refs:
 
 # NRR — Discount Expiration Treatment
 
-**Governed metric key:** `net_revenue_retention`  
-**Owner team:** analytics  
-**Notion:** `notion://notion_page_retention_policy_current#nrr-definition` and `#discount-expiration-treatment`  
+**Governed metric key:** `net_revenue_retention`
+**Owner team:** analytics
+**Notion:** `notion://notion_page_retention_policy_current#nrr-definition` and `#discount-expiration-treatment`
 **Sources:** `mart_nrr_quarterly`, `mart_retention_movement_breakout`
 
 ## NRR Definition

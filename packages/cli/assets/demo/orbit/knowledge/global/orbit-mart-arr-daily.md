@@ -18,7 +18,7 @@ tables:
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/56.json -->
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/96.json -->
 
-**Table:** `orbit_analytics.mart_arr_daily`  
+**Table:** `orbit_analytics.mart_arr_daily`
 **Grain:** one row per `metric_date`
 
 ## Columns
@@ -44,4 +44,3 @@ tables:
 
 - ARR is calculated contract-first: active contract ARR takes precedence over subscription ARR for any covered period. See [orbit-arr-contract-first-definition](orbit-arr-contract-first-definition).
 - `display` is a formatted label for UI rendering; use `arr_cents` for all arithmetic.
-

@@ -23,14 +23,14 @@ describe('standalone Notion connection config', () => {
   it('parses selected-root Notion config with safe defaults', () => {
     const parsed = parseNotionConnectionConfig({
       driver: 'notion',
-      auth_token_ref: 'env:NOTION_AUTH_TOKEN',
+      auth_token_ref: 'env:NOTION_TOKEN',
       crawl_mode: 'selected_roots',
       root_page_ids: ['page-1'],
     });
 
     expect(parsed).toEqual({
       driver: 'notion',
-      auth_token_ref: 'env:NOTION_AUTH_TOKEN',
+      auth_token_ref: 'env:NOTION_TOKEN',
       crawl_mode: 'selected_roots',
       root_page_ids: ['page-1'],
       root_database_ids: [],
@@ -70,7 +70,7 @@ describe('standalone Notion connection config', () => {
     expect(() =>
       parseNotionConnectionConfig({
         driver: 'notion',
-        auth_token_ref: 'env:NOTION_AUTH_TOKEN',
+        auth_token_ref: 'env:NOTION_TOKEN',
         crawl_mode: 'selected_roots',
       }),
     ).toThrow('selected_roots requires at least one root page, database, or data source id');
@@ -81,8 +81,8 @@ describe('standalone Notion connection config', () => {
     await writeFile(tokenPath, 'ntn_file_token\n', 'utf-8');
 
     await expect(
-      resolveNotionAuthToken('env:NOTION_AUTH_TOKEN', {
-        env: { NOTION_AUTH_TOKEN: 'ntn_env_token' },
+      resolveNotionAuthToken('env:NOTION_TOKEN', {
+        env: { NOTION_TOKEN: 'ntn_env_token' },
       }),
     ).resolves.toBe('ntn_env_token');
     await expect(resolveNotionAuthToken(`file:${tokenPath}`)).resolves.toBe('ntn_file_token');
@@ -95,14 +95,14 @@ describe('standalone Notion connection config', () => {
     const pullConfig = await notionConnectionToPullConfig(
       parseNotionConnectionConfig({
         driver: 'notion',
-        auth_token_ref: 'env:NOTION_AUTH_TOKEN',
+        auth_token_ref: 'env:NOTION_TOKEN',
         crawl_mode: 'all_accessible',
         max_pages_per_run: 12,
         max_knowledge_creates_per_run: 2,
         max_knowledge_updates_per_run: 7,
         last_successful_cursor: '{"phase":"all_accessible_pages","cursor":"cursor-1"}',
       }),
-      { env: { NOTION_AUTH_TOKEN: 'ntn_env_token' } },
+      { env: { NOTION_TOKEN: 'ntn_env_token' } },
     );
 
     expect(pullConfig).toEqual({

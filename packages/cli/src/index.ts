@@ -47,13 +47,18 @@ export { runKtxRuntime, type KtxRuntimeArgs, type KtxRuntimeDeps } from './runti
 export {
   allocateDaemonPort,
   readManagedPythonDaemonStatus,
+  stopAllManagedPythonDaemons,
   startManagedPythonDaemon,
   stopManagedPythonDaemon,
 } from './managed-python-daemon.js';
 export type {
+  ManagedPythonDaemonProcessInfo,
   ManagedPythonDaemonStartResult,
   ManagedPythonDaemonState,
   ManagedPythonDaemonStatus,
+  ManagedPythonDaemonStopAllEntry,
+  ManagedPythonDaemonStopAllFailure,
+  ManagedPythonDaemonStopAllResult,
   ManagedPythonDaemonStopResult,
 } from './managed-python-daemon.js';
 export {

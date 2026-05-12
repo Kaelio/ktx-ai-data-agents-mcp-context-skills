@@ -9,44 +9,30 @@ If you are a coding assistant trying to decide which KTX docs page to read, star
 
 ## Workflow summary
 
-Use this sequence when an agent needs to set up KTX from a fresh checkout:
+Use this sequence when you are setting up KTX in an analytics project:
 
-1. `pnpm install` — install workspace dependencies.
-2. `pnpm run setup:dev` — build local packages and prepare the development CLI.
-3. `pnpm run link:dev` — link the `ktx` command for local use.
-4. `ktx setup` — create or resume a KTX project.
-5. `ktx status` — verify project readiness.
-6. `ktx sl list` — confirm semantic-layer sources are available.
-7. `ktx sl query ... --format sql` — compile a semantic query without executing it.
+1. `npm install -g @kaelio/ktx` — install the published KTX CLI from npm.
+2. `ktx setup` — create or resume a KTX project.
 
 The setup wizard is stateful. If it exits before completion, rerun `ktx setup` in the same project directory to resume from the first incomplete step.
 
-## Prerequisites
-
-- **Node.js 22+** and **pnpm**
-- An **Anthropic API key** for LLM-powered enrichment and ingestion
-- A **database connection** — PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, or SQLite
-- Optionally, a **dbt project**, **LookML repo**, **Metabase instance**, or other context source
-
 ## Install and run setup
 
-KTX is currently used from a local checkout or linked workspace CLI. Build and link the CLI first:
+Install the published [`@kaelio/ktx`](https://www.npmjs.com/package/@kaelio/ktx) CLI:
 
 ```bash
-git clone https://github.com/kaelio/ktx.git
-cd ktx
-pnpm install
-pnpm run setup:dev
-pnpm run link:dev
+npm install -g @kaelio/ktx
 ```
 
-Then run the setup wizard in the directory where you want your KTX project:
+Then run the setup wizard:
 
 ```bash
 ktx setup
 ```
 
-The wizard walks through six steps. You can go back at any point, and if you exit early, running `ktx setup` again resumes where you left off.
+The local checkout flow is only for contributors working on KTX itself. See [Contributing](/docs/community/contributing) for that setup.
+
+The wizard walks through six steps. You can go back at any point, and if you exit early, rerunning `ktx setup` resumes where you left off.
 
 ## Step 1: Configure LLM
 
@@ -86,10 +72,11 @@ KTX uses embeddings for semantic search over sources, wiki content, schema metad
 
 **OpenAI embeddings** use `text-embedding-3-small` (1536 dimensions) and require an `OPENAI_API_KEY`.
 
-**Local embeddings** use `all-MiniLM-L6-v2` (384 dimensions) via the KTX Python daemon. No API key is needed. If you run the daemon as a long-lived HTTP service, start it with:
+**Local embeddings** use `all-MiniLM-L6-v2` (384 dimensions) via the KTX managed Python runtime. No API key is needed. KTX can install and start the runtime during setup; to prepare it ahead of time, run:
 
 ```bash
-ktx-daemon serve-http --host 127.0.0.1 --port 8765
+ktx runtime install --feature local-embeddings --yes
+ktx runtime start --feature local-embeddings
 ```
 
 ## Step 3: Connect a database
@@ -208,11 +195,14 @@ Then select which agents to install for:
 │  ◻ Codex
 │  ◻ Cursor
 │  ◻ OpenCode
+│  ◻ Custom agent (.agents)
 ```
 
 **CLI mode** writes a skill file (e.g., `.claude/skills/ktx/SKILL.md`) that teaches the agent to call KTX commands directly.
 
 **MCP mode** writes an MCP server configuration (e.g., `.mcp.json`) that lets the agent call KTX tools like `sl_query`, `knowledge_search`, and `sl_write_source` over the Model Context Protocol.
+
+**Custom agent** uses the universal `.agents` target for agents that can read project-local skills or MCP configuration.
 
 ## Generated files
 
@@ -247,44 +237,14 @@ KTX context built: yes
 Agent integration ready: yes (claude-code:project)
 ```
 
-List your semantic sources:
-
-```bash
-ktx sl list
-```
-
-Query through the semantic layer:
-
-```bash
-ktx sl query \
-  --connection-id postgres-warehouse \
-  --measure orders.total_revenue \
-  --dimension orders.status \
-  --order-by orders.total_revenue:desc \
-  --limit 5 \
-  --format sql
-```
-
-This outputs the generated SQL. Add `--execute` to run it against your warehouse:
-
-```bash
-ktx sl query \
-  --connection-id postgres-warehouse \
-  --measure orders.total_revenue \
-  --dimension orders.status \
-  --order-by orders.total_revenue:desc \
-  --limit 5 \
-  --execute --max-rows 10
-```
-
 ## Common errors
 
 | Error or symptom | Likely cause | Recovery |
 |------------------|--------------|----------|
-| `ktx: command not found` | The local CLI has not been linked | Run `pnpm run setup:dev` and `pnpm run link:dev` from the KTX checkout, then open a new shell |
+| `ktx: command not found` | The KTX package is not installed globally, or the shell cannot find the global binary | Run `npm install -g @kaelio/ktx` and open a new shell |
 | LLM health check fails | Missing, invalid, or unauthorized Anthropic API key | Export `ANTHROPIC_API_KEY` or rerun `ktx setup` and choose the file-backed secret option |
 | OpenAI embedding check fails | `OPENAI_API_KEY` is missing when OpenAI embeddings are selected | Export `OPENAI_API_KEY`, or rerun setup and choose local sentence-transformers embeddings |
-| Local embeddings hang or fail | The Python daemon cannot start or the local model runtime is unavailable | Run `uv sync --all-groups`, then start `ktx-daemon serve-http --host 127.0.0.1 --port 8765` and rerun setup |
+| Local embeddings hang or fail | The managed Python runtime cannot start or the local model runtime is unavailable | Install `uv`, run `ktx runtime doctor`, then run `ktx runtime install --feature local-embeddings --yes` and rerun setup |
 | Database connection test fails | Credentials, network access, warehouse, database, or schema value is wrong | Test the same URL with the database's native client, then rerun `ktx connection add ... --force` or rerun setup |
 | `KTX context built: no` in `ktx status` | Setup saved configuration but did not build context | Run `ktx setup context build` or rerun `ktx setup` and choose to build context now |
 | Agent integration is incomplete | Setup skipped the agents step or the target was not installed | Run `ktx setup --agents --target codex --agent-install-mode both --project` using the target you need |

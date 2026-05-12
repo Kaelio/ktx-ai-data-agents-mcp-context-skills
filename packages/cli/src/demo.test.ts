@@ -11,6 +11,9 @@ import type { renderMemoryFlowTui } from './memory-flow-tui.js';
 import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
 
+const SEEDED_DEMO_SEMANTIC_SOURCE_COUNT = 46;
+const SEEDED_DEMO_KNOWLEDGE_PAGE_COUNT = 28;
+
 function makeIo(options: { isTTY?: boolean; columns?: number; rawMode?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
@@ -336,8 +339,14 @@ describe('runKtxDemo', () => {
         notion: { pageCount: 8 },
       },
       generatedOutputs: {
-        semanticLayer: { manifestSourceCount: 46, fileCount: 46 },
-        knowledge: { manifestPageCount: 28, fileCount: 28 },
+        semanticLayer: {
+          manifestSourceCount: SEEDED_DEMO_SEMANTIC_SOURCE_COUNT,
+          fileCount: SEEDED_DEMO_SEMANTIC_SOURCE_COUNT,
+        },
+        knowledge: {
+          manifestPageCount: SEEDED_DEMO_KNOWLEDGE_PAGE_COUNT,
+          fileCount: SEEDED_DEMO_KNOWLEDGE_PAGE_COUNT,
+        },
         links: { manifestLinkCount: 23, linkCount: 23 },
         reports: { primaryPath: 'reports/seeded-demo-report.json', fileCount: 1 },
       },
@@ -636,10 +645,16 @@ describe('runKtxDemo', () => {
     ).resolves.toBe(0);
 
     expect(seededIo.stdout()).toContain('Status: ready');
-    expect(seededIo.stdout()).toContain('Semantic-layer sources: 46 manifest, 46 files');
-    expect(seededIo.stdout()).toContain('Knowledge pages: 28 manifest, 28 files');
+    expect(seededIo.stdout()).toContain(
+      `Semantic-layer sources: ${SEEDED_DEMO_SEMANTIC_SOURCE_COUNT} manifest, ${SEEDED_DEMO_SEMANTIC_SOURCE_COUNT} files`,
+    );
+    expect(seededIo.stdout()).toContain(
+      `Knowledge pages: ${SEEDED_DEMO_KNOWLEDGE_PAGE_COUNT} manifest, ${SEEDED_DEMO_KNOWLEDGE_PAGE_COUNT} files`,
+    );
     expect(seededIo.stdout()).not.toContain('Status: corrupt');
-    expect(seededIo.stdout()).not.toContain('Semantic-layer sources: 6 manifest, 0 files');
+    expect(seededIo.stdout()).not.toContain(
+      `Semantic-layer sources: ${SEEDED_DEMO_SEMANTIC_SOURCE_COUNT} manifest, 0 files`,
+    );
   });
 
   it('fails corrupted demo projects in no-input mode with reset guidance', async () => {

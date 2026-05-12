@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.71",
+    "@ai-sdk/devtools": "0.0.17",
     "@ai-sdk/google-vertex": "^4.0.112",
     "ai": "^6.0.168",
     "openai": "^6.25.0"

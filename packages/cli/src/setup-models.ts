@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { cancel, isCancel, password, select, text } from '@clack/prompts';
+import { resolveLocalKtxLlmConfig } from '@ktx/context';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   type KtxProjectConfig,
@@ -170,13 +171,26 @@ export async function fetchAnthropicModels(
   return models.map((item, index) => ({ ...item, recommended: index === Math.max(recommendedIndex, 0) }));
 }
 
-function hasCompletedLlm(config: KtxProjectConfig): boolean {
-  return (
-    config.setup?.completed_steps.includes('llm') === true &&
-    config.llm.provider.backend === 'anthropic' &&
-    typeof config.llm.models.default === 'string' &&
-    config.llm.models.default.length > 0
-  );
+export function isKtxSetupLlmConfigReady(config: KtxProjectLlmConfig): boolean {
+  let resolved: KtxLlmConfig | null;
+  try {
+    resolved = resolveLocalKtxLlmConfig(config, process.env);
+  } catch {
+    return false;
+  }
+  if (!resolved) {
+    return false;
+  }
+
+  if (resolved.backend === 'vertex') {
+    return typeof resolved.vertex?.location === 'string' && resolved.vertex.location.trim().length > 0;
+  }
+
+  return resolved.backend === 'anthropic' || resolved.backend === 'gateway';
+}
+
+function hasUsableConfiguredLlm(config: KtxProjectConfig): boolean {
+  return isKtxSetupLlmConfigReady(config.llm);
 }
 
 function buildProjectLlmConfig(
@@ -386,7 +400,7 @@ export async function runKtxSetupAnthropicModelStep(
   const project = await loadKtxProject({ projectDir: args.projectDir });
   if (
     args.forcePrompt !== true &&
-    hasCompletedLlm(project.config) &&
+    hasUsableConfiguredLlm(project.config) &&
     !args.anthropicApiKeyEnv &&
     !args.anthropicApiKeyFile &&
     !args.anthropicModel

@@ -80,10 +80,10 @@ export interface LookerClientDeps {
 }
 
 const defaultLogger: LookerClientLogger = {
-  log: (message) => console.log(message),
-  warn: (message) => console.warn(message),
-  error: (message) => console.error(message),
-  debug: (message) => console.debug(message),
+  log: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+  debug: () => undefined,
 };
 
 class InlineLookerSettings extends NodeSettings {

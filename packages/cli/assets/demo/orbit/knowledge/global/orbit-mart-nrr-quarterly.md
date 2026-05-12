@@ -20,7 +20,7 @@ tables:
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/98.json -->
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/103.json -->
 
-**Table:** `orbit_analytics.mart_nrr_quarterly`  
+**Table:** `orbit_analytics.mart_nrr_quarterly`
 **Grain:** one row per `quarter_label` × `segment`
 
 ## Columns
@@ -53,4 +53,3 @@ tables:
 - `net_revenue_retention` is a ratio, not a percentage. Multiply by 100 for display.
 - Contraction includes discount expirations (classified as contraction, not churn). See [orbit-nrr-discount-expiration-treatment](orbit-nrr-discount-expiration-treatment).
 - Enterprise is the primary executive reporting segment.
-

@@ -20,7 +20,7 @@ tables:
 
 # Activation KPI Glossary
 
-**Owner team:** Growth  
+**Owner team:** Growth
 **Source:** Notion — Orbit Demo Home / Data Team - Onboarding / Activation KPI Glossary, last edited 2026-05-07
 
 Use this when a question is about signup-to-habit behavior. Orbit uses activation language across Growth, Product, and CS conversations.
@@ -62,4 +62,3 @@ Growth conversations typically use D7 and D14 Activation Rate. Product and CS ma
 ## Relationship to Account-Level Activation
 
 This glossary defines **customer-level** activation (signup-to-habit). The **account-level** activation workflow (requester login → first approved purchase request → account activated) is a separate concept tracked in `mart_account_activity` and governed by the January 2026 policy change. See `orbit-activation-policy-change-jan-2026` for that definition.
-

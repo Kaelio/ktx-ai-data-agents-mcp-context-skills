@@ -21,7 +21,7 @@ refs:
 
 Orbit sells procurement workflow and spend-control software. The core value proposition: route purchase requests, collect approvals, onboard suppliers, and issue purchase orders without turning every exception into a status hunt.
 
-**Primary buyers:** Finance, Procurement, Business Operations.  
+**Primary buyers:** Finance, Procurement, Business Operations.
 **Daily users:** department admins, office managers, IT leads, legal ops partners — anyone who has to get a vendor through the building.
 
 ## Product Workflow
@@ -69,4 +69,3 @@ Orbit sells procurement workflow and spend-control software. The core value prop
 - "Supplier onboarding is split across three teams."
 - "Renewals are visible too late."
 - "People keep asking Finance for status because there is nowhere better to look."
-

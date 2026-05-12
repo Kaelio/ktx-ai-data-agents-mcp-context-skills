@@ -14,9 +14,9 @@ sl_refs:
 
 # Plan & Segment Normalization
 
-**Governed metric key:** `segment`  
-**Owner team:** sales_ops  
-**Notion:** `notion://notion_page_sales_ops_segmentation#growth-plan-normalization`  
+**Governed metric key:** `segment`
+**Owner team:** sales_ops
+**Notion:** `notion://notion_page_sales_ops_segmentation#growth-plan-normalization`
 **Sources:** `mart_account_segments`, `stg_plan_segment_mapping`, `stg_plans`
 
 ## Canonical Plan Codes

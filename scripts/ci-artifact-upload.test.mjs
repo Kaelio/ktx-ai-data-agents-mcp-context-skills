@@ -31,7 +31,7 @@ describe('KTX CI artifact upload contract', () => {
       workflow,
       /name: Build and verify package artifacts\s+run: pnpm run artifacts:check\s+- name: Upload package artifacts/s,
     );
-    assert.match(workflow, /uses: actions\/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f/);
+    assert.match(workflow, /uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/);
     assert.match(workflow, /name: ktx-package-artifacts-\$\{\{ github\.sha \}\}/);
     assert.match(workflow, /dist\/artifacts\/manifest\.json/);
     assert.match(workflow, /dist\/artifacts\/npm\/\*\.tgz/);

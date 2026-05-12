@@ -12,7 +12,7 @@ refs:
 
 ## New Hire Week-One Onboarding Policy
 
-**Source:** Notion — People & Operating Norms, last edited 2026-05-07  
+**Source:** Notion — People & Operating Norms, last edited 2026-05-07
 **Owner:** Manager (not People Ops)
 
 ---

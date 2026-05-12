@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { cancel, isCancel, select } from '@clack/prompts';
-import { loadKtxProject } from '@ktx/context/project';
+import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
+import { ktxLocalStateDbPath, loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { formatSetupNextStepLines } from './next-steps.js';
 import { isKtxSetupExitError, withSetupInterruptConfirmation } from './setup-interrupt.js';
@@ -20,7 +21,7 @@ import {
   runKtxSetupDatabasesStep,
 } from './setup-databases.js';
 import { type KtxSetupEmbeddingsDeps, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
-import { type KtxSetupModelDeps, runKtxSetupAnthropicModelStep } from './setup-models.js';
+import { type KtxSetupModelDeps, isKtxSetupLlmConfigReady, runKtxSetupAnthropicModelStep } from './setup-models.js';
 import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
 import {
   isKtxPreAgentSetupReady,
@@ -226,10 +227,6 @@ async function runKtxSetupDemoFromEntryMenu(
   );
 }
 
-function llmReady(status: KtxSetupStatus['llm']): boolean {
-  return status.backend === 'anthropic' && typeof status.model === 'string' && status.model.length > 0;
-}
-
 function embeddingsReady(status: KtxSetupStatus['embeddings']): boolean {
   return (
     status.backend !== undefined &&
@@ -252,6 +249,31 @@ function sourceConnections(config: Awaited<ReturnType<typeof loadKtxProject>>['c
     .sort((left, right) => left.connectionId.localeCompare(right.connectionId));
 }
 
+type LocalIngestStatusReport = NonNullable<Awaited<ReturnType<typeof getLatestLocalIngestStatus>>>;
+
+function reportHasSavedContext(report: LocalIngestStatusReport): boolean {
+  if (report.body.failedWorkUnits.length > 0) {
+    return false;
+  }
+  const counts = savedMemoryCountsForReport(report);
+  return counts.wikiCount > 0 || counts.slCount > 0;
+}
+
+async function readIngestContextStatus(project: KtxLocalProject): Promise<KtxSetupContextStatusSummary | null> {
+  if (!existsSync(ktxLocalStateDbPath(project))) {
+    return null;
+  }
+  const report = await getLatestLocalIngestStatus(project);
+  if (!report || !reportHasSavedContext(report)) {
+    return null;
+  }
+  return {
+    ready: true,
+    status: 'completed',
+    runId: report.runId,
+  };
+}
+
 export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupStatus> {
   const resolvedProjectDir = resolve(projectDir);
   if (!existsSync(join(resolvedProjectDir, 'ktx.yaml'))) {
@@ -269,10 +291,9 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
   const project = await loadKtxProject({ projectDir: resolvedProjectDir });
   const llm = {
     backend: project.config.llm.provider.backend,
-    ready: false,
+    ready: isKtxSetupLlmConfigReady(project.config.llm),
     model: project.config.llm.models.default,
   };
-  llm.ready = llmReady(llm);
 
   const embeddings = {
     backend: project.config.ingest.embeddings.backend,
@@ -284,6 +305,10 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
 
   const completedSteps = project.config.setup?.completed_steps ?? [];
   const contextState = await readKtxSetupContextState(resolvedProjectDir);
+  const setupContextStatus = setupContextStatusFromState(contextState, {
+    completedStep: completedSteps.includes('context'),
+  });
+  const ingestContextStatus = setupContextStatus.ready ? null : await readIngestContextStatus(project);
   const databaseIds = project.config.setup?.database_connection_ids ?? Object.keys(project.config.connections);
   const databasesComplete = completedSteps.includes('databases');
   const manifest = await readKtxAgentInstallManifest(resolvedProjectDir);
@@ -306,7 +331,7 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
       ...source,
       ready: completedSteps.includes('sources'),
     })),
-    context: setupContextStatusFromState(contextState, { completedStep: completedSteps.includes('context') }),
+    context: ingestContextStatus ?? setupContextStatus,
     agents,
   };
 }
@@ -376,7 +401,7 @@ function setupStatusReady(status: KtxSetupStatus): boolean {
     return true;
   }
   return (
-    llmReady(status.llm) &&
+    status.llm.ready &&
     embeddingsReady(status.embeddings) &&
     status.databases.every((database) => database.ready) &&
     status.sources.every((source) => source.ready)

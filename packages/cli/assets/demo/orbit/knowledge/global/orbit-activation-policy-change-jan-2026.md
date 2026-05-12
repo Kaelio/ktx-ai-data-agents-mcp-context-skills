@@ -14,9 +14,9 @@ sl_refs:
 
 # Activation Policy Change — January 2026
 
-**Governed metric key:** `activated_accounts`  
-**Owner team:** growth  
-**Notion:** `notion://notion_page_activation_policy_decision#policy-change`  
+**Governed metric key:** `activated_accounts`
+**Owner team:** growth
+**Notion:** `notion://notion_page_activation_policy_decision#policy-change`
 **Sources:** `mart_account_activity`, `int_activation_policy_windows`, `stg_activation_events`
 
 ## Policy Boundary

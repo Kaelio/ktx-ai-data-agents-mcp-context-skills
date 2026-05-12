@@ -20,7 +20,7 @@ tables:
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/102.json -->
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/104.json -->
 
-**Table:** `orbit_analytics.mart_revenue_daily`  
+**Table:** `orbit_analytics.mart_revenue_daily`
 **Grain:** one row per `revenue_date`
 
 ## Columns
@@ -54,4 +54,3 @@ tables:
 - `reconciliation_check` must be `true` on every row. Any `false` row indicates a data quality issue.
 - Gross-to-net reconciliation: gross revenue − credits − refunds = net revenue. See [orbit-revenue-gross-to-net-reconciliation](orbit-revenue-gross-to-net-reconciliation).
 - All amounts are in cents; divide by 100 for USD, by 100,000,000 for $M.
-

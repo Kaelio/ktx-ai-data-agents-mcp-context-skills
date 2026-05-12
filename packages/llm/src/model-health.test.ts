@@ -1,3 +1,4 @@
+import { wrapLanguageModel as defaultWrapLanguageModel } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 import { runKtxLlmHealthCheck } from './model-health.js';
 
@@ -7,6 +8,7 @@ describe('KTX LLM health check', () => {
   it('runs a minimal non-streaming model call through the configured provider', async () => {
     const generateText = vi.fn(async () => ({ text: 'ok' }));
     const createAnthropic = vi.fn(() => vi.fn(() => anthropicModel));
+    const wrapLanguageModel = vi.fn(defaultWrapLanguageModel);
 
     await expect(
       runKtxLlmHealthCheck(
@@ -15,7 +17,7 @@ describe('KTX LLM health check', () => {
           anthropic: { apiKey: 'sk-ant-test' },
           modelSlots: { default: 'claude-sonnet-4-6' },
         },
-        { deps: { createAnthropic, generateText } },
+        { deps: { createAnthropic, generateText, devtoolsEnabled: true, wrapLanguageModel } },
       ),
     ).resolves.toEqual({ ok: true });
 
@@ -32,6 +34,7 @@ describe('KTX LLM health check', () => {
         maxOutputTokens: 8,
       }),
     );
+    expect(wrapLanguageModel).not.toHaveBeenCalled();
   });
 
   it('returns a failed result without exposing secret values', async () => {

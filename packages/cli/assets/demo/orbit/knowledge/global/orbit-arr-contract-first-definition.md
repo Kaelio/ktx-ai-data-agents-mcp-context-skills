@@ -15,9 +15,9 @@ sl_refs:
 
 # ARR — Contract-First Definition
 
-**Governed metric key:** `arr`  
-**Owner team:** finance  
-**Notion:** `notion://notion_page_arr_contract_reporting#arr-contract-first`  
+**Governed metric key:** `arr`
+**Owner team:** finance
+**Notion:** `notion://notion_page_arr_contract_reporting#arr-contract-first`
 **Source:** `mart_arr_daily` (grain: `metric_date`)
 
 ## Rule

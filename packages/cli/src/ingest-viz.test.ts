@@ -331,8 +331,9 @@ describe('runKtxIngest viz and replay', () => {
     ).resolves.toBe(0);
 
     expect(runLocal).toHaveBeenCalledWith(expect.objectContaining({ memoryFlow: expect.anything() }));
-    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
+    expect(io.stderr()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: plain-run');
+    expect(io.stdout()).not.toContain('[5%]');
     expect(io.stdout()).not.toContain('KTX memory flow');
   });
 
@@ -407,8 +408,9 @@ describe('runKtxIngest viz and replay', () => {
 
     expect(startLiveMemoryFlow).not.toHaveBeenCalled();
     expect(runLocal).toHaveBeenCalledWith(expect.objectContaining({ memoryFlow: expect.anything() }));
-    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
+    expect(io.stderr()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: raw-missing-viz-run');
+    expect(io.stdout()).not.toContain('[5%]');
     expect(io.stdout()).not.toContain('KTX memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but stdin raw mode is unavailable; printing plain output.',

@@ -18,7 +18,7 @@ tables:
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/88.json -->
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/108.json -->
 
-**Table:** `orbit_analytics.mart_procurement_activity`  
+**Table:** `orbit_analytics.mart_procurement_activity`
 **Grain:** one row per `week_start_date` × `contract_arr_threshold_cents`
 
 ## Columns
@@ -45,4 +45,3 @@ tables:
 - `active_requesters` counts non-internal, non-test requesters on large active contracts. See [orbit-procurement-qualifying-actions](orbit-procurement-qualifying-actions).
 - The standard threshold is `contract_arr_threshold_cents = 20000000` ($200k ARR).
 - Always filter by `contract_arr_threshold_cents` — the table contains rows for multiple threshold values.
-

@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig } from '@ktx/context/project';
+import type { MetabaseRuntimeClient } from '@ktx/context/ingest';
+import { initKtxProject, parseKtxProjectConfig, serializeKtxProjectConfig } from '@ktx/context/project';
 import type { KtxConnectionDriver, KtxScanConnector, KtxSchemaSnapshot } from '@ktx/context/scan';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxConnection } from './connection.js';
@@ -476,7 +477,7 @@ describe('runKtxConnection', () => {
           force: false,
           allowLiteralCredentials: false,
           notion: {
-            authTokenRef: 'env:NOTION_AUTH_TOKEN',
+            authTokenRef: 'env:NOTION_TOKEN',
             crawlMode: 'all_accessible',
             rootPageIds: [],
             rootDatabaseIds: [],
@@ -492,7 +493,7 @@ describe('runKtxConnection', () => {
 
     const yaml = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(yaml).toContain('driver: notion');
-    expect(yaml).toContain('auth_token_ref: env:NOTION_AUTH_TOKEN');
+    expect(yaml).toContain('auth_token_ref: env:NOTION_TOKEN');
     expect(yaml).toContain('crawl_mode: all_accessible');
     expect(yaml).toContain('max_pages_per_run: 50');
     expect(yaml).not.toContain('ntn_');
@@ -515,7 +516,7 @@ describe('runKtxConnection', () => {
         force: false,
         allowLiteralCredentials: false,
         notion: {
-          authTokenRef: 'env:NOTION_AUTH_TOKEN',
+          authTokenRef: 'env:NOTION_TOKEN',
           crawlMode: 'all_accessible',
           rootPageIds: [],
           rootDatabaseIds: ['database-1'],
@@ -596,6 +597,61 @@ describe('runKtxConnection', () => {
     expect(io.stdout()).toContain('Connection test passed: warehouse');
     expect(io.stdout()).toContain('Driver: sqlite');
     expect(io.stdout()).toContain('Tables: 2');
+  });
+
+  it('tests a configured Metabase connection through the Metabase runtime client', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const projectConfig = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      serializeKtxProjectConfig({
+        ...projectConfig,
+        connections: {
+          ...projectConfig.connections,
+          prod_metabase: {
+            driver: 'metabase',
+            api_url: 'http://metabase.example.test',
+            api_key: 'mb_test',
+          },
+        },
+      }),
+      'utf-8',
+    );
+    const testConnection = vi.fn(async () => ({ success: true as const }));
+    const getDatabases = vi.fn(async () => [
+      { id: 1, name: 'Analytics', engine: 'postgres', details: {}, is_sample: false },
+      { id: 2, name: 'Sample Database', engine: 'h2', details: {}, is_sample: true },
+    ]);
+    const cleanup = vi.fn(async () => undefined);
+    const createMetabaseClient = vi.fn(
+      async (): Promise<Pick<MetabaseRuntimeClient, 'testConnection' | 'getDatabases' | 'cleanup'>> => ({
+        testConnection,
+        getDatabases,
+        cleanup,
+      }),
+    );
+    const createScanConnector = vi.fn(async () => {
+      throw new Error('native scanner should not be used for Metabase');
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'prod_metabase' }, io.io, {
+        createScanConnector,
+        createMetabaseClient,
+      }),
+    ).resolves.toBe(0);
+
+    expect(createScanConnector).not.toHaveBeenCalled();
+    expect(createMetabaseClient).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), 'prod_metabase');
+    expect(testConnection).toHaveBeenCalledTimes(1);
+    expect(getDatabases).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(io.stdout()).toContain('Connection test passed: prod_metabase');
+    expect(io.stdout()).toContain('Driver: metabase');
+    expect(io.stdout()).toContain('Databases: 1');
+    expect(io.stderr()).toBe('');
   });
 
   it('cleans up the native scan connector when connection testing fails', async () => {

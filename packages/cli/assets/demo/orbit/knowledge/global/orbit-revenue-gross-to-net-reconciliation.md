@@ -14,9 +14,9 @@ sl_refs:
 
 # Revenue — Gross-to-Net Reconciliation
 
-**Governed metric key:** `net_revenue`  
-**Owner team:** finance  
-**Notion:** `notion://notion_page_revenue_reporting_policy#gross-to-net-reconciliation`  
+**Governed metric key:** `net_revenue`
+**Owner team:** finance
+**Notion:** `notion://notion_page_revenue_reporting_policy#gross-to-net-reconciliation`
 **Source:** `mart_revenue_daily` (grain: `revenue_date`)
 
 ## Formula

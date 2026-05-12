@@ -427,6 +427,69 @@ describe('local scan enrichment', () => {
     expect(result.relationships).toEqual({ accepted: 0, review: 1, rejected: 0, skipped: 0 });
   });
 
+  it('generates table descriptions with bounded table-level concurrency', async () => {
+    const concurrentSnapshot: KtxSchemaSnapshot = {
+      ...snapshot,
+      tables: Array.from({ length: 8 }, (_, index) => ({
+        catalog: null,
+        db: 'public',
+        name: `table_${index + 1}`,
+        kind: 'table' as const,
+        comment: null,
+        estimatedRows: 2,
+        foreignKeys: [],
+        columns: [
+          {
+            name: 'id',
+            nativeType: 'integer',
+            normalizedType: 'integer',
+            dimensionType: 'number' as const,
+            nullable: false,
+            primaryKey: true,
+            comment: null,
+          },
+        ],
+      })),
+    };
+    let activeColumnSamples = 0;
+    let maxActiveColumnSamples = 0;
+    const scanConnector = {
+      ...connector(),
+      introspect: vi.fn(async () => concurrentSnapshot),
+      sampleColumn: vi.fn(async () => {
+        activeColumnSamples += 1;
+        maxActiveColumnSamples = Math.max(maxActiveColumnSamples, activeColumnSamples);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        activeColumnSamples -= 1;
+        return {
+          values: ['1'],
+          nullCount: 0,
+          distinctCount: 1,
+        };
+      }),
+      sampleTable: vi.fn(async () => ({
+        headers: ['id'],
+        rows: [[1]],
+        totalRows: 1,
+      })),
+    };
+    const settings = {
+      ...buildDefaultKtxProjectConfig('test').scan.relationships,
+      enabled: false,
+    };
+
+    await runLocalScanEnrichment({
+      connectionId: 'warehouse',
+      mode: 'enriched',
+      connector: scanConnector,
+      context: { runId: 'scan-run-concurrent-descriptions' },
+      providers: createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 3 }),
+      relationshipSettings: settings,
+    });
+
+    expect(maxActiveColumnSamples).toBe(6);
+  });
+
   it('reports enrichment progress for countable stages', async () => {
     const events: Array<{ progress: number; message?: string; transient?: boolean }> = [];
     const progress = {
@@ -713,7 +776,7 @@ describe('local scan enrichment', () => {
           model: 'provider/embedding-model',
           dimensions: 1536,
           batchSize: 8,
-          openai: { api_key: 'env:OPENAI_API_KEY' },
+          openai: { api_key: 'env:OPENAI_API_KEY' }, // pragma: allowlist secret
         },
       },
       {
@@ -726,7 +789,7 @@ describe('local scan enrichment', () => {
       {
         createKtxLlmProvider: createKtxLlmProvider as any,
         createKtxEmbeddingProvider: createKtxEmbeddingProvider as any,
-        env: { OPENAI_API_KEY: 'openai-key' },
+        env: { OPENAI_API_KEY: 'openai-key' }, // pragma: allowlist secret
       },
     );
 

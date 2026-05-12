@@ -112,6 +112,24 @@ describe('LookerClient', () => {
     });
   });
 
+  it('does not warn to console when optional prioritization inputs fail by default', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fakeSdk = sdk({
+      search_dashboards: vi.fn().mockRejectedValue(new Error('dashboards unavailable')),
+      search_looks: vi.fn().mockRejectedValue(new Error('looks unavailable')),
+    });
+    const client = new LookerClient(params(), { sdkFactory: () => fakeSdk });
+
+    await expect(client.getSignals()).resolves.toMatchObject({
+      dashboardUsage: [],
+      lookUsage: [],
+      scheduledPlans: [],
+      favorites: [],
+    });
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('maps dashboards, looks, folders, models, explores, users, and groups to staged DTOs', async () => {
     const fakeSdk = sdk();
     const client = new LookerClient(params(), { sdkFactory: () => fakeSdk });

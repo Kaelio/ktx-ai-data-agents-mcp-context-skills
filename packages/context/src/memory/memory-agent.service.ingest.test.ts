@@ -37,6 +37,7 @@ interface BuiltMocks {
   agentRunner: any;
   slValidator: any;
   toolsetFactory: any;
+  logger: any;
 }
 
 const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
@@ -131,6 +132,7 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
         getAllTools: vi.fn().mockReturnValue([]),
       }),
     },
+    logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   };
 
   return { ...defaults, ...overrides };
@@ -179,6 +181,7 @@ const buildService = (mocks: BuiltMocks): MemoryAgentService =>
     telemetry: {
       trackMemoryIngestion: mocks.eventTracker.trackEvent,
     },
+    logger: mocks.logger,
   });
 
 const baseInput = {
@@ -236,6 +239,27 @@ describe('MemoryAgentService.ingest — session-branch orchestration', () => {
     );
 
     expect(result.commitHash).toBe('cafebabe');
+  });
+
+  it('logs prompt debug output when KTX_MEMORY_AGENT_DEBUG_PROMPTS is enabled', async () => {
+    const previousDebugPrompts = process.env.KTX_MEMORY_AGENT_DEBUG_PROMPTS;
+    const mocks = buildMocks();
+    const svc = buildService(mocks);
+
+    try {
+      process.env.KTX_MEMORY_AGENT_DEBUG_PROMPTS = '1';
+
+      await svc.ingest(baseInput);
+
+      expect(mocks.logger.debug).toHaveBeenCalledWith(expect.stringContaining('[memory-agent prompt-debug] system='));
+      expect(mocks.logger.debug).toHaveBeenCalledWith(expect.stringContaining('[memory-agent prompt-debug] user='));
+    } finally {
+      if (previousDebugPrompts === undefined) {
+        delete process.env.KTX_MEMORY_AGENT_DEBUG_PROMPTS;
+      } else {
+        process.env.KTX_MEMORY_AGENT_DEBUG_PROMPTS = previousDebugPrompts;
+      }
+    }
   });
 
   it('empty path: squash returns no touched paths → no enqueue, cleanup(empty), commitHash=null', async () => {

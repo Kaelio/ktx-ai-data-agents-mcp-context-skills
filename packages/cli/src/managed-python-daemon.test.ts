@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   readManagedPythonDaemonStatus,
   startManagedPythonDaemon,
+  stopAllManagedPythonDaemons,
   stopManagedPythonDaemon,
   type ManagedPythonDaemonChild,
   type ManagedPythonDaemonFetch,
+  type ManagedPythonDaemonProcessInfo,
   type ManagedPythonDaemonSpawn,
   type ManagedPythonDaemonState,
 } from './managed-python-daemon.js';
@@ -105,6 +107,24 @@ function runningState(root: string, overrides: Partial<ManagedPythonDaemonState>
   };
 }
 
+function daemonStatePath(root: string, version: string): string {
+  return join(root, 'runtime', version, 'daemon.json');
+}
+
+function runningStateForVersion(
+  root: string,
+  version: string,
+  overrides: Partial<ManagedPythonDaemonState> = {},
+): ManagedPythonDaemonState {
+  return {
+    ...runningState(root),
+    version,
+    stdoutLog: join(root, 'runtime', version, 'daemon.stdout.log'),
+    stderrLog: join(root, 'runtime', version, 'daemon.stderr.log'),
+    ...overrides,
+  };
+}
+
 describe('managed Python daemon lifecycle', () => {
   let tempDir: string;
 
@@ -167,6 +187,41 @@ describe('managed Python daemon lifecycle', () => {
       features: ['core'],
       stdoutLog: layout(tempDir).daemonStdoutPath,
       stderrLog: layout(tempDir).daemonStderrPath,
+    });
+  });
+
+  it('makes a final health probe before reporting startup failure', async () => {
+    const spawnDaemon = makeSpawn(5556);
+    const installRuntime = vi.fn(async () => installResult(tempDir));
+    const fetch = vi
+      .fn<ManagedPythonDaemonFetch>()
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'healthy', version: '0.2.0' }),
+        text: async () => '',
+      });
+
+    const result = await startManagedPythonDaemon({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      features: ['core'],
+      installRuntime,
+      spawnDaemon,
+      fetch,
+      allocatePort: vi.fn(async () => 61234),
+      now: () => new Date('2026-05-11T00:00:00.000Z'),
+      startupTimeoutMs: 5,
+      pollIntervalMs: 20,
+    });
+
+    expect(result.status).toBe('started');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(await readFile(layout(tempDir).daemonStatePath, 'utf8'))).toMatchObject({
+      pid: 5556,
+      port: 61234,
+      version: '0.2.0',
     });
   });
 
@@ -235,5 +290,139 @@ describe('managed Python daemon lifecycle', () => {
     expect(result.status).toBe('stopped');
     expect(killProcess).toHaveBeenCalledWith(4242);
     await expect(readFile(layout(tempDir).daemonStatePath, 'utf8')).rejects.toThrow();
+  });
+
+  it('stops all recorded daemon states across runtime versions and removes state files', async () => {
+    await mkdir(join(tempDir, 'runtime', '0.1.0'), { recursive: true });
+    await mkdir(join(tempDir, 'runtime', '0.2.0'), { recursive: true });
+    await writeFile(
+      daemonStatePath(tempDir, '0.1.0'),
+      `${JSON.stringify(runningStateForVersion(tempDir, '0.1.0', { pid: 1111, port: 61111 }), null, 2)}\n`,
+    );
+    await writeFile(
+      daemonStatePath(tempDir, '0.2.0'),
+      `${JSON.stringify(runningStateForVersion(tempDir, '0.2.0', { pid: 2222, port: 62222 }), null, 2)}\n`,
+    );
+    const alive = new Set([1111, 2222]);
+    const killProcess = vi.fn((pid: number) => {
+      alive.delete(pid);
+    });
+
+    const result = await stopAllManagedPythonDaemons({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      listProcesses: vi.fn(async () => []),
+      processAlive: vi.fn((pid) => alive.has(pid)),
+      killProcess,
+      stopGraceMs: 0,
+    });
+
+    expect(result.failed).toHaveLength(0);
+    expect(result.stopped.map((entry) => entry.pid).sort()).toEqual([1111, 2222]);
+    expect(killProcess).toHaveBeenCalledWith(1111, 'SIGTERM');
+    expect(killProcess).toHaveBeenCalledWith(2222, 'SIGTERM');
+    await expect(readFile(daemonStatePath(tempDir, '0.1.0'), 'utf8')).rejects.toThrow();
+    await expect(readFile(daemonStatePath(tempDir, '0.2.0'), 'utf8')).rejects.toThrow();
+  });
+
+  it('removes stale state when the recorded daemon process is no longer alive', async () => {
+    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
+
+    const result = await stopAllManagedPythonDaemons({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      listProcesses: vi.fn(async () => []),
+      processAlive: vi.fn(() => false),
+      killProcess: vi.fn(),
+      stopGraceMs: 0,
+    });
+
+    expect(result.stopped).toHaveLength(0);
+    expect(result.stale.map((entry) => entry.pid)).toEqual([4242]);
+    await expect(readFile(layout(tempDir).daemonStatePath, 'utf8')).rejects.toThrow();
+  });
+
+  it('deduplicates a daemon found by state and process scan, preferring state metadata', async () => {
+    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
+    const alive = new Set([4242]);
+    const killProcess = vi.fn((pid: number) => {
+      alive.delete(pid);
+    });
+
+    const result = await stopAllManagedPythonDaemons({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      listProcesses: vi.fn(async (): Promise<ManagedPythonDaemonProcessInfo[]> => [
+        { pid: 4242, command: 'uv run ktx-daemon serve-http --host 127.0.0.1 --port 61234' },
+      ]),
+      processAlive: vi.fn((pid) => alive.has(pid)),
+      killProcess,
+      stopGraceMs: 0,
+    });
+
+    expect(result.stopped).toHaveLength(1);
+    expect(result.stopped[0]).toMatchObject({
+      pid: 4242,
+      source: 'state',
+      url: 'http://127.0.0.1:58731',
+    });
+    expect(killProcess).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops unrecorded ktx-daemon serve-http processes from process scan results', async () => {
+    const alive = new Set([3333, 5555]);
+    const killProcess = vi.fn((pid: number) => {
+      alive.delete(pid);
+    });
+
+    const result = await stopAllManagedPythonDaemons({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      listProcesses: vi.fn(async (): Promise<ManagedPythonDaemonProcessInfo[]> => [
+        { pid: 3333, command: 'uv run ktx-daemon serve-http --host 127.0.0.1 --port 8765' },
+        { pid: 4444, command: 'node server.js --port 8765' },
+        { pid: 5555, command: 'grep ktx-daemon serve-http --port 8765' },
+      ]),
+      processAlive: vi.fn((pid) => alive.has(pid)),
+      killProcess,
+      stopGraceMs: 0,
+    });
+
+    expect(result.failed).toHaveLength(0);
+    expect(result.stopped).toEqual([
+      expect.objectContaining({
+        pid: 3333,
+        source: 'process',
+        url: 'http://127.0.0.1:8765',
+      }),
+    ]);
+    expect(killProcess).toHaveBeenCalledWith(3333, 'SIGTERM');
+    expect(killProcess).not.toHaveBeenCalledWith(4444, expect.anything());
+    expect(killProcess).not.toHaveBeenCalledWith(5555, expect.anything());
+  });
+
+  it('reports a failed stop when TERM and KILL leave a daemon running', async () => {
+    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
+
+    const result = await stopAllManagedPythonDaemons({
+      cliVersion: '0.2.0',
+      runtimeRoot: join(tempDir, 'runtime'),
+      listProcesses: vi.fn(async () => []),
+      processAlive: vi.fn(() => true),
+      killProcess: vi.fn(),
+      stopGraceMs: 0,
+    });
+
+    expect(result.stopped).toHaveLength(0);
+    expect(result.failed).toEqual([
+      expect.objectContaining({
+        pid: 4242,
+        detail: 'Process still running after SIGKILL',
+      }),
+    ]);
+    expect(await readFile(layout(tempDir).daemonStatePath, 'utf8')).toContain('"pid": 4242');
   });
 });

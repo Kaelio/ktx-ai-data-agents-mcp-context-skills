@@ -62,7 +62,7 @@ function firstNonEmptyLine(...values) {
 function parseArgs(argv) {
   const options = {
     connectionId: process.env.KTX_ORBIT_CONNECTION_ID ?? 'orbit',
-    projectDir: process.env.KTX_ORBIT_PROJECT_DIR ?? defaultProjectDir,
+    projectDir: process.env.KTX_PROJECT_DIR ?? defaultProjectDir,
     reportPath: defaultReportPath,
   };
 
@@ -242,7 +242,7 @@ function orbitVerificationEnv(projectDir) {
 
 export async function runOrbitVerification(options = {}) {
   const connectionId = options.connectionId ?? process.env.KTX_ORBIT_CONNECTION_ID ?? 'orbit';
-  const projectDir = options.projectDir ?? process.env.KTX_ORBIT_PROJECT_DIR ?? defaultProjectDir;
+  const projectDir = options.projectDir ?? process.env.KTX_PROJECT_DIR ?? defaultProjectDir;
   const reportPath = options.reportPath ?? defaultReportPath;
   const rootDir = options.rootDir ?? ktxRootDir;
   const runner = options.runWorkspaceKtx ?? runWorkspaceKtx;

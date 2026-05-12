@@ -22,10 +22,10 @@ sl_refs:
 
 # Orbit dbt Project Overview
 
-**Project name:** `kaelio_demo`  
-**dbt version:** 1.0.0  
-**Profile target:** Postgres (`orbit_analytics` schema, `kaelio_demo` database)  
-**Raw source schema:** `orbit_raw`  
+**Project name:** `kaelio_demo`
+**dbt version:** 1.0.0
+**Profile target:** Postgres (`orbit_analytics` schema, `kaelio_demo` database)
+**Raw source schema:** `orbit_raw`
 **Analytics schema:** `orbit_analytics` (all models materialised as views by default)
 
 ## Model Layers
@@ -52,4 +52,3 @@ sl_refs:
 ## Raw Source Tables (`orbit_raw` schema)
 
 accounts, account_hierarchy, plans, contracts, subscriptions, contract_discount_terms, arr_movements, invoices, invoice_line_items, refunds, plan_segment_mapping, users, activation_events, sessions, purchase_requests, approval_events, suppliers, supplier_onboarding_events, purchase_orders, support_tickets, account_owners.
-

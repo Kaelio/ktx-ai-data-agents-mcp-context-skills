@@ -41,7 +41,7 @@ export async function runKtxLlmHealthCheck(
 ): Promise<KtxLlmHealthCheckResult> {
   try {
     const { generateText: runGenerateTextOverride, ...providerDeps } = options.deps ?? {};
-    const provider = createKtxLlmProvider(config, providerDeps);
+    const provider = createKtxLlmProvider(config, { ...providerDeps, devtoolsEnabled: false });
     const runGenerateText = runGenerateTextOverride ?? generateText;
     await withTimeout(
       runGenerateText({

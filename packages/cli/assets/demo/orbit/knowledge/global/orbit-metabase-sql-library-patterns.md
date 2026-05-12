@@ -69,4 +69,3 @@ Card 48 is the canonical reference; card 55 is a filtered variant for large-cont
 | 53 | Enterprise NRR quarter breakout | mart_nrr_quarterly | 0 |
 | 54 | February credits drilldown | mart_revenue_daily | 0 |
 | 55 | Large contract requesters | mart_account_segments | 0 |
-

@@ -14,9 +14,9 @@ sl_refs:
 
 # Procurement — Qualifying Actions & Weekly Active Requesters
 
-**Governed metric key:** `weekly_active_requesters`  
-**Owner team:** product  
-**Notion:** `notion://notion_page_procurement_instrumentation#qualifying-procurement-actions`  
+**Governed metric key:** `weekly_active_requesters`
+**Owner team:** product
+**Notion:** `notion://notion_page_procurement_instrumentation#qualifying-procurement-actions`
 **Sources:** `mart_procurement_activity`, `int_procurement_qualifying_actions`
 
 ## Qualifying Action Definition

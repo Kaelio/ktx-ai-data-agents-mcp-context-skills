@@ -1,6 +1,6 @@
-import { cancel, confirm, isCancel } from '@clack/prompts';
 import { createPythonSemanticLayerComputePort, type KtxSemanticLayerComputePort } from '@ktx/context/daemon';
 import type { KtxCliIo } from './cli-runtime.js';
+import { createClackPromptAdapter } from './clack.js';
 import {
   installManagedPythonRuntime,
   readManagedPythonRuntimeStatus,
@@ -36,7 +36,7 @@ export interface ManagedPythonCommandRuntime {
 export interface ManagedPythonCommandDeps {
   readStatus?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeStatus>;
   installRuntime?: (options: ManagedPythonRuntimeInstallOptions) => Promise<ManagedPythonRuntimeInstallResult>;
-  confirmInstall?: (message: string) => Promise<boolean>;
+  confirmInstall?: (message: string, io: KtxCliIo) => Promise<boolean>;
 }
 
 export interface ManagedPythonCommandOptions extends ManagedPythonCommandDeps {
@@ -69,16 +69,12 @@ function hasFeature(manifest: InstalledKtxRuntimeManifest, feature: KtxRuntimeFe
   return manifest.features.includes(feature);
 }
 
-async function defaultConfirmInstall(message: string): Promise<boolean> {
-  if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
+async function defaultConfirmInstall(message: string, io: KtxCliIo): Promise<boolean> {
+  if (io.stdout.isTTY !== true) {
     return false;
   }
-  const response = await confirm({ message, initialValue: true });
-  if (isCancel(response)) {
-    cancel('Runtime installation cancelled.');
-    return false;
-  }
-  return response === true;
+  const prompts = createClackPromptAdapter();
+  return await prompts.confirm({ message, initialValue: true });
 }
 
 export async function ensureManagedPythonCommandRuntime(
@@ -99,7 +95,7 @@ export async function ensureManagedPythonCommandRuntime(
 
   if (options.installPolicy === 'prompt') {
     const confirmInstall = options.confirmInstall ?? defaultConfirmInstall;
-    const confirmed = await confirmInstall(installPrompt(feature));
+    const confirmed = await confirmInstall(installPrompt(feature), options.io);
     if (!confirmed) {
       throw new Error(`KTX Python runtime installation was cancelled. Run: ${managedRuntimeInstallCommand(feature)}`);
     }

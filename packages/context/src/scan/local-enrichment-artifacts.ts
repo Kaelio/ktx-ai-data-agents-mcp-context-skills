@@ -62,6 +62,14 @@ interface ExistingManifestState {
 
 type LocalDescriptionUpdates = KtxLocalScanEnrichmentResult['descriptionUpdates'];
 
+function isGeneratedErrorDescription(description: string | null | undefined): boolean {
+  const normalized = description?.trim().toLowerCase();
+  return (
+    normalized === 'failed to generate description' ||
+    normalized?.startsWith('error generating description:') === true
+  );
+}
+
 function artifactDir(connectionId: string, syncId: string): string {
   return `raw-sources/${connectionId}/${LIVE_DATABASE_ADAPTER}/${syncId}/enrichment`;
 }
@@ -79,7 +87,7 @@ function tableDescription(
   if (table.comment) {
     descriptions.db = table.comment;
   }
-  if (update?.tableDescription) {
+  if (update?.tableDescription && !isGeneratedErrorDescription(update.tableDescription)) {
     descriptions.ai = update.tableDescription;
   }
   return Object.keys(descriptions).length > 0 ? descriptions : undefined;
@@ -96,7 +104,7 @@ function columnDescription(
   if (column.comment) {
     descriptions.db = column.comment;
   }
-  if (aiDescription) {
+  if (aiDescription && !isGeneratedErrorDescription(aiDescription)) {
     descriptions.ai = aiDescription;
   }
   return Object.keys(descriptions).length > 0 ? descriptions : undefined;

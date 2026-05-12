@@ -19,7 +19,7 @@ tables:
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/105.json -->
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/115.json -->
 
-**Table:** `orbit_analytics.mart_retention_movement_breakout`  
+**Table:** `orbit_analytics.mart_retention_movement_breakout`
 **Grain:** one row per `quarter_label` × `segment` × `movement_type` × `movement_reason`
 
 ## Columns
@@ -53,4 +53,3 @@ tables:
 - Contraction includes discount expirations, classified as contraction (not churn), tracked via `movement_reason`. See [orbit-nrr-discount-expiration-treatment](orbit-nrr-discount-expiration-treatment).
 - This table is the row-level source for `mart_nrr_quarterly` aggregations.
 - Only one of `expansion_arr_cents`, `contraction_arr_cents`, `churned_arr_cents` is non-zero per row.
-

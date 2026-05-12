@@ -138,7 +138,7 @@ function makeIo(options: { isTTY?: boolean; stdinIsTTY?: boolean } = {}) {
 describe('runKtxConnectionMetabaseSetup', () => {
   const fakeMetabaseCredential = 'mb_example';
   const existingMetabaseCredential = 'mb_existing';
-  const fakeAdminCredential = 'pw';
+  const fakeAdminCredential = 'admin-secret-value-123';
 
   let tempDir: string;
   let projectDir: string;

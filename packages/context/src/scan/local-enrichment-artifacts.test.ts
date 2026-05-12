@@ -553,6 +553,47 @@ describe('writeLocalScanEnrichmentArtifacts', () => {
     });
   });
 
+  it('does not persist generated error descriptions in manifest shards', async () => {
+    await writeLocalScanManifestShards({
+      project,
+      connectionId: 'warehouse',
+      syncId: 'sync-error-description',
+      driver: 'postgres',
+      snapshot,
+      descriptionUpdates: [
+        {
+          table: { catalog: null, db: 'public', name: 'orders' },
+          tableDescription: 'Error generating description: timeout exceeded when trying to connect',
+          columnDescriptions: {
+            id: 'Error generating description: timeout exceeded when trying to connect',
+            customer_id: 'AI customer reference',
+          },
+        },
+      ],
+      dryRun: false,
+    });
+
+    const shard = YAML.parse(
+      await readFile(join(tempDir, 'project/semantic-layer/warehouse/_schema/public.yaml'), 'utf8'),
+    ) as {
+      tables: {
+        orders: {
+          descriptions?: Record<string, string>;
+          columns: Array<{ name: string; descriptions?: Record<string, string> }>;
+        };
+      };
+    };
+
+    expect(shard.tables.orders.descriptions).toEqual({ db: 'DB orders table' });
+    expect(shard.tables.orders.columns.find((column) => column.name === 'id')?.descriptions).toEqual({
+      db: 'DB order id',
+    });
+    expect(shard.tables.orders.columns.find((column) => column.name === 'customer_id')?.descriptions).toEqual({
+      db: 'DB customer id',
+      ai: 'AI customer reference',
+    });
+  });
+
   it('writes accepted composite relationships to relationship artifacts and manifest shards', async () => {
     const compositeSnapshot: KtxSchemaSnapshot = {
       connectionId: 'warehouse',

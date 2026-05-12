@@ -21,9 +21,14 @@ class IngestInputError extends Error {
   }
 }
 
-const logger = {
-  log: (message: string) => console.log(message),
-  warn: (message: string) => console.warn(message),
+export interface MetabaseFetchLogger {
+  log(message: string): void;
+  warn(message: string): void;
+}
+
+const noopMetabaseFetchLogger: MetabaseFetchLogger = {
+  log: () => undefined,
+  warn: () => undefined,
 };
 
 export interface FetchMetabaseBundleParams {
@@ -32,6 +37,7 @@ export interface FetchMetabaseBundleParams {
   ctx: FetchContext;
   clientFactory: MetabaseClientFactory;
   sourceStateReader: MetabaseSourceStateReader;
+  logger?: MetabaseFetchLogger;
 }
 
 interface CollectionNode {
@@ -76,6 +82,7 @@ function resolvePath(index: Map<number | 'root', CollectionNode>, collectionId: 
 
 export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Promise<void> {
   const pullConfig: MetabasePullConfig = parseMetabasePullConfig(params.pullConfig);
+  const logger = params.logger ?? noopMetabaseFetchLogger;
   const syncState = await params.sourceStateReader.getSourceState(pullConfig.metabaseConnectionId);
   const mapping = syncState.mappings.find(
     (m) => m.metabaseDatabaseId === pullConfig.metabaseDatabaseId && m.syncEnabled,

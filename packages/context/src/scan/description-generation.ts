@@ -348,7 +348,7 @@ export class KtxDescriptionGenerator {
     };
   }
 
-  async generateTableDescription(input: KtxGenerateTableDescriptionInput): Promise<string> {
+  async generateTableDescription(input: KtxGenerateTableDescriptionInput): Promise<string | null> {
     const tableRef = toTableRef(input.table);
     const cacheKey = this.cache?.buildTableKey(tableRef);
     if (cacheKey) {
@@ -386,7 +386,7 @@ export class KtxDescriptionGenerator {
         this.settings.tableMaxWords,
         'ktx-table-description',
       );
-      if (cacheKey) {
+      if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
       }
       return description;
@@ -396,7 +396,7 @@ export class KtxDescriptionGenerator {
     }
   }
 
-  async generateDataSourceDescription(input: KtxGenerateDataSourceDescriptionInput): Promise<string> {
+  async generateDataSourceDescription(input: KtxGenerateDataSourceDescriptionInput): Promise<string | null> {
     if (input.tables.length === 0) {
       return 'No tables found in database';
     }
@@ -451,7 +451,7 @@ export class KtxDescriptionGenerator {
         this.settings.dataSourceMaxWords,
         'ktx-data-source-description',
       );
-      if (cacheKey) {
+      if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
       }
       return description;
@@ -543,7 +543,7 @@ export class KtxDescriptionGenerator {
         'ktx-column-description',
       );
 
-      if (cacheKey) {
+      if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
       }
 
@@ -551,20 +551,20 @@ export class KtxDescriptionGenerator {
         columnName: column.name,
         description,
         skipped: false,
-        processed: true,
+        processed: description !== null,
       };
     } catch (error) {
       this.logger?.error(`Error analyzing column '${column.name}': ${errorMessage(error)}`);
       return {
         columnName: column.name,
-        description: `Error generating description: ${errorMessage(error)}`,
+        description: null,
         skipped: false,
         processed: false,
       };
     }
   }
 
-  private async generateAiDescription(prompt: string, maxWords: number, _operationName: string): Promise<string> {
+  private async generateAiDescription(prompt: string, maxWords: number, _operationName: string): Promise<string | null> {
     try {
       const text = await generateKtxText({
         llmProvider: this.llmProvider,
@@ -573,10 +573,10 @@ export class KtxDescriptionGenerator {
         temperature: this.settings.temperature,
       });
       const description = text.trim();
-      return description || 'Failed to generate description';
+      return description || null;
     } catch (error) {
       this.logger?.error(`Error generating AI description: ${errorMessage(error)}`);
-      return `Error generating description: ${errorMessage(error)}`;
+      return null;
     }
   }
 }

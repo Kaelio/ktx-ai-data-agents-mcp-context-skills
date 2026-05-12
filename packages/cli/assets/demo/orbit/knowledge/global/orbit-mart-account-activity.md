@@ -20,7 +20,7 @@ tables:
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/106.json -->
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/107.json -->
 
-**Table:** `orbit_analytics.mart_account_activity`  
+**Table:** `orbit_analytics.mart_account_activity`
 **Grain:** one row per `policy_change_date`
 
 ## Columns
@@ -47,4 +47,3 @@ tables:
 - The January 2026 activation policy change (`policy_change_date = 2026-01-15`) is the primary boundary. `policy_version` in upstream events splits into `pre_2026_01_15` and `post_2026_01_15` cohorts.
 - Rates are ratios (0–1); multiply by 100 for percentage display.
 - See [orbit-activation-policy-change-jan-2026](orbit-activation-policy-change-jan-2026) for full policy context.
-

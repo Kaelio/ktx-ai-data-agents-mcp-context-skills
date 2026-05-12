@@ -1,4 +1,5 @@
 import type { KtxLocalProject, KtxProjectConnectionConfig } from '../../../project/index.js';
+import type { LookerClientLogger } from './client.js';
 import {
   DefaultLookerClientFactory,
   DefaultLookerConnectionClientFactory,
@@ -59,8 +60,11 @@ export function createLocalLookerCredentialResolver(
 export function createLocalLookerSourceAdapter(
   project: KtxLocalProject,
   env: NodeJS.ProcessEnv = process.env,
+  logger?: LookerClientLogger,
 ): LookerSourceAdapter {
-  const connectionFactory = new DefaultLookerConnectionClientFactory(createLocalLookerCredentialResolver(project, env));
+  const connectionFactory = new DefaultLookerConnectionClientFactory(createLocalLookerCredentialResolver(project, env), {
+    ...(logger ? { logger } : {}),
+  });
   return new LookerSourceAdapter({
     clientFactory: new DefaultLookerClientFactory(connectionFactory),
   });

@@ -35,6 +35,7 @@ import {
   managedDaemonDatabaseIntrospectionOptions,
   type ManagedPythonCoreDaemonOptions,
 } from './managed-python-http.js';
+import type { KtxOperationalLogger } from './io/logger.js';
 
 function hasSnowflakeDriver(connection: unknown): boolean {
   return (
@@ -162,6 +163,7 @@ export interface KtxCliLocalIngestAdaptersOptions extends DefaultLocalIngestAdap
   sqlAnalysis?: SqlAnalysisPort;
   sqlAnalysisUrl?: string;
   managedDaemon?: ManagedPythonCoreDaemonOptions;
+  logger?: KtxOperationalLogger;
 }
 
 function historicSqlRecord(connection: unknown): Record<string, unknown> | null {

@@ -42,4 +42,3 @@ Declared in `models/exposures.yml`. All exposures are type `dashboard` with matu
 - **Owner:** Growth (growth@orbit-demo.example.com)
 - **Depends on:** `mart_account_activity`
 - **Description:** Activation policy comparison around the January 2026 workflow update.
-

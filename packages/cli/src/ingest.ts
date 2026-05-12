@@ -18,6 +18,7 @@ import {
 } from '@ktx/context/ingest';
 import { loadKtxProject } from '@ktx/context/project';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
+import { createCliOperationalLogger } from './io/logger.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { type KtxMemoryFlowStdin, renderMemoryFlowInteractively } from './memory-flow-interactive.js';
@@ -142,22 +143,22 @@ function createMetabaseFanoutProgress(
   connectionId: string,
   io: KtxIngestIo,
 ): LocalMetabaseFanoutProgress {
-  io.stdout.write(`Metabase ingest: ${connectionId}\n`);
-  io.stdout.write('Checking mappings and scheduled-pull targets...\n');
+  io.stderr.write(`Metabase ingest: ${connectionId}\n`);
+  io.stderr.write('Checking mappings and scheduled-pull targets...\n');
   return {
     onMetabaseFanoutPlanned(event) {
-      io.stdout.write(`Targets: ${pluralize(event.children.length, 'mapped database')}\n`);
+      io.stderr.write(`Targets: ${pluralize(event.children.length, 'mapped database')}\n`);
       for (const child of event.children) {
-        io.stdout.write(`- database=${child.metabaseDatabaseId} target=${child.targetConnectionId} status=queued\n`);
+        io.stderr.write(`- database=${child.metabaseDatabaseId} target=${child.targetConnectionId} status=queued\n`);
       }
     },
     onMetabaseChildStarted(event) {
-      io.stdout.write(
+      io.stderr.write(
         `- database=${event.metabaseDatabaseId} target=${event.targetConnectionId} status=running job=${event.jobId}\n`,
       );
     },
     onMetabaseChildCompleted(event) {
-      io.stdout.write(
+      io.stderr.write(
         `- database=${event.metabaseDatabaseId} target=${event.targetConnectionId} status=${event.status} job=${event.jobId}\n`,
       );
     },
@@ -168,14 +169,51 @@ function formatDiffProgress(event: Extract<MemoryFlowEvent, { type: 'diff_comput
   return `+${event.added}/~${event.modified}/-${event.deleted}/=${event.unchanged}`;
 }
 
-function completedWorkUnitCount(snapshot: MemoryFlowReplayInput): number {
-  return snapshot.events.filter((event) => event.type === 'work_unit_finished').length;
+function workUnitEventsThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): MemoryFlowEvent[] {
+  return snapshot.events.slice(0, eventIndex + 1);
+}
+
+function completedWorkUnitCountThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): number {
+  return workUnitEventsThrough(snapshot, eventIndex).filter((event) => event.type === 'work_unit_finished').length;
+}
+
+function activeWorkUnitCountThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): number {
+  const active = new Set<string>();
+  for (const event of workUnitEventsThrough(snapshot, eventIndex)) {
+    if (event.type === 'work_unit_started') {
+      active.add(event.unitKey);
+    }
+    if (event.type === 'work_unit_finished') {
+      active.delete(event.unitKey);
+    }
+  }
+  return active.size;
+}
+
+function plannedWorkUnitCountThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): number {
+  if (snapshot.plannedWorkUnits.length > 0) {
+    return snapshot.plannedWorkUnits.length;
+  }
+  const planEvent = workUnitEventsThrough(snapshot, eventIndex)
+    .filter((event) => event.type === 'chunks_planned')
+    .at(-1);
+  return planEvent?.workUnitCount ?? completedWorkUnitCountThrough(snapshot, eventIndex);
+}
+
+function workUnitOrdinalThrough(snapshot: MemoryFlowReplayInput, eventIndex: number, unitKey: string): number {
+  const events = workUnitEventsThrough(snapshot, eventIndex);
+  const startedIndex = events.findIndex((event) => event.type === 'work_unit_started' && event.unitKey === unitKey);
+  if (startedIndex === -1) {
+    return completedWorkUnitCountThrough(snapshot, eventIndex) + 1;
+  }
+  return events.slice(0, startedIndex + 1).filter((event) => event.type === 'work_unit_started').length;
 }
 
 function plainIngestEventProgress(
   event: MemoryFlowEvent,
   snapshot: MemoryFlowReplayInput,
-): { percent: number; message: string } | null {
+  eventIndex: number,
+): { percent: number; message: string; transient?: boolean } | null {
   switch (event.type) {
     case 'source_acquired':
       return {
@@ -196,11 +234,28 @@ function plainIngestEventProgress(
       };
     case 'stage_skipped':
       return { percent: 45, message: `Skipped ${event.stage}: ${event.reason}` };
-    case 'work_unit_started':
-      return { percent: 55, message: `Processing ${event.unitKey}` };
+    case 'work_unit_started': {
+      const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
+      const ordinal = workUnitOrdinalThrough(snapshot, eventIndex, event.unitKey);
+      const progress = total > 0 ? `${ordinal}/${total} work units: ` : '';
+      return { percent: 55, message: `Processing ${progress}${event.unitKey}` };
+    }
+    case 'work_unit_step': {
+      const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
+      const completed = completedWorkUnitCountThrough(snapshot, eventIndex);
+      const active = activeWorkUnitCountThrough(snapshot, eventIndex);
+      const stepFraction = event.stepBudget > 0 ? Math.min(1, event.stepIndex / event.stepBudget) : 0;
+      const percent = total > 0 ? 55 + Math.ceil(((completed + stepFraction) / total) * 25) : 55;
+      const latest = `${event.unitKey} step ${event.stepIndex}/${event.stepBudget}`;
+      return {
+        percent,
+        message: `Processing work units: ${completed}/${total} complete, ${active} active; latest ${latest}`,
+        transient: true,
+      };
+    }
     case 'work_unit_finished': {
-      const total = snapshot.plannedWorkUnits.length || completedWorkUnitCount(snapshot);
-      const completed = completedWorkUnitCount(snapshot);
+      const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
+      const completed = completedWorkUnitCountThrough(snapshot, eventIndex);
       const percent = total > 0 ? 55 + Math.round((completed / total) * 25) : 80;
       return {
         percent,
@@ -225,7 +280,6 @@ function plainIngestEventProgress(
     case 'report_created':
       return { percent: 98, message: `Created ingest report ${event.reportPath ?? event.runId}` };
     case 'scope_detected':
-    case 'work_unit_step':
     case 'candidate_action':
       return null;
   }
@@ -242,15 +296,31 @@ function shouldWritePlainIngestProgress(
 function createPlainIngestProgressRenderer(
   args: Extract<KtxIngestArgs, { command: 'run' }>,
   io: KtxIngestIo,
-): { start(): void; update(snapshot: MemoryFlowReplayInput): void } {
+): { start(): void; update(snapshot: MemoryFlowReplayInput): void; flush(): void } {
   let printedEvents = 0;
   let lastPercent = 0;
   let printedCompletion = false;
+  let hasPendingTransient = false;
 
-  const write = (percent: number, message: string) => {
+  const flush = () => {
+    if (!hasPendingTransient) {
+      return;
+    }
+    io.stdout.write('\n');
+    hasPendingTransient = false;
+  };
+
+  const write = (percent: number, message: string, options?: { transient?: boolean }) => {
     const nextPercent = Math.max(lastPercent, Math.max(0, Math.min(100, percent)));
     lastPercent = nextPercent;
-    io.stdout.write(`[${nextPercent}%] ${message}\n`);
+    const line = `[${nextPercent}%] ${message}`;
+    if (options?.transient === true) {
+      io.stdout.write(`\r${line}\u001b[K`);
+      hasPendingTransient = true;
+      return;
+    }
+    flush();
+    io.stdout.write(`${line}\n`);
   };
 
   return {
@@ -259,13 +329,14 @@ function createPlainIngestProgressRenderer(
     },
     update(snapshot) {
       while (printedEvents < snapshot.events.length) {
+        const eventIndex = printedEvents;
         const event = snapshot.events[printedEvents++];
         if (!event) {
           continue;
         }
-        const progress = plainIngestEventProgress(event, snapshot);
+        const progress = plainIngestEventProgress(event, snapshot, eventIndex);
         if (progress) {
-          write(progress.percent, progress.message);
+          write(progress.percent, progress.message, progress.transient === true ? { transient: true } : undefined);
         }
       }
       if (!printedCompletion && snapshot.status !== 'running') {
@@ -273,6 +344,7 @@ function createPlainIngestProgressRenderer(
         write(100, snapshot.status === 'done' ? 'Ingest completed' : 'Ingest failed');
       }
     },
+    flush,
   };
 }
 
@@ -435,11 +507,13 @@ export async function runKtxIngest(
       const executeLocalIngest = deps.runLocalIngest ?? runLocalIngest;
       const localIngestOptions = deps.localIngestOptions ?? {};
       const managedDaemon = managedDaemonOptionsForIngestRun(args, io);
+      const operationalLogger = createCliOperationalLogger(io, args.outputMode);
       const adapterOptions = {
         ...(localIngestOptions.pullConfigOptions ?? {}),
         ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
         ...(managedDaemon ? { managedDaemon } : {}),
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
+        logger: operationalLogger,
       };
       if (args.adapter === 'metabase' && args.sourceDir) {
         throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
@@ -524,6 +598,7 @@ export async function runKtxIngest(
           io.stdout.write(formatMemoryFlowFinalSummary(latestMemoryFlowSnapshot));
           return reportStatus(result.report) === 'done' ? 0 : 1;
         }
+        plainProgress?.flush();
         await writeReportRecord(result.report, runOutputMode, io, {
           interactive: (args.inputMode ?? 'auto') === 'auto',
           renderStoredMemoryFlow: deps.renderStoredMemoryFlow,
@@ -531,6 +606,7 @@ export async function runKtxIngest(
         });
         return reportStatus(result.report) === 'done' ? 0 : 1;
       } finally {
+        plainProgress?.flush();
         liveTui?.close();
       }
     }

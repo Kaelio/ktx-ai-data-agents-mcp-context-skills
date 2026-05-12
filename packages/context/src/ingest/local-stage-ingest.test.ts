@@ -569,8 +569,8 @@ describe('local ingest', () => {
   });
 
   it('passes resolved standalone Notion config into fetch adapters', async () => {
-    const priorToken = process.env.NOTION_AUTH_TOKEN;
-    process.env.NOTION_AUTH_TOKEN = 'ntn_local_test_token';
+    const priorToken = process.env.NOTION_TOKEN;
+    process.env.NOTION_TOKEN = 'ntn_local_test_token';
     try {
       await writeFile(
         join(project.projectDir, 'ktx.yaml'),
@@ -579,7 +579,7 @@ describe('local ingest', () => {
           'connections:',
           '  notion-main:',
           '    driver: notion',
-          '    auth_token_ref: env:NOTION_AUTH_TOKEN',
+          '    auth_token_ref: env:NOTION_TOKEN',
           '    crawl_mode: selected_roots',
           '    root_page_ids:',
           '      - page-1',
@@ -667,9 +667,9 @@ describe('local ingest', () => {
       });
     } finally {
       if (priorToken === undefined) {
-        delete process.env.NOTION_AUTH_TOKEN;
+        delete process.env.NOTION_TOKEN;
       } else {
-        process.env.NOTION_AUTH_TOKEN = priorToken;
+        process.env.NOTION_TOKEN = priorToken;
       }
     }
   });

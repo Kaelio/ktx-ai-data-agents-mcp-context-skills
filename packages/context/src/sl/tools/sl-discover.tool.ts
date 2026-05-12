@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DEFAULT_PRIORITY, resolveDescription } from '../descriptions.js';
+import type { SemanticLayerService } from '../semantic-layer.service.js';
 import type { SemanticLayerSource } from '../types.js';
 import type { ToolContext, ToolOutput } from '../../tools/index.js';
 import { BaseSemanticLayerTool, type BaseSemanticLayerToolDeps } from './base-semantic-layer.tool.js';
@@ -66,13 +67,14 @@ Use this to understand what data is available before writing a semantic_query.
     return slDiscoverInputSchema;
   }
 
-  async call(input: SlDiscoverInput, _context: ToolContext): Promise<ToolOutput<SlDiscoverStructured>> {
+  async call(input: SlDiscoverInput, context: ToolContext): Promise<ToolOutput<SlDiscoverStructured>> {
     const { query, sourceName } = input;
+    const semanticLayerService = context.session?.semanticLayerService ?? this.semanticLayerService;
 
     // Resolve connectionId: use provided value, or auto-detect
     let connectionId = input.connectionId;
     if (!connectionId) {
-      const connections = await this.semanticLayerService.listConnectionIdsWithNames();
+      const connections = await semanticLayerService.listConnectionIdsWithNames();
       if (connections.length === 0) {
         return {
           markdown: 'No semantic layer sources found. Run a schema scan first.',
@@ -92,14 +94,14 @@ Use this to understand what data is available before writing a semantic_query.
             structured: { sources: [], totalSources: 0 },
           };
         }
-        return this.discoverAcrossConnections(connections, query);
+        return this.discoverAcrossConnections(semanticLayerService, connections, query);
       }
     }
 
     // If inspecting a specific source — show the SL interface (columns, measures, joins)
     // without the raw SQL. Use `sl_read_source` to see the full YAML including SQL.
     if (sourceName) {
-      const sources = await this.semanticLayerService.loadAllSources(connectionId);
+      const sources = await semanticLayerService.loadAllSources(connectionId);
       const source = sources.find((s) => s.name === sourceName);
       if (!source) {
         return {
@@ -136,19 +138,20 @@ Use this to understand what data is available before writing a semantic_query.
     }
 
     // Single connection: list all sources
-    const connections = await this.semanticLayerService.listConnectionIdsWithNames();
+    const connections = await semanticLayerService.listConnectionIdsWithNames();
     const connInfo = connections.find((c) => c.id === connectionId);
-    return this.discoverForConnection(connectionId, connInfo?.name ?? connectionId, query);
+    return this.discoverForConnection(semanticLayerService, connectionId, connInfo?.name ?? connectionId, query);
   }
 
   private async discoverAcrossConnections(
+    semanticLayerService: SemanticLayerService,
     connections: Array<{ id: string; name: string; connectionType: string }>,
     query?: string,
   ): Promise<ToolOutput<SlDiscoverStructured>> {
     // Load sources from all connections in parallel
     const results = await Promise.all(
       connections.map(async (conn) => {
-        const sources = await this.semanticLayerService.loadAllSources(conn.id);
+        const sources = await semanticLayerService.loadAllSources(conn.id);
         let filtered = sources;
         if (query) {
           filtered = await this.filterByQuery(conn.id, sources, query);
@@ -205,11 +208,12 @@ Use this to understand what data is available before writing a semantic_query.
   }
 
   private async discoverForConnection(
+    semanticLayerService: SemanticLayerService,
     connectionId: string,
     connectionName: string,
     query?: string,
   ): Promise<ToolOutput<SlDiscoverStructured>> {
-    const sources = await this.semanticLayerService.loadAllSources(connectionId);
+    const sources = await semanticLayerService.loadAllSources(connectionId);
 
     if (sources.length === 0) {
       return {

@@ -1,6 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { devToolsMiddleware } from '@ai-sdk/devtools';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
-import { createGateway, generateText, type LanguageModel } from 'ai';
+import { createGateway, generateText, wrapLanguageModel, type LanguageModel } from 'ai';
 import { createKtxToolCallRepairHandler } from './repair.js';
 import type {
   KtxLlmConfig,
@@ -21,6 +22,9 @@ export interface KtxLlmProviderFactoryDeps {
   createVertexAnthropic?: VertexAnthropicFactory;
   createGateway?: GatewayFactory;
   generateText?: typeof generateText;
+  devtoolsEnabled?: boolean;
+  wrapLanguageModel?: typeof wrapLanguageModel;
+  devToolsMiddleware?: typeof devToolsMiddleware;
 }
 
 const DEFAULT_PROMPT_CACHING: KtxPromptCachingConfig = {
@@ -40,8 +44,25 @@ function resolvePromptCaching(config: KtxLlmConfig): KtxPromptCachingConfig {
   return { ...DEFAULT_PROMPT_CACHING, ...config.promptCaching };
 }
 
+function resolveDevtoolsEnabled(override: boolean | undefined): boolean {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  if (override !== undefined) {
+    return override;
+  }
+  const value = process.env.KTX_AI_DEVTOOLS_ENABLED?.trim().toLowerCase();
+  return value === 'true' || value === '1' || value === 'yes';
+}
+
 export function modelIdFromLanguageModel(model: LanguageModel | string): string {
   return typeof model === 'string' ? model : ((model as { modelId?: string }).modelId ?? '');
+}
+
+function providerIdFromLanguageModel(model: Exclude<LanguageModel, string>): string | undefined {
+  return typeof (model as { provider?: unknown }).provider === 'string'
+    ? (model as { provider: string }).provider
+    : undefined;
 }
 
 export function isAnthropicProtocolModel(model: LanguageModel | string): boolean {
@@ -53,6 +74,9 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
   private readonly promptCaching: KtxPromptCachingConfig;
   private readonly getModelByResolvedName: (modelId: string) => LanguageModel;
   private readonly runGenerateText: typeof generateText;
+  private readonly devtoolsEnabled: boolean;
+  private readonly runWrapLanguageModel: typeof wrapLanguageModel;
+  private readonly createDevToolsMiddleware: typeof devToolsMiddleware;
 
   constructor(
     private readonly config: KtxLlmConfig,
@@ -60,6 +84,9 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
   ) {
     this.promptCaching = resolvePromptCaching(config);
     this.runGenerateText = deps.generateText ?? generateText;
+    this.devtoolsEnabled = resolveDevtoolsEnabled(deps.devtoolsEnabled);
+    this.runWrapLanguageModel = deps.wrapLanguageModel ?? wrapLanguageModel;
+    this.createDevToolsMiddleware = deps.devToolsMiddleware ?? devToolsMiddleware;
     this.getModelByResolvedName = this.createModelFactory(config, deps);
   }
 
@@ -68,7 +95,7 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
   }
 
   getModelByName(modelId: string): LanguageModel {
-    return this.getModelByResolvedName(modelId);
+    return this.withDevtools(this.getModelByResolvedName(modelId));
   }
 
   cacheMarker(ttl: KtxPromptCacheTtl, model?: LanguageModel | string) {
@@ -111,6 +138,18 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
 
   private resolveRole(role: KtxModelRole): string {
     return this.config.modelSlots[role] ?? this.config.modelSlots.default;
+  }
+
+  private withDevtools(model: LanguageModel): LanguageModel {
+    if (!this.devtoolsEnabled || typeof model === 'string') {
+      return model;
+    }
+    return this.runWrapLanguageModel({
+      model: model as Parameters<typeof wrapLanguageModel>[0]['model'],
+      middleware: this.createDevToolsMiddleware(),
+      modelId: modelIdFromLanguageModel(model),
+      providerId: providerIdFromLanguageModel(model),
+    });
   }
 
   private createModelFactory(config: KtxLlmConfig, deps: KtxLlmProviderFactoryDeps): (modelId: string) => LanguageModel {

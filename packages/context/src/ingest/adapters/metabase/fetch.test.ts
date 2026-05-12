@@ -86,6 +86,7 @@ describe('fetchMetabaseBundle', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await rm(stagedDir, { recursive: true, force: true });
   });
 
@@ -113,6 +114,41 @@ describe('fetchMetabaseBundle', () => {
     expect(card.resolutionStatus).toBe('resolved');
     expect(card.collectionPath).toEqual(['Orders Team']);
     expect(card.archived).toBe(false);
+  });
+
+  it('does not write Metabase fetch progress to console by default', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await fetchMetabaseBundle({
+      pullConfig: { metabaseConnectionId, metabaseDatabaseId: 42 },
+      stagedDir,
+      ctx: makeFetchContext(),
+      clientFactory,
+      sourceStateReader,
+    });
+
+    expect(log).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('routes Metabase fetch warnings through the injected logger', async () => {
+    const logger = {
+      log: vi.fn(),
+      warn: vi.fn(),
+    };
+    clientFactory.__client.getCard.mockRejectedValueOnce(new Error('card read failed'));
+
+    await fetchMetabaseBundle({
+      pullConfig: { metabaseConnectionId, metabaseDatabaseId: 42 },
+      stagedDir,
+      ctx: makeFetchContext(),
+      clientFactory,
+      sourceStateReader,
+      logger,
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith('failed to load card 1: card read failed');
   });
 
   it('passes the Metabase source pull config and target fetch context to the client factory', async () => {

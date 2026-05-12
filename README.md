@@ -1,9 +1,9 @@
 <h1 align="center">
-  <img src="assets/ktx-readme-header.png" alt="KTX" width="472" />
+  <img src="assets/ktx-lockup.svg" alt="KTX" width="500" />
 </h1>
 
 <p align="center">
-  <strong>Workspace-first context layer for database agents</strong>
+  <strong>The context layer for analytics agents</strong>
 </p>
 
 <p align="center">
@@ -14,26 +14,64 @@
 
 ---
 
-KTX stores warehouse memory in a project directory, generates and validates
-semantic-layer YAML, indexes knowledge, scans database schemas, and exposes the
-result through a CLI and MCP server.
+KTX turns warehouse metadata, semantic definitions, and business knowledge into
+reviewable project files that agents can use while planning, querying, and
+updating analytics work.
 
-KTX projects are plain files: YAML, Markdown, SQLite state, and generated
-artifacts. You can inspect them, commit them, and serve them to any MCP client.
+A KTX project is a directory of plain files — YAML semantic sources, Markdown
+knowledge pages, and SQLite state — that you commit to git and review in PRs,
+just like dbt models.
 
-## What KTX provides
+## Who KTX is for
 
-- Durable warehouse memory with semantic-layer sources and knowledge pages.
-- Native scan connectors for SQLite, Postgres, MySQL, ClickHouse, SQL Server,
-  BigQuery, and Snowflake.
-- Agentic ingest with provenance links, tool transcripts, and replay metadata.
-- Local semantic-layer query planning and optional query execution.
-- A stdio MCP server with tools for connections, knowledge, semantic-layer
-  sources, ingest reports, and replay.
+KTX is built for analytics engineers and data teams who want data agents to
+work on real analytics systems — not just generate one-off SQL.
+
+Use KTX when you want agents to:
+
+- **Generate SQL** from approved measures and joins
+- **Repair semantic definitions** through reviewable diffs
+- **Explain metric provenance** with warehouse evidence
+- **Work alongside** dbt, LookML, MetricFlow, Looker, Metabase, and modern BI
+  platforms
+
+Works with PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
+SQLite.
 
 ## Quick start
 
-Run the pre-seeded demo through the public npm package:
+Install the CLI and run the setup wizard:
+
+```bash
+npm install @kaelio/ktx
+npm install -g @kaelio/ktx
+ktx setup
+```
+
+The wizard walks through six steps: configuring your LLM provider, setting up
+embeddings, connecting your database, adding context sources (dbt, LookML,
+Metabase, Looker, Notion), building context, and installing agent integration.
+
+If it exits before completion, rerun `ktx setup` to resume where you left off.
+
+Check your project status:
+
+```bash
+ktx status
+```
+
+```
+KTX project: /home/user/analytics
+Project ready: yes
+LLM ready: yes (claude-sonnet-4-6)
+Embeddings ready: yes (text-embedding-3-small)
+Primary sources configured: yes (postgres-warehouse)
+Context sources configured: yes (dbt-main)
+KTX context built: yes
+Agent integration ready: yes (claude-code:project)
+```
+
+Run the packaged demo without installing globally:
 
 ```bash
 npx @kaelio/ktx setup demo --no-input
@@ -43,144 +81,21 @@ npx @kaelio/ktx setup demo inspect
 The default demo uses packaged sample data and prebuilt context. It does not
 require API keys, network access, or an LLM provider.
 
-To replay the packaged ingest run, use:
+Generate SQL from a semantic-layer source:
 
 ```bash
-npx @kaelio/ktx setup demo --mode replay --no-input
-```
-
-To run the full agentic demo with an LLM provider, set a provider key for the
-current process:
-
-```bash
-ANTHROPIC_API_KEY=$YOUR_ANTHROPIC_API_KEY \
-  npx @kaelio/ktx setup demo --mode full --no-input
-```
-
-Interactive full-demo setup can prompt for a provider key without writing the
-key to `ktx.yaml`.
-
-You can also install the CLI in a project or globally:
-
-```bash
-npm install @kaelio/ktx
-npx ktx --help
-npm install -g @kaelio/ktx
-ktx --help
-```
-
-## Build a local project
-
-Create a project from a local workspace:
-
-```bash
-npm install @kaelio/ktx
-PROJECT_DIR="$(mktemp -d)/ktx-demo"
-npx ktx init "$PROJECT_DIR" --name ktx-demo
-```
-
-Create a SQLite warehouse:
-
-```bash
-python - "$PROJECT_DIR/demo.db" <<'PY'
-import sqlite3
-import sys
-
-conn = sqlite3.connect(sys.argv[1])
-conn.executescript("""
-DROP TABLE IF EXISTS accounts;
-CREATE TABLE accounts (
-  account_id INTEGER PRIMARY KEY,
-  account_name TEXT NOT NULL,
-  segment TEXT NOT NULL,
-  region TEXT NOT NULL
-);
-INSERT INTO accounts VALUES
-  (1, 'Acme Analytics', 'Mid-Market', 'NA'),
-  (2, 'Beacon Bank', 'Enterprise', 'EMEA'),
-  (3, 'Cobalt Coffee', 'SMB', 'NA'),
-  (4, 'Delta Devices', 'Mid-Market', 'APAC'),
-  (5, 'Evergreen Energy', 'Enterprise', 'NA');
-""")
-conn.close()
-PY
-```
-
-Replace the generated `ktx.yaml`:
-
-```bash
-cat > "$PROJECT_DIR/ktx.yaml" <<YAML
-project: ktx-demo
-connections:
-  warehouse:
-    driver: sqlite
-    path: $PROJECT_DIR/demo.db
-    readonly: true
-storage:
-  state: sqlite
-  search: sqlite-fts5
-  git:
-    auto_commit: true
-    author: "ktx <ktx@example.com>"
-memory:
-  auto_commit: true
-YAML
-```
-
-Write and validate a semantic-layer source:
-
-```bash
-npx ktx sl write accounts --project-dir "$PROJECT_DIR" \
-  --connection-id warehouse --yaml 'name: accounts
-table: accounts
-description: CRM accounts with segmentation attributes.
-grain:
-  - account_id
-columns:
-  - name: account_id
-    type: number
-  - name: account_name
-    type: string
-  - name: segment
-    type: string
-  - name: region
-    type: string
-measures:
-  - name: account_count
-    expr: count(account_id)
-joins: []
-'
-
-npx ktx sl validate accounts --project-dir "$PROJECT_DIR" \
-  --connection-id warehouse
-```
-
-Generate SQL and execute the query:
-
-```bash
-npx ktx sl query --project-dir "$PROJECT_DIR" \
+npx @kaelio/ktx sl query --project-dir "$PROJECT_DIR" \
   --connection-id warehouse \
   --measure accounts.account_count \
   --dimension accounts.segment \
-  --order-by accounts.account_count:desc \
-  --limit 5 \
   --format sql
-
-npx ktx sl query --project-dir "$PROJECT_DIR" \
-  --connection-id warehouse \
-  --measure accounts.account_count \
-  --dimension accounts.segment \
-  --order-by accounts.account_count:desc \
-  --limit 5 \
-  --execute \
-  --max-rows 5
 ```
 
-List and test the warehouse connection:
+List and test a configured warehouse connection:
 
 ```bash
-npx ktx connection list --project-dir "$PROJECT_DIR"
-npx ktx connection test warehouse --project-dir "$PROJECT_DIR"
+ktx connection list --project-dir "$PROJECT_DIR"
+ktx connection test warehouse --project-dir "$PROJECT_DIR"
 ```
 
 The connection test prints the configured driver and discovered table count:
@@ -190,18 +105,44 @@ Driver: sqlite
 Tables: 1
 ```
 
+## What's in a project
+
+```
+my-project/
+├── ktx.yaml                     # Project configuration
+├── semantic-layer/
+│   └── warehouse/
+│       ├── orders.yaml           # Semantic source definitions
+│       ├── customers.yaml
+│       └── order_items.yaml
+├── knowledge/
+│   ├── global/
+│   │   ├── revenue.md            # Business definitions and rules
+│   │   └── segment-classification.md
+│   └── user/
+│       └── local/
+├── raw-sources/
+│   └── warehouse/
+│       └── live-database/        # Scan artifacts and reports
+└── .ktx/
+    └── db.sqlite                 # Local state (git-ignored)
+```
+
+Semantic sources and knowledge pages are committed to git. The `.ktx/` directory
+holds ephemeral state and is git-ignored — delete it and KTX rebuilds on the
+next run.
+
 ### Scan the demo warehouse
 
 Scan artifacts are written under
 `raw-sources/warehouse/live-database/<syncId>/` in the project directory.
 
 ```bash
-
-SCAN_OUTPUT="$(npx ktx scan warehouse --project-dir "$PROJECT_DIR")"
+SCAN_OUTPUT="$(ktx scan warehouse --project-dir "$PROJECT_DIR")"
 printf '%s\n' "$SCAN_OUTPUT"
 SCAN_RUN_ID="$(printf '%s\n' "$SCAN_OUTPUT" | awk '/^Run: / { print $2 }')"
-npx ktx scan status --project-dir "$PROJECT_DIR" "$SCAN_RUN_ID"
-npx ktx scan report --project-dir "$PROJECT_DIR" "$SCAN_RUN_ID"
+ktx scan status --project-dir "$PROJECT_DIR" "$SCAN_RUN_ID"
+ktx scan report --project-dir "$PROJECT_DIR" "$SCAN_RUN_ID"
 ```
 
 For non-SQLite drivers, prefer credential references such as `--url env:NAME`
@@ -219,107 +160,118 @@ backed KTX commands. KTX doesn't download `uv` automatically; run
 `ktx runtime doctor` if runtime installation fails:
 
 ```bash
-npx ktx runtime install --yes
-npx ktx runtime status
-npx ktx runtime doctor
-npx ktx runtime start
-npx ktx runtime stop
-npx ktx runtime prune --dry-run
-npx ktx runtime prune --yes
+ktx runtime install --yes
+ktx runtime status
+ktx runtime doctor
+ktx runtime start
+ktx runtime stop
+ktx runtime prune --dry-run
+ktx runtime prune --yes
 ```
 
-Use `runtime prune --dry-run` to preview stale runtime directories from older
-CLI versions. Add `--yes` to remove those stale directories after daemon
-processes are stopped.
+The release artifact manifest contains the public npm tarball and the bundled `kaelio-ktx`
+runtime wheel. The `python/ktx-sl` and `python/ktx-daemon` directories remain
+source packages for development, not public release artifacts.
 
-Commands such as `npx @kaelio/ktx sl query ... --yes` can install the core
-runtime lazily from the bundled wheel. Local embeddings remain lazy; prepare
-them only when you select local `sentence-transformers` embeddings:
+## Serve agents
+
+KTX integrates with coding agents through CLI skills, an MCP server, or both.
+The setup wizard configures this automatically — here's what each mode looks
+like.
+
+**CLI skills** — the agent calls `ktx` commands directly through a skill file
+installed in your agent's config (e.g., `.claude/skills/ktx/SKILL.md`):
 
 ```bash
-npx ktx runtime install --feature local-embeddings --yes
-npx ktx runtime start --feature local-embeddings
+ktx sl query --measure orders.revenue --dimension orders.status --format sql
+ktx wiki search "revenue definition"
+ktx sl validate orders
 ```
 
-## Serve MCP
-
-Start the stdio MCP server from the project directory:
+**MCP server** — the agent calls KTX tools over the Model Context Protocol:
 
 ```bash
-npx ktx serve --mcp stdio --project-dir "$PROJECT_DIR" \
+ktx serve --mcp stdio \
   --user-id local \
   --semantic-compute \
   --execute-queries \
   --yes
 ```
 
-The `--semantic-compute` flag uses the managed Python runtime when no explicit
-semantic compute URL is provided. KTX starts or reuses the managed runtime as
-needed.
+This exposes tools for connections, knowledge search, semantic-layer sources,
+validation, queries, ingestion, and replay. The `--semantic-compute` flag starts
+the managed Python runtime for query planning automatically.
 
-The MCP server exposes `connection_list`, `knowledge_search`,
+The standalone MCP server exposes `connection_list`, `knowledge_search`,
 `knowledge_read`, `knowledge_write`, `sl_list_sources`, `sl_read_source`,
 `sl_write_source`, `sl_validate`, `sl_query`, `ingest_trigger`,
 `ingest_status`, `ingest_report`, and `ingest_replay`.
 
+Supported agents: Claude Code, Codex, Cursor, OpenCode, and any agent that
+reads `.agents/` skills or MCP configuration.
+
 ## Workspace packages
 
-- `packages/context`: core TypeScript context library.
-- `packages/cli`: CLI wrapper over the context package.
-- `packages/llm`: LLM and embedding provider helpers.
-- `packages/connector-bigquery`: BigQuery scan connector.
-- `packages/connector-clickhouse`: ClickHouse scan connector.
-- `packages/connector-mysql`: MySQL scan connector.
-- `packages/connector-postgres`: Postgres scan connector.
-- `packages/connector-snowflake`: Snowflake scan connector.
-- `packages/connector-sqlite`: SQLite scan connector.
-- `packages/connector-sqlserver`: SQL Server scan connector.
-- `python/ktx-sl`: semantic-layer engine.
-- `python/ktx-daemon`: portable compute service for semantic-layer operations.
+| Package | Purpose |
+|---------|---------|
+| `packages/cli` | CLI entry point |
+| `packages/context` | Core context engine |
+| `packages/llm` | LLM and embedding providers |
+| `packages/connector-bigquery` | BigQuery scan connector |
+| `packages/connector-clickhouse` | ClickHouse scan connector |
+| `packages/connector-mysql` | MySQL scan connector |
+| `packages/connector-postgres` | Postgres scan connector |
+| `packages/connector-snowflake` | Snowflake scan connector |
+| `packages/connector-sqlite` | SQLite scan connector |
+| `packages/connector-sqlserver` | SQL Server scan connector |
+| `python/ktx-sl` | Semantic-layer query planning |
+| `python/ktx-daemon` | Portable compute service |
 
 ## Development
 
-Install dependencies and run checks:
-
 ```bash
+git clone https://github.com/kaelio/ktx.git
+cd ktx
 pnpm install
+uv sync --all-groups
+pnpm run build
 pnpm run check
-uv sync --all-packages
-source .venv/bin/activate
-uv run pytest
 ```
 
-Use the optional development binary when you want a local `ktx-dev` command:
+Use the development CLI for local testing:
 
 ```bash
+pnpm run setup:dev
 pnpm run link:dev
 ktx-dev --help
 ```
 
-The repository uses `pnpm` for TypeScript packages and `uv` for Python
-packages.
+### Debug LLM traces
 
-## Release status
-
-This repository builds one public npm artifact named `@kaelio/ktx`. The release
-artifact manifest contains the public npm tarball and the bundled `kaelio-ktx`
-runtime wheel. The first public npm handoff is policy-gated through
-`release-policy.json`, which keeps Python package publishing disabled because
-KTX-owned Python code ships inside the npm package as a bundled wheel. The
-`python/ktx-sl` and `python/ktx-daemon` directories remain source packages for
-development, not public release artifacts.
-
-Build local package artifacts and verify the guarded dry-run publish path with:
+KTX can capture local AI SDK DevTools traces for LLM calls that run through the
+KTX provider. Enable it with an environment flag when running an LLM-backed
+command:
 
 ```bash
-source .venv/bin/activate
-pnpm run artifacts:check
-pnpm run release:readiness
-pnpm run release:npm-publish
+KTX_AI_DEVTOOLS_ENABLED=true ktx dev ingest run \
+  --connection-id warehouse \
+  --adapter metabase
 ```
 
-Run the live npm publish only from the manual `KTX Release` workflow with the
-`publish_live` input enabled after the `NPM_TOKEN` secret is configured.
+Traces are written to `.devtools/generations.json` under the current working
+directory. To inspect them, run:
+
+```bash
+pnpm dlx @ai-sdk/devtools
+```
+
+Then open `http://localhost:4983`. These traces are local-development-only and
+store prompts, model outputs, tool arguments/results, and raw provider payloads
+in plain text. Do not enable this in production or for sensitive runs.
+
+The repository uses `pnpm` for TypeScript packages and `uv` for Python
+packages. See [Contributing](docs-site/content/docs/community/contributing.mdx)
+for full development setup, testing, and PR guidelines.
 
 ## License
 

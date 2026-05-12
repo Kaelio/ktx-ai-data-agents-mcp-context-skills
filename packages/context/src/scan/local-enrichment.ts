@@ -1,4 +1,5 @@
 import type { KtxLlmProvider } from '@ktx/llm';
+import pLimit from 'p-limit';
 import { buildDefaultKtxProjectConfig, type KtxScanRelationshipConfig } from '../project/config.js';
 import { type KtxDescriptionColumnTable, KtxDescriptionGenerator } from './description-generation.js';
 import { buildKtxColumnEmbeddingText } from './embedding-text.js';
@@ -39,6 +40,8 @@ import type {
   KtxSchemaTable,
   KtxTableRef,
 } from './types.js';
+
+const DESCRIPTION_TABLE_CONCURRENCY = 6;
 
 export interface DeterministicLocalScanEnrichmentProviderOptions {
   embeddingDimensions?: number;
@@ -322,41 +325,47 @@ async function generateDescriptions(input: {
     await input.progress?.update(1, 'No tables to describe');
     return updates;
   }
-  for (const [index, table] of input.snapshot.tables.entries()) {
-    await input.progress?.update(
-      (index + 1) / totalTables,
-      `Generating descriptions ${index + 1}/${totalTables} tables`,
-      {
-        transient: true,
-      },
-    );
-    const tableInput = descriptionTable(table);
-    const columnResult = await generator.generateColumnDescriptions({
-      connectionId: input.snapshot.connectionId,
-      connector: input.connector,
-      context: input.context,
-      dataSourceType: input.snapshot.driver,
-      supportsNestedAnalysis: input.connector.capabilities.nestedAnalysis,
-      table: tableInput,
-    });
-    const tableDescription = await generator.generateTableDescription({
-      connectionId: input.snapshot.connectionId,
-      connector: input.connector,
-      context: input.context,
-      dataSourceType: input.snapshot.driver,
-      table: {
-        catalog: table.catalog,
-        db: table.db,
-        name: table.name,
-        rawDescriptions: table.comment ? { db: table.comment } : {},
-      },
-    });
-    updates.push({
-      table: tableRef(table),
-      tableDescription,
-      columnDescriptions: Object.fromEntries(columnResult.columnDescriptions),
-    });
-  }
+  const limitTable = pLimit(DESCRIPTION_TABLE_CONCURRENCY);
+  const tableUpdates = await Promise.all(
+    input.snapshot.tables.map((table, index) =>
+      limitTable(async () => {
+        await input.progress?.update(
+          (index + 1) / totalTables,
+          `Generating descriptions ${index + 1}/${totalTables} tables`,
+          {
+            transient: true,
+          },
+        );
+        const tableInput = descriptionTable(table);
+        const columnResult = await generator.generateColumnDescriptions({
+          connectionId: input.snapshot.connectionId,
+          connector: input.connector,
+          context: input.context,
+          dataSourceType: input.snapshot.driver,
+          supportsNestedAnalysis: input.connector.capabilities.nestedAnalysis,
+          table: tableInput,
+        });
+        const tableDescription = await generator.generateTableDescription({
+          connectionId: input.snapshot.connectionId,
+          connector: input.connector,
+          context: input.context,
+          dataSourceType: input.snapshot.driver,
+          table: {
+            catalog: table.catalog,
+            db: table.db,
+            name: table.name,
+            rawDescriptions: table.comment ? { db: table.comment } : {},
+          },
+        });
+        return {
+          table: tableRef(table),
+          tableDescription,
+          columnDescriptions: Object.fromEntries(columnResult.columnDescriptions),
+        };
+      }),
+    ),
+  );
+  updates.push(...tableUpdates);
   await input.progress?.update(1, `Generated descriptions for ${totalTables} tables`);
   return updates;
 }

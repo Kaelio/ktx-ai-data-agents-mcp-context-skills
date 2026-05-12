@@ -115,6 +115,43 @@ describe('relationship Orbit verification helper', () => {
     assert.match(writes[0].content, new RegExp(defaultProjectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
 
+  it('uses KTX_PROJECT_DIR for the Orbit verification project override', async () => {
+    const previousProjectDir = process.env.KTX_PROJECT_DIR;
+    const calls = [];
+
+    try {
+      process.env.KTX_PROJECT_DIR = '/tmp/orbit-project-from-env';
+
+      const result = await runOrbitVerification({
+        reportPath: '/tmp/orbit-report.md',
+        now: () => new Date('2026-05-07T10:00:00.000Z'),
+        mkdir: async () => {},
+        writeFile: async () => {},
+        runWorkspaceKtx: async (argv, options) => {
+          calls.push(argv);
+          if (argv[2] === 'report') {
+            options.stdout.write(successReportJson());
+            return 0;
+          }
+          options.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n');
+          return 0;
+        },
+      });
+
+      assert.equal(result.projectDir, '/tmp/orbit-project-from-env');
+      assert.deepEqual(calls, [
+        ['dev', 'scan', 'orbit', '--enrich', '--project-dir', '/tmp/orbit-project-from-env'],
+        ['dev', 'scan', 'report', '--json', '--project-dir', '/tmp/orbit-project-from-env', 'scan-orbit-1'],
+      ]);
+    } finally {
+      if (previousProjectDir === undefined) {
+        delete process.env.KTX_PROJECT_DIR;
+      } else {
+        process.env.KTX_PROJECT_DIR = previousProjectDir;
+      }
+    }
+  });
+
   it('extracts the run id from human scan output', () => {
     assert.equal(extractRunId(`KTX scan completed\nStatus: done\nRun: scan-orbit-1\nConnection: orbit\n`), 'scan-orbit-1');
     assert.equal(extractRunId('KTX scan completed without a run line\n'), null);

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
 import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
 import { runDemoTour } from './setup-demo-tour.js';
 import { readKtxSetupStatus, runKtxSetup } from './setup.js';
@@ -88,6 +89,38 @@ describe('setup status', () => {
       project: { path: tempDir, ready: true },
       llm: { backend: 'anthropic', ready: true, model: 'claude-sonnet-4-6' },
       embeddings: { backend: 'deterministic', ready: false, model: 'deterministic', dimensions: 8 },
+    });
+  });
+
+  it.each([
+    {
+      backend: 'vertex',
+      providerLines: ['    backend: vertex', '    vertex:', '      project: kaelio-dev', '      location: us-east5'],
+      model: 'claude-sonnet-4-6',
+    },
+    {
+      backend: 'gateway',
+      providerLines: ['    backend: gateway', '    gateway:', '      api_key: env:AI_GATEWAY_API_KEY'],
+      model: 'anthropic/claude-sonnet-4-6',
+    },
+  ])('reports configured $backend llm backends as setup-ready', async (fixture) => {
+    await mkdir(tempDir, { recursive: true });
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'llm:',
+        '  provider:',
+        ...fixture.providerLines,
+        '  models:',
+        `    default: ${fixture.model}`,
+        'connections: {}',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
+      llm: { backend: fixture.backend, ready: true, model: fixture.model },
     });
   });
 
@@ -281,6 +314,62 @@ describe('setup status', () => {
         statusCommand: `ktx setup context status setup-context-local-abc123 --project-dir ${tempDir}`,
       },
     });
+  });
+
+  it('reports Vertex LLM and context ready after a successful Metabase ingest report', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '  completed_steps:',
+        '    - project',
+        '    - databases',
+        '    - sources',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '  metabase:',
+        '    driver: metabase',
+        '    url: env:METABASE_URL',
+        '    api_key_ref: env:METABASE_API_KEY',
+        '    warehouse_connection_id: warehouse',
+        'llm:',
+        '  provider:',
+        '    backend: vertex',
+        '    vertex:',
+        '      project: kaelio-dev',
+        '      location: us-east5',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        'ingest:',
+        '  embeddings:',
+        '    backend: deterministic',
+        '    model: deterministic',
+        '    dimensions: 8',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await persistLocalBundleReport(
+      tempDir,
+      localFakeBundleReport('metabase-job-1', {
+        connectionId: 'warehouse',
+        sourceKey: 'metabase',
+      }),
+    );
+
+    const status = await readKtxSetupStatus(tempDir);
+    const io = makeIo();
+    await expect(runKtxSetup({ command: 'status', projectDir: tempDir, json: false }, io.io)).resolves.toBe(0);
+
+    expect(status.llm).toMatchObject({ backend: 'vertex', ready: true, model: 'claude-sonnet-4-6' });
+    expect(status.context).toMatchObject({ ready: true, status: 'completed' });
+    expect(io.stdout()).toContain('LLM ready: yes (claude-sonnet-4-6)');
+    expect(io.stdout()).toContain('KTX context built: yes');
   });
 
   it('prints plain and JSON setup status', async () => {
@@ -1176,6 +1265,77 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources']);
+  });
+
+  it.each([
+    {
+      backend: 'vertex',
+      providerLines: ['    backend: vertex', '    vertex:', '      project: kaelio-dev', '      location: us-east5'],
+      model: 'claude-sonnet-4-6',
+    },
+    {
+      backend: 'gateway',
+      providerLines: ['    backend: gateway', '    gateway:', '      api_key: env:AI_GATEWAY_API_KEY'],
+      model: 'anthropic/claude-sonnet-4-6',
+    },
+  ])('adds a dbt source in non-interactive setup with existing $backend llm config', async (fixture) => {
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '  completed_steps:',
+        '    - project',
+        '    - databases',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_URL',
+        'llm:',
+        '  provider:',
+        ...fixture.providerLines,
+        '  models:',
+        `    default: ${fixture.model}`,
+      ].join('\n'),
+      'utf-8',
+    );
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          source: 'dbt',
+          sourceConnectionId: 'dbt-main',
+          sourceGitUrl: 'https://github.com/Kaelio/klo-dbt-demo',
+          sourceBranch: 'main',
+          sourceProjectName: 'orbit_analytics',
+          sourceWarehouseConnectionId: 'warehouse',
+          skipSources: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          sourcesDeps: { validateDbt: vi.fn(async () => ({ ok: true as const, detail: 'dbt project valid' })) },
+          context: vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir, runId: 'setup-context-test' })),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).not.toContain('Anthropic');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('dbt-main:');
   });
 
   it('does not fail context build when prerequisites were explicitly skipped and agents are skipped', async () => {

@@ -14,7 +14,7 @@ refs:
 
 ## Sales Ops → Customer Success Implementation Handoff
 
-**Source:** Notion — People & Operating Norms, last edited 2026-05-07  
+**Source:** Notion — People & Operating Norms, last edited 2026-05-07
 **Owner:** Sales Ops (sender), Customer Success (receiver)
 
 ---

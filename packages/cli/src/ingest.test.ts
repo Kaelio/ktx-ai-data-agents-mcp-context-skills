@@ -14,6 +14,7 @@ import {
 import { initKtxProject, ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type KtxIngestArgs, runKtxIngest } from './ingest.js';
+import type { KtxCliLocalIngestAdaptersOptions } from './local-adapters.js';
 import {
   CliLookerSlWritingAgentRunner,
   CliMetabaseAgentRunner,
@@ -32,6 +33,7 @@ import {
   writeWarehouseConfig,
 } from './ingest.test-utils.js';
 import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
+import { runKtxSetup } from './setup.js';
 
 describe('runKtxIngest', () => {
   let tempDir: string;
@@ -105,6 +107,75 @@ describe('runKtxIngest', () => {
     expect(statusIo.stderr()).toBe('');
   });
 
+  it('prints provider setup guidance when a skip-llm setup project runs dev ingest', async () => {
+    const projectDir = join(tempDir, 'project');
+    const setupIo = makeIo();
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir,
+          mode: 'new',
+          agents: false,
+          agentScope: 'project',
+          agentInstallMode: 'cli',
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.0.0-test',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseDrivers: ['postgres'],
+          databaseConnectionId: 'warehouse',
+          databaseUrl: 'env:WAREHOUSE_URL',
+          databaseSchemas: [],
+          enableHistoricSql: true,
+          skipDatabases: false,
+          skipSources: true,
+        },
+        setupIo.io,
+        {
+          databasesDeps: {
+            testConnection: async (_projectDir, _connectionId, io) => {
+              io.stdout.write('Driver: postgres\nTables: 1\n');
+              return 0;
+            },
+            scanConnection: async () => 0,
+            historicSqlProbe: async () => ({ ok: true, lines: ['PASS Historic SQL probe skipped in test'] }),
+          },
+          context: async () => ({ status: 'skipped', projectDir }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+
+    const runIo = makeIo();
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          sourceDir,
+          outputMode: 'plain',
+        },
+        runIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(runIo.stdout()).toBe('');
+    expect(runIo.stderr()).toContain(
+      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+    );
+    expect(runIo.stderr()).toContain(
+      `ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+    );
+  });
+
   it('routes metabase scheduled pulls to the fan-out runner and prints child summaries', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
@@ -159,7 +230,7 @@ describe('runKtxIngest', () => {
     expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
     expect(io.stdout()).toContain('warehouse_a');
     expect(io.stdout()).toContain('metabase-child-1');
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
   it('returns a non-zero code when Metabase fan-out has failed children', async () => {
@@ -229,7 +300,7 @@ describe('runKtxIngest', () => {
     expect(io.stdout()).toContain('Metabase fan-out: partial_failure');
     expect(io.stdout()).toContain('Failed work units: 1');
     expect(io.stdout()).toContain('status=error');
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
   it('prints Metabase fan-out progress before the final summary', async () => {
@@ -303,12 +374,56 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('Metabase ingest: prod-metabase');
-    expect(io.stdout()).toContain('Targets: 1 mapped database');
-    expect(io.stdout()).toContain('- database=1 target=warehouse_a status=running job=metabase-child-1');
-    expect(io.stdout()).toContain('- database=1 target=warehouse_a status=done job=metabase-child-1');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
+    expect(io.stderr()).toContain('Targets: 1 mapped database');
+    expect(io.stderr()).toContain('- database=1 target=warehouse_a status=running job=metabase-child-1');
+    expect(io.stderr()).toContain('- database=1 target=warehouse_a status=done job=metabase-child-1');
     expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
-    expect(io.stderr()).toBe('');
+    expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
+  });
+
+  it('writes metabase fan-out progress to stderr and final result to stdout', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalMetabaseIngest: async (input) => {
+            input.progress?.onMetabaseFanoutPlanned?.({
+              metabaseConnectionId: 'prod-metabase',
+              children: [{ metabaseDatabaseId: 1, targetConnectionId: 'warehouse_a' }],
+            });
+            input.progress?.onMetabaseChildStarted?.({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+            });
+            return {
+              metabaseConnectionId: 'prod-metabase',
+              status: 'all_succeeded',
+              totals: { workUnits: 0, failedWorkUnits: 0 },
+              children: [],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
+    expect(io.stderr()).toContain('status=running job=metabase-child-1');
+    expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
+    expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
   });
 
   it('runs Metabase scheduled ingest through the public CLI command path with real fan-out', async () => {
@@ -393,7 +508,8 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
+    expect(io.stderr()).toContain('Targets: 2 mapped databases');
     expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
     expect(io.stdout()).toContain('Source: prod-metabase');
     expect(io.stdout()).toContain('Children: 2');
@@ -480,6 +596,46 @@ describe('runKtxIngest', () => {
       status: 'all_succeeded',
       children: [],
     });
+    expect(io.stderr()).toBe('');
+  });
+
+  it('keeps metabase JSON stdout free of operational adapter logs', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo();
+    let adapterOptions: KtxCliLocalIngestAdaptersOptions | undefined;
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          createAdapters: (_project, options) => {
+            adapterOptions = options;
+            options?.logger?.warn('adapter warning');
+            return [];
+          },
+          runLocalMetabaseIngest: async (input) => {
+            input.adapters.find((adapter) => adapter.source === 'metabase');
+            return {
+              metabaseConnectionId: 'prod-metabase',
+              status: 'all_succeeded',
+              totals: { workUnits: 0, failedWorkUnits: 0 },
+              children: [],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(adapterOptions?.logger).toEqual(expect.objectContaining({ warn: expect.any(Function) }));
+    expect(() => JSON.parse(io.stdout())).not.toThrow();
     expect(io.stderr()).toBe('');
   });
 
@@ -694,17 +850,22 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
-      databaseIntrospectionUrl: 'http://127.0.0.1:8765',
-    });
+    expect(createAdapters).toHaveBeenCalledWith(
+      expect.objectContaining({ projectDir }),
+      expect.objectContaining({
+        databaseIntrospectionUrl: 'http://127.0.0.1:8765',
+        logger: expect.any(Object),
+      }),
+    );
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
         adapters: createdAdapters,
         adapter: 'fake',
         connectionId: 'warehouse',
-        pullConfigOptions: {
+        pullConfigOptions: expect.objectContaining({
           databaseIntrospectionUrl: 'http://127.0.0.1:8765',
-        },
+          logger: expect.any(Object),
+        }),
       }),
     );
   });
@@ -747,14 +908,19 @@ describe('runKtxIngest', () => {
       installPolicy: 'auto',
       io: io.io,
     };
-    expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
-      managedDaemon: expectedManagedDaemon,
-    });
+    expect(createAdapters).toHaveBeenCalledWith(
+      expect.objectContaining({ projectDir }),
+      expect.objectContaining({
+        managedDaemon: expectedManagedDaemon,
+        logger: expect.any(Object),
+      }),
+    );
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
-        pullConfigOptions: {
+        pullConfigOptions: expect.objectContaining({
           managedDaemon: expectedManagedDaemon,
-        },
+          logger: expect.any(Object),
+        }),
       }),
     );
   });
@@ -808,9 +974,13 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
-      historicSqlConnectionId: 'warehouse',
-    });
+    expect(createAdapters).toHaveBeenCalledWith(
+      expect.objectContaining({ projectDir }),
+      expect.objectContaining({
+        historicSqlConnectionId: 'warehouse',
+        logger: expect.any(Object),
+      }),
+    );
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
         adapters: createdAdapters,
@@ -912,10 +1082,226 @@ describe('runKtxIngest', () => {
     expect(stdout).toContain('[45%] Planned 1 work unit');
     expect(stdout).toContain('[80%] Processed 1/1 work units');
     expect(stdout).toContain('[100%] Ingest completed');
-    expect(stdout.indexOf('[5%] Fetching source files for warehouse/historic-sql')).toBeLessThan(
-      stdout.indexOf('Report: report-live-1'),
-    );
+    expect(stdout).toContain('Report: report-live-1');
     expect(io.stderr()).toBe('');
+  });
+
+  it('writes plain TTY ingest progress and final report to stdout', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) => completedLocalBundleRun(input, 'local-job-1'));
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          sourceDir,
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          env: interactiveEnv(),
+          runLocalIngest: runLocal,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
+    expect(io.stdout()).toContain('Report: report-live-1');
+    expect(io.stderr()).toBe('');
+  });
+
+  it('prints plain WorkUnit step progress during long-running local ingest', async () => {
+    const projectDir = join(tempDir, 'historic-sql-step-progress-project');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      [
+        'project: historic-sql-step-progress-project',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      minExecutions: 2',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const createdAdapters: SourceAdapter[] = [
+      { source: 'historic-sql', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+    ];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) => {
+      input.memoryFlow?.update({
+        plannedWorkUnits: [
+          {
+            unitKey: 'historic-sql-table-public-orders',
+            rawFiles: ['tables/public/orders.json'],
+            peerFileCount: 0,
+            dependencyCount: 0,
+          },
+          {
+            unitKey: 'historic-sql-table-public-customers',
+            rawFiles: ['tables/public/customers.json'],
+            peerFileCount: 0,
+            dependencyCount: 0,
+          },
+        ],
+      });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 });
+      input.memoryFlow?.emit({
+        type: 'work_unit_started',
+        unitKey: 'historic-sql-table-public-orders',
+        skills: ['historic_sql_table_digest'],
+        stepBudget: 40,
+      });
+      input.memoryFlow?.emit({
+        type: 'work_unit_step',
+        unitKey: 'historic-sql-table-public-orders',
+        stepIndex: 7,
+        stepBudget: 40,
+      });
+      input.memoryFlow?.emit({
+        type: 'work_unit_finished',
+        unitKey: 'historic-sql-table-public-orders',
+        status: 'success',
+      });
+      input.memoryFlow?.finish('done');
+      return completedLocalBundleRun(input, input.jobId ?? 'historic-step-progress-job');
+    });
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          env: interactiveEnv(),
+          createAdapters: vi.fn(() => createdAdapters as never),
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'historic-step-progress-job',
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const stdout = io.stdout();
+    expect(stdout).toContain('[45%] Planned 2 work units');
+    expect(stdout).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
+    expect(stdout).toContain(
+      '\r[58%] Processing work units: 0/2 complete, 1 active; latest historic-sql-table-public-orders step 7/40\u001b[K',
+    );
+    expect(stdout).toContain('[68%] Processed 1/2 work units');
+  });
+
+  it('renders concurrent WorkUnit step progress as transient aggregate status', async () => {
+    const projectDir = join(tempDir, 'historic-sql-concurrent-progress-project');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      [
+        'project: historic-sql-concurrent-progress-project',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      minExecutions: 2',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const createdAdapters: SourceAdapter[] = [
+      { source: 'historic-sql', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+    ];
+    const workUnitKeys = [
+      'historic-sql-table-public-orders',
+      'historic-sql-table-public-customers',
+      'historic-sql-table-public-line-items',
+      'historic-sql-table-public-payments',
+      'historic-sql-table-public-products',
+      'historic-sql-table-public-suppliers',
+    ];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) => {
+      input.memoryFlow?.update({
+        plannedWorkUnits: workUnitKeys.map((unitKey) => ({
+          unitKey,
+          rawFiles: [`tables/${unitKey}.json`],
+          peerFileCount: 0,
+          dependencyCount: 0,
+        })),
+      });
+      input.memoryFlow?.emit({
+        type: 'chunks_planned',
+        chunkCount: workUnitKeys.length,
+        workUnitCount: workUnitKeys.length,
+        evictionCount: 0,
+      });
+      for (const unitKey of workUnitKeys) {
+        input.memoryFlow?.emit({
+          type: 'work_unit_started',
+          unitKey,
+          skills: ['historic_sql_table_digest'],
+          stepBudget: 40,
+        });
+      }
+      for (const unitKey of workUnitKeys) {
+        input.memoryFlow?.emit({ type: 'work_unit_step', unitKey, stepIndex: 1, stepBudget: 40 });
+      }
+      input.memoryFlow?.finish('done');
+      return completedLocalBundleRun(input, input.jobId ?? 'historic-concurrent-progress-job');
+    });
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          env: interactiveEnv(),
+          createAdapters: vi.fn(() => createdAdapters as never),
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'historic-concurrent-progress-job',
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const stdout = io.stdout();
+    expect(stdout).toContain(
+      '\r[56%] Processing work units: 0/6 complete, 6 active; latest historic-sql-table-public-suppliers step 1/40\u001b[K',
+    );
+    expect(stdout).not.toContain(
+      '\n[56%] Processing 6/6 work units: historic-sql-table-public-suppliers step 1/40\n',
+    );
+    expect(stdout).toContain('\n[100%] Ingest completed\n');
   });
 
   it('passes local Looker pull-config options and agent runner into scheduled ingest for Looker scheduled ingest', async () => {
@@ -958,15 +1344,19 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(createAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), {
-      looker: {
-        parser: pullConfigOptions.looker.parser,
-      },
-    });
+    expect(createAdapters).toHaveBeenCalledWith(
+      expect.objectContaining({ projectDir }),
+      expect.objectContaining({
+        logger: expect.any(Object),
+        looker: {
+          parser: pullConfigOptions.looker.parser,
+        },
+      }),
+    );
     expect(runLocal).toHaveBeenCalledWith(
       expect.objectContaining({
         agentRunner,
-        pullConfigOptions,
+        pullConfigOptions: expect.objectContaining(pullConfigOptions),
       }),
     );
   });

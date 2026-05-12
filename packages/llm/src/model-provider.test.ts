@@ -1,10 +1,138 @@
-import type { LanguageModel } from 'ai';
+import { devToolsMiddleware as defaultDevToolsMiddleware } from '@ai-sdk/devtools';
+import { wrapLanguageModel as defaultWrapLanguageModel, type LanguageModel } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
-import { createKtxLlmProvider } from './model-provider.js';
+import { createKtxLlmProvider, type KtxLlmProviderFactoryDeps } from './model-provider.js';
 
 const languageModel = (modelId: string, provider = 'test'): LanguageModel => ({ modelId, provider }) as LanguageModel;
+const devtoolsMiddleware = (): ReturnType<typeof defaultDevToolsMiddleware> => ({ specificationVersion: 'v3' });
+const wrapWith = (model: LanguageModel) =>
+  vi.fn((_options: Parameters<typeof defaultWrapLanguageModel>[0]) => model as ReturnType<typeof defaultWrapLanguageModel>);
 
 describe('createKtxLlmProvider', () => {
+  it('wraps language models with DevTools middleware when explicitly enabled', () => {
+    const anthropicModel = languageModel('claude-sonnet-4-6', 'anthropic');
+    const wrappedModel = languageModel('claude-sonnet-4-6', 'anthropic-devtools');
+    const middleware = devtoolsMiddleware();
+    const wrapLanguageModel = wrapWith(wrappedModel);
+    const devToolsMiddleware = vi.fn(devtoolsMiddleware);
+
+    const provider = createKtxLlmProvider(
+      {
+        backend: 'anthropic',
+        anthropic: { apiKey: 'test-anthropic-key' }, // pragma: allowlist secret
+        modelSlots: { default: 'claude-sonnet-4-6' },
+        promptCaching: { enabled: false },
+      },
+      {
+        createAnthropic: vi.fn(() => vi.fn(() => anthropicModel)),
+        devtoolsEnabled: true,
+        wrapLanguageModel,
+        devToolsMiddleware,
+      } satisfies KtxLlmProviderFactoryDeps,
+    );
+
+    expect(provider.getModel('default')).toBe(wrappedModel);
+    expect(devToolsMiddleware).toHaveBeenCalledTimes(1);
+    expect(wrapLanguageModel).toHaveBeenCalledWith({
+      model: anthropicModel,
+      middleware,
+      modelId: 'claude-sonnet-4-6',
+      providerId: 'anthropic',
+    });
+  });
+
+  it('does not wrap language models by default', () => {
+    const anthropicModel = languageModel('claude-sonnet-4-6', 'anthropic');
+    const wrapLanguageModel = vi.fn(defaultWrapLanguageModel);
+    const devToolsMiddleware = vi.fn(defaultDevToolsMiddleware);
+
+    const provider = createKtxLlmProvider(
+      {
+        backend: 'anthropic',
+        anthropic: { apiKey: 'test-anthropic-key' }, // pragma: allowlist secret
+        modelSlots: { default: 'claude-sonnet-4-6' },
+        promptCaching: { enabled: false },
+      },
+      {
+        createAnthropic: vi.fn(() => vi.fn(() => anthropicModel)),
+        wrapLanguageModel,
+        devToolsMiddleware,
+      } satisfies KtxLlmProviderFactoryDeps,
+    );
+
+    expect(provider.getModel('default')).toBe(anthropicModel);
+    expect(wrapLanguageModel).not.toHaveBeenCalled();
+    expect(devToolsMiddleware).not.toHaveBeenCalled();
+  });
+
+  it('wraps language models when KTX_AI_DEVTOOLS_ENABLED is true', () => {
+    const originalEnv = process.env.KTX_AI_DEVTOOLS_ENABLED;
+    process.env.KTX_AI_DEVTOOLS_ENABLED = 'true';
+    try {
+      const gatewayModel = languageModel('anthropic/claude-sonnet-4-6', 'gateway');
+      const wrappedModel = languageModel('anthropic/claude-sonnet-4-6', 'gateway-devtools');
+      const wrapLanguageModel = wrapWith(wrappedModel);
+
+      const provider = createKtxLlmProvider(
+        {
+          backend: 'gateway',
+          gateway: { baseURL: 'https://gateway.test/v1' },
+          modelSlots: { default: 'anthropic/claude-sonnet-4-6' },
+          promptCaching: { enabled: false },
+        },
+        {
+          createGateway: vi.fn(() => vi.fn(() => gatewayModel)),
+          wrapLanguageModel,
+          devToolsMiddleware: vi.fn(devtoolsMiddleware),
+        } satisfies KtxLlmProviderFactoryDeps,
+      );
+
+      expect(provider.getModel('default')).toBe(wrappedModel);
+      expect(wrapLanguageModel).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.KTX_AI_DEVTOOLS_ENABLED;
+      } else {
+        process.env.KTX_AI_DEVTOOLS_ENABLED = originalEnv;
+      }
+    }
+  });
+
+  it('does not wrap language models in production even when enabled', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const anthropicModel = languageModel('claude-sonnet-4-6', 'anthropic');
+      const wrapLanguageModel = vi.fn(defaultWrapLanguageModel);
+      const devToolsMiddleware = vi.fn(defaultDevToolsMiddleware);
+
+      const provider = createKtxLlmProvider(
+        {
+          backend: 'anthropic',
+          anthropic: { apiKey: 'test-anthropic-key' }, // pragma: allowlist secret
+          modelSlots: { default: 'claude-sonnet-4-6' },
+          promptCaching: { enabled: false },
+        },
+        {
+          createAnthropic: vi.fn(() => vi.fn(() => anthropicModel)),
+          devtoolsEnabled: true,
+          wrapLanguageModel,
+          devToolsMiddleware,
+        } satisfies KtxLlmProviderFactoryDeps,
+      );
+
+      expect(provider.getModel('default')).toBe(anthropicModel);
+      expect(wrapLanguageModel).not.toHaveBeenCalled();
+      expect(devToolsMiddleware).not.toHaveBeenCalled();
+    } finally {
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    }
+  });
+
   it('uses direct Anthropic with both beta headers', () => {
     const anthropicModel = languageModel('claude-sonnet-4-6', 'anthropic');
     const anthropic = vi.fn(() => anthropicModel);

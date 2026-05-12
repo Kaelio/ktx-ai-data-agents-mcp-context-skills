@@ -448,10 +448,18 @@ joins: []
       listIo.io,
     );
     expect(code).toBe(0);
+    expect(listIo.stderr()).toBe('');
 
     const parsed = JSON.parse(listIo.stdout());
-    expect(parsed.kind).toBe('list');
-    expect(parsed.meta).toEqual({ command: 'sl list' });
+    expect(parsed).toMatchObject({
+      kind: 'list',
+      data: {
+        items: expect.any(Array),
+      },
+      meta: {
+        command: 'sl list',
+      },
+    });
     expect(parsed.data.items).toHaveLength(1);
     expect(parsed.data.items[0]).toMatchObject({
       connectionId: 'warehouse',

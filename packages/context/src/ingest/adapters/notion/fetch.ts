@@ -12,10 +12,19 @@ import {
   type NotionPullConfig,
 } from './types.js';
 
+export interface NotionFetchLogger {
+  warn(message: string): void;
+}
+
+const noopNotionFetchLogger: NotionFetchLogger = {
+  warn: () => undefined,
+};
+
 interface FetchNotionSnapshotParams {
   client: NotionApi;
   config: NotionPullConfig;
   stagedDir: string;
+  logger?: NotionFetchLogger;
 }
 
 interface CrawlState {
@@ -23,6 +32,7 @@ interface CrawlState {
   databaseCount: number;
   dataSourceCount: number;
   capped: boolean;
+  logger: NotionFetchLogger;
   skipped: Array<{ externalId: string; reason: string }>;
   warnings: string[];
   materializedPageTargets: Set<string>;
@@ -44,9 +54,6 @@ interface NotionLinks {
 
 const DEFAULT_MAX_BLOCK_DEPTH = 10;
 const DEFAULT_MAX_BLOCKS_PER_PAGE = 2000;
-const logger = {
-  warn: (message: string) => console.warn(message),
-};
 
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -58,7 +65,12 @@ async function writeText(path: string, value: string): Promise<void> {
   await writeFile(path, value.endsWith('\n') ? value : `${value}\n`, 'utf-8');
 }
 
-function addWarning(warnings: string[], warning: string, logWarning = false): void {
+function addWarning(
+  warnings: string[],
+  warning: string,
+  logWarning = false,
+  logger: NotionFetchLogger = noopNotionFetchLogger,
+): void {
   if (!warnings.includes(warning)) {
     warnings.push(warning);
     if (logWarning) {
@@ -119,11 +131,21 @@ async function visitPaginated<T>(params: {
   } while (cursor);
 }
 
-function addBlockCountWarning(state: BlockCollectionState, warnings: string[], pageId: string): void {
+function addBlockCountWarning(
+  state: BlockCollectionState,
+  warnings: string[],
+  pageId: string,
+  logger: NotionFetchLogger,
+): void {
   if (state.blockCountWarningWritten) {
     return;
   }
-  addWarning(warnings, `maxBlocksPerPage reached for page ${pageId} at ${DEFAULT_MAX_BLOCKS_PER_PAGE} blocks`, true);
+  addWarning(
+    warnings,
+    `maxBlocksPerPage reached for page ${pageId} at ${DEFAULT_MAX_BLOCKS_PER_PAGE} blocks`,
+    true,
+    logger,
+  );
   state.blockCountWarningWritten = true;
 }
 
@@ -134,18 +156,19 @@ async function collectBlockChildren(params: {
   depth: number;
   warnings: string[];
   state: BlockCollectionState;
+  logger: NotionFetchLogger;
 }): Promise<void> {
   let cursor: string | null = null;
   do {
     const remainingBlocks = DEFAULT_MAX_BLOCKS_PER_PAGE - params.state.blocks.length;
     if (remainingBlocks <= 0) {
-      addBlockCountWarning(params.state, params.warnings, params.pageId);
+      addBlockCountWarning(params.state, params.warnings, params.pageId, params.logger);
       return;
     }
     const page = await params.client.listBlockChildren(params.blockId, cursor, Math.min(remainingBlocks, 100));
     for (let index = 0; index < page.results.length; index += 1) {
       if (params.state.blocks.length >= DEFAULT_MAX_BLOCKS_PER_PAGE) {
-        addBlockCountWarning(params.state, params.warnings, params.pageId);
+        addBlockCountWarning(params.state, params.warnings, params.pageId, params.logger);
         return;
       }
 
@@ -159,9 +182,10 @@ async function collectBlockChildren(params: {
             params.warnings,
             `maxBlockDepth reached for page ${params.pageId} at depth ${DEFAULT_MAX_BLOCK_DEPTH}`,
             true,
+            params.logger,
           );
         } else if (params.state.blocks.length >= DEFAULT_MAX_BLOCKS_PER_PAGE) {
-          addBlockCountWarning(params.state, params.warnings, params.pageId);
+          addBlockCountWarning(params.state, params.warnings, params.pageId, params.logger);
           return;
         } else {
           await collectBlockChildren({
@@ -171,6 +195,7 @@ async function collectBlockChildren(params: {
             depth: blockDepth,
             warnings: params.warnings,
             state: params.state,
+            logger: params.logger,
           });
         }
       }
@@ -179,7 +204,7 @@ async function collectBlockChildren(params: {
         params.state.blocks.length >= DEFAULT_MAX_BLOCKS_PER_PAGE &&
         (index < page.results.length - 1 || page.hasMore)
       ) {
-        addBlockCountWarning(params.state, params.warnings, params.pageId);
+        addBlockCountWarning(params.state, params.warnings, params.pageId, params.logger);
         return;
       }
     }
@@ -187,7 +212,12 @@ async function collectBlockChildren(params: {
   } while (cursor);
 }
 
-async function collectBlockTree(client: NotionApi, pageId: string, warnings: string[]): Promise<NotionBlock[]> {
+async function collectBlockTree(
+  client: NotionApi,
+  pageId: string,
+  warnings: string[],
+  logger: NotionFetchLogger,
+): Promise<NotionBlock[]> {
   const state: BlockCollectionState = { blocks: [], blockCountWarningWritten: false };
   await collectBlockChildren({
     client,
@@ -196,6 +226,7 @@ async function collectBlockTree(client: NotionApi, pageId: string, warnings: str
     depth: 0,
     warnings,
     state,
+    logger,
   });
   return state.blocks;
 }
@@ -341,7 +372,7 @@ async function materializePage(params: {
     if (params.skipDataSourceRows && !params.dataSourceId && parentDataSourceId(page)) {
       return;
     }
-    const blocks = await collectBlockTree(params.client, params.pageId, params.state.warnings);
+    const blocks = await collectBlockTree(params.client, params.pageId, params.state.warnings, params.state.logger);
     const metadata = normalizeNotionPageMetadata({
       page,
       fallbackPath: params.fallbackPath,
@@ -374,7 +405,9 @@ async function materializePage(params: {
       }
     }
   } catch (error) {
-    logger.warn(`Skipping Notion page ${params.pageId}: ${error instanceof Error ? error.message : String(error)}`);
+    params.state.logger.warn(
+      `Skipping Notion page ${params.pageId}: ${error instanceof Error ? error.message : String(error)}`,
+    );
     params.state.skipped.push({
       externalId: params.pageId,
       reason: error instanceof Error ? error.message : String(error),
@@ -491,6 +524,7 @@ async function materializeDatabase(params: {
 
 export async function fetchNotionSnapshot(params: FetchNotionSnapshotParams): Promise<NotionManifest> {
   await mkdir(params.stagedDir, { recursive: true });
+  const logger = params.logger ?? noopNotionFetchLogger;
   const configuredCursor = params.config.crawlMode === 'all_accessible' ? parseConfiguredCursor(params.config) : null;
   const continuedFromCursor = configuredCursor !== null;
   const state: CrawlState = {
@@ -498,6 +532,7 @@ export async function fetchNotionSnapshot(params: FetchNotionSnapshotParams): Pr
     databaseCount: 0,
     dataSourceCount: 0,
     capped: false,
+    logger,
     skipped: [],
     warnings: [],
     materializedPageTargets: new Set(),

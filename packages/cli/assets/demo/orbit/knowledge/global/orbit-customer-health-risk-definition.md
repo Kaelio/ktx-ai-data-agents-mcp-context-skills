@@ -14,9 +14,9 @@ sl_refs:
 
 # Customer Health Risk Definition
 
-**Governed metric key:** `active_customers`  
-**Owner team:** customer_success  
-**Notion:** `notion://notion_page_customer_health_playbook#risk-definition`  
+**Governed metric key:** `active_customers`
+**Owner team:** customer_success
+**Notion:** `notion://notion_page_customer_health_playbook#risk-definition`
 **Sources:** `mart_customer_health`, `int_customer_health_signals`
 
 ## Risk Levels

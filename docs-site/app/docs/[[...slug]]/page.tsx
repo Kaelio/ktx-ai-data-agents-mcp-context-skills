@@ -17,6 +17,10 @@ function isDocsIndex(slug: string[] | undefined) {
   return slug === undefined || slug.length === 0 || slug.join("/") === "";
 }
 
+function isHeroPage(slug: string[] | undefined) {
+  return slug?.join("/") === "getting-started/introduction";
+}
+
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
 }) {
@@ -30,14 +34,22 @@ export default async function Page(props: {
 
   const MDX = page.data.body;
 
+  const hero = isHeroPage(params.slug);
+
   return (
     <DocsPage toc={page.data.toc}>
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription>{page.data.description}</DocsDescription>
-      <DocsPageActions
-        markdownUrl={`${page.url}.md`}
-        mdxSource={page.data.content}
-      />
+      {!hero && (
+        <>
+          <div className="flex items-start justify-between gap-4">
+            <DocsTitle>{page.data.title}</DocsTitle>
+            <DocsPageActions
+              markdownUrl={`${page.url}.md`}
+              mdxSource={page.data.content}
+            />
+          </div>
+          <DocsDescription>{page.data.description}</DocsDescription>
+        </>
+      )}
       <DocsBody>
         <MDX components={{ ...defaultMdxComponents, pre: CodeBlock }} />
       </DocsBody>

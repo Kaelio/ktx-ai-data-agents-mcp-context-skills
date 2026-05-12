@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptPath = fileURLToPath(import.meta.url);
 const ktxRoot = dirname(dirname(scriptPath));
-const repoRoot = dirname(ktxRoot);
 
 const packageNameByDir = new Map(
   [
@@ -35,7 +34,8 @@ const pythonPackageTests = new Map([
 ]);
 
 function normalizeFilePath(filePath) {
-  return filePath.replaceAll('\\', '/').replace(/^\.\//, '');
+  const normalized = filePath.replaceAll('\\', '/').replace(/^\.\//, '');
+  return normalized.startsWith('ktx/') ? normalized.slice('ktx/'.length) : normalized;
 }
 
 function stablePush(commands, key, cmd, args) {
@@ -68,13 +68,7 @@ export function planChecks(files) {
   let runAllPythonTests = false;
 
   for (const rawFile of files) {
-    const file = normalizeFilePath(rawFile);
-
-    if (!file.startsWith('ktx/')) {
-      continue;
-    }
-
-    const ktxFile = file.slice('ktx/'.length);
+    const ktxFile = normalizeFilePath(rawFile);
 
     if (ktxFile.startsWith('packages/')) {
       const [, packageDir, ...rest] = ktxFile.split('/');
@@ -189,6 +183,6 @@ export function runChecks(files) {
   return 0;
 }
 
-if (process.argv[1] && relative(repoRoot, process.argv[1]).split(sep).join('/') === 'ktx/scripts/precommit-check.mjs') {
+if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {
   process.exitCode = runChecks(process.argv.slice(2));
 }

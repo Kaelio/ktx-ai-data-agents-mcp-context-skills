@@ -19,7 +19,7 @@ tables:
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/69.json -->
 <!-- from: raw-sources/postgres-warehouse/metabase/2026-05-12-035303-local-metabase-3-114d957b-f564-4f46-8d4c-2770720a95be/cards/100.json -->
 
-**Table:** `orbit_analytics.mart_account_segments`  
+**Table:** `orbit_analytics.mart_account_segments`
 **Grain:** one row per `account_id`
 
 ## Columns
@@ -53,4 +53,3 @@ tables:
 - `normalized_plan_code` maps `pro_plus` → `growth`. Always use `normalized_plan_code` for plan-based reporting. See [orbit-plan-segment-normalization](orbit-plan-segment-normalization).
 - `segment` is derived from `canonical_plan_code × size_band` via `stg_plan_segment_mapping`.
 - `contract_arr_cents` is the contract-first ARR value. See [orbit-arr-contract-first-definition](orbit-arr-contract-first-definition).
-

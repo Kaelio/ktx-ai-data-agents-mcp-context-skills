@@ -1,0 +1,70 @@
+# See https://pre-commit.com for hook documentation.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.21.2
+    hooks:
+      - id: pyupgrade
+        name: pyupgrade (python)
+        files: ^python/
+        args: [--py313-plus]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.2
+    hooks:
+      - id: ruff
+        name: ruff (python)
+        files: ^python/
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: ruff format (python)
+        files: ^python/
+
+  - repo: local
+    hooks:
+      - id: ktx-package-checks
+        name: ktx package checks
+        entry: node scripts/precommit-check.mjs
+        language: system
+        files: ^(packages/|scripts/|python/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|release-policy\.json$|tsconfig\.base\.json$|pyproject\.toml$|uv\.lock$|uv\.toml$)
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        exclude: |
+          (?x)^(
+            .*\.lock$|
+            .*pnpm-lock\.yaml$|
+            .*package-lock\.json$|
+            .*yarn\.lock$|
+            .*\.log$|
+            .*\.dump$|
+            .*\.sql$|
+            .*\.csv$|
+            .*\.db$|
+            .*\.sqlite$|
+            .*\.sqlite3$|
+            .*/node_modules/.*|
+            .*/\.venv/.*|
+            .*/dist/.*|
+            .*/build/.*|
+            .*/coverage/.*|
+            .*/htmlcov/.*|
+            .*\.gen\.ts$|
+            .*\.gen\.py$|
+            .*\.generated\.ts$
+          )$

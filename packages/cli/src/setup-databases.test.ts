@@ -1305,6 +1305,7 @@ describe('setup databases step', () => {
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('redactionPatterns');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
+    expect(config.ingest.workUnits.maxConcurrency).toBe(6);
     expect(io.stdout()).toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements ready');
   });

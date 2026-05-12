@@ -68,7 +68,7 @@ The MCP server is typically configured through `ktx setup --agents` rather than 
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Agent cannot start server | The agent config cannot find the `ktx` binary | Run `pnpm run link:dev` or use an absolute command path in the agent config |
+| Agent cannot start server | The agent config cannot find the `ktx` binary | Install `@kaelio/ktx` globally with `npm install -g @kaelio/ktx` or use an absolute command path in the agent config |
 | Semantic tools are unavailable | Server was started without `--semantic-compute` | Add `--semantic-compute` or `--semantic-compute-url` to the server args |
 | Query execution is denied | Server was started without `--execute-queries` | Add `--execute-queries` only for trusted projects where read-only execution is intended |
 | Context resolves to wrong project | `KTX_PROJECT_DIR` is missing or points elsewhere | Set `KTX_PROJECT_DIR` to the project containing the intended `ktx.yaml` |

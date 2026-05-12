@@ -19,6 +19,7 @@ import {
 } from './adapters/live-database/daemon-introspection.js';
 import { LiveDatabaseSourceAdapter } from './adapters/live-database/live-database.adapter.js';
 import { createDaemonLookerTableIdentifierParser } from './adapters/looker/daemon-table-identifier-parser.js';
+import type { LookerClientLogger } from './adapters/looker/client.js';
 import { DefaultLookerConnectionClientFactory } from './adapters/looker/factory.js';
 import { createLocalLookerCredentialResolver } from './adapters/looker/local-looker.adapter.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
@@ -32,9 +33,12 @@ import type { LookerRuntimeClient } from './adapters/looker/fetch.js';
 import { LookmlSourceAdapter } from './adapters/lookml/lookml.adapter.js';
 import { pullConfigFromIntegrationConfig } from './adapters/lookml/pull-config.js';
 import { createLocalMetabaseSourceAdapter } from './adapters/metabase/local-metabase.adapter.js';
+import type { MetabaseClientLogger } from './adapters/metabase/client.js';
+import type { MetabaseFetchLogger } from './adapters/metabase/fetch.js';
 import { MetricflowSourceAdapter } from './adapters/metricflow/metricflow.adapter.js';
 import { pullConfigFromMetricflowIntegration } from './adapters/metricflow/pull-config.js';
 import { NotionSourceAdapter } from './adapters/notion/notion.adapter.js';
+import type { NotionFetchLogger } from './adapters/notion/fetch.js';
 import { seedLocalMappingStateFromKtxYaml } from './local-mapping-reconcile.js';
 import type { SourceAdapter } from './types.js';
 
@@ -56,7 +60,13 @@ export interface DefaultLocalIngestAdaptersOptions {
     parser?: LookerTableIdentifierParser;
     env?: NodeJS.ProcessEnv;
   };
+  logger?: LocalIngestOperationalLogger;
 }
+
+type LocalIngestOperationalLogger = MetabaseClientLogger &
+  MetabaseFetchLogger &
+  LookerClientLogger &
+  NotionFetchLogger;
 
 export function createDefaultLocalIngestAdapters(
   project: KtxLocalProject,
@@ -64,6 +74,9 @@ export function createDefaultLocalIngestAdapters(
 ): SourceAdapter[] {
   const lookerConnectionFactory = new DefaultLookerConnectionClientFactory(
     createLocalLookerCredentialResolver(project, options.looker?.env),
+    {
+      ...(options.logger ? { logger: options.logger } : {}),
+    },
   );
 
   const adapters: SourceAdapter[] = [
@@ -80,7 +93,9 @@ export function createDefaultLocalIngestAdapters(
       homeDir: join(project.projectDir, '.ktx/cache'),
       targetConnectionIds: primaryWarehouseConnectionIds(project),
     }),
-    createLocalMetabaseSourceAdapter(project),
+    createLocalMetabaseSourceAdapter(project, {
+      ...(options.logger ? { logger: options.logger } : {}),
+    }),
     new LookerSourceAdapter({
       clientFactory: {
         async createClient(config, ctx) {
@@ -92,7 +107,9 @@ export function createDefaultLocalIngestAdapters(
       },
     }),
     new MetricflowSourceAdapter({ homeDir: join(project.projectDir, '.ktx/cache') }),
-    new NotionSourceAdapter(),
+    new NotionSourceAdapter({
+      ...(options.logger ? { logger: options.logger } : {}),
+    }),
   ];
 
   if (options.historicSql) {

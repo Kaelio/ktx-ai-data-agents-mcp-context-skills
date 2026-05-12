@@ -1,0 +1,32 @@
+<svg viewBox="0 0 500 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ktx">
+  <!-- mascot -->
+  <g fill="none" stroke="#1B3139" stroke-width="16" stroke-linecap="round">
+    <path d="M 62 110 Q 32 130 44 152" />
+    <path d="M 88 116 Q 80 152 70 174" />
+    <path d="M 112 116 Q 120 152 130 174" />
+  </g>
+
+  <path
+    d="M 134 108 C 162 116, 172 96, 162 78 C 154 64, 168 56, 178 60"
+    fill="none" stroke="#FF8A4C" stroke-width="16" stroke-linecap="round"
+  />
+
+  <path
+    d="M 48 102 C 48 56, 78 30, 100 30 C 122 30, 152 56, 152 102 C 152 116, 132 120, 100 120 C 68 120, 48 116, 48 102 Z"
+    fill="#1B3139"
+  />
+
+  <path d="M 80 84 Q 86 77 92 84" fill="none" stroke="#F5F1EA" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M 108 84 Q 114 77 120 84" fill="none" stroke="#F5F1EA" stroke-width="3.5" stroke-linecap="round" />
+
+  <!-- wordmark: 'ktx', half the logo height, vertically centered -->
+  <text
+    x="225"
+    y="145"
+    font-family="'JetBrains Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, monospace"
+    font-size="140"
+    font-weight="600"
+    fill="#1B3139"
+    letter-spacing="-0.04em"
+  >ktx</text>
+</svg>

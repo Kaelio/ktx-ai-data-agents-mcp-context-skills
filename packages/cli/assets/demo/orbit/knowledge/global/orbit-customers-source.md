@@ -18,8 +18,8 @@ tables:
 
 # Orbit Customers Source
 
-**Table:** `orbit_analytics.customer`  
-**Grain:** one row per signed-up customer  
+**Table:** `orbit_analytics.customer`
+**Grain:** one row per signed-up customer
 **Source:** Notion — Orbit Demo Home / Data Team - Onboarding / Orbit Customers Source, last edited 2026-05-07
 
 Use this when a question needs customer identity, plan tier, signup timing, recent activity, or the standard customer joins.
@@ -58,4 +58,3 @@ Always join through `customer.id`. Do not join on `email`.
 - **Timezone:** `created_at` and `last_seen_at` are UTC. Confirm whether a question expects UTC or a local business day before filtering.
 - **Paying vs. all:** `free` customers must be excluded from paying-customer follow-ups. Use `paying_customer_count`, not `customer_count`.
 - **plan_tier values:** `free`, `pro`, `enterprise`. Note: `pro_plus` is a legacy alias for `growth` in the account/contract layer (see `orbit-plan-segment-normalization`), but `plan_tier` on this table uses `pro` not `pro_plus`.
-

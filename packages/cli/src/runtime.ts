@@ -1,7 +1,9 @@
 import type { KtxCliIo } from './cli-runtime.js';
 import {
+  stopAllManagedPythonDaemons,
   startManagedPythonDaemon,
   stopManagedPythonDaemon,
+  type ManagedPythonDaemonStopAllResult,
   type ManagedPythonDaemonStartResult,
   type ManagedPythonDaemonStopResult,
 } from './managed-python-daemon.js';
@@ -22,7 +24,7 @@ import {
 export type KtxRuntimeArgs =
   | { command: 'install'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
   | { command: 'start'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
-  | { command: 'stop'; cliVersion: string }
+  | { command: 'stop'; cliVersion: string; all: boolean }
   | { command: 'status'; cliVersion: string; json: boolean }
   | { command: 'doctor'; cliVersion: string; json: boolean }
   | { command: 'prune'; cliVersion: string; dryRun: boolean; yes: boolean };
@@ -35,6 +37,7 @@ export interface KtxRuntimeDeps {
     force?: boolean;
   }) => Promise<ManagedPythonDaemonStartResult>;
   stopDaemon?: (options: { cliVersion: string }) => Promise<ManagedPythonDaemonStopResult>;
+  stopAllDaemons?: (options: { cliVersion: string }) => Promise<ManagedPythonDaemonStopAllResult>;
   readStatus?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeStatus>;
   doctorRuntime?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeDoctorCheck[]>;
   pruneRuntime?: (options: {
@@ -79,6 +82,58 @@ function writeDaemonStop(io: KtxCliIo, result: ManagedPythonDaemonStopResult): v
   io.stdout.write('Stopped KTX Python daemon\n');
   io.stdout.write(`pid: ${result.state?.pid ?? 'unknown'}\n`);
   io.stdout.write(`state: ${result.layout.daemonStatePath}\n`);
+}
+
+function writeStopAllEntry(io: KtxCliIo, entry: { pid: number; source: string; url?: string; health?: string; detail?: string }): void {
+  io.stdout.write(
+    `pid: ${entry.pid} source: ${entry.source}${entry.url ? ` url: ${entry.url}` : ''}${
+      entry.health ? ` health: ${entry.health}` : ''
+    }${
+      entry.detail ? ` detail: ${entry.detail}` : ''
+    }\n`,
+  );
+}
+
+function writeDaemonStopAll(io: KtxCliIo, result: ManagedPythonDaemonStopAllResult): number {
+  const failed = result.failed.length + result.scanErrors.length;
+  if (
+    result.stopped.length === 0 &&
+    result.stale.length === 0 &&
+    result.failed.length === 0 &&
+    result.scanErrors.length === 0
+  ) {
+    io.stdout.write('No KTX Python daemons found\n');
+    return 0;
+  }
+  if (failed === 0) {
+    io.stdout.write(`Stopped ${result.stopped.length} KTX Python daemons\n`);
+    if (result.stale.length > 0) {
+      io.stdout.write(`Cleaned ${result.stale.length} stale daemon states\n`);
+    }
+    for (const entry of result.stopped) {
+      writeStopAllEntry(io, entry);
+    }
+    for (const entry of result.stale) {
+      writeStopAllEntry(io, entry);
+    }
+    return 0;
+  }
+  io.stderr.write(
+    `Stopped ${result.stopped.length} KTX Python daemons; failed ${result.failed.length}${
+      result.stale.length > 0 ? `; cleaned stale ${result.stale.length}` : ''
+    }\n`,
+  );
+  for (const entry of result.failed) {
+    io.stderr.write(
+      `pid: ${entry.pid} source: ${entry.source}${entry.url ? ` url: ${entry.url}` : ''}${
+        entry.health ? ` health: ${entry.health}` : ''
+      } detail: ${entry.detail}\n`,
+    );
+  }
+  for (const error of result.scanErrors) {
+    io.stderr.write(`process scan: ${error}\n`);
+  }
+  return 1;
 }
 
 function writeStatus(io: KtxCliIo, status: ManagedPythonRuntimeStatus): void {
@@ -142,10 +197,16 @@ export async function runKtxRuntime(
       return 0;
     }
     if (args.command === 'stop') {
-      const stopDaemon = deps.stopDaemon ?? stopManagedPythonDaemon;
-      const result = await stopDaemon({ cliVersion: args.cliVersion });
-      writeDaemonStop(io, result);
-      return 0;
+      if (args.all) {
+        const stopAllDaemons = deps.stopAllDaemons ?? stopAllManagedPythonDaemons;
+        const result = await stopAllDaemons({ cliVersion: args.cliVersion });
+        return writeDaemonStopAll(io, result);
+      } else {
+        const stopDaemon = deps.stopDaemon ?? stopManagedPythonDaemon;
+        const result = await stopDaemon({ cliVersion: args.cliVersion });
+        writeDaemonStop(io, result);
+        return 0;
+      }
     }
     if (args.command === 'status') {
       const readStatus = deps.readStatus ?? readManagedPythonRuntimeStatus;

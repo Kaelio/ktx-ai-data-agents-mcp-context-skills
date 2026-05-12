@@ -4,7 +4,7 @@ import type { ChunkResult, DiffSet, FetchContext, ScopeDescriptor, SourceAdapter
 import { chunkMetabaseStagedDir } from './chunk.js';
 import type { MetabaseClientFactory } from './client-port.js';
 import { detectMetabaseStagedDir } from './detect.js';
-import { fetchMetabaseBundle } from './fetch.js';
+import { fetchMetabaseBundle, type MetabaseFetchLogger } from './fetch.js';
 import { computeFetchScope, hashScope, isPathInMetabaseScope } from './fetch-scope.js';
 import type { MetabaseSourceStateReader } from './source-state-port.js';
 import { STAGED_FILES, stagedSyncConfigSchema } from './types.js';
@@ -12,6 +12,7 @@ import { STAGED_FILES, stagedSyncConfigSchema } from './types.js';
 export interface MetabaseSourceAdapterDeps {
   clientFactory: MetabaseClientFactory;
   sourceStateReader: MetabaseSourceStateReader;
+  logger?: MetabaseFetchLogger;
 }
 
 export class MetabaseSourceAdapter implements SourceAdapter {
@@ -31,6 +32,7 @@ export class MetabaseSourceAdapter implements SourceAdapter {
       ctx,
       clientFactory: this.deps.clientFactory,
       sourceStateReader: this.deps.sourceStateReader,
+      ...(this.deps.logger ? { logger: this.deps.logger } : {}),
     });
   }
 
