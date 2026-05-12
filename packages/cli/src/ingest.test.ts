@@ -1108,11 +1108,11 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    const stdout = io.stdout();
-    expect(stdout).toContain('[45%] Planned 2 work units');
-    expect(stdout).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
-    expect(stdout).toContain('[58%] Processing 1/2 work units: historic-sql-table-public-orders step 7/40');
-    expect(stdout).toContain('[68%] Processed 1/2 work units');
+    const stderr = io.stderr();
+    expect(stderr).toContain('[45%] Planned 2 work units');
+    expect(stderr).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
+    expect(stderr).toContain('[58%] Processing 1/2 work units: historic-sql-table-public-orders step 7/40');
+    expect(stderr).toContain('[68%] Processed 1/2 work units');
   });
 
   it('passes local Looker pull-config options and agent runner into scheduled ingest for Looker scheduled ingest', async () => {

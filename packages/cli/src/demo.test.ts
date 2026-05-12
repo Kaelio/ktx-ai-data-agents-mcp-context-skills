@@ -336,8 +336,8 @@ describe('runKtxDemo', () => {
         notion: { pageCount: 8 },
       },
       generatedOutputs: {
-        semanticLayer: { manifestSourceCount: 6, fileCount: 6 },
-        knowledge: { manifestPageCount: 10, fileCount: 10 },
+        semanticLayer: { manifestSourceCount: 52, fileCount: 52 },
+        knowledge: { manifestPageCount: 29, fileCount: 29 },
         links: { manifestLinkCount: 23, linkCount: 23 },
         reports: { primaryPath: 'reports/seeded-demo-report.json', fileCount: 1 },
       },
@@ -636,8 +636,8 @@ describe('runKtxDemo', () => {
     ).resolves.toBe(0);
 
     expect(seededIo.stdout()).toContain('Status: ready');
-    expect(seededIo.stdout()).toContain('Semantic-layer sources: 6 manifest, 6 files');
-    expect(seededIo.stdout()).toContain('Knowledge pages: 10 manifest, 10 files');
+    expect(seededIo.stdout()).toContain('Semantic-layer sources: 52 manifest, 52 files');
+    expect(seededIo.stdout()).toContain('Knowledge pages: 29 manifest, 29 files');
     expect(seededIo.stdout()).not.toContain('Status: corrupt');
     expect(seededIo.stdout()).not.toContain('Semantic-layer sources: 6 manifest, 0 files');
   });
