@@ -153,6 +153,7 @@ export const ingestReportSnapshotSchema = z
         ),
         failedWorkUnits: z.array(z.string()),
         reconciliationSkipped: z.boolean(),
+        reconciliationActions: z.array(ingestActionSchema).default([]),
         conflictsResolved: z.array(conflictResolvedSchema).default([]),
         evictionsApplied: z.array(evictionAppliedSchema).default([]),
         unmappedFallbacks: z.array(unmappedFallbackSchema).default([]),

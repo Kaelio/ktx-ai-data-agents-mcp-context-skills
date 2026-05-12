@@ -55,6 +55,10 @@ export interface IngestReportBody {
   workUnits: IngestReportWorkUnit[];
   failedWorkUnits: string[];
   reconciliationSkipped: boolean;
+  // Actions emitted by the reconciliation stage (wiki/sl writes from
+  // cross-WU reconciliation). Counted alongside workUnit.actions in
+  // savedMemoryCountsForReport so progress reports reflect all writes.
+  reconciliationActions?: MemoryAction[];
   conflictsResolved: ConflictResolvedRecord[];
   evictionsApplied: EvictionAppliedRecord[];
   unmappedFallbacks: UnmappedFallbackRecord[];
@@ -111,7 +115,9 @@ export function postProcessorSavedMemoryCounts(
 }
 
 export function savedMemoryCountsForReport(report: IngestReportSnapshot): IngestSavedMemoryCounts {
-  const actions = report.body.workUnits.flatMap((workUnit) => workUnit.actions);
+  const workUnitActions = report.body.workUnits.flatMap((workUnit) => workUnit.actions);
+  const reconciliationActions = report.body.reconciliationActions ?? [];
+  const actions = [...workUnitActions, ...reconciliationActions];
   const directCounts = {
     wikiCount: actions.filter((action) => action.target === 'wiki').length,
     slCount: actions.filter((action) => action.target === 'sl').length,
