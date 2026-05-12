@@ -247,6 +247,8 @@ describe('NotionSourceAdapter', () => {
     expect(result.reconcileNotes).toEqual([
       'Notion maxKnowledgeCreatesPerRun=25',
       'Notion maxKnowledgeUpdatesPerRun=20',
+      'Notion dataSourceCount is Notion-only; use sl_discover for warehouse/dbt mapping decisions.',
+      'Reconcile Notion wiki pages sharing tables/sl_refs before creating distinct artifacts.',
     ]);
     expect(result.contextReport).toEqual({ capped: false, warnings: [NOTION_ORG_KNOWLEDGE_WARNING] });
   });

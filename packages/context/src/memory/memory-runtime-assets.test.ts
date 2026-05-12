@@ -90,6 +90,25 @@ describe('memory runtime assets', () => {
     expect(body).not.toContain('a standalone SL source only when raw evidence contains enough table or SQL structure');
   });
 
+  it('ships Metabase guidance that avoids invalid joins for SQL-only card outputs', async () => {
+    const body = await readFile(join(skillsDir, 'metabase_ingest', 'SKILL.md'), 'utf-8');
+
+    expect(body).toContain('Do not declare a KTX join just because the card SQL joins that table internally');
+    expect(body).toContain('only when the card output exposes a local key that matches the target source grain');
+    expect(body).toContain('If `sl_discover` resolves the table, it is not outside the manifest');
+    expect(body).toContain('reason: "parse_error"');
+    expect(body).not.toContain('Tables outside the manifest');
+    expect(body).not.toContain('reason: "metabase_sql_untranslated"');
+  });
+
+  it('ships Notion guidance for physical-table fallbacks and duplicate wiki reconciliation', async () => {
+    const body = await readFile(join(skillsDir, 'notion_synthesize', 'SKILL.md'), 'utf-8');
+
+    expect(body).toContain('Notion `dataSourceCount` counts Notion databases/data sources only');
+    expect(body).toContain('Search existing wiki pages for the same `tables:` or `sl_refs:` frontmatter');
+    expect(body).toContain('no_physical_table');
+  });
+
   it('packages LookML connection-mismatch SL gate guidance', async () => {
     const body = await readFile(join(skillsDir, 'lookml_ingest', 'SKILL.md'), 'utf-8');
 

@@ -510,8 +510,8 @@ function buildLookmlConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionC
 }
 
 function buildNotionConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionConfig {
-  const crawlMode = args.notionCrawlMode ?? 'selected_roots';
   const rootPageIds = args.notionRootPageIds ?? [];
+  const crawlMode = rootPageIds.length > 0 ? 'selected_roots' : (args.notionCrawlMode ?? 'selected_roots');
   if (crawlMode === 'selected_roots' && rootPageIds.length === 0) {
     throw new Error('Notion selected_roots requires --notion-root-page-id.');
   }
@@ -1189,8 +1189,8 @@ async function promptForInteractiveSource(
       const crawlMode = await prompts.select({
         message: 'Which Notion pages should KTX ingest?',
         options: [
-          { value: 'all_accessible', label: 'All pages the integration can access' },
           { value: 'selected_roots', label: 'Specific pages and their subpages (you\'ll paste page IDs)' },
+          { value: 'all_accessible', label: 'All pages the integration can access' },
           { value: 'back', label: 'Back' },
         ],
       });

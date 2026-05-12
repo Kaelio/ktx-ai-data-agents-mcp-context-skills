@@ -57,7 +57,7 @@ For each card:
    - Trivial query (`SELECT *`, simple `COUNT(*)` with no business logic) → do nothing; the runner will record this card as `action_type='skipped'`.
    - Duplicate of an existing measure → same as trivial; do nothing for this card.
 
-**Manifest-only names need an overlay first.** If `sl_discover` shows a source name with `Type: table` but `sl_read_source` returns "Source not found", the source lives only in the schema manifest (no standalone overlay yet). `sl_edit_source` cannot edit manifest-only names — you must bootstrap an overlay with `sl_write_source` using the overlay shape:
+**Manifest-only names need an overlay first.** If `sl_discover` shows a source name with `Type: table` but `sl_read_source` returns "Source not found", the source lives only in the schema manifest (no standalone overlay yet). `sl_edit_source` cannot edit manifest-only names, and a full standalone `sl_write_source` for that name would shadow manifest columns and joins. Bootstrap an overlay with `sl_write_source` using the overlay shape:
 
 ```yaml
 name: <SOURCE_NAME>
@@ -68,7 +68,7 @@ measures:
 
 Overlay shape: `name:` plus any of `measures:`, `segments:`, `description:`, `joins:`, `disable_joins:`. Never include `sql:`, `table:`, `grain:`, or `columns:` on a manifest-backed name — those would shadow the manifest's schema and drop its joins. Overlay `joins:` are merged additively with the manifest's joins (deduped by `to` + `on`); use `disable_joins: ["<on-clause>"]` to suppress a specific manifest join. After the overlay exists, use `sl_edit_source` for further tweaks. See `sl_capture` skill for the canonical overlay rule.
 
-**Join discovery:** When your card's SQL references warehouse tables (e.g. in `FROM` or `JOIN` clauses), call `sl_discover({ query: '<table>' })` before writing. The matching manifest entry's `name` is the value you put in `joins: [- to: <name>]`. Use `many_to_one` for FK-to-dimension joins, `one_to_many` for the reverse.
+**Join discovery:** When your card's SQL references warehouse tables (e.g. in `FROM` or `JOIN` clauses), call `sl_discover({ query: '<table>' })` before writing. The matching manifest entry's `name` is the value you use in `joins: [- to: <name>]` only when the card output exposes a local key that matches the target source grain (for example `account_id = mart_account_segments.account_id`). Do not declare a KTX join just because the card SQL joins that table internally. If the output only exposes display fields such as `account_name`, keep the SQL source self-contained or project the key before adding the join. Use `many_to_one` for FK-to-dimension joins, `one_to_many` for the reverse.
 
 ## priorProvenance
 
@@ -162,7 +162,7 @@ After Steps A and B, your SQL must:
 - Reference no aliases that aren't defined inside the SQL itself.
 - Be valid as a standalone subquery (the validator runs `SELECT * FROM (your_sql) LIMIT 1`).
 
-If `resolutionStatus: "fallback"` and the SQL is still complex enough that you can't confidently translate it, **skip the card** rather than writing broken SQL. Call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "metabase_sql_untranslated"`, and `fallback: "flagged"`.
+If `resolutionStatus: "fallback"` and the SQL is still complex enough that you can't confidently translate it, **skip the card** rather than writing broken SQL. Call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "parse_error"`, `detail: "metabase_sql_untranslated"`, and `fallback: "flagged"`.
 
 ## Join-graph connectivity
 
@@ -171,8 +171,9 @@ For `source_type: table`:
 - Match column names ending in `_id` against existing sources' grain columns.
 
 For `source_type: sql`:
-- The validator parses your SQL and **rejects the write** if any FROM/JOIN table has a manifest entry that you did not declare in `joins:`. The error names every missing join target — declare a `many_to_one` join for each and reissue.
-- Tables outside the manifest (schemas not covered by this connection — e.g. `staging.*` referenced from a MARTS source) are not flagged. For those, write a single-line `wiki_write` with key `unmapped-table-<table_name>` so the gap is documented, then call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "table_outside_manifest"`, and `fallback: "wiki_only"`.
+- The validator parses your SQL and rejects the write when a referenced manifest table has a viable projected local key but no declared `joins:` entry. Add the join only after confirming the output key and target grain match.
+- If `sl_discover` resolves the table, it is not outside the manifest. Do not write an `unmapped-table-*` fallback for resolved `orbit_raw`, `mart`, or other manifest-backed sources just because they appear inside card SQL.
+- If `sl_discover` cannot resolve a referenced table at all, write a single-line `wiki_write` with key `unmapped-table-<table_name>` so the gap is documented, then call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "missing_target_table"`, and `fallback: "wiki_only"`.
 
 Joins on manifest-backed names compose: the manifest's joins are inherited automatically, and any overlay `joins:` are merged on top (deduped by `to` + `on`). Use `disable_joins: ["<on-clause>"]` in the overlay to suppress a specific manifest join. If `sl_discover` shows a manifest-backed source with `Joins: 0` and the warehouse FK metadata is genuinely absent, declaring application-level joins via the overlay is fair game — bootstrap with `sl_write_source` (overlay shape above), then refine via `sl_edit_source`.
 

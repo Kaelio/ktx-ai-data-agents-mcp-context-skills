@@ -84,6 +84,22 @@ describe('clusterNotionWorkUnits', () => {
     }
   });
 
+  test('merges pages into one synthesis unit at the clustering threshold', async () => {
+    const pages = Array.from({ length: MIN_PAGES_TO_CLUSTER }, (_, i) => ({
+      id: `p${i}`,
+      title: `Customer source reference ${i}`,
+      body: `Customer source reference maps to orbit_analytics.customer ${i}`.repeat(10),
+    }));
+    const stagedDir = await makeStaged(pages);
+    const wus = makeWorkUnits(pages);
+    const out = await clusterNotionWorkUnits({ workUnits: wus, stagedDir, embedding: mockEmbed });
+    expect(out).toHaveLength(1);
+    expect(out[0].unitKey).toBe('notion-cluster-1');
+    expect(new Set(out[0].rawFiles)).toEqual(new Set(wus.flatMap((wu) => wu.rawFiles)));
+    expect(out[0].notes).toContain('emit_unmapped_fallback');
+    expect(out[0].notes).toContain('Do not create SL sources under the Notion connection');
+  });
+
   test('preserves coverage: every input rawFile appears in some cluster', async () => {
     const pages = Array.from({ length: 12 }, (_, i) => ({
       id: `p${i}`,

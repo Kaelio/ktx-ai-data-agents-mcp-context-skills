@@ -46,6 +46,8 @@ Prefer fewer, stronger entries. Every wiki entry must cite at least one Notion p
 
 If a clustered WorkUnit includes several related pages, synthesize the shared rule or concept instead of writing one thin page per source. For oversized page spans, read only the assigned span unless the WorkUnit explicitly asks for neighboring context.
 
+Search existing wiki pages for the same `tables:` or `sl_refs:` frontmatter and for source-of-truth aliases before creating a new page. If an existing page already documents the same warehouse object or business concept, update it instead of creating a differently named duplicate.
+
 ## Citation Style
 
 ```md
@@ -61,6 +63,7 @@ If a clustered WorkUnit includes several related pages, synthesize the shared ru
 - Discover existing sources first with `sl_discover`; read existing source YAML before editing.
 - Prefer overlays on manifest-backed sources over standalone SQL.
 - If Notion describes a dashboard or metric but does not define executable logic, write a wiki page and attach `sl_refs` only after confirming the referenced source exists.
+- Notion `dataSourceCount` counts Notion databases/data sources only. It does not prove that a warehouse/dbt table has or lacks a mapped semantic-layer source.
 - Do not create SL sources under the Notion connection just because a page mentions a warehouse, dbt, Looker, or Metabase object. Use the mapped warehouse/source connection after discovery, or emit an unmapped fallback and write wiki-only.
 - Distinguish fallback reasons precisely: if a non-Notion warehouse/dbt connection exists but `sl_discover` cannot find the named table/source, use `no_physical_table`; reserve `no_connection_mapping` for cases where there is no plausible non-Notion target connection at all.
 

@@ -120,6 +120,135 @@ class TestInvalidGrain:
         assert any("bad" in e and "nonexistent_col" in e for e in report.errors)
 
 
+class TestJoinValidation:
+    def test_join_local_column_must_exist(self):
+        orders = _src(
+            "orders",
+            columns=["id"],
+            joins=[
+                JoinDeclaration(
+                    to="customers",
+                    on="customer_id = customers.id",
+                    relationship="many_to_one",
+                )
+            ],
+        )
+        customers = _src("customers")
+        engine = SemanticEngine.from_sources({"orders": orders, "customers": customers})
+
+        report = engine.validate()
+
+        assert not report.valid
+        assert any(
+            "orders" in e and "customer_id" in e and "columns list" in e
+            for e in report.errors
+        )
+
+    def test_many_to_one_join_rejects_display_name_to_id_grain(self):
+        requesters = _src(
+            "large_contract_requesters",
+            columns=["account_name", "requester_email"],
+            grain=["requester_email"],
+            joins=[
+                JoinDeclaration(
+                    to="mart_account_segments",
+                    on="account_name = mart_account_segments.account_id",
+                    relationship="many_to_one",
+                )
+            ],
+        )
+        accounts = _src(
+            "mart_account_segments",
+            columns=["account_id", "account_name"],
+            grain=["account_id"],
+        )
+        engine = SemanticEngine.from_sources(
+            {
+                "large_contract_requesters": requesters,
+                "mart_account_segments": accounts,
+            }
+        )
+
+        report = engine.validate()
+
+        assert not report.valid
+        assert any(
+            "large_contract_requesters" in e
+            and "account_name" in e
+            and "mart_account_segments.account_id" in e
+            for e in report.errors
+        )
+
+    def test_sql_join_coverage_does_not_require_join_without_projected_key(self):
+        requesters = SourceDefinition(
+            name="large_contract_requesters",
+            sql="""
+                select accounts.account_name, users.email as requester_email
+                from orbit_raw.requests requests
+                join public.mart_account_segments accounts
+                  on requests.account_id = accounts.account_id
+                join orbit_raw.users users
+                  on requests.user_id = users.user_id
+            """,
+            grain=["requester_email"],
+            columns=[
+                SourceColumn(name="account_name", type="string"),
+                SourceColumn(name="requester_email", type="string"),
+            ],
+            joins=[],
+        )
+        accounts = _src(
+            "mart_account_segments",
+            columns=["account_id", "account_name"],
+            grain=["account_id"],
+        )
+        engine = SemanticEngine.from_sources(
+            {
+                "large_contract_requesters": requesters,
+                "mart_account_segments": accounts,
+            }
+        )
+
+        report = engine.validate(recently_touched={"large_contract_requesters"})
+
+        assert report.errors == []
+
+    def test_sql_join_coverage_requires_join_when_projected_key_exists(self):
+        requesters = SourceDefinition(
+            name="large_contract_requesters",
+            sql="""
+                select accounts.account_id, users.email as requester_email
+                from orbit_raw.requests requests
+                join public.mart_account_segments accounts
+                  on requests.account_id = accounts.account_id
+                join orbit_raw.users users
+                  on requests.user_id = users.user_id
+            """,
+            grain=["requester_email"],
+            columns=[
+                SourceColumn(name="account_id", type="string"),
+                SourceColumn(name="requester_email", type="string"),
+            ],
+            joins=[],
+        )
+        accounts = _src(
+            "mart_account_segments",
+            columns=["account_id", "account_name"],
+            grain=["account_id"],
+        )
+        engine = SemanticEngine.from_sources(
+            {
+                "large_contract_requesters": requesters,
+                "mart_account_segments": accounts,
+            }
+        )
+
+        report = engine.validate(recently_touched={"large_contract_requesters"})
+
+        assert not report.valid
+        assert any("mart_account_segments" in e and "joins[]" in e for e in report.errors)
+
+
 class TestDisconnectedComponents:
     def test_two_components_produce_warning_not_error(self):
         a = _src("a")

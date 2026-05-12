@@ -62,6 +62,7 @@ class SemanticEngine:
         report = ValidationReport()
         self._check_orphan_join_targets(report)
         self._check_invalid_grain(report)
+        self._check_join_columns(report)
         self._check_sql_join_coverage(report, recently_touched=recently_touched)
         self._check_disconnected_components(report, recently_touched=recently_touched)
         return report
@@ -90,6 +91,99 @@ class SemanticEngine:
                         f"Source '{source.name}' has grain column '{grain_col}' "
                         f"that is not in its columns list"
                     )
+
+    def _check_join_columns(self, report: ValidationReport) -> None:
+        for source in self.sources.values():
+            source_columns = {c.name for c in source.columns}
+            for join in source.joins:
+                target = self.sources.get(join.to)
+                if target is None:
+                    continue
+                target_columns = {c.name for c in target.columns}
+                try:
+                    local_raw, target_raw = self.graph._parse_on(join.on, join.to)
+                except ValueError as exc:
+                    report.errors.append(
+                        f"Source '{source.name}' has invalid join to '{join.to}': {exc}"
+                    )
+                    continue
+
+                local_cols = [col.strip() for col in local_raw.split(",") if col.strip()]
+                target_cols = [
+                    col.strip() for col in target_raw.split(",") if col.strip()
+                ]
+                for local_col in local_cols:
+                    if local_col not in source_columns:
+                        report.errors.append(
+                            f"Source '{source.name}' joins to '{join.to}' on "
+                            f"local column '{local_col}', but '{local_col}' is not "
+                            f"in '{source.name}' columns list"
+                        )
+                for target_col in target_cols:
+                    if target_col not in target_columns:
+                        report.errors.append(
+                            f"Source '{source.name}' joins to '{join.to}' on "
+                            f"target column '{target_col}', but '{target_col}' is not "
+                            f"in '{join.to}' columns list"
+                        )
+
+                if join.relationship not in {"many_to_one", "one_to_one"}:
+                    continue
+                for local_col, target_col in zip(local_cols, target_cols, strict=False):
+                    if (
+                        local_col in source_columns
+                        and target_col in target_columns
+                        and target_col in target.grain
+                        and self._looks_like_display_value_to_identifier(
+                            local_col, target_col
+                        )
+                    ):
+                        report.errors.append(
+                            f"Source '{source.name}' joins '{local_col}' to "
+                            f"'{join.to}.{target_col}', but '{local_col}' looks like "
+                            "a display value and the target column is an identifier "
+                            "grain. Project the matching key column or omit this join."
+                        )
+
+    @staticmethod
+    def _looks_like_display_value_to_identifier(
+        local_col: str, target_col: str
+    ) -> bool:
+        if target_col != "id" and not target_col.endswith("_id"):
+            return False
+        display_names = {"name", "email", "label", "title", "description"}
+        display_suffixes = (
+            "_name",
+            "_email",
+            "_label",
+            "_title",
+            "_description",
+        )
+        return local_col in display_names or local_col.endswith(display_suffixes)
+
+    @staticmethod
+    def _source_exposes_join_key(
+        source: SourceDefinition, target: SourceDefinition
+    ) -> bool:
+        source_columns = {c.name.lower() for c in source.columns}
+        target_name = target.name.lower()
+        target_name_singular = (
+            target_name[:-1] if target_name.endswith("s") else target_name
+        )
+        for grain_col in target.grain:
+            grain = grain_col.lower()
+            if grain in source_columns:
+                return True
+            if any(col.endswith(f"_{grain}") for col in source_columns):
+                return True
+            if grain == "id":
+                candidates = {
+                    f"{target_name}_id",
+                    f"{target_name_singular}_id",
+                }
+                if source_columns.intersection(candidates):
+                    return True
+        return False
 
     def _check_sql_join_coverage(
         self,
@@ -135,6 +229,8 @@ class SemanticEngine:
                     continue
                 if hit_name.lower() in declared:
                     continue
+                if not self._source_exposes_join_key(source, self.sources[hit_name]):
+                    continue
                 if hit_name not in missing:
                     missing.append(hit_name)
 
@@ -148,11 +244,12 @@ class SemanticEngine:
             )
             msg = (
                 f"Source '{source.name}' SQL joins manifest table(s) [{ref_list}] "
-                f"that are not declared in joins[]. Add a join entry for each, "
+                f"that have projected key columns but are not declared in joins[]. "
+                f"Add a join entry for each, "
                 f"e.g. {{to: {example}, on: '{source.name}.<your_fk> = "
-                f"{example}.{grain_col}', relationship: many_to_one}}. If a "
-                f"reference is intentionally absent, document it with a "
-                f"`unmapped-table-*` wiki note and remove the SQL reference."
+                f"{example}.{grain_col}', relationship: many_to_one}}. If the "
+                "SQL intentionally keeps a referenced table internal, omit "
+                "that table's key column from the SQL source output."
             )
             report.errors.append(msg)
 
