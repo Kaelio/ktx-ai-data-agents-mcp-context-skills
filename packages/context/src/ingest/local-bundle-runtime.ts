@@ -77,6 +77,7 @@ import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './conte
 import { DiffSetService } from './diff-set.service.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import { PageTriageService } from './page-triage/index.js';
+import { createWarehouseVerificationTools } from './tools/warehouse-verification/index.js';
 import type {
   IngestBundleRunnerDeps,
   IngestCommitMessagePort,
@@ -486,38 +487,47 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
       slSearchService: deps.slSearchService,
       authorResolver: deps.authorResolver,
     };
+    const wikiSearchTool = new WikiSearchTool({
+      search: async (input) => {
+        const results = await searchLocalKnowledgePages(deps.project, {
+          userId: input.userId,
+          query: input.query,
+          limit: input.limit,
+          embeddingService: deps.embedding,
+        });
+        return {
+          results: results.slice(0, input.limit).map((result) => ({
+            key: result.key,
+            path: result.path,
+            summary: result.summary,
+            score: result.score,
+            matchReasons: result.matchReasons,
+            lanes: result.lanes,
+          })),
+          totalFound: results.length,
+        };
+      },
+    });
+    const slDiscoverTool = new SlDiscoverTool(slDeps, { maxSources: 25, minRrfScore: 0, maxDetailedSources: 5 });
+    const warehouseVerificationTools = createWarehouseVerificationTools({
+      connections: deps.connections,
+      fallbackFileStore: deps.project.fileStore,
+      wikiSearchTool,
+      slDiscoverTool,
+    });
     this.baseTools = [
       new WikiReadTool(deps.wikiService, deps.knowledgeIndex),
-      new WikiSearchTool({
-        search: async (input) => {
-          const results = await searchLocalKnowledgePages(deps.project, {
-            userId: input.userId,
-            query: input.query,
-            limit: input.limit,
-            embeddingService: deps.embedding,
-          });
-          return {
-            results: results.slice(0, input.limit).map((result) => ({
-              key: result.key,
-              path: result.path,
-              summary: result.summary,
-              score: result.score,
-              matchReasons: result.matchReasons,
-              lanes: result.lanes,
-            })),
-            totalFound: results.length,
-          };
-        },
-      }),
+      wikiSearchTool,
       new WikiListTagsTool(deps.wikiService, deps.knowledgeIndex),
       new WikiWriteTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
       new WikiRemoveTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
-      new SlDiscoverTool(slDeps, { maxSources: 25, minRrfScore: 0, maxDetailedSources: 5 }),
+      slDiscoverTool,
       new SlEditSourceTool(slDeps),
       new SlReadSourceTool(slDeps),
       new SlWriteSourceTool(slDeps),
       new SlValidateTool(slDeps),
       new SlRollbackTool(deps.slSourcesRepository, deps.connections, 0),
+      ...warehouseVerificationTools,
     ];
     this.contextTools = [
       new ContextEvidenceSearchTool(deps.contextStore, deps.embedding),

@@ -409,6 +409,38 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
+  it('threads target warehouse connection names into WorkUnit and reconcile tool sessions', async () => {
+    const deps = makeDeps();
+    const sessions: any[] = [];
+    deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['warehouse']);
+    deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
+      sessions.push(toolSession);
+      return {
+        toAiSdkTools: vi.fn().mockReturnValue({}),
+        getAllTools: vi.fn().mockReturnValue([]),
+        getToolNames: vi.fn().mockReturnValue([]),
+      };
+    });
+    deps.agentRunner.runLoop.mockResolvedValue({ stopReason: 'natural' });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/notion/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'notion',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect([...sessions[0].allowedConnectionNames].sort()).toEqual(['notion', 'warehouse']);
+  });
+
   it('reuses document evidence indexing and page triage for document WorkUnits', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'notion';
