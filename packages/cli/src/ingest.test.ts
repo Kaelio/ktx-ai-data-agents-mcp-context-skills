@@ -918,6 +918,97 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).toBe('');
   });
 
+  it('prints plain WorkUnit step progress during long-running local ingest', async () => {
+    const projectDir = join(tempDir, 'historic-sql-step-progress-project');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      [
+        'project: historic-sql-step-progress-project',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      minExecutions: 2',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const createdAdapters: SourceAdapter[] = [
+      { source: 'historic-sql', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+    ];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) => {
+      input.memoryFlow?.update({
+        plannedWorkUnits: [
+          {
+            unitKey: 'historic-sql-table-public-orders',
+            rawFiles: ['tables/public/orders.json'],
+            peerFileCount: 0,
+            dependencyCount: 0,
+          },
+          {
+            unitKey: 'historic-sql-table-public-customers',
+            rawFiles: ['tables/public/customers.json'],
+            peerFileCount: 0,
+            dependencyCount: 0,
+          },
+        ],
+      });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 });
+      input.memoryFlow?.emit({
+        type: 'work_unit_started',
+        unitKey: 'historic-sql-table-public-orders',
+        skills: ['historic_sql_table_digest'],
+        stepBudget: 40,
+      });
+      input.memoryFlow?.emit({
+        type: 'work_unit_step',
+        unitKey: 'historic-sql-table-public-orders',
+        stepIndex: 7,
+        stepBudget: 40,
+      });
+      input.memoryFlow?.emit({
+        type: 'work_unit_finished',
+        unitKey: 'historic-sql-table-public-orders',
+        status: 'success',
+      });
+      input.memoryFlow?.finish('done');
+      return completedLocalBundleRun(input, input.jobId ?? 'historic-step-progress-job');
+    });
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          env: interactiveEnv(),
+          createAdapters: vi.fn(() => createdAdapters as never),
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'historic-step-progress-job',
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const stdout = io.stdout();
+    expect(stdout).toContain('[45%] Planned 2 work units');
+    expect(stdout).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
+    expect(stdout).toContain('[58%] Processing 1/2 work units: historic-sql-table-public-orders step 7/40');
+    expect(stdout).toContain('[68%] Processed 1/2 work units');
+  });
+
   it('passes local Looker pull-config options and agent runner into scheduled ingest for Looker scheduled ingest', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);
