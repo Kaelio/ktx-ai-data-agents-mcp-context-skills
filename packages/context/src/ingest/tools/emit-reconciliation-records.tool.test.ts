@@ -148,6 +148,7 @@ describe('reconciliation emit tools', () => {
       {
         rawPath: 'metrics/conversion.yml',
         reason: 'no_physical_table',
+        detail: expect.stringContaining('not present as a source'),
         fallback: 'flagged',
       },
     ]);
@@ -175,6 +176,7 @@ describe('reconciliation emit tools', () => {
       {
         rawPath: 'metrics/conversion.yml',
         reason: 'no_physical_table',
+        detail: expect.stringContaining('not present as a source'),
         fallback: 'flagged',
       },
     ]);
