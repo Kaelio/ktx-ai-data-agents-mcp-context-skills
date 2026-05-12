@@ -12,7 +12,16 @@ describe('precommit-check', () => {
     assert.deepEqual(commandKeys(['outside-workspace/src/app.ts']), []);
   });
 
-  it('runs only the touched package checks for package code', () => {
+  it('runs only the touched package checks for standalone package paths', () => {
+    assert.deepEqual(commandKeys(['packages/cli/src/index.ts']), [
+      'boundary-check',
+      'type-check:@ktx/cli',
+      'build:@ktx/cli',
+      'test:@ktx/cli',
+    ]);
+  });
+
+  it('accepts legacy subtree-prefixed package paths', () => {
     assert.deepEqual(commandKeys(['ktx/packages/cli/src/index.ts']), [
       'boundary-check',
       'type-check:@ktx/cli',
@@ -22,12 +31,12 @@ describe('precommit-check', () => {
   });
 
   it('runs the matching script test when a script changes', () => {
-    assert.deepEqual(commandKeys(['ktx/scripts/check-boundaries.mjs']), [
+    assert.deepEqual(commandKeys(['scripts/check-boundaries.mjs']), [
       'script-test:scripts/check-boundaries.test.mjs',
     ]);
   });
 
   it('runs the touched python package tests', () => {
-    assert.deepEqual(commandKeys(['ktx/python/ktx-sl/semantic_layer/parser.py']), ['pytest:ktx-sl']);
+    assert.deepEqual(commandKeys(['python/ktx-sl/semantic_layer/parser.py']), ['pytest:ktx-sl']);
   });
 });
