@@ -22,6 +22,25 @@ describe('WikiRemoveTool', () => {
     expect(result.markdown).toMatch(/removed/i);
   });
 
+  it('rejects slash-delimited page keys with a flat-key suggestion', async () => {
+    const wikiService = {
+      deletePage: vi.fn().mockResolvedValue(undefined),
+      deleteFromIndex: vi.fn().mockResolvedValue(undefined),
+    };
+    const pagesRepository = { findPageByKey: vi.fn().mockResolvedValue({ page_key: 'old' }) };
+    const knowledgeRepository = { createEvent: vi.fn().mockResolvedValue(undefined) };
+    const tool = new WikiRemoveTool(wikiService as any, pagesRepository as any, knowledgeRepository as any);
+
+    const result = await tool.call({ key: 'orbit/company-overview' } as any, baseContext);
+
+    expect(result.structured).toEqual({ success: false, key: 'orbit/company-overview' });
+    expect(result.markdown).toContain(
+      'Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".',
+    );
+    expect(pagesRepository.findPageByKey).not.toHaveBeenCalled();
+    expect(wikiService.deletePage).not.toHaveBeenCalled();
+  });
+
   it('skips deleteFromIndex when session is worktree-scoped', async () => {
     const wikiService = {
       readPage: vi.fn().mockResolvedValue({ pageKey: 'old', frontmatter: { summary: 'Old' }, content: 'body' }),

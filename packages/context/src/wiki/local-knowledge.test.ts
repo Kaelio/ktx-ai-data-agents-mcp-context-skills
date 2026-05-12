@@ -37,7 +37,7 @@ describe('local knowledge helpers', () => {
 
   it('writes, reads, lists, and searches global knowledge pages', async () => {
     const write = await writeLocalKnowledgePage(project, {
-      key: 'metrics/revenue',
+      key: 'metrics-revenue',
       scope: 'GLOBAL',
       summary: 'Revenue metric definition',
       content: 'Revenue is recognized when an order is paid.',
@@ -46,11 +46,11 @@ describe('local knowledge helpers', () => {
       slRefs: ['orders'],
     });
 
-    expect(write.path).toBe('knowledge/global/metrics/revenue.md');
+    expect(write.path).toBe('knowledge/global/metrics-revenue.md');
     expect(write.operation).toBe('write');
 
-    await expect(readLocalKnowledgePage(project, { key: 'metrics/revenue', userId: 'local' })).resolves.toMatchObject({
-      key: 'metrics/revenue',
+    await expect(readLocalKnowledgePage(project, { key: 'metrics-revenue', userId: 'local' })).resolves.toMatchObject({
+      key: 'metrics-revenue',
       scope: 'GLOBAL',
       summary: 'Revenue metric definition',
       content: 'Revenue is recognized when an order is paid.',
@@ -61,8 +61,8 @@ describe('local knowledge helpers', () => {
 
     await expect(listLocalKnowledgePages(project, { userId: 'local' })).resolves.toEqual([
       {
-        key: 'metrics/revenue',
-        path: 'knowledge/global/metrics/revenue.md',
+        key: 'metrics-revenue',
+        path: 'knowledge/global/metrics-revenue.md',
         scope: 'GLOBAL',
         summary: 'Revenue metric definition',
       },
@@ -71,8 +71,8 @@ describe('local knowledge helpers', () => {
     const search = await searchLocalKnowledgePages(project, { query: 'paid order', userId: 'local' });
     expect(search).toEqual([
       expect.objectContaining({
-        key: 'metrics/revenue',
-        path: 'knowledge/global/metrics/revenue.md',
+        key: 'metrics-revenue',
+        path: 'knowledge/global/metrics-revenue.md',
         scope: 'GLOBAL',
         score: expect.any(Number),
         matchReasons: expect.arrayContaining(['lexical']),
@@ -85,7 +85,7 @@ describe('local knowledge helpers', () => {
 
   it('adds the token lane alongside lexical wiki matches', async () => {
     await writeLocalKnowledgePage(project, {
-      key: 'metrics/revenue',
+      key: 'metrics-revenue',
       scope: 'GLOBAL',
       summary: 'Revenue metric definition',
       content: 'Revenue is recognized when an order is paid.',
@@ -95,7 +95,7 @@ describe('local knowledge helpers', () => {
     const search = await searchLocalKnowledgePages(project, { query: 'paid---', userId: 'local', limit: 5 });
 
     expect(search[0]).toMatchObject({
-      key: 'metrics/revenue',
+      key: 'metrics-revenue',
       matchReasons: expect.arrayContaining(['token']),
       lanes: expect.arrayContaining([expect.objectContaining({ lane: 'token', status: 'available' })]),
     });
@@ -103,14 +103,14 @@ describe('local knowledge helpers', () => {
 
   it('uses stored page embeddings when a wiki embedding backend is configured', async () => {
     await writeLocalKnowledgePage(project, {
-      key: 'metrics/revenue',
+      key: 'metrics-revenue',
       scope: 'GLOBAL',
       summary: 'Semantic revenue definition',
       content: 'Revenue search text.',
       tags: ['finance'],
     });
     await writeLocalKnowledgePage(project, {
-      key: 'support/escalations',
+      key: 'support-escalations',
       scope: 'GLOBAL',
       summary: 'Support escalation process',
       content: 'Support search text.',
@@ -125,7 +125,7 @@ describe('local knowledge helpers', () => {
     });
 
     expect(search[0]).toMatchObject({
-      key: 'metrics/revenue',
+      key: 'metrics-revenue',
       matchReasons: expect.arrayContaining(['semantic']),
       lanes: expect.arrayContaining([expect.objectContaining({ lane: 'semantic', status: 'available' })]),
     });
@@ -133,7 +133,7 @@ describe('local knowledge helpers', () => {
 
   it('reports semantic lane as skipped when wiki embeddings are not configured', async () => {
     await writeLocalKnowledgePage(project, {
-      key: 'metrics/revenue',
+      key: 'metrics-revenue',
       scope: 'GLOBAL',
       summary: 'Revenue metric definition',
       content: 'Revenue is recognized when an order is paid.',
@@ -172,7 +172,7 @@ describe('local knowledge helpers', () => {
 
   it('serializes historic-SQL frontmatter fields for global pages', async () => {
     await writeLocalKnowledgePage(project, {
-      key: 'queries/monthly-paid-orders',
+      key: 'monthly-paid-orders',
       scope: 'GLOBAL',
       summary: 'Monthly paid orders',
       content: '## Monthly paid order count',
@@ -195,7 +195,7 @@ describe('local knowledge helpers', () => {
       fingerprints: ['fp_paid_orders'],
     });
 
-    const raw = await project.fileStore.readFile('knowledge/global/queries/monthly-paid-orders.md');
+    const raw = await project.fileStore.readFile('knowledge/global/monthly-paid-orders.md');
     expect(raw.content).toContain('source: historic-sql');
     expect(raw.content).toContain('intent: Monthly paid order count');
     expect(raw.content).toContain(['tables:', '  - analytics.orders'].join('\n'));
@@ -207,7 +207,7 @@ describe('local knowledge helpers', () => {
   it('falls back to Markdown scanning when the config does not select sqlite-fts5', async () => {
     project.config.storage.search = 'postgres-hybrid';
     await writeLocalKnowledgePage(project, {
-      key: 'metrics/revenue',
+      key: 'metrics-revenue',
       scope: 'GLOBAL',
       summary: 'Revenue metric definition',
       content: 'Revenue is recognized when an order is paid.',
@@ -216,7 +216,7 @@ describe('local knowledge helpers', () => {
 
     await expect(searchLocalKnowledgePages(project, { query: 'paid order', userId: 'local' })).resolves.toEqual([
       expect.objectContaining({
-        key: 'metrics/revenue',
+        key: 'metrics-revenue',
         score: 3,
         matchReasons: ['token'],
       }),
@@ -231,6 +231,17 @@ describe('local knowledge helpers', () => {
         summary: 'bad',
         content: 'bad',
       }),
-    ).rejects.toThrow('Unsafe knowledge key');
+    ).rejects.toThrow('Invalid wiki key "../secret". Wiki keys must be flat; use "secret".');
+  });
+
+  it('rejects slash-delimited knowledge keys with a flat-key suggestion', async () => {
+    await expect(
+      writeLocalKnowledgePage(project, {
+        key: 'orbit/company-overview',
+        scope: 'GLOBAL',
+        summary: 'bad',
+        content: 'bad',
+      }),
+    ).rejects.toThrow('Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".');
   });
 });

@@ -146,7 +146,7 @@ async function seedSemanticLayerProject(project: KtxLocalProject): Promise<void>
 
 async function seedWikiProject(project: KtxLocalProject): Promise<void> {
   await writeLocalKnowledgePage(project, {
-    key: 'metrics/revenue',
+    key: 'metrics-revenue',
     scope: 'GLOBAL',
     summary: 'Semantic revenue definition',
     content: 'Revenue is recognized when an order is paid.',
@@ -155,7 +155,7 @@ async function seedWikiProject(project: KtxLocalProject): Promise<void> {
     slRefs: ['orders'],
   });
   await writeLocalKnowledgePage(project, {
-    key: 'support/escalations',
+    key: 'support-escalations',
     scope: 'GLOBAL',
     summary: 'Support escalation process',
     content: 'Escalations move urgent support tickets to the operations queue.',
@@ -338,9 +338,9 @@ describe('SQLite hybrid search backend conformance', () => {
       surface: 'wiki',
       caseName: 'lexical page ranking',
       results: lexical.map(toWikiConformanceResult),
-      expectedTopIds: ['metrics/revenue'],
+      expectedTopIds: ['metrics-revenue'],
       expectedReasonsById: {
-        'metrics/revenue': ['lexical'],
+        'metrics-revenue': ['lexical'],
       },
       expectedLanes: {
         lexical: { status: 'available' },
@@ -359,9 +359,9 @@ describe('SQLite hybrid search backend conformance', () => {
       surface: 'wiki',
       caseName: 'semantic page ranking',
       results: semantic.map(toWikiConformanceResult),
-      expectedTopIds: ['metrics/revenue'],
+      expectedTopIds: ['metrics-revenue'],
       expectedReasonsById: {
-        'metrics/revenue': ['semantic'],
+        'metrics-revenue': ['semantic'],
       },
       expectedLanes: {
         semantic: { status: 'available' },
@@ -378,9 +378,9 @@ describe('SQLite hybrid search backend conformance', () => {
       surface: 'wiki',
       caseName: 'token page fallback',
       results: token.map(toWikiConformanceResult),
-      expectedTopIds: ['metrics/revenue'],
+      expectedTopIds: ['metrics-revenue'],
       expectedReasonsById: {
-        'metrics/revenue': ['token'],
+        'metrics-revenue': ['token'],
       },
       expectedLanes: {
         token: { status: 'available' },

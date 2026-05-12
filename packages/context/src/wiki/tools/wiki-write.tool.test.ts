@@ -38,6 +38,21 @@ describe('WikiWriteTool', () => {
     expect(result.markdown).toMatch(/created/i);
   });
 
+  it('rejects slash-delimited page keys with a flat-key suggestion', async () => {
+    const { tool, wikiService } = makeTool();
+    const result = await tool.call(
+      { key: 'orbit/company-overview', summary: 'Company overview', content: '# Orbit' } as any,
+      baseContext,
+    );
+
+    expect(result.structured).toEqual({ success: false, key: 'orbit/company-overview' });
+    expect(result.markdown).toContain(
+      'Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".',
+    );
+    expect(wikiService.readPage).not.toHaveBeenCalled();
+    expect(wikiService.writePage).not.toHaveBeenCalled();
+  });
+
   it('normalizes accidentally escaped markdown newlines before writing', async () => {
     const { tool, wikiService } = makeTool();
 
@@ -150,7 +165,7 @@ describe('WikiWriteTool', () => {
 
     await tool.call(
       {
-        key: 'queries/monthly-paid-orders',
+        key: 'monthly-paid-orders',
         summary: 'Monthly paid orders',
         tags: ['historic-sql', 'query-pattern'],
         sl_refs: ['analytics.orders'],
@@ -225,7 +240,7 @@ describe('WikiWriteTool', () => {
     const { tool, wikiService } = makeTool({
       wikiService: {
         readPage: vi.fn().mockResolvedValue({
-          pageKey: 'queries/monthly-paid-orders',
+          pageKey: 'monthly-paid-orders',
           frontmatter: existingFrontmatter,
           content: 'old body',
         }),
@@ -234,7 +249,7 @@ describe('WikiWriteTool', () => {
 
     await tool.call(
       {
-        key: 'queries/monthly-paid-orders',
+        key: 'monthly-paid-orders',
         summary: 'Monthly paid orders updated',
         content: '## Monthly paid order count updated',
       } as any,

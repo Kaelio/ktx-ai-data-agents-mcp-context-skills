@@ -3,6 +3,7 @@ import type { KnowledgeIndexPort } from '../ports.js';
 import type { KnowledgeEventPort } from '../ports.js';
 type BlockScope = 'GLOBAL' | 'USER';
 import { KnowledgeWikiService } from '../index.js';
+import { validateFlatWikiKey } from '../keys.js';
 import { BaseTool, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
 
 const SYSTEM_AUTHOR = 'System User';
@@ -46,6 +47,13 @@ export class WikiRemoveTool extends BaseTool<typeof wikiRemoveInputSchema> {
     const wikiService = context.session?.wikiService ?? this.wikiService;
     const writesGlobal = !!context.session;
     const skipIndex = context.session?.isWorktreeScoped === true;
+    const keyValidation = validateFlatWikiKey(input.key);
+    if (!keyValidation.ok) {
+      return {
+        markdown: keyValidation.error,
+        structured: { success: false, key: input.key },
+      };
+    }
     const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
     if (!rawPathValidation.ok) {
       return {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { KnowledgeIndexPort } from '../ports.js';
 import { KnowledgeWikiService } from '../index.js';
+import { validateFlatWikiKey } from '../keys.js';
 import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
 
 const WikiReadInputSchema = z.object({
@@ -44,6 +45,13 @@ export class WikiReadTool extends BaseTool<typeof WikiReadInputSchema> {
   }
 
   async call(input: WikiReadInput, context: ToolContext): Promise<ToolOutput<WikiReadStructured>> {
+    const keyValidation = validateFlatWikiKey(input.key);
+    if (!keyValidation.ok) {
+      return {
+        markdown: keyValidation.error,
+        structured: { blockKey: input.key, content: '', scope: '', found: false },
+      };
+    }
     const wikiService = context.session?.wikiService ?? this.wikiService;
     const page = await wikiService.readPageForUser(context.userId, input.key);
 

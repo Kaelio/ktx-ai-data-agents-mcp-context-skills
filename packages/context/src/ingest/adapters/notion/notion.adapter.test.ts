@@ -244,6 +244,9 @@ describe('NotionSourceAdapter', () => {
     expect(result.workUnits[0].notes).toContain('emit_unmapped_fallback');
     expect(result.workUnits[0].notes).toContain('use reason no_physical_table rather than no_connection_mapping');
     expect(result.workUnits[0].notes).toContain('Do not create SL sources under the Notion connection');
+    expect(result.workUnits[0].notes).toContain(
+      'Wiki keys must be flat slugs like orbit-company-overview, not orbit/company-overview',
+    );
     expect(result.reconcileNotes).toEqual([
       'Notion maxKnowledgeCreatesPerRun=25',
       'Notion maxKnowledgeUpdatesPerRun=20',

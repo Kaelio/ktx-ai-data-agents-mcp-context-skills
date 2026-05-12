@@ -38,6 +38,25 @@ describe('WikiReadTool', () => {
     expect(result.markdown).toContain('A page written earlier in the same ingest worktree.');
   });
 
+  it('rejects slash-delimited page keys with a flat-key suggestion', async () => {
+    const rootWikiService = { readPageForUser: vi.fn().mockResolvedValue(null) };
+    const pagesRepository = { findPageByKey: vi.fn(), incrementUsageCount: vi.fn() };
+    const tool = new WikiReadTool(rootWikiService as any, pagesRepository as any);
+
+    const result = await tool.call({ key: 'orbit/company-overview' }, baseContext);
+
+    expect(result.structured).toEqual({
+      blockKey: 'orbit/company-overview',
+      content: '',
+      scope: '',
+      found: false,
+    });
+    expect(result.markdown).toContain(
+      'Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".',
+    );
+    expect(rootWikiService.readPageForUser).not.toHaveBeenCalled();
+  });
+
   it('does not append derived refs to the editable markdown body', async () => {
     const rootWikiService = {
       readPageForUser: vi.fn().mockResolvedValue({

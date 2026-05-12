@@ -3,6 +3,7 @@ import type { KnowledgeIndexPort } from '../ports.js';
 import type { KnowledgeEventPort } from '../ports.js';
 type BlockScope = 'GLOBAL' | 'USER';
 import { KnowledgeWikiService, type WikiFrontmatter } from '../index.js';
+import { validateFlatWikiKey } from '../keys.js';
 import { applySqlEdits } from '../../tools/sql-edit-replacer.js';
 import { BaseTool, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
 
@@ -160,6 +161,13 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
     const wikiService = context.session?.wikiService ?? this.wikiService;
     const writesGlobal = !!context.session;
     const skipIndex = context.session?.isWorktreeScoped === true;
+    const keyValidation = validateFlatWikiKey(input.key);
+    if (!keyValidation.ok) {
+      return {
+        markdown: keyValidation.error,
+        structured: { success: false, key: input.key },
+      };
+    }
     const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
     if (!rawPathValidation.ok) {
       return {

@@ -33,13 +33,19 @@ function makeService() {
     diffNameStatus: vi.fn().mockResolvedValue([]),
     getFileAtCommit: vi.fn().mockResolvedValue(''),
   };
+  const logger = {
+    log: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
   const service = new KnowledgeWikiService(
     configService as any,
     embeddingService as any,
     pagesRepository as any,
     gitService as any,
+    logger as any,
   );
-  return { service, pagesRepository, embeddingService, configService, gitService };
+  return { service, pagesRepository, embeddingService, configService, gitService, logger };
 }
 
 const fm: WikiFrontmatter = { summary: 'sum', usage_mode: 'auto' };
@@ -105,6 +111,53 @@ describe('KnowledgeWikiService.syncFromCommit', () => {
       ]),
     );
     expect(call.deletes).toEqual([{ scope: 'GLOBAL', scopeId: null, pageKey: 'gone-page' }]);
+  });
+
+  it('indexes historic-SQL nested pages but skips other nested wiki paths from commit sync', async () => {
+    const { service, pagesRepository, gitService, logger } = makeService();
+
+    gitService.diffNameStatus.mockResolvedValue([
+      { status: 'A', path: 'knowledge/global/revenue-policy.md' },
+      { status: 'A', path: 'knowledge/global/historic-sql/order-lifecycle.md' },
+      { status: 'A', path: 'knowledge/global/historic-sql/_archived/retired-pattern.md' },
+      { status: 'A', path: 'knowledge/global/orbit/company-overview.md' },
+    ]);
+    gitService.getFileAtCommit.mockImplementation((path: string) => {
+      if (path.endsWith('revenue-policy.md')) {
+        return Promise.resolve('---\nsummary: revenue\nusage_mode: auto\n---\n\nbody-revenue\n');
+      }
+      if (path.endsWith('order-lifecycle.md')) {
+        return Promise.resolve('---\nsummary: order lifecycle\nusage_mode: auto\n---\n\nbody-orders\n');
+      }
+      if (path.endsWith('retired-pattern.md')) {
+        return Promise.resolve('---\nsummary: retired\nusage_mode: never\n---\n\nbody-retired\n');
+      }
+      return Promise.reject(new Error(`unexpected getFileAtCommit path: ${path}`));
+    });
+
+    await service.syncFromCommit('sha-before', 'sha-after', 'run-uuid');
+
+    expect(gitService.getFileAtCommit).not.toHaveBeenCalledWith('knowledge/global/orbit/company-overview.md', 'sha-after');
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[knowledge.sync] skipping unparseable path: knowledge/global/orbit/company-overview.md',
+    );
+    const call = pagesRepository.applyDiffTransactional.mock.calls[0][0];
+    expect(call.upserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ scope: 'GLOBAL', pageKey: 'revenue-policy', summary: 'revenue' }),
+        expect.objectContaining({
+          scope: 'GLOBAL',
+          pageKey: 'historic-sql/order-lifecycle',
+          summary: 'order lifecycle',
+        }),
+        expect.objectContaining({
+          scope: 'GLOBAL',
+          pageKey: 'historic-sql/_archived/retired-pattern',
+          summary: 'retired',
+        }),
+      ]),
+    );
+    expect(call.upserts).toHaveLength(3);
   });
 
   it('is a no-op when the diff between shas has no knowledge changes', async () => {
