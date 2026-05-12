@@ -345,7 +345,7 @@ describe('local semantic-layer helpers', () => {
 
     await expect(validateLocalSlSource(invalidYaml)).resolves.toMatchObject({
       valid: false,
-      errors: [expect.stringContaining('grain')],
+      errors: expect.arrayContaining([expect.stringContaining('grain')]),
     });
 
     await expect(

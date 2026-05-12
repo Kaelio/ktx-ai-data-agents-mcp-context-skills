@@ -151,7 +151,7 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
     source = normalizeSemanticLayerDescriptions(source, { fillMissing: !!context.session?.ingest });
 
     // Re-serialize and write
-    const updatedYaml = YAML.stringify(source, { indent: 2, lineWidth: 0 });
+    const updatedYaml = YAML.stringify(source, { indent: 2, lineWidth: 0, version: '1.1' });
 
     const { errors: validationErrors, warnings: validationWarnings } =
       await semanticLayerService.validateWithProposedSource(connectionId, source);

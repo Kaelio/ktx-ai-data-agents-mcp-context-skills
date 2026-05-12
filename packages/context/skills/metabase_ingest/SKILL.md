@@ -48,7 +48,7 @@ Use `resultMetadata` to:
 
 For each card:
 1. Analyze `resolvedSql` + `resultMetadata`: identify base tables, aggregations, joins, filters, column types.
-2. Check `sl_discover` and `sl_read_source` for existing sources that overlap.
+2. **REQUIRED before any write**: call `sl_discover` for every candidate target source name. The response tells you whether the name is manifest-backed (`Type: table` or `Type: sql`). For manifest-backed names you MUST use the overlay shape (`name:` + `measures:`/`segments:`/`description:` only — no `sql:`, `table:`, `grain:`, or `columns:`); the tool will reject a standalone write and you'll have wasted the call. If `sl_discover` returns nothing for the name, you can write a standalone source. Also call `sl_read_source` on existing sources you intend to extend so you don't duplicate measures.
 3. Decide:
    - Simple aggregation on a table that already has a source → `sl_edit_source` to add a measure.
    - Join between tables that should be linked in the SL graph → `sl_edit_source` to add a join.
@@ -69,6 +69,8 @@ measures:
 Overlay shape: `name:` plus any of `measures:`, `segments:`, `description:`, `joins:`, `disable_joins:`. Never include `sql:`, `table:`, `grain:`, or `columns:` on a manifest-backed name — those would shadow the manifest's schema and drop its joins. Overlay `joins:` are merged additively with the manifest's joins (deduped by `to` + `on`); use `disable_joins: ["<on-clause>"]` to suppress a specific manifest join. After the overlay exists, use `sl_edit_source` for further tweaks. See `sl_capture` skill for the canonical overlay rule.
 
 **Join discovery:** When your card's SQL references warehouse tables (e.g. in `FROM` or `JOIN` clauses), call `sl_discover({ query: '<table>' })` before writing. The matching manifest entry's `name` is the value you use in `joins: [- to: <name>]` only when the card output exposes a local key that matches the target source grain (for example `account_id = mart_account_segments.account_id`). Do not declare a KTX join just because the card SQL joins that table internally. If the output only exposes display fields such as `account_name`, keep the SQL source self-contained or project the key before adding the join. Use `many_to_one` for FK-to-dimension joins, `one_to_many` for the reverse.
+
+**Hard rule on join columns (prevents broken joins):** For every join you declare, the local column on the left of `on:` MUST be (a) present in your source's projected output and (b) a key/ID column, never a display value. If the natural FK isn't in your SELECT, add it to SELECT before declaring the join. Joining `account_name = mart_account_segments.account_id` is always wrong — names are not identifiers and the equality produces zero matches. The validator rejects this with a "display value to identifier" error; the tool will refuse to save it. Add `account_id` to your SELECT and join on `account_id = mart_account_segments.account_id`, or omit the join entirely.
 
 ## priorProvenance
 

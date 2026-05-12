@@ -63,6 +63,14 @@ const sourceFreshnessSchema = z.object({
   dbt: freshnessDbtSchema.optional(),
 });
 
+// Identifiers (grain entries, column names) must be unqualified output-column
+// names. A dot would mean the agent emitted a table-qualified reference like
+// `activity.account_id` — those break SQL generation and grain semantics.
+const unqualifiedNameSchema = z
+  .string()
+  .min(1)
+  .regex(/^[^.]+$/, "must be unqualified (no '.') — use the output column name");
+
 const joinDeclarationSchema = z.object({
   to: z.string().min(1),
   on: z.string().min(1),
@@ -71,7 +79,7 @@ const joinDeclarationSchema = z.object({
 });
 
 const sourceColumnSchema = z.object({
-  name: z.string().min(1),
+  name: unqualifiedNameSchema,
   // type/description optional on standalone sources: compose-time enrichment fills them
   // from the manifest entry named in `inherits_columns_from`. If the agent does not set
   // `inherits_columns_from`, or the column is not in the manifest, type must be present
@@ -90,7 +98,7 @@ const sourceColumnSchema = z.object({
 /** Overlay column: type requires expr (structural types are inherited from manifest). */
 const overlayColumnSchema = z
   .object({
-    name: z.string().min(1),
+    name: unqualifiedNameSchema,
     type: z.enum(columnTypeValues).optional(),
     role: z.enum(columnRoleValues).optional(),
     visibility: z.enum(columnVisibilityValues).optional(),
@@ -118,8 +126,13 @@ export const sourceDefinitionSchema = z
     // agent write `columns: [{name: FOO}]` instead of redeclaring known fields.
     // Lookup is fuzzy: bare key, fully-qualified table path, or any suffix all match.
     inherits_columns_from: z.string().optional(),
-    grain: z.array(z.string()).min(1),
-    columns: z.array(sourceColumnSchema).default([]),
+    grain: z.array(unqualifiedNameSchema).min(1),
+    // Standalone sources MUST declare columns. An empty columns array means
+    // there's nothing to query or join against and breaks grain validation
+    // (the grain must reference declared columns). Inheritance from a manifest
+    // via `inherits_columns_from` only fills in type/description on declared
+    // columns — the column names themselves must be listed here.
+    columns: z.array(sourceColumnSchema).min(1),
     joins: z.array(joinDeclarationSchema).default([]),
     measures: z.array(slMeasureDefinitionSchema).default([]),
     segments: z.array(segmentDefinitionSchema).optional(),
@@ -139,7 +152,7 @@ export const sourceOverlaySchema = z
     name: z.string().min(1),
     description: z.string().optional(),
     descriptions: z.record(z.string(), z.string()).optional(),
-    grain: z.array(z.string()).optional(),
+    grain: z.array(unqualifiedNameSchema).optional(),
     columns: z.array(overlayColumnSchema).optional(),
     joins: z.array(joinDeclarationSchema).optional(),
     measures: z.array(slMeasureDefinitionSchema).optional(),

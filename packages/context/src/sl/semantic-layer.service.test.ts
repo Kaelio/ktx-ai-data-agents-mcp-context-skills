@@ -363,6 +363,34 @@ describe('sourceDefinitionSchema', () => {
       externalOwner: 'analytics',
     });
   });
+
+  it("rejects qualified grain names (e.g. 'activity.account_id')", () => {
+    const result = sourceDefinitionSchema.safeParse({
+      name: 'activity',
+      table: 'public.activity',
+      grain: ['activity.account_id'],
+      columns: [{ name: 'account_id', type: 'number' }],
+      joins: [],
+      measures: [],
+    });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues.some((i) => i.path.join('.').startsWith('grain'))).toBe(true);
+  });
+
+  it('rejects qualified column names', () => {
+    const result = sourceDefinitionSchema.safeParse({
+      name: 'activity',
+      table: 'public.activity',
+      grain: ['account_id'],
+      columns: [{ name: 'activity.account_id', type: 'number' }],
+      joins: [],
+      measures: [],
+    });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues.some((i) => i.path.join('.').startsWith('columns'))).toBe(true);
+  });
 });
 
 describe('projectManifestEntry', () => {

@@ -119,6 +119,116 @@ class TestInvalidGrain:
         assert not report.valid
         assert any("bad" in e and "nonexistent_col" in e for e in report.errors)
 
+    def test_qualified_grain_name_is_rejected(self):
+        bad = _src(
+            "activity",
+            columns=["account_id"],
+            grain=["activity.account_id"],
+        )
+        engine = SemanticEngine.from_sources({"activity": bad})
+
+        report = engine.validate()
+
+        assert not report.valid
+        assert any(
+            "activity" in e and "activity.account_id" in e and "qualified" in e
+            for e in report.errors
+        )
+
+    def test_qualified_column_name_is_rejected(self):
+        bad = SourceDefinition(
+            name="activity",
+            table="public.activity",
+            grain=["account_id"],
+            columns=[
+                SourceColumn(name="account_id", type="number"),
+                SourceColumn(name="activity.user_id", type="number"),
+            ],
+        )
+        engine = SemanticEngine.from_sources({"activity": bad})
+
+        report = engine.validate()
+
+        assert not report.valid
+        assert any(
+            "activity" in e and "activity.user_id" in e and "unqualified" in e
+            for e in report.errors
+        )
+
+    def test_sql_source_grain_missing_from_projection(self):
+        bad = SourceDefinition(
+            name="large_contract_requesters",
+            sql=(
+                "select account.account_name, requester.email as requester_email "
+                "from orbit_raw.actions activity "
+                "join orbit_raw.accounts account "
+                "  on account.account_id = activity.account_id "
+                "join orbit_raw.users requester "
+                "  on requester.user_id = activity.user_id"
+            ),
+            grain=["account_id", "user_id"],
+            columns=[
+                SourceColumn(name="account_id", type="number"),
+                SourceColumn(name="user_id", type="number"),
+                SourceColumn(name="account_name", type="string"),
+                SourceColumn(name="requester_email", type="string"),
+            ],
+        )
+        engine = SemanticEngine.from_sources({"large_contract_requesters": bad})
+
+        report = engine.validate()
+
+        assert not report.valid
+        assert any(
+            "large_contract_requesters" in e
+            and "account_id" in e
+            and "SELECT projection" in e
+            for e in report.errors
+        )
+
+    def test_sql_source_grain_in_projection_passes(self):
+        good = SourceDefinition(
+            name="contract_requesters",
+            sql=(
+                "select activity.account_id, activity.user_id, "
+                "account.account_name, requester.email as requester_email "
+                "from orbit_raw.actions activity "
+                "join orbit_raw.accounts account "
+                "  on account.account_id = activity.account_id "
+                "join orbit_raw.users requester "
+                "  on requester.user_id = activity.user_id"
+            ),
+            grain=["account_id", "user_id"],
+            columns=[
+                SourceColumn(name="account_id", type="number"),
+                SourceColumn(name="user_id", type="number"),
+                SourceColumn(name="account_name", type="string"),
+                SourceColumn(name="requester_email", type="string"),
+            ],
+        )
+        engine = SemanticEngine.from_sources({"contract_requesters": good})
+
+        report = engine.validate()
+
+        # No grain-related errors. (Other validators may emit unrelated
+        # warnings — we just assert the grain check is clean.)
+        assert not any("grain" in e or "SELECT projection" in e for e in report.errors)
+
+    def test_sql_source_with_select_star_skips_projection_check(self):
+        # SELECT * means we can't statically know projected columns;
+        # the projection check must skip rather than false-fail.
+        src = SourceDefinition(
+            name="opaque",
+            sql="select * from public.events",
+            grain=["event_id"],
+            columns=[SourceColumn(name="event_id", type="number")],
+        )
+        engine = SemanticEngine.from_sources({"opaque": src})
+
+        report = engine.validate()
+
+        assert not any("SELECT projection" in e for e in report.errors)
+
 
 class TestJoinValidation:
     def test_join_local_column_must_exist(self):
@@ -246,7 +356,9 @@ class TestJoinValidation:
         report = engine.validate(recently_touched={"large_contract_requesters"})
 
         assert not report.valid
-        assert any("mart_account_segments" in e and "joins[]" in e for e in report.errors)
+        assert any(
+            "mart_account_segments" in e and "joins[]" in e for e in report.errors
+        )
 
 
 class TestDisconnectedComponents:

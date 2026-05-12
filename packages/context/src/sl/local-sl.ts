@@ -157,7 +157,7 @@ function summarizeSource(args: { connectionId: string; path: string; raw: string
 }
 
 function sourceToYaml(source: SemanticLayerSource): string {
-  return YAML.stringify(source, { indent: 2, lineWidth: 0 });
+  return YAML.stringify(source, { indent: 2, lineWidth: 0, version: '1.1' });
 }
 
 function summarizeSemanticSource(args: {

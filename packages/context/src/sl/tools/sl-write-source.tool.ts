@@ -164,7 +164,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       ? `${isOverlay ? 'Update overlay' : 'Rewrite source'}: ${sourceName}`
       : `${isOverlay ? 'Create overlay' : 'Create source'}: ${sourceName}`;
 
-    const yamlContent = YAML.stringify(normalizedSource);
+    const yamlContent = YAML.stringify(normalizedSource, { indent: 2, lineWidth: 0, version: '1.1' });
 
     const orphanError = await this.rejectOrphanOverlay(semanticLayerService, connectionId, sourceName, yamlContent);
     if (orphanError) {

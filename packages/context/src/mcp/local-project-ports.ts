@@ -512,7 +512,7 @@ export function createLocalProjectMcpContextPorts(
         }
 
         const yaml =
-          input.yaml ?? YAML.stringify({ ...input.source, name: input.sourceName }, { indent: 2, lineWidth: 0 });
+          input.yaml ?? YAML.stringify({ ...input.source, name: input.sourceName }, { indent: 2, lineWidth: 0, version: '1.1' });
         parseYamlRecord(yaml);
         await project.fileStore.writeFile(
           path,

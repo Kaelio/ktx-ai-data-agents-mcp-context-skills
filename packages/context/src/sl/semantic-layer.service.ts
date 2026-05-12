@@ -133,7 +133,7 @@ export class SemanticLayerService {
 
     const path = this.sourcePath(connectionId, source.name);
     const normalizedSource = normalizeSemanticLayerDescriptions(source);
-    const content = YAML.stringify(normalizedSource, { indent: 2, lineWidth: 0 });
+    const content = YAML.stringify(normalizedSource, { indent: 2, lineWidth: 0, version: '1.1' });
     const message = commitMessage ?? `Update semantic layer source: ${source.name}`;
     const result = await this.configService.writeFile(path, content, author, authorEmail, message, {
       skipLock: options?.skipLock,

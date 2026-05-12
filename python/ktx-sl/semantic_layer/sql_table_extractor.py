@@ -70,3 +70,30 @@ def ref_matches_source_table(ref: tuple[str, ...], source_table: str) -> bool:
     if len(ref) > len(src):
         return False
     return src[-len(ref) :] == ref
+
+
+def extract_projected_columns(sql: str, dialect: str = "postgres") -> set[str] | None:
+    """Return the set of output column names projected by `sql`.
+
+    Returns None if the projection cannot be statically determined — when
+    SELECT * (or qualified `t.*`) is present, or when parsing fails. Callers
+    should treat None as "unknown projection" and skip projection-dependent
+    checks rather than reporting a false-positive error.
+    """
+    try:
+        tree = sqlglot.parse_one(sql, read=dialect)
+    except Exception as e:
+        logger.debug("extract_projected_columns: parse failed (%s); skipping", e)
+        return None
+
+    if not isinstance(tree, exp.Select):
+        return None
+
+    for projection in tree.expressions:
+        # Bare `*` or `t.*` — projection list is opaque.
+        if isinstance(projection, exp.Star):
+            return None
+        if isinstance(projection, exp.Column) and isinstance(projection.this, exp.Star):
+            return None
+
+    return {name for name in tree.named_selects if name}

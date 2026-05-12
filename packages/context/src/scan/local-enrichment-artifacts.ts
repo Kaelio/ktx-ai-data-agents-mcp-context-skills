@@ -291,7 +291,7 @@ export async function writeLocalScanManifestShards(
     const path = `${schemaDir(input.connectionId)}/${shardKey}.yaml`;
     await input.project.fileStore.writeFile(
       path,
-      YAML.stringify(shard, { indent: 2, lineWidth: 0 }),
+      YAML.stringify(shard, { indent: 2, lineWidth: 0, version: '1.1' }),
       LOCAL_AUTHOR,
       LOCAL_AUTHOR_EMAIL,
       `scan(${LIVE_DATABASE_ADAPTER}): write manifest shard ${shardKey} syncId=${input.syncId}`,

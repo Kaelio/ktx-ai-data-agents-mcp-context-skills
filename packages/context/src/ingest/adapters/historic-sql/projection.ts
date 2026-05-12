@@ -74,7 +74,7 @@ async function readJson(path: string): Promise<unknown> {
 async function writeYamlAtomic(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.tmp`;
-  await writeFile(tmp, YAML.stringify(value, { indent: 2, lineWidth: 0 }), 'utf-8');
+  await writeFile(tmp, YAML.stringify(value, { indent: 2, lineWidth: 0, version: '1.1' }), 'utf-8');
   await rename(tmp, path);
 }
 
@@ -270,7 +270,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
         }
       }
     }
-    const after = YAML.stringify(shard, { indent: 2, lineWidth: 0 });
+    const after = YAML.stringify(shard, { indent: 2, lineWidth: 0, version: '1.1' });
     if (after !== before) {
       await writeYamlAtomic(path, shard);
     }
