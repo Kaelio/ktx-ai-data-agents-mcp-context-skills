@@ -523,6 +523,35 @@ describe('local ingest adapters', () => {
     await expect(notion?.listTargetConnectionIds?.('/tmp/staged-notion')).resolves.toEqual(['warehouse']);
   });
 
+  it('passes primary warehouse connection ids to local LookML and MetricFlow adapters', async () => {
+    const adapters = createDefaultLocalIngestAdapters(
+      projectWithConnections({
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgresql://readonly@db.example.test/analytics',
+        },
+        lookml_docs: {
+          driver: 'lookml',
+          lookml: {
+            repoUrl: 'https://github.com/acme/lookml.git',
+          },
+        },
+        metrics_repo: {
+          driver: 'metricflow',
+          metricflow: {
+            repoUrl: 'https://github.com/acme/metrics.git',
+          },
+        },
+      } as never),
+    );
+
+    const lookml = adapters.find((adapter) => adapter.source === 'lookml');
+    const metricflow = adapters.find((adapter) => adapter.source === 'metricflow');
+
+    await expect(lookml?.listTargetConnectionIds?.('/tmp/staged-lookml')).resolves.toEqual(['warehouse']);
+    await expect(metricflow?.listTargetConnectionIds?.('/tmp/staged-metricflow')).resolves.toEqual(['warehouse']);
+  });
+
   it('resolves MetricFlow auth_token_ref without writing literal tokens to config', async () => {
     const project = projectWithConnections({
       metricflow_main: {

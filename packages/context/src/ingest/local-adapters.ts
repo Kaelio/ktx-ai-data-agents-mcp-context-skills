@@ -88,7 +88,10 @@ export function createDefaultLocalIngestAdapters(
         ...(options.databaseIntrospectionUrl ? { baseUrl: options.databaseIntrospectionUrl } : {}),
       }),
     }),
-    new LookmlSourceAdapter({ homeDir: join(project.projectDir, '.ktx/cache') }),
+    new LookmlSourceAdapter({
+      homeDir: join(project.projectDir, '.ktx/cache'),
+      targetConnectionIds: primaryWarehouseConnectionIds(project),
+    }),
     new DbtSourceAdapter({
       homeDir: join(project.projectDir, '.ktx/cache'),
       targetConnectionIds: primaryWarehouseConnectionIds(project),
@@ -106,7 +109,10 @@ export function createDefaultLocalIngestAdapters(
         },
       },
     }),
-    new MetricflowSourceAdapter({ homeDir: join(project.projectDir, '.ktx/cache') }),
+    new MetricflowSourceAdapter({
+      homeDir: join(project.projectDir, '.ktx/cache'),
+      targetConnectionIds: primaryWarehouseConnectionIds(project),
+    }),
     new NotionSourceAdapter({
       targetConnectionIds: primaryWarehouseConnectionIds(project),
       ...(options.logger ? { logger: options.logger } : {}),
