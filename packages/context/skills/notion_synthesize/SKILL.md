@@ -67,10 +67,38 @@ Search existing wiki pages for the same `tables:` or `sl_refs:` frontmatter and 
 - Do not create SL sources under the Notion connection just because a page mentions a warehouse, dbt, Looker, or Metabase object. Use the mapped warehouse/source connection after discovery, or emit an unmapped fallback and write wiki-only.
 - Distinguish fallback reasons precisely: if a non-Notion warehouse/dbt connection exists but `sl_discover` cannot find the named table/source, use `no_physical_table`; reserve `no_connection_mapping` for cases where there is no plausible non-Notion target connection at all.
 - If `sl_discover` resolves the table/source, do not call `emit_unmapped_fallback` for that table. Use the resolved source for `sl_refs`, overlay edits, or wiki-only documentation.
-- When calling `emit_unmapped_fallback`, pass the table or source identifier as `tableRef` (e.g. `tableRef: "orbit_analytics.customer"`) — the tool generates the canonical detail string from the reason code and `tableRef`. Use the optional `clarification` field only to add context that does not contradict the reason. Do not restate the reason in `clarification`.
+- When calling `emit_unmapped_fallback`, pass the table or source identifier as `tableRef` (e.g. `tableRef: "<schema>.<table>"`) — the tool generates the canonical detail string from the reason code and `tableRef`. Use the optional `clarification` field only to add context that does not contradict the reason. Do not restate the reason in `clarification`.
+
+## Identifier Verification Protocol
+
+Before writing a wiki page or SL source on any topic:
+
+1. `discover_data({query: "<topic>"})` - see what wikis, SL sources, and raw
+   tables already exist. Prefer updating existing pages over creating new ones.
+
+Before emitting any `schema.table` or `schema.table.column` into a wiki body,
+SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
+
+2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
+   confirm the identifier resolves; inspect native types, FK/PK, and
+   sampleValues.
+3. For literal values from the source, such as status codes or plan tiers,
+   check whether they appear in `entity_details` sampleValues for the relevant
+   column. If sampleValues is short or the sample may have missed real values,
+   run a `sql_execution` probe:
+   `SELECT DISTINCT <col> FROM <ref> LIMIT 50`.
+4. If the candidate identifier still does not resolve, do one of:
+   - Use `sql_execution` with `SELECT 1 FROM <ref> LIMIT 0`. If it errors, the
+     identifier is fictional.
+   - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
+     citing the exact raw path that mentioned it.
+   - When recording `emit_unmapped_fallback` with `no_physical_table`, include
+     the failing probe error in `clarification`.
+5. Never copy `<schema>.<table>` placeholder strings from these instructions
+   into output.
 
 ## Tools
 
-Allowed: `read_raw_file`, `read_raw_span`, `wiki_search`, `wiki_read`, `wiki_write`, `sl_discover`, `sl_read_source`, `sl_write_source`, `sl_edit_source`, `sl_validate`, `context_evidence_search`, `context_evidence_read`, `context_evidence_neighbors`, `emit_unmapped_fallback`, `eviction_list`, `context_eviction_decision_write`.
+Allowed: `read_raw_file`, `read_raw_span`, `wiki_search`, `wiki_read`, `wiki_write`, `discover_data`, `entity_details`, `sql_execution`, `sl_discover`, `sl_read_source`, `sl_write_source`, `sl_edit_source`, `sl_validate`, `context_evidence_search`, `context_evidence_read`, `context_evidence_neighbors`, `emit_unmapped_fallback`, `eviction_list`, `context_eviction_decision_write`.
 
 Not allowed: `context_candidate_write`, `context_candidate_mark`.

@@ -17,6 +17,14 @@ Use this skill when the WorkUnit raw file is one `tables/<schema>.<name>.json` f
 5. Call `emit_historic_sql_evidence` exactly once with `kind: "table_usage"`.
 6. Stop after the evidence tool succeeds.
 
+## Identifier Verification Protocol
+
+Only mention columns visible in the table's scan record. Use
+`entity_details({connectionName, targets: [{display: "<identifier>"}]})` if
+the table or column attribution is uncertain. Do not infer join columns or
+filters from neighboring SQL unless the scan record confirms the column exists
+on the named table.
+
 ## Evidence Shape
 
 Call `emit_historic_sql_evidence` with this shape:
