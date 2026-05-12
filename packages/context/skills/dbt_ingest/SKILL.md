@@ -19,6 +19,14 @@ Use this skill for **uploaded** dbt projects (`dbt_project.yml` at stage root, `
 | `accepted_values` | Add a **brief** line in the column description: allowed values (truncate long lists) | Also mention enum-like use in `wiki_sl_search` / filters. |
 | `relationships` | Add or confirm `joins:` on the overlay **only** when `to` resolves to a real table via `read_raw_file` + `wiki_sl_search` / `sl_describe_table` | If the ref cannot be resolved, capture the intent in a wiki page instead. |
 
+## Physical schema grounding
+
+dbt YAML is documentation and test metadata; it is not permission to invent physical columns. Before writing any table-backed SL source, confirm the real warehouse shape with `wiki_sl_search`, `sl_discover`, or `sl_describe_table` and use only confirmed column names in `columns:`, `grain:`, `joins:`, `segments:`, and `measures[].expr`.
+
+If a `models:` entry has no `columns:` block, or the available raw files do not confirm the physical column names, do **not** synthesize a full standalone source. Write a wiki note or a description-only overlay for the resolved manifest table instead. If a business metric is described but its referenced column is not confirmed in the warehouse schema, omit the measure and capture the unresolved intent in the wiki.
+
+After every `sl_write_source`, call `sl_validate`. A validation error saying a declared column or measure reference is absent from the physical table is a hard stop: re-read the warehouse-backed source and rewrite with confirmed names, or remove the invalid SL fields.
+
 ## 1.1 test hints (descriptions / meta)
 
 When YAML shows `accepted_values` or `not_null`, add **short** hints into `columns[].descriptions` (e.g. under `user`) or freeform column notes so chat and validation see intent before the next git sync refreshes `constraints` / `enum_values` in `_schema`. Keep hints under a few words when possible.
@@ -30,5 +38,7 @@ If the same bundle also has MetricFlow `semantic_models:` / `metrics:`, the **`m
 ## Do not
 
 - Do not run `dbt` CLI or assume `target/` / `manifest.json` exists in the upload.
+- Do not invent column names, grain keys, or measure expressions from dbt model names, descriptions, tests, or common naming patterns.
+- Do not write `columns:`, `grain:`, or `measures:` for a dbt model unless those exact column names are confirmed by dbt YAML columns or warehouse schema discovery.
 - Do not invent joins from `relationships` tests if the target model/table is not found in SL or the warehouse.
 - Do not read `peerFileIndex` paths — use `read_raw_file` only on `rawFiles` and `dependencyPaths` from the WorkUnit.

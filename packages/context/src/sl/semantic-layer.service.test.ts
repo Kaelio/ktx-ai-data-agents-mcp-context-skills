@@ -784,6 +784,156 @@ describe('validateWithProposedSource', () => {
     expect(result.errors[0]).toMatch(/Overlay 'orphan' has no matching manifest entry/);
     expect(pythonPort.validateSources).not.toHaveBeenCalled();
   });
+
+  it('rejects table-backed sources whose declared columns are absent from a matching physical manifest', async () => {
+    const schemaPath = 'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml';
+    configService.listFiles.mockImplementation((dir: string) => {
+      if (dir === 'semantic-layer/dbt-main') {
+        return Promise.resolve({ files: [] });
+      }
+      if (dir === 'semantic-layer') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      if (dir === 'semantic-layer/dbt-main/_schema' || dir === 'semantic-layer/postgres-warehouse/_schema') {
+        return Promise.resolve({ files: dir.endsWith('postgres-warehouse/_schema') ? [schemaPath] : [] });
+      }
+      return Promise.resolve({ files: [] });
+    });
+    configService.readFile.mockImplementation((path: string) => {
+      if (path === schemaPath) {
+        return Promise.resolve({
+          content: [
+            'tables:',
+            '  int_procurement_qualifying_actions:',
+            '    table: orbit_analytics.int_procurement_qualifying_actions',
+            '    columns:',
+            '      - { name: action_id, type: string }',
+            '      - { name: account_id, type: string }',
+            '      - { name: user_id, type: string }',
+            '      - { name: action_date, type: time }',
+            '      - { name: action_type, type: string }',
+          ].join('\n'),
+        });
+      }
+      return Promise.reject(new Error(`Unexpected readFile: ${path}`));
+    });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('dbt-main', {
+      name: 'int_procurement_qualifying_actions',
+      table: 'orbit_analytics.int_procurement_qualifying_actions',
+      grain: ['purchase_request_id'],
+      columns: [
+        { name: 'purchase_request_id', type: 'string' },
+        { name: 'account_id', type: 'string' },
+        { name: 'requester_user_id', type: 'string' },
+        { name: 'action_week', type: 'time' },
+      ],
+      joins: [],
+      measures: [{ name: 'qualifying_action_count', expr: 'count(purchase_request_id)' }],
+    });
+
+    expect(result.errors.join('\n')).toMatch(/declared column\(s\) absent from physical table/);
+    expect(result.errors.join('\n')).toMatch(/purchase_request_id/);
+    expect(result.errors.join('\n')).toMatch(/requester_user_id/);
+    expect(result.errors.join('\n')).toMatch(/action_week/);
+    expect(result.errors.join('\n')).toMatch(/measure "qualifying_action_count" references unknown column\(s\)/);
+  });
+
+  it('keeps valid table-backed sources clean when a physical manifest matches', async () => {
+    const schemaPath = 'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml';
+    configService.listFiles.mockImplementation((dir: string) => {
+      if (dir === 'semantic-layer/dbt-main') {
+        return Promise.resolve({ files: [] });
+      }
+      if (dir === 'semantic-layer') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      if (dir === 'semantic-layer/dbt-main/_schema' || dir === 'semantic-layer/postgres-warehouse/_schema') {
+        return Promise.resolve({ files: dir.endsWith('postgres-warehouse/_schema') ? [schemaPath] : [] });
+      }
+      return Promise.resolve({ files: [] });
+    });
+    configService.readFile.mockResolvedValue({
+      content: [
+        'tables:',
+        '  mart_revenue_daily:',
+        '    table: orbit_analytics.mart_revenue_daily',
+        '    columns:',
+        '      - { name: revenue_date, type: time }',
+        '      - { name: gross_revenue_cents, type: number }',
+        '      - { name: credits_cents, type: number }',
+        '      - { name: refunds_cents, type: number }',
+        '      - { name: net_revenue_cents, type: number }',
+      ].join('\n'),
+    });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('dbt-main', {
+      name: 'mart_revenue_daily',
+      table: 'orbit_analytics.mart_revenue_daily',
+      grain: ['revenue_date'],
+      columns: [
+        { name: 'revenue_date', type: 'time' },
+        { name: 'gross_revenue_cents', type: 'number' },
+        { name: 'credits_cents', type: 'number' },
+        { name: 'refunds_cents', type: 'number' },
+        { name: 'net_revenue_cents', type: 'number' },
+      ],
+      joins: [],
+      measures: [{ name: 'net_revenue', expr: 'sum(net_revenue_cents)' }],
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+
+  it('rejects join keys that are absent from matched physical sources', async () => {
+    const schemaPath = 'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml';
+    configService.listFiles.mockImplementation((dir: string) => {
+      if (dir === 'semantic-layer/dbt-main') {
+        return Promise.resolve({ files: [] });
+      }
+      if (dir === 'semantic-layer') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      if (dir === 'semantic-layer/dbt-main/_schema' || dir === 'semantic-layer/postgres-warehouse/_schema') {
+        return Promise.resolve({ files: dir.endsWith('postgres-warehouse/_schema') ? [schemaPath] : [] });
+      }
+      return Promise.resolve({ files: [] });
+    });
+    configService.readFile.mockResolvedValue({
+      content: [
+        'tables:',
+        '  activity:',
+        '    table: orbit_analytics.activity',
+        '    columns:',
+        '      - { name: account_id, type: string }',
+        '  accounts:',
+        '    table: orbit_analytics.accounts',
+        '    columns:',
+        '      - { name: account_id, type: string }',
+      ].join('\n'),
+    });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('dbt-main', {
+      name: 'activity',
+      table: 'orbit_analytics.activity',
+      grain: ['account_id'],
+      columns: [{ name: 'account_id', type: 'string' }],
+      joins: [{ to: 'accounts', on: 'activity.account_name = accounts.account_uuid', relationship: 'many_to_one' }],
+      measures: [],
+    });
+
+    expect(result.errors.join('\n')).toMatch(/local column "account_name"/);
+    expect(result.errors.join('\n')).toMatch(/target column "account_uuid"/);
+  });
 });
 
 describe('findDanglingSegmentRefs', () => {

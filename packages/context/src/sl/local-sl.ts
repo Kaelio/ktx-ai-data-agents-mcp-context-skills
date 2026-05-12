@@ -7,7 +7,12 @@ import { HybridSearchCore, type SearchCandidateGenerator } from '../search/index
 import { DEFAULT_PRIORITY, resolveDescription } from './descriptions.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
-import { composeOverlay, type ManifestTableEntry, projectManifestEntry } from './semantic-layer.service.js';
+import {
+  composeOverlay,
+  type ManifestTableEntry,
+  projectManifestEntry,
+  SemanticLayerService,
+} from './semantic-layer.service.js';
 import type { PgliteSlSearchPrototypeOwnerOptions } from './pglite-sl-search-prototype.js';
 import { loadLatestSlDictionaryEntries } from './sl-dictionary-profile.js';
 import { buildSemanticLayerSourceSearchText, SlSearchService } from './sl-search.service.js';
@@ -246,12 +251,24 @@ export async function loadLocalSlSourceRecords(
   return [...sources.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export async function validateLocalSlSource(rawYaml: string): Promise<LocalSlValidationResult> {
+export async function validateLocalSlSource(
+  rawYaml: string,
+  options?: { project?: KtxLocalProject; connectionId?: string },
+): Promise<LocalSlValidationResult> {
   try {
     const parsed = parseYamlRecord(rawYaml);
     const schema = parsed.table || parsed.sql ? sourceDefinitionSchema : sourceOverlaySchema;
-    schema.parse(parsed);
-    return { valid: true, errors: [] };
+    const result = schema.parse(parsed);
+    const errors: string[] = [];
+
+    if (options?.project && options.connectionId && 'table' in result && result.table) {
+      const service = new SemanticLayerService(options.project.fileStore, {} as never, {} as never);
+      errors.push(
+        ...(await service.validatePhysicalTableReferences(options.connectionId, [result as SemanticLayerSource])),
+      );
+    }
+
+    return { valid: errors.length === 0, errors };
   } catch (error) {
     return { valid: false, errors: validationErrors(error) };
   }
@@ -261,7 +278,7 @@ export async function writeLocalSlSource(
   project: KtxLocalProject,
   input: { connectionId: string; sourceName: string; yaml: string },
 ): Promise<KtxFileWriteResult> {
-  const validation = await validateLocalSlSource(input.yaml);
+  const validation = await validateLocalSlSource(input.yaml, { project, connectionId: input.connectionId });
   if (!validation.valid) {
     throw new Error(`Invalid semantic-layer source: ${validation.errors.join('; ')}`);
   }

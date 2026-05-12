@@ -396,6 +396,174 @@ export class SemanticLayerService {
     return null;
   }
 
+  async findManifestEntryByTableRefAcrossConnections(
+    preferredConnectionId: string,
+    ref: string,
+  ): Promise<{ connectionId: string; source: SemanticLayerSource } | null> {
+    const preferred = await this.findManifestEntryByTableRef(preferredConnectionId, ref);
+    if (preferred) {
+      return { connectionId: preferredConnectionId, source: preferred };
+    }
+
+    for (const entry of await this.listAllManifestEntries()) {
+      if (entry.connectionId === preferredConnectionId) {
+        continue;
+      }
+      if (manifestEntryMatchesRef(entry.source, ref)) {
+        return entry;
+      }
+    }
+
+    return null;
+  }
+
+  async validatePhysicalTableReferences(
+    connectionId: string,
+    sources: SemanticLayerSource[],
+  ): Promise<string[]> {
+    const errors: string[] = [];
+    const sourceNames = new Set(sources.map((s) => s.name.toLowerCase()));
+    const sourcesByName = new Map(sources.map((s) => [s.name.toLowerCase(), s]));
+
+    for (const source of sources) {
+      if (!source.table) {
+        continue;
+      }
+
+      const manifestMatch = await this.findManifestEntryByTableRefAcrossConnections(connectionId, source.table);
+      if (!manifestMatch) {
+        continue;
+      }
+
+      const manifestSource = manifestMatch.source;
+      const manifestColumns = new Map(manifestSource.columns.map((c) => [c.name.toLowerCase(), c.name]));
+      const declaredColumns = source.columns ?? [];
+      const declaredByLower = new Map(declaredColumns.map((c) => [c.name.toLowerCase(), c]));
+      const validOutputColumns = new Set(
+        declaredColumns
+          .filter((c) => c.expr || manifestColumns.has(c.name.toLowerCase()))
+          .map((c) => c.name.toLowerCase()),
+      );
+      const measureNames = new Set((source.measures ?? []).map((m) => m.name.toLowerCase()));
+      const manifestLabel =
+        manifestMatch.connectionId === connectionId
+          ? manifestSource.name
+          : `${manifestMatch.connectionId}/${manifestSource.name}`;
+
+      const absentDeclaredColumns = declaredColumns
+        .filter((c) => !c.expr && !manifestColumns.has(c.name.toLowerCase()))
+        .map((c) => c.name);
+      if (absentDeclaredColumns.length > 0) {
+        errors.push(
+          `${source.name}.yaml: table "${source.table}" matched manifest ${manifestLabel}, ` +
+            `but declared column(s) absent from physical table: ${absentDeclaredColumns.join(', ')}. ` +
+            `Available columns: ${[...manifestColumns.values()].join(', ')}`,
+        );
+      }
+
+      const missingGrainColumns = (source.grain ?? []).filter((grain) => {
+        const declared = declaredByLower.get(grain.toLowerCase());
+        return !declared || (!declared.expr && !manifestColumns.has(grain.toLowerCase()));
+      });
+      if (missingGrainColumns.length > 0) {
+        errors.push(
+          `${source.name}.yaml: grain column(s) absent from physical table "${source.table}": ${missingGrainColumns.join(', ')}`,
+        );
+      }
+
+      for (const column of declaredColumns) {
+        if (!column.expr) {
+          continue;
+        }
+        const missing = missingLocalExpressionRefs({
+          expr: column.expr,
+          sourceName: source.name,
+          sourceNames,
+          validColumns: new Set([...manifestColumns.keys(), ...validOutputColumns]),
+          validMeasures: new Set(),
+        });
+        if (missing.length > 0) {
+          errors.push(
+            `${source.name}.yaml: computed column "${column.name}" references unknown column(s): ${missing.join(', ')}`,
+          );
+        }
+      }
+
+      for (const segment of source.segments ?? []) {
+        const missing = missingLocalExpressionRefs({
+          expr: segment.expr,
+          sourceName: source.name,
+          sourceNames,
+          validColumns: validOutputColumns,
+          validMeasures: new Set(),
+        });
+        if (missing.length > 0) {
+          errors.push(
+            `${source.name}.yaml: segment "${segment.name}" references unknown column(s): ${missing.join(', ')}`,
+          );
+        }
+      }
+
+      for (const measure of source.measures ?? []) {
+        const exprMissing = missingLocalExpressionRefs({
+          expr: measure.expr,
+          sourceName: source.name,
+          sourceNames,
+          validColumns: validOutputColumns,
+          validMeasures: measureNames,
+        });
+        if (exprMissing.length > 0) {
+          errors.push(
+            `${source.name}.yaml: measure "${measure.name}" references unknown column(s): ${exprMissing.join(', ')}`,
+          );
+        }
+
+        if (measure.filter) {
+          const filterMissing = missingLocalExpressionRefs({
+            expr: measure.filter,
+            sourceName: source.name,
+            sourceNames,
+            validColumns: validOutputColumns,
+            validMeasures: new Set(),
+          });
+          if (filterMissing.length > 0) {
+            errors.push(
+              `${source.name}.yaml: measure "${measure.name}" filter references unknown column(s): ${filterMissing.join(', ')}`,
+            );
+          }
+        }
+      }
+
+      for (const join of source.joins ?? []) {
+        const parsed = parseJoinColumns(join.on, source.name, join.to);
+        if (!parsed) {
+          continue;
+        }
+        if (!validOutputColumns.has(parsed.localColumn.toLowerCase())) {
+          errors.push(
+            `${source.name}.yaml: join to "${join.to}" references local column ` +
+              `"${parsed.localColumn}" that is not a valid output column`,
+          );
+        }
+
+        const targetSource =
+          sourcesByName.get(join.to.toLowerCase()) ??
+          (await this.findManifestEntryByTableRefAcrossConnections(connectionId, join.to))?.source;
+        if (targetSource) {
+          const targetColumns = new Set(targetSource.columns.map((c) => c.name.toLowerCase()));
+          if (!targetColumns.has(parsed.targetColumn.toLowerCase())) {
+            errors.push(
+              `${source.name}.yaml: join to "${join.to}" references target column ` +
+                `"${parsed.targetColumn}" that does not exist on the target source`,
+            );
+          }
+        }
+      }
+    }
+
+    return errors;
+  }
+
   async getDialectForConnection(connectionId: string): Promise<string> {
     const connection = await this.connections.getConnectionById(connectionId);
     if (!connection) {
@@ -500,10 +668,15 @@ export class SemanticLayerService {
         return { errors: [errorMsg], warnings: [], perSourceWarnings: {} };
       }
       if (!data) {
-        return { errors: [], warnings: [], perSourceWarnings: {} };
+        return {
+          errors: await this.validatePhysicalTableReferences(connectionId, validatable),
+          warnings: [],
+          perSourceWarnings: {},
+        };
       }
+      const physicalErrors = await this.validatePhysicalTableReferences(connectionId, validatable);
       return {
-        errors: data.errors ?? [],
+        errors: [...(data.errors ?? []), ...physicalErrors],
         warnings: data.warnings ?? [],
         perSourceWarnings: data.per_source_warnings ?? {},
       };
@@ -529,12 +702,38 @@ export class SemanticLayerService {
       return { errors: [formatPortError(error, 'Unknown validation error')], warnings: [] };
     }
     if (!data) {
-      return { errors: [], warnings: [] };
+      return { errors: await this.validatePhysicalTableReferences(connectionId, sources), warnings: [] };
     }
+    const physicalErrors = await this.validatePhysicalTableReferences(connectionId, sources);
     return {
-      errors: data.errors ?? [],
+      errors: [...(data.errors ?? []), ...physicalErrors],
       warnings: data.warnings ?? [],
     };
+  }
+
+  private async listAllManifestEntries(): Promise<Array<{ connectionId: string; source: SemanticLayerSource }>> {
+    let files: string[];
+    try {
+      files = (await this.configService.listFiles(SL_DIR_PREFIX)).files;
+    } catch {
+      return [];
+    }
+
+    const schemaFiles = files.filter((file) => /^semantic-layer\/[^/]+\/_schema\/.+\.ya?ml$/.test(file));
+    const entries: Array<{ connectionId: string; source: SemanticLayerSource }> = [];
+    for (const filePath of schemaFiles) {
+      const connectionId = filePath.split('/')[1];
+      try {
+        const { content } = await this.configService.readFile(filePath);
+        const shard = YAML.parse(content) as { tables?: Record<string, ManifestTableEntry> };
+        for (const [name, entry] of Object.entries(shard?.tables ?? {})) {
+          entries.push({ connectionId, source: projectManifestEntry(name, entry) });
+        }
+      } catch {
+        // skip unparseable shards
+      }
+    }
+    return entries;
   }
 
   /**
@@ -969,12 +1168,153 @@ const SQL_KEYWORDS = new Set([
   'false',
   'asc',
   'desc',
+  'date',
+  'day',
+  'month',
+  'quarter',
+  'week',
+  'year',
+  'interval',
+  'extract',
+  'from',
+  'over',
+  'partition',
+  'by',
+  'rows',
+  'range',
+  'current',
+  'row',
+  'numeric',
+  'decimal',
+  'int',
+  'integer',
+  'float',
+  'double',
+  'string',
+  'timestamp',
+  'bool',
+  'boolean',
 ]);
 
 function extractColumnReferences(expr: string): string[] {
   const cleaned = expr.replace(/'[^']*'/g, '').replace(/\b\d+(\.\d+)?\b/g, '');
   const tokens = cleaned.match(/\b[a-zA-Z_]\w*\b/g) ?? [];
   return [...new Set(tokens.filter((t) => !SQL_KEYWORDS.has(t.toLowerCase())))];
+}
+
+function manifestEntryMatchesRef(source: SemanticLayerSource, ref: string): boolean {
+  if (source.name.toLowerCase() === ref.toLowerCase()) {
+    return true;
+  }
+  const table = source.table?.toLowerCase();
+  const lowered = ref.toLowerCase();
+  return !!table && (table === lowered || table.endsWith(`.${lowered}`));
+}
+
+function normalizeSqlExpressionForIdentifierScan(expr: string): string {
+  return expr
+    .replace(/--.*$/gm, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/'([^']|'')*'/g, ' ')
+    .replace(/"([^"]+)"/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]/g, '$1');
+}
+
+function extractSqlIdentifierRefs(expr: string): Array<{ qualifier?: string; name: string }> {
+  const normalized = normalizeSqlExpressionForIdentifierScan(expr);
+  const refs = new Map<string, { qualifier?: string; name: string }>();
+  const re = /(?:\b([A-Za-z_][\w$]*)\s*\.\s*)?(\b[A-Za-z_][\w$]*)\b/g;
+  for (const match of normalized.matchAll(re)) {
+    const qualifier = match[1];
+    const name = match[2];
+    if (!name) {
+      continue;
+    }
+    const nameLower = name.toLowerCase();
+    const qualifierLower = qualifier?.toLowerCase();
+    const after = normalized.slice((match.index ?? 0) + match[0].length).trimStart();
+    if (!qualifier && after.startsWith('(')) {
+      continue;
+    }
+    if (SQL_KEYWORDS.has(nameLower) || (qualifierLower && SQL_KEYWORDS.has(qualifierLower))) {
+      continue;
+    }
+    refs.set(`${qualifierLower ?? ''}.${nameLower}`, qualifier ? { qualifier, name } : { name });
+  }
+  return [...refs.values()];
+}
+
+function refBelongsToSource(
+  ref: { qualifier?: string; name: string },
+  sourceName: string,
+  sourceNames: Set<string>,
+): boolean {
+  if (!ref.qualifier) {
+    return true;
+  }
+  const qualifier = ref.qualifier.toLowerCase();
+  if (qualifier === sourceName.toLowerCase()) {
+    return true;
+  }
+  return !sourceNames.has(qualifier);
+}
+
+function missingLocalExpressionRefs(input: {
+  expr: string;
+  sourceName: string;
+  sourceNames: Set<string>;
+  validColumns: Set<string>;
+  validMeasures: Set<string>;
+}): string[] {
+  const missing = new Set<string>();
+  for (const ref of extractSqlIdentifierRefs(input.expr)) {
+    if (!refBelongsToSource(ref, input.sourceName, input.sourceNames)) {
+      continue;
+    }
+    const name = ref.name.toLowerCase();
+    if (!input.validColumns.has(name) && !input.validMeasures.has(name)) {
+      missing.add(ref.name);
+    }
+  }
+  return [...missing].sort();
+}
+
+function parseJoinSide(side: string): { qualifier?: string; column: string } | null {
+  const match = side.trim().match(/^(?:(\w+)\.)?(\w+)$/);
+  if (!match) {
+    return null;
+  }
+  return match[1] ? { qualifier: match[1], column: match[2] } : { column: match[2] };
+}
+
+function parseJoinColumns(
+  on: string,
+  sourceName: string,
+  targetName: string,
+): { localColumn: string; targetColumn: string } | null {
+  const sides = on.split('=');
+  if (sides.length !== 2) {
+    return null;
+  }
+  const left = parseJoinSide(sides[0]);
+  const right = parseJoinSide(sides[1]);
+  if (!left || !right) {
+    return null;
+  }
+
+  const sourceLower = sourceName.toLowerCase();
+  const targetLower = targetName.toLowerCase();
+  const leftQualifier = left.qualifier?.toLowerCase();
+  const rightQualifier = right.qualifier?.toLowerCase();
+
+  if (leftQualifier === targetLower || rightQualifier === sourceLower) {
+    return { localColumn: right.column, targetColumn: left.column };
+  }
+  if (rightQualifier === targetLower || leftQualifier === sourceLower || !leftQualifier) {
+    return { localColumn: left.column, targetColumn: right.column };
+  }
+  return { localColumn: left.column, targetColumn: right.column };
 }
 
 /**

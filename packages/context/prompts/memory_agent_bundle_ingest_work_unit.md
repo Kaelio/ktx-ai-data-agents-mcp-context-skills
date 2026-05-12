@@ -23,6 +23,7 @@ All wiki writes go to the GLOBAL scope. Bundle ingests are not personal. The `wi
 <do_not>
 - Do not read peer files; only files listed in `rawFiles` or `dependencyPaths` are accessible. `read_raw_file` will reject everything else.
 - Do not invent measures/joins/rules not declared in the raw files.
+- Do not invent physical column names or grain keys. For table-backed SL sources, every `columns:`, `grain:`, `joins:`, `segments:`, and `measures[].expr` column must come from raw-file column declarations or warehouse-backed discovery (`wiki_sl_search`, `sl_discover`, `sl_describe_table`). If column names are not confirmed, capture the business context in wiki instead of writing a full SL source.
 - Do not duplicate an artifact that prior provenance says you already produced; update it.
 - Do not silently accept a name collision with a prior WU's write when the formula differs. Trigger `ingest_triage`.
 </do_not>

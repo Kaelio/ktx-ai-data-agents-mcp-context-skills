@@ -89,6 +89,39 @@ describe('local semantic-layer helpers', () => {
     await expect(validateLocalSlSource(ORDERS_YAML)).resolves.toEqual({ valid: true, errors: [] });
   });
 
+  it('validates table-backed sources against matching physical manifests when project context is provided', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml',
+      `tables:
+  int_active_contract_arr:
+    table: orbit_analytics.int_active_contract_arr
+    columns:
+      - { name: contract_id, type: string }
+      - { name: contract_arr_cents, type: number }
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add warehouse manifest',
+    );
+
+    const invalidDbtSource = [
+      'name: int_active_contract_arr',
+      'table: orbit_analytics.int_active_contract_arr',
+      'grain: [contract_id]',
+      'columns:',
+      '  - { name: contract_id, type: string }',
+      '  - { name: arr_cents, type: number }',
+      'measures:',
+      '  - { name: arr, expr: sum(arr_cents) }',
+      '',
+    ].join('\n');
+
+    const result = await validateLocalSlSource(invalidDbtSource, { project, connectionId: 'dbt-main' });
+    expect(result.valid).toBe(false);
+    expect(result.errors.join('\n')).toContain('arr_cents');
+    expect(result.errors.join('\n')).toContain('absent from physical table');
+  });
+
   it('lists and reads manifest-backed scan sources as queryable sources', async () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/_schema/public.yaml',
