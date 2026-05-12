@@ -48,4 +48,10 @@ describe('DbtSourceAdapter', () => {
   it('implements fetch() for git-backed dbt source setup', () => {
     expect(adapter.fetch).toBeTypeOf('function');
   });
+
+  it('reports mapped warehouse targets for bundle SL discovery', async () => {
+    adapter = new DbtSourceAdapter({ targetConnectionIds: ['postgres-warehouse', 'postgres-warehouse'] });
+
+    await expect(adapter.listTargetConnectionIds?.(stagedDir)).resolves.toEqual(['postgres-warehouse']);
+  });
 });

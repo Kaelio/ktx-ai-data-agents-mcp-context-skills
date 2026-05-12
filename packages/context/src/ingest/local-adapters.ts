@@ -76,7 +76,10 @@ export function createDefaultLocalIngestAdapters(
       }),
     }),
     new LookmlSourceAdapter({ homeDir: join(project.projectDir, '.ktx/cache') }),
-    new DbtSourceAdapter({ homeDir: join(project.projectDir, '.ktx/cache') }),
+    new DbtSourceAdapter({
+      homeDir: join(project.projectDir, '.ktx/cache'),
+      targetConnectionIds: primaryWarehouseConnectionIds(project),
+    }),
     createLocalMetabaseSourceAdapter(project),
     new LookerSourceAdapter({
       clientFactory: {
@@ -109,6 +112,21 @@ export function createDefaultLocalIngestAdapters(
   }
 
   return adapters;
+}
+
+function primaryWarehouseConnectionIds(project: KtxLocalProject): string[] {
+  const configuredPrimaryIds = project.config.setup?.database_connection_ids ?? [];
+  const configured = configuredPrimaryIds.filter((connectionId) =>
+    Boolean(localConnectionToWarehouseDescriptor(connectionId, project.config.connections[connectionId])),
+  );
+  if (configured.length > 0) {
+    return [...new Set(configured)];
+  }
+
+  return Object.entries(project.config.connections)
+    .filter(([connectionId, connection]) => Boolean(localConnectionToWarehouseDescriptor(connectionId, connection)))
+    .map(([connectionId]) => connectionId)
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

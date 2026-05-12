@@ -184,7 +184,11 @@ const makeDeps = () => {
       .mockImplementation((connectionId: string) =>
         Promise.resolve(connectionId === 'warehouse-2' ? ['looker__orders.yaml'] : []),
       ),
-    loadAllSources: vi.fn().mockResolvedValue([]),
+    loadAllSources: vi
+      .fn()
+      .mockImplementation((connectionId: string) =>
+        Promise.resolve(connectionId === 'warehouse-2' ? [{ name: 'looker__orders' }] : []),
+      ),
   };
   const slSearchService = {
     indexSources: vi.fn().mockResolvedValue(undefined),
@@ -1261,8 +1265,8 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       ([params]: any[]) => params.telemetryTags.operationName === 'ingest-bundle-wu',
     );
     expect(deps.adapter.listTargetConnectionIds).toHaveBeenCalledWith('/tmp/stage/upload-x');
-    expect(deps.semanticLayerService.listFilesForConnection).toHaveBeenCalledWith('looker-run');
-    expect(deps.semanticLayerService.listFilesForConnection).toHaveBeenCalledWith('warehouse-2');
+    expect(deps.semanticLayerService.loadAllSources).toHaveBeenCalledWith('looker-run');
+    expect(deps.semanticLayerService.loadAllSources).toHaveBeenCalledWith('warehouse-2');
     expect(workUnitCall?.[0].userPrompt).toContain('looker__orders');
     expect(deps.canonicalPins.listPins).toHaveBeenCalledWith(['looker-run', 'warehouse-2']);
   });
@@ -1554,6 +1558,36 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       '- revenue-recognition: Recognize revenue net of refunds after fulfillment.',
     );
     expect(deps.knowledgeIndex.listPagesForUser).toHaveBeenCalledWith('system');
+  });
+
+  it('includes manifest-backed target sources in WorkUnit prompts', async () => {
+    const deps = makeDeps();
+    deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['postgres-warehouse']);
+    deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
+      Promise.resolve(connectionId === 'postgres-warehouse' ? [{ name: 'stg_accounts' }] : []),
+    );
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['models/schema.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/dbt-main/dbt/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'dbt-main',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    const workUnitCall = deps.agentRunner.runLoop.mock.calls.find(
+      ([params]: any[]) => params.telemetryTags.operationName === 'ingest-bundle-wu',
+    );
+    expect(workUnitCall?.[0].userPrompt).toContain('## postgres-warehouse');
+    expect(workUnitCall?.[0].userPrompt).toContain('stg_accounts');
+    expect(deps.canonicalPins.listPins).toHaveBeenCalledWith(['dbt-main', 'postgres-warehouse']);
   });
 
   it('passes relevant canonical pins into the reconciliation system prompt', async () => {

@@ -259,12 +259,22 @@ export class IngestBundleRunner {
     const blocks = await Promise.all(
       connectionIds.map(async (connectionId) => {
         try {
-          const files = await this.deps.semanticLayerService.listFilesForConnection(connectionId);
-          const names = files.filter((f) => !f.startsWith('_schema/')).map((f) => f.replace(/\.yaml$/, ''));
+          const sources = await this.deps.semanticLayerService.loadAllSources(connectionId);
+          const names = sources.map((source) => source.name).sort((left, right) => left.localeCompare(right));
           const body = names.length > 0 ? names.join('\n') : '(no sources yet)';
           return `## ${connectionId}\n${body}`;
         } catch {
-          return `## ${connectionId}\n(empty)`;
+          try {
+            const files = await this.deps.semanticLayerService.listFilesForConnection(connectionId);
+            const names = files
+              .filter((f) => !f.startsWith('_schema/'))
+              .map((f) => f.replace(/\.yaml$/, ''))
+              .sort((left, right) => left.localeCompare(right));
+            const body = names.length > 0 ? names.join('\n') : '(no sources yet)';
+            return `## ${connectionId}\n${body}`;
+          } catch {
+            return `## ${connectionId}\n(empty)`;
+          }
         }
       }),
     );
