@@ -815,6 +815,44 @@ describe('runKtxIngest', () => {
     expect(runLocalIngest).toHaveBeenCalledWith(expect.objectContaining({ llmDebugRequestFile: debugFile }));
   });
 
+  it('supplies a scan-connector query executor to local ingest runs', async () => {
+    const io = makeIo();
+    const projectDir = join(tempDir, 'query-executor-project');
+    await writeWarehouseConfig(projectDir);
+    const queryExecutor = {
+      execute: vi.fn(async () => ({
+        headers: [],
+        rows: [],
+        totalRows: 0,
+        command: 'SELECT',
+        rowCount: 0,
+      })),
+    };
+    const runLocalIngest = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> =>
+      completedLocalBundleRun(input, 'query-executor-run'),
+    );
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          runLocalIngest,
+          createAdapters: () => [],
+          createQueryExecutor: () => queryExecutor,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runLocalIngest).toHaveBeenCalledWith(expect.objectContaining({ queryExecutor }));
+  });
+
   it('passes daemon database introspection URL to default local ingest adapters', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);

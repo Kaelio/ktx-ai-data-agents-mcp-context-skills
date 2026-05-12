@@ -16,7 +16,9 @@ import {
   runLocalMetabaseIngest,
   savedMemoryCountsForReport,
 } from '@ktx/context/ingest';
-import { loadKtxProject } from '@ktx/context/project';
+import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
+import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
 import { createCliOperationalLogger } from './io/logger.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
@@ -69,6 +71,7 @@ interface KtxIngestDeps {
   jobIdFactory?: () => string;
   now?: () => Date;
   createAdapters?: typeof createKtxCliLocalIngestAdapters;
+  createQueryExecutor?: (project: KtxLocalProject) => KtxSqlQueryExecutorPort;
   runLocalIngest?: typeof runLocalIngest;
   runLocalMetabaseIngest?: typeof runLocalMetabaseIngest;
   readReportFile?: typeof readIngestReportSnapshotFile;
@@ -530,6 +533,9 @@ export async function runKtxIngest(
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
         logger: operationalLogger,
       };
+      const queryExecutor =
+        localIngestOptions.queryExecutor ??
+        (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(project);
       if (args.adapter === 'metabase' && args.sourceDir) {
         throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
       }
@@ -542,6 +548,7 @@ export async function runKtxIngest(
           adapters: createAdapters(project, adapterOptions),
           metabaseConnectionId: args.connectionId,
           ...localIngestOptions,
+          queryExecutor,
           trigger: 'manual_resync',
           jobIdFactory: deps.jobIdFactory,
           ...(progress ? { progress } : {}),
@@ -602,6 +609,7 @@ export async function runKtxIngest(
           trigger: 'manual_resync',
           jobId,
           ...localIngestOptions,
+          queryExecutor,
           pullConfigOptions: adapterOptions,
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),
           ...(memoryFlow ? { memoryFlow } : {}),
