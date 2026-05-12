@@ -306,7 +306,7 @@ function createPlainIngestProgressRenderer(
     if (!hasPendingTransient) {
       return;
     }
-    io.stdout.write('\n');
+    io.stderr.write('\n');
     hasPendingTransient = false;
   };
 
@@ -315,12 +315,12 @@ function createPlainIngestProgressRenderer(
     lastPercent = nextPercent;
     const line = `[${nextPercent}%] ${message}`;
     if (options?.transient === true) {
-      io.stdout.write(`\r${line}\u001b[K`);
+      io.stderr.write(`\r${line}\u001b[K`);
       hasPendingTransient = true;
       return;
     }
     flush();
-    io.stdout.write(`${line}\n`);
+    io.stderr.write(`${line}\n`);
   };
 
   return {

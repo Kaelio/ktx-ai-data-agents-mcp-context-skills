@@ -1077,16 +1077,17 @@ describe('runKtxIngest', () => {
     ).resolves.toBe(0);
 
     const stdout = io.stdout();
-    expect(stdout).toContain('[5%] Fetching source files for warehouse/historic-sql');
-    expect(stdout).toContain('[15%] Fetched 3 source files from historic-sql');
-    expect(stdout).toContain('[45%] Planned 1 work unit');
-    expect(stdout).toContain('[80%] Processed 1/1 work units');
-    expect(stdout).toContain('[100%] Ingest completed');
+    const stderr = io.stderr();
+    expect(stderr).toContain('[5%] Fetching source files for warehouse/historic-sql');
+    expect(stderr).toContain('[15%] Fetched 3 source files from historic-sql');
+    expect(stderr).toContain('[45%] Planned 1 work unit');
+    expect(stderr).toContain('[80%] Processed 1/1 work units');
+    expect(stderr).toContain('[100%] Ingest completed');
     expect(stdout).toContain('Report: report-live-1');
-    expect(io.stderr()).toBe('');
+    expect(stdout).not.toContain('[5%]');
   });
 
-  it('writes plain TTY ingest progress and final report to stdout', async () => {
+  it('writes plain TTY ingest progress to stderr and final report to stdout', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);
     const sourceDir = join(tempDir, 'source');
@@ -1113,9 +1114,9 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('[5%] Fetching source files for warehouse/fake');
+    expect(io.stderr()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Report: report-live-1');
-    expect(io.stderr()).toBe('');
+    expect(io.stdout()).not.toContain('[5%]');
   });
 
   it('prints plain WorkUnit step progress during long-running local ingest', async () => {
@@ -1202,13 +1203,13 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    const stdout = io.stdout();
-    expect(stdout).toContain('[45%] Planned 2 work units');
-    expect(stdout).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
-    expect(stdout).toContain(
+    const stderr = io.stderr();
+    expect(stderr).toContain('[45%] Planned 2 work units');
+    expect(stderr).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
+    expect(stderr).toContain(
       '\r[58%] Processing work units: 0/2 complete, 1 active; latest historic-sql-table-public-orders step 7/40\u001b[K',
     );
-    expect(stdout).toContain('[68%] Processed 1/2 work units');
+    expect(stderr).toContain('[68%] Processed 1/2 work units');
   });
 
   it('renders concurrent WorkUnit step progress as transient aggregate status', async () => {
@@ -1294,14 +1295,14 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    const stdout = io.stdout();
-    expect(stdout).toContain(
+    const stderr = io.stderr();
+    expect(stderr).toContain(
       '\r[56%] Processing work units: 0/6 complete, 6 active; latest historic-sql-table-public-suppliers step 1/40\u001b[K',
     );
-    expect(stdout).not.toContain(
+    expect(stderr).not.toContain(
       '\n[56%] Processing 6/6 work units: historic-sql-table-public-suppliers step 1/40\n',
     );
-    expect(stdout).toContain('\n[100%] Ingest completed\n');
+    expect(stderr).toContain('\n[100%] Ingest completed\n');
   });
 
   it('passes local Looker pull-config options and agent runner into scheduled ingest for Looker scheduled ingest', async () => {
