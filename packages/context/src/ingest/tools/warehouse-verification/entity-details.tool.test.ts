@@ -143,6 +143,36 @@ describe('EntityDetailsTool', () => {
     expect(result.structured.missing).toHaveLength(1);
   });
 
+  it('reports missing structured table targets in model-visible markdown', async () => {
+    const result = await tool.call(
+      {
+        connectionName: 'warehouse',
+        targets: [{ catalog: null, db: 'public', name: 'orderz' }],
+      },
+      context,
+    );
+
+    expect(result.markdown).toContain('Not found in scan: public.orderz');
+    expect(result.markdown).toContain('Closest matches: orders');
+    expect(result.structured.resolved).toHaveLength(0);
+    expect(result.structured.missing).toHaveLength(1);
+  });
+
+  it('reports missing structured column targets in model-visible markdown', async () => {
+    const result = await tool.call(
+      {
+        connectionName: 'warehouse',
+        targets: [{ catalog: null, db: 'public', name: 'orders', column: 'plan_tier' }],
+      },
+      context,
+    );
+
+    expect(result.markdown).toContain('Column not found in scan: public.orders.plan_tier');
+    expect(result.markdown).toContain('Available columns: id, status');
+    expect(result.structured.resolved).toHaveLength(0);
+    expect(result.structured.missing).toHaveLength(1);
+  });
+
   it('returns a no-scan state distinct from not found', async () => {
     const result = await tool.call(
       { connectionName: 'empty', targets: [{ display: 'public.orders' }] },

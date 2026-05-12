@@ -19,6 +19,7 @@ const entityDetailsInputSchema = z.object({
 });
 
 type EntityDetailsInput = z.infer<typeof entityDetailsInputSchema>;
+type EntityDetailsTarget = EntityDetailsInput['targets'][number];
 
 export interface EntityDetailsStructured {
   resolved: TableDetail[];
@@ -28,6 +29,41 @@ export interface EntityDetailsStructured {
 
 function allowedConnectionNames(context: ToolContext): ReadonlySet<string> | null {
   return context.session?.allowedConnectionNames ?? null;
+}
+
+function targetLabel(target: EntityDetailsTarget): string {
+  if ('display' in target) {
+    return target.display;
+  }
+  return [target.catalog, target.db, target.name, target.column].filter((part): part is string => !!part).join('.');
+}
+
+function appendMissingTargetMarkdown(parts: string[], target: EntityDetailsTarget, candidates: KtxTableRef[]): void {
+  parts.push(`Not found in scan: ${targetLabel(target)}`);
+  if (candidates.length > 0) {
+    parts.push(`Closest matches: ${candidates.map((candidate) => candidate.name).join(', ')}`);
+  }
+}
+
+async function resolveTarget(
+  catalog: WarehouseCatalogService,
+  connectionName: string,
+  target: EntityDetailsTarget,
+): Promise<{ resolved: (KtxTableRef & { column?: string }) | null; candidates: KtxTableRef[] }> {
+  if ('display' in target) {
+    return catalog.resolveDisplayTarget(connectionName, target.display);
+  }
+
+  const candidateResolution = await catalog.resolveDisplayTarget(connectionName, targetLabel(target));
+  return {
+    resolved: {
+      catalog: target.catalog,
+      db: target.db,
+      name: target.name,
+      column: target.column,
+    },
+    candidates: candidateResolution.candidates,
+  };
 }
 
 function sampleText(values: string[]): string {
@@ -92,25 +128,16 @@ export class EntityDetailsTool extends BaseTool<typeof entityDetailsInputSchema>
     const missing: EntityDetailsStructured['missing'] = [];
 
     for (const target of input.targets) {
-      const resolution =
-        'display' in target
-          ? await catalog.resolveDisplayTarget(input.connectionName, target.display)
-          : {
-              resolved: { catalog: target.catalog, db: target.db, name: target.name, column: target.column },
-              candidates: [],
-              dialect: '',
-            };
+      const resolution = await resolveTarget(catalog, input.connectionName, target);
       if (!resolution.resolved) {
         missing.push({ target, candidates: resolution.candidates });
-        parts.push(`Not found in scan: ${'display' in target ? target.display : target.name}`);
-        if (resolution.candidates.length > 0) {
-          parts.push(`Closest matches: ${resolution.candidates.map((candidate) => candidate.name).join(', ')}`);
-        }
+        appendMissingTargetMarkdown(parts, target, resolution.candidates);
         continue;
       }
       const detail = await catalog.getTable({ connectionName: input.connectionName, ...resolution.resolved });
       if (!detail) {
         missing.push({ target, candidates: resolution.candidates });
+        appendMissingTargetMarkdown(parts, target, resolution.candidates);
         continue;
       }
       const requestedColumn = resolution.resolved.column;
