@@ -20,6 +20,11 @@ describe('WarehouseCatalogService', () => {
 
   async function seedLiveDatabaseScan(connectionName = 'warehouse', syncId = 'sync-2', driver = 'postgres') {
     const root = `raw-sources/${connectionName}/live-database/${syncId}`;
+    const tableRef = {
+      catalog: driver === 'bigquery' ? 'analytics' : null,
+      db: driver === 'sqlite' ? null : 'public',
+      name: 'orders',
+    };
     await project.fileStore.writeFile(
       `${root}/connection.json`,
       JSON.stringify({ connectionId: connectionName, driver, extractedAt: '2026-05-12T00:00:00.000Z' }, null, 2),
@@ -31,9 +36,9 @@ describe('WarehouseCatalogService', () => {
       `${root}/tables/orders.json`,
       JSON.stringify(
         {
-          catalog: null,
-          db: driver === 'sqlite' ? null : 'public',
-          name: 'orders',
+          catalog: tableRef.catalog,
+          db: tableRef.db,
+          name: tableRef.name,
           kind: 'table',
           comment: 'Customer orders',
           estimatedRows: 12,
@@ -74,10 +79,10 @@ describe('WarehouseCatalogService', () => {
           driver,
           sqlAvailable: true,
           queryCount: 3,
-          tables: [{ table: { catalog: null, db: driver === 'sqlite' ? null : 'public', name: 'orders' }, rowCount: 12 }],
+          tables: [{ table: { catalog: tableRef.catalog, db: tableRef.db, name: tableRef.name }, rowCount: 12 }],
           columns: {
             'orders.status': {
-              table: { catalog: null, db: driver === 'sqlite' ? null : 'public', name: 'orders' },
+              table: { catalog: tableRef.catalog, db: tableRef.db, name: tableRef.name },
               column: 'status',
               nativeType: 'text',
               normalizedType: 'text',
@@ -148,6 +153,28 @@ describe('WarehouseCatalogService', () => {
 
     await expect(catalog.resolveDisplay('warehouse', 'public.orders')).resolves.toMatchObject({
       resolved: null,
+      dialect: 'bigquery',
+    });
+  });
+
+  it('resolves postgres column display strings without treating the column as a table', async () => {
+    await seedLiveDatabaseScan();
+    const catalog = new WarehouseCatalogService({ fileStore: project.fileStore });
+
+    await expect(catalog.resolveDisplayTarget('warehouse', 'public.orders.status')).resolves.toMatchObject({
+      resolved: { catalog: null, db: 'public', name: 'orders', column: 'status' },
+      candidates: [],
+      dialect: 'postgres',
+    });
+  });
+
+  it('resolves BigQuery column display strings with four parts', async () => {
+    await seedLiveDatabaseScan('warehouse', 'sync-bigquery', 'bigquery');
+    const catalog = new WarehouseCatalogService({ fileStore: project.fileStore });
+
+    await expect(catalog.resolveDisplayTarget('warehouse', 'analytics.public.orders.status')).resolves.toMatchObject({
+      resolved: { catalog: 'analytics', db: 'public', name: 'orders', column: 'status' },
+      candidates: [],
       dialect: 'bigquery',
     });
   });

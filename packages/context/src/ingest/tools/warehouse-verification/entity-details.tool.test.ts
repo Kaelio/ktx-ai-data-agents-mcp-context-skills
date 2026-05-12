@@ -118,6 +118,31 @@ describe('EntityDetailsTool', () => {
     expect(result.structured.resolved).toHaveLength(1);
   });
 
+  it('resolves display targets that include a column name', async () => {
+    const result = await tool.call(
+      { connectionName: 'warehouse', targets: [{ display: 'public.orders.status' }] },
+      context,
+    );
+
+    expect(result.markdown).toContain('### public.orders');
+    expect(result.markdown).toContain('- status (text, nullable=false)');
+    expect(result.markdown).not.toContain('- id (integer');
+    expect(result.structured.resolved).toHaveLength(1);
+    expect(result.structured.resolved[0]?.columns.map((column) => column.name)).toEqual(['status']);
+  });
+
+  it('reports missing explicit columns instead of returning an empty column list', async () => {
+    const result = await tool.call(
+      { connectionName: 'warehouse', targets: [{ display: 'public.orders.plan_tier' }] },
+      context,
+    );
+
+    expect(result.markdown).toContain('Column not found in scan: public.orders.plan_tier');
+    expect(result.markdown).toContain('Available columns: id, status');
+    expect(result.structured.resolved).toHaveLength(0);
+    expect(result.structured.missing).toHaveLength(1);
+  });
+
   it('returns a no-scan state distinct from not found', async () => {
     const result = await tool.call(
       { connectionName: 'empty', targets: [{ display: 'public.orders' }] },

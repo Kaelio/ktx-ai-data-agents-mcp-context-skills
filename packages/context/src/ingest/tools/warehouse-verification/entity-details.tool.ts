@@ -49,6 +49,11 @@ function appendTableMarkdown(parts: string[], detail: TableDetail, columnName?: 
   parts.push('');
 }
 
+function findColumn(detail: TableDetail, columnName: string): TableDetail['columns'][number] | null {
+  const normalized = columnName.toLowerCase();
+  return detail.columns.find((column) => column.name.toLowerCase() === normalized) ?? null;
+}
+
 export class EntityDetailsTool extends BaseTool<typeof entityDetailsInputSchema> {
   readonly name = 'entity_details';
 
@@ -89,8 +94,12 @@ export class EntityDetailsTool extends BaseTool<typeof entityDetailsInputSchema>
     for (const target of input.targets) {
       const resolution =
         'display' in target
-          ? await catalog.resolveDisplay(input.connectionName, target.display)
-          : { resolved: { catalog: target.catalog, db: target.db, name: target.name }, candidates: [], dialect: '' };
+          ? await catalog.resolveDisplayTarget(input.connectionName, target.display)
+          : {
+              resolved: { catalog: target.catalog, db: target.db, name: target.name, column: target.column },
+              candidates: [],
+              dialect: '',
+            };
       if (!resolution.resolved) {
         missing.push({ target, candidates: resolution.candidates });
         parts.push(`Not found in scan: ${'display' in target ? target.display : target.name}`);
@@ -104,8 +113,26 @@ export class EntityDetailsTool extends BaseTool<typeof entityDetailsInputSchema>
         missing.push({ target, candidates: resolution.candidates });
         continue;
       }
+      const requestedColumn = resolution.resolved.column;
+      if (requestedColumn) {
+        const column = findColumn(detail, requestedColumn);
+        if (!column) {
+          missing.push({
+            target,
+            candidates: [{ catalog: detail.catalog, db: detail.db, name: detail.name }],
+          });
+          parts.push(`Column not found in scan: ${detail.display}.${requestedColumn}`);
+          parts.push(`Available columns: ${detail.columns.map((candidate) => candidate.name).join(', ')}`);
+          continue;
+        }
+        const scopedDetail = { ...detail, columns: [column] };
+        resolved.push(scopedDetail);
+        appendTableMarkdown(parts, scopedDetail, column.name);
+        continue;
+      }
+
       resolved.push(detail);
-      appendTableMarkdown(parts, detail, 'column' in target ? target.column : undefined);
+      appendTableMarkdown(parts, detail);
     }
 
     return {

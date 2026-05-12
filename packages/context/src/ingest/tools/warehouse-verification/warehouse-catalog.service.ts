@@ -41,6 +41,12 @@ export type RawSchemaHit =
   | { kind: 'table'; ref: KtxTableRef; display: string; matchedOn: 'name' | 'db' | 'comment' | 'description' }
   | { kind: 'column'; ref: KtxTableRef & { column: string }; display: string; matchedOn: 'name' | 'comment' | 'description' };
 
+export interface DisplayTargetResolution {
+  resolved: (KtxTableRef & { column?: string }) | null;
+  candidates: KtxTableRef[];
+  dialect: string;
+}
+
 interface ConnectionArtifact {
   driver?: CatalogDriver;
 }
@@ -136,6 +142,30 @@ function parseDisplay(driver: CatalogDriver, display: string): KtxTableRef | nul
     return { catalog: parts[0]!, db: parts[1]!, name: parts[2]! };
   }
   return parts.length === 1 ? { catalog: null, db: null, name: parts[0]! } : null;
+}
+
+function expectedDisplayPartCount(driver: CatalogDriver): number {
+  if (driver === 'sqlite' || driver === 'sqlite3') {
+    return 1;
+  }
+  if (driver === 'bigquery' || driver === 'snowflake' || driver === 'sqlserver') {
+    return 3;
+  }
+  return 2;
+}
+
+function parseColumnDisplay(driver: CatalogDriver, display: string): (KtxTableRef & { column: string }) | null {
+  const parts = splitDisplay(display);
+  const tablePartCount = expectedDisplayPartCount(driver);
+  if (parts.length !== tablePartCount + 1) {
+    return null;
+  }
+  const column = parts.at(-1);
+  if (!column) {
+    return null;
+  }
+  const table = parseDisplay(driver, parts.slice(0, -1).join('.'));
+  return table ? { ...table, column } : null;
 }
 
 function bestCandidates(tables: KtxSchemaTable[], display: string, limit = 5): KtxTableRef[] {
@@ -293,6 +323,40 @@ export class WarehouseCatalogService {
       return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect };
     }
     return { resolved: { catalog: table.catalog, db: table.db, name: table.name }, candidates: [], dialect };
+  }
+
+  async resolveDisplayTarget(connectionName: string, display: string): Promise<DisplayTargetResolution> {
+    const catalog = await this.loadCatalog(connectionName);
+    if (!catalog) {
+      return { resolved: null, candidates: [], dialect: 'unknown' };
+    }
+
+    const dialect = getDialectForDriver(catalog.driver).type;
+    const tableResolution = await this.resolveDisplay(connectionName, display);
+    if (tableResolution.resolved) {
+      return tableResolution;
+    }
+
+    const parsedColumn = parseColumnDisplay(catalog.driver, display);
+    if (!parsedColumn) {
+      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect };
+    }
+
+    const table = catalog.tables.find((candidate) => refsEqual(candidate, parsedColumn));
+    if (!table) {
+      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect };
+    }
+
+    return {
+      resolved: {
+        catalog: table.catalog,
+        db: table.db,
+        name: table.name,
+        column: parsedColumn.column,
+      },
+      candidates: [],
+      dialect,
+    };
   }
 
   async searchByName(connectionName: string, query: string, limit: number): Promise<RawSchemaHit[]> {
