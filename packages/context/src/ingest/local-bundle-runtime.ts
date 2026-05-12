@@ -6,7 +6,7 @@ import type { Tool } from 'ai';
 import YAML from 'yaml';
 import type { AgentRunnerService } from '../agent/index.js';
 import { AgentRunnerService as DefaultAgentRunnerService } from '../agent/index.js';
-import { localConnectionInfoFromConfig } from '../connections/index.js';
+import { localConnectionInfoFromConfig, type KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
 import { noopLogger, SessionWorktreeService } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
@@ -104,7 +104,7 @@ export interface CreateLocalBundleIngestRuntimeOptions {
   llmDebugRequestFile?: string;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
-  queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
+  queryExecutor?: KtxSqlQueryExecutorPort;
   jobIdFactory?: () => string;
   logger?: KtxLogger;
 }
@@ -170,9 +170,7 @@ class LocalAuthorResolver implements GitAuthorResolverPort {
 class LocalConnectionCatalog implements SlConnectionCatalogPort {
   constructor(
     private readonly project: KtxLocalProject,
-    private readonly queryExecutor?: {
-      execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult>;
-    },
+    private readonly queryExecutor?: KtxSqlQueryExecutorPort,
   ) {}
 
   async listEnabledConnections(ids: string[]): Promise<KtxConnectionInfo[]> {
@@ -193,7 +191,12 @@ class LocalConnectionCatalog implements SlConnectionCatalogPort {
     if (!this.queryExecutor) {
       throw new Error('Local ingest has no query executor configured');
     }
-    return this.queryExecutor.execute({ connectionId, sql });
+    return this.queryExecutor.execute({
+      connectionId,
+      projectDir: this.project.projectDir,
+      connection: this.project.config.connections[connectionId],
+      sql,
+    });
   }
 }
 
