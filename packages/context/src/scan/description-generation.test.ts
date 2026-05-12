@@ -51,6 +51,29 @@ function createLlmProvider(text = 'generated description') {
   } as any;
 }
 
+function createFailingLlmProvider(message = 'timeout exceeded when trying to connect') {
+  vi.mocked(generateText).mockRejectedValue(new Error(message) as never);
+  return {
+    getModel: vi.fn().mockReturnValue({ modelId: 'claude-sonnet-4-6', provider: 'anthropic' }),
+    getModelByName: vi.fn(),
+    cacheMarker: vi.fn(),
+    repairToolCallHandler: vi.fn(),
+    thinkingProviderOptions: vi.fn(),
+    telemetryConfig: vi.fn(),
+    promptCachingConfig: vi.fn(() => ({
+      enabled: false,
+      systemTtl: '1h',
+      toolsTtl: '1h',
+      historyTtl: '5m',
+      cacheSystem: true,
+      cacheTools: true,
+      cacheHistory: true,
+      vertexFallbackTo5m: false,
+    })),
+    activeBackend: vi.fn(() => 'anthropic'),
+  } as any;
+}
+
 function createConnector(): KtxScanConnector {
   return {
     id: 'test-connector',
@@ -272,6 +295,51 @@ describe('KtxDescriptionGenerator', () => {
       { runId: 'run-1' },
     );
     expect('introspect' in sampler).toBe(false);
+  });
+
+  it('does not turn LLM failures into generated descriptions', async () => {
+    const cache = createCache();
+    const connector = createConnector();
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createFailingLlmProvider(),
+      cache,
+      settings: {
+        columnMaxWords: 12,
+        tableMaxWords: 18,
+        dataSourceMaxWords: 24,
+      },
+    });
+
+    const columnResult = await generator.generateColumnDescriptions({
+      connectionId: 'conn-1',
+      connector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      supportsNestedAnalysis: false,
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        columns: [{ name: 'status' }],
+      },
+    });
+
+    await expect(
+      generator.generateTableDescription({
+        connectionId: 'conn-1',
+        connector,
+        context: { runId: 'run-1' },
+        dataSourceType: 'POSTGRESQL',
+        table: { catalog: null, db: 'public', name: 'orders' },
+      }),
+    ).resolves.toBeNull();
+
+    expect(columnResult).toEqual({
+      columnDescriptions: [['status', null]],
+      processedColumns: [],
+      skippedColumns: [],
+    });
+    expect(cache.set).not.toHaveBeenCalled();
   });
 
   it('generates and caches table and data-source descriptions', async () => {
