@@ -91,4 +91,12 @@ describe('ingest runtime assets', () => {
     expect(body).toContain('cross-table');
     expect(body).not.toMatch(forbiddenProductPattern());
   });
+
+  it('packages identifier verification prompt assets', async () => {
+    const shared = await readFile(join(skillsDir, '_shared', 'identifier-verification.md'), 'utf-8');
+    expect(shared).toContain('## Identifier Verification Protocol');
+    expect(shared).toContain('discover_data');
+    expect(shared).toContain('entity_details');
+    expect(shared).toContain('sql_execution');
+  });
 });

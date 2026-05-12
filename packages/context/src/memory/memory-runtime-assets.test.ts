@@ -23,6 +23,19 @@ const expectedAdapterSkillHeadings: Record<string, string> = {
   metabase_ingest: '# Metabase to KTX Semantic Layer',
   metricflow_ingest: '# MetricFlow to KTX Semantic Layer',
 };
+const verificationWriterSkills = [
+  'notion_synthesize',
+  'dbt_ingest',
+  'lookml_ingest',
+  'looker_ingest',
+  'metabase_ingest',
+  'metricflow_ingest',
+  'live_database_ingest',
+  'historic_sql_table_digest',
+  'historic_sql_patterns',
+  'knowledge_capture',
+  'sl_capture',
+] as const;
 
 function forbiddenProductPattern() {
   return new RegExp([['Kae', 'lio'].join(''), ['kae', 'lio'].join(''), ['KAE', 'LIO_'].join('')].join('|'));
@@ -116,5 +129,22 @@ describe('memory runtime assets', () => {
     expect(body).toContain('lookml_connection_mismatch');
     expect(body).toContain('Do not call `sl_write_source` or `sl_edit_source`');
     expect(body).toContain('LookML writes target the run connection directly');
+  });
+
+  it('ships identifier verification protocol in every synthesis writer skill', async () => {
+    for (const skillName of verificationWriterSkills) {
+      const body = await readFile(join(skillsDir, skillName, 'SKILL.md'), 'utf-8');
+      expect(body).toContain('## Identifier Verification Protocol');
+      expect(body).toMatch(/discover_data|entity_details/);
+    }
+  });
+
+  it('does not ship stale warehouse verification tool names or fictional identifiers', async () => {
+    for (const skillName of verificationWriterSkills) {
+      const body = await readFile(join(skillsDir, skillName, 'SKILL.md'), 'utf-8');
+      expect(body).not.toContain('orbit_analytics.customer');
+      expect(body).not.toContain('wiki_sl_search');
+      expect(body).not.toContain('sl_describe_table');
+    }
   });
 });
