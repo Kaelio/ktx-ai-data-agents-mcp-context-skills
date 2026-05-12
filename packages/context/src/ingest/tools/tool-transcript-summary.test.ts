@@ -107,6 +107,30 @@ describe('tool transcript summaries', () => {
       summary,
       entry({
         toolName: 'emit_unmapped_fallback',
+        input: { rawPath: 'models/schema.yml', reason: 'no_physical_table', tableRef: 'stg_accounts', fallback: 'wiki_only' },
+        output: 'recorded unmapped fallback for models/schema.yml (wiki_only)',
+      }),
+    );
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(0);
+  });
+
+  it('treats an untargeted unmapped fallback as recovery when there is only one pending SL failure', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'sl_write_source',
+        input: { connectionId: 'dbt-main', sourceName: 'stg_accounts' },
+        output: { structured: { success: false, sourceName: 'stg_accounts' } },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'emit_unmapped_fallback',
         input: { rawPath: 'models/schema.yml', reason: 'no_physical_table', fallback: 'wiki_only' },
         output: 'recorded unmapped fallback for models/schema.yml (wiki_only)',
       }),
@@ -114,6 +138,38 @@ describe('tool transcript summaries', () => {
 
     expect(summary.errorCount).toBe(1);
     expect(summary.fatalErrorCount).toBe(0);
+  });
+
+  it('keeps unrelated SL write failures fatal when one source gets an unmapped fallback', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'sl_write_source',
+        input: { connectionId: 'dbt-main', sourceName: 'stg_accounts' },
+        output: { structured: { success: false, sourceName: 'stg_accounts' } },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'sl_write_source',
+        input: { connectionId: 'dbt-main', sourceName: 'stg_orders' },
+        output: { structured: { success: false, sourceName: 'stg_orders' } },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'emit_unmapped_fallback',
+        input: { rawPath: 'models/schema.yml', reason: 'no_physical_table', tableRef: 'stg_accounts', fallback: 'wiki_only' },
+        output: 'recorded unmapped fallback for models/schema.yml (wiki_only)',
+      }),
+    );
+
+    expect(summary.errorCount).toBe(2);
+    expect(summary.fatalErrorCount).toBe(1);
   });
 
   it('keeps thrown tool errors fatal even after a successful write', () => {

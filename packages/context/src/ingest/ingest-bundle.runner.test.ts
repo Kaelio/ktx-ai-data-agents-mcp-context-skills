@@ -1590,6 +1590,19 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(deps.canonicalPins.listPins).toHaveBeenCalledWith(['dbt-main', 'postgres-warehouse']);
   });
 
+  it('does not resolve qualified fallback table refs by source name alone', async () => {
+    const deps = makeDeps();
+    deps.semanticLayerService.loadAllSources.mockResolvedValue([{ name: 'orders', table: 'sales.orders' }]);
+    const runner = buildRunner(deps);
+
+    await expect(
+      (runner as any).tableRefExistsInSemanticLayer(deps.semanticLayerService, ['warehouse'], 'finance.orders'),
+    ).resolves.toBe(false);
+    await expect(
+      (runner as any).tableRefExistsInSemanticLayer(deps.semanticLayerService, ['warehouse'], 'sales.orders'),
+    ).resolves.toBe(true);
+  });
+
   it('passes relevant canonical pins into the reconciliation system prompt', async () => {
     const deps = makeDeps();
     deps.diffSetService.compute.mockResolvedValue({

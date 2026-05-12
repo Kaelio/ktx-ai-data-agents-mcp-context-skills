@@ -51,8 +51,13 @@ export function recordToolTranscriptEntry(summary: MutableToolTranscriptSummary,
     summary.recoverableFailureCounts.delete(recoveryKey);
   }
   if (entry.toolName === 'emit_unmapped_fallback') {
-    for (const key of [...summary.recoverableFailureCounts.keys()]) {
-      if (key.startsWith('sl:')) {
+    const fallbackTarget = fallbackSlTargetKey(entry);
+    const pendingSlKeys = [...summary.recoverableFailureCounts.keys()].filter((key) => key.startsWith('sl:'));
+    for (const key of pendingSlKeys) {
+      if (
+        (fallbackTarget && slFailureKeyMatchesFallback(key, fallbackTarget)) ||
+        (!fallbackTarget && pendingSlKeys.length === 1)
+      ) {
         summary.recoverableFailureCounts.delete(key);
       }
     }
@@ -118,6 +123,49 @@ function slTargetKey(entry: ToolCallLogEntry): string | null {
   }
   const connectionId = stringField(entry.input, 'connectionId') ?? '';
   return `sl:${connectionId}:${sourceName}`;
+}
+
+function fallbackSlTargetKey(entry: ToolCallLogEntry): { connectionId?: string; sourceName: string } | null {
+  const tableRef = stringField(entry.input, 'tableRef');
+  if (!tableRef) {
+    return null;
+  }
+  const sourceName = finalReferenceSegment(tableRef);
+  if (!sourceName) {
+    return null;
+  }
+  const connectionId = stringField(entry.input, 'connectionId');
+  return {
+    sourceName,
+    ...(connectionId ? { connectionId } : {}),
+  };
+}
+
+function slFailureKeyMatchesFallback(
+  failureKey: string,
+  fallback: { connectionId?: string; sourceName: string },
+): boolean {
+  const match = /^sl:([^:]*):(.*)$/.exec(failureKey);
+  if (!match) {
+    return false;
+  }
+  const [, connectionId, sourceName] = match;
+  if (fallback.connectionId && connectionId !== fallback.connectionId) {
+    return false;
+  }
+  return normalizeReferenceSegment(sourceName ?? '') === normalizeReferenceSegment(fallback.sourceName);
+}
+
+function finalReferenceSegment(value: string): string {
+  const normalized = value
+    .trim()
+    .replace(/["`]/g, '')
+    .replace(/[\[\]]/g, '');
+  return normalized.split('.').filter(Boolean).at(-1) ?? '';
+}
+
+function normalizeReferenceSegment(value: string): string {
+  return finalReferenceSegment(value).toLowerCase();
 }
 
 function recordField(value: unknown, field: string): Record<string, unknown> | null {

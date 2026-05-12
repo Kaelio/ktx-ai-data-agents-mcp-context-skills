@@ -105,18 +105,17 @@ function semanticSourceMatchesTableRef(source: SemanticLayerSource, tableRef: st
     return false;
   }
 
+  const refIsQualified = normalizedRef.includes('.');
   const normalizedSourceName = normalizeTableReference(source.name);
   if (normalizedSourceName === normalizedRef) {
     return true;
   }
 
   const table = typeof source.table === 'string' ? normalizeTableReference(source.table) : '';
-  if (table && table === normalizedRef) {
+  if (table && (table === normalizedRef || table.endsWith(`.${normalizedRef}`))) {
     return true;
   }
-
-  const refIsQualified = normalizedRef.includes('.');
-  if (refIsQualified && normalizedSourceName === finalReferenceSegment(normalizedRef)) {
+  if (!refIsQualified && table && finalReferenceSegment(table) === normalizedRef) {
     return true;
   }
 
