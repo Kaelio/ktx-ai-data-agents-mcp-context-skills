@@ -36,6 +36,7 @@ describe('DiscoverDataTool', () => {
     catalog.searchByName.mockResolvedValue([
       {
         kind: 'table',
+        connectionName: 'warehouse',
         ref: { catalog: null, db: 'public', name: 'orders' },
         display: 'public.orders',
         matchedOn: 'name',
@@ -53,6 +54,33 @@ describe('DiscoverDataTool', () => {
     expect(result.markdown).toContain('## Raw Warehouse Schema');
     expect(result.markdown).toContain('use `entity_details({connectionName, targets: [{display}]})`');
     expect(result.structured.raw?.hits).toHaveLength(1);
+  });
+
+  it('includes connectionName on raw schema hits so entity_details can follow up', async () => {
+    const multiConnectionContext: ToolContext = {
+      ...context,
+      session: { allowedConnectionNames: new Set(['warehouse', 'analytics']) } as any,
+    };
+    catalog.searchByName.mockImplementation(async (connectionName: string, query: string) => [
+      {
+        kind: 'table',
+        connectionName,
+        ref: { catalog: null, db: 'public', name: `${connectionName}_${query}` },
+        display: `public.${connectionName}_${query}`,
+        matchedOn: 'name',
+      },
+    ]);
+
+    const result = await tool.call({ query: 'orders', limit: 10 }, multiConnectionContext);
+
+    expect(catalog.searchByName).toHaveBeenCalledWith('analytics', 'orders', 10);
+    expect(catalog.searchByName).toHaveBeenCalledWith('warehouse', 'orders', 10);
+    expect(result.markdown).toContain('connectionName=analytics');
+    expect(result.markdown).toContain('connectionName=warehouse');
+    expect(result.markdown).toContain(
+      'entity_details({connectionName: "analytics", targets: [{display: "public.analytics_orders"}]})',
+    );
+    expect(result.structured.raw?.hits.map((hit) => hit.connectionName)).toEqual(['analytics', 'warehouse']);
   });
 
   it('refuses explicit out-of-scope connection names', async () => {

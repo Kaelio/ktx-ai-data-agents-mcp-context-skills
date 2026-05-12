@@ -113,11 +113,18 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
       rawHits.push(...(await catalog.searchByName(connectionName, query, limit)));
     }
     if (rawHits.length > 0) {
-      parts.push('## Raw Warehouse Schema', '> use `entity_details({connectionName, targets: [{display}]})` for full DDL + sample values');
+      parts.push(
+        '## Raw Warehouse Schema',
+        '> use `entity_details({connectionName, targets: [{display}]})` for full DDL + sample values',
+      );
       parts.push(
         rawHits
           .slice(0, limit)
-          .map((hit) => `- ${hit.kind}: ${hit.display} (matched on ${hit.matchedOn})`)
+          .map(
+            (hit) =>
+              `- ${hit.kind}: ${hit.display} [connectionName=${hit.connectionName}] (matched on ${hit.matchedOn}) - ` +
+              `follow up with \`entity_details({connectionName: "${hit.connectionName}", targets: [{display: "${hit.display}"}]})\``,
+          )
           .join('\n'),
       );
       raw = { hits: rawHits.slice(0, limit) };

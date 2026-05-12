@@ -38,8 +38,20 @@ export interface TableDetail {
 }
 
 export type RawSchemaHit =
-  | { kind: 'table'; ref: KtxTableRef; display: string; matchedOn: 'name' | 'db' | 'comment' | 'description' }
-  | { kind: 'column'; ref: KtxTableRef & { column: string }; display: string; matchedOn: 'name' | 'comment' | 'description' };
+  | {
+      kind: 'table';
+      connectionName: string;
+      ref: KtxTableRef;
+      display: string;
+      matchedOn: 'name' | 'db' | 'comment' | 'description';
+    }
+  | {
+      kind: 'column';
+      connectionName: string;
+      ref: KtxTableRef & { column: string };
+      display: string;
+      matchedOn: 'name' | 'comment' | 'description';
+    };
 
 export interface DisplayTargetResolution {
   resolved: (KtxTableRef & { column?: string }) | null;
@@ -370,6 +382,7 @@ export class WarehouseCatalogService {
       if (tableMatch) {
         hits.push({
           kind: 'table',
+          connectionName,
           ref: { catalog: table.catalog, db: table.db, name: table.name },
           display: formatDisplay(catalog.driver, table),
           matchedOn: tableMatch,
@@ -382,6 +395,7 @@ export class WarehouseCatalogService {
         }
         hits.push({
           kind: 'column',
+          connectionName,
           ref: { catalog: table.catalog, db: table.db, name: table.name, column: column.name },
           display: `${formatDisplay(catalog.driver, table)}.${column.name}`,
           matchedOn: columnMatch,
