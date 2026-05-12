@@ -5,7 +5,7 @@ description: "Run the MCP stdio server."
 
 Start a Model Context Protocol (MCP) server that exposes your KTX project's context to coding agents. The server runs over stdio and provides tools for querying semantic sources, searching knowledge, managing connections, and running ingests.
 
-## Usage
+## Command signature
 
 ```bash
 ktx serve --mcp stdio [options]
@@ -49,3 +49,26 @@ ktx serve --mcp stdio --project-dir /path/to/my-project
 ## Agent integration
 
 The MCP server is typically configured through `ktx setup --agents` rather than started manually. See the [Serving Agents](/docs/guides/serving-agents) guide and [Agent Clients](/docs/integrations/agent-clients) integration page for per-tool configuration.
+
+## Output
+
+`ktx serve --mcp stdio` communicates through MCP messages on stdio. It is meant to be launched by an agent client, not read directly by a human terminal session.
+
+```json
+{
+  "command": "ktx",
+  "args": ["serve", "--mcp", "stdio", "--semantic-compute", "--execute-queries"],
+  "env": {
+    "KTX_PROJECT_DIR": "/home/user/analytics"
+  }
+}
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Agent cannot start server | The agent config cannot find the `ktx` binary | Run `pnpm run link:dev` or use an absolute command path in the agent config |
+| Semantic tools are unavailable | Server was started without `--semantic-compute` | Add `--semantic-compute` or `--semantic-compute-url` to the server args |
+| Query execution is denied | Server was started without `--execute-queries` | Add `--execute-queries` only for trusted projects where read-only execution is intended |
+| Context resolves to wrong project | `KTX_PROJECT_DIR` is missing or points elsewhere | Set `KTX_PROJECT_DIR` to the project containing the intended `ktx.yaml` |

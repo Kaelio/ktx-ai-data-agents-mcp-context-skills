@@ -1,0 +1,29 @@
+name: stg_purchase_orders
+table: orbit_analytics.stg_purchase_orders
+grain:
+  - purchase_order_id
+columns:
+  - name: purchase_order_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: purchase_request_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related purchase request on stg_purchase_orders.
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_purchase_orders.
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [created, sent, fulfilled, cancelled]"
+  - name: created_at
+    type: time
+    descriptions:
+      ktx: Date or time value for created at on stg_purchase_orders.
+joins: []
+measures: []
+descriptions:
+  user: Purchase orders generated from approved procurement requests.

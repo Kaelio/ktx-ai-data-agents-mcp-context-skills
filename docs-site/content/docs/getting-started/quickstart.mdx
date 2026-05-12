@@ -5,6 +5,22 @@ description: Set up KTX and build your first context in under 10 minutes.
 
 This guide walks you through `ktx setup` — an interactive wizard that configures your LLM provider, connects your database, optionally ingests from your existing tools, builds context, and installs agent integration.
 
+If you are a coding assistant trying to decide which KTX docs page to read, start with the [Agent Quickstart](/docs/ai-resources/agent-quickstart). This page is the human setup walkthrough.
+
+## Workflow summary
+
+Use this sequence when an agent needs to set up KTX from a fresh checkout:
+
+1. `pnpm install` — install workspace dependencies.
+2. `pnpm run setup:dev` — build local packages and prepare the development CLI.
+3. `pnpm run link:dev` — link the `ktx` command for local use.
+4. `ktx setup` — create or resume a KTX project.
+5. `ktx status` — verify project readiness.
+6. `ktx sl list` — confirm semantic-layer sources are available.
+7. `ktx sl query ... --format sql` — compile a semantic query without executing it.
+
+The setup wizard is stateful. If it exits before completion, rerun `ktx setup` in the same project directory to resume from the first incomplete step.
+
 ## Prerequisites
 
 - **Node.js 22+** and **pnpm**
@@ -198,6 +214,20 @@ Then select which agents to install for:
 
 **MCP mode** writes an MCP server configuration (e.g., `.mcp.json`) that lets the agent call KTX tools like `sl_query`, `knowledge_search`, and `sl_write_source` over the Model Context Protocol.
 
+## Generated files
+
+KTX writes project state as plain files so agents can inspect and edit changes in git.
+
+| Path | Created by | Purpose |
+|------|------------|---------|
+| `ktx.yaml` | `ktx setup` | Main project configuration: connections, LLM settings, embeddings, and context sources |
+| `.ktx/secrets/*` | `ktx setup` when file-backed secrets are selected | Local secret files referenced from `ktx.yaml`; do not commit these |
+| `semantic-layer/<connection-id>/*.yaml` | context build, ingestion, or `ktx sl write` | Semantic source definitions agents use for SQL generation |
+| `knowledge/global/*.md` | ingestion or `ktx wiki write --scope global` | Shared business context and metric definitions |
+| `knowledge/user/<user-id>/*.md` | `ktx wiki write --scope user` | User-scoped notes for one agent/user context |
+| `.mcp.json`, `.cursor/mcp.json`, `.agents/mcp/ktx.json`, `.opencode/mcp.json` | agent integration setup | MCP server configuration for supported agent clients |
+| `.claude/skills/ktx/SKILL.md`, `.agents/skills/ktx/SKILL.md` | CLI-mode agent integration setup | Agent instructions for calling `ktx agent` commands |
+
 ## Verify it worked
 
 Check your project status:
@@ -246,6 +276,18 @@ ktx sl query \
   --limit 5 \
   --execute --max-rows 10
 ```
+
+## Common errors
+
+| Error or symptom | Likely cause | Recovery |
+|------------------|--------------|----------|
+| `ktx: command not found` | The local CLI has not been linked | Run `pnpm run setup:dev` and `pnpm run link:dev` from the KTX checkout, then open a new shell |
+| LLM health check fails | Missing, invalid, or unauthorized Anthropic API key | Export `ANTHROPIC_API_KEY` or rerun `ktx setup` and choose the file-backed secret option |
+| OpenAI embedding check fails | `OPENAI_API_KEY` is missing when OpenAI embeddings are selected | Export `OPENAI_API_KEY`, or rerun setup and choose local sentence-transformers embeddings |
+| Local embeddings hang or fail | The Python daemon cannot start or the local model runtime is unavailable | Run `uv sync --all-groups`, then start `ktx-daemon serve-http --host 127.0.0.1 --port 8765` and rerun setup |
+| Database connection test fails | Credentials, network access, warehouse, database, or schema value is wrong | Test the same URL with the database's native client, then rerun `ktx connection add ... --force` or rerun setup |
+| `KTX context built: no` in `ktx status` | Setup saved configuration but did not build context | Run `ktx setup context build` or rerun `ktx setup` and choose to build context now |
+| Agent integration is incomplete | Setup skipped the agents step or the target was not installed | Run `ktx setup --agents --target codex --agent-install-mode both --project` using the target you need |
 
 ## Next steps
 

@@ -80,3 +80,14 @@ This matters for three reasons.
 **Reproducibility.** Because ingestion sessions are recorded as structured transcripts (tool calls and responses, not just logs), they can be replayed for testing and validation. If you change your ingestion configuration or upgrade the LLM, you can replay previous sessions to see how the output would differ. This gives you a safety net for changes that affect how context is generated.
 
 The transcript is stored with local ingest run state and can be reviewed or replayed when you need to audit a decision. Commit the resulting YAML and Markdown changes; commit reports or transcripts only when they are part of your team's review workflow.
+
+## Agent usage notes
+
+Use this page when an agent needs to explain review workflows, ingestion diffs, replayability, or why KTX writes YAML and Markdown instead of hiding context in a hosted service.
+
+| Agent task | Relevant section | Next page |
+|------------|------------------|-----------|
+| Explain how generated context should be reviewed | The git workflow | [Building Context](/docs/guides/building-context) |
+| Diagnose why ingestion changed a semantic source | Auto-ingestion and Deterministic replay | [ktx ingest](/docs/cli-reference/ktx-ingest) |
+| Explain how context improves over time | Feedback loops | [Link Detection](/docs/benchmarks/link-detection) |
+| Tell a user what to commit | The git workflow | [Writing Context](/docs/guides/writing-context) |

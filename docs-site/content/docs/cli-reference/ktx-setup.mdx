@@ -5,7 +5,7 @@ description: "Set up or resume a local KTX project."
 
 Interactive wizard that walks you through configuring LLM credentials, embeddings, database connections, context sources, and agent integrations. When run without flags in a directory that has no `ktx.yaml`, it launches the full guided flow. When run in an existing project, it resumes from the first incomplete step.
 
-## Usage
+## Command signature
 
 ```bash
 ktx setup [options]
@@ -173,3 +173,27 @@ ktx setup context watch
 # Run the packaged demo
 ktx setup demo
 ```
+
+## Output
+
+Interactive setup renders prompts and progress messages. `ktx setup status` is the best command for agents because it summarizes readiness in one response.
+
+```text
+KTX project: /home/user/analytics
+Project ready: yes
+LLM ready: yes (claude-sonnet-4-6)
+Embeddings ready: yes (text-embedding-3-small)
+Primary sources configured: yes (postgres-warehouse)
+Context sources configured: yes (dbt-main)
+KTX context built: yes
+Agent integration ready: yes (codex:project)
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Setup resumes an unexpected project | `KTX_PROJECT_DIR` or nearest `ktx.yaml` points to another directory | Pass `--project-dir <path>` explicitly |
+| Health check for model fails | Provider key or model id is invalid | Set the correct environment variable or secret file and rerun setup |
+| Setup cannot run in CI | Interactive prompts need a TTY | Use `--yes --no-input` with explicit flags for required values |
+| Agent integration missing | Setup skipped the agents step | Run `ktx setup --agents --target <target> --agent-install-mode both` |

@@ -1,0 +1,10 @@
+name: mart_account_activity
+measures:
+  - name: avg_pre_policy_activation_rate
+    expr: avg(pre_policy_30_day_activation_rate)
+    description: Average 30-day activation rate for the pre-policy cohort (before 2026-01-15).
+  - name: avg_post_policy_activation_rate
+    expr: avg(post_policy_30_day_activation_rate)
+    description: Average 30-day activation rate for the post-policy cohort (on or after 2026-01-15).
+descriptions:
+  user: "Pre/post-policy 30-day activation rates. Source: dbt mart_account_activity. Compares activation counts across the Jan 2026 policy boundary."

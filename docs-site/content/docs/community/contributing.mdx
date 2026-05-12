@@ -220,3 +220,17 @@ Before submitting a pull request:
 5. **Don't commit artifacts** — `node_modules/`, `.venv/`, `dist/`, coverage output, and local databases should not be committed.
 
 For larger features or architectural changes, open an issue first to discuss the approach.
+
+## Agent usage notes
+
+Use this page when an agent is modifying the KTX repository itself rather than using KTX in an analytics project.
+
+| Agent task | Command or section |
+|------------|--------------------|
+| Prepare the workspace | `pnpm install`, `pnpm run setup:dev`, `uv sync --all-groups` |
+| Verify TypeScript changes | `pnpm run type-check`, `pnpm run test`, or package-filtered equivalents |
+| Verify Python changes | `uv run pytest -q` and `uv run pre-commit run --files <files>` |
+| Add a connector | Adding a connector |
+| Check style expectations | Code conventions |
+
+Common recovery path: if a check fails because generated files or local runtimes are missing, run the setup commands first. If a check fails because of a real type, lint, or test error, fix the source file and rerun the smallest failing check before broadening verification.

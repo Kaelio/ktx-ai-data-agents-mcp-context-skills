@@ -1,0 +1,29 @@
+name: stg_refunds
+table: orbit_analytics.stg_refunds
+grain:
+  - refund_id
+columns:
+  - name: refund_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: invoice_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related invoice on stg_refunds.
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [pending, succeeded, failed, cancelled]"
+  - name: refund_date
+    type: time
+    descriptions:
+      ktx: Date or time value for refund date on stg_refunds.
+  - name: amount_cents
+    type: number
+    descriptions:
+      ktx: Column amount cents from stg_refunds.
+joins: []
+measures: []
+descriptions:
+  user: Refund events that reduce net revenue in the refund month.

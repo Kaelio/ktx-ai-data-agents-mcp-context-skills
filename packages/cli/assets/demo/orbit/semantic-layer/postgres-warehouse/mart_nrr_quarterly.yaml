@@ -1,0 +1,19 @@
+name: mart_nrr_quarterly
+measures:
+  - name: avg_net_revenue_retention
+    expr: avg(net_revenue_retention)
+    description: Average NRR (net revenue retention) across quarters and segments.
+  - name: total_expansion_arr_cents
+    expr: sum(expansion_arr_cents)
+    description: Total expansion ARR in cents across all quarters and segments.
+  - name: total_contraction_arr_cents
+    expr: sum(contraction_arr_cents)
+    description: Total contraction ARR in cents across all quarters and segments.
+  - name: total_churned_arr_cents
+    expr: sum(churned_arr_cents)
+    description: Total churned ARR in cents across all quarters and segments.
+  - name: total_starting_arr_cents
+    expr: sum(starting_arr_cents)
+    description: Total starting ARR in cents at the beginning of each quarter.
+descriptions:
+  user: "Quarterly NRR per segment. Source: dbt mart_nrr_quarterly. Enterprise-focused in current dataset."

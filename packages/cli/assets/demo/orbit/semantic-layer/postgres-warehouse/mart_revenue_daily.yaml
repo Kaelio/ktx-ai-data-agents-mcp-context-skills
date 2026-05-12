@@ -1,0 +1,20 @@
+name: mart_revenue_daily
+measures:
+  - name: total_gross_revenue_cents
+    expr: sum(gross_revenue_cents)
+    description: Total gross invoice revenue in cents across all days.
+  - name: total_credits_cents
+    expr: sum(credits_cents)
+    description: Total credits applied in cents across all days.
+  - name: total_refunds_cents
+    expr: sum(refunds_cents)
+    description: Total refunds issued in cents across all days.
+  - name: total_net_revenue_cents
+    expr: sum(net_revenue_cents)
+    description: Total net revenue in cents (gross minus credits and refunds) across all days.
+  - name: count_reconciled_days
+    expr: count(*)
+    filter: reconciliation_check = true
+    description: Number of days where reconciliation_check passed (gross - credits - refunds = net).
+descriptions:
+  user: "Daily gross-to-net revenue. Source: dbt mart_revenue_daily. Aggregate-only — no account dimension."

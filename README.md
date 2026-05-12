@@ -1,9 +1,22 @@
-# KTX
+<h1 align="center">
+  <img src="assets/ktx-readme-header.png" alt="KTX" width="472" />
+</h1>
 
-KTX is a workspace-first context layer for database agents. It stores warehouse
-memory in a project directory, generates and validates semantic-layer YAML,
-indexes knowledge, scans database schemas, and exposes the result through a CLI
-and MCP server.
+<p align="center">
+  <strong>Workspace-first context layer for database agents</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@kaelio/ktx"><img src="https://img.shields.io/npm/v/@kaelio/ktx?style=flat-square&color=f97316" alt="npm version" /></a>
+  <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/Kaelio/ktx"><img src="https://img.shields.io/github/stars/Kaelio/ktx?style=flat-square" alt="GitHub stars" /></a>
+</p>
+
+---
+
+KTX stores warehouse memory in a project directory, generates and validates
+semantic-layer YAML, indexes knowledge, scans database schemas, and exposes the
+result through a CLI and MCP server.
 
 KTX projects are plain files: YAML, Markdown, SQLite state, and generated
 artifacts. You can inspect them, commit them, and serve them to any MCP client.

@@ -1,0 +1,11 @@
+{
+  "title": "AI Resources",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "agent-quickstart",
+    "markdown-access",
+    "agent-instructions",
+    "prompt-recipes"
+  ]
+}

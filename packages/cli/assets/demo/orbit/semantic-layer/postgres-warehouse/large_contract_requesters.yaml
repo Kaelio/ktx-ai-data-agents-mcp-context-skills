@@ -1,0 +1,44 @@
+name: large_contract_requesters
+source_type: sql
+sql: |-
+  select account.account_name,
+         requester.email as requester_email,
+         activity.action_type,
+         activity.action_date,
+         round(segment.contract_arr_cents / 100.0, 0) as contract_arr_usd
+  from orbit_analytics.int_procurement_qualifying_actions activity
+  join orbit_raw.accounts account on account.account_id = activity.account_id
+  join orbit_raw.users requester on requester.user_id = activity.user_id
+  left join orbit_analytics.mart_account_segments segment on segment.account_id = activity.account_id
+  order by activity.action_date desc, segment.contract_arr_cents desc nulls last
+  limit 25
+grain:
+  - action_date
+  - requester_email
+  - action_type
+columns:
+  - name: account_name
+    type: string
+    descriptions:
+      user: Name of the account
+  - name: requester_email
+    type: string
+    descriptions:
+      user: Email of the requester
+  - name: action_type
+    type: string
+    descriptions:
+      user: Type of qualifying procurement action
+  - name: action_date
+    type: time
+    role: time
+    descriptions:
+      user: Date the action occurred
+  - name: contract_arr_usd
+    type: number
+    descriptions:
+      user: Contract ARR in USD
+joins: []
+measures: []
+descriptions:
+  user: Recent procurement actions by requesters on large contracts. Joins qualifying procurement actions to account names, requester emails, and contract ARR. Used to identify active requesters on high-value accounts.

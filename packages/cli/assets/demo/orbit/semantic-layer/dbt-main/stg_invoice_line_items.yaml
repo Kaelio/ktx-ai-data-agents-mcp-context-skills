@@ -1,0 +1,25 @@
+name: stg_invoice_line_items
+table: orbit_analytics.stg_invoice_line_items
+grain:
+  - invoice_line_item_id
+columns:
+  - name: invoice_line_item_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: invoice_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related invoice on stg_invoice_line_items.
+  - name: line_item_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [subscription, seat, usage, addon, credit]"
+  - name: amount_cents
+    type: number
+    descriptions:
+      ktx: Column amount cents from stg_invoice_line_items.
+joins: []
+measures: []
+descriptions:
+  user: Invoice line items used to split gross revenue, credits, seats, usage, and addons.

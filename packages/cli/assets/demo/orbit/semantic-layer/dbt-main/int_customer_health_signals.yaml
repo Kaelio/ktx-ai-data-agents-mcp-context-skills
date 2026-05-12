@@ -1,0 +1,25 @@
+name: int_customer_health_signals
+table: orbit_analytics.int_customer_health_signals
+grain:
+  - account_id
+columns:
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on int_customer_health_signals.
+  - name: open_critical_ticket_count
+    type: number
+    descriptions:
+      ktx: Column open critical ticket count from int_customer_health_signals.
+  - name: recent_procurement_action_count
+    type: number
+    descriptions:
+      ktx: Column recent procurement action count from int_customer_health_signals.
+  - name: risk_level
+    type: string
+    descriptions:
+      user: "Derived risk level: low, medium, high"
+joins: []
+measures: []
+descriptions:
+  user: Support-ticket and recent-procurement signals for customer health risk.

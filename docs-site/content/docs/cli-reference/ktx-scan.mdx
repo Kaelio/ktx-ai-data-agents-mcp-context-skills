@@ -7,7 +7,7 @@ Discover your database schema — tables, columns, types, constraints, and relat
 
 Scan commands live under `ktx dev scan`. See also the [Building Context](/docs/guides/building-context) guide for a walkthrough.
 
-## Usage
+## Command signature
 
 ```bash
 ktx dev scan <connectionId> [options]
@@ -143,3 +143,27 @@ ktx dev scan relationship-calibration --accept-threshold 0.9 --review-threshold 
 # Get threshold advice based on review decisions
 ktx dev scan relationship-thresholds
 ```
+
+## Output
+
+Scan commands write scan artifacts under the KTX project directory and print status or report summaries. Use `--json` on report and relationship commands when an agent needs structured output.
+
+```json
+{
+  "runId": "scan-local-abc123",
+  "status": "completed",
+  "mode": "structural",
+  "changes": {
+    "tablesAdded": 42
+  }
+}
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Scan cannot connect | Connection credentials or network access are invalid | Run `ktx connection test <connectionId>` and update the connection before scanning |
+| Enriched scan cannot describe columns | LLM credentials are missing or invalid | Complete LLM setup with `ktx setup` before enriched scans |
+| Relationship apply writes nothing | No accepted candidates match the provided run id or candidate ids | Inspect `ktx dev scan relationships <runId> --status accepted` first |
+| Calibration is not ready | Too few reviewed relationship labels exist | Review and accept/reject more candidates, then rerun calibration |

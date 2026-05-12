@@ -1,0 +1,25 @@
+name: stg_sessions
+table: orbit_analytics.stg_sessions
+grain:
+  - session_id
+columns:
+  - name: session_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_sessions.
+  - name: user_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related user on stg_sessions.
+  - name: started_at
+    type: time
+    descriptions:
+      ktx: Column started at from stg_sessions.
+joins: []
+measures: []
+descriptions:
+  user: Product sessions used for pre-policy activation and activity exclusions.

@@ -1,0 +1,33 @@
+name: stg_account_owners
+table: orbit_analytics.stg_account_owners
+grain:
+  - account_owner_id
+columns:
+  - name: account_owner_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_account_owners.
+  - name: owner_user_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related owner user on stg_account_owners.
+  - name: owner_team
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [sales_ops, customer_success, finance]"
+  - name: effective_from
+    type: time
+    descriptions:
+      ktx: Column effective from from stg_account_owners.
+  - name: effective_to
+    type: time
+    descriptions:
+      ktx: Column effective to from stg_account_owners.
+joins: []
+measures: []
+descriptions:
+  user: Effective-dated ownership assignments for account health, renewals, and escalation context.

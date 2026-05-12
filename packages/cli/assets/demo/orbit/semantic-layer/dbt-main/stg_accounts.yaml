@@ -1,0 +1,25 @@
+name: stg_accounts
+table: orbit_analytics.stg_accounts
+grain:
+  - account_id
+columns:
+  - name: account_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: sales_region
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [na, emea, apac]"
+  - name: size_band
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [smb, mid_market, enterprise]"
+  - name: lifecycle_status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [prospect, active, churned, internal, test]"
+joins: []
+measures: []
+descriptions:
+  user: Customer and internal/test account records for Orbit.

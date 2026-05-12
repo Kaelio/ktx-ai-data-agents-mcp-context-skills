@@ -1,0 +1,13 @@
+name: mart_procurement_activity
+measures:
+  - name: total_active_requesters
+    expr: sum(active_requesters)
+    description: Total count of active requesters summed across all weeks.
+  - name: avg_weekly_active_requesters
+    expr: avg(active_requesters)
+    description: Average number of active requesters per week (golden week metric).
+  - name: avg_contract_arr_threshold_cents
+    expr: avg(contract_arr_threshold_cents)
+    description: Average contract ARR threshold in cents used to qualify large active contracts.
+descriptions:
+  user: "Weekly procurement KPI. Source: dbt mart_procurement_activity. Tracks active requesters on large active contracts."

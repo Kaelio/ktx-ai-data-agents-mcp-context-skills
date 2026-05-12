@@ -1,0 +1,75 @@
+---
+title: Markdown Access
+description: Fetch KTX docs as llms.txt, llms-full.txt, or per-page Markdown.
+---
+
+KTX docs are available as plain Markdown so assistants do not need to parse the rendered HTML site.
+
+## Index
+
+Fetch the curated index:
+
+```text
+https://docs.kaelio.com/ktx/llms.txt
+```
+
+Use this file to discover high-value pages, task-specific entry points, and Markdown URLs.
+
+## Full corpus
+
+Fetch the complete docs corpus:
+
+```text
+https://docs.kaelio.com/ktx/llms-full.txt
+```
+
+Use this when an assistant needs broad context across setup, concepts, CLI reference, integrations, and troubleshooting. Prefer the smaller per-page Markdown route for narrow tasks.
+
+## Per-page Markdown
+
+Every docs page has a Markdown route:
+
+```text
+https://docs.kaelio.com/ktx/docs/getting-started/quickstart.md
+https://docs.kaelio.com/ktx/docs/cli-reference/ktx-agent.md
+https://docs.kaelio.com/ktx/docs/guides/building-context.md
+```
+
+Requests that ask for Markdown can also use the normal docs URL with `Accept: text/markdown`:
+
+```bash
+curl -H "Accept: text/markdown" https://docs.kaelio.com/ktx/docs/getting-started/quickstart
+```
+
+## Recommended retrieval order
+
+1. Fetch `/llms.txt`.
+2. Select one or two relevant page Markdown URLs.
+3. Fetch `/llms-full.txt` only when page-level docs are not enough.
+
+## Output contract
+
+Markdown responses are designed for agent consumption:
+
+- Frontmatter is removed.
+- Each page includes a title, description, canonical URL, and Markdown URL.
+- Code blocks stay as code blocks.
+- Tables stay as Markdown tables.
+- Missing docs pages return a plain-text `404` instead of silently falling back to HTML.
+
+## Page actions
+
+Rendered docs pages include page-level actions near the title:
+
+- **Copy MD** copies the generated Markdown for the current page.
+- **View MD** opens the generated Markdown route.
+- **Copy MDX** copies the source MDX for the current page.
+
+## Common mistakes
+
+| Mistake | Better path |
+|---------|-------------|
+| Scraping the HTML page for a docs answer | Fetch the `.md` route instead |
+| Loading `/llms-full.txt` for a single CLI flag lookup | Fetch the relevant CLI reference page |
+| Treating `/llms.txt` as complete documentation | Use it as an index, then fetch linked pages |
+| Copying rendered text by hand | Use **Copy MD** or **Copy MDX** from the page actions |

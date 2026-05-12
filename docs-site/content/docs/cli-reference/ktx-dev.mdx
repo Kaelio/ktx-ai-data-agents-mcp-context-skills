@@ -5,7 +5,7 @@ description: "Low-level diagnostics, scans, adapter commands, and mapping tools.
 
 Hidden commands for low-level project management, diagnostics, direct adapter control, and shell completion. Most users interact with these through higher-level commands like [`ktx ingest`](/docs/cli-reference/ktx-ingest) and [`ktx setup`](/docs/cli-reference/ktx-setup), but `ktx dev` provides direct access when you need fine-grained control.
 
-## Usage
+## Command signature
 
 ```bash
 ktx dev <subcommand> [options]
@@ -145,3 +145,22 @@ ktx dev completion zsh
 # Install zsh completions
 ktx dev completion zsh --install
 ```
+
+## Output
+
+`ktx dev` commands are diagnostic and may print plain text, JSON, or visual reports depending on the selected flags.
+
+| Mode | How to request it | Use case |
+|------|-------------------|----------|
+| Plain text | `--plain` or default diagnostic output | Human-readable terminal inspection |
+| JSON | `--json` | Agent parsing and automation |
+| Visual report | `--viz` | Interactive memory-flow and ingest debugging |
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Doctor reports missing runtime pieces | Packages, Python environment, or linked CLI are not ready | Run `pnpm install`, `pnpm run setup:dev`, and `uv sync --all-groups` |
+| Ingest run cannot find adapter | `--adapter` does not match a supported source adapter | Use configured source names from `ktx.yaml` or run higher-level `ktx ingest` |
+| Replay/report file cannot be read | The report path is wrong or the run id is not stored locally | Run `ktx dev ingest status --json` to discover stored run ids and report files |
+| Visual output fails in CI | TUI rendering requires an interactive terminal | Use `--plain --no-input` or `--json --no-input` |

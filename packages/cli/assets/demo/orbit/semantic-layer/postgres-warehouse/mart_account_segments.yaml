@@ -1,0 +1,18 @@
+name: mart_account_segments
+measures:
+  - name: total_contract_arr_cents
+    expr: sum(contract_arr_cents)
+    description: Total active-contract ARR in cents across all accounts.
+  - name: active_contract_arr_cents
+    expr: sum(contract_arr_cents)
+    filter: contract_status = 'active'
+    description: Active-contract ARR in cents, filtered to accounts with an active contract status.
+  - name: count_accounts
+    expr: count(distinct account_id)
+    description: Distinct count of accounts in the segment.
+  - name: count_active_contract_accounts
+    expr: count(distinct account_id)
+    filter: contract_status = 'active'
+    description: Distinct count of accounts with an active contract.
+descriptions:
+  user: "Per-account segment and active-contract ARR. Source: dbt mart_account_segments."

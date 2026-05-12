@@ -60,7 +60,7 @@ export function CodeBlock(props: Props) {
   // Mode A — Terminal
   if (isTerminal) {
     return (
-      <div className="ktx-code ktx-code-terminal group">
+      <div className="not-prose ktx-code ktx-code-terminal group">
         <div className="ktx-code-terminal-head">
           <span className="ktx-tl-dot" style={{ background: "#ff5f57" }} />
           <span className="ktx-tl-dot" style={{ background: "#febc2e" }} />
@@ -83,7 +83,7 @@ export function CodeBlock(props: Props) {
   // Mode B — VS Code tab (filename present)
   if (hasTitle) {
     return (
-      <div className="ktx-code ktx-code-tab group">
+      <div className="not-prose ktx-code ktx-code-tab group">
         <div className="ktx-code-tab-head">
           <span className="ktx-file-glyph" data-lang={language ?? ""} />
           <span className="ktx-code-tab-filename">{title}</span>
@@ -99,7 +99,7 @@ export function CodeBlock(props: Props) {
 
   // Mode C — Minimal default
   return (
-    <div className="ktx-code ktx-code-minimal group relative">
+    <div className="not-prose ktx-code ktx-code-minimal group relative">
       {language && <span className="ktx-code-minimal-lang">{language}</span>}
       <CopyButton text={codeText} className="ktx-code-minimal-copy" />
       <pre {...rest} className="ktx-code-body ktx-code-body-minimal">

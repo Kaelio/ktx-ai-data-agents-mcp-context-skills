@@ -1,0 +1,50 @@
+---
+title: Agent Quickstart
+description: A task-first route for coding agents that need to understand KTX docs.
+---
+
+This page is for coding assistants reading or citing the KTX docs. It is intentionally limited to documentation lookup, docs navigation, and safe command discovery.
+
+## First read
+
+Agents should start with the smallest source that answers the task:
+
+1. [`/llms.txt`](/llms.txt) - discover the docs and preferred entry points.
+2. The relevant per-page Markdown URL, for example `/docs/getting-started/quickstart.md`.
+3. [`/llms-full.txt`](/llms-full.txt) - use only when the task needs broad context across many pages.
+
+## Task router
+
+| User asks the agent to explain... | Read first | Then read |
+|------------------------------------|------------|-----------|
+| What KTX does | [Introduction](/docs/getting-started/introduction) | [The Context Layer](/docs/concepts/the-context-layer) |
+| How to start from a checkout | [Quickstart](/docs/getting-started/quickstart) | [ktx setup](/docs/cli-reference/ktx-setup) |
+| How to check project readiness | [ktx status](/docs/cli-reference/ktx-status) | [Quickstart](/docs/getting-started/quickstart) |
+| How context gets built | [Building Context](/docs/guides/building-context) | [ktx ingest](/docs/cli-reference/ktx-ingest) |
+| How semantic YAML works | [Writing Context](/docs/guides/writing-context) | [ktx sl](/docs/cli-reference/ktx-sl) |
+| How machine-readable CLI output is shaped | [ktx agent](/docs/cli-reference/ktx-agent) | [Markdown Access](/docs/ai-resources/markdown-access) |
+
+## Operating workflow
+
+Use this workflow when the user asks an assistant to answer a KTX docs question:
+
+1. Read [`/llms.txt`](/llms.txt).
+2. Pick the smallest relevant `.md` page.
+3. Use [`/llms-full.txt`](/llms-full.txt) only if the answer needs multiple sections of the docs.
+4. Quote commands exactly from the docs page.
+5. If a command affects a local project, ask the user before assuming credentials or live services are available.
+
+## Docs lookup from a shell
+
+```bash
+curl https://docs.kaelio.com/ktx/llms.txt
+curl https://docs.kaelio.com/ktx/docs/getting-started/quickstart.md
+```
+
+## Guardrails
+
+- Do not invent CLI flags. Fetch the relevant CLI reference page.
+- Do not scrape rendered HTML when a `.md` route exists.
+- Do not assume docs lookup requires agent-client configuration.
+- Do not include credentials or secrets in prompts, URLs, or copied docs snippets.
+- When docs and local CLI behavior disagree, prefer the local CLI output and mention the mismatch.

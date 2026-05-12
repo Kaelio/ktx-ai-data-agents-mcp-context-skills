@@ -5,7 +5,7 @@ description: "Build and refresh context from configured sources."
 
 Ingest context from your configured sources — dbt, Looker, Metabase, MetricFlow, LookML, or Notion. The ingest process extracts metadata from your tools, then uses an LLM agent to reconcile it with existing context, writing semantic sources and knowledge pages to your project.
 
-## Usage
+## Command signature
 
 ```bash
 ktx ingest [connectionId] [options]
@@ -68,3 +68,28 @@ ktx ingest status --json
 ## Low-level ingest commands
 
 For adapter-level control, use `ktx dev ingest`. See [`ktx dev`](/docs/cli-reference/ktx-dev) for the full low-level ingest surface including `run`, `status`, `watch`, and `replay` with output mode options (`--plain`, `--json`, `--viz`).
+
+## Output
+
+Ingest run commands print progress and create a stored ingest report. `ktx ingest status --json` returns the run state, adapter, connection, and summary information.
+
+```json
+{
+  "runId": "ingest-local-abc123",
+  "status": "completed",
+  "connectionId": "dbt-main",
+  "summary": {
+    "semanticSourcesChanged": 4,
+    "knowledgePagesChanged": 2
+  }
+}
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| No eligible sources | `ktx.yaml` has no configured context source for ingest | Add a source with `ktx setup` or `ktx connection add`, then rerun ingest |
+| Ingest needs credentials | The source adapter requires API or git access | Configure the referenced environment variable or secret file |
+| Latest run not found | No ingest run has been started in this project | Run `ktx ingest <connectionId>` or `ktx ingest --all` first |
+| Report watch fails in a non-interactive shell | Visual report needs a terminal | Use `ktx ingest status --json` for agent and CI workflows |

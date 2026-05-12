@@ -1,0 +1,33 @@
+name: stg_activation_events
+table: orbit_analytics.stg_activation_events
+grain:
+  - activation_event_id
+columns:
+  - name: activation_event_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_activation_events.
+  - name: user_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related user on stg_activation_events.
+  - name: event_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [first_requester_login, requester_activated, first_approved_purchase_request, account_activated]"
+  - name: policy_version
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [pre_2026_01_15, post_2026_01_15]"
+  - name: event_at
+    type: time
+    descriptions:
+      ktx: Column event at from stg_activation_events.
+joins: []
+measures: []
+descriptions:
+  user: Account and requester activation events across the January policy change.

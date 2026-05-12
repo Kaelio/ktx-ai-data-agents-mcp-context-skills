@@ -1,0 +1,21 @@
+name: stg_suppliers
+table: orbit_analytics.stg_suppliers
+grain:
+  - supplier_id
+columns:
+  - name: supplier_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [invited, onboarding, active, inactive]"
+  - name: name
+    type: string
+    descriptions:
+      ktx: Column name from stg_suppliers.
+joins: []
+measures: []
+descriptions:
+  user: Supplier directory records associated with procurement workflow events.

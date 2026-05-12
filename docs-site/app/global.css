@@ -188,6 +188,24 @@ pre {
   border-radius: 0 !important;
 }
 
+.ktx-code code {
+  display: grid;
+  min-width: max-content;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  color: inherit;
+}
+
+.ktx-code .line {
+  display: block;
+  min-height: 1.7em;
+  padding-inline: 0 !important;
+}
+
 /* Neutralize the outer figure styling that our wrapper now owns */
 figure:has(> .ktx-code),
 figure[data-rehype-pretty-code-figure]:has(.ktx-code) {

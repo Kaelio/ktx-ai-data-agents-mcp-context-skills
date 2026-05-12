@@ -19,11 +19,9 @@ describe('demo seeded mode', () => {
     await expect(access(join(projectDir, 'demo.db'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'ktx.yaml'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'manifest.json'))).resolves.toBeUndefined();
-    await expect(access(join(projectDir, 'semantic-layer/orbit_demo/accounts.yaml'))).resolves.toBeUndefined();
-    await expect(access(join(projectDir, 'knowledge/global/arr-contract-first.md'))).resolves.toBeUndefined();
-    await expect(access(join(projectDir, 'raw-sources/dbt/schema.yml'))).resolves.toBeUndefined();
-    await expect(access(join(projectDir, 'raw-sources/bi/revenue_exec.dashboard.lookml'))).resolves.toBeUndefined();
-    await expect(access(join(projectDir, 'raw-sources/notion/revenue-reporting-policy.md'))).resolves.toBeUndefined();
+    await expect(access(join(projectDir, 'semantic-layer/dbt-main/mart_arr_daily.yaml'))).resolves.toBeUndefined();
+    await expect(access(join(projectDir, 'semantic-layer/postgres-warehouse/mart_account_activity.yaml'))).resolves.toBeUndefined();
+    await expect(access(join(projectDir, 'knowledge/global/orbit-company-overview.md'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'links/provenance.json'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'reports/seeded-demo-report.json'))).resolves.toBeUndefined();
   });
@@ -88,8 +86,8 @@ describe('demo seeded mode', () => {
 
   it('SL YAML validates correctly', async () => {
     await ensureSeededDemoProject({ projectDir, force: false });
-    const slYaml = await readFile(join(projectDir, 'semantic-layer/orbit_demo/accounts.yaml'), 'utf-8');
-    expect(slYaml).toContain('name: accounts');
+    const slYaml = await readFile(join(projectDir, 'semantic-layer/dbt-main/mart_arr_daily.yaml'), 'utf-8');
+    expect(slYaml).toContain('name: mart_arr_daily');
     expect(slYaml).toContain('grain:');
     expect(slYaml).toContain('columns:');
     expect(slYaml).toContain('measures:');
@@ -98,11 +96,11 @@ describe('demo seeded mode', () => {
 
   it('wiki pages have valid frontmatter', async () => {
     await ensureSeededDemoProject({ projectDir, force: false });
-    const wiki = await readFile(join(projectDir, 'knowledge/global/arr-contract-first.md'), 'utf-8');
+    const wiki = await readFile(join(projectDir, 'knowledge/global/orbit-company-overview.md'), 'utf-8');
     expect(wiki).toContain('---');
     expect(wiki).toContain('summary:');
     expect(wiki).toContain('tags:');
-    expect(wiki).toContain('sl_refs:');
+    expect(wiki).toContain('refs:');
     expect(wiki).toContain('usage_mode: auto');
   });
 

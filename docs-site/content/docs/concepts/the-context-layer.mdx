@@ -145,3 +145,14 @@ my-project/
 Semantic sources and knowledge pages are committed to git. The SQLite database holds ephemeral state — scan results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
 
 This means your analytics context travels with your code. You can fork it, branch it, review it in a PR, and merge it with the same tools you use for dbt models. There's no sync problem between a remote server and your local state. There's no migration to run. The files are the source of truth.
+
+## Agent usage notes
+
+Use this page when an agent needs to explain why KTX exists, why schema-only database access is not enough, or how KTX differs from MetricFlow, Cube, Malloy, and traditional semantic layers.
+
+| Agent task | Relevant section | Next page |
+|------------|------------------|-----------|
+| Explain why a database agent made a plausible but wrong query | The problem | [Writing Context](/docs/guides/writing-context) |
+| Decide whether a metric belongs in YAML or Markdown | What a context layer is | [Writing Context](/docs/guides/writing-context) |
+| Compare KTX to another semantic layer | How KTX compares | [Primary Sources](/docs/integrations/primary-sources) |
+| Explain reviewability and source of truth | The plain-files philosophy | [Context as Code](/docs/concepts/context-as-code) |

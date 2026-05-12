@@ -6,7 +6,12 @@ import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
+import { runDemoTour } from './setup-demo-tour.js';
 import { readKtxSetupStatus, runKtxSetup } from './setup.js';
+
+vi.mock('./setup-demo-tour.js', () => ({
+  runDemoTour: vi.fn(async () => 0),
+}));
 
 const execFileAsync = promisify(execFile);
 
@@ -351,10 +356,10 @@ describe('setup status', () => {
       expect(labels).toEqual([
         'Set up KTX for my data',
         'Check setup status',
-        'Try KTX with packaged demo data',
+        'Explore a pre-built KTX project',
         'Exit',
       ]);
-      expect(labels.indexOf('Try KTX with packaged demo data')).toBe(labels.length - 2);
+      expect(labels.indexOf('Explore a pre-built KTX project')).toBe(labels.length - 2);
       return 'exit';
     });
     const cancel = vi.fn();
@@ -400,7 +405,7 @@ describe('setup status', () => {
         'Create a new KTX project',
         'Connect a coding agent to KTX',
         'Check setup status',
-        'Try KTX with packaged demo data',
+        'Explore a pre-built KTX project',
         'Exit',
       ]);
       return 'exit';
@@ -695,9 +700,8 @@ describe('setup status', () => {
     );
   });
 
-  it('runs the seeded demo when the first setup intent menu chooses packaged demo data', async () => {
+  it('runs the demo tour when the first setup intent menu chooses demo', async () => {
     const testIo = makeIo();
-    const demo = vi.fn(async (_args: { projectDir: string }, _io: unknown) => 0);
 
     await expect(
       runKtxSetup(
@@ -718,19 +722,15 @@ describe('setup status', () => {
           showEntryMenu: true,
         },
         testIo.io,
-        { entryMenuDeps: { prompts: { select: vi.fn(async () => 'demo'), cancel: vi.fn() } }, demo },
+        { entryMenuDeps: { prompts: { select: vi.fn(async () => 'demo'), cancel: vi.fn() } } },
       ),
     ).resolves.toBe(0);
 
-    expect(demo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'seeded',
-        outputMode: 'viz',
-        inputMode: 'auto',
-      }),
+    expect(runDemoTour).toHaveBeenCalledWith(
+      { inputMode: 'auto' },
       testIo.io,
+      expect.objectContaining({}),
     );
-    expect(demo.mock.calls[0]?.[0].projectDir).toMatch(/ktx-demo-/);
   });
 
   it('creates a project through run mode when --new is selected', async () => {

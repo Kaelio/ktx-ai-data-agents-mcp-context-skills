@@ -1,0 +1,25 @@
+name: stg_contract_discount_terms
+table: orbit_analytics.stg_contract_discount_terms
+grain:
+  - discount_term_id
+columns:
+  - name: discount_term_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: contract_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related contract on stg_contract_discount_terms.
+  - name: discount_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [launch, renewal, migration, goodwill]"
+  - name: expiry_date
+    type: time
+    descriptions:
+      ktx: Date or time value for expiry date on stg_contract_discount_terms.
+joins: []
+measures: []
+descriptions:
+  user: Contract discount terms that explain Q1 2026 enterprise contraction movement.
