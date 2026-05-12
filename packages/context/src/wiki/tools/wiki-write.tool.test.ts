@@ -127,7 +127,7 @@ describe('WikiWriteTool', () => {
       baseContext,
     );
 
-    expect(result.structured).toEqual({ success: true, key: 'orbit-customers', action: 'updated' });
+    expect(result.structured).toMatchObject({ success: true, key: 'orbit-customers', action: 'updated' });
     expect(wikiService.writePage).toHaveBeenCalledWith(
       'USER',
       'u',

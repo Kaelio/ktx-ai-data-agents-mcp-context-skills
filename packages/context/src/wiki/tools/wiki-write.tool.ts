@@ -45,6 +45,7 @@ interface WikiWriteStructured {
   success: boolean;
   key: string;
   action?: 'created' | 'updated';
+  content?: string;
 }
 
 function looksLikeEscapedMarkdown(content: string): boolean {
@@ -181,9 +182,17 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
       context.session.actions.push({ target: 'wiki', type: action, key: input.key, detail: input.summary });
     }
 
+    // When the LLM used `replacements` (edit mode), it doesn't have the
+    // post-edit content cached. Returning the result here prevents the
+    // common bug where a follow-up edit uses an oldText string that no
+    // longer matches because a prior edit already changed the page.
+    const markdown = hasReplacements
+      ? `Page "${input.key}" ${action}.\n\nCurrent content (use for subsequent edits):\n\n${finalContent}`
+      : `Page "${input.key}" ${action}.`;
+
     return {
-      markdown: `Page "${input.key}" ${action}.`,
-      structured: { success: true, key: input.key, action },
+      markdown,
+      structured: { success: true, key: input.key, action, content: finalContent },
     };
   }
 }
