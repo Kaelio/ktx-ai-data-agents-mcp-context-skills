@@ -546,7 +546,7 @@ export async function runPublicMetabaseSyncModeCase(tempDir: string, input: Sync
     ),
   ).resolves.toBe(0);
 
-  expect(io.stderr()).toBe('');
+  expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
   expect(io.stdout()).toContain(`target=warehouse_a database=1 status=done job=${jobId}`);
 

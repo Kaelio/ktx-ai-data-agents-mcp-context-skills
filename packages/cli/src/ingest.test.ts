@@ -230,7 +230,7 @@ describe('runKtxIngest', () => {
     expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
     expect(io.stdout()).toContain('warehouse_a');
     expect(io.stdout()).toContain('metabase-child-1');
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
   it('returns a non-zero code when Metabase fan-out has failed children', async () => {
@@ -300,7 +300,7 @@ describe('runKtxIngest', () => {
     expect(io.stdout()).toContain('Metabase fan-out: partial_failure');
     expect(io.stdout()).toContain('Failed work units: 1');
     expect(io.stdout()).toContain('status=error');
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
   it('prints Metabase fan-out progress before the final summary', async () => {
@@ -374,12 +374,56 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('Metabase ingest: prod-metabase');
-    expect(io.stdout()).toContain('Targets: 1 mapped database');
-    expect(io.stdout()).toContain('- database=1 target=warehouse_a status=running job=metabase-child-1');
-    expect(io.stdout()).toContain('- database=1 target=warehouse_a status=done job=metabase-child-1');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
+    expect(io.stderr()).toContain('Targets: 1 mapped database');
+    expect(io.stderr()).toContain('- database=1 target=warehouse_a status=running job=metabase-child-1');
+    expect(io.stderr()).toContain('- database=1 target=warehouse_a status=done job=metabase-child-1');
     expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
-    expect(io.stderr()).toBe('');
+    expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
+  });
+
+  it('writes metabase fan-out progress to stderr and final result to stdout', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalMetabaseIngest: async (input) => {
+            input.progress?.onMetabaseFanoutPlanned({
+              metabaseConnectionId: 'prod-metabase',
+              children: [{ metabaseDatabaseId: 1, targetConnectionId: 'warehouse_a' }],
+            });
+            input.progress?.onMetabaseChildStarted({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+            });
+            return {
+              metabaseConnectionId: 'prod-metabase',
+              status: 'all_succeeded',
+              totals: { workUnits: 0, failedWorkUnits: 0 },
+              children: [],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
+    expect(io.stderr()).toContain('status=running job=metabase-child-1');
+    expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
+    expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
   });
 
   it('runs Metabase scheduled ingest through the public CLI command path with real fan-out', async () => {
@@ -464,7 +508,8 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
+    expect(io.stderr()).toContain('Targets: 2 mapped databases');
     expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
     expect(io.stdout()).toContain('Source: prod-metabase');
     expect(io.stdout()).toContain('Children: 2');
@@ -1031,16 +1076,46 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    const stdout = io.stdout();
-    expect(stdout).toContain('[5%] Fetching source files for warehouse/historic-sql');
-    expect(stdout).toContain('[15%] Fetched 3 source files from historic-sql');
-    expect(stdout).toContain('[45%] Planned 1 work unit');
-    expect(stdout).toContain('[80%] Processed 1/1 work units');
-    expect(stdout).toContain('[100%] Ingest completed');
-    expect(stdout.indexOf('[5%] Fetching source files for warehouse/historic-sql')).toBeLessThan(
-      stdout.indexOf('Report: report-live-1'),
-    );
-    expect(io.stderr()).toBe('');
+    const stderr = io.stderr();
+    expect(stderr).toContain('[5%] Fetching source files for warehouse/historic-sql');
+    expect(stderr).toContain('[15%] Fetched 3 source files from historic-sql');
+    expect(stderr).toContain('[45%] Planned 1 work unit');
+    expect(stderr).toContain('[80%] Processed 1/1 work units');
+    expect(stderr).toContain('[100%] Ingest completed');
+    expect(io.stdout()).toContain('Report: report-live-1');
+    expect(io.stdout()).not.toContain('[5%]');
+  });
+
+  it('writes plain TTY ingest progress to stderr and final report to stdout', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) => completedLocalBundleRun(input, 'local-job-1'));
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          sourceDir,
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          env: interactiveEnv(),
+          runLocalIngest: runLocal,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).toContain('[5%] Fetching source files for warehouse/fake');
+    expect(io.stdout()).toContain('Report: report-live-1');
+    expect(io.stdout()).not.toContain('[5%]');
   });
 
   it('prints plain WorkUnit step progress during long-running local ingest', async () => {
@@ -1127,11 +1202,12 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    const stdout = io.stdout();
-    expect(stdout).toContain('[45%] Planned 2 work units');
-    expect(stdout).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
-    expect(stdout).toContain('[58%] Processing 1/2 work units: historic-sql-table-public-orders step 7/40');
-    expect(stdout).toContain('[68%] Processed 1/2 work units');
+    const stderr = io.stderr();
+    expect(stderr).toContain('[45%] Planned 2 work units');
+    expect(stderr).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
+    expect(stderr).toContain('[58%] Processing 1/2 work units: historic-sql-table-public-orders step 7/40');
+    expect(stderr).toContain('[68%] Processed 1/2 work units');
+    expect(io.stdout()).not.toContain('[45%]');
   });
 
   it('passes local Looker pull-config options and agent runner into scheduled ingest for Looker scheduled ingest', async () => {

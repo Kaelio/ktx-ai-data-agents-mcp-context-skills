@@ -143,22 +143,22 @@ function createMetabaseFanoutProgress(
   connectionId: string,
   io: KtxIngestIo,
 ): LocalMetabaseFanoutProgress {
-  io.stdout.write(`Metabase ingest: ${connectionId}\n`);
-  io.stdout.write('Checking mappings and scheduled-pull targets...\n');
+  io.stderr.write(`Metabase ingest: ${connectionId}\n`);
+  io.stderr.write('Checking mappings and scheduled-pull targets...\n');
   return {
     onMetabaseFanoutPlanned(event) {
-      io.stdout.write(`Targets: ${pluralize(event.children.length, 'mapped database')}\n`);
+      io.stderr.write(`Targets: ${pluralize(event.children.length, 'mapped database')}\n`);
       for (const child of event.children) {
-        io.stdout.write(`- database=${child.metabaseDatabaseId} target=${child.targetConnectionId} status=queued\n`);
+        io.stderr.write(`- database=${child.metabaseDatabaseId} target=${child.targetConnectionId} status=queued\n`);
       }
     },
     onMetabaseChildStarted(event) {
-      io.stdout.write(
+      io.stderr.write(
         `- database=${event.metabaseDatabaseId} target=${event.targetConnectionId} status=running job=${event.jobId}\n`,
       );
     },
     onMetabaseChildCompleted(event) {
-      io.stdout.write(
+      io.stderr.write(
         `- database=${event.metabaseDatabaseId} target=${event.targetConnectionId} status=${event.status} job=${event.jobId}\n`,
       );
     },
@@ -290,7 +290,7 @@ function createPlainIngestProgressRenderer(
   const write = (percent: number, message: string) => {
     const nextPercent = Math.max(lastPercent, Math.max(0, Math.min(100, percent)));
     lastPercent = nextPercent;
-    io.stdout.write(`[${nextPercent}%] ${message}\n`);
+    io.stderr.write(`[${nextPercent}%] ${message}\n`);
   };
 
   return {
