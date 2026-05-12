@@ -1076,14 +1076,15 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
+    const stdout = io.stdout();
     const stderr = io.stderr();
     expect(stderr).toContain('[5%] Fetching source files for warehouse/historic-sql');
     expect(stderr).toContain('[15%] Fetched 3 source files from historic-sql');
     expect(stderr).toContain('[45%] Planned 1 work unit');
     expect(stderr).toContain('[80%] Processed 1/1 work units');
     expect(stderr).toContain('[100%] Ingest completed');
-    expect(io.stdout()).toContain('Report: report-live-1');
-    expect(io.stdout()).not.toContain('[5%]');
+    expect(stdout).toContain('Report: report-live-1');
+    expect(stdout).not.toContain('[5%]');
   });
 
   it('writes plain TTY ingest progress to stderr and final report to stdout', async () => {

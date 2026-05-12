@@ -105,7 +105,7 @@ describe('sanitizeMemoryFlowTuiError', () => {
 describe('MemoryFlowTuiApp', () => {
   it('always shows the KTX logo', () => {
     const { lastFrame } = renderInkTest(<MemoryFlowTuiApp input={replayInput()} terminalWidth={120} onExit={vi.fn()} showBoot={false} />);
-    expect(lastFrame()).toContain('█████╔╝');
+    expect(lastFrame()).toContain('╚███╔╝');
   });
 
   it('shows persistent HUD with source and status terminology', () => {
@@ -229,7 +229,7 @@ describe('MemoryFlowTuiApp', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('Ingesting — 0/1 business area done');
     expect(frame).toContain('Reading table schemas, understanding relationships, creating query definitions');
-    expect(frame).toContain('█████╔╝');
+    expect(frame).toContain('╚███╔╝');
   });
 
   it('describes multi-source ingestion as building the context layer', () => {
