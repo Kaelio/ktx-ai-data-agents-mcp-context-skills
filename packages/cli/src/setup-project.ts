@@ -148,8 +148,8 @@ async function promptForNewProjectDir(
   const defaultProjectDir = join(projectDir, DEFAULT_NEW_PROJECT_FOLDER_NAME);
 
   while (true) {
-    io.stdout.write(`Relative paths are resolved from:\n  ${projectDir}\n`);
-    io.stdout.write(`Home paths are resolved from:\n  ${homeDir}\n`);
+    io.stdout.write(`│  Relative paths are resolved from:\n│    ${projectDir}\n`);
+    io.stdout.write(`│  Home paths are resolved from:\n│    ${homeDir}\n`);
     const destinationChoice = await prompts.select({
       message: 'Where should KTX create the project?',
       options: [
@@ -213,7 +213,7 @@ async function promptForNewProjectDir(
       confirmedCreation = true;
     }
 
-    io.stdout.write(`KTX will create:\n  ${selectedDir}\n`);
+    io.stdout.write(`│  KTX will create:\n│    ${selectedDir}\n`);
     if (state !== 'non-empty-directory') {
       const createAction = await prompts.select({
         message: `Create KTX project at ${selectedDir}?`,
@@ -317,7 +317,7 @@ export async function runKtxSetupProjectStep(
 
   const prompts = deps.prompts ?? createClackSetupProjectPromptAdapter();
   io.stdout.write(
-    'Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
+    '│  Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
   );
   while (true) {
     const choice = await prompts.select({

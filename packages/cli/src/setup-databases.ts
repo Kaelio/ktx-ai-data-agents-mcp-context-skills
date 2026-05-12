@@ -1110,7 +1110,7 @@ async function maybeRunHistoricSqlSetupProbe(input: {
     return;
   }
 
-  input.io.stdout.write('Historic SQL probe...\n');
+  input.io.stdout.write('│  Historic SQL probe...\n');
   const probe = input.deps.historicSqlProbe ?? defaultHistoricSqlProbe;
   const result = await probe({
     projectDir: input.projectDir,
@@ -1118,10 +1118,10 @@ async function maybeRunHistoricSqlSetupProbe(input: {
     dialect: 'postgres',
   });
   for (const line of result.lines) {
-    input.io.stdout.write(`${line}\n`);
+    input.io.stdout.write(`│${line}\n`);
   }
   if (!result.ok) {
-    input.io.stdout.write('Setup written; first ingest run will fail until fixed.\n');
+    input.io.stdout.write('│  Setup written; first ingest run will fail until fixed.\n');
   }
 }
 
@@ -1256,7 +1256,7 @@ async function chooseDrivers(
       return 'back';
     }
 
-    io.stdout.write('KTX cannot work without at least one primary source. Select a source or press Escape to go back.\n');
+    io.stdout.write('│  KTX cannot work without at least one primary source. Select a source or press Escape to go back.\n');
   }
 }
 

@@ -254,7 +254,7 @@ async function chooseCredentialRef(
   const prompts = deps.prompts ?? createPromptAdapter();
   if (args.showPromptInstructions !== false) {
     io.stdout.write(
-      'Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
+      '│  Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
     );
   }
   while (true) {
@@ -271,7 +271,7 @@ async function chooseCredentialRef(
     }
     if (choice === 'paste') {
       io.stdout.write(
-        'KTX will save the key in .ktx/secrets/anthropic-api-key with local file permissions, then write a file: reference in ktx.yaml.\n',
+        '│  KTX will save the key in .ktx/secrets/anthropic-api-key with local file permissions, then write a file: reference in ktx.yaml.\n',
       );
       const value = await prompts.password({ message: withTextInputNavigation('Anthropic API key') });
       if (value === undefined) {

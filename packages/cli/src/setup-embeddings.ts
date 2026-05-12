@@ -257,7 +257,7 @@ async function chooseCredentialRef(
   }
   if (choice === 'paste') {
     io.stdout.write(
-      `${[
+      `│  ${[
         `KTX will save the key in .ktx/secrets/${backend}-api-key with local file permissions,`,
         'then write a file: reference in ktx.yaml.',
       ].join(' ')}\n`,
