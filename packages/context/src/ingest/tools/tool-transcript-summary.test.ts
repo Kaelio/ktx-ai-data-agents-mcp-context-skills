@@ -92,6 +92,30 @@ describe('tool transcript summaries', () => {
     expect(summary.fatalErrorCount).toBe(0);
   });
 
+  it('treats explicit unmapped fallback as recovery for guarded SL write failures', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'sl_write_source',
+        input: { connectionId: 'dbt-main', sourceName: 'stg_accounts' },
+        output: { structured: { success: false, sourceName: 'stg_accounts' } },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        toolName: 'emit_unmapped_fallback',
+        input: { rawPath: 'models/schema.yml', reason: 'no_physical_table', fallback: 'wiki_only' },
+        output: 'recorded unmapped fallback for models/schema.yml (wiki_only)',
+      }),
+    );
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(0);
+  });
+
   it('keeps thrown tool errors fatal even after a successful write', () => {
     const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
 

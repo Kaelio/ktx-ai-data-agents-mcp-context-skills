@@ -50,6 +50,13 @@ export function recordToolTranscriptEntry(summary: MutableToolTranscriptSummary,
   if (recoveryKey) {
     summary.recoverableFailureCounts.delete(recoveryKey);
   }
+  if (entry.toolName === 'emit_unmapped_fallback') {
+    for (const key of [...summary.recoverableFailureCounts.keys()]) {
+      if (key.startsWith('sl:')) {
+        summary.recoverableFailureCounts.delete(key);
+      }
+    }
+  }
   refreshFatalErrorCount(summary);
 }
 
