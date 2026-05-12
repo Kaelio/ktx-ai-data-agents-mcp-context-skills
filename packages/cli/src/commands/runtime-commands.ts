@@ -53,10 +53,12 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
   runtime
     .command('stop')
     .description('Stop the KTX-managed Python HTTP daemon')
-    .action(async () => {
+    .option('--all', 'Stop all KTX daemon processes recorded or discoverable on this machine', false)
+    .action(async (options: { all?: boolean }) => {
       await runRuntimeArgs(context, {
         command: 'stop',
         cliVersion: context.packageInfo.version,
+        all: options.all === true,
       });
     });
 

@@ -143,6 +143,7 @@ describe('runKtxCli', () => {
     const installIo = makeIo();
     const startIo = makeIo();
     const stopIo = makeIo();
+    const stopAllIo = makeIo();
     const statusIo = makeIo();
     const doctorIo = makeIo();
     const pruneIo = makeIo();
@@ -156,6 +157,7 @@ describe('runKtxCli', () => {
       runKtxCli(['runtime', 'start', '--feature', 'local-embeddings', '--force'], startIo.io, { runtime }),
     ).resolves.toBe(0);
     await expect(runKtxCli(['runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['runtime', 'stop', '--all'], stopAllIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['runtime', 'doctor'], doctorIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(0);
@@ -185,11 +187,21 @@ describe('runKtxCli', () => {
       {
         command: 'stop',
         cliVersion: '0.0.0-private',
+        all: false,
       },
       stopIo.io,
     );
     expect(runtime).toHaveBeenNthCalledWith(
       4,
+      {
+        command: 'stop',
+        cliVersion: '0.0.0-private',
+        all: true,
+      },
+      stopAllIo.io,
+    );
+    expect(runtime).toHaveBeenNthCalledWith(
+      5,
       {
         command: 'status',
         cliVersion: '0.0.0-private',
@@ -198,7 +210,7 @@ describe('runKtxCli', () => {
       statusIo.io,
     );
     expect(runtime).toHaveBeenNthCalledWith(
-      5,
+      6,
       {
         command: 'doctor',
         cliVersion: '0.0.0-private',
@@ -207,7 +219,7 @@ describe('runKtxCli', () => {
       doctorIo.io,
     );
     expect(runtime).toHaveBeenNthCalledWith(
-      6,
+      7,
       {
         command: 'prune',
         cliVersion: '0.0.0-private',
@@ -216,6 +228,17 @@ describe('runKtxCli', () => {
       },
       pruneIo.io,
     );
+  });
+
+  it('documents runtime stop all in command help', async () => {
+    const testIo = makeIo();
+
+    await expect(runKtxCli(['runtime', 'stop', '--help'], testIo.io)).resolves.toBe(0);
+
+    expect(testIo.stdout()).toContain('--all');
+    expect(testIo.stdout()).toContain('Stop all KTX daemon processes recorded or discoverable');
+    expect(testIo.stdout()).toContain('on this machine');
+    expect(testIo.stderr()).toBe('');
   });
 
   it('routes sl query managed runtime install policies', async () => {

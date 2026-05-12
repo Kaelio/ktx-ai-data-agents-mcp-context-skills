@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  ManagedPythonDaemonStopAllResult,
   ManagedPythonDaemonStartResult,
   ManagedPythonDaemonStopResult,
 } from './managed-python-daemon.js';
@@ -199,11 +200,61 @@ describe('runKtxRuntime', () => {
       })),
     };
 
-    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0' }, io.io, deps)).resolves.toBe(0);
+    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', all: false }, io.io, deps)).resolves.toBe(0);
 
     expect(deps.stopDaemon).toHaveBeenCalledWith({ cliVersion: '0.2.0' });
     expect(io.stdout()).toContain('Stopped KTX Python daemon');
     expect(io.stdout()).toContain('pid: 4242');
+  });
+
+  it('stops all discovered Python daemons and reports the summary', async () => {
+    const io = makeIo();
+    const deps: KtxRuntimeDeps = {
+      stopAllDaemons: vi.fn(async (): Promise<ManagedPythonDaemonStopAllResult> => ({
+        runtimeRoot: '/runtime',
+        stopped: [
+          { pid: 4242, source: 'state', url: 'http://127.0.0.1:61234', statePaths: ['/runtime/0.2.0/daemon.json'] },
+          { pid: 5252, source: 'process', url: 'http://127.0.0.1:8765', statePaths: [] },
+        ],
+        stale: [],
+        failed: [],
+        scanErrors: [],
+      })),
+    };
+
+    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', all: true }, io.io, deps)).resolves.toBe(0);
+
+    expect(deps.stopAllDaemons).toHaveBeenCalledWith({ cliVersion: '0.2.0' });
+    expect(io.stdout()).toContain('Stopped 2 KTX Python daemons');
+    expect(io.stdout()).toContain('pid: 4242 source: state url: http://127.0.0.1:61234');
+    expect(io.stdout()).toContain('pid: 5252 source: process url: http://127.0.0.1:8765');
+  });
+
+  it('returns failure when stop all cannot stop every daemon', async () => {
+    const io = makeIo();
+    const deps: KtxRuntimeDeps = {
+      stopAllDaemons: vi.fn(async (): Promise<ManagedPythonDaemonStopAllResult> => ({
+        runtimeRoot: '/runtime',
+        stopped: [],
+        stale: [],
+        failed: [
+          {
+            pid: 4242,
+            source: 'state',
+            url: 'http://127.0.0.1:61234',
+            statePaths: ['/runtime/0.2.0/daemon.json'],
+            detail: 'Process still running after SIGKILL',
+          },
+        ],
+        scanErrors: ['ps failed'],
+      })),
+    };
+
+    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', all: true }, io.io, deps)).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('Stopped 0 KTX Python daemons; failed 1');
+    expect(io.stderr()).toContain('pid: 4242 source: state url: http://127.0.0.1:61234');
+    expect(io.stderr()).toContain('process scan: ps failed');
   });
 
   it('prints runtime status as JSON', async () => {
