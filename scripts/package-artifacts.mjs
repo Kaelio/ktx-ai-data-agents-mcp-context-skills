@@ -619,8 +619,8 @@ try {
   const missingProjectError = parseJsonFailure('ktx agent sl list missing project', missingProjectSearch);
   assert.equal(missingProjectError.error.code, 'agent_sl_search_missing_project');
   assert.deepEqual(missingProjectError.error.nextSteps, [
-    'ktx demo',
     'ktx setup --project-dir ' + missingProjectDir,
+    'ktx status --project-dir ' + missingProjectDir,
     'ktx ingest <connection>',
     'ktx agent sl list --json --query "revenue" --project-dir ' + missingProjectDir,
   ]);
@@ -676,8 +676,8 @@ try {
   const emptySearchError = parseJsonFailure('ktx agent sl list no connections', emptySearch);
   assert.equal(emptySearchError.error.code, 'agent_sl_search_no_connections');
   assert.deepEqual(emptySearchError.error.nextSteps, [
-    'ktx demo',
     'ktx setup --project-dir ' + emptyProjectDir,
+    'ktx status --project-dir ' + emptyProjectDir,
     'ktx ingest <connection>',
     'ktx agent sl list --json --query "revenue" --project-dir ' + emptyProjectDir,
   ]);
@@ -767,8 +767,8 @@ try {
   const noSourceSearchError = parseJsonFailure('ktx agent sl list no indexed sources', noSourceSearch);
   assert.equal(noSourceSearchError.error.code, 'agent_sl_search_no_indexed_sources');
   assert.deepEqual(noSourceSearchError.error.nextSteps, [
-    'ktx demo',
     'ktx setup --project-dir ' + projectDir,
+    'ktx status --project-dir ' + projectDir,
     'ktx ingest <connection>',
     'ktx agent sl list --json --query "revenue" --project-dir ' + projectDir,
   ]);
@@ -1005,7 +1005,7 @@ try {
 `;
 }
 
-export function npmDemoSmokeSource() {
+export function npmCliSmokeSource() {
   return `
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -1047,18 +1047,8 @@ function requireStdout(label, result, pattern) {
   assert.match(result.stdout, pattern, label + ' stdout did not match ' + pattern);
 }
 
-function requireProjectStderr(label, result, projectDir) {
-  assert.equal(
-    result.code,
-    0,
-    label + ' failed with code ' + result.code + '\\nstdout:\\n' + result.stdout + '\\nstderr:\\n' + result.stderr,
-  );
-  assert.equal(result.stderr, 'Project: ' + projectDir + '\\n', label + ' wrote unexpected stderr');
-}
-
-const root = await mkdtemp(join(tmpdir(), 'ktx-packed-demo-smoke-'));
+const root = await mkdtemp(join(tmpdir(), 'ktx-cli-smoke-'));
 try {
-  const projectDir = join(root, 'demo-project');
   const packageJson = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8'));
   assert.deepEqual(Object.keys(packageJson.dependencies), ['@kaelio/ktx']);
 
@@ -1067,61 +1057,10 @@ try {
   requireStdout('ktx --help', help, /Usage: ktx/);
   requireStdout('ktx --help', help, /setup/);
 
-  const seeded = await run(
-    'pnpm',
-    ['exec', 'ktx', 'setup', 'demo', '--project-dir', projectDir, '--no-input', '--plain'],
-  );
-  requireSuccess('ktx setup demo seeded', seeded);
-  requireStdout('ktx setup demo seeded', seeded, /Mode: seeded/);
-  requireStdout('ktx setup demo seeded', seeded, /Source: packaged demo project/);
-  requireStdout('ktx setup demo seeded', seeded, /LLM calls: none/);
-  requireStdout('ktx setup demo seeded', seeded, /ktx agent context --json/);
-  assert.doesNotMatch(seeded.stdout, new RegExp(['--mode', 'deterministic'].join(' ')));
-  assert.doesNotMatch(seeded.stdout, /KTX memory flow/);
-  requireProjectStderr('ktx setup demo seeded', seeded, projectDir);
-
-  const demoWikiSearch = await run('pnpm', [
-    'exec',
-    'ktx',
-    'agent',
-    'wiki',
-    'search',
-    'ARR contract',
-    '--json',
-    '--limit',
-    '5',
-    '--project-dir',
-    projectDir,
-  ]);
-  requireSuccess('ktx seeded demo agent wiki search', demoWikiSearch);
-  const demoWikiSearchJson = JSON.parse(demoWikiSearch.stdout);
-  assert.ok(demoWikiSearchJson.totalFound > 0, 'seeded demo wiki search should find results');
-  assert.ok(
-    demoWikiSearchJson.results.some((result) => Array.isArray(result.matchReasons) && result.matchReasons.length > 0),
-    'seeded demo wiki search should expose match reasons',
-  );
-  process.stdout.write('ktx seeded demo agent wiki search verified\\n');
-
-  const demoSlSearch = await run('pnpm', [
-    'exec',
-    'ktx',
-    'agent',
-    'sl',
-    'list',
-    '--json',
-    '--query',
-    'ARR',
-    '--project-dir',
-    projectDir,
-  ]);
-  requireSuccess('ktx seeded demo agent sl search', demoSlSearch);
-  const demoSlSearchJson = JSON.parse(demoSlSearch.stdout);
-  assert.ok(demoSlSearchJson.totalSources > 0, 'seeded demo semantic-layer search should find sources');
-  assert.ok(
-    demoSlSearchJson.sources.some((source) => Array.isArray(source.matchReasons) && source.matchReasons.length > 0),
-    'seeded demo semantic-layer search should expose match reasons',
-  );
-  process.stdout.write('ktx seeded demo agent sl search verified\\n');
+  const setupHelp = await run('pnpm', ['exec', 'ktx', 'setup', '--help']);
+  requireSuccess('ktx setup --help', setupHelp);
+  requireStdout('ktx setup --help', setupHelp, /Usage: ktx setup/);
+  requireStdout('ktx setup --help', setupHelp, /--no-input/);
 
   const doctor = await run('pnpm', ['exec', 'ktx', 'status', '--no-input']);
   assert.ok([0, 1].includes(doctor.code), 'ktx status setup exit code must be 0 or 1');
@@ -1176,29 +1115,29 @@ async function verifyNpmArtifacts(layout, tmpRoot) {
   await writeFile(join(projectDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());
   await writeFile(join(projectDir, 'verify-npm.mjs'), npmVerifySource());
   await writeFile(join(projectDir, 'verify-installed-cli.mjs'), npmRuntimeSmokeSource());
-  await writeFile(join(projectDir, 'verify-installed-demo.mjs'), npmDemoSmokeSource());
+  await writeFile(join(projectDir, 'verify-installed-cli-commands.mjs'), npmCliSmokeSource());
 
   await runCommand('pnpm', ['install'], { cwd: projectDir });
   await runCommand('pnpm', ['rebuild', 'better-sqlite3'], { cwd: projectDir });
   await runCommand('node', ['verify-npm.mjs'], { cwd: projectDir });
   await runCommand('pnpm', ['exec', 'ktx', '--version'], { cwd: projectDir });
   await runCommand('node', ['verify-installed-cli.mjs'], { cwd: projectDir });
-  await runCommand('node', ['verify-installed-demo.mjs'], { cwd: projectDir });
+  await runCommand('node', ['verify-installed-cli-commands.mjs'], { cwd: projectDir });
 }
 
-async function verifyNpmDemoArtifacts(layout, tmpRoot) {
+async function verifyNpmCliArtifacts(layout, tmpRoot) {
   for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
     await assertPathExists(layout.npmTarballs[packageInfo.name], `${packageInfo.name} tarball`);
   }
 
-  const projectDir = join(tmpRoot, 'npm-demo-clean-install');
+  const projectDir = join(tmpRoot, 'npm-cli-clean-install');
   await mkdir(projectDir, { recursive: true });
   await writeFile(join(projectDir, 'package.json'), `${JSON.stringify(npmSmokePackageJson(layout), null, 2)}\n`);
   await writeFile(join(projectDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());
-  await writeFile(join(projectDir, 'verify-installed-demo.mjs'), npmDemoSmokeSource());
+  await writeFile(join(projectDir, 'verify-installed-cli-commands.mjs'), npmCliSmokeSource());
 
   await runCommand('pnpm', ['install'], { cwd: projectDir });
-  await runCommand('node', ['verify-installed-demo.mjs'], { cwd: projectDir });
+  await runCommand('node', ['verify-installed-cli-commands.mjs'], { cwd: projectDir });
 }
 
 async function verifyArtifacts(layout) {
@@ -1212,12 +1151,12 @@ async function verifyArtifacts(layout) {
   }
 }
 
-async function verifyDemoArtifacts(layout) {
+async function verifyCliArtifacts(layout) {
   await verifyArtifactManifest(layout);
 
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'ktx-demo-artifacts-'));
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'ktx-cli-artifacts-'));
   try {
-    await verifyNpmDemoArtifacts(layout, tmpRoot);
+    await verifyNpmCliArtifacts(layout, tmpRoot);
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }
@@ -1236,7 +1175,7 @@ async function main() {
     return;
   }
   if (command === 'verify-demo') {
-    await verifyDemoArtifacts(layout);
+    await verifyCliArtifacts(layout);
     return;
   }
   if (command === 'verify-manifest') {

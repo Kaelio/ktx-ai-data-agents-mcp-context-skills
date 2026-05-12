@@ -21,8 +21,8 @@ function projectSearchCommand(projectDir: string, query: string | undefined): st
 
 function baseNextSteps(projectDir: string, query: string | undefined): string[] {
   return [
-    'ktx demo',
     `ktx setup --project-dir ${projectDir}`,
+    `ktx status --project-dir ${projectDir}`,
     'ktx ingest <connection>',
     projectSearchCommand(projectDir, query),
   ];

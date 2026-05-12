@@ -91,11 +91,11 @@ export interface KtxSetupContextStepArgs {
   autoWatch?: boolean;
 }
 
-export type KtxSetupContextCommandArgs =
-  | { command: 'build'; projectDir: string; inputMode: 'auto' | 'disabled' }
-  | { command: 'watch'; projectDir: string; runId?: string; inputMode: 'auto' | 'disabled' }
-  | { command: 'status'; projectDir: string; runId?: string; json: boolean }
-  | { command: 'stop'; projectDir: string; runId?: string };
+interface KtxSetupContextWatchArgs {
+  projectDir: string;
+  runId?: string;
+  inputMode: 'auto' | 'disabled';
+}
 
 export interface KtxSetupContextPromptAdapter {
   select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
@@ -154,12 +154,11 @@ async function pathExists(path: string): Promise<boolean> {
 
 export function contextBuildCommands(projectDir: string, runId?: string): KtxSetupContextCommands {
   const resolvedProjectDir = resolve(projectDir);
-  const runIdArg = runId ? ` ${runId}` : '';
   return {
-    build: `ktx setup context build --project-dir ${resolvedProjectDir}`,
-    watch: `ktx setup context watch${runIdArg} --project-dir ${resolvedProjectDir}`,
-    status: `ktx setup context status${runIdArg} --project-dir ${resolvedProjectDir}`,
-    stop: `ktx setup context stop${runIdArg} --project-dir ${resolvedProjectDir}`,
+    build: `ktx setup --project-dir ${resolvedProjectDir}`,
+    watch: `ktx setup --project-dir ${resolvedProjectDir}`,
+    status: `ktx status --project-dir ${resolvedProjectDir}`,
+    stop: `ktx setup --project-dir ${resolvedProjectDir}`,
     resume: `ktx setup --project-dir ${resolvedProjectDir}`,
   };
 }
@@ -498,7 +497,7 @@ function writeSkippedContext(projectDir: string, io: KtxCliIo): void {
   io.stdout.write('\nKTX is configured, but context has not been built yet.\n\n');
   io.stdout.write('Agents were not connected because KTX has not prepared searchable context for them.\n\n');
   io.stdout.write(`Resume setup:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
-  io.stdout.write(`Build context directly:\n  ktx setup context build --project-dir ${resolve(projectDir)}\n\n`);
+  io.stdout.write(`Build context:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
   io.stdout.write(`Check status:\n  ktx status --project-dir ${resolve(projectDir)}\n`);
 }
 
@@ -726,7 +725,6 @@ export async function runKtxSetupContextStep(
       if (args.autoWatch) {
         const watched = await watchContextStatus(
           {
-            command: 'watch',
             projectDir: args.projectDir,
             ...(existingState.runId ? { runId: existingState.runId } : {}),
             inputMode: args.inputMode,
@@ -752,7 +750,6 @@ export async function runKtxSetupContextStep(
       if (choice === 'watch') {
         const watched = await watchContextStatus(
           {
-            command: 'watch',
             projectDir: args.projectDir,
             ...(existingState.runId ? { runId: existingState.runId } : {}),
             inputMode: args.inputMode,
@@ -833,10 +830,6 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-function statusPayload(state: KtxSetupContextState): KtxSetupContextStatusSummary {
-  return setupContextStatusFromState(state, { completedStep: state.status === 'completed' });
-}
-
 function writeContextStatus(state: KtxSetupContextState, io: KtxCliIo): void {
   io.stdout.write(`KTX context built: ${state.status === 'completed' ? 'yes' : state.status.replaceAll('_', ' ')}\n`);
   if (state.runId) {
@@ -850,7 +843,7 @@ function writeContextStatus(state: KtxSetupContextState, io: KtxCliIo): void {
 }
 
 async function watchContextStatus(
-  args: Extract<KtxSetupContextCommandArgs, { command: 'watch' }>,
+  args: KtxSetupContextWatchArgs,
   initialState: KtxSetupContextState,
   io: KtxCliIo,
   deps: KtxSetupContextDeps,
@@ -862,7 +855,7 @@ async function watchContextStatus(
 }
 
 async function watchContextStatusText(
-  args: Extract<KtxSetupContextCommandArgs, { command: 'watch' }>,
+  args: KtxSetupContextWatchArgs,
   initialState: KtxSetupContextState,
   io: KtxCliIo,
   deps: KtxSetupContextDeps,
@@ -894,7 +887,7 @@ async function watchContextStatusText(
 }
 
 async function watchContextStatusWithProgressView(
-  args: Extract<KtxSetupContextCommandArgs, { command: 'watch' }>,
+  args: KtxSetupContextWatchArgs,
   initialState: KtxSetupContextState,
   io: KtxCliIo,
   deps: KtxSetupContextDeps,
@@ -975,7 +968,7 @@ async function watchContextStatusWithProgressView(
 
   io.stdout.write('\n\nContext build continuing in the background.\n');
   io.stdout.write(`Resume: ktx setup --project-dir ${projectDir}\n`);
-  io.stdout.write(`Status: ktx setup context status --project-dir ${projectDir}\n`);
+  io.stdout.write(`Status: ktx status --project-dir ${projectDir}\n`);
   return { exitCode: 0, state };
 }
 
@@ -990,52 +983,4 @@ function setupResultFromWatchedState(projectDir: string, state: KtxSetupContextS
     return { status: 'detached', projectDir, runId: state.runId ?? '' };
   }
   return { status: 'failed', projectDir };
-}
-
-export async function runKtxSetupContextCommand(
-  args: KtxSetupContextCommandArgs,
-  io: KtxCliIo,
-  deps: KtxSetupContextDeps = {},
-): Promise<number> {
-  if (args.command === 'build') {
-    const result = await runKtxSetupContextStep(
-      { projectDir: args.projectDir, inputMode: args.inputMode, prompt: false },
-      io,
-      deps,
-    );
-    return result.status === 'ready' || result.status === 'skipped' ? 0 : 1;
-  }
-
-  const state = await readKtxSetupContextState(args.projectDir);
-  if (!stateMatchesRunId(state, args.runId)) {
-    io.stderr.write(`KTX setup context run "${args.runId}" was not found.\n`);
-    return 1;
-  }
-
-  if (args.command === 'status') {
-    if (args.json) {
-      io.stdout.write(`${JSON.stringify(statusPayload(state), null, 2)}\n`);
-    } else {
-      writeContextStatus(state, io);
-    }
-    return 0;
-  }
-
-  if (args.command === 'watch') {
-    return (await watchContextStatus(args, state, io, deps)).exitCode;
-  }
-
-  const updatedAt = new Date().toISOString();
-  const nextState: KtxSetupContextState = {
-    ...state,
-    status: state.status === 'completed' ? 'completed' : 'paused',
-    updatedAt,
-  };
-  await writeKtxSetupContextState(args.projectDir, nextState);
-  io.stdout.write(
-    state.status === 'completed'
-      ? 'KTX context build already completed.\n'
-      : 'KTX context build pause requested. Resume with setup when ready.\n',
-  );
-  return 0;
 }

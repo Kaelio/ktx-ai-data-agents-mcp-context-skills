@@ -508,7 +508,7 @@ describe('runContextBuild', () => {
     expect(mockExit).toHaveBeenCalledWith(0);
     expect(io.stdout()).toContain('Context build continuing in the background.');
     expect(io.stdout()).toContain('Resume: ktx setup --project-dir /tmp/project');
-    expect(io.stdout()).toContain('Status: ktx setup context status --project-dir /tmp/project');
+    expect(io.stdout()).toContain('Status: ktx status --project-dir /tmp/project');
     mockExit.mockRestore();
   });
 

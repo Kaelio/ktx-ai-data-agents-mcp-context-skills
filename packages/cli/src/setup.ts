@@ -11,7 +11,6 @@ import {
   type KtxAgentTarget,
   type KtxSetupAgentsDeps,
   readKtxAgentInstallManifest,
-  removeKtxAgentInstall,
   runKtxSetupAgentsStep,
 } from './setup-agents.js';
 import {
@@ -32,8 +31,6 @@ import { type KtxSetupSourcesDeps, type KtxSetupSourceType, runKtxSetupSourcesSt
 import { withMenuOptionsSpacing } from './prompt-navigation.js';
 import {
   readKtxSetupContextState,
-  runKtxSetupContextCommand,
-  type KtxSetupContextCommandArgs,
   type KtxSetupContextDeps,
   type KtxSetupContextResult,
   runKtxSetupContextStep,
@@ -105,13 +102,7 @@ export type KtxSetupArgs =
       runInitialSourceIngest?: boolean;
       skipSources?: boolean;
       showEntryMenu?: boolean;
-    }
-  | { command: 'status'; projectDir: string; json: boolean }
-  | { command: 'context-build'; projectDir: string; inputMode: 'auto' | 'disabled' }
-  | { command: 'context-watch'; projectDir: string; runId?: string; inputMode: 'auto' | 'disabled' }
-  | { command: 'context-status'; projectDir: string; runId?: string; json: boolean }
-  | { command: 'context-stop'; projectDir: string; runId?: string }
-  | { command: 'remove-agents'; projectDir: string };
+    };
 
 export interface KtxSetupDeps {
   project?: KtxSetupProjectDeps;
@@ -142,7 +133,6 @@ export interface KtxSetupDeps {
   agentsDeps?: KtxSetupAgentsDeps;
   context?: (args: Parameters<typeof runKtxSetupContextStep>[0], io: KtxCliIo) => Promise<KtxSetupContextResult>;
   contextDeps?: KtxSetupContextDeps;
-  removeAgents?: typeof removeKtxAgentInstall;
   readyMenuDeps?: KtxSetupReadyMenuDeps;
   entryMenuDeps?: KtxSetupEntryMenuDeps;
 }
@@ -358,8 +348,8 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
     return [
       `No KTX project found at ${status.project.path}.`,
       '',
-      'Check another project: ktx --project-dir <folder> setup status',
-      'Or from that folder: ktx setup status',
+      'Check another project: ktx --project-dir <folder> status',
+      'Or from that folder: ktx status',
       'Create a new KTX project here: ktx setup',
       '',
     ].join('\n');
@@ -383,9 +373,7 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
     lines.push(`Resume: ${status.context.watchCommand}`);
   }
   if (!status.context.ready && status.context.status === 'failed' && status.context.detail) {
-    lines.push(
-      `Retry: ${status.context.retryCommand ?? `ktx setup context build --project-dir ${status.project.path}`}`,
-    );
+    lines.push(`Retry: ${status.context.retryCommand ?? `ktx setup --project-dir ${status.project.path}`}`);
   }
 
   return `${lines.join('\n')}\n`;
@@ -420,7 +408,7 @@ function setupContextActive(status: KtxSetupStatus): boolean {
 
 function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
   io.stderr.write('KTX context is not ready for agents.\n\n');
-  io.stderr.write(`Build context first:\n  ktx setup context build --project-dir ${resolve(projectDir)}\n\n`);
+  io.stderr.write(`Build context first:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
   io.stderr.write(`Then install agent integration:\n  ktx setup --agents --project-dir ${resolve(projectDir)}\n`);
 }
 
@@ -448,43 +436,6 @@ export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSet
 }
 
 async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
-  if (args.command === 'remove-agents') {
-    return await (deps.removeAgents ?? removeKtxAgentInstall)(args.projectDir, io);
-  }
-
-  if (
-    args.command === 'context-build' ||
-    args.command === 'context-watch' ||
-    args.command === 'context-status' ||
-    args.command === 'context-stop'
-  ) {
-    const commandArgs: KtxSetupContextCommandArgs =
-      args.command === 'context-build'
-        ? { command: 'build', projectDir: args.projectDir, inputMode: args.inputMode }
-        : args.command === 'context-watch'
-          ? {
-              command: 'watch',
-              projectDir: args.projectDir,
-              ...(args.runId ? { runId: args.runId } : {}),
-              inputMode: args.inputMode,
-            }
-          : args.command === 'context-status'
-            ? {
-                command: 'status',
-                projectDir: args.projectDir,
-                ...(args.runId ? { runId: args.runId } : {}),
-                json: args.json,
-              }
-            : { command: 'stop', projectDir: args.projectDir, ...(args.runId ? { runId: args.runId } : {}) };
-    return await runKtxSetupContextCommand(commandArgs, io, deps.contextDeps);
-  }
-
-  if (args.command === 'status') {
-    const status = await readKtxSetupStatus(args.projectDir);
-    io.stdout.write(args.json ? `${JSON.stringify(status, null, 2)}\n` : formatKtxSetupStatus(status));
-    return 0;
-  }
-
   io.stdout.write('KTX setup\n');
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;

@@ -1,4 +1,3 @@
-import { dirname, join } from 'node:path';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
@@ -31,26 +30,6 @@ function assertHttpRegistry(registry, label) {
 
 function registryEnv(config) {
   return config.registry ? { npm_config_registry: config.registry } : {};
-}
-
-function runtimeCommandEnv(config, runtimeRoot) {
-  return { ...registryEnv(config), KTX_RUNTIME_ROOT: runtimeRoot };
-}
-
-function semanticQueryArgs(projectDir) {
-  return [
-    'sl',
-    'query',
-    '--project-dir',
-    projectDir,
-    '--connection-id',
-    'orbit_demo',
-    '--measure',
-    'contracts.contract_count',
-    '--format',
-    'sql',
-    '--yes',
-  ];
 }
 
 function normalizePolicyConfig(policyConfig = {}) {
@@ -150,24 +129,22 @@ export function buildPublishedPackageNpxCommand(config, args, label = 'published
 
 export function buildPublishedPackageSmokeCommands(
   config,
-  projectDir,
-  runtimeRoot = join(dirname(projectDir), 'managed-runtime'),
+  _projectDir,
 ) {
-  const runtimeEnv = runtimeCommandEnv(config, runtimeRoot);
   const packageEnv = registryEnv(config);
-  const queryArgs = semanticQueryArgs(projectDir);
 
   return [
     buildPublishedPackageNpxCommand(config, ['--version'], 'published package npx version'),
     buildPublishedPackageNpxCommand(
       config,
-      ['setup', 'demo', '--project-dir', projectDir, '--no-input', '--plain'],
-      'published package setup demo',
-      { KTX_RUNTIME_ROOT: runtimeRoot },
+      ['setup', '--help'],
+      'published package npx setup help',
     ),
-    buildPublishedPackageNpxCommand(config, queryArgs, 'published package npx sl query', {
-      KTX_RUNTIME_ROOT: runtimeRoot,
-    }),
+    buildPublishedPackageNpxCommand(
+      config,
+      ['status', '--help'],
+      'published package npx status help',
+    ),
     {
       label: 'published package local install',
       command: 'pnpm',
@@ -181,10 +158,10 @@ export function buildPublishedPackageSmokeCommands(
       env: packageEnv,
     },
     {
-      label: 'published package local sl query',
+      label: 'published package local status help',
       command: 'npx',
-      args: ['ktx', ...queryArgs],
-      env: runtimeEnv,
+      args: ['ktx', 'status', '--help'],
+      env: packageEnv,
     },
     {
       label: 'published package global install',
@@ -199,10 +176,10 @@ export function buildPublishedPackageSmokeCommands(
       env: packageEnv,
     },
     {
-      label: 'published package global sl query',
+      label: 'published package global status help',
       command: 'ktx',
-      args: queryArgs,
-      env: runtimeEnv,
+      args: ['status', '--help'],
+      env: packageEnv,
     },
   ];
 }

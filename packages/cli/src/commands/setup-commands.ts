@@ -3,7 +3,6 @@ import type { KtxCliCommandContext } from '../cli-program.js';
 import { resolveCommandProjectDir } from '../cli-program.js';
 import type { KtxSetupDatabaseDriver } from '../setup-databases.js';
 import type { KtxSetupSourceType } from '../setup-sources.js';
-import { registerDemoCommands } from './demo-commands.js';
 
 async function runSetupArgs(
   context: KtxCliCommandContext,
@@ -414,98 +413,4 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       showEntryMenu: shouldShowSetupEntryMenu(options, command),
     });
   });
-
-  registerDemoCommands(setup, context, { description: 'Run the packaged KTX demo from setup' });
-
-  const setupContext = setup.command('context').description('Build, inspect, and recover setup-managed KTX context');
-
-  function setupContextInputMode(command: {
-    optsWithGlobals?: () => unknown;
-    opts?: () => unknown;
-  }): 'auto' | 'disabled' {
-    const options = command.optsWithGlobals?.() as { input?: boolean } | undefined;
-    return options?.input === false ? 'disabled' : 'auto';
-  }
-
-  setupContext
-    .command('build')
-    .description('Build agent-ready KTX context for setup')
-    .option('--no-input', 'Disable interactive terminal input')
-    .action(async (options: { input?: boolean }, command) => {
-      await runSetupArgs(context, {
-        command: 'context-build',
-        projectDir: resolveCommandProjectDir(command),
-        inputMode: options.input === false ? 'disabled' : setupContextInputMode(command),
-      });
-    });
-
-  setupContext
-    .command('watch')
-    .description('Watch a setup-managed context build')
-    .argument('[runId]', 'Setup context build run id')
-    .option('--no-input', 'Disable interactive terminal input')
-    .action(async (runId: string | undefined, options: { input?: boolean }, command) => {
-      await runSetupArgs(context, {
-        command: 'context-watch',
-        projectDir: resolveCommandProjectDir(command),
-        ...(runId ? { runId } : {}),
-        inputMode: options.input === false ? 'disabled' : setupContextInputMode(command),
-      });
-    });
-
-  setupContext
-    .command('status')
-    .description('Print setup-managed context build status')
-    .argument('[runId]', 'Setup context build run id')
-    .option('--json', 'Print JSON output', false)
-    .action(async (runId: string | undefined, options: { json?: boolean }, command) => {
-      await runSetupArgs(context, {
-        command: 'context-status',
-        projectDir: resolveCommandProjectDir(command),
-        ...(runId ? { runId } : {}),
-        json: options.json === true,
-      });
-    });
-
-  setupContext
-    .command('stop')
-    .description('Request a pause for a setup-managed context build')
-    .argument('[runId]', 'Setup context build run id')
-    .option('--force', 'Request the pause without an interactive confirmation', false)
-    .action(async (runId: string | undefined, _options: { force?: boolean }, command) => {
-      await runSetupArgs(context, {
-        command: 'context-stop',
-        projectDir: resolveCommandProjectDir(command),
-        ...(runId ? { runId } : {}),
-      });
-    });
-
-  setup
-    .command('remove')
-    .description('Remove setup-managed local integrations')
-    .option('--agents', 'Remove setup-managed agent integration files', false)
-    .action(async (options: { agents?: boolean }, command) => {
-      const parentOptions = command.parent?.opts() as { agents?: boolean } | undefined;
-      if (options.agents !== true && parentOptions?.agents !== true) {
-        context.io.stderr.write('Choose what to remove: --agents.\n');
-        context.setExitCode(1);
-        return;
-      }
-      await runSetupArgs(context, {
-        command: 'remove-agents',
-        projectDir: resolveCommandProjectDir(command),
-      });
-    });
-
-  setup
-    .command('status')
-    .description('Show setup readiness for the resolved KTX project')
-    .option('--json', 'Print JSON output', false)
-    .action(async (options: { json?: boolean }, command) => {
-      await runSetupArgs(context, {
-        command: 'status',
-        projectDir: resolveCommandProjectDir(command),
-        json: options.json === true,
-      });
-    });
 }

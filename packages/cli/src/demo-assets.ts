@@ -1,11 +1,9 @@
 import { constants as fsConstants } from 'node:fs';
-import { access, copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
-import type { MemoryFlowReplayInput } from '@ktx/context/ingest/memory-flow';
-import { loadDemoReplayFile, loadLatestDemoReplay } from './demo-replay-store.js';
 
 interface DemoProjectResult {
   projectDir: string;
@@ -19,25 +17,9 @@ interface EnsureDemoProjectOptions {
   force: boolean;
 }
 
-type DemoProjectStateStatus = 'missing' | 'ready' | 'corrupt';
-
-interface DemoProjectState {
-  status: DemoProjectStateStatus;
-  projectDir: string;
-  missing: string[];
-}
-
 export const DEMO_CONNECTION_ID = 'orbit_demo';
 export const DEMO_ADAPTER = 'live-database';
 export const DEMO_REPLAY_FILE = 'replay.memory-flow.v1.json';
-export const DEMO_FULL_JOB_ID = 'demo-full-ingest';
-
-const REQUIRED_BASE_PROJECT_PATHS = [
-  'ktx.yaml',
-  'demo.db',
-  'state.sqlite',
-  join('replays', DEMO_REPLAY_FILE),
-] as const;
 
 const REQUIRED_PACKAGED_BASE_ASSET_PATHS = ['demo.db', 'manifest.json', DEMO_REPLAY_FILE] as const;
 
@@ -66,49 +48,6 @@ async function exists(path: string): Promise<boolean> {
 export function defaultDemoProjectDir(): string {
   const suffix = randomBytes(4).toString('hex');
   return join(tmpdir(), `ktx-demo-${suffix}`);
-}
-
-export async function inspectDemoProjectState(projectDir: string): Promise<DemoProjectState> {
-  const root = resolve(projectDir);
-  const missing: string[] = [];
-
-  for (const relativePath of REQUIRED_BASE_PROJECT_PATHS) {
-    if (!(await exists(join(root, relativePath)))) {
-      missing.push(relativePath);
-    }
-  }
-
-  if (missing.length === REQUIRED_BASE_PROJECT_PATHS.length) {
-    return { status: 'missing', projectDir: root, missing };
-  }
-
-  if (missing.length > 0) {
-    return { status: 'corrupt', projectDir: root, missing };
-  }
-
-  return { status: 'ready', projectDir: root, missing: [] };
-}
-
-export async function resetDemoProject(options: EnsureDemoProjectOptions): Promise<DemoProjectResult> {
-  const projectDir = resolve(options.projectDir);
-  if (!options.force) {
-    throw new Error(`ktx setup demo reset is destructive; pass --force to recreate ${projectDir}`);
-  }
-
-  const preservedConfig = await readExistingConfig(join(projectDir, 'ktx.yaml'));
-  const result = await ensureDemoProject({ projectDir, force: true });
-  if (preservedConfig !== null) {
-    await writeFile(result.configPath, preservedConfig, 'utf-8');
-  }
-  return result;
-}
-
-async function readExistingConfig(configPath: string): Promise<string | null> {
-  try {
-    return await readFile(configPath, 'utf-8');
-  } catch {
-    return null;
-  }
 }
 
 function demoConfig(databasePath: string): string {
@@ -242,35 +181,4 @@ export async function ensureSeededDemoProject(options: EnsureDemoProjectOptions)
 
   await copySeededAssetDirectories(result.projectDir);
   return result;
-}
-
-export async function loadPackagedDemoReplay(): Promise<MemoryFlowReplayInput> {
-  const replay = await loadDemoReplayFile(join(assetDir(), DEMO_REPLAY_FILE));
-  return {
-    ...replay,
-    metadata: {
-      schemaVersion: 1,
-      mode: replay.metadata?.mode ?? 'seeded',
-      origin: 'packaged',
-      timing: replay.metadata?.timing ?? 'prebuilt',
-      capturedAt: replay.metadata?.capturedAt ?? null,
-      sourceReportId: replay.metadata?.sourceReportId ?? 'demo-seeded-report',
-      sourceReportPath: replay.metadata?.sourceReportPath ?? `reports/seeded-demo-report.json`,
-      fallbackReason: null,
-    },
-  };
-}
-
-export async function loadProjectDemoReplay(projectDir: string): Promise<MemoryFlowReplayInput> {
-  const latest = await loadLatestDemoReplay(projectDir);
-  if (latest) {
-    return latest;
-  }
-
-  const replayPath = join(resolve(projectDir), 'replays', DEMO_REPLAY_FILE);
-  if (!(await exists(replayPath))) {
-    await mkdir(dirname(replayPath), { recursive: true });
-    await copyPackagedReplay(resolve(projectDir));
-  }
-  return loadPackagedDemoReplay();
 }

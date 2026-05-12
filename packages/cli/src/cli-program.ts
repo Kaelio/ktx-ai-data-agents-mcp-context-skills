@@ -33,6 +33,14 @@ interface KtxCommanderProgramOptions {
   runInit: (args: { projectDir: string; projectName?: string; force: boolean }, io: KtxCliIo) => Promise<number>;
 }
 
+export interface BuildKtxProgramOptions {
+  io: KtxCliIo;
+  deps: KtxCliDeps;
+  packageInfo: KtxCliPackageInfo;
+  runInit: (args: { projectDir: string; projectName?: string; force: boolean }, io: KtxCliIo) => Promise<number>;
+  setExitCode?: (code: number) => void;
+}
+
 type CommanderExitLike = { exitCode: number; code: string; message: string };
 
 interface KtxGlobalOptionValues {
@@ -288,6 +296,35 @@ async function runBareInteractiveCommand(
   return 0;
 }
 
+export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
+  const program = createBaseProgram(options.packageInfo, options.io);
+  program.hook('preAction', (_thisCommand, actionCommand) => {
+    writeProjectDir(options.io, actionCommand as CommandPathNode);
+  });
+
+  const context: KtxCliCommandContext = {
+    io: options.io,
+    deps: options.deps,
+    packageInfo: options.packageInfo,
+    setExitCode: options.setExitCode ?? (() => {}),
+    runInit: options.runInit,
+    writeDebug: (command: string, commandContext: CommandWithGlobalOptions) => {
+      writeDebug(options.io, commandContext, command);
+    },
+  };
+
+  registerSetupCommands(program, context);
+  registerConnectionCommands(program, context);
+  registerPublicIngestCommands(program, context);
+  registerWikiCommands(program, context);
+  registerSlCommands(program, context);
+  registerStatusCommands(program, context);
+  registerAgentCommands(program, context);
+  registerDevCommands(program, context);
+
+  return program;
+}
+
 export async function runCommanderKtxCli(
   argv: string[],
   io: KtxCliIo,
@@ -297,11 +334,16 @@ export async function runCommanderKtxCli(
 ): Promise<number> {
   profileMark('commander:entry');
   let exitCode = 0;
-  const program = createBaseProgram(info, io);
-  program.hook('preAction', (_thisCommand, actionCommand) => {
-    writeProjectDir(io, actionCommand as CommandPathNode);
+  const program = buildKtxProgram({
+    io,
+    deps,
+    packageInfo: info,
+    runInit: options.runInit,
+    setExitCode: (code: number) => {
+      exitCode = code;
+    },
   });
-  profileMark('commander:base-program');
+  profileMark('commander:program-built');
   const context: KtxCliCommandContext = {
     io,
     deps,
@@ -314,30 +356,6 @@ export async function runCommanderKtxCli(
       writeDebug(io, commandContext, command);
     },
   };
-
-  registerSetupCommands(program, context);
-  profileMark('commander:register-setup');
-
-  registerConnectionCommands(program, context);
-  profileMark('commander:register-connection');
-
-  registerPublicIngestCommands(program, context);
-  profileMark('commander:register-public-ingest');
-
-  registerWikiCommands(program, context);
-  profileMark('commander:register-wiki');
-
-  registerSlCommands(program, context);
-  profileMark('commander:register-sl');
-
-  registerStatusCommands(program, context);
-  profileMark('commander:register-status');
-
-  registerAgentCommands(program, context);
-  profileMark('commander:register-agent');
-
-  registerDevCommands(program, context);
-  profileMark('commander:register-dev');
 
   if (argv.length === 0) {
     if (io.stdout.isTTY === true) {

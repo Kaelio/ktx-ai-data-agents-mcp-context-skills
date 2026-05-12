@@ -31,14 +31,13 @@ describe('project directory defaults', () => {
     process.env.KTX_PROJECT_DIR = '/tmp/ktx-env-project';
 
     const connection = vi.fn(async () => 0);
-    const demo = vi.fn(async () => 0);
     const doctor = vi.fn(async () => 0);
     const ingest = vi.fn(async () => 0);
     const publicIngest = vi.fn(async () => 0);
     const scan = vi.fn(async () => 0);
     const setup = vi.fn(async () => 0);
     const agent = vi.fn(async () => 0);
-    const deps: KtxCliDeps = { agent, connection, demo, doctor, ingest, publicIngest, scan, setup };
+    const deps: KtxCliDeps = { agent, connection, doctor, ingest, publicIngest, scan, setup };
 
     const cases: Array<{
       argv: string[];
@@ -50,12 +49,6 @@ describe('project directory defaults', () => {
         argv: ['connection', 'list'],
         spy: connection,
         expected: { command: 'list', projectDir: '/tmp/ktx-env-project' },
-        expectedStderr: 'Project: /tmp/ktx-env-project\n',
-      },
-      {
-        argv: ['setup', 'demo', 'scan', '--no-input'],
-        spy: demo,
-        expected: { command: 'scan', projectDir: '/tmp/ktx-env-project' },
         expectedStderr: 'Project: /tmp/ktx-env-project\n',
       },
       {
@@ -71,9 +64,9 @@ describe('project directory defaults', () => {
         expectedStderr: 'Project: /tmp/ktx-env-project\n',
       },
       {
-        argv: ['setup', 'status'],
+        argv: ['setup', '--no-input'],
         spy: setup,
-        expected: { command: 'status', projectDir: '/tmp/ktx-env-project' },
+        expected: { command: 'run', projectDir: '/tmp/ktx-env-project' },
         expectedStderr: 'Project: /tmp/ktx-env-project\n',
       },
       {

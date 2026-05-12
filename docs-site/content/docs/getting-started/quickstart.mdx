@@ -156,8 +156,8 @@ Run: setup-context-local-abc123
 Project: /home/user/analytics
 
 Detach: press d to leave this running.
-Resume: ktx setup context watch setup-context-local-abc123
-Status: ktx setup context status setup-context-local-abc123
+Resume: ktx setup --project-dir /home/user/analytics
+Status: ktx status --project-dir /home/user/analytics
 ```
 
 When the build completes, KTX verifies that agent-ready context was produced:
@@ -241,7 +241,7 @@ Agent integration ready: yes (claude-code:project)
 | OpenAI embedding check fails | `OPENAI_API_KEY` is missing when OpenAI embeddings are selected | Export `OPENAI_API_KEY`, or rerun setup and choose local sentence-transformers embeddings |
 | Local embeddings hang or fail | The managed Python runtime cannot start or the local model runtime is unavailable | Install `uv`, run `ktx dev runtime doctor`, then run `ktx dev runtime install --feature local-embeddings --yes` and rerun setup |
 | Database connection test fails | Credentials, network access, warehouse, database, or schema value is wrong | Test the same URL with the database's native client, then rerun `ktx connection add ... --force` or rerun setup |
-| `KTX context built: no` in `ktx status` | Setup saved configuration but did not build context | Run `ktx setup context build` or rerun `ktx setup` and choose to build context now |
+| `KTX context built: no` in `ktx status` | Setup saved configuration but did not build context | Run `ktx setup` and choose to build context now |
 | Agent integration is incomplete | Setup skipped the agents step or the target was not installed | Run `ktx setup --agents --target codex --project` using the target you need |
 
 ## Next steps

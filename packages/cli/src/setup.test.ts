@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
 import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
 import { runDemoTour } from './setup-demo-tour.js';
-import { readKtxSetupStatus, runKtxSetup } from './setup.js';
+import { formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from './setup.js';
 
 vi.mock('./setup-demo-tour.js', () => ({
   runDemoTour: vi.fn(async () => 0),
@@ -310,8 +310,8 @@ describe('setup status', () => {
         ready: false,
         status: 'running',
         runId: 'setup-context-local-abc123',
-        watchCommand: `ktx setup context watch setup-context-local-abc123 --project-dir ${tempDir}`,
-        statusCommand: `ktx setup context status setup-context-local-abc123 --project-dir ${tempDir}`,
+        watchCommand: `ktx setup --project-dir ${tempDir}`,
+        statusCommand: `ktx status --project-dir ${tempDir}`,
       },
     });
   });
@@ -363,44 +363,36 @@ describe('setup status', () => {
     );
 
     const status = await readKtxSetupStatus(tempDir);
-    const io = makeIo();
-    await expect(runKtxSetup({ command: 'status', projectDir: tempDir, json: false }, io.io)).resolves.toBe(0);
+    const rendered = formatKtxSetupStatus(status);
 
     expect(status.llm).toMatchObject({ backend: 'vertex', ready: true, model: 'claude-sonnet-4-6' });
     expect(status.context).toMatchObject({ ready: true, status: 'completed' });
-    expect(io.stdout()).toContain('LLM ready: yes (claude-sonnet-4-6)');
-    expect(io.stdout()).toContain('KTX context built: yes');
+    expect(rendered).toContain('LLM ready: yes (claude-sonnet-4-6)');
+    expect(rendered).toContain('KTX context built: yes');
   });
 
-  it('prints plain and JSON setup status', async () => {
-    const plainIo = makeIo();
-    const jsonIo = makeIo();
+  it('formats plain and JSON setup status payloads', async () => {
+    const status = await readKtxSetupStatus(tempDir);
+    const rendered = formatKtxSetupStatus(status);
 
-    await expect(runKtxSetup({ command: 'status', projectDir: tempDir, json: false }, plainIo.io)).resolves.toBe(0);
-    await expect(runKtxSetup({ command: 'status', projectDir: tempDir, json: true }, jsonIo.io)).resolves.toBe(0);
-
-    expect(plainIo.stdout()).toContain(`No KTX project found at ${tempDir}.`);
-    expect(plainIo.stdout()).toContain('Check another project: ktx --project-dir <folder> setup status');
-    expect(plainIo.stdout()).toContain('Or from that folder: ktx setup status');
-    expect(plainIo.stdout()).toContain('Create a new KTX project here: ktx setup');
-    expect(plainIo.stdout()).not.toContain('Project ready: no');
-    expect(JSON.parse(jsonIo.stdout())).toMatchObject({ project: { path: tempDir, ready: false } });
-    expect(plainIo.stderr()).toBe('');
-    expect(jsonIo.stderr()).toBe('');
+    expect(rendered).toContain(`No KTX project found at ${tempDir}.`);
+    expect(rendered).toContain('Check another project: ktx --project-dir <folder> status');
+    expect(rendered).toContain('Or from that folder: ktx status');
+    expect(rendered).toContain('Create a new KTX project here: ktx setup');
+    expect(rendered).not.toContain('Project ready: no');
+    expect(JSON.parse(JSON.stringify(status))).toMatchObject({ project: { path: tempDir, ready: false } });
   });
 
   it('prints the readiness checklist for an existing project', async () => {
-    const testIo = makeIo();
     await writeFile(join(tempDir, 'ktx.yaml'), 'project: revenue\nconnections: {}\n', 'utf-8');
 
-    await expect(runKtxSetup({ command: 'status', projectDir: tempDir, json: false }, testIo.io)).resolves.toBe(0);
+    const rendered = formatKtxSetupStatus(await readKtxSetupStatus(tempDir));
 
-    expect(testIo.stdout()).toContain(`KTX project: ${tempDir}`);
-    expect(testIo.stdout()).toContain('Project ready: yes');
-    expect(testIo.stdout()).toContain('LLM ready: no');
-    expect(testIo.stdout()).toContain('KTX context built: no');
-    expect(testIo.stdout()).not.toContain('No KTX project found.');
-    expect(testIo.stderr()).toBe('');
+    expect(rendered).toContain(`KTX project: ${tempDir}`);
+    expect(rendered).toContain('Project ready: yes');
+    expect(rendered).toContain('LLM ready: no');
+    expect(rendered).toContain('KTX context built: no');
+    expect(rendered).not.toContain('No KTX project found.');
   });
 
   it('prints the setup shell intro for auto-created run mode', async () => {
@@ -2028,17 +2020,6 @@ describe('setup status', () => {
 
     expect(context).toHaveBeenCalledTimes(1);
     expect(agents).toHaveBeenCalledTimes(1);
-  });
-
-  it('removes agent integrations through setup remove command', async () => {
-    const io = makeIo();
-    const removeAgents = vi.fn(async () => 0);
-
-    await expect(runKtxSetup({ command: 'remove-agents', projectDir: tempDir }, io.io, { removeAgents })).resolves.toBe(
-      0,
-    );
-
-    expect(removeAgents).toHaveBeenCalledWith(tempDir, io.io);
   });
 
   it('does not run embedding setup when the model step fails', async () => {
