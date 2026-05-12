@@ -41,6 +41,24 @@ function forbiddenProductPattern() {
   return new RegExp([['Kae', 'lio'].join(''), ['kae', 'lio'].join(''), ['KAE', 'LIO_'].join('')].join('|'));
 }
 
+function sqlExecutionCallBlocks(body: string): string[] {
+  const blocks: string[] = [];
+  const marker = 'sql_execution({';
+  let offset = 0;
+
+  while (offset < body.length) {
+    const start = body.indexOf(marker, offset);
+    if (start === -1) {
+      break;
+    }
+    const end = body.indexOf('})', start + marker.length);
+    blocks.push(body.slice(start, end === -1 ? start + marker.length : end + 2));
+    offset = start + marker.length;
+  }
+
+  return blocks;
+}
+
 describe('memory runtime assets', () => {
   it('packages every memory-agent base prompt referenced by promptNameFor()', async () => {
     const prompts = new PromptService({ promptsDir, partials: [] });
@@ -150,16 +168,30 @@ describe('memory runtime assets', () => {
 
   it('ships only the KTX connectionName sql_execution call shape in writer guidance', async () => {
     const shared = await readFile(join(skillsDir, '_shared', 'identifier-verification.md'), 'utf-8');
+    const bodies = [{ name: '_shared/identifier-verification.md', body: shared }];
 
     expect(shared).toContain('sql_execution({connectionName, sql: "SELECT DISTINCT');
     expect(shared).toContain('sql_execution({connectionName, sql: "SELECT 1 FROM');
 
     for (const skillName of verificationWriterSkills) {
       const body = await readFile(join(skillsDir, skillName, 'SKILL.md'), 'utf-8');
+      bodies.push({ name: `${skillName}/SKILL.md`, body });
       expect(body).toContain('sql_execution({connectionName');
       expect(body).not.toContain('sql_execution({ sql');
       expect(body).not.toContain('session shape');
       expect(body).not.toContain('connection is already pinned by the ingest session');
+    }
+
+    for (const { name, body } of bodies) {
+      const calls = sqlExecutionCallBlocks(body);
+      expect(calls.length, `${name} should contain sql_execution guidance`).toBeGreaterThan(0);
+      expect(
+        calls.filter((call) => !call.includes('connectionName')),
+        `${name} has sql_execution calls without connectionName`,
+      ).toEqual([]);
+      expect(body, `${name} has a connectionless multiline sql_execution call`).not.toMatch(
+        /sql_execution\(\{\s*sql\s*:/,
+      );
     }
   });
 });
