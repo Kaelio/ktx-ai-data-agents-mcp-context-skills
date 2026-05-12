@@ -279,7 +279,8 @@ Prior turn: user asked to correlate LTV with protocol count; assistant joined `f
 sl_read_source({ sourceName: "fct_orders" })
   → no joins section yet
 sql_execution({
-  sql: "SELECT COUNT(*), COUNT(DISTINCT a.admin_user_id) FROM fct_orders a JOIN fct_mau_multiprotocol b ON a.admin_user_id = b.admin_user_id LIMIT 1"
+  connectionName: "warehouse",
+  sql: "SELECT COUNT(*), COUNT(DISTINCT a.admin_user_id) FROM public.fct_orders a JOIN public.fct_mau_multiprotocol b ON a.admin_user_id = b.admin_user_id LIMIT 1"
 })
   → confirms cardinality (many orders per MAU row = many_to_one)
 sl_edit_source({
