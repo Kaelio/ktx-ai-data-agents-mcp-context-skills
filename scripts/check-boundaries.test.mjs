@@ -65,6 +65,13 @@ describe('scanFileContent', () => {
     assert.equal(scanFileContent('python/ktx-sl/openspec/specs/semantic-layer/spec.md', name).length, 0);
   });
 
+  it('allows product identifiers in test fixtures', () => {
+    const name = lowerProductName();
+
+    assert.equal(scanFileContent('packages/cli/src/setup.test.ts', `project: ${name}-dev`).length, 0);
+    assert.equal(scanFileContent('packages/context/src/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
+  });
+
   it('allows public package identifiers in release packaging and managed runtime source', () => {
     const name = lowerProductName();
 

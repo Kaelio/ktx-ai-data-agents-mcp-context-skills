@@ -1,0 +1,21 @@
+name: stg_users
+table: orbit_analytics.stg_users
+grain:
+  - user_id
+columns:
+  - name: user_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_users.
+  - name: email
+    type: string
+    descriptions:
+      ktx: Column email from stg_users.
+joins: []
+measures: []
+descriptions:
+  user: Orbit user identities shared across warehouse, Slack, Looker, Notion, and Drive artifacts.

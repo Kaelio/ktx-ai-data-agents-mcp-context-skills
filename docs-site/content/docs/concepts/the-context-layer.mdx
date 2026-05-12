@@ -9,7 +9,7 @@ Give an agent access to your database and it will generate SQL. It might even pr
 
 The agent doesn't know that `orders.amount` includes refunds and needs a status filter. It doesn't know that `customers` should join to `orders` on `customer_id`, not `id`. It doesn't know that your team stopped using `legacy_segments` six months ago, or that "enterprise" means contracts over $100k, not just big logos. It sees column names and types. It doesn't see your business.
 
-This isn't a model capability problem. GPT-4, Claude, and Gemini can all write correct SQL — when they know what correct means. The gap is context: which tables matter, which joins are valid, which metrics are canonical, what the business terms actually refer to. Without that, agents produce plausible-looking artifacts that are subtly, dangerously wrong. Wrong enough to pass a glance, wrong enough to drive a decision.
+This isn't a model capability problem. Claude Code, Codex, and your BI agents can write correct SQL when they know what correct means. The gap is context: which tables matter, which joins are valid, which metrics are canonical, what the business terms actually refer to. Without that, agents produce plausible-looking artifacts that are subtly, dangerously wrong. Wrong enough to pass a glance, wrong enough to drive a decision.
 
 Analytics engineers already know this pain. It's the same reason you write dbt tests, maintain a data dictionary, and spend half of standup explaining why someone's dashboard number doesn't match the board deck. The difference is that agents make decisions at machine speed, so the wrong context propagates faster than a human can catch it.
 
@@ -19,15 +19,22 @@ The industry has moved through three distinct approaches to getting AI and data 
 
 **Wave one: database access.** Connect an LLM to a database, let it generate SQL. This works for simple lookups — "how many orders last week?" — but breaks on anything that requires business knowledge. The agent guesses at joins, invents metrics, and hallucinates table relationships. Every query is a coin flip.
 
-**Wave two: semantic layers and text-to-SQL.** Add structure. Define metrics in MetricFlow or Cube, expose schemas, build text-to-SQL pipelines. This is better — the agent knows that `revenue` means `sum(amount) where status != 'refunded'` — but it's still limited. Semantic layers define what to calculate, not why, when, or how to interpret the result. The agent can compute net revenue but doesn't know about the February refund anomaly, the segment reclassification, or the fact that `enterprise` changed definition last quarter.
+**Wave two: semantic layers and text-to-SQL.** Add structure. Define metrics in MetricFlow or Cube, expose schemas, build text-to-SQL pipelines. This is better — the agent knows that `revenue` means `sum(amount) where status != 'refunded'` — but building and maintaining that structure by hand is manual, time-consuming, and still limited. Semantic layers define what to calculate, not why, when, or how to interpret the result. The agent can compute net revenue but doesn't know about the February refund anomaly, the segment reclassification, or the fact that `enterprise` changed definition last quarter.
 
-**Wave three: agentic context.** AI is no longer just answering questions — it's generating dashboards, writing semantic definitions, proposing dbt models, creating tests and documentation. For that to work, agents need more than metric definitions. They need the full picture: business rules, data quality gotchas, relationship maps, historical context, and the institutional knowledge that lives in your team's heads. They need a context layer.
+**Wave three: agentic context.** AI is no longer just answering questions — it's generating dashboards, writing semantic definitions, proposing dbt models, creating tests and documentation. For that to work, agents need more than metric definitions. They need the full picture: business rules, known data quality issues, relationship maps, historical context, and the institutional knowledge that lives in your team's heads. They need a context layer.
 
 ## What a context layer is
 
 A context layer is the infrastructure that gives agents the business knowledge they need to produce correct analytics artifacts. It includes a semantic layer — that's a critical component — but it's not the whole thing.
 
 KTX organizes context into four pillars:
+
+- Semantic sources
+- Knowledge pages
+- Scan artifacts
+- Provenance
+
+Each pillar covers a different kind of context agents need before they can safely write SQL, update semantic definitions, or explain an analytics result.
 
 **Semantic sources** are YAML definitions that describe your data in terms agents can reason about. Each source maps to a table or SQL query, declares its grain, defines typed columns, specifies valid joins, and exposes named measures with optional filters. This is where "revenue means `sum(amount)` excluding refunds" lives.
 
@@ -60,7 +67,7 @@ measures:
     expr: count(id)
 ```
 
-**Knowledge pages** are Markdown documents that capture business definitions, rules, and gotchas — the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
+**Knowledge pages** are Markdown documents that capture business definitions, rules, and operating context — the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
 
 ```markdown
 ---
@@ -90,13 +97,12 @@ Together, these four pillars give agents enough context to produce analytics art
 
 ## How KTX compares
 
-KTX is a context layer, and its structured core is an agent-native semantic layer. That matters. MetricFlow, Cube, and Malloy all give teams ways to model metrics, dimensions, joins, and generated SQL. KTX covers that same semantic-layer job, then adds the surrounding context agents need to use it well: knowledge pages, schema scans, provenance, ingestion, validation, and MCP tools.
+KTX is a context layer with an agent-native semantic layer at its core. MetricFlow, Cube, and Malloy model metrics, dimensions, joins, and generated SQL. KTX covers that semantic-layer work, then adds the context agents need to use and maintain it: knowledge pages, schema scans, provenance, ingestion, validation, and MCP tools.
 
-The primary user is different. MetricFlow is centered on dbt-style metric definitions. Cube is centered on a governed semantic runtime for BI, applications, and agents. Malloy is centered on an expressive modeling and query language. KTX is centered on agents that need to read a semantic model, change it, validate it, inspect the generated SQL, and leave a reviewable git diff.
+The workflow is the difference. Traditional semantic layers are powerful, but they are usually built and maintained through manual modeling work, product-specific runtimes, or language-specific workflows. They are not agent-native by default, which makes them harder for agents to inspect, edit, validate, and review in a tight loop. KTX is designed for agents that need to read context, change semantic files, inspect generated SQL, and leave a reviewable git diff.
 
 | | KTX semantic layer | MetricFlow | Cube | Malloy |
 |---|---|---|---|---|
-| **Design center** | Agent-native semantic modeling inside a broader context layer | Metric definitions and dbt semantic models | Governed serving layer for BI, embedded analytics, APIs, and agents | Semantic modeling and analytical query language |
 | **Model surface** | Plain YAML sources plus Markdown knowledge pages | YAML semantic models and metrics in a dbt project | YAML or JavaScript cubes, views, access policies, and pre-aggregations | `.malloy` models, query pipelines, notebooks, and annotations |
 | **What it models** | Sources, columns, measures, segments, joins, grain, filters, default time dimensions, and context references | Semantic models, entities, dimensions, measures, metrics, time grains, and metric types | Cubes, views, measures, dimensions, segments, joins, hierarchies, policies, and rollups | Sources, joins, dimensions, measures, calculations, nested results, and query pipelines |
 | **Agent edit loop** | First-class. Agents can patch small files, save imperfect drafts, run validation, query through MCP, inspect SQL, and refine in the same workflow | Possible, but the interface is a dbt/metric workflow rather than an agent context workflow | Possible through code-first models and platform APIs, but changes are tied to runtime deployment and governance concerns | Possible, but agents must operate in Malloy's language and compiler model |
@@ -105,15 +111,7 @@ The primary user is different. MetricFlow is centered on dbt-style metric defini
 | **Context around semantics** | Built in: wiki pages, scan artifacts, relationship inference, ingest transcripts, replay, and agent-facing MCP tools | Primarily metric and dbt project context | Descriptions and `meta.ai_context` inside the semantic model, plus platform agent features | Annotations/tags can carry metadata; surrounding context depends on the application |
 | **Best fit** | Agents maintaining analytics code, metrics, joins, SQL, docs, and semantic definitions | Teams standardizing metrics inside dbt workflows | Production semantic APIs, BI integrations, access control, caching, and concurrency | Expressive modeling and exploratory analysis above SQL |
 
-**Agent-native by design.** KTX's advantage is not just that the files are YAML. The whole loop is shaped for agents: sources are small, overlays can add measures or computed columns without copying entire generated schemas, writes are permissive so an agent can save a draft, and validation/query tools give immediate feedback. An agent can move from "this metric is wrong" to "here is the semantic diff, generated SQL, and supporting context" without leaving the project.
-
-**A semantic layer plus the context to use it.** Traditional semantic layers define what to calculate. KTX also stores why the definition exists, where it came from, what schema evidence supports it, and what an agent did when it changed. A measure can live next to a knowledge page about exclusions, a scan artifact that proves the join path, and an ingest transcript that explains the source of the definition. That is the difference between giving an agent a metric catalog and giving it operational memory.
-
-**Fan-out handling is explicit and reviewable.** KTX asks model authors and agents to declare grain and relationship direction. The planner uses that metadata to avoid silent row multiplication: it detects `one_to_many` fan-out paths, separates independent fact measures into aggregate-locality CTEs, and refuses filters that would be unsafe to apply after pre-aggregation. Cube, MetricFlow, and Malloy all have strong approaches to this class of problem, but KTX's approach is deliberately inspectable in the files and in the generated plan.
-
-**Where other systems are stronger.** KTX draws a clear product boundary around agent-native context and semantic modeling. Cube is stronger when you need a production semantic API with access policies, pre-aggregations, refresh workers, and high-concurrency serving. MetricFlow is stronger when your primary workflow is dbt-native metric standardization. Malloy is stronger when you want a full analytical language with nested query shapes. KTX is strongest when the semantic layer is the substrate agents will read, edit, validate, and extend as part of day-to-day analytics engineering.
-
-**When KTX replaces your semantic layer vs. works beside it.** If you do not have a semantic layer, KTX can build an agent-native one from your database schema and enrich it with generated descriptions and knowledge pages. If you already use MetricFlow, LookML, Looker, Metabase, dbt, or Notion, KTX ingests from those tools and merges their context into KTX's files. You can keep your existing BI or metric-serving system while using KTX as the semantic and contextual surface agents work against.
+If you do not have a semantic layer, KTX can build an agent-native one from your database schema and enrich it with generated descriptions and knowledge pages. If you already use MetricFlow or LookML, KTX ingests from those tools and merges their context into KTX's files. You can keep your existing BI or metric-serving system while using KTX as the semantic and contextual surface agents work against.
 
 ## The plain-files philosophy
 
@@ -145,3 +143,14 @@ my-project/
 Semantic sources and knowledge pages are committed to git. The SQLite database holds ephemeral state — scan results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
 
 This means your analytics context travels with your code. You can fork it, branch it, review it in a PR, and merge it with the same tools you use for dbt models. There's no sync problem between a remote server and your local state. There's no migration to run. The files are the source of truth.
+
+## Agent usage notes
+
+Use this page when an agent needs to explain why KTX exists, why schema-only database access is not enough, or how KTX differs from MetricFlow, Cube, Malloy, and traditional semantic layers.
+
+| Agent task | Relevant section | Next page |
+|------------|------------------|-----------|
+| Explain why a database agent made a plausible but wrong query | The problem | [Writing Context](/docs/guides/writing-context) |
+| Decide whether a metric belongs in YAML or Markdown | What a context layer is | [Writing Context](/docs/guides/writing-context) |
+| Compare KTX to another semantic layer | How KTX compares | [Primary Sources](/docs/integrations/primary-sources) |
+| Explain reviewability and source of truth | The plain-files philosophy | [Context as Code](/docs/concepts/context-as-code) |

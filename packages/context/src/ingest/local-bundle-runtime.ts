@@ -536,6 +536,14 @@ function nextLocalJobId(): string {
   return `local-${Date.now().toString(36)}`;
 }
 
+function localIngestLlmProviderGuardMessage(projectDir: string): string {
+  return [
+    'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+    'Configure an Anthropic provider, then rerun ingest:',
+    `  ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+  ].join('\n');
+}
+
 function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
   agentRunner: AgentRunnerService;
   llmProvider?: KtxLlmProvider;
@@ -548,9 +556,7 @@ function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
   }
 
   if (!llmProvider) {
-    throw new Error(
-      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
-    );
+    throw new Error(localIngestLlmProviderGuardMessage(options.project.projectDir));
   }
 
   return {

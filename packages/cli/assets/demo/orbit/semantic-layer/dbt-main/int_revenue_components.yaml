@@ -1,0 +1,37 @@
+name: int_revenue_components
+table: orbit_analytics.int_revenue_components
+grain:
+  - revenue_date
+columns:
+  - name: revenue_date
+    type: time
+    descriptions:
+      ktx: Date or time value for revenue date on int_revenue_components.
+  - name: gross_revenue_cents
+    type: number
+    descriptions:
+      ktx: Column gross revenue cents from int_revenue_components.
+  - name: credit_cents
+    type: number
+    descriptions:
+      ktx: Column credit cents from int_revenue_components.
+  - name: refund_cents
+    type: number
+    descriptions:
+      ktx: Column refund cents from int_revenue_components.
+  - name: net_revenue_cents
+    type: number
+    descriptions:
+      ktx: Column net revenue cents from int_revenue_components.
+joins: []
+measures:
+  - name: total_gross_revenue_cents
+    expr: sum(gross_revenue_cents)
+  - name: total_credit_cents
+    expr: sum(credit_cents)
+  - name: total_refund_cents
+    expr: sum(refund_cents)
+  - name: total_net_revenue_cents
+    expr: sum(net_revenue_cents)
+descriptions:
+  user: Daily gross, credit, refund, and net revenue components.

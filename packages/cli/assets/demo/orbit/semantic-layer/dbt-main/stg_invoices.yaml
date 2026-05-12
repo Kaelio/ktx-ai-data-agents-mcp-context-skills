@@ -1,0 +1,33 @@
+name: stg_invoices
+table: orbit_analytics.stg_invoices
+grain:
+  - invoice_id
+columns:
+  - name: invoice_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_invoices.
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [draft, open, paid, void, failed]"
+  - name: currency
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [USD] — USD only"
+  - name: invoice_date
+    type: time
+    descriptions:
+      ktx: Date or time value for invoice date on stg_invoices.
+  - name: gross_amount_cents
+    type: number
+    descriptions:
+      ktx: Column gross amount cents from stg_invoices.
+joins: []
+measures: []
+descriptions:
+  user: Billing invoices that anchor gross revenue recognition dates.

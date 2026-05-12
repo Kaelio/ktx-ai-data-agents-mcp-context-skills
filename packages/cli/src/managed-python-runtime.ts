@@ -186,9 +186,28 @@ async function readJsonFile(path: string): Promise<unknown> {
   return JSON.parse(await readFile(path, 'utf8')) as unknown;
 }
 
+function isErrnoException(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
 export async function verifyRuntimeAsset(input: { assetDir: string }): Promise<ManagedRuntimeAsset> {
   const manifestPath = join(input.assetDir, 'manifest.json');
-  const manifest = runtimeAssetManifestSchema.parse(await readJsonFile(manifestPath));
+  let manifestData: unknown;
+  try {
+    manifestData = await readJsonFile(manifestPath);
+  } catch (error) {
+    if (isErrnoException(error, 'ENOENT')) {
+      throw new Error(
+        [
+          `Missing bundled Python runtime manifest: ${manifestPath}`,
+          'In a source checkout, build the local runtime assets with: pnpm run artifacts:build',
+          'Then retry the runtime-backed KTX command.',
+        ].join('\n'),
+      );
+    }
+    throw error;
+  }
+  const manifest = runtimeAssetManifestSchema.parse(manifestData);
   assertSafeWheelFilename(manifest.wheel.file);
   const wheelPath = join(input.assetDir, manifest.wheel.file);
   const wheel = await readFile(wheelPath);
@@ -243,10 +262,11 @@ async function runLogged(input: {
   command: string;
   args: string[];
   cwd?: string;
+  env?: NodeJS.ProcessEnv;
 }): Promise<{ stdout: string; stderr: string }> {
   await appendFile(input.logPath, `$ ${input.command} ${input.args.join(' ')}\n`);
   try {
-    const result = await input.exec(input.command, input.args, { cwd: input.cwd });
+    const result = await input.exec(input.command, input.args, { cwd: input.cwd, env: input.env });
     if (result.stdout) {
       await appendFile(input.logPath, result.stdout.endsWith('\n') ? result.stdout : `${result.stdout}\n`);
     }
@@ -266,9 +286,13 @@ async function runLogged(input: {
   }
 }
 
-async function ensureUv(exec: ManagedPythonRuntimeExec): Promise<string> {
+function managedRuntimeUvEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { ...baseEnv, UV_NO_CONFIG: '1' };
+}
+
+async function ensureUv(exec: ManagedPythonRuntimeExec, env?: NodeJS.ProcessEnv): Promise<string> {
   try {
-    const result = await exec('uv', ['--version']);
+    const result = await exec('uv', ['--version'], { env });
     return result.stdout.trim() || 'uv available';
   } catch {
     throw new Error(MISSING_UV_RUNTIME_INSTALL_MESSAGE);
@@ -282,6 +306,7 @@ export async function installManagedPythonRuntime(
   const exec = options.exec ?? defaultExec;
   const features = normalizeFeatures(options.features);
   const asset = await verifyRuntimeAsset({ assetDir: layout.assetDir });
+  const uvEnv = managedRuntimeUvEnv(options.env ?? process.env);
   const existing = await readInstalledManifest(layout.manifestPath);
   if (
     options.force !== true &&
@@ -298,14 +323,21 @@ export async function installManagedPythonRuntime(
   await rm(layout.versionDir, { recursive: true, force: true });
   await mkdir(layout.versionDir, { recursive: true });
   await writeFile(layout.installLogPath, '');
-  await ensureUv(exec);
-  await runLogged({ exec, logPath: layout.installLogPath, command: 'uv', args: ['venv', layout.venvDir] });
+  await ensureUv(exec, uvEnv);
+  await runLogged({
+    exec,
+    logPath: layout.installLogPath,
+    command: 'uv',
+    args: ['venv', layout.venvDir],
+    env: uvEnv,
+  });
   const wheelSpec = features.includes('local-embeddings') ? `${asset.wheelPath}[local-embeddings]` : asset.wheelPath;
   await runLogged({
     exec,
     logPath: layout.installLogPath,
     command: 'uv',
     args: ['pip', 'install', '--python', layout.pythonPath, wheelSpec],
+    env: uvEnv,
   });
 
   const manifest: InstalledKtxRuntimeManifest = {
@@ -371,7 +403,7 @@ export async function doctorManagedPythonRuntime(
   const exec = options.exec ?? defaultExec;
   const checks: ManagedPythonRuntimeDoctorCheck[] = [];
   try {
-    const version = await ensureUv(exec);
+    const version = await ensureUv(exec, managedRuntimeUvEnv(options.env ?? process.env));
     checks.push(check('pass', { id: 'uv', label: 'uv', detail: version }));
   } catch (error) {
     checks.push(

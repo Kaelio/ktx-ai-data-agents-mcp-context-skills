@@ -1,0 +1,40 @@
+---
+title: Agent Instructions
+description: Suggested instructions for coding assistants that need to read and cite KTX docs.
+---
+
+Use these instructions when a coding assistant needs to answer questions from the KTX documentation.
+
+```text
+When answering KTX docs questions:
+
+1. Start with https://docs.kaelio.com/ktx/llms.txt.
+2. Fetch the smallest relevant Markdown page from the index.
+3. Prefer /docs/<path>.md over rendered HTML.
+4. Use https://docs.kaelio.com/ktx/llms-full.txt only when the task needs broad docs context.
+5. Quote commands exactly from docs pages.
+6. If docs and local repository behavior disagree, say what differs and prefer local verified output for code changes.
+```
+
+## What this is for
+
+This page is for documentation consumption only:
+
+- answering questions about KTX
+- finding the right docs page
+- citing setup or CLI guidance
+- helping an assistant avoid stale or invented commands
+
+It does not describe local tool configuration.
+
+## Minimal project prompt
+
+```text
+You are helping with KTX. Read https://docs.kaelio.com/ktx/llms.txt first, then fetch only the Markdown pages needed for the task. Do not scrape the rendered docs site when a .md route exists.
+```
+
+## Repository prompt
+
+```text
+Before editing KTX docs, read /llms.txt and the affected .md docs pages. Keep AI Resources focused on docs consumption. After editing, verify /llms.txt, /llms-full.txt, and any changed .md routes.
+```

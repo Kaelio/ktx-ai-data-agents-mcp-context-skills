@@ -11,6 +11,20 @@ All connectors share these conventions:
 - Connections are read-only — KTX never writes to your database
 - Schema scanning discovers tables, columns, types, and constraints automatically
 
+## Connection field reference
+
+Agents should prefer environment or file references over literal secrets.
+
+| Field | Required | Applies to | Description |
+|-------|----------|------------|-------------|
+| `driver` | Yes | all connections | Connector driver such as `postgres`, `snowflake`, `bigquery`, `clickhouse`, `mysql`, `sqlserver`, or `sqlite` |
+| `url` | One of the connection methods | URL-style connectors | Database URL, `env:NAME`, or `file:/path/to/secret` |
+| `host`, `port`, `database`, `username`, `password` | One of the connection methods | PostgreSQL, MySQL, ClickHouse, SQL Server | Field-by-field connection values |
+| `schema` or `schemas` | No | schema-aware warehouses | Single schema or list of schemas to scan |
+| `readonly` | Strongly recommended | all primary sources | Marks the connection as read-only in KTX config |
+| `historicSql` | No | supported warehouses | Enables query-history ingestion when the warehouse supports it |
+| `path` | Yes for path-style SQLite | SQLite | Local SQLite database path or `env:NAME` reference |
+
 ## PostgreSQL
 
 The most full-featured connector. Supports schema introspection, foreign key detection, column statistics, and historic SQL via `pg_stat_statements`.
@@ -488,3 +502,13 @@ No authentication required — SQLite is file-based. The file must be readable b
 - SQLite type affinity system: `TEXT`, `NUMERIC`, `INTEGER`, `REAL`, `BLOB`
 - Foreign key enforcement requires explicit `PRAGMA foreign_keys = ON`
 - In-memory databases supported with `path: ":memory:"` (for testing)
+
+## Common errors
+
+| Error or symptom | Likely cause | Recovery |
+|------------------|--------------|----------|
+| Connection URL appears in git diff | A literal credential URL was written to `ktx.yaml` | Replace it with `env:NAME` or `file:/path/to/secret` and rotate exposed credentials |
+| Scan returns no tables | Schema/database/project filter is wrong or the user lacks metadata permissions | Verify the schema list and grant metadata read permissions |
+| Historic SQL is empty | Query history extension or warehouse history view is unavailable | Enable the warehouse-specific history feature, then rerun scan or setup |
+| Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on structural scan output |
+| SQL execution fails through agents | Connection is missing, unreachable, or execution is disabled in the server | Run `ktx connection test <id>` and check `ktx serve` flags |

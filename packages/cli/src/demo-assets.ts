@@ -45,14 +45,9 @@ const REQUIRED_SEEDED_ASSET_PATHS = [
   'demo.db',
   'manifest.json',
   DEMO_REPLAY_FILE,
-  join('raw-sources', 'warehouse', 'accounts.csv'),
-  join('raw-sources', 'dbt', 'schema.yml'),
-  join('raw-sources', 'bi', 'revenue_exec.dashboard.lookml'),
-  join('raw-sources', 'notion', 'revenue-reporting-policy.md'),
-  join('semantic-layer', 'orbit_demo', 'accounts.yaml'),
-  join('knowledge', 'global', 'arr-contract-first.md'),
-  join('links', 'provenance.json'),
-  join('reports', 'seeded-demo-report.json'),
+  join('semantic-layer', 'dbt-main', 'mart_arr_daily.yaml'),
+  join('semantic-layer', 'postgres-warehouse', 'mart_account_activity.yaml'),
+  join('knowledge', 'global', 'orbit-company-overview.md'),
 ] as const;
 
 function assetDir(): string {

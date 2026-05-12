@@ -5,6 +5,17 @@ description: Write and refine semantic sources and knowledge pages.
 
 After building context through scanning and ingestion, you'll want to refine it — edit semantic sources to match your business logic, add knowledge pages that capture tribal knowledge, and query your data through the semantic layer to verify everything works.
 
+## Agent workflow summary
+
+Agents should refine context in this order:
+
+1. `ktx sl list --json` — discover available sources and connection ids.
+2. `ktx sl read <source> --connection-id <id>` — inspect the current YAML.
+3. Edit the source YAML directly or use `ktx sl write`.
+4. `ktx sl validate <source> --connection-id <id>` — verify columns, joins, and table references.
+5. `ktx sl query ... --format sql` — compile a representative query without executing it.
+6. `ktx wiki search ...` and `ktx wiki write ...` — add business context that does not belong in schema YAML.
+
 ## Semantic Sources
 
 Semantic sources are YAML files that describe your tables, columns, measures, and joins. They're the core of the context layer — the structured definitions that agents use to generate correct SQL.
@@ -108,6 +119,26 @@ Key fields:
 | `segments` | No | Named filter conditions |
 | `inherits_columns_from` | No | Inherit column metadata from a manifest entry |
 
+Source component fields:
+
+| Component | Field | Required | Description |
+|-----------|-------|----------|-------------|
+| Column | `name` | Yes | Column identifier as used in SQL expressions |
+| Column | `type` | Yes | Agent-facing type: `string`, `number`, `time`, or `boolean` |
+| Column | `role` | No | Special role such as `time` for default time dimensions |
+| Column | `visibility` | No | `public`, `internal`, or `hidden` |
+| Column | `description` | Strongly recommended | Human-readable business meaning |
+| Measure | `name` | Yes | Queryable metric name |
+| Measure | `expr` | Yes | SQL aggregation expression at the source grain |
+| Measure | `filter` | No | SQL predicate applied only to this measure |
+| Measure | `description` | Strongly recommended | Definition agents can cite and compare |
+| Segment | `name` | Yes | Reusable filter name |
+| Segment | `expr` | Yes | SQL predicate for the segment |
+| Join | `to` | Yes | Target semantic source name |
+| Join | `on` | Yes | SQL join condition using source names or aliases |
+| Join | `relationship` | Yes | `many_to_one`, `one_to_many`, or `one_to_one` |
+| Join | `alias` | No | Query alias for repeated or clearer joins |
+
 Column visibility controls what agents see:
 
 | Visibility | Behavior |
@@ -192,6 +223,16 @@ Query flags:
 
 The query planner is grain-aware — it understands the cardinality of joins and avoids chasm traps (double-counting caused by many-to-many fan-outs). When you query measures that span multiple sources, KTX generates sub-queries at the correct grain before joining.
 
+### Workflow: edit and validate a source
+
+1. `ktx sl read orders --connection-id my-postgres > /tmp/orders.yaml` — capture the current definition.
+2. Edit `/tmp/orders.yaml` to add columns, measures, joins, or descriptions.
+3. `ktx sl write orders --connection-id my-postgres --yaml "$(cat /tmp/orders.yaml)"` — write the updated source.
+4. `ktx sl validate orders --connection-id my-postgres` — check the definition against the live schema.
+5. `ktx sl query --connection-id my-postgres --measure total_revenue --dimension order_date --format sql` — compile a representative query.
+
+If validation fails, fix the YAML before asking an agent to use the source. Common validation failures are missing columns, invalid join targets, and measure expressions that reference fields outside the source.
+
 ## Knowledge Pages
 
 Knowledge pages are Markdown files that capture business context — definitions, rules, gotchas, and anything an agent needs to understand beyond what the schema tells it.
@@ -250,6 +291,18 @@ Write flags:
 | `--ref <ref>` | Reference to external resources (repeatable) |
 | `--sl-ref <ref>` | Link to a semantic source (repeatable) |
 
+Knowledge page fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| Key | Yes | Stable page identifier passed to `ktx wiki read` |
+| Summary | Yes | Short text shown in search results |
+| Content | Yes | Full Markdown business context |
+| Scope | No | `global` for shared context or `user` for user-scoped notes |
+| Tags | No | Search and organization labels |
+| External refs | No | Links or identifiers for source-of-truth systems |
+| Semantic-layer refs | No | Source names the page explains or constrains |
+
 You can also create and edit knowledge pages directly as Markdown files in the `knowledge/` directory.
 
 ### Listing pages
@@ -271,3 +324,21 @@ ktx wiki search "revenue recognition"
 ```
 
 Search uses both full-text matching and semantic similarity — it finds relevant pages even when the exact terms don't match. Agents call this automatically when they need business context to answer a question.
+
+### Workflow: add searchable business context
+
+1. Search first: `ktx wiki search "order status definitions"`.
+2. If no page already covers the rule, write a page with `ktx wiki write`.
+3. Include a concise `--summary`; agents see this before loading full content.
+4. Add `--tag` values for the business area and `--sl-ref` values for related semantic sources.
+5. Search again with the user's likely wording to confirm the page is discoverable.
+
+## Common errors
+
+| Error or symptom | Likely cause | Recovery |
+|------------------|--------------|----------|
+| `ktx sl validate` reports a missing column | YAML references a column that is absent from the scanned table | Run a fresh scan or update the YAML to match the warehouse schema |
+| Query compilation double-counts a measure | Join relationship or grain is missing or wrong | Add `grain` and explicit `relationship` values, then validate and recompile |
+| Agent cannot find a metric | Measure name or description does not match business terminology | Add a measure description and a knowledge page with common synonyms |
+| Knowledge search misses a page | Summary and tags do not include likely user wording | Rewrite the summary and add relevant tags, then search again |
+| `ktx sl write` changes are hard to review | Large YAML was passed inline | Edit the source file directly or write from a temporary file, then review the git diff |

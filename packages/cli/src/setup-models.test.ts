@@ -676,4 +676,53 @@ describe('setup Anthropic model step', () => {
     ).resolves.toMatchObject({ status: 'ready' });
     expect(healthCheck).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      backend: 'vertex',
+      providerLines: ['    backend: vertex', '    vertex:', '      project: kaelio-dev', '      location: us-east5'],
+      model: 'claude-sonnet-4-6',
+    },
+    {
+      backend: 'gateway',
+      providerLines: ['    backend: gateway', '    gateway:', '      api_key: env:AI_GATEWAY_API_KEY'],
+      model: 'anthropic/claude-sonnet-4-6',
+    },
+  ])('preserves already configured $backend llm setup without asking for Anthropic credentials', async (fixture) => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'setup:',
+        '  database_connection_ids: []',
+        '  completed_steps:',
+        '    - project',
+        '    - llm',
+        'connections: {}',
+        'llm:',
+        '  provider:',
+        ...fixture.providerLines,
+        '  models:',
+        `    default: ${fixture.model}`,
+        'ingest:',
+        '  embeddings:',
+        '    backend: deterministic',
+        '    model: deterministic',
+        '    dimensions: 8',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const healthCheck = vi.fn(async () => ({ ok: true as const }));
+    const io = makeIo();
+    await expect(
+      runKtxSetupAnthropicModelStep({ projectDir: tempDir, inputMode: 'disabled', skipLlm: false }, io.io, {
+        healthCheck,
+      }),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(healthCheck).not.toHaveBeenCalled();
+    expect(io.stdout()).toContain(`LLM ready: yes (${fixture.model})`);
+    expect(io.stderr()).not.toContain('Anthropic');
+  });
 });

@@ -7,7 +7,7 @@ Hidden commands that provide machine-readable JSON output for coding agents. The
 
 All `ktx agent` subcommands require `--json` and produce structured JSON output on stdout.
 
-## Usage
+## Command signature
 
 ```bash
 ktx agent <subcommand> --json [options]
@@ -124,3 +124,25 @@ ktx agent sql execute --json \
   --sql-file /tmp/query.sql \
   --max-rows 500
 ```
+
+## Output
+
+Every `ktx agent` command writes JSON to stdout and diagnostic text to stderr. Agents should parse stdout as JSON and treat a non-zero exit code as a failed tool call.
+
+```json
+{
+  "ok": true,
+  "data": {
+    "type": "agent-response"
+  }
+}
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Missing JSON output | `--json` was omitted | Re-run the same subcommand with `--json` |
+| Unknown connection id | The requested connection is not configured in `ktx.yaml` | Call `ktx agent context --json` or `ktx connection list` to discover valid ids |
+| Query file cannot be read | `--query-file` points to a missing or invalid JSON file | Write the query payload to a real file and pass its absolute path |
+| SQL execution rejected | SQL is not read-only or `--max-rows` is missing | Use semantic-layer queries first; for direct SQL, pass read-only SQL and an explicit row limit |

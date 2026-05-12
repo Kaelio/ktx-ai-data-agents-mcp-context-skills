@@ -1,0 +1,27 @@
+name: mart_account_segments
+table: orbit_analytics.mart_account_segments
+grain:
+  - account_id
+columns:
+  - name: account_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: normalized_plan_code
+    type: string
+    descriptions:
+      user: pro_plus is normalized to growth through plans.canonical_plan_code.
+  - name: size_band
+    type: string
+    descriptions:
+      ktx: Column size band from mart_account_segments.
+  - name: segment
+    type: string
+    descriptions:
+      user: "Reporting segment: self_serve, commercial, enterprise"
+joins: []
+measures:
+  - name: account_count
+    expr: count(account_id)
+descriptions:
+  user: "Current plan, size band, and reporting segment for accounts. Governed metric: segment. Owner: sales_ops. See notion://notion_page_sales_ops_segmentation#growth-plan-normalization."

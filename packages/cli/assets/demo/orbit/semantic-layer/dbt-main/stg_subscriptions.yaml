@@ -1,0 +1,25 @@
+name: stg_subscriptions
+table: orbit_analytics.stg_subscriptions
+grain:
+  - subscription_id
+columns:
+  - name: subscription_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_subscriptions.
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [active, cancelled, past_due, trialing]"
+  - name: arr_cents
+    type: number
+    descriptions:
+      ktx: Column arr cents from stg_subscriptions.
+joins: []
+measures: []
+descriptions:
+  user: Subscription rows used when active contract ARR is not present for a covered period.

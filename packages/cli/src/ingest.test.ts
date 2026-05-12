@@ -32,6 +32,7 @@ import {
   writeWarehouseConfig,
 } from './ingest.test-utils.js';
 import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
+import { runKtxSetup } from './setup.js';
 
 describe('runKtxIngest', () => {
   let tempDir: string;
@@ -103,6 +104,75 @@ describe('runKtxIngest', () => {
     expect(statusIo.stdout()).toContain('Status: done');
     expect(statusIo.stdout()).toContain('Diff: +2/~0/-0/=0');
     expect(statusIo.stderr()).toBe('');
+  });
+
+  it('prints provider setup guidance when a skip-llm setup project runs dev ingest', async () => {
+    const projectDir = join(tempDir, 'project');
+    const setupIo = makeIo();
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir,
+          mode: 'new',
+          agents: false,
+          agentScope: 'project',
+          agentInstallMode: 'cli',
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.0.0-test',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseDrivers: ['postgres'],
+          databaseConnectionId: 'warehouse',
+          databaseUrl: 'env:WAREHOUSE_URL',
+          databaseSchemas: [],
+          enableHistoricSql: true,
+          skipDatabases: false,
+          skipSources: true,
+        },
+        setupIo.io,
+        {
+          databasesDeps: {
+            testConnection: async (_projectDir, _connectionId, io) => {
+              io.stdout.write('Driver: postgres\nTables: 1\n');
+              return 0;
+            },
+            scanConnection: async () => 0,
+            historicSqlProbe: async () => ({ ok: true, lines: ['PASS Historic SQL probe skipped in test'] }),
+          },
+          context: async () => ({ status: 'skipped', projectDir }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+
+    const runIo = makeIo();
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          sourceDir,
+          outputMode: 'plain',
+        },
+        runIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(runIo.stdout()).toBe('');
+    expect(runIo.stderr()).toContain(
+      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+    );
+    expect(runIo.stderr()).toContain(
+      `ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+    );
   });
 
   it('routes metabase scheduled pulls to the fan-out runner and prints child summaries', async () => {
@@ -952,6 +1022,97 @@ describe('runKtxIngest', () => {
     expect(stderr).toContain('[100%] Ingest completed');
     expect(io.stdout()).toContain('Report: report-live-1');
     expect(io.stdout()).not.toContain('[5%]');
+  });
+
+  it('prints plain WorkUnit step progress during long-running local ingest', async () => {
+    const projectDir = join(tempDir, 'historic-sql-step-progress-project');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      [
+        'project: historic-sql-step-progress-project',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      minExecutions: 2',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const createdAdapters: SourceAdapter[] = [
+      { source: 'historic-sql', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+    ];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) => {
+      input.memoryFlow?.update({
+        plannedWorkUnits: [
+          {
+            unitKey: 'historic-sql-table-public-orders',
+            rawFiles: ['tables/public/orders.json'],
+            peerFileCount: 0,
+            dependencyCount: 0,
+          },
+          {
+            unitKey: 'historic-sql-table-public-customers',
+            rawFiles: ['tables/public/customers.json'],
+            peerFileCount: 0,
+            dependencyCount: 0,
+          },
+        ],
+      });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 });
+      input.memoryFlow?.emit({
+        type: 'work_unit_started',
+        unitKey: 'historic-sql-table-public-orders',
+        skills: ['historic_sql_table_digest'],
+        stepBudget: 40,
+      });
+      input.memoryFlow?.emit({
+        type: 'work_unit_step',
+        unitKey: 'historic-sql-table-public-orders',
+        stepIndex: 7,
+        stepBudget: 40,
+      });
+      input.memoryFlow?.emit({
+        type: 'work_unit_finished',
+        unitKey: 'historic-sql-table-public-orders',
+        status: 'success',
+      });
+      input.memoryFlow?.finish('done');
+      return completedLocalBundleRun(input, input.jobId ?? 'historic-step-progress-job');
+    });
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          env: interactiveEnv(),
+          createAdapters: vi.fn(() => createdAdapters as never),
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'historic-step-progress-job',
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const stdout = io.stdout();
+    expect(stdout).toContain('[45%] Planned 2 work units');
+    expect(stdout).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
+    expect(stdout).toContain('[58%] Processing 1/2 work units: historic-sql-table-public-orders step 7/40');
+    expect(stdout).toContain('[68%] Processed 1/2 work units');
   });
 
   it('passes local Looker pull-config options and agent runner into scheduled ingest for Looker scheduled ingest', async () => {

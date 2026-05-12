@@ -5,7 +5,7 @@ description: "Show current project status."
 
 Print the current setup status of your KTX project — which steps are complete, which need attention, and whether the project is ready for agents.
 
-## Usage
+## Command signature
 
 ```bash
 ktx status [options]
@@ -26,3 +26,26 @@ ktx status
 # Get status as JSON (useful for scripting)
 ktx status --json
 ```
+
+## Output
+
+`ktx status` prints readiness for each setup area. Agents should use `ktx status --json` when they need to branch on readiness state.
+
+```json
+{
+  "projectReady": true,
+  "llmReady": true,
+  "embeddingsReady": true,
+  "primarySourcesConfigured": true,
+  "contextBuilt": true,
+  "agentIntegrationReady": true
+}
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| No KTX project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | Run from a KTX project or set `KTX_PROJECT_DIR` |
+| Project ready is false | One or more setup steps are incomplete | Run `ktx setup` to resume setup |
+| Agent integration ready is false | No agent target has been installed | Run `ktx setup --agents --target <target>` |

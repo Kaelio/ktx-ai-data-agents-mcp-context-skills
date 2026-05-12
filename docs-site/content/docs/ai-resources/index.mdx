@@ -1,0 +1,38 @@
+---
+title: AI Resources
+description: Machine-readable docs and prompt recipes for coding assistants reading KTX documentation.
+---
+
+Use this section when a coding assistant, IDE agent, or automation system needs to understand the KTX documentation.
+
+> **Documentation index**
+>
+> Start with [`/llms.txt`](/llms.txt) to discover the available docs. Use [`/llms-full.txt`](/llms-full.txt) when the assistant needs the complete docs corpus in one Markdown response.
+
+## Choose the right path
+
+| Goal | Use this page |
+|------|---------------|
+| Tell a coding assistant how to approach KTX docs | [Agent Quickstart](/docs/ai-resources/agent-quickstart) |
+| Fetch docs as Markdown instead of HTML | [Markdown Access](/docs/ai-resources/markdown-access) |
+| Add lightweight instructions to an assistant prompt | [Agent Instructions](/docs/ai-resources/agent-instructions) |
+| Copy prompts for common agent workflows | [Prompt Recipes](/docs/ai-resources/prompt-recipes) |
+
+## Available resources
+
+| Resource | What it gives agents |
+|----------|----------------------|
+| [`/llms.txt`](/llms.txt) | Curated index of high-value KTX docs and Markdown endpoints |
+| [`/llms-full.txt`](/llms-full.txt) | Complete docs corpus in one plain-text Markdown response |
+| `/docs/<path>.md` | Per-page Markdown for any docs page |
+| Page-level actions | Copy Markdown, view Markdown, or copy MDX from rendered docs pages |
+| Prompt recipes | Reusable prompts for docs lookup, setup help, and docs editing |
+
+## Agent usage notes
+
+When an assistant is unsure where to begin, use this order:
+
+1. Read [`/llms.txt`](/llms.txt).
+2. Fetch the specific Markdown page for the task.
+3. Use [Agent Quickstart](/docs/ai-resources/agent-quickstart) to choose the next command or page.
+4. Use page-level copy actions when the user wants the exact Markdown or MDX source.

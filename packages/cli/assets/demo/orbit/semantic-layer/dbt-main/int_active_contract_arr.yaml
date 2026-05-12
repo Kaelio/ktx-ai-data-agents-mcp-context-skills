@@ -1,0 +1,24 @@
+name: int_active_contract_arr
+table: orbit_analytics.int_active_contract_arr
+grain:
+  - contract_id
+columns:
+  - name: contract_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on int_active_contract_arr.
+  - name: arr_cents
+    type: number
+    descriptions:
+      ktx: Column arr cents from int_active_contract_arr.
+joins: []
+measures:
+  - name: total_arr_cents
+    expr: sum(arr_cents)
+    description: Total active contract ARR in cents as of 2026-03-31.
+descriptions:
+  user: Active contract ARR as of 2026-03-31.

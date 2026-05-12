@@ -1,0 +1,29 @@
+name: stg_arr_movements
+table: orbit_analytics.stg_arr_movements
+grain:
+  - arr_movement_id
+columns:
+  - name: arr_movement_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_arr_movements.
+  - name: movement_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [new, expansion, contraction, churn, reactivation]"
+  - name: movement_date
+    type: time
+    descriptions:
+      ktx: Date or time value for movement date on stg_arr_movements.
+  - name: arr_cents
+    type: number
+    descriptions:
+      ktx: Column arr cents from stg_arr_movements.
+joins: []
+measures: []
+descriptions:
+  user: ARR movement ledger used by retention and expansion marts.

@@ -5,7 +5,7 @@ description: "List, read, validate, query, or write semantic-layer sources."
 
 Interact with your project's semantic layer. Semantic sources are YAML definitions that describe your tables, columns, measures, joins, and grain — the vocabulary agents use to generate correct SQL.
 
-## Usage
+## Command signature
 
 ```bash
 ktx sl <subcommand> [options]
@@ -120,3 +120,28 @@ ktx sl query \
   --execute \
   --max-rows 1000
 ```
+
+## Output
+
+Semantic-layer commands return human-readable output by default. Use `--json` or `--format json` when an agent needs structured output; use `--format sql` to inspect generated SQL before execution.
+
+```json
+{
+  "sql": "SELECT orders.status, SUM(orders.total_amount) AS total_revenue FROM public.orders GROUP BY orders.status",
+  "rows": [
+    {
+      "orders.status": "completed",
+      "total_revenue": 125000
+    }
+  ]
+}
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Source not found | Source name or connection id is wrong | Run `ktx sl list --json` and retry with an exact source name and connection id |
+| Validation fails | YAML references missing columns, invalid joins, or invalid SQL expressions | Fix the source YAML and rerun `ktx sl validate` |
+| Query compile fails | Measure, dimension, filter, or segment name is invalid | Read the source with `ktx sl read`, then retry using declared fields |
+| Execution returns too many rows | `--max-rows` is missing or too high | Add `--max-rows` with a bounded value before executing |

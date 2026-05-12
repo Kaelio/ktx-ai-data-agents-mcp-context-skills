@@ -1,0 +1,29 @@
+name: stg_contracts
+table: orbit_analytics.stg_contracts
+grain:
+  - contract_id
+columns:
+  - name: contract_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_contracts.
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [draft, active, cancelled, expired]"
+  - name: renewal_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [new, renewal, expansion, downgrade]"
+  - name: arr_cents
+    type: number
+    descriptions:
+      ktx: Column arr cents from stg_contracts.
+joins: []
+measures: []
+descriptions:
+  user: Contract records that provide contract-first ARR for active accounts.

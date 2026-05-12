@@ -5,7 +5,7 @@ description: "Add, list, test, and map data sources."
 
 Manage database and source connections in your KTX project. Connections define how KTX reaches your data warehouse, BI tools, and context sources.
 
-## Usage
+## Command signature
 
 ```bash
 ktx connection <subcommand> [options]
@@ -147,3 +147,28 @@ ktx connection mapping refresh metabase-prod --auto-accept
 # Pick Notion root pages interactively
 ktx connection notion pick my-notion
 ```
+
+## Output
+
+Interactive commands render prompts and status text. Commands with `--json` return machine-readable JSON suitable for scripts and agents.
+
+```json
+{
+  "connections": [
+    {
+      "id": "my-warehouse",
+      "driver": "postgres",
+      "readonly": false
+    }
+  ]
+}
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Connection test fails | Credentials, network access, database, warehouse, or schema is invalid | Verify the same URL with the database's native client, then rerun `ktx connection add ... --force` |
+| Literal credentials rejected | KTX avoids writing raw secrets to `ktx.yaml` by default | Use `env:NAME` or `file:/path/to/secret`; use `--allow-literal-credentials` only for local throwaway projects |
+| Mapping validation fails | BI database mappings do not point at valid warehouse connections | Run `ktx connection mapping refresh <connectionId> --auto-accept`, then set invalid mappings explicitly |
+| Notion pick cannot run non-interactively | `--no-input` was used without root page or database ids | Pass `--root-page-id`, `--root-database-id`, or `--root-data-source-id` with `--no-input` |

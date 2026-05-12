@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
+import { runDemoTour } from './setup-demo-tour.js';
 import { readKtxSetupStatus, runKtxSetup } from './setup.js';
+
+vi.mock('./setup-demo-tour.js', () => ({
+  runDemoTour: vi.fn(async () => 0),
+}));
 
 function makeIo() {
   let stdout = '';
@@ -79,6 +84,38 @@ describe('setup status', () => {
       project: { path: tempDir, ready: true },
       llm: { backend: 'anthropic', ready: true, model: 'claude-sonnet-4-6' },
       embeddings: { backend: 'deterministic', ready: false, model: 'deterministic', dimensions: 8 },
+    });
+  });
+
+  it.each([
+    {
+      backend: 'vertex',
+      providerLines: ['    backend: vertex', '    vertex:', '      project: kaelio-dev', '      location: us-east5'],
+      model: 'claude-sonnet-4-6',
+    },
+    {
+      backend: 'gateway',
+      providerLines: ['    backend: gateway', '    gateway:', '      api_key: env:AI_GATEWAY_API_KEY'],
+      model: 'anthropic/claude-sonnet-4-6',
+    },
+  ])('reports configured $backend llm backends as setup-ready', async (fixture) => {
+    await mkdir(tempDir, { recursive: true });
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'llm:',
+        '  provider:',
+        ...fixture.providerLines,
+        '  models:',
+        `    default: ${fixture.model}`,
+        'connections: {}',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
+      llm: { backend: fixture.backend, ready: true, model: fixture.model },
     });
   });
 
@@ -347,10 +384,10 @@ describe('setup status', () => {
       expect(labels).toEqual([
         'Set up KTX for my data',
         'Check setup status',
-        'Try KTX with packaged demo data',
+        'Explore a pre-built KTX project',
         'Exit',
       ]);
-      expect(labels.indexOf('Try KTX with packaged demo data')).toBe(labels.length - 2);
+      expect(labels.indexOf('Explore a pre-built KTX project')).toBe(labels.length - 2);
       return 'exit';
     });
     const cancel = vi.fn();
@@ -396,7 +433,7 @@ describe('setup status', () => {
         'Create a new KTX project',
         'Connect a coding agent to KTX',
         'Check setup status',
-        'Try KTX with packaged demo data',
+        'Explore a pre-built KTX project',
         'Exit',
       ]);
       return 'exit';
@@ -691,9 +728,8 @@ describe('setup status', () => {
     );
   });
 
-  it('runs the seeded demo when the first setup intent menu chooses packaged demo data', async () => {
+  it('runs the demo tour when the first setup intent menu chooses demo', async () => {
     const testIo = makeIo();
-    const demo = vi.fn(async (_args: { projectDir: string }, _io: unknown) => 0);
 
     await expect(
       runKtxSetup(
@@ -714,19 +750,15 @@ describe('setup status', () => {
           showEntryMenu: true,
         },
         testIo.io,
-        { entryMenuDeps: { prompts: { select: vi.fn(async () => 'demo'), cancel: vi.fn() } }, demo },
+        { entryMenuDeps: { prompts: { select: vi.fn(async () => 'demo'), cancel: vi.fn() } } },
       ),
     ).resolves.toBe(0);
 
-    expect(demo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'seeded',
-        outputMode: 'viz',
-        inputMode: 'auto',
-      }),
+    expect(runDemoTour).toHaveBeenCalledWith(
+      { inputMode: 'auto' },
       testIo.io,
+      expect.objectContaining({}),
     );
-    expect(demo.mock.calls[0]?.[0].projectDir).toMatch(/ktx-demo-/);
   });
 
   it('creates a project through run mode when --new is selected', async () => {
@@ -1172,6 +1204,77 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources']);
+  });
+
+  it.each([
+    {
+      backend: 'vertex',
+      providerLines: ['    backend: vertex', '    vertex:', '      project: kaelio-dev', '      location: us-east5'],
+      model: 'claude-sonnet-4-6',
+    },
+    {
+      backend: 'gateway',
+      providerLines: ['    backend: gateway', '    gateway:', '      api_key: env:AI_GATEWAY_API_KEY'],
+      model: 'anthropic/claude-sonnet-4-6',
+    },
+  ])('adds a dbt source in non-interactive setup with existing $backend llm config', async (fixture) => {
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: revenue',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '  completed_steps:',
+        '    - project',
+        '    - databases',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_URL',
+        'llm:',
+        '  provider:',
+        ...fixture.providerLines,
+        '  models:',
+        `    default: ${fixture.model}`,
+      ].join('\n'),
+      'utf-8',
+    );
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          source: 'dbt',
+          sourceConnectionId: 'dbt-main',
+          sourceGitUrl: 'https://github.com/Kaelio/klo-dbt-demo',
+          sourceBranch: 'main',
+          sourceProjectName: 'orbit_analytics',
+          sourceWarehouseConnectionId: 'warehouse',
+          skipSources: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          sourcesDeps: { validateDbt: vi.fn(async () => ({ ok: true as const, detail: 'dbt project valid' })) },
+          context: vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir, runId: 'setup-context-test' })),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).not.toContain('Anthropic');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('dbt-main:');
   });
 
   it('does not fail context build when prerequisites were explicitly skipped and agents are skipped', async () => {

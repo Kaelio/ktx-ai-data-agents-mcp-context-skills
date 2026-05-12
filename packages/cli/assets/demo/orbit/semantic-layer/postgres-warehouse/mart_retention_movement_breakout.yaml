@@ -1,0 +1,25 @@
+name: mart_retention_movement_breakout
+measures:
+  - name: total_expansion_arr_cents
+    expr: sum(expansion_arr_cents)
+    description: Total expansion ARR in cents
+  - name: total_contraction_arr_cents
+    expr: sum(contraction_arr_cents)
+    description: Total contraction ARR in cents (includes discount expiration contraction)
+  - name: total_churned_arr_cents
+    expr: sum(churned_arr_cents)
+    description: Total churned ARR in cents
+  - name: parent_account_count
+    expr: sum(parent_account_count)
+    description: Total number of parent accounts affected by the movement
+  - name: expansion_arr_millions
+    expr: round(sum(expansion_arr_cents) / 100000000.0, 3)
+    description: Expansion ARR in millions of dollars
+  - name: contraction_arr_millions
+    expr: round(sum(contraction_arr_cents) / 100000000.0, 3)
+    description: Contraction ARR in millions of dollars
+  - name: churned_arr_millions
+    expr: round(sum(churned_arr_cents) / 100000000.0, 3)
+    description: Churned ARR in millions of dollars
+descriptions:
+  user: Quarterly ARR movement breakout by segment, movement_type (expansion/contraction/churn), and movement_reason. One row per quarter × segment × movement_type × movement_reason. Contraction includes discount expirations (is_discount_expiration_contraction). Used for NRR waterfall analysis.

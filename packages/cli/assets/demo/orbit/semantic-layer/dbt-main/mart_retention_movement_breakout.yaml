@@ -1,0 +1,31 @@
+name: mart_retention_movement_breakout
+table: orbit_analytics.mart_retention_movement_breakout
+grain:
+  - movement_type
+  - movement_reason
+columns:
+  - name: movement_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [expansion, contraction, churn]"
+  - name: movement_reason
+    type: string
+    descriptions:
+      user: Includes discount_expiration contraction, which is not churn.
+  - name: parent_account_count
+    type: number
+    descriptions:
+      user: "dbt assertion: 11 parent accounts where movement_type='contraction' and movement_reason='discount_expiration'."
+  - name: expansion_arr_cents
+    type: number
+    descriptions:
+      user: Expansion ARR cents for Q1 enterprise movement rows.
+joins: []
+measures:
+  - name: total_parent_account_count
+    expr: sum(parent_account_count)
+  - name: total_expansion_arr_cents
+    expr: sum(expansion_arr_cents)
+    filter: movement_type = 'expansion'
+descriptions:
+  user: "Q1 2026 enterprise retention movement breakout. Governed metric: net_revenue_retention. Owner: analytics. See notion://notion_page_retention_policy_current#discount-expiration-treatment."

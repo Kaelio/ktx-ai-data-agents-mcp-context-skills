@@ -14,6 +14,8 @@ import { runKtxScan } from './scan.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
 
+const HISTORIC_SQL_WORK_UNIT_MAX_CONCURRENCY = 6;
+
 export type KtxSetupDatabaseDriver =
   | 'sqlite'
   | 'postgres'
@@ -843,7 +845,7 @@ async function writeConnectionConfig(input: {
       ? (input.connection.historicSql as Record<string, unknown>)
       : null;
   if (historicSql?.enabled === true) {
-    await ensureHistoricSqlAdapterEnabled(input.projectDir);
+    await ensureHistoricSqlIngestDefaults(input.projectDir);
   }
 }
 
@@ -954,9 +956,19 @@ async function maybeConfigurePostgresSchemas(input: {
   return true;
 }
 
-async function ensureHistoricSqlAdapterEnabled(projectDir: string): Promise<void> {
+async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  if (project.config.ingest.adapters.includes('historic-sql')) {
+  const adapters = project.config.ingest.adapters.includes('historic-sql')
+    ? project.config.ingest.adapters
+    : [...project.config.ingest.adapters, 'historic-sql'];
+  const maxConcurrency = Math.max(
+    project.config.ingest.workUnits.maxConcurrency,
+    HISTORIC_SQL_WORK_UNIT_MAX_CONCURRENCY,
+  );
+  if (
+    adapters === project.config.ingest.adapters &&
+    maxConcurrency === project.config.ingest.workUnits.maxConcurrency
+  ) {
     return;
   }
   await writeFile(
@@ -965,7 +977,11 @@ async function ensureHistoricSqlAdapterEnabled(projectDir: string): Promise<void
       ...project.config,
       ingest: {
         ...project.config.ingest,
-        adapters: [...project.config.ingest.adapters, 'historic-sql'],
+        adapters,
+        workUnits: {
+          ...project.config.ingest.workUnits,
+          maxConcurrency,
+        },
       },
     }),
     'utf-8',

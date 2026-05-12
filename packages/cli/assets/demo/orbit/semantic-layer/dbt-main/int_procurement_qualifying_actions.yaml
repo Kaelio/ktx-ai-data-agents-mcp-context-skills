@@ -1,0 +1,27 @@
+name: int_procurement_qualifying_actions
+table: orbit_analytics.int_procurement_qualifying_actions
+grain:
+  - purchase_request_id
+columns:
+  - name: purchase_request_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related purchase request on int_procurement_qualifying_actions.
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on int_procurement_qualifying_actions.
+  - name: requester_user_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related requester user on int_procurement_qualifying_actions.
+  - name: action_week
+    type: time
+    descriptions:
+      ktx: Column action week from int_procurement_qualifying_actions.
+joins: []
+measures:
+  - name: qualifying_action_count
+    expr: count(purchase_request_id)
+descriptions:
+  user: Non-internal, non-test requester activity for large active contracts in the golden week.

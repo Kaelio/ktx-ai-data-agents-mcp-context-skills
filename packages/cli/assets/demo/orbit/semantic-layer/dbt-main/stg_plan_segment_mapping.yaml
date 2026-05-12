@@ -1,0 +1,33 @@
+name: stg_plan_segment_mapping
+table: orbit_analytics.stg_plan_segment_mapping
+grain:
+  - plan_segment_mapping_id
+columns:
+  - name: plan_segment_mapping_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: canonical_plan_code
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [starter, growth, enterprise]"
+  - name: size_band
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [smb, mid_market, enterprise]"
+  - name: segment
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [self_serve, commercial, enterprise]"
+  - name: effective_from
+    type: time
+    descriptions:
+      ktx: Column effective from from stg_plan_segment_mapping.
+  - name: effective_to
+    type: time
+    descriptions:
+      ktx: Column effective to from stg_plan_segment_mapping.
+joins: []
+measures: []
+descriptions:
+  user: Effective-dated mapping from canonical plans and size bands to reporting segments.

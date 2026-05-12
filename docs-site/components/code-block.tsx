@@ -52,15 +52,14 @@ export function CodeBlock(props: Props) {
   const language = detectLanguage(props, children);
   const codeText = extractText(children);
 
-  const isTerminal =
-    (language !== null && TERMINAL_LANGS.has(language)) ||
-    WIZARD_GLYPHS.test(codeText);
+  const isTerminal = language !== null && TERMINAL_LANGS.has(language);
+  const isOutput = !isTerminal && WIZARD_GLYPHS.test(codeText);
   const hasTitle = typeof title === "string" && title.length > 0;
 
-  // Mode A — Terminal
+  // Mode A — Terminal (commands the user types)
   if (isTerminal) {
     return (
-      <div className="ktx-code ktx-code-terminal group">
+      <div className="not-prose ktx-code ktx-code-terminal group">
         <div className="ktx-code-terminal-head">
           <span className="ktx-tl-dot" style={{ background: "#ff5f57" }} />
           <span className="ktx-tl-dot" style={{ background: "#febc2e" }} />
@@ -80,10 +79,23 @@ export function CodeBlock(props: Props) {
     );
   }
 
+  // Mode D — Output preview (wizard prompts, terminal output)
+  if (isOutput) {
+    return (
+      <div className="not-prose ktx-code ktx-code-output group relative">
+        <span className="ktx-code-output-label">output</span>
+        <CopyButton text={codeText} className="ktx-code-output-copy" />
+        <pre {...rest} className="ktx-code-body ktx-code-body-output">
+          {children}
+        </pre>
+      </div>
+    );
+  }
+
   // Mode B — VS Code tab (filename present)
   if (hasTitle) {
     return (
-      <div className="ktx-code ktx-code-tab group">
+      <div className="not-prose ktx-code ktx-code-tab group">
         <div className="ktx-code-tab-head">
           <span className="ktx-file-glyph" data-lang={language ?? ""} />
           <span className="ktx-code-tab-filename">{title}</span>
@@ -99,7 +111,7 @@ export function CodeBlock(props: Props) {
 
   // Mode C — Minimal default
   return (
-    <div className="ktx-code ktx-code-minimal group relative">
+    <div className="not-prose ktx-code ktx-code-minimal group relative">
       {language && <span className="ktx-code-minimal-lang">{language}</span>}
       <CopyButton text={codeText} className="ktx-code-minimal-copy" />
       <pre {...rest} className="ktx-code-body ktx-code-body-minimal">

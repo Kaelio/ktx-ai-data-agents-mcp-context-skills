@@ -1,0 +1,25 @@
+name: stg_account_hierarchy
+table: orbit_analytics.stg_account_hierarchy
+grain:
+  - account_hierarchy_id
+columns:
+  - name: account_hierarchy_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: parent_account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related parent account on stg_account_hierarchy.
+  - name: child_account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related child account on stg_account_hierarchy.
+  - name: relationship_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [subsidiary, division, billing_group]"
+joins: []
+measures: []
+descriptions:
+  user: Parent-child account relationships used for enterprise retention grain.

@@ -3,8 +3,6 @@ import { join, resolve } from 'node:path';
 import { cancel, isCancel, select } from '@clack/prompts';
 import { loadKtxProject } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
-import type { KtxDemoArgs } from './demo.js';
-import { defaultDemoProjectDir } from './demo-assets.js';
 import { formatSetupNextStepLines } from './next-steps.js';
 import { isKtxSetupExitError, withSetupInterruptConfirmation } from './setup-interrupt.js';
 import {
@@ -22,7 +20,7 @@ import {
   runKtxSetupDatabasesStep,
 } from './setup-databases.js';
 import { type KtxSetupEmbeddingsDeps, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
-import { type KtxSetupModelDeps, runKtxSetupAnthropicModelStep } from './setup-models.js';
+import { type KtxSetupModelDeps, isKtxSetupLlmConfigReady, runKtxSetupAnthropicModelStep } from './setup-models.js';
 import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
 import {
   isKtxPreAgentSetupReady,
@@ -148,7 +146,6 @@ export interface KtxSetupDeps {
   removeAgents?: typeof removeKtxAgentInstall;
   readyMenuDeps?: KtxSetupReadyMenuDeps;
   entryMenuDeps?: KtxSetupEntryMenuDeps;
-  demo?: (args: KtxDemoArgs, io: KtxCliIo) => Promise<number>;
 }
 
 const SOURCE_DRIVERS = new Set(['dbt', 'metricflow', 'metabase', 'looker', 'lookml', 'notion']);
@@ -200,13 +197,13 @@ async function runKtxSetupEntryMenu(
         { value: 'new-project', label: 'Create a new KTX project' },
         { value: 'agents', label: 'Connect a coding agent to KTX' },
         { value: 'status', label: 'Check setup status' },
-        { value: 'demo', label: 'Try KTX with packaged demo data' },
+        { value: 'demo', label: 'Explore a pre-built KTX project' },
         { value: 'exit', label: 'Exit' },
       ]
     : [
         { value: 'setup', label: 'Set up KTX for my data' },
         { value: 'status', label: 'Check setup status' },
-        { value: 'demo', label: 'Try KTX with packaged demo data' },
+        { value: 'demo', label: 'Explore a pre-built KTX project' },
         { value: 'exit', label: 'Exit' },
       ];
   const action = (await prompts.select({
@@ -221,20 +218,12 @@ async function runKtxSetupDemoFromEntryMenu(
   io: KtxCliIo,
   deps: KtxSetupDeps,
 ): Promise<number> {
-  const runner = deps.demo ?? (await import('./demo.js')).runKtxDemo;
-  return await runner(
-    {
-      command: 'seeded',
-      projectDir: defaultDemoProjectDir(),
-      outputMode: 'viz',
-      inputMode: args.inputMode,
-    },
+  const { runDemoTour } = await import('./setup-demo-tour.js');
+  return await runDemoTour(
+    { inputMode: args.inputMode },
     io,
+    { agents: deps.agents },
   );
-}
-
-function llmReady(status: KtxSetupStatus['llm']): boolean {
-  return status.backend === 'anthropic' && typeof status.model === 'string' && status.model.length > 0;
 }
 
 function embeddingsReady(status: KtxSetupStatus['embeddings']): boolean {
@@ -276,10 +265,9 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
   const project = await loadKtxProject({ projectDir: resolvedProjectDir });
   const llm = {
     backend: project.config.llm.provider.backend,
-    ready: false,
+    ready: isKtxSetupLlmConfigReady(project.config.llm),
     model: project.config.llm.models.default,
   };
-  llm.ready = llmReady(llm);
 
   const embeddings = {
     backend: project.config.ingest.embeddings.backend,
@@ -383,7 +371,7 @@ function setupStatusReady(status: KtxSetupStatus): boolean {
     return true;
   }
   return (
-    llmReady(status.llm) &&
+    status.llm.ready &&
     embeddingsReady(status.embeddings) &&
     status.databases.every((database) => database.ready) &&
     status.sources.every((source) => source.ready)

@@ -1,0 +1,29 @@
+name: stg_supplier_onboarding_events
+table: orbit_analytics.stg_supplier_onboarding_events
+grain:
+  - supplier_onboarding_event_id
+columns:
+  - name: supplier_onboarding_event_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: supplier_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related supplier on stg_supplier_onboarding_events.
+  - name: event_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [invited, profile_started, profile_completed, approved]"
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [pending, completed, blocked]"
+  - name: occurred_at
+    type: time
+    descriptions:
+      ktx: Column occurred at from stg_supplier_onboarding_events.
+joins: []
+measures: []
+descriptions:
+  user: Supplier onboarding milestones that qualify as procurement workflow activity.

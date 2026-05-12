@@ -1,0 +1,10 @@
+name: mart_arr_daily
+measures:
+  - name: total_arr_cents
+    expr: sum(arr_cents)
+    description: Sum of ARR in cents across all snapshot dates (use with a date filter to get point-in-time ARR).
+  - name: latest_arr_cents
+    expr: max(arr_cents)
+    description: Most recent ARR value in cents (max across dates in the filtered window).
+descriptions:
+  user: "Daily ARR snapshot. Source: dbt mart_arr_daily. One row per metric_date with global ARR in cents."

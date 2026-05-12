@@ -53,7 +53,13 @@ describe('createLocalBundleIngestRuntime', () => {
         project,
         adapters: [new FakeSourceAdapter()],
       }),
-    ).toThrow('ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner');
+    ).toThrow(
+      [
+        'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+        `Configure an Anthropic provider, then rerun ingest:`,
+        `  ktx setup --project-dir ${project.projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+      ].join('\n'),
+    );
   });
 
   it('builds runner deps with local SQLite stores and context tools enabled', async () => {

@@ -53,8 +53,8 @@ describe('seeded demo inspect contract', () => {
         notion: { label: 'Notion', path: 'raw-sources/notion', pageCount: 8 },
       },
       generatedOutputs: {
-        semanticLayer: { path: 'semantic-layer/orbit_demo', manifestSourceCount: 6, fileCount: 6 },
-        knowledge: { path: 'knowledge/global', manifestPageCount: 10, fileCount: 10 },
+        semanticLayer: { path: 'semantic-layer', manifestSourceCount: 52, fileCount: 52 },
+        knowledge: { path: 'knowledge/global', manifestPageCount: 29, fileCount: 29 },
         links: { path: 'links/provenance.json', manifestLinkCount: 23, linkCount: 23 },
         reports: { primaryPath: 'reports/seeded-demo-report.json', fileCount: 1 },
         replays: { primaryPath: 'replays/replay.memory-flow.v1.json', latestPath: 'replays/latest.memory-flow.v1.json' },
@@ -83,8 +83,8 @@ describe('seeded demo inspect contract', () => {
     expect(output).toContain('dbt: 3 models, 8 source tables');
     expect(output).toContain('BI: 5 explores, 2 dashboards');
     expect(output).toContain('Notion: 8 pages');
-    expect(output).toContain('Semantic-layer sources: 6 manifest, 6 files');
-    expect(output).toContain('Knowledge pages: 10 manifest, 10 files');
+    expect(output).toContain('Semantic-layer sources: 52 manifest, 52 files');
+    expect(output).toContain('Knowledge pages: 29 manifest, 29 files');
     expect(output).toContain('Evidence links: 23 manifest, 23 links');
     expect(output).toContain('Report: reports/seeded-demo-report.json');
     expect(output).toContain('Replay: replays/replay.memory-flow.v1.json');
