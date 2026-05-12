@@ -221,7 +221,7 @@ describe('standalone built ktx CLI smoke', () => {
     expect(result.stdout).toContain('Notion:');
     expect(result.stdout).toContain('Semantic-layer sources:');
     expect(result.stdout).toContain('Knowledge pages:');
-    expect(result.stdout).toContain('ktx serve --mcp stdio');
+    expect(result.stdout).not.toContain('ktx serve --mcp stdio');
     expect(result.stdout).not.toContain(['--mode', 'deterministic'].join(' '));
   });
 
@@ -336,7 +336,7 @@ describe('standalone built ktx CLI smoke', () => {
     expect(inspect.stdout).toContain('ktx agent tools --json');
     expect(inspect.stdout).toContain('ktx agent context --json');
     expect(inspect.stdout).not.toContain('ktx ask "your question here"');
-    expect(inspect.stdout).toContain('ktx serve --mcp stdio');
+    expect(inspect.stdout).not.toContain('ktx serve --mcp stdio');
   });
 
   it('serves seeded demo wiki and semantic-layer context over stdio MCP', async () => {

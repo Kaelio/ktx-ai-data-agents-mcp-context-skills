@@ -66,11 +66,10 @@ describe('KTX demo next steps', () => {
     const rendered = formatNextStepLines().join('\n');
 
     expect(rendered).toContain('KTX context is ready for agents.');
-    expect(rendered).toContain('Preferred route: CLI + Skills');
-    expect(rendered).toContain('no MCP server is required');
-    expect(rendered).toContain('Direct CLI checks:');
-    expect(rendered).toContain('Optional MCP:');
-    expect(rendered).not.toContain('Ask your agent to use KTX');
+    expect(rendered).toContain('ask a data question');
+    expect(rendered).toContain('Verify with:');
+    expect(rendered).not.toContain('Preferred route');
+    expect(rendered).not.toContain('Optional MCP:');
   });
 
   it('does not advertise removed Commander migration commands', () => {
@@ -80,7 +79,6 @@ describe('KTX demo next steps', () => {
     expect(rendered).toContain('ktx agent context --json');
     expect(rendered).toContain('ktx sl list');
     expect(rendered).toContain('ktx wiki list');
-    expect(rendered).toContain('ktx serve --mcp stdio --user-id local');
 
     for (const removed of [
       command('ktx', 'ask'),
@@ -91,6 +89,7 @@ describe('KTX demo next steps', () => {
       command('dev', 'knowledge'),
       command('ktx', 'ingest', 'run'),
       command('ktx', 'ingest', 'replay'),
+      command('ktx', 'serve', '--mcp', 'stdio', '--user-id', 'local'),
     ]) {
       expect(rendered).not.toContain(removed);
     }
@@ -123,7 +122,7 @@ describe('KTX demo next steps', () => {
 
     expect(rendered).toContain('KTX context is ready for agents.');
     expect(rendered).toContain('ktx agent context --json');
-    expect(rendered).toContain('ktx serve --mcp stdio --user-id local');
+    expect(rendered).not.toContain('ktx serve --mcp stdio --user-id local');
     expect(rendered).not.toContain('Build KTX context next.');
   });
 });

@@ -8,7 +8,7 @@ import { DEMO_FULL_JOB_ID, defaultDemoProjectDir, ensureDemoProject } from './de
 import type { DemoFullResult } from './demo-full.js';
 import { createTestDemoPromptAdapter } from './demo-interaction.js';
 import type { renderMemoryFlowTui } from './memory-flow-tui.js';
-import { KTX_NEXT_STEP_COMMANDS } from './next-steps.js';
+import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 import { resetVizFallbackWarningsForTest } from './viz-fallback.js';
 
 function makeIo(options: { isTTY?: boolean; columns?: number; rawMode?: boolean } = {}) {
@@ -205,7 +205,7 @@ describe('runKtxDemo', () => {
     expect(io.stdout()).toContain('Connection: orbit_demo');
     expect(io.stdout()).toContain('ktx sl list');
     expect(io.stdout()).toContain('ktx wiki list');
-    expect(io.stdout()).toContain('ktx serve --mcp stdio --user-id local');
+    expect(io.stdout()).not.toContain('ktx serve --mcp stdio --user-id local');
     expect(io.stdout()).not.toContain('KTX memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but stdin raw mode is unavailable; printing plain output.',
@@ -223,7 +223,7 @@ describe('runKtxDemo', () => {
     expect(testIo.stdout()).toContain('Connection: orbit_demo');
     expect(testIo.stdout()).toContain('ktx sl list');
     expect(testIo.stdout()).toContain('ktx wiki list');
-    expect(testIo.stdout()).toContain('ktx serve --mcp stdio --user-id local');
+    expect(testIo.stdout()).not.toContain('ktx serve --mcp stdio --user-id local');
     expect(testIo.stdout()).not.toContain('KTX memory flow');
     expect(testIo.stderr()).toContain(
       'Visualization requested but stdout is not an interactive terminal; printing plain output.',
@@ -284,7 +284,7 @@ describe('runKtxDemo', () => {
     expect(io.stdout()).toContain('LLM calls: none');
     expect(io.stdout()).toContain('Your KTX project files are at:');
     expect(io.stdout()).toContain(join(tmpdir(), 'ktx-demo-'));
-    expect(io.stdout()).toContain('ktx serve --mcp stdio');
+    expect(io.stdout()).not.toContain('ktx serve --mcp stdio');
     expect(io.stdout()).not.toContain(['ktx', 'mcp'].join(' '));
     expect(io.stdout()).not.toContain('deterministic');
   });
@@ -347,7 +347,7 @@ describe('runKtxDemo', () => {
         generatedContext: 'prebuilt from bundled assets',
         llmCalls: 'none',
       },
-      nextCommands: KTX_NEXT_STEP_COMMANDS,
+      nextCommands: KTX_NEXT_STEP_DIRECT_COMMANDS,
     });
     expect(parsed.generatedOutputs.replays.fileCount).toBeGreaterThanOrEqual(3);
     expect(jsonIo.stderr()).toBe('');
@@ -414,7 +414,7 @@ describe('runKtxDemo', () => {
     expect(testIo.stdout()).toContain('KTX finished ingesting your data');
     expect(testIo.stdout()).toContain('ktx sl list');
     expect(testIo.stdout()).toContain('ktx wiki list');
-    expect(testIo.stdout()).toContain('ktx serve --mcp stdio --user-id local');
+    expect(testIo.stdout()).not.toContain('ktx serve --mcp stdio --user-id local');
     expect(testIo.stdout()).not.toContain(['ktx', 'ask'].join(' '));
     expect(testIo.stdout()).not.toContain(['ktx', 'mcp'].join(' '));
   });
