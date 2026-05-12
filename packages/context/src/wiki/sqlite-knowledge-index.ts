@@ -75,7 +75,9 @@ function parseEmbedding(raw: string | null): number[] | null {
   }
   try {
     const embedding = JSON.parse(raw) as unknown;
-    return Array.isArray(embedding) && embedding.every((value) => typeof value === 'number') ? embedding : null;
+    return Array.isArray(embedding) && embedding.length > 0 && embedding.every((value) => typeof value === 'number')
+      ? embedding
+      : null;
   } catch {
     return null;
   }
@@ -170,7 +172,7 @@ export class SqliteKnowledgeIndex {
           content: searchText,
           tags: page.tags.join(' '),
           searchText,
-          embeddingJson: page.embedding ? JSON.stringify(page.embedding) : null,
+          embeddingJson: page.embedding && page.embedding.length > 0 ? JSON.stringify(page.embedding) : null,
         };
         upsertPage.run(row);
         deleteFts.run(row);

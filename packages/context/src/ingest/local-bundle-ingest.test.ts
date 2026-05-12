@@ -403,6 +403,50 @@ describe('canonical local ingest', () => {
     }
   });
 
+  it('does not persist noop embedding vectors when local embeddings are disabled', async () => {
+    await writeFile(
+      join(project.projectDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        'ingest:',
+        '  adapters:',
+        '    - fake',
+        '  embeddings:',
+        '    backend: none',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    project = await loadKtxProject({ projectDir: project.projectDir });
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+    const agentRunner = new WikiWritingAgentRunner();
+
+    const result = await runLocalIngest({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      adapter: 'fake',
+      connectionId: 'warehouse',
+      sourceDir,
+      jobId: 'wiki-local-no-embeddings-1',
+      agentRunner,
+    });
+
+    expect(result.result.failedWorkUnits).toEqual([]);
+    const db = new Database(join(project.projectDir, '.ktx', 'db.sqlite'), { readonly: true });
+    try {
+      expect(db.prepare('SELECT key, summary, embedding_json IS NOT NULL AS has_embedding FROM knowledge_pages ORDER BY key').all()).toEqual([
+        { key: 'orders_context', summary: 'Orders source context', has_embedding: 0 },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('uses explicit action raw paths to avoid over-attributing work-unit provenance', async () => {
     const sourceDir = join(tempDir, 'source');
     await mkdir(join(sourceDir, 'orders'), { recursive: true });

@@ -82,6 +82,14 @@ describe('SqliteKnowledgeIndex', () => {
     );
   });
 
+  it('does not treat empty embeddings as indexed semantic vectors', () => {
+    const index = new SqliteKnowledgeIndex({ dbPath });
+    index.sync([page({ path: 'knowledge/global/revenue.md', key: 'revenue', embedding: [] })]);
+
+    expect(index.getExistingPages().get('knowledge/global/revenue.md')?.embedding).toBeNull();
+    expect(index.searchSemanticCandidates({ queryEmbedding: [1, 0], limit: 10 })).toEqual([]);
+  });
+
   it('returns semantic lane candidates from stored page embeddings', () => {
     const index = new SqliteKnowledgeIndex({ dbPath });
     index.sync([
