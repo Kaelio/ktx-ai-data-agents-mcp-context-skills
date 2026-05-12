@@ -210,8 +210,6 @@ class SemanticEngine:
             grain = grain_col.lower()
             if grain in source_columns:
                 return True
-            if any(col.endswith(f"_{grain}") for col in source_columns):
-                return True
             if grain == "id":
                 candidates = {
                     f"{target_name}_id",
@@ -219,6 +217,9 @@ class SemanticEngine:
                 }
                 if source_columns.intersection(candidates):
                     return True
+                continue
+            if any(col.endswith(f"_{grain}") for col in source_columns):
+                return True
         return False
 
     def _check_sql_join_coverage(

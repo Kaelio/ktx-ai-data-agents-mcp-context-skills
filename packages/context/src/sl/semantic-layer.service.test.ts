@@ -891,6 +891,60 @@ describe('validateWithProposedSource', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('allows SQL syntax tokens and cast types in physical expression validation', async () => {
+    const schemaPath = 'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml';
+    configService.listFiles.mockImplementation((dir: string) => {
+      if (dir === 'semantic-layer/dbt-main') {
+        return Promise.resolve({ files: [] });
+      }
+      if (dir === 'semantic-layer') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      if (dir === 'semantic-layer/dbt-main/_schema' || dir === 'semantic-layer/postgres-warehouse/_schema') {
+        return Promise.resolve({ files: dir.endsWith('postgres-warehouse/_schema') ? [schemaPath] : [] });
+      }
+      return Promise.resolve({ files: [] });
+    });
+    configService.readFile.mockResolvedValue({
+      content: [
+        'tables:',
+        '  mart_revenue_daily:',
+        '    table: orbit_analytics.mart_revenue_daily',
+        '    columns:',
+        '      - { name: order_id, type: string }',
+        '      - { name: revenue_date, type: time }',
+        '      - { name: amount, type: number }',
+        '      - { name: status, type: string }',
+        '      - { name: created_at, type: time }',
+      ].join('\n'),
+    });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('dbt-main', {
+      name: 'mart_revenue_daily',
+      table: 'orbit_analytics.mart_revenue_daily',
+      grain: ['order_id'],
+      columns: [
+        { name: 'order_id', type: 'string' },
+        { name: 'revenue_date', type: 'time' },
+        { name: 'amount', type: 'number' },
+        { name: 'status', type: 'string' },
+        { name: 'created_at', type: 'time' },
+        { name: 'status_text', type: 'string', expr: 'status::text' },
+      ],
+      segments: [{ name: 'current_or_paid', expr: "created_at <= current_date OR status = 'paid'" }],
+      joins: [],
+      measures: [
+        { name: 'paid_amount', expr: "sum(amount) FILTER (WHERE status = 'paid')" },
+        { name: 'cast_amount_count', expr: 'count(cast(amount as text))' },
+      ],
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+
   it('rejects join keys that are absent from matched physical sources', async () => {
     const schemaPath = 'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml';
     configService.listFiles.mockImplementation((dir: string) => {

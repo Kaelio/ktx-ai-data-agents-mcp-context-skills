@@ -1160,6 +1160,8 @@ const SQL_KEYWORDS = new Set([
   'in',
   'between',
   'like',
+  'where',
+  'filter',
   'cast',
   'coalesce',
   'nullif',
@@ -1183,15 +1185,31 @@ const SQL_KEYWORDS = new Set([
   'rows',
   'range',
   'current',
+  'current_date',
+  'current_time',
+  'current_timestamp',
+  'localtime',
+  'localtimestamp',
   'row',
   'numeric',
   'decimal',
   'int',
   'integer',
+  'bigint',
+  'smallint',
   'float',
   'double',
+  'real',
   'string',
+  'text',
+  'char',
+  'character',
+  'varchar',
   'timestamp',
+  'time',
+  'uuid',
+  'json',
+  'jsonb',
   'bool',
   'boolean',
 ]);
@@ -1218,7 +1236,8 @@ function normalizeSqlExpressionForIdentifierScan(expr: string): string {
     .replace(/'([^']|'')*'/g, ' ')
     .replace(/"([^"]+)"/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]/g, '$1');
+    .replace(/\[([^\]]+)\]/g, '$1')
+    .replace(/::\s*[A-Za-z_][\w$]*(?:\s*\([^)]*\))?/g, ' ');
 }
 
 function extractSqlIdentifierRefs(expr: string): Array<{ qualifier?: string; name: string }> {

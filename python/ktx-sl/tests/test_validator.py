@@ -323,6 +323,34 @@ class TestJoinValidation:
 
         assert report.errors == []
 
+    def test_sql_join_coverage_does_not_treat_unrelated_id_suffix_as_id_key(self):
+        requesters = SourceDefinition(
+            name="large_contract_requesters",
+            sql="""
+                select accounts.account_name, requests.user_id
+                from orbit_raw.requests requests
+                join public.accounts accounts
+                  on requests.account_id = accounts.id
+            """,
+            grain=["user_id"],
+            columns=[
+                SourceColumn(name="account_name", type="string"),
+                SourceColumn(name="user_id", type="string"),
+            ],
+            joins=[],
+        )
+        accounts = _src("accounts", columns=["id", "account_name"], grain=["id"])
+        engine = SemanticEngine.from_sources(
+            {
+                "large_contract_requesters": requesters,
+                "accounts": accounts,
+            }
+        )
+
+        report = engine.validate(recently_touched={"large_contract_requesters"})
+
+        assert report.errors == []
+
     def test_sql_join_coverage_requires_join_when_projected_key_exists(self):
         requesters = SourceDefinition(
             name="large_contract_requesters",
