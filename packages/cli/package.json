@@ -27,6 +27,7 @@
   "scripts": {
     "assets:demo": "node scripts/build-demo-assets.mjs",
     "build": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.json && node ../../scripts/prepare-cli-bin.mjs",
+    "docs:commands": "pnpm run build && node dist/print-command-tree.js",
     "smoke": "vitest run src/standalone-smoke.test.ts src/example-smoke.test.ts --testTimeout 30000",
     "test": "vitest run --exclude src/standalone-smoke.test.ts --exclude src/example-smoke.test.ts --exclude src/setup-databases.test.ts --exclude src/scan.test.ts --exclude src/commands/connection-metabase-setup.test.ts --exclude src/setup-models.test.ts --exclude src/setup-sources.test.ts --exclude src/setup.test.ts --exclude src/connection.test.ts --exclude src/setup-embeddings.test.ts --exclude src/ingest.test.ts --exclude src/commands/connection-mapping.test.ts --exclude src/ingest-viz.test.ts --exclude src/demo.test.ts --exclude src/setup-project.test.ts --exclude src/sl.test.ts --exclude src/local-scan-connectors.test.ts --exclude src/commands/connection-notion.test.ts",
     "test:slow": "vitest run src/setup-databases.test.ts src/scan.test.ts src/commands/connection-metabase-setup.test.ts src/setup-models.test.ts src/setup-sources.test.ts src/setup.test.ts src/connection.test.ts src/setup-embeddings.test.ts src/ingest.test.ts src/commands/connection-mapping.test.ts src/ingest-viz.test.ts src/demo.test.ts src/setup-project.test.ts src/sl.test.ts src/local-scan-connectors.test.ts src/commands/connection-notion.test.ts --testTimeout 30000",
