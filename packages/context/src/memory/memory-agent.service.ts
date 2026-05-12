@@ -192,7 +192,7 @@ export class MemoryAgentService {
       `[memory-agent] chat=${chatId} running (sourceType=${sourceType}, hasSL=${hasSL}, budget=${stepBudget}, model=${modelName})${signalsSuffix}${dialectSuffix}`,
     );
 
-    if (process.env.MEMORY_AGENT_DEBUG_PROMPTS === '1') {
+    if (process.env.KTX_MEMORY_AGENT_DEBUG_PROMPTS === '1') {
       this.logger.debug(`[memory-agent prompt-debug] system=${systemPrompt}`);
       this.logger.debug(`[memory-agent prompt-debug] user=${prompt}`);
     }

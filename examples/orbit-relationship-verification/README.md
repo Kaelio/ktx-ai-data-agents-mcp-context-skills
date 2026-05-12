@@ -29,5 +29,5 @@ examples/orbit-relationship-verification/reports/orbit-verification.md
 Use a real local Orbit project by overriding the project directory:
 
 ```bash
-KTX_ORBIT_PROJECT_DIR=/path/to/orbit-project pnpm run relationships:verify-orbit
+KTX_PROJECT_DIR=/path/to/orbit-project pnpm run relationships:verify-orbit
 ```
