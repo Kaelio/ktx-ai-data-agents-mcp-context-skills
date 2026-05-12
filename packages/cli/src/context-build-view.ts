@@ -648,10 +648,10 @@ export async function runContextBuild(
       targetState.status = failed ? 'failed' : 'done';
       targetState.detailLine = null;
       const capturedOutput = capture.captured();
+      const metadata = collectOutputMetadata(capturedOutput, targetState.target.operation);
+      for (const reportId of metadata.reportIds) reportIds.add(reportId);
+      for (const artifactPath of metadata.artifactPaths) artifactPaths.add(artifactPath);
       if (!failed) {
-        const metadata = collectOutputMetadata(capturedOutput, targetState.target.operation);
-        for (const reportId of metadata.reportIds) reportIds.add(reportId);
-        for (const artifactPath of metadata.artifactPaths) artifactPaths.add(artifactPath);
         targetState.summaryText =
           targetState.target.operation === 'scan'
             ? parseScanSummary(capturedOutput)

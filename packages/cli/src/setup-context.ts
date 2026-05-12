@@ -234,6 +234,24 @@ function normalizeSourceProgress(value: unknown): ContextBuildSourceProgressUpda
   return entries.length > 0 ? entries : undefined;
 }
 
+function setupContextTargetIds(targets: KtxSetupContextTargets): string[] {
+  return [...new Set([...targets.primarySourceConnectionIds, ...targets.contextSourceConnectionIds])];
+}
+
+function retryableFailedTargetsFromProgress(
+  targets: KtxSetupContextTargets,
+  progress: ContextBuildSourceProgressUpdate[] | undefined,
+): string[] {
+  const targetIds = setupContextTargetIds(targets);
+  if (!progress || progress.length === 0) {
+    return targetIds;
+  }
+
+  const failedIds = new Set(progress.filter((source) => source.status === 'failed').map((source) => source.connectionId));
+  const failedTargets = targetIds.filter((connectionId) => failedIds.has(connectionId));
+  return failedTargets.length > 0 ? failedTargets : targetIds;
+}
+
 export async function readKtxSetupContextState(projectDir: string): Promise<KtxSetupContextState> {
   const filePath = statePath(projectDir);
   if (!(await pathExists(filePath))) {
@@ -614,7 +632,7 @@ async function runBuild(
       updatedAt,
       reportIds: completedReportIds,
       artifactPaths: completedArtifactPaths,
-      retryableFailedTargets: [...targets.primarySourceConnectionIds, ...targets.contextSourceConnectionIds],
+      retryableFailedTargets: retryableFailedTargetsFromProgress(targets, lastSourceProgress),
       failureReason: 'Context build failed.',
       ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
     });

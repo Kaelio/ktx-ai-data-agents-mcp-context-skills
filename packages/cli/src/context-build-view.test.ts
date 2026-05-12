@@ -587,6 +587,36 @@ describe('runContextBuild', () => {
       ],
     });
   });
+
+  it('returns report IDs parsed from failed source-ingest target output', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+      dbt_main: { driver: 'dbt' },
+    });
+    const executeTarget = vi.fn(async (target, _args, targetIo) => {
+      if (target.operation === 'scan') {
+        return successResult(target.connectionId, target.driver, target.operation);
+      }
+
+      targetIo.stdout.write('Report: report-dbt-failed\n');
+      targetIo.stdout.write('Work units: 3\n');
+      return failedResult(target.connectionId, target.driver, target.operation);
+    });
+
+    const result = await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toMatchObject({
+      exitCode: 1,
+      detached: false,
+      reportIds: ['report-dbt-failed'],
+    });
+  });
 });
 
 describe('viewStateFromSourceProgress', () => {
