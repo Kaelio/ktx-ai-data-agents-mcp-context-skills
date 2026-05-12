@@ -1,10 +1,14 @@
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
 import { readKtxSetupStatus, runKtxSetup } from './setup.js';
+
+const execFileAsync = promisify(execFile);
 
 function makeIo() {
   let stdout = '';
@@ -1291,6 +1295,60 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources', 'context', 'agents']);
+  });
+
+  it('commits setup config changes written by later setup steps', async () => {
+    const io = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'new',
+          agents: false,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          skipSources: true,
+          skipAgents: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir: tempDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
+          databases: async () => {
+            const configPath = join(tempDir, 'ktx.yaml');
+            const current = await readFile(configPath, 'utf-8');
+            await writeFile(
+              configPath,
+              current.replace(
+                'connections: {}',
+                ['connections:', '  warehouse:', '    driver: postgres', '    url: env:DATABASE_URL'].join('\n'),
+              ),
+              'utf-8',
+            );
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          context: async () => ({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' }),
+          agents: async () => ({
+            status: 'ready',
+            projectDir: tempDir,
+            installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+          }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const { stdout } = await execFileAsync('git', ['-C', tempDir, 'status', '--short', '--', 'ktx.yaml']);
+    expect(stdout).toBe('');
+    const committedConfig = await execFileAsync('git', ['-C', tempDir, 'show', 'HEAD:ktx.yaml']);
+    expect(committedConfig.stdout).toContain('warehouse:');
   });
 
   it('runs agent setup after context succeeds in --agents mode', async () => {
