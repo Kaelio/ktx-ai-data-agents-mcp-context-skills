@@ -3,7 +3,6 @@ import { join, resolve } from 'node:path';
 import { cancel, isCancel, select } from '@clack/prompts';
 import { loadKtxProject } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
-import type { KtxDemoArgs } from './demo.js';
 import { formatSetupNextStepLines } from './next-steps.js';
 import { isKtxSetupExitError, withSetupInterruptConfirmation } from './setup-interrupt.js';
 import {
@@ -146,7 +145,6 @@ export interface KtxSetupDeps {
   removeAgents?: typeof removeKtxAgentInstall;
   readyMenuDeps?: KtxSetupReadyMenuDeps;
   entryMenuDeps?: KtxSetupEntryMenuDeps;
-  demo?: (args: KtxDemoArgs, io: KtxCliIo) => Promise<number>;
 }
 
 const SOURCE_DRIVERS = new Set(['dbt', 'metricflow', 'metabase', 'looker', 'lookml', 'notion']);
