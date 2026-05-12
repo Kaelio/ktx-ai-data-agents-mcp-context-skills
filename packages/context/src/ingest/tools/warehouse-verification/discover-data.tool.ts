@@ -41,6 +41,10 @@ function totalSources(structured: unknown): number {
     : 0;
 }
 
+function allowedConnectionNames(context: ToolContext): ReadonlySet<string> | null {
+  return context.session?.allowedConnectionNames ?? null;
+}
+
 export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
   readonly name = 'discover_data';
 
@@ -57,6 +61,14 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
   }
 
   async call(input: DiscoverDataInput, context: ToolContext): Promise<ToolOutput<DiscoverDataStructured>> {
+    const allowed = allowedConnectionNames(context);
+    if (input.connectionName && allowed && !allowed.has(input.connectionName)) {
+      return {
+        markdown: `Connection "${input.connectionName}" is not available to this ingest stage.`,
+        structured: { wiki: null, sl: null, raw: null },
+      };
+    }
+
     if (input.sourceName) {
       const sl = await this.deps.slDiscoverTool.call(
         { sourceName: input.sourceName, connectionId: input.connectionName },
@@ -95,9 +107,7 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
     }
 
     const catalog = this.deps.catalogFactory(context);
-    const connections = input.connectionName
-      ? [input.connectionName]
-      : [...(context.session?.allowedConnectionNames ?? [])].sort();
+    const connections = input.connectionName ? [input.connectionName] : [...(allowed ?? [])].sort();
     const rawHits: RawSchemaHit[] = [];
     for (const connectionName of connections) {
       rawHits.push(...(await catalog.searchByName(connectionName, query, limit)));

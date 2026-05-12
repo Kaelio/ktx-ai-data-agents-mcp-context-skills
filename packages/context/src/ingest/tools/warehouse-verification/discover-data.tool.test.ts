@@ -55,6 +55,16 @@ describe('DiscoverDataTool', () => {
     expect(result.structured.raw?.hits).toHaveLength(1);
   });
 
+  it('refuses explicit out-of-scope connection names', async () => {
+    const result = await tool.call({ query: 'orders', connectionName: 'billing' }, context);
+
+    expect(result.markdown).toContain('Connection "billing" is not available to this ingest stage.');
+    expect(result.structured).toEqual({ wiki: null, sl: null, raw: null });
+    expect(wikiSearchTool.call).not.toHaveBeenCalled();
+    expect(slDiscoverTool.call).not.toHaveBeenCalled();
+    expect(catalog.searchByName).not.toHaveBeenCalled();
+  });
+
   it('delegates sourceName inspect mode to sl_discover only', async () => {
     slDiscoverTool.call.mockResolvedValueOnce({
       markdown: 'source detail',
