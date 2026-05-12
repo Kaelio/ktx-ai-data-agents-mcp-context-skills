@@ -27,12 +27,12 @@
   },
   "dependencies": {
     "@ktx/context": "workspace:*",
-    "mysql2": "^3.18.1"
+    "mysql2": "^3.22.3"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "@types/node": "^25.7.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   },
   "license": "Apache-2.0",
   "repository": {

@@ -27,13 +27,13 @@
   },
   "dependencies": {
     "@ktx/context": "workspace:*",
-    "better-sqlite3": "^12.6.2"
+    "better-sqlite3": "^12.10.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^24.3.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "@types/node": "^25.7.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   },
   "license": "Apache-2.0",
   "repository": {

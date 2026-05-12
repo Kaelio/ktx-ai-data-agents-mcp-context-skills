@@ -10,18 +10,18 @@
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "fumadocs-core": "15.7.13",
-    "fumadocs-mdx": "11.10.1",
-    "fumadocs-ui": "15.7.13",
-    "next": "^15",
+    "fumadocs-core": "16.8.10",
+    "fumadocs-mdx": "15.0.4",
+    "fumadocs-ui": "16.8.10",
+    "next": "^16",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
+    "@types/node": "^25.7.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "typescript": "^5.9",
+    "typescript": "^6.0",
     "@tailwindcss/postcss": "^4",
     "tailwindcss": "^4"
   }

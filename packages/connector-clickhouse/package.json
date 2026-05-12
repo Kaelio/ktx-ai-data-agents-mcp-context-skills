@@ -26,13 +26,13 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@clickhouse/client": "^1.18.2",
+    "@clickhouse/client": "^1.18.4",
     "@ktx/context": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "@types/node": "^25.7.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   },
   "license": "Apache-2.0",
   "repository": {
