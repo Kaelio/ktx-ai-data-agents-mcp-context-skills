@@ -6,13 +6,17 @@ describe('renderKtxCommandTree', () => {
     const output = renderKtxCommandTree();
 
     const lines = output.split('\n');
-    expect(lines[0]).toMatch(/^ktx( |$|\s—)/);
+    expect(lines[0]).toMatch(/^ktx( |$)/);
 
-    const topLevel = lines.filter((line) => /^ {2}\S/.test(line)).map((line) => line.trim().split(' ')[0]);
+    const topLevel = lines
+      .filter((line) => /^ {2}[├└]── \S/.test(line))
+      .map((line) => line.replace(/^ {2}[├└]── /, '').trim().split(' ')[0]);
 
     for (const expected of ['setup', 'connection', 'ingest', 'sl', 'dev']) {
       expect(topLevel).toContain(expected);
     }
+
+    expect(output).toContain('│   ├── test <connectionId>');
   });
 
   it('ends with a single trailing newline', () => {

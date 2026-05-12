@@ -16,12 +16,14 @@ describe('walkCommandTree', () => {
       name: 'root',
       description: 'the root',
       aliases: [],
+      arguments: [],
       children: [
         {
           name: 'child',
           description: 'a child',
           aliases: ['c', 'ch'],
-          children: [{ name: 'grand', description: 'a grandchild', aliases: [], children: [] }],
+          arguments: [],
+          children: [{ name: 'grand', description: 'a grandchild', aliases: [], arguments: [], children: [] }],
         },
       ],
     });
@@ -33,6 +35,7 @@ describe('walkCommandTree', () => {
       name: 'leaf',
       description: 'alone',
       aliases: [],
+      arguments: [],
       children: [],
     });
   });
@@ -41,41 +44,64 @@ describe('walkCommandTree', () => {
     const command = new Command('bare');
     expect(walkCommandTree(command).description).toBe('');
   });
+
+  it('captures required, optional, and variadic arguments', () => {
+    const command = new Command('scan')
+      .argument('<connectionId>', 'KTX connection id')
+      .argument('[schemas...]', 'Schemas');
+
+    expect(walkCommandTree(command).arguments).toEqual(['<connectionId>', '[schemas...]']);
+  });
 });
 
 describe('formatCommandTree', () => {
   it('renders a single node with no children', () => {
-    const node = { name: 'solo', description: 'just me', aliases: [], children: [] };
-    expect(formatCommandTree(node)).toBe('solo — just me\n');
+    const node = { name: 'solo', description: 'just me', aliases: [], arguments: [], children: [] };
+    expect(formatCommandTree(node)).toMatch(/^solo\s+just me\n$/);
   });
 
   it('renders aliases in parentheses before the description', () => {
-    const node = { name: 'cmd', description: 'does things', aliases: ['c', 'co'], children: [] };
-    expect(formatCommandTree(node)).toBe('cmd (c, co) — does things\n');
+    const node = { name: 'cmd', description: 'does things', aliases: ['c', 'co'], arguments: [], children: [] };
+    expect(formatCommandTree(node)).toMatch(/^cmd \(c, co\)\s+does things\n$/);
+  });
+
+  it('renders command arguments after the command name', () => {
+    const node = {
+      name: 'test',
+      description: 'Test a configured connection',
+      aliases: [],
+      arguments: ['<connectionId>'],
+      children: [],
+    };
+    expect(formatCommandTree(node)).toMatch(/^test <connectionId>\s+Test a configured connection\n$/);
   });
 
   it('omits the dash when description is empty', () => {
-    const node = { name: 'bare', description: '', aliases: [], children: [] };
+    const node = { name: 'bare', description: '', aliases: [], arguments: [], children: [] };
     expect(formatCommandTree(node)).toBe('bare\n');
   });
 
-  it('indents children by two spaces per depth level and sorts siblings alphabetically', () => {
+  it('renders tree connectors and preserves sibling registration order', () => {
     const tree = {
       name: 'root',
       description: 'top',
       aliases: [],
+      arguments: [],
       children: [
-        { name: 'beta', description: 'b', aliases: [], children: [] },
+        { name: 'beta', description: 'b', aliases: [], arguments: [], children: [] },
         {
           name: 'alpha',
           description: 'a',
           aliases: ['al'],
-          children: [{ name: 'inner', description: 'i', aliases: [], children: [] }],
+          arguments: ['<id>'],
+          children: [{ name: 'inner', description: 'i', aliases: [], arguments: [], children: [] }],
         },
       ],
     };
-    expect(formatCommandTree(tree)).toBe(
-      'root — top\n' + '  alpha (al) — a\n' + '    inner — i\n' + '  beta — b\n',
-    );
+    const lines = formatCommandTree(tree).trimEnd().split('\n');
+    expect(lines[0]).toMatch(/^root\s+top$/);
+    expect(lines[1]).toMatch(/^  ├── beta\s+b$/);
+    expect(lines[2]).toMatch(/^  └── alpha <id> \(al\)\s+a$/);
+    expect(lines[3]).toMatch(/^      └── inner\s+i$/);
   });
 });
