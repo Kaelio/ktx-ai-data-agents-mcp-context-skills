@@ -250,6 +250,8 @@ describe('NotionSourceAdapter', () => {
     });
     expect(result.workUnits[0].notes).toContain('Synthesize durable wiki and SL knowledge');
     expect(result.workUnits[0].notes).toContain('emit_unmapped_fallback');
+    expect(result.workUnits[0].notes).toContain('discover_data');
+    expect(result.workUnits[0].notes).toContain('entity_details');
     expect(result.workUnits[0].notes).toContain('use reason no_physical_table rather than no_connection_mapping');
     expect(result.workUnits[0].notes).toContain('Do not create SL sources under the Notion connection');
     expect(result.workUnits[0].notes).toContain(
@@ -258,7 +260,7 @@ describe('NotionSourceAdapter', () => {
     expect(result.reconcileNotes).toEqual([
       'Notion maxKnowledgeCreatesPerRun=25',
       'Notion maxKnowledgeUpdatesPerRun=20',
-      'Notion dataSourceCount is Notion-only; use sl_discover for warehouse/dbt mapping decisions.',
+      'Notion dataSourceCount is Notion-only; use discover_data/entity_details for warehouse/dbt mapping decisions.',
       'Reconcile Notion wiki pages sharing tables/sl_refs before creating distinct artifacts.',
     ]);
     expect(result.contextReport).toEqual({ capped: false, warnings: [NOTION_ORG_KNOWLEDGE_WARNING] });
