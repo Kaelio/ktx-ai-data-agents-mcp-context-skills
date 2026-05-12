@@ -527,7 +527,7 @@ export function createCliScanProgress(
       io.stdout.write(`${line}\n`);
     },
     startPhase(phaseWeight: number) {
-      return createCliScanProgress(io, state, state.progress, phaseWeight);
+      return createCliScanProgress(io, state, state.progress, weight * phaseWeight);
     },
     flush() {
       if (!shouldWrite || !state.hasPendingTransient) {
