@@ -716,7 +716,7 @@ describe('standalone built ktx CLI smoke', () => {
       '--project-dir',
       projectDir,
       '--token-env',
-      'NOTION_AUTH_TOKEN',
+      'NOTION_TOKEN',
       '--crawl-mode',
       'all_accessible',
       '--max-pages',
@@ -729,7 +729,7 @@ describe('standalone built ktx CLI smoke', () => {
 
     const yaml = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(yaml).toContain('driver: notion');
-    expect(yaml).toContain('auth_token_ref: env:NOTION_AUTH_TOKEN');
+    expect(yaml).toContain('auth_token_ref: env:NOTION_TOKEN');
     expect(yaml).toContain('crawl_mode: all_accessible');
     expect(yaml).toContain('max_pages_per_run: 5');
     expect(yaml).not.toContain('ntn_');
@@ -737,7 +737,7 @@ describe('standalone built ktx CLI smoke', () => {
     const parsed = parseKtxProjectConfig(yaml);
     expect(parsed.connections['notion-main']).toMatchObject({
       driver: 'notion',
-      auth_token_ref: 'env:NOTION_AUTH_TOKEN',
+      auth_token_ref: 'env:NOTION_TOKEN',
       crawl_mode: 'all_accessible',
     });
   });

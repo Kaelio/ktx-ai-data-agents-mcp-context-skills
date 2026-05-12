@@ -1964,7 +1964,7 @@ describe('runKtxCli', () => {
           '--project-dir',
           tempDir,
           '--token-env',
-          'NOTION_AUTH_TOKEN',
+          'NOTION_TOKEN',
           '--crawl-mode',
           'selected_roots',
           '--root-page-id',
@@ -1991,7 +1991,7 @@ describe('runKtxCli', () => {
         force: false,
         allowLiteralCredentials: false,
         notion: {
-          authTokenRef: 'env:NOTION_AUTH_TOKEN',
+          authTokenRef: 'env:NOTION_TOKEN',
           crawlMode: 'selected_roots',
           rootPageIds: ['page-1'],
           rootDatabaseIds: ['database-1'],

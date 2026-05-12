@@ -477,7 +477,7 @@ describe('runKtxConnection', () => {
           force: false,
           allowLiteralCredentials: false,
           notion: {
-            authTokenRef: 'env:NOTION_AUTH_TOKEN',
+            authTokenRef: 'env:NOTION_TOKEN',
             crawlMode: 'all_accessible',
             rootPageIds: [],
             rootDatabaseIds: [],
@@ -493,7 +493,7 @@ describe('runKtxConnection', () => {
 
     const yaml = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(yaml).toContain('driver: notion');
-    expect(yaml).toContain('auth_token_ref: env:NOTION_AUTH_TOKEN');
+    expect(yaml).toContain('auth_token_ref: env:NOTION_TOKEN');
     expect(yaml).toContain('crawl_mode: all_accessible');
     expect(yaml).toContain('max_pages_per_run: 50');
     expect(yaml).not.toContain('ntn_');
@@ -516,7 +516,7 @@ describe('runKtxConnection', () => {
         force: false,
         allowLiteralCredentials: false,
         notion: {
-          authTokenRef: 'env:NOTION_AUTH_TOKEN',
+          authTokenRef: 'env:NOTION_TOKEN',
           crawlMode: 'all_accessible',
           rootPageIds: [],
           rootDatabaseIds: ['database-1'],
