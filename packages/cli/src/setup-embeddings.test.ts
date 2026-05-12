@@ -198,7 +198,7 @@ describe('setup embeddings step', () => {
 
     await vi.waitFor(() => {
       expect(io.stdout()).toContain(
-        '\r- Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
+        '\r│  - Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
       );
     });
 

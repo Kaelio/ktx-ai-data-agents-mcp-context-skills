@@ -1320,7 +1320,7 @@ export async function runKtxSetupDatabasesStep(
   deps: KtxSetupDatabasesDeps = {},
 ): Promise<KtxSetupDatabasesResult> {
   if (args.skipDatabases) {
-    io.stdout.write('Primary source setup skipped. KTX cannot work until you add a primary source.\n');
+    io.stdout.write('│  Primary source setup skipped. KTX cannot work until you add a primary source.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
@@ -1377,7 +1377,7 @@ export async function runKtxSetupDatabasesStep(
     if (drivers === 'missing-input') return { status: 'missing-input', projectDir: args.projectDir };
     if (drivers.length === 0) {
       await markDatabasesComplete(args.projectDir, []);
-      io.stdout.write('KTX cannot work without a primary source.\n');
+      io.stdout.write('│  KTX cannot work without a primary source.\n');
       return { status: 'skipped', projectDir: args.projectDir };
     }
 

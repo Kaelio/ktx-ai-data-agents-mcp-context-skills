@@ -136,7 +136,7 @@ async function loadExistingProject(projectDir: string, deps: KtxSetupProjectDeps
 }
 
 function printProjectSummary(io: KtxCliIo, projectDir: string): void {
-  io.stdout.write(`Project: ${projectDir}\n`);
+  io.stdout.write(`│  Project: ${projectDir}\n`);
 }
 
 async function promptForNewProjectDir(

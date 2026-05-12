@@ -369,7 +369,7 @@ export async function runKtxSetupAgentsStep(
   deps: KtxSetupAgentsDeps = {},
 ): Promise<KtxSetupAgentsResult> {
   if (args.skipAgents) {
-    io.stdout.write('Agent integration skipped.\n');
+    io.stdout.write('│  Agent integration skipped.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
   if (!args.agents && args.inputMode === 'disabled') {

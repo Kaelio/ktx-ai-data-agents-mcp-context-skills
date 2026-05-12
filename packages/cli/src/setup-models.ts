@@ -393,7 +393,7 @@ export async function runKtxSetupAnthropicModelStep(
   deps: KtxSetupModelDeps = {},
 ): Promise<KtxSetupModelResult> {
   if (args.skipLlm) {
-    io.stdout.write('LLM setup skipped.\n');
+    io.stdout.write('│  LLM setup skipped.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
@@ -405,7 +405,7 @@ export async function runKtxSetupAnthropicModelStep(
     !args.anthropicApiKeyFile &&
     !args.anthropicModel
   ) {
-    io.stdout.write(`LLM ready: yes (${project.config.llm.models.default})\n`);
+    io.stdout.write(`│  LLM ready: yes (${project.config.llm.models.default})\n`);
     return { status: 'ready', projectDir: args.projectDir };
   }
 
@@ -438,7 +438,7 @@ export async function runKtxSetupAnthropicModelStep(
     const health = await healthCheck(buildHealthConfig(credential.value, model.model));
     if (health.ok) {
       await persistLlmConfig(args.projectDir, credential.ref, model.model);
-      io.stdout.write(`LLM ready: yes (${model.model})\n`);
+      io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
 
