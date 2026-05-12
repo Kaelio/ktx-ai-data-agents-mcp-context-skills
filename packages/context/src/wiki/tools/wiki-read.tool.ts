@@ -34,6 +34,7 @@ export class WikiReadTool extends BaseTool<typeof WikiReadInputSchema> {
     return (
       'Load the full content of a knowledge block by its key. ' +
       'Use this to retrieve detailed rules, preferences, or definitions listed in the <knowledge_index>. ' +
+      'The markdown output is the exact stored page body; use it verbatim for wiki_write replacements. ' +
       'Call this when the user query relates to a topic covered by an available knowledge block.'
     );
   }
@@ -62,14 +63,8 @@ export class WikiReadTool extends BaseTool<typeof WikiReadInputSchema> {
       void this.pagesRepository.incrementUsageCount([indexEntry.id]);
     }
 
-    let md = `## ${page.pageKey}\n\n${page.content}`;
-    const refs = page.frontmatter.refs;
-    if (refs && refs.length > 0) {
-      md += `\n\nSee also: ${refs.map((r) => `[[${r}]]`).join(', ')}`;
-    }
-
     return {
-      markdown: md,
+      markdown: page.content,
       structured: {
         blockKey: page.pageKey,
         content: page.content,

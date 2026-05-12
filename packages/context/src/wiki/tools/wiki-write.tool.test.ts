@@ -6,6 +6,7 @@ import { WikiWriteTool } from './wiki-write.tool.js';
 function makeTool(overrides: any = {}) {
   const wikiService = {
     readPage: vi.fn().mockResolvedValue(null),
+    listPageKeys: vi.fn().mockResolvedValue([]),
     writePage: vi.fn().mockResolvedValue(undefined),
     syncSinglePage: vi.fn().mockResolvedValue(undefined),
     ...overrides.wikiService,
@@ -244,5 +245,48 @@ describe('WikiWriteTool', () => {
       ...existingFrontmatter,
       summary: 'Monthly paid orders updated',
     });
+  });
+
+  it('rejects frontmatter refs that target missing wiki pages', async () => {
+    const { tool, wikiService } = makeTool({
+      wikiService: {
+        listPageKeys: vi.fn().mockResolvedValue(['orbit-company-overview']),
+      },
+    });
+
+    const result = await tool.call(
+      {
+        key: 'orbit-how-we-work',
+        summary: 'Operating norms',
+        content: '## How We Work',
+        refs: ['orbit-company-overview', 'orbit-team-lanes-detail'],
+      } as any,
+      baseContext,
+    );
+
+    expect(result.structured.success).toBe(false);
+    expect(result.markdown).toMatch(/orbit-team-lanes-detail/);
+    expect(wikiService.writePage).not.toHaveBeenCalled();
+  });
+
+  it('rejects inline wiki links that target missing wiki pages', async () => {
+    const { tool, wikiService } = makeTool({
+      wikiService: {
+        listPageKeys: vi.fn().mockResolvedValue(['orbit-company-overview']),
+      },
+    });
+
+    const result = await tool.call(
+      {
+        key: 'orbit-how-we-work',
+        summary: 'Operating norms',
+        content: 'See [[orbit-company-overview]] and [[orbit-team-lanes-detail]].',
+      } as any,
+      baseContext,
+    );
+
+    expect(result.structured.success).toBe(false);
+    expect(result.markdown).toMatch(/orbit-team-lanes-detail/);
+    expect(wikiService.writePage).not.toHaveBeenCalled();
   });
 });

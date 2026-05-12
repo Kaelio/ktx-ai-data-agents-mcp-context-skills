@@ -64,6 +64,71 @@ function normalizeAccidentalEscapedMarkdownNewlines(content: string): string {
   return content.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n');
 }
 
+function isWikiPageKeyRef(ref: string): boolean {
+  return /^[a-z0-9][a-z0-9_-]*(?:-[a-z0-9_]+)*$/.test(ref);
+}
+
+function extractInlineWikiRefs(content: string): string[] {
+  const refs = new Set<string>();
+  const re = /\[\[([^\]\n]+)\]\]/g;
+  for (const match of content.matchAll(re)) {
+    const target = match[1]?.split('|', 1)[0]?.trim();
+    if (target && isWikiPageKeyRef(target)) {
+      refs.add(target);
+    }
+  }
+  return [...refs].sort();
+}
+
+async function visibleWikiPageKeys(
+  wikiService: KnowledgeWikiService,
+  scope: BlockScope,
+  scopeId: string | null,
+): Promise<Set<string>> {
+  const keys = new Set<string>();
+  if (scope === 'USER') {
+    for (const key of await wikiService.listPageKeys('GLOBAL', null)) {
+      keys.add(key);
+    }
+    for (const key of await wikiService.listPageKeys('USER', scopeId)) {
+      keys.add(key);
+    }
+    return keys;
+  }
+
+  for (const key of await wikiService.listPageKeys('GLOBAL', null)) {
+    keys.add(key);
+  }
+  return keys;
+}
+
+async function findMissingWikiRefs(input: {
+  wikiService: KnowledgeWikiService;
+  scope: BlockScope;
+  scopeId: string | null;
+  pageKey: string;
+  refs?: string[];
+  content: string;
+}): Promise<string[]> {
+  const candidates = new Set<string>();
+  for (const ref of input.refs ?? []) {
+    if (isWikiPageKeyRef(ref)) {
+      candidates.add(ref);
+    }
+  }
+  for (const ref of extractInlineWikiRefs(input.content)) {
+    candidates.add(ref);
+  }
+
+  if (candidates.size === 0) {
+    return [];
+  }
+
+  const available = await visibleWikiPageKeys(input.wikiService, input.scope, input.scopeId);
+  available.add(input.pageKey);
+  return [...candidates].filter((ref) => !available.has(ref)).sort();
+}
+
 export class WikiWriteTool extends BaseTool<typeof wikiWriteInputSchema> {
   readonly name = 'wiki_write';
 
@@ -158,6 +223,23 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
       finalContent = editResult.sql;
     } else {
       finalContent = existing?.content ?? '';
+    }
+
+    const missingRefs = await findMissingWikiRefs({
+      wikiService,
+      scope,
+      scopeId,
+      pageKey: input.key,
+      refs: finalFm.refs,
+      content: finalContent,
+    });
+    if (missingRefs.length > 0) {
+      return {
+        markdown:
+          `Error: wiki references target missing page(s): ${missingRefs.join(', ')}. ` +
+          'Create those pages first, retarget the links, or remove the refs.',
+        structured: { success: false, key: input.key },
+      };
     }
 
     await wikiService.writePage(scope, scopeId, input.key, finalFm, finalContent, SYSTEM_AUTHOR, SYSTEM_EMAIL);

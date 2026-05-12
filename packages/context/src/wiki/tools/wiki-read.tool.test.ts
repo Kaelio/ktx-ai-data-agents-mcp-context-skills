@@ -37,4 +37,24 @@ describe('WikiReadTool', () => {
     expect(result.structured).toMatchObject({ found: true, blockKey: 'staged-page', scope: 'GLOBAL' });
     expect(result.markdown).toContain('A page written earlier in the same ingest worktree.');
   });
+
+  it('does not append derived refs to the editable markdown body', async () => {
+    const rootWikiService = {
+      readPageForUser: vi.fn().mockResolvedValue({
+        pageKey: 'orbit-how-we-work',
+        scope: 'GLOBAL',
+        frontmatter: { summary: 'How we work', tags: ['policy'], refs: ['orbit-company-overview'] },
+        content: '## How We Work\n\nUse written-first operating norms.',
+      }),
+    };
+    const pagesRepository = { findPageByKey: vi.fn().mockResolvedValue(null), incrementUsageCount: vi.fn() };
+    const tool = new WikiReadTool(rootWikiService as any, pagesRepository as any);
+
+    const result = await tool.call({ key: 'orbit-how-we-work' }, baseContext);
+
+    expect(result.markdown).toBe('## How We Work\n\nUse written-first operating norms.');
+    expect(result.markdown).not.toContain('See also');
+    expect(result.markdown).not.toContain('[[orbit-company-overview]]');
+    expect(result.structured.refs).toEqual(['orbit-company-overview']);
+  });
 });
