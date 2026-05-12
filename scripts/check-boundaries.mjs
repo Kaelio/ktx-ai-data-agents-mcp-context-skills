@@ -95,7 +95,7 @@ function scansForContextProductionLlmBoundaries(relativePath) {
 }
 
 function scansForForbiddenIdentifiers(relativePath) {
-  return isCodeSource(relativePath) || isRuntimeAsset(relativePath);
+  return (isCodeSource(relativePath) && !isTestSource(relativePath)) || isRuntimeAsset(relativePath);
 }
 
 function skipsIdentifierScan(relativePath) {

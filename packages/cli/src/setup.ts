@@ -20,7 +20,7 @@ import {
   runKtxSetupDatabasesStep,
 } from './setup-databases.js';
 import { type KtxSetupEmbeddingsDeps, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
-import { type KtxSetupModelDeps, runKtxSetupAnthropicModelStep } from './setup-models.js';
+import { type KtxSetupModelDeps, isKtxSetupLlmConfigReady, runKtxSetupAnthropicModelStep } from './setup-models.js';
 import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
 import {
   isKtxPreAgentSetupReady,
@@ -226,10 +226,6 @@ async function runKtxSetupDemoFromEntryMenu(
   );
 }
 
-function llmReady(status: KtxSetupStatus['llm']): boolean {
-  return status.backend === 'anthropic' && typeof status.model === 'string' && status.model.length > 0;
-}
-
 function embeddingsReady(status: KtxSetupStatus['embeddings']): boolean {
   return (
     status.backend !== undefined &&
@@ -269,10 +265,9 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
   const project = await loadKtxProject({ projectDir: resolvedProjectDir });
   const llm = {
     backend: project.config.llm.provider.backend,
-    ready: false,
+    ready: isKtxSetupLlmConfigReady(project.config.llm),
     model: project.config.llm.models.default,
   };
-  llm.ready = llmReady(llm);
 
   const embeddings = {
     backend: project.config.ingest.embeddings.backend,
@@ -376,7 +371,7 @@ function setupStatusReady(status: KtxSetupStatus): boolean {
     return true;
   }
   return (
-    llmReady(status.llm) &&
+    status.llm.ready &&
     embeddingsReady(status.embeddings) &&
     status.databases.every((database) => database.ready) &&
     status.sources.every((source) => source.ready)
