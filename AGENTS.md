@@ -156,6 +156,19 @@ pnpm run test 2>&1 | tee /tmp/ktx-test-output.log
 - Do not manually edit generated or built output under `dist/`; edit source and
   rebuild.
 
+### CLI Standards
+
+- Use Commander for CLI command trees, arguments, options, help text, custom
+  parsers, and async action dispatch. Prefer `@commander-js/extra-typings` for
+  typed command definitions, use `InvalidArgumentError` for parse failures, and
+  call `parseAsync` when actions await asynchronous work.
+- Use `@clack/prompts` for interactive flows. Always handle cancellation with
+  `isCancel` plus `cancel`, stop active spinners before exiting, and keep prompts
+  grouped or factored so multi-step setup flows share cancellation behavior.
+- Keep command behavior scriptable: prefer flags and config over prompts when
+  values are supplied, and reserve prompts for interactive missing input or
+  explicit setup flows.
+
 ### Zod Naming Convention
 
 ```typescript
