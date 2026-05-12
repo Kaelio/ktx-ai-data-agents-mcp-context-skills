@@ -573,6 +573,32 @@ describe('runKtxScan', () => {
     expect(io.stdout()).toContain('\n[90%] Building embeddings 1/4 batches\n');
   });
 
+  it('scales nested progress phases by the parent phase weight', async () => {
+    const io = makeIo({ isTTY: true });
+    const previousCi = process.env.CI;
+    delete process.env.CI;
+
+    try {
+      const progress = createCliScanProgress(io.io);
+      await progress.update(0.82, 'Enriching schema metadata');
+      const enrichmentProgress = progress.startPhase(0.18);
+      await enrichmentProgress.update(0.05, 'Loaded schema snapshot with 56 tables');
+      const descriptionProgress = enrichmentProgress.startPhase(0.45);
+      await descriptionProgress.update(37 / 56, 'Generating descriptions 37/56 tables', { transient: true });
+      await descriptionProgress.update(1, 'Generated descriptions for 56 tables');
+    } finally {
+      if (previousCi === undefined) {
+        delete process.env.CI;
+      } else {
+        process.env.CI = previousCi;
+      }
+    }
+
+    expect(io.stdout()).toContain('\r[88%] Generating descriptions 37/56 tables');
+    expect(io.stdout()).toContain('\n[91%] Generated descriptions for 56 tables\n');
+    expect(io.stdout()).not.toContain('[100%] Generating descriptions 37/56 tables');
+  });
+
   it('flushes transient TTY progress messages before printing scan failures', async () => {
     await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     const runLocalScan = vi.fn(async (input: RunLocalScanOptions): Promise<LocalScanRunResult> => {
