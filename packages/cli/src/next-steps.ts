@@ -1,15 +1,11 @@
 export const KTX_CONTEXT_BUILD_COMMANDS = [
   {
-    command: 'ktx setup context build',
-    description: 'Build agent-ready context from configured primary and context sources',
+    command: 'ktx setup',
+    description: 'Build or resume agent-ready context from configured sources',
   },
   {
     command: 'ktx status',
     description: 'Check setup and context readiness',
-  },
-  {
-    command: 'ktx setup context status',
-    description: 'Check the setup-managed context build state',
   },
 ] as const;
 

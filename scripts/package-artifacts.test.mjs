@@ -16,7 +16,7 @@ import {
   copyRuntimeWheelAssets,
   findPythonArtifacts,
   NPM_ARTIFACT_PACKAGES,
-  npmDemoSmokeSource,
+  npmCliSmokeSource,
   npmRuntimeSmokeSource,
   npmSmokePackageJson,
   npmVerifySource,
@@ -386,9 +386,9 @@ describe('verifyNpmArtifacts', () => {
   it('does not prepare an external Python environment for the npm smoke', async () => {
     const source = await readFile(new URL('./package-artifacts.mjs', import.meta.url), 'utf8');
     const start = source.indexOf('async function verifyNpmArtifacts');
-    const end = source.indexOf('async function verifyNpmDemoArtifacts');
+    const end = source.indexOf('async function verifyNpmCliArtifacts');
     assert.ok(start > 0, 'verifyNpmArtifacts function must exist');
-    assert.ok(end > start, 'verifyNpmDemoArtifacts must follow verifyNpmArtifacts');
+    assert.ok(end > start, 'verifyNpmCliArtifacts must follow verifyNpmArtifacts');
 
     const body = source.slice(start, end);
     assert.doesNotMatch(body, /uv', \['venv', '\.venv'\]/);
@@ -508,21 +508,16 @@ describe('verification snippets', () => {
     assert.match(source, /ktx dev ingest provider guard verified/);
   });
 
-  describe('npmDemoSmokeSource', () => {
-    it('exercises the public packed-demo first-run contract', () => {
-      const source = npmDemoSmokeSource();
+  describe('npmCliSmokeSource', () => {
+    it('exercises supported public package CLI commands', () => {
+      const source = npmCliSmokeSource();
 
       assert.match(source, /pnpm', \['exec', 'ktx', '--help'\]/);
-      assert.match(source, /'demo', '--project-dir', projectDir, '--no-input', '--plain'/);
-      assert.match(source, /Mode: seeded/);
-      assert.match(source, /Source: packaged demo project/);
-      assert.match(source, /LLM calls: none/);
-      assert.match(source, /ktx agent context --json/);
+      assert.match(source, /pnpm', \['exec', 'ktx', 'setup', '--help'\]/);
+      assert.match(source, /Usage: ktx setup/);
       assert.doesNotMatch(source, new RegExp(["'demo'", "'--mode'", "'deterministic'"].join(', ')));
       assert.match(source, /'status', '--no-input'/);
-      assert.match(source, /'--plain'/);
-      assert.match(source, /function requireProjectStderr/);
-      assert.match(source, /requireProjectStderr\('ktx setup demo seeded', seeded, projectDir\)/);
+      assert.doesNotMatch(source, /function requireProjectStderr/);
       assert.match(source, /Object\.keys\(packageJson\.dependencies\)/);
       assert.match(source, /'@kaelio\/ktx'/);
     });

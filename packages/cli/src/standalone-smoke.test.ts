@@ -199,76 +199,6 @@ describe('standalone built ktx CLI smoke', () => {
     );
   });
 
-  it('runs the default pre-seeded demo without credentials', async () => {
-    const projectDir = join(tempDir, 'demo-project');
-    const result = await runBuiltCli(
-      ['setup', 'demo', '--project-dir', projectDir, '--plain', '--no-input'],
-      {
-        env: { ...process.env, ANTHROPIC_API_KEY: '' },
-      },
-    );
-
-    expectProjectStderr(result, projectDir);
-    expect(result.stdout).toContain('Mode: seeded');
-    expect(result.stdout).toContain('Source: packaged demo project');
-    expect(result.stdout).toContain('LLM calls: none');
-    expect(result.stdout).toContain('Warehouse:');
-    expect(result.stdout).toContain('dbt:');
-    expect(result.stdout).toContain('BI:');
-    expect(result.stdout).toContain('Notion:');
-    expect(result.stdout).toContain('Semantic-layer sources:');
-    expect(result.stdout).toContain('Knowledge pages:');
-    expect(result.stdout).not.toContain('ktx serve --mcp stdio');
-    expect(result.stdout).not.toContain(['--mode', 'deterministic'].join(' '));
-  });
-
-  it('runs hybrid agent search against the seeded demo through the built binary', async () => {
-    const projectDir = join(tempDir, 'seeded-hybrid-search-project');
-
-    const seeded = await runBuiltCli(['setup', 'demo', '--project-dir', projectDir, '--plain', '--no-input'], {
-      env: { ...process.env, ANTHROPIC_API_KEY: '' },
-    });
-    expectProjectStderr(seeded, projectDir);
-    expect(seeded.stdout).toContain('Mode: seeded');
-
-    const wikiSearch = await runBuiltCli([
-      'agent',
-      'wiki',
-      'search',
-      'ARR contract',
-      '--json',
-      '--limit',
-      '5',
-      '--project-dir',
-      projectDir,
-    ]);
-    expect(wikiSearch).toMatchObject({ code: 0, stderr: '' });
-    const wikiJson = parseJsonOutput<{
-      results: Array<{ key: string; score: number; matchReasons?: string[] }>;
-      totalFound: number;
-    }>(wikiSearch.stdout);
-    expect(wikiJson.totalFound).toBeGreaterThan(0);
-    expect(wikiJson.results.some((result) => result.matchReasons?.length)).toBe(true);
-
-    const slSearch = await runBuiltCli([
-      'agent',
-      'sl',
-      'list',
-      '--json',
-      '--query',
-      'ARR',
-      '--project-dir',
-      projectDir,
-    ]);
-    expect(slSearch).toMatchObject({ code: 0, stderr: '' });
-    const slJson = parseJsonOutput<{
-      sources: Array<{ connectionId: string; name: string; score?: number; matchReasons?: string[] }>;
-      totalSources: number;
-    }>(slSearch.stdout);
-    expect(slJson.totalSources).toBeGreaterThan(0);
-    expect(slJson.sources.some((source) => source.matchReasons?.length)).toBe(true);
-  });
-
   it('prints guided JSON for agent semantic-layer search outside a project through the built binary', async () => {
     const projectDir = join(tempDir, 'missing-search-project');
     await mkdir(projectDir, { recursive: true });
@@ -296,44 +226,13 @@ describe('standalone built ktx CLI smoke', () => {
         code: 'agent_sl_search_missing_project',
         message: `Semantic-layer search needs an initialized KTX project at ${projectDir}.`,
         nextSteps: [
-          'ktx demo',
           `ktx setup --project-dir ${projectDir}`,
+          `ktx status --project-dir ${projectDir}`,
           'ktx ingest <connection>',
           `ktx agent sl list --json --query "revenue" --project-dir ${projectDir}`,
         ],
       },
     });
-  });
-
-  it('runs the pre-seeded demo and inspect without credentials', async () => {
-    const projectDir = join(tempDir, 'seeded-demo-project');
-
-    const seeded = await runBuiltCli(['setup', 'demo', '--mode', 'seeded', '--project-dir', projectDir, '--no-input']);
-    expect(seeded.code).toBe(0);
-    expect(seeded.stdout).toContain('Mode: seeded');
-    expect(seeded.stdout).toContain('LLM calls: none');
-    expect(seeded.stdout).toContain('Semantic-layer sources:');
-    expect(seeded.stdout).toContain('Knowledge pages:');
-
-    const inspect = await runBuiltCli(['setup', 'demo', 'inspect', '--project-dir', projectDir, '--no-input']);
-    expectProjectStderr(inspect, projectDir);
-    expect(inspect.stdout).toContain('Mode: seeded');
-    expect(inspect.stdout).toContain('Status: ready');
-    expect(inspect.stdout).toContain('Warehouse: 8 tables, 11,234 rows');
-    expect(inspect.stdout).toContain('Rows: accounts 210, arr_movements 720');
-    expect(inspect.stdout).toContain('dbt: 3 models, 8 source tables');
-    expect(inspect.stdout).toContain('BI: 5 explores, 2 dashboards');
-    expect(inspect.stdout).toContain('Notion: 8 pages');
-    expect(inspect.stdout).toContain('Semantic-layer sources:');
-    expect(inspect.stdout).toContain('Knowledge pages:');
-    expect(inspect.stdout).toContain('Evidence links:');
-    expect(inspect.stdout).toContain('Report: reports/seeded-demo-report.json');
-    expect(inspect.stdout).toContain('Replay: replays/replay.memory-flow.v1.json');
-    expect(inspect.stdout).toContain('Latest replay: seeded (packaged, prebuilt)');
-    expect(inspect.stdout).toContain('ktx agent tools --json');
-    expect(inspect.stdout).toContain('ktx agent context --json');
-    expect(inspect.stdout).not.toContain('ktx ask "your question here"');
-    expect(inspect.stdout).not.toContain('ktx serve --mcp stdio');
   });
 
   it('runs doctor setup through the built binary', async () => {
@@ -344,90 +243,6 @@ describe('standalone built ktx CLI smoke', () => {
     expect(result.stdout).toContain('Workspace-local CLI');
     expect(result.stderr).toBe('');
     expect([0, 1]).toContain(result.code);
-  });
-
-  it('reports missing Anthropic credentials for full demo through the built binary', async () => {
-    const projectDir = join(tempDir, 'full-demo-missing-key');
-
-    const result = await runBuiltCli(['setup', 'demo', '--mode', 'full', '--project-dir', projectDir, '--no-input'], {
-      env: { ...process.env, ANTHROPIC_API_KEY: '' },
-    });
-
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain('ktx setup demo --mode full needs ANTHROPIC_API_KEY');
-    expect(result.stderr).toContain('ktx setup demo --mode seeded --no-input');
-  });
-
-  it('requires force for demo reset through the built binary', async () => {
-    const projectDir = join(tempDir, 'reset-demo-project');
-
-    const init = await runBuiltCli(['setup', 'demo', 'init', '--project-dir', projectDir, '--no-input']);
-    expectProjectStderr(init, projectDir);
-
-    const withoutForce = await runBuiltCli(['setup', 'demo', 'reset', '--project-dir', projectDir, '--no-input']);
-    expect(withoutForce.code).toBe(1);
-    expect(withoutForce.stderr).toContain(
-      `ktx setup demo reset is destructive; pass --force to recreate ${projectDir}`,
-    );
-
-    const withForce = await runBuiltCli([
-      'setup',
-      'demo',
-      'reset',
-      '--project-dir',
-      projectDir,
-      '--force',
-      '--no-input',
-    ]);
-    expectProjectStderr(withForce, projectDir);
-    expect(withForce.stdout).toContain(`Demo project reset: ${projectDir}`);
-  });
-
-  it('reports corrupted demo state with reset guidance through the built binary', async () => {
-    const projectDir = join(tempDir, 'corrupt-demo-project');
-
-    const init = await runBuiltCli(['setup', 'demo', 'init', '--project-dir', projectDir, '--no-input']);
-    expectProjectStderr(init, projectDir);
-    await rm(join(projectDir, 'demo.db'), { force: true });
-
-    const replay = await runBuiltCli(['setup', 'demo', '--mode', 'replay', '--project-dir', projectDir, '--no-input']);
-    expect(replay.code).toBe(1);
-    expect(replay.stderr).toContain(`Demo project is not ready at ${projectDir}: missing demo.db`);
-    expect(replay.stderr).toContain(`ktx setup demo reset --project-dir ${projectDir} --force --no-input`);
-  });
-
-  it('runs demo doctor through the built binary', async () => {
-    const projectDir = join(tempDir, 'doctor-demo-project');
-
-    const init = await runBuiltCli(['setup', 'demo', 'init', '--project-dir', projectDir, '--no-input']);
-    expectProjectStderr(init, projectDir);
-
-    const result = await runBuiltCli(['setup', 'demo', 'doctor', '--project-dir', projectDir, '--no-input']);
-    expect(result.stdout).toContain('KTX demo doctor');
-    expect(result.stdout).toContain('Demo dataset');
-    expect(result.stdout).toContain('Demo replay');
-    expect(result.stdout).toContain('Demo LLM provider');
-    expect(result.stderr).toBe(`Project: ${projectDir}\n`);
-    expect([0, 1]).toContain(result.code);
-  });
-
-  it('runs demo ingest seeded mode through the built binary', async () => {
-    const projectDir = join(tempDir, 'seeded-ingest-alias');
-
-    const result = await runBuiltCli([
-      'setup',
-      'demo',
-      'ingest',
-      '--mode',
-      'seeded',
-      '--project-dir',
-      projectDir,
-      '--no-input',
-    ]);
-
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain('Mode: seeded');
-    expect(result.stdout).toContain('LLM calls: none');
   });
 
   it('runs structural and enriched scans through the built binary with manifest artifacts', async () => {

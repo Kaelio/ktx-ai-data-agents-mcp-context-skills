@@ -412,7 +412,7 @@ function spawnBackgroundBuild(projectDir: string): { logPath: string } | null {
 
   const child = spawn(
     process.execPath,
-    [entryScript, 'setup', 'context', 'build', '--project-dir', resolvedDir, '--no-input'],
+    [entryScript, 'setup', '--project-dir', resolvedDir, '--no-input'],
     { detached: true, stdio: ['ignore', logFd, logFd] },
   );
   child.unref();
@@ -590,7 +590,7 @@ export async function runContextBuild(
         io.stdout.write('\n\nContext build continuing in the background.\n');
         if (bg) io.stdout.write(`Log: ${bg.logPath}\n`);
         io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
-        io.stdout.write(`Status: ktx setup context status --project-dir ${resolve(args.projectDir)}\n`);
+        io.stdout.write(`Status: ktx status --project-dir ${resolve(args.projectDir)}\n`);
         exiting = true;
         process.exit(0);
       },

@@ -11,25 +11,6 @@ Interactive wizard that walks you through configuring LLM credentials, embedding
 ktx setup [options]
 ```
 
-## Subcommands
-
-| Subcommand | Description |
-|-----------|-------------|
-| `setup demo` | Run the packaged KTX demo from setup |
-| `setup demo init` | Initialize the packaged demo project |
-| `setup demo reset` | Reset the packaged demo project |
-| `setup demo replay` | Replay the packaged demo memory-flow |
-| `setup demo scan` | Run the packaged demo scan |
-| `setup demo inspect` | Inspect packaged demo outputs |
-| `setup demo doctor` | Check packaged demo readiness |
-| `setup demo ingest` | Run packaged demo ingest |
-| `setup context build` | Build agent-ready KTX context for setup |
-| `setup context watch [runId]` | Watch a setup-managed context build |
-| `setup context status [runId]` | Print setup-managed context build status |
-| `setup context stop [runId]` | Request a pause for a setup-managed context build |
-| `setup remove` | Remove setup-managed local integrations |
-| `setup status` | Show setup readiness for the resolved KTX project |
-
 ## Options
 
 ### General
@@ -119,17 +100,6 @@ ktx setup [options]
 | `--skip-initial-source-ingest` | Validate source setup without building source context during setup | `false` |
 | `--skip-sources` | Mark optional source setup complete with no sources | `false` |
 
-### Subcommand Options
-
-| Flag | Subcommand | Description | Default |
-|------|-----------|-------------|---------|
-| `--json` | `status`, `context status` | Print JSON output | `false` |
-| `--no-input` | `context build`, `context watch` | Disable interactive terminal input | — |
-| `--force` | `context stop` | Request the pause without interactive confirmation | `false` |
-| `--agents` | `remove` | Remove setup-managed agent integration files | `false` |
-| `--mode <mode>` | `demo` | Demo mode: `seeded`, `replay`, or `full` | `seeded` |
-| `--plain` | `demo` | Print plain text output | `false` |
-
 ## Examples
 
 ```bash
@@ -161,21 +131,13 @@ ktx setup --source dbt --source-path ./my-dbt-project
 ktx setup --skip-sources --skip-agents
 
 # Check setup readiness
-ktx setup status
-
-# Build context after setup
-ktx setup context build
-
-# Watch a running context build
-ktx setup context watch
-
-# Run the packaged demo
-ktx setup demo
+ktx status
 ```
 
 ## Output
 
-Interactive setup renders prompts and progress messages. `ktx setup status` is the best command for agents because it summarizes readiness in one response.
+Interactive setup renders prompts and progress messages. Use `ktx status` to
+check setup and context readiness after setup exits.
 
 ```text
 KTX project: /home/user/analytics

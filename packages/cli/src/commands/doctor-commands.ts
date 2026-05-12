@@ -21,7 +21,7 @@ async function runDoctorArgs(context: KtxCliCommandContext, args: KtxDoctorArgs)
 export function registerDoctorCommands(program: Command, context: KtxCliCommandContext): void {
   const doctor = program
     .command('doctor')
-    .description('Check KTX setup, project, and demo readiness')
+    .description('Check KTX setup and project readiness')
     .option('--json', 'Print JSON output', false)
     .option('--no-input', 'Disable interactive terminal input')
     .action(async (options: { json?: boolean; input?: boolean }, command) => {

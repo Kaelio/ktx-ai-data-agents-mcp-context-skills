@@ -71,16 +71,6 @@ KTX context built: yes
 Agent integration ready: yes (claude-code:project)
 ```
 
-Run the packaged demo without installing globally:
-
-```bash
-npx @kaelio/ktx setup demo --no-input
-npx @kaelio/ktx setup demo inspect
-```
-
-The default demo uses packaged sample data and prebuilt context. It does not
-require API keys, network access, or an LLM provider.
-
 Generate SQL from a semantic-layer source:
 
 ```bash

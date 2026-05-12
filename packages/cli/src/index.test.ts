@@ -342,14 +342,15 @@ describe('runKtxCli', () => {
     expect(io.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
   });
 
-  it('exposes demo under setup help instead of root help', async () => {
+  it('documents setup as a bare command without subcommands', async () => {
     const testIo = makeIo();
 
     await expect(runKtxCli(['setup', '--help'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx setup [options] [command]');
-    expect(testIo.stdout()).toContain('demo');
-    expect(testIo.stdout()).toContain('Run the packaged KTX demo from setup');
+    expect(testIo.stdout()).toContain('Usage: ktx setup [options]');
+    expect(testIo.stdout()).not.toContain('Commands:');
+    expect(testIo.stdout()).not.toContain('setup demo');
+    expect(testIo.stdout()).not.toContain('setup context');
     expect(testIo.stdout()).not.toContain('--skip-llm');
     expect(testIo.stdout()).not.toContain('--skip-embeddings');
     expect(testIo.stdout()).not.toContain('--embedding-model');
@@ -373,13 +374,14 @@ describe('runKtxCli', () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     const commands = [
-      ['--project-dir', projectDir, 'setup', 'status', '--json'],
+      ['--project-dir', projectDir, 'status', '--json'],
       ['--project-dir', projectDir, 'sl', 'list', '--json'],
     ];
 
     for (const argv of commands) {
       const testIo = makeIo();
-      await expect(runKtxCli(argv, testIo.io)).resolves.toBe(0);
+      const code = await runKtxCli(argv, testIo.io);
+      expect([0, 1]).toContain(code);
 
       expect(() => JSON.parse(testIo.stdout())).not.toThrow();
       expect(testIo.stderr()).toBe('');
@@ -747,139 +749,33 @@ describe('runKtxCli', () => {
 
   it('rejects standalone demo commands', async () => {
     const testIo = makeIo();
-    const demo = vi.fn().mockResolvedValue(0);
 
-    await expect(runKtxCli(['demo', '--mode', 'replay', '--no-input'], testIo.io, { demo })).resolves.toBe(1);
+    await expect(runKtxCli(['demo', '--mode', 'replay', '--no-input'], testIo.io)).resolves.toBe(1);
 
     expect(testIo.stderr()).toMatch(/unknown command|error:/i);
-    expect(demo).not.toHaveBeenCalled();
   });
 
-  it('dispatches setup demo commands', async () => {
-    const testIo = makeIo();
-    const demo = vi.fn().mockResolvedValue(0);
+  it('rejects removed setup subcommands', async () => {
+    const setup = vi.fn(async () => 0);
+    const cases = [
+      ['setup', 'demo', '--mode', 'replay', '--no-input'],
+      ['setup', '--no-input', 'demo', '--mode', 'seeded'],
+      ['setup', 'demo', 'ingest', '--mode', 'full', '--no-input'],
+      ['setup', 'context', 'build'],
+      ['setup', 'context', 'watch', 'setup-context-local-1'],
+      ['setup', 'context', 'status', 'setup-context-local-1', '--json'],
+      ['setup', 'context', 'stop', 'setup-context-local-1'],
+      ['setup', 'remove', '--agents'],
+      ['setup', 'status', '--json'],
+    ];
 
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'demo', '--mode', 'replay', '--no-input'], testIo.io, { demo }),
-    ).resolves.toBe(0);
+    for (const args of cases) {
+      const testIo = makeIo();
+      await expect(runKtxCli(['--project-dir', tempDir, ...args], testIo.io, { setup })).resolves.toBe(1);
+      expect(testIo.stderr()).toMatch(/unknown command|error:/i);
+    }
 
-    expect(demo).toHaveBeenCalledWith(
-      {
-        command: 'replay',
-        projectDir: tempDir,
-        outputMode: 'viz',
-        inputMode: 'disabled',
-      },
-      testIo.io,
-    );
-
-    demo.mockClear();
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'demo', '--mode', 'seeded', '--no-input'], testIo.io, {
-        demo,
-      }),
-    ).resolves.toBe(0);
-    expect(demo).toHaveBeenCalledWith(
-      {
-        command: 'seeded',
-        projectDir: tempDir,
-        outputMode: 'viz',
-        inputMode: 'disabled',
-      },
-      testIo.io,
-    );
-
-    demo.mockClear();
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', '--no-input', 'demo', '--mode', 'seeded'], testIo.io, {
-        demo,
-      }),
-    ).resolves.toBe(0);
-    expect(demo).toHaveBeenCalledWith(
-      {
-        command: 'seeded',
-        projectDir: tempDir,
-        outputMode: 'viz',
-        inputMode: 'disabled',
-      },
-      testIo.io,
-    );
-
-    demo.mockClear();
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'demo', 'inspect', '--no-input'], testIo.io, { demo }),
-    ).resolves.toBe(0);
-    expect(demo).toHaveBeenCalledWith(
-      {
-        command: 'inspect',
-        projectDir: tempDir,
-        outputMode: 'plain',
-        inputMode: 'disabled',
-      },
-      testIo.io,
-    );
-  });
-
-  it('dispatches demo ingest argv', async () => {
-    const testIo = makeIo();
-    const demo = vi.fn().mockResolvedValue(0);
-
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'demo', 'ingest', '--mode', 'full', '--no-input'], testIo.io, {
-        demo,
-      }),
-    ).resolves.toBe(0);
-
-    expect(demo).toHaveBeenCalledWith(
-      {
-        command: 'ingest',
-        mode: 'full',
-        projectDir: tempDir,
-        outputMode: 'viz',
-        inputMode: 'disabled',
-      },
-      testIo.io,
-    );
-
-    demo.mockClear();
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', '--no-input', 'demo', 'ingest', '--mode', 'seeded'], testIo.io, {
-        demo,
-      }),
-    ).resolves.toBe(0);
-
-    expect(demo).toHaveBeenCalledWith(
-      {
-        command: 'ingest',
-        mode: 'seeded',
-        projectDir: tempDir,
-        outputMode: 'viz',
-        inputMode: 'disabled',
-      },
-      testIo.io,
-    );
-
-    demo.mockClear();
-    await expect(
-      runKtxCli(
-        ['--project-dir', tempDir, 'setup', 'demo', 'ingest', '--mode', 'full', '--no-input', '--plain'],
-        testIo.io,
-        {
-          demo,
-        },
-      ),
-    ).resolves.toBe(0);
-
-    expect(demo).toHaveBeenCalledWith(
-      {
-        command: 'ingest',
-        mode: 'full',
-        projectDir: tempDir,
-        outputMode: 'plain',
-        inputMode: 'disabled',
-      },
-      testIo.io,
-    );
+    expect(setup).not.toHaveBeenCalled();
   });
 
   it('prints public ingest help without invoking ingest execution', async () => {
@@ -1067,21 +963,16 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe(`Project: ${tempDir}\n`);
   });
 
-  it('keeps setup status on the setup runner and routes top-level status through doctor', async () => {
+  it('routes top-level status through doctor', async () => {
     const setup = vi.fn(async () => 0);
     const doctor = vi.fn(async () => 0);
-    const setupIo = makeIo();
     const statusIo = makeIo();
 
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'status', '--json'], setupIo.io, { setup }),
-    ).resolves.toBe(0);
     await expect(
       runKtxCli(['--project-dir', tempDir, 'status', '--json', '--no-input'], statusIo.io, { setup, doctor }),
     ).resolves.toBe(0);
 
-    expect(setup).toHaveBeenNthCalledWith(1, { command: 'status', projectDir: tempDir, json: true }, setupIo.io);
-    expect(setup).toHaveBeenCalledTimes(1);
+    expect(setup).not.toHaveBeenCalled();
     expect(doctor).toHaveBeenCalledWith(
       { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
       statusIo.io,
@@ -1119,54 +1010,6 @@ describe('runKtxCli', () => {
       }
       await rm(tempCwd, { recursive: true, force: true });
     }
-  });
-
-  it('dispatches setup context recovery commands through the setup runner', async () => {
-    const setup = vi.fn(async () => 0);
-    const buildIo = makeIo();
-    const watchIo = makeIo();
-    const statusIo = makeIo();
-    const stopIo = makeIo();
-
-    await expect(runKtxCli(['--project-dir', tempDir, 'setup', 'context', 'build'], buildIo.io, { setup })).resolves.toBe(
-      0,
-    );
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'context', 'watch', 'setup-context-local-1'], watchIo.io, {
-        setup,
-      }),
-    ).resolves.toBe(0);
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'context', 'status', 'setup-context-local-1', '--json'], statusIo.io, {
-        setup,
-      }),
-    ).resolves.toBe(0);
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'context', 'stop', 'setup-context-local-1'], stopIo.io, {
-        setup,
-      }),
-    ).resolves.toBe(0);
-
-    expect(setup).toHaveBeenNthCalledWith(
-      1,
-      { command: 'context-build', projectDir: tempDir, inputMode: 'auto' },
-      buildIo.io,
-    );
-    expect(setup).toHaveBeenNthCalledWith(
-      2,
-      { command: 'context-watch', projectDir: tempDir, runId: 'setup-context-local-1', inputMode: 'auto' },
-      watchIo.io,
-    );
-    expect(setup).toHaveBeenNthCalledWith(
-      3,
-      { command: 'context-status', projectDir: tempDir, runId: 'setup-context-local-1', json: true },
-      statusIo.io,
-    );
-    expect(setup).toHaveBeenNthCalledWith(
-      4,
-      { command: 'context-stop', projectDir: tempDir, runId: 'setup-context-local-1' },
-      stopIo.io,
-    );
   });
 
   it('dispatches Anthropic setup flags to the setup runner', async () => {
@@ -1366,10 +1209,9 @@ describe('runKtxCli', () => {
     );
   });
 
-  it('dispatches setup agent flags and removal', async () => {
+  it('dispatches setup agent flags', async () => {
     const setup = vi.fn(async () => 0);
     const setupIo = makeIo();
-    const removeIo = makeIo();
 
     await expect(
       runKtxCli(
@@ -1388,12 +1230,8 @@ describe('runKtxCli', () => {
         { setup },
       ),
     ).resolves.toBe(0);
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', 'remove', '--agents'], removeIo.io, { setup }),
-    ).resolves.toBe(0);
 
-    expect(setup).toHaveBeenNthCalledWith(
-      1,
+    expect(setup).toHaveBeenCalledWith(
       expect.objectContaining({
         command: 'run',
         agents: true,
@@ -1404,7 +1242,6 @@ describe('runKtxCli', () => {
       }),
       setupIo.io,
     );
-    expect(setup).toHaveBeenNthCalledWith(2, { command: 'remove-agents', projectDir: tempDir }, removeIo.io);
   });
 
   it('rejects source-path with source-git-url', async () => {
@@ -2345,21 +2182,17 @@ describe('runKtxCli', () => {
 
   it('rejects mutually exclusive output modes before invoking runners', async () => {
     const ingest = vi.fn(async () => 0);
-    const demo = vi.fn(async () => 0);
 
     for (const argv of [
       ['dev', 'ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'fake', '--json', '--plain'],
       ['dev', 'ingest', 'status', 'run-1', '--json', '--viz'],
-      ['setup', 'demo', '--json', '--plain'],
-      ['setup', 'demo', 'replay', '--json', '--plain'],
     ]) {
       const testIo = makeIo();
-      await expect(runKtxCli(argv, testIo.io, { ingest, demo })).resolves.toBe(1);
+      await expect(runKtxCli(argv, testIo.io, { ingest })).resolves.toBe(1);
       expect(testIo.stderr()).toMatch(/conflict|cannot be used/i);
     }
 
     expect(ingest).not.toHaveBeenCalled();
-    expect(demo).not.toHaveBeenCalled();
   });
 
   it('rejects mutually exclusive credential and scan mode options before invoking runners', async () => {

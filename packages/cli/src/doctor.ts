@@ -29,8 +29,7 @@ interface DoctorReport {
 
 export type KtxDoctorArgs =
   | { command: 'setup'; outputMode: KtxDoctorOutputMode; inputMode?: KtxDoctorInputMode }
-  | { command: 'project'; projectDir: string; outputMode: KtxDoctorOutputMode; inputMode?: KtxDoctorInputMode }
-  | { command: 'demo'; projectDir: string; outputMode: KtxDoctorOutputMode; inputMode?: KtxDoctorInputMode };
+  | { command: 'project'; projectDir: string; outputMode: KtxDoctorOutputMode; inputMode?: KtxDoctorInputMode };
 
 interface KtxDoctorIo {
   stdout: { write(chunk: string): void };
@@ -323,7 +322,7 @@ async function runProjectChecks(projectDir: string, deps: KtxDoctorDeps = {}): P
             'connections',
             'Connections',
             '0 configured',
-            'Add a connection to ktx.yaml or run `ktx setup demo init`',
+            'Add a connection to ktx.yaml or run `ktx setup`',
           ),
     );
     checks.push(check('pass', 'storage', 'Storage', `${project.config.storage.state}/${project.config.storage.search}`));
@@ -343,94 +342,6 @@ async function runProjectChecks(projectDir: string, deps: KtxDoctorDeps = {}): P
       ),
     );
   }
-  return checks;
-}
-
-async function runDemoProjectChecks(projectDir: string, deps: KtxDoctorDeps = {}): Promise<DoctorCheck[]> {
-  const env = deps.env ?? process.env;
-  const { DEMO_CONNECTION_ID, DEMO_REPLAY_FILE } = await import('./demo-assets.js');
-  const { loadKtxProject } = await import('@ktx/context/project');
-  const checks: DoctorCheck[] = [];
-  const requiredPaths = [
-    ['demo-config', 'Demo config', 'ktx.yaml'],
-    ['demo-database', 'Demo dataset', 'demo.db'],
-    ['demo-state', 'Demo state database', 'state.sqlite'],
-    ['demo-replay', 'Demo replay', join('replays', DEMO_REPLAY_FILE)],
-    ['demo-raw-sources', 'Demo raw sources directory', 'raw-sources'],
-    ['demo-semantic-layer', 'Demo semantic-layer directory', 'semantic-layer'],
-    ['demo-knowledge', 'Demo knowledge directory', 'knowledge'],
-  ] as const;
-
-  for (const [id, label, relativePath] of requiredPaths) {
-    const absolutePath = join(projectDir, relativePath);
-    checks.push(
-      (await defaultPathExists(absolutePath))
-        ? check('pass', id, label, relativePath)
-        : check(
-            'fail',
-            id,
-            label,
-            `Missing ${relativePath}`,
-            `Run: ktx setup demo init --project-dir ${projectDir} --force --no-input`,
-          ),
-    );
-  }
-
-  try {
-    const project = await loadKtxProject({ projectDir });
-    const connection = project.config.connections[DEMO_CONNECTION_ID];
-    checks.push(
-      connection?.driver === 'sqlite'
-        ? check('pass', 'demo-connection', 'Demo connection', `${DEMO_CONNECTION_ID} uses sqlite`)
-        : check(
-            'fail',
-            'demo-connection',
-            'Demo connection',
-            `${DEMO_CONNECTION_ID} is missing or is not sqlite`,
-            `Run: ktx setup demo init --project-dir ${projectDir} --force --no-input`,
-          ),
-    );
-    const provider = project.config.llm.provider.backend;
-    checks.push(
-      provider === 'anthropic' || provider === 'vertex' || provider === 'gateway'
-        ? check('pass', 'demo-llm-provider', 'Demo LLM provider', provider)
-        : check(
-            'fail',
-            'demo-llm-provider',
-            'Demo LLM provider',
-            provider,
-            `Run: ktx setup demo init --project-dir ${projectDir} --force --no-input`,
-          ),
-    );
-    if (provider === 'anthropic' && !env.ANTHROPIC_API_KEY) {
-      checks.push(
-        check(
-          'warn',
-          'anthropic-credentials',
-          'Anthropic credentials',
-          'ANTHROPIC_API_KEY is not set',
-          'Export ANTHROPIC_API_KEY to run `ktx setup demo --mode full --no-input`',
-        ),
-      );
-    } else {
-      checks.push(check('pass', 'anthropic-credentials', 'Anthropic credentials', 'Configured for current provider'));
-    }
-    checks.push(await runSemanticSearchEmbeddingCheck(project.config.ingest.embeddings, projectDir, deps));
-    const runHistoricSqlDoctorChecks =
-      deps.runHistoricSqlDoctorChecks ?? (await import('./historic-sql-doctor.js')).runPostgresHistoricSqlDoctorChecks;
-    checks.push(...(await runHistoricSqlDoctorChecks(project, deps)));
-  } catch (error) {
-    checks.push(
-      check(
-        'fail',
-        'demo-config-parse',
-        'Demo config parse',
-        failureMessage(error),
-        `Run: ktx setup demo init --project-dir ${projectDir} --force --no-input`,
-      ),
-    );
-  }
-
   return checks;
 }
 
@@ -469,15 +380,10 @@ export async function runKtxDoctor(
     const report: DoctorReport =
       args.command === 'setup'
         ? { title: 'KTX setup doctor', checks: setupChecks }
-        : args.command === 'demo'
-          ? {
-              title: 'KTX demo doctor',
-              checks: [...setupChecks, ...(await runDemoProjectChecks(args.projectDir, deps))],
-            }
-          : {
-              title: 'KTX project doctor',
-              checks: [...setupChecks, ...(await runProjectChecks(args.projectDir, deps))],
-            };
+        : {
+            title: 'KTX project doctor',
+            checks: [...setupChecks, ...(await runProjectChecks(args.projectDir, deps))],
+          };
 
     writeReport(report, args.outputMode, io);
     return hasFailures(report) ? 1 : 0;

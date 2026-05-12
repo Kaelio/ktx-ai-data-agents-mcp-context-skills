@@ -326,8 +326,8 @@ describe('runKtxAgent', () => {
         code: 'agent_sl_search_missing_project',
         message: `Semantic-layer search needs an initialized KTX project at ${tempDir}.`,
         nextSteps: [
-          'ktx demo',
           `ktx setup --project-dir ${tempDir}`,
+          `ktx status --project-dir ${tempDir}`,
           'ktx ingest <connection>',
           `ktx agent sl list --json --query "gross revenue" --project-dir ${tempDir}`,
         ],
@@ -353,8 +353,8 @@ describe('runKtxAgent', () => {
         code: 'agent_sl_search_no_connections',
         message: `Semantic-layer search found no configured connections in ${tempDir}.`,
         nextSteps: [
-          'ktx demo',
           `ktx setup --project-dir ${tempDir}`,
+          `ktx status --project-dir ${tempDir}`,
           'ktx ingest <connection>',
           `ktx agent sl list --json --query "revenue" --project-dir ${tempDir}`,
         ],

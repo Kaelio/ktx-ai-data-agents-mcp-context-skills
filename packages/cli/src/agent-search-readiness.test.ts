@@ -13,8 +13,8 @@ describe('agent semantic-layer search readiness guidance', () => {
       code: 'agent_sl_search_missing_project',
       message: 'Semantic-layer search needs an initialized KTX project at /tmp/ktx-search.',
       nextSteps: [
-        'ktx demo',
         'ktx setup --project-dir /tmp/ktx-search',
+        'ktx status --project-dir /tmp/ktx-search',
         'ktx ingest <connection>',
         'ktx agent sl list --json --query "gross revenue" --project-dir /tmp/ktx-search',
       ],

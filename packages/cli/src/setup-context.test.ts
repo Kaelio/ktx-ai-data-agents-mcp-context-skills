@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   contextBuildCommands,
   readKtxSetupContextState,
-  runKtxSetupContextCommand,
   runKtxSetupContextStep,
   writeKtxSetupContextState,
 } from './setup-context.js';
@@ -154,8 +153,8 @@ describe('setup context build state', () => {
       primarySourceConnectionIds: ['warehouse'],
       contextSourceConnectionIds: ['docs'],
       commands: {
-        watch: `ktx setup context watch setup-context-local-abc123 --project-dir ${tempDir}`,
-        status: `ktx setup context status setup-context-local-abc123 --project-dir ${tempDir}`,
+        watch: `ktx setup --project-dir ${tempDir}`,
+        status: `ktx status --project-dir ${tempDir}`,
         resume: `ktx setup --project-dir ${tempDir}`,
       },
     });
@@ -587,110 +586,5 @@ describe('setup context build state', () => {
     expect(output).toContain('Building KTX context');
     expect(output).toContain('Context build continuing in the background.');
     expect(output).toContain('Resume: ktx setup --project-dir');
-  });
-
-  it('prints JSON setup context command status with watch and resume commands', async () => {
-    await mkdir(join(tempDir, '.ktx', 'setup'), { recursive: true });
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-abc123',
-      status: 'detached',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:01:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: ['docs'],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-abc123'),
-    });
-    const io = makeIo();
-
-    await expect(
-      runKtxSetupContextCommand(
-        { command: 'status', projectDir: tempDir, runId: 'setup-context-local-abc123', json: true },
-        io.io,
-      ),
-    ).resolves.toBe(0);
-
-    expect(JSON.parse(io.stdout())).toMatchObject({
-      ready: false,
-      status: 'detached',
-      runId: 'setup-context-local-abc123',
-      watchCommand: `ktx setup context watch setup-context-local-abc123 --project-dir ${tempDir}`,
-      statusCommand: `ktx setup context status setup-context-local-abc123 --project-dir ${tempDir}`,
-    });
-  });
-
-  it('watches setup context command status until the run reaches a terminal state', async () => {
-    await mkdir(join(tempDir, '.ktx', 'setup'), { recursive: true });
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-watch',
-      status: 'running',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: ['docs'],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-watch'),
-    });
-    const io = makeIo();
-    const completeRun = async () => {
-      await writeKtxSetupContextState(tempDir, {
-        runId: 'setup-context-local-watch',
-        status: 'completed',
-        startedAt: '2026-05-09T10:00:00.000Z',
-        updatedAt: '2026-05-09T10:02:00.000Z',
-        completedAt: '2026-05-09T10:02:00.000Z',
-        primarySourceConnectionIds: ['warehouse'],
-        contextSourceConnectionIds: ['docs'],
-        reportIds: [],
-        artifactPaths: [],
-        retryableFailedTargets: [],
-        commands: contextBuildCommands(tempDir, 'setup-context-local-watch'),
-      });
-    };
-
-    await expect(
-      runKtxSetupContextCommand(
-        { command: 'watch', projectDir: tempDir, runId: 'setup-context-local-watch', inputMode: 'disabled' },
-        io.io,
-        { sleep: completeRun, watchIntervalMs: 1 },
-      ),
-    ).resolves.toBe(0);
-    expect(io.stdout()).toContain('KTX context built: running');
-    expect(io.stdout()).toContain('KTX context built: yes');
-  });
-
-  it('runs direct build commands without asking for setup confirmation first', async () => {
-    await writeReadyProject(tempDir);
-    const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0, detached: false }));
-
-    await expect(
-      runKtxSetupContextCommand(
-        { command: 'build', projectDir: tempDir, inputMode: 'auto' },
-        io.io,
-        {
-          prompts: {
-            select: vi.fn(async () => {
-              throw new Error('direct build should not prompt');
-            }),
-            cancel: vi.fn(),
-          },
-          runIdFactory: () => 'setup-context-local-direct',
-          runContextBuild: runContextBuildMock,
-          verifyContextReady: vi.fn(async () => ({
-            ready: true,
-            agentContextReady: true,
-            semanticSearchReady: true,
-            details: [],
-          })),
-        },
-      ),
-    ).resolves.toBe(0);
-
-    expect(runContextBuildMock).toHaveBeenCalled();
   });
 });

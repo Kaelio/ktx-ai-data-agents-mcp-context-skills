@@ -4,7 +4,6 @@ import type { KtxConnectionMetabaseSetupArgs } from './commands/connection-metab
 import type { KtxConnectionNotionArgs } from './commands/connection-notion.js';
 import type { KtxAgentArgs } from './agent.js';
 import type { KtxConnectionArgs } from './connection.js';
-import type { KtxDemoArgs } from './demo.js';
 import type { KtxDoctorArgs } from './doctor.js';
 import type { KtxIngestArgs } from './ingest.js';
 import type { KtxKnowledgeArgs } from './knowledge.js';
@@ -36,7 +35,6 @@ export interface KtxCliDeps {
   connection?: (args: KtxConnectionArgs, io: KtxCliIo) => Promise<number>;
   connectionNotion?: (args: KtxConnectionNotionArgs, io: KtxCliIo) => Promise<number>;
   connectionMetabaseSetup?: (args: KtxConnectionMetabaseSetupArgs, io: KtxCliIo) => Promise<number>;
-  demo?: (args: KtxDemoArgs, io: KtxCliIo) => Promise<number>;
   doctor?: (args: KtxDoctorArgs, io: KtxCliIo) => Promise<number>;
   ingest?: (args: KtxIngestArgs, io: KtxCliIo) => Promise<number>;
   publicIngest?: (args: KtxPublicIngestArgs, io: KtxCliIo) => Promise<number>;

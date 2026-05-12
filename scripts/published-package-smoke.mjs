@@ -29,18 +29,8 @@ const VERSION_LABELS = new Set([
   'published package global version',
 ]);
 
-const SEMANTIC_QUERY_LABELS = new Set([
-  'published package npx sl query',
-  'published package local sl query',
-  'published package global sl query',
-]);
-
 export function isPublishedPackageVersionLabel(label) {
   return VERSION_LABELS.has(label);
-}
-
-export function isPublishedPackageSemanticQueryLabel(label) {
-  return SEMANTIC_QUERY_LABELS.has(label);
 }
 
 function scriptRootDir() {
@@ -99,10 +89,6 @@ export async function runPublishedPackageSmoke(config) {
       requireSuccess(command.label, result);
       if (isPublishedPackageVersionLabel(command.label)) {
         assert.match(result.stdout, /@kaelio\/ktx /);
-      }
-      if (isPublishedPackageSemanticQueryLabel(command.label)) {
-        assert.match(result.stdout, /SELECT/i);
-        assert.match(result.stdout, /contracts/i);
       }
     }
 

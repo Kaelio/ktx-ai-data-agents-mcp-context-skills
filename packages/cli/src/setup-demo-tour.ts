@@ -39,7 +39,7 @@ function createDemoTarget(
     driver,
     operation,
     ...(adapter ? { adapter } : {}),
-    debugCommand: `ktx setup context build --target ${connectionId}`,
+    debugCommand: `ktx setup --project-dir <project-dir>`,
     steps: operation === 'scan'
       ? ['scan', 'enrich', 'memory-update']
       : ['source-ingest', 'enrich', 'memory-update'],
