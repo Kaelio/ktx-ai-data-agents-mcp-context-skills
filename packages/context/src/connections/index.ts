@@ -3,7 +3,9 @@ export type {
   KtxSqlQueryExecutionResult,
   KtxSqlQueryExecutorPort,
 } from './query-executor.js';
+export type { KtxDialect, SupportedDriver } from './dialects.js';
 export { createDefaultLocalQueryExecutor, type DefaultLocalQueryExecutorOptions } from './local-query-executor.js';
+export { getDialectForDriver } from './dialects.js';
 export { normalizeQueryRows } from './query-executor.js';
 export { createPostgresQueryExecutor } from './postgres-query-executor.js';
 export { assertReadOnlySql, limitSqlForExecution } from './read-only-sql.js';
