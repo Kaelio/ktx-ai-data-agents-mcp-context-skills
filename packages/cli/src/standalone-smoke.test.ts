@@ -370,7 +370,7 @@ describe('standalone built ktx CLI smoke', () => {
         totalFound: number;
       }>(await client.callTool({ name: 'knowledge_search', arguments: { query: 'ARR contract', limit: 5 } }));
       expect(knowledgeSearch.totalFound).toBeGreaterThan(0);
-      expect(knowledgeSearch.results.map((result) => result.key)).toContain('arr-contract-first');
+      expect(knowledgeSearch.results.map((result) => result.key)).toContain('orbit-arr-contract-first-definition');
 
       const knowledgeRead = structuredContent<{
         key: string;
@@ -378,26 +378,26 @@ describe('standalone built ktx CLI smoke', () => {
         content: string;
         tags: string[];
         slRefs: string[];
-      }>(await client.callTool({ name: 'knowledge_read', arguments: { key: 'arr-contract-first' } }));
-      expect(knowledgeRead.key).toBe('arr-contract-first');
+      }>(await client.callTool({ name: 'knowledge_read', arguments: { key: 'orbit-arr-contract-first-definition' } }));
+      expect(knowledgeRead.key).toBe('orbit-arr-contract-first-definition');
       expect(knowledgeRead.summary).toContain('ARR');
       expect(knowledgeRead.content).toContain('contract');
-      expect(knowledgeRead.slRefs).toContain('orbit_demo.contracts');
+      expect(knowledgeRead.slRefs).toContain('mart_arr_daily');
 
       const slRead = structuredContent<{ sourceName: string; yaml: string }>(
         await client.callTool({
           name: 'sl_read_source',
-          arguments: { connectionId: 'orbit_demo', sourceName: 'accounts' },
+          arguments: { connectionId: 'postgres-warehouse', sourceName: 'mart_arr_daily' },
         }),
       );
-      expect(slRead.sourceName).toBe('accounts');
-      expect(slRead.yaml).toContain('name: accounts');
+      expect(slRead.sourceName).toBe('mart_arr_daily');
+      expect(slRead.yaml).toContain('name: mart_arr_daily');
       expect(slRead.yaml).toContain('measures:');
 
       const slValidate = structuredContent<{ success: boolean; errors: string[]; warnings: string[] }>(
         await client.callTool({
           name: 'sl_validate',
-          arguments: { connectionId: 'orbit_demo', names: ['accounts', 'contracts'] },
+          arguments: { connectionId: 'postgres-warehouse', names: ['mart_arr_daily'] },
         }),
       );
       expect(slValidate.success).toBe(true);

@@ -135,72 +135,86 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(readme, /--historic-sql-min-calls/);
   });
 
-  it('lists every published TypeScript package in the package root README', async () => {
-    const rootReadme = await readText('README.md');
+  it('lists every workspace package in the contributor docs', async () => {
+    const contributing = await readText('docs-site/content/docs/community/contributing.mdx');
 
-    assert.match(rootReadme, /`packages\/context`/);
-    assert.match(rootReadme, /`packages\/cli`/);
-    assert.match(rootReadme, /`packages\/connector-bigquery`/);
-    assert.match(rootReadme, /`packages\/connector-clickhouse`/);
-    assert.match(rootReadme, /`packages\/connector-mysql`/);
-    assert.match(rootReadme, /`packages\/connector-postgres`/);
-    assert.match(rootReadme, /`packages\/connector-snowflake`/);
-    assert.match(rootReadme, /`packages\/connector-sqlite`/);
-    assert.match(rootReadme, /`packages\/connector-sqlserver`/);
-    assert.match(rootReadme, /`python\/ktx-sl`/);
-    assert.match(rootReadme, /`python\/ktx-daemon`/);
+    assert.match(contributing, /cli\/\s+# CLI entry point/);
+    assert.match(contributing, /context\/\s+# Core context engine/);
+    assert.match(contributing, /llm\/\s+# LLM client abstraction/);
+    assert.match(contributing, /connector-bigquery\/\s+# BigQuery connector/);
+    assert.match(contributing, /connector-clickhouse\/\s+# ClickHouse connector/);
+    assert.match(contributing, /connector-mysql\/\s+# MySQL connector/);
+    assert.match(contributing, /connector-postgres\/\s+# PostgreSQL connector/);
+    assert.match(contributing, /connector-snowflake\/\s+# Snowflake connector/);
+    assert.match(contributing, /connector-sqlite\/\s+# SQLite connector/);
+    assert.match(contributing, /connector-sqlserver\/\s+# SQL Server connector/);
+    assert.match(contributing, /ktx-sl\/\s+# Semantic layer/);
+    assert.match(contributing, /ktx-daemon\/\s+# Daemon/);
   });
 
   it('documents every standalone MCP tool that the CLI server exposes', async () => {
-    const rootReadme = await readText('README.md');
+    const servingAgents = await readText('docs-site/content/docs/guides/serving-agents.mdx');
 
-    assert.match(rootReadme, /`connection_list`/);
-    assert.match(rootReadme, /`knowledge_search`/);
-    assert.match(rootReadme, /`knowledge_read`/);
-    assert.match(rootReadme, /`knowledge_write`/);
-    assert.match(rootReadme, /`sl_list_sources`/);
-    assert.match(rootReadme, /`sl_read_source`/);
-    assert.match(rootReadme, /`sl_write_source`/);
-    assert.match(rootReadme, /`sl_validate`/);
-    assert.match(rootReadme, /`sl_query`/);
-    assert.match(rootReadme, /`ingest_trigger`/);
-    assert.match(rootReadme, /`ingest_status`/);
-    assert.match(rootReadme, /`ingest_report`/);
-    assert.match(rootReadme, /`ingest_replay`/);
+    for (const tool of [
+      'connection_list',
+      'connection_test',
+      'knowledge_search',
+      'knowledge_read',
+      'knowledge_write',
+      'sl_list_sources',
+      'sl_read_source',
+      'sl_write_source',
+      'sl_validate',
+      'sl_query',
+      'scan_trigger',
+      'scan_status',
+      'scan_report',
+      'scan_list_artifacts',
+      'scan_read_artifact',
+      'ingest_trigger',
+      'ingest_status',
+      'ingest_report',
+      'ingest_replay',
+      'memory_capture',
+      'memory_capture_status',
+    ]) {
+      assert.match(servingAgents, new RegExp(`\`${tool}\``));
+    }
   });
 
-  it('walks through ktx connection list and ktx connection test in the README quickstart', async () => {
-    const rootReadme = await readText('README.md');
+  it('walks through connection testing in the quickstart and CLI reference', async () => {
+    const quickstart = await readText('docs-site/content/docs/getting-started/quickstart.mdx');
+    const connectionReference = await readText('docs-site/content/docs/cli-reference/ktx-connection.mdx');
 
-    assert.match(rootReadme, /connection list --project-dir/);
-    assert.match(rootReadme, /connection test warehouse --project-dir/);
-    assert.match(rootReadme, /Driver: sqlite/);
-    assert.match(rootReadme, /Tables: 1/);
+    assert.match(connectionReference, /ktx connection list/);
+    assert.match(connectionReference, /ktx connection test my-warehouse/);
+    assert.match(quickstart, /Connection test passed/);
+    assert.match(quickstart, /Driver: PostgreSQL .* Tables: 42/);
   });
 
-  it('documents public npm and managed runtime usage in the README', async () => {
+  it('documents public npm and managed runtime usage', async () => {
     const rootReadme = await readText('README.md');
+    const quickstart = await readText('docs-site/content/docs/getting-started/quickstart.mdx');
+    const packageArtifacts = await readText('examples/package-artifacts/README.md');
 
-    assert.match(rootReadme, publicPackagePattern('npx {package} setup demo --no-input'));
-    assert.match(rootReadme, publicPackagePattern('npx {package} sl query'));
-    assert.match(rootReadme, publicPackagePattern('npm install {package}'));
     assert.match(rootReadme, publicPackagePattern('npm install -g {package}'));
-    assert.match(rootReadme, /ktx runtime install/);
-    assert.match(rootReadme, /ktx runtime status/);
-    assert.match(rootReadme, /ktx runtime doctor/);
-    assert.match(rootReadme, /ktx runtime start/);
-    assert.match(rootReadme, /ktx runtime stop/);
-    assert.match(rootReadme, /ktx runtime prune --dry-run/);
-    assert.match(rootReadme, /ktx runtime prune --yes/);
-    assert.match(rootReadme, /KTX requires `uv` on `PATH`/);
-    assert.match(rootReadme, /KTX doesn't download `uv` automatically/);
+    assert.match(quickstart, publicPackagePattern('npm install -g {package}'));
+    assert.match(quickstart, /ktx runtime install --feature local-embeddings --yes/);
+    assert.match(quickstart, /ktx runtime start --feature local-embeddings/);
+    assert.match(quickstart, /Install `uv`, run `ktx runtime doctor`/);
+    assert.match(packageArtifacts, /requires `uv` on `PATH`/);
+    assert.match(packageArtifacts, /ktx runtime status/);
+    assert.match(packageArtifacts, /ktx runtime doctor/);
+    assert.match(packageArtifacts, /ktx runtime prune --dry-run/);
+    assert.match(packageArtifacts, /ktx runtime prune --yes/);
     assert.match(
-      rootReadme,
-      runtimeWheelPackagePattern(
-        'release\\s+artifact manifest contains the public npm tarball and the\\s+bundled `{package}`\\s+runtime wheel',
+      packageArtifacts,
+      new RegExp(
+        `artifact manifest contains the public \`${escapeRegExp(publicNpmPackageName())}\` npm tarball and the\\s+bundled \`${escapeRegExp(
+          runtimeWheelPackageName(),
+        )}\` runtime wheel`,
       ),
     );
-    assert.match(rootReadme, /source packages for\s+development, not public release artifacts/);
     assert.match(rootReadme, /ktx serve --mcp stdio/);
     assert.doesNotMatch(rootReadme, /uv run ktx-daemon serve-http/);
     assert.doesNotMatch(rootReadme, /--semantic-compute-url http:\/\/127\.0\.0\.1:8765/);
@@ -232,14 +246,17 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);
   });
 
-  it('replaces the fake-ingest smoke with a ktx scan walkthrough in the README', async () => {
+  it('documents scan workflows in the docs site', async () => {
     const rootReadme = await readText('README.md');
+    const buildingContext = await readText('docs-site/content/docs/guides/building-context.mdx');
+    const scanReference = await readText('docs-site/content/docs/cli-reference/ktx-scan.mdx');
 
-    assert.match(rootReadme, /### Scan the demo warehouse/);
-    assert.match(rootReadme, /scan warehouse --project-dir/);
-    assert.match(rootReadme, /scan status --project-dir/);
-    assert.match(rootReadme, /scan report --project-dir/);
-    assert.match(rootReadme, /raw-sources\/warehouse\/live-database/);
+    assert.match(buildingContext, /ktx dev scan <connection-id>/);
+    assert.match(buildingContext, /ktx dev scan status <run-id>/);
+    assert.match(buildingContext, /ktx dev scan report <run-id>/);
+    assert.match(scanReference, /ktx dev scan <connectionId> \[options\]/);
+    assert.match(rootReadme, /raw-sources\//);
+    assert.match(rootReadme, /live-database\//);
     assert.doesNotMatch(rootReadme, /Run a local ingest smoke test/);
     assert.doesNotMatch(rootReadme, /ktx dev ingest run --project-dir/);
     assert.doesNotMatch(rootReadme, /ktx ingest status --project-dir/);
