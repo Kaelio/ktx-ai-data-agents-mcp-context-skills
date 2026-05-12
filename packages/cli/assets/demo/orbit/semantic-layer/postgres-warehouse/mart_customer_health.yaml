@@ -1,0 +1,27 @@
+name: mart_customer_health
+measures:
+  - name: count_accounts
+    expr: count(distinct account_id)
+    description: Total distinct accounts in the health snapshot.
+  - name: count_active_customers
+    expr: count(distinct account_id)
+    filter: is_active_customer = true
+    description: Distinct count of accounts flagged as active customers.
+  - name: count_high_risk_accounts
+    expr: count(distinct account_id)
+    filter: risk_level = 'high'
+    description: Distinct count of accounts with high risk level (open critical tickets and/or recent procurement activity).
+  - name: count_medium_risk_accounts
+    expr: count(distinct account_id)
+    filter: risk_level = 'medium'
+    description: Distinct count of accounts with medium risk level.
+  - name: count_accounts_with_high_ticket
+    expr: count(distinct account_id)
+    filter: has_unresolved_high_ticket = true
+    description: Distinct count of accounts with at least one unresolved high-severity support ticket.
+  - name: count_accounts_with_recent_procurement
+    expr: count(distinct account_id)
+    filter: has_recent_procurement_activity = true
+    description: Distinct count of accounts with recent procurement activity.
+descriptions:
+  user: "Per-account risk signals as of a snapshot date. Source: dbt mart_customer_health."

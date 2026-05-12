@@ -1,0 +1,22 @@
+name: mart_nrr_quarterly
+table: orbit_analytics.mart_nrr_quarterly
+grain:
+  - quarter_label
+  - segment
+columns:
+  - name: quarter_label
+    type: string
+    descriptions:
+      user: "dbt: not_null. Format: YYYY-QN (e.g. 2026-Q1)."
+  - name: segment
+    type: string
+    descriptions:
+      user: Reporting segment (self_serve, commercial, enterprise).
+  - name: net_revenue_retention
+    type: number
+    descriptions:
+      user: "NRR ratio. dbt assertions: enterprise 2026-Q1 = 1.018; enterprise 2025-Q4 = 1.064."
+joins: []
+measures: []
+descriptions:
+  user: "Enterprise quarterly net revenue retention. Governed metric: net_revenue_retention. Owner: analytics. See notion://notion_page_retention_policy_current#nrr-definition."

@@ -1,0 +1,23 @@
+name: mart_account_activity
+table: orbit_analytics.mart_account_activity
+grain:
+  - policy_version
+columns:
+  - name: policy_version
+    type: string
+    descriptions:
+      user: pre_2026_01_15 or post_2026_01_15
+  - name: activated_account_count
+    type: number
+    descriptions:
+      ktx: Column activated account count from mart_account_activity.
+  - name: window_label
+    type: string
+    descriptions:
+      ktx: Column window label from mart_account_activity.
+joins: []
+measures:
+  - name: total_activated_accounts
+    expr: sum(activated_account_count)
+descriptions:
+  user: "Activation policy comparison values. Governed metric: activated_accounts. Owner: growth. See notion://notion_page_activation_policy_decision#policy-change."

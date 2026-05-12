@@ -1,0 +1,30 @@
+name: mart_customer_health
+table: orbit_analytics.mart_customer_health
+grain:
+  - account_id
+columns:
+  - name: account_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: risk_level
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [low, medium, high]"
+  - name: open_critical_ticket_count
+    type: number
+    descriptions:
+      ktx: Column open critical ticket count from mart_customer_health.
+  - name: recent_procurement_action_count
+    type: number
+    descriptions:
+      ktx: Column recent procurement action count from mart_customer_health.
+joins: []
+measures:
+  - name: account_count
+    expr: count(account_id)
+  - name: high_risk_account_count
+    expr: count(account_id)
+    filter: risk_level = 'high'
+descriptions:
+  user: "Customer-health risk mart as of 2026-03-31. Governed metric: active_customers. Owner: customer_success. See notion://notion_page_customer_health_playbook#risk-definition."

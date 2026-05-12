@@ -1,0 +1,29 @@
+name: stg_purchase_requests
+table: orbit_analytics.stg_purchase_requests
+grain:
+  - purchase_request_id
+columns:
+  - name: purchase_request_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_purchase_requests.
+  - name: requester_user_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related requester user on stg_purchase_requests.
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [draft, submitted, approved, rejected, cancelled]"
+  - name: submitted_at
+    type: time
+    descriptions:
+      ktx: Column submitted at from stg_purchase_requests.
+joins: []
+measures: []
+descriptions:
+  user: Procurement request records used for activation, requester activity, and health signals.

@@ -1,0 +1,29 @@
+name: stg_support_tickets
+table: orbit_analytics.stg_support_tickets
+grain:
+  - support_ticket_id
+columns:
+  - name: support_ticket_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on stg_support_tickets.
+  - name: severity
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [low, medium, high, critical]"
+  - name: status
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [open, pending, solved, closed]"
+  - name: created_at
+    type: time
+    descriptions:
+      ktx: Date or time value for created at on stg_support_tickets.
+joins: []
+measures: []
+descriptions:
+  user: Customer support tickets that inform account health and risk.

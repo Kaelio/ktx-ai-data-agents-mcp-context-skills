@@ -1,0 +1,20 @@
+name: mart_arr_daily
+table: orbit_analytics.mart_arr_daily
+grain:
+  - metric_date
+columns:
+  - name: metric_date
+    type: time
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: arr_cents
+    type: number
+    descriptions:
+      user: "ARR in cents. dbt assertion: expected value 1874200000 (i.e. $18,742,000) as of 2026-03-31."
+joins: []
+measures:
+  - name: arr_cents
+    expr: sum(arr_cents)
+    description: Total ARR in cents across metric dates.
+descriptions:
+  user: "Board-prep ARR as of the metric date. Governed metric: arr. Owner: finance. Contract-first ARR calculation — see notion://notion_page_arr_contract_reporting#arr-contract-first."

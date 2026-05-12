@@ -1,0 +1,24 @@
+name: mart_procurement_activity
+table: orbit_analytics.mart_procurement_activity
+grain:
+  - week_start
+  - account_id
+columns:
+  - name: week_start
+    type: time
+    descriptions:
+      ktx: Date or time value for week start on mart_procurement_activity.
+  - name: account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related account on mart_procurement_activity.
+  - name: active_requesters
+    type: number
+    descriptions:
+      user: Weekly active requesters for large active contracts.
+joins: []
+measures:
+  - name: total_active_requesters
+    expr: sum(active_requesters)
+descriptions:
+  user: "Weekly active requester counts for large active contracts. Governed metric: weekly_active_requesters. Owner: product. See notion://notion_page_procurement_instrumentation#qualifying-procurement-actions."

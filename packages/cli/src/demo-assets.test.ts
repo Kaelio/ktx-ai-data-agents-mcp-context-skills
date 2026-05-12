@@ -91,22 +91,17 @@ describe('demo assets', () => {
     expect(manifest.sources.bi.explores).toBeGreaterThanOrEqual(2);
     expect(manifest.sources.bi.dashboards).toBeGreaterThanOrEqual(2);
     expect(manifest.sources.notion.pages).toBeGreaterThanOrEqual(5);
-    expect(manifest.generated.semanticLayer.sourceCount).toBeGreaterThanOrEqual(5);
-    expect(manifest.generated.knowledge.pageCount).toBeGreaterThanOrEqual(10);
+    expect(manifest.generated.semanticLayer.sourceCount).toBeGreaterThanOrEqual(40);
+    expect(manifest.generated.knowledge.pageCount).toBeGreaterThanOrEqual(20);
     expect(manifest.generated.links.linkCount).toBeGreaterThanOrEqual(10);
 
     const dbStat = await stat(packagedDemoAssetPath('demo.db'));
     expect(dbStat.size).toBeGreaterThan(0);
     expect(dbStat.size).toBeLessThan(10 * 1024 * 1024);
 
-    await expect(access(packagedDemoAssetPath('raw-sources/warehouse/accounts.csv'))).resolves.toBeUndefined();
-    await expect(access(packagedDemoAssetPath('raw-sources/dbt/schema.yml'))).resolves.toBeUndefined();
-    await expect(access(packagedDemoAssetPath('raw-sources/bi/revenue_exec.dashboard.lookml'))).resolves.toBeUndefined();
-    await expect(access(packagedDemoAssetPath('raw-sources/notion/revenue-reporting-policy.md'))).resolves.toBeUndefined();
-    expect(manifest.generated.semanticLayer.path).toBe('semantic-layer/orbit_demo');
-
-    await expect(access(packagedDemoAssetPath('semantic-layer/orbit_demo/accounts.yaml'))).resolves.toBeUndefined();
-    await expect(access(packagedDemoAssetPath('knowledge/global/arr-contract-first.md'))).resolves.toBeUndefined();
+    await expect(access(packagedDemoAssetPath('semantic-layer/dbt-main/mart_arr_daily.yaml'))).resolves.toBeUndefined();
+    await expect(access(packagedDemoAssetPath('semantic-layer/postgres-warehouse/mart_account_activity.yaml'))).resolves.toBeUndefined();
+    await expect(access(packagedDemoAssetPath('knowledge/global/orbit-company-overview.md'))).resolves.toBeUndefined();
     await expect(access(packagedDemoAssetPath('links/provenance.json'))).resolves.toBeUndefined();
     await expect(access(packagedDemoAssetPath('reports/seeded-demo-report.json'))).resolves.toBeUndefined();
   });

@@ -1,0 +1,17 @@
+name: stg_plans
+table: orbit_analytics.stg_plans
+grain:
+  - plan_id
+columns:
+  - name: plan_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: canonical_plan_code
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [starter, growth, enterprise]. Note: pro_plus is normalized to growth."
+joins: []
+measures: []
+descriptions:
+  user: Canonical and historical Orbit pricing plans.

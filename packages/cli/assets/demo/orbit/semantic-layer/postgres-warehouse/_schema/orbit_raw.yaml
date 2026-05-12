@@ -1,0 +1,989 @@
+tables:
+  account_hierarchy:
+    table: orbit_raw.account_hierarchy
+    columns:
+      - name: account_hierarchy_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for account parent-child relationship records within an organizational hierarchy.
+      - name: parent_account_id
+        type: string
+        descriptions:
+          ai: Identifiers for the higher-level accounts in a parent-child account relationship hierarchy.
+      - name: child_account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for subordinate accounts nested within a parent-child account relationship structure.
+      - name: relationship_type
+        type: string
+        descriptions:
+          ai: Categorizes the structural or financial relationship between parent and child accounts in a hierarchy.
+      - name: effective_start_date
+        type: time
+        descriptions:
+          ai: Start date when a parent-child account relationship becomes active and valid.
+      - name: effective_end_date
+        type: time
+        descriptions:
+          ai: End date when the parent-child account relationship expires or becomes inactive.
+    descriptions:
+      ai: Defines parent-child relationships between accounts, supporting organizational structures like subsidiaries, divisions, and billing groups with time-bound validity periods.
+    joins:
+      - to: stg_account_hierarchy
+        "on": account_hierarchy.account_hierarchy_id = stg_account_hierarchy.account_hierarchy_id
+        relationship: one_to_many
+        source: inferred
+  account_owners:
+    table: orbit_raw.account_owners
+    columns:
+      - name: account_owner_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for account ownership records, linking accounts to their designated owners.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking ownership records to specific customer or business accounts.
+      - name: owner_user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual users assigned as owners of specific accounts.
+      - name: owner_team
+        type: string
+        descriptions:
+          ai: Organizational team responsible for managing or owning the account, such as sales or finance.
+      - name: role
+        type: string
+        descriptions:
+          ai: Business function or responsibility of the owner associated with the account relationship.
+      - name: effective_start_date
+        type: time
+        descriptions:
+          ai: Start date when an account owner's role or assignment becomes active.
+      - name: effective_end_date
+        type: time
+        descriptions:
+          ai: End date when an account owner's assigned role or responsibility expires or becomes inactive.
+    descriptions:
+      ai: Tracks ownership assignments of accounts to users and teams, defining roles and time-bound responsibilities for managing customer relationships.
+    joins:
+      - to: stg_account_owners
+        "on": account_owners.account_owner_id = stg_account_owners.account_owner_id
+        relationship: one_to_many
+        source: inferred
+      - to: accounts
+        "on": account_owners.account_id = accounts.account_id
+        relationship: many_to_one
+        source: inferred
+  accounts:
+    table: orbit_raw.accounts
+    columns:
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for customer or business accounts, prefixed with "acct_" followed by a numeric sequence.
+      - name: parent_account_id
+        type: string
+        descriptions:
+          ai: Identifier linking a child account to its parent in a hierarchical account structure.
+      - name: account_name
+        type: string
+        descriptions:
+          ai: Display name or label assigned to each customer or business account.
+      - name: domain
+        type: string
+        descriptions:
+          ai: Unique web domain associated with each customer account for identification and access purposes.
+      - name: industry
+        type: string
+        descriptions:
+          ai: Business sector or vertical market classification of the account organization.
+      - name: sales_region
+        type: string
+        descriptions:
+          ai: Geographic sales territory classification (e.g., North America, EMEA, Asia-Pacific) for account segmentation.
+      - name: size_band
+        type: string
+        descriptions:
+          ai: Categorical classification of account size, segmenting customers by organizational scale (e.g., enterprise, SMB).
+      - name: lifecycle_status
+        type: string
+        descriptions:
+          ai: Current stage of an account in the business relationship lifecycle (e.g., active, churned).
+      - name: is_internal
+        type: boolean
+        descriptions:
+          ai: Boolean flag identifying whether the account belongs to the company internally, rather than an external customer.
+      - name: is_test
+        type: boolean
+        descriptions:
+          ai: Boolean flag identifying whether an account is a test/sandbox entry, excluded from production reporting.
+      - name: created_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when each account record was first created in the system.
+    descriptions:
+      ai: Customer account records for a SaaS platform, tracking organizational clients across industries, regions, and lifecycle stages for account management purposes.
+    joins:
+      - to: int_active_contract_arr
+        "on": accounts.account_id = int_active_contract_arr.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: int_customer_health_signals
+        "on": accounts.account_id = int_customer_health_signals.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: mart_account_segments
+        "on": accounts.account_id = mart_account_segments.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: mart_customer_health
+        "on": accounts.account_id = mart_customer_health.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_account_owners
+        "on": accounts.account_id = stg_account_owners.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_accounts
+        "on": accounts.account_id = stg_accounts.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_contracts
+        "on": accounts.account_id = stg_contracts.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_invoices
+        "on": accounts.account_id = stg_invoices.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_refunds
+        "on": accounts.account_id = stg_refunds.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: account_owners
+        "on": accounts.account_id = account_owners.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: contracts
+        "on": accounts.account_id = contracts.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: invoices
+        "on": accounts.account_id = invoices.account_id
+        relationship: one_to_many
+        source: inferred
+      - to: refunds
+        "on": accounts.account_id = refunds.account_id
+        relationship: one_to_many
+        source: inferred
+  activation_events:
+    table: orbit_raw.activation_events
+    columns:
+      - name: activation_event_id
+        type: string
+        descriptions:
+          ai: Unique sequential identifiers for individual activation events, formatted with a prefixed numeric string.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for customer or business accounts associated with activation events.
+      - name: user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for users associated with activation events, formatted as sequential user codes.
+      - name: event_type
+        type: string
+        descriptions:
+          ai: Categorizes key activation milestones, such as a user's first login as a requester.
+      - name: event_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when an activation event occurred, stored in UTC with timezone offset.
+      - name: policy_version
+        type: string
+        descriptions:
+          ai: Version identifier of the policy in effect at the time of the activation event.
+    descriptions:
+      ai: Tracks milestone activation events when users first access accounts, capturing policy version context for compliance and onboarding analytics.
+    joins:
+      - to: stg_activation_events
+        "on": activation_events.activation_event_id = stg_activation_events.activation_event_id
+        relationship: one_to_many
+        source: inferred
+  approval_events:
+    table: orbit_raw.approval_events
+    columns:
+      - name: approval_event_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual approval events, formatted with a sequential numeric suffix.
+      - name: purchase_request_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking approval events to their associated purchase requests.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for accounts associated with purchase request approval events.
+      - name: approver_user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for users who reviewed and made approval decisions on purchase requests.
+      - name: decision
+        type: string
+        descriptions:
+          ai: Outcome of an approval action on a purchase request, such as "approved" or "rejected."
+      - name: decided_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when an approver made their decision on a purchase request.
+    descriptions:
+      ai: Records of approval decisions made by designated approvers on purchase requests, tracking who approved what and when for procurement governance.
+    joins:
+      - to: stg_approval_events
+        "on": approval_events.approval_event_id = stg_approval_events.approval_event_id
+        relationship: one_to_many
+        source: inferred
+      - to: purchase_requests
+        "on": approval_events.purchase_request_id = purchase_requests.purchase_request_id
+        relationship: many_to_one
+        source: inferred
+  arr_movements:
+    table: orbit_raw.arr_movements
+    columns:
+      - name: arr_movement_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual ARR movement records, using a sequential prefixed format.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifier for the customer account associated with each ARR movement record.
+      - name: parent_account_id
+        type: string
+        descriptions:
+          ai: Identifier linking a child account to its parent in a hierarchical account structure.
+      - name: contract_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking ARR movements to their associated customer contracts.
+      - name: movement_date
+        type: time
+        descriptions:
+          ai: Date when an ARR movement or change event occurred, used for revenue tracking.
+      - name: movement_type
+        type: string
+        descriptions:
+          ai: Categorical classification of ARR change events, such as expansion, contraction, churn, or new business.
+      - name: movement_reason
+        type: string
+        descriptions:
+          ai: Categorizes the specific cause driving an ARR change, such as seat expansion or contraction.
+      - name: arr_delta_cents
+        type: number
+        descriptions:
+          ai: Monetary change in Annual Recurring Revenue for a given movement, stored in cents.
+      - name: starting_arr_cents
+        type: number
+        descriptions:
+          ai: Annual Recurring Revenue (ARR) value in cents before the movement was applied.
+      - name: ending_arr_cents
+        type: number
+        descriptions:
+          ai: Annual Recurring Revenue (ARR) balance in cents after applying the recorded movement.
+    descriptions:
+      ai: Tracks changes in Annual Recurring Revenue (ARR) for customer accounts, capturing expansion, contraction, and churn movements to monitor subscription revenue growth.
+    joins:
+      - to: int_parent_account_arr_movements
+        "on": arr_movements.arr_movement_id = int_parent_account_arr_movements.arr_movement_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_arr_movements
+        "on": arr_movements.arr_movement_id = stg_arr_movements.arr_movement_id
+        relationship: one_to_many
+        source: inferred
+  contract_discount_terms:
+    table: orbit_raw.contract_discount_terms
+    columns:
+      - name: discount_term_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual discount terms associated with contracts, formatted as sequential codes.
+      - name: contract_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking discount terms to their associated contracts in the system.
+      - name: discount_type
+        type: string
+        descriptions:
+          ai: Categorizes the business reason or occasion for applying a contract discount.
+      - name: discount_cents
+        type: number
+        descriptions:
+          ai: Fixed discount amount in cents applied to a contract, representing a flat monetary reduction.
+      - name: discount_percent
+        type: number
+        descriptions:
+          ai: Percentage-based discount rate applied to a contract, expressed as a decimal (e.g., 0.10 = 10%).
+      - name: starts_on
+        type: time
+        descriptions:
+          ai: Effective start date for when a contract discount term becomes active.
+      - name: expires_on
+        type: time
+        descriptions:
+          ai: End date when a contract discount term becomes inactive or no longer valid.
+      - name: reason
+        type: string
+        descriptions:
+          ai: Categorical label indicating the rationale or trigger for a contract discount, such as expiration events.
+    descriptions:
+      ai: Tracks discount terms applied to contracts, capturing promotional pricing details including discount amounts, types, validity periods, and expiration reasons for contract management.
+  contracts:
+    table: orbit_raw.contracts
+    columns:
+      - name: contract_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual contracts, formatted as sequential alphanumeric codes.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking each contract to a specific customer account.
+      - name: parent_account_id
+        type: string
+        descriptions:
+          ai: Identifier linking contracts to a parent/umbrella account, supporting hierarchical account structures.
+      - name: plan_id
+        type: string
+        descriptions:
+          ai: Identifier referencing the subscription or pricing plan associated with each contract.
+      - name: contract_arr_cents
+        type: number
+        descriptions:
+          ai: Annual Recurring Revenue (ARR) value of the contract, stored in cents.
+      - name: booked_arr_cents
+        type: number
+        descriptions:
+          ai: Committed annual recurring revenue at time of booking, stored in cents.
+      - name: start_date
+        type: time
+        descriptions:
+          ai: Date when a contract becomes active and billing or service obligations begin.
+      - name: end_date
+        type: time
+        descriptions:
+          ai: Expiration date marking when a contract term concludes, used for renewal tracking.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current lifecycle state of a contract, such as active, expired, or cancelled.
+      - name: renewal_type
+        type: string
+        descriptions:
+          ai: Classification of contract motion type, indicating whether it's new business, a renewal, expansion, or downgrade.
+    descriptions:
+      ai: Tracks customer subscription contracts, capturing revenue commitments, contract terms, and lifecycle stages (new, renewal, expansion) for recurring revenue management.
+    joins:
+      - to: int_active_contract_arr
+        "on": contracts.contract_id = int_active_contract_arr.contract_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_contracts
+        "on": contracts.contract_id = stg_contracts.contract_id
+        relationship: one_to_many
+        source: inferred
+      - to: accounts
+        "on": contracts.account_id = accounts.account_id
+        relationship: many_to_one
+        source: inferred
+      - to: plans
+        "on": contracts.plan_id = plans.plan_id
+        relationship: many_to_one
+        source: inferred
+  invoice_line_items:
+    table: orbit_raw.invoice_line_items
+    columns:
+      - name: invoice_line_item_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual line items within invoices, formatted as sequential alphanumeric codes.
+      - name: invoice_id
+        type: string
+        descriptions:
+          ai: Foreign key referencing the parent invoice, linking line items to their corresponding invoice record.
+      - name: line_item_type
+        type: string
+        descriptions:
+          ai: Categorizes invoice charges by billing type, such as subscriptions, seats, usage, or add-ons.
+      - name: amount_cents
+        type: number
+        descriptions:
+          ai: Monetary value of individual invoice line items, stored in cents (e.g., $20,000).
+      - name: recognized_at
+        type: time
+        descriptions:
+          ai: Timestamp indicating when a line item's revenue was formally recognized for accounting purposes.
+    descriptions:
+      ai: Individual line items within invoices, capturing billing details for subscriptions, seat licenses, and usage-based charges with revenue recognition timestamps.
+    joins:
+      - to: stg_invoice_line_items
+        "on": invoice_line_items.invoice_line_item_id = stg_invoice_line_items.invoice_line_item_id
+        relationship: one_to_many
+        source: inferred
+  invoices:
+    table: orbit_raw.invoices
+    columns:
+      - name: invoice_id
+        type: string
+        descriptions:
+          ai: Unique sequential identifiers for individual invoice records, prefixed with "inv_".
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking invoices to specific customer accounts in the billing system.
+      - name: subscription_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking invoices to their associated subscription plans or agreements.
+      - name: invoice_date
+        type: time
+        descriptions:
+          ai: Timestamp indicating when an invoice was issued to the account or customer.
+      - name: paid_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when an invoice was successfully paid, stored in UTC.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current payment state of an invoice, such as paid, pending, or overdue.
+      - name: currency
+        type: string
+        descriptions:
+          ai: Three-letter ISO currency code used for billing and payment processing on invoices.
+    descriptions:
+      ai: Billing records tracking subscription invoices, payment timestamps, and statuses for customer accounts in a subscription-based revenue management system.
+    joins:
+      - to: stg_invoices
+        "on": invoices.invoice_id = stg_invoices.invoice_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_refunds
+        "on": invoices.invoice_id = stg_refunds.invoice_id
+        relationship: one_to_many
+        source: inferred
+      - to: accounts
+        "on": invoices.account_id = accounts.account_id
+        relationship: many_to_one
+        source: inferred
+      - to: stg_subscriptions
+        "on": invoices.subscription_id = stg_subscriptions.subscription_id
+        relationship: many_to_one
+        source: inferred
+      - to: refunds
+        "on": invoices.invoice_id = refunds.invoice_id
+        relationship: one_to_many
+        source: inferred
+  plan_segment_mapping:
+    table: orbit_raw.plan_segment_mapping
+    columns:
+      - name: plan_segment_mapping_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for plan-to-segment mapping records, linking insurance plans to specific customer segments.
+      - name: canonical_plan_code
+        type: string
+        descriptions:
+          ai: Standardized plan tier identifiers (e.g., "starter," "growth") used to categorize subscription or pricing plans.
+      - name: size_band
+        type: string
+        descriptions:
+          ai: Business size classification of customers, categorizing them as SMB, mid-market, or enterprise segments.
+      - name: segment
+        type: string
+        descriptions:
+          ai: Business or market segment classification (e.g., self-serve, commercial, enterprise) for plan targeting.
+      - name: effective_start_date
+        type: time
+        descriptions:
+          ai: Start date when a plan-segment mapping record becomes active and valid for use.
+      - name: effective_end_date
+        type: time
+        descriptions:
+          ai: End date when a plan-segment mapping record expires or becomes inactive.
+    descriptions:
+      ai: Maps subscription plans to customer segments and size bands with time-bound effective dates, enabling segment-specific plan routing and pricing logic.
+    joins:
+      - to: stg_plan_segment_mapping
+        "on": plan_segment_mapping.plan_segment_mapping_id = stg_plan_segment_mapping.plan_segment_mapping_id
+        relationship: one_to_many
+        source: inferred
+      - to: plans
+        "on": plan_segment_mapping.canonical_plan_code = plans.plan_code
+        relationship: many_to_one
+        source: inferred
+  plans:
+    table: orbit_raw.plans
+    columns:
+      - name: plan_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for subscription or service plans within the system.
+      - name: plan_code
+        type: string
+        descriptions:
+          ai: Short identifier codes for subscription tiers, used to programmatically reference available plans.
+      - name: plan_name
+        type: string
+        descriptions:
+          ai: Human-readable label for a subscription tier offered to customers.
+      - name: canonical_plan_code
+        type: string
+        descriptions:
+          ai: Standardized plan tier identifiers grouping related plans into core business categories (starter, growth, enterprise).
+      - name: is_retired
+        type: boolean
+        descriptions:
+          ai: Boolean flag indicating whether a plan has been decommissioned or is no longer active.
+      - name: retired_at
+        type: time
+        descriptions:
+          ai: Timestamp indicating when a plan was or will be retired/deactivated.
+    descriptions:
+      ai: Subscription tier configurations defining available service plans (Starter, Growth, Enterprise) for customer pricing and product packaging decisions.
+    joins:
+      - to: int_active_contract_arr
+        "on": plans.plan_id = int_active_contract_arr.plan_id
+        relationship: one_to_many
+        source: inferred
+      - to: mart_account_segments
+        "on": plans.plan_code = mart_account_segments.current_plan_code
+        relationship: one_to_many
+        source: inferred
+      - to: mart_account_segments
+        "on": plans.plan_code = mart_account_segments.normalized_plan_code
+        relationship: one_to_many
+        source: inferred
+      - to: stg_contracts
+        "on": plans.plan_id = stg_contracts.plan_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_plan_segment_mapping
+        "on": plans.plan_code = stg_plan_segment_mapping.canonical_plan_code
+        relationship: one_to_many
+        source: inferred
+      - to: stg_plans
+        "on": plans.plan_code = stg_plans.canonical_plan_code
+        relationship: one_to_many
+        source: inferred
+      - to: stg_plans
+        "on": plans.plan_code = stg_plans.plan_code
+        relationship: one_to_many
+        source: inferred
+      - to: stg_plans
+        "on": plans.plan_id = stg_plans.plan_id
+        relationship: one_to_many
+        source: inferred
+      - to: contracts
+        "on": plans.plan_id = contracts.plan_id
+        relationship: one_to_many
+        source: inferred
+      - to: plan_segment_mapping
+        "on": plans.plan_code = plan_segment_mapping.canonical_plan_code
+        relationship: one_to_many
+        source: inferred
+      - to: plans
+        "on": plans.canonical_plan_code = plans.plan_code
+        relationship: many_to_one
+        source: inferred
+      - to: plans
+        "on": plans.plan_code = plans.canonical_plan_code
+        relationship: one_to_many
+        source: inferred
+  purchase_orders:
+    table: orbit_raw.purchase_orders
+    columns:
+      - name: purchase_order_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for purchase orders, formatted with a "po_" prefix and sequential numbering.
+      - name: purchase_request_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking a purchase order to its originating purchase request.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifier for the account associated with each purchase order transaction.
+      - name: supplier_id
+        type: string
+        descriptions:
+          ai: Unique identifiers referencing the supplier fulfilling each purchase order.
+      - name: created_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when each purchase order was created or submitted in the system.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current state of a purchase order in its fulfillment lifecycle (e.g., sent, fulfilled).
+      - name: amount_cents
+        type: number
+        descriptions:
+          ai: Monetary value of purchase orders stored in cents (e.g., 25100 = $251.00).
+    descriptions:
+      ai: Records of formal purchase orders issued to suppliers, tracking procurement transactions from approved purchase requests through fulfillment for financial and supply chain management.
+    joins:
+      - to: stg_purchase_orders
+        "on": purchase_orders.purchase_order_id = stg_purchase_orders.purchase_order_id
+        relationship: one_to_many
+        source: inferred
+      - to: purchase_requests
+        "on": purchase_orders.purchase_request_id = purchase_requests.purchase_request_id
+        relationship: many_to_one
+        source: inferred
+      - to: stg_suppliers
+        "on": purchase_orders.supplier_id = stg_suppliers.supplier_id
+        relationship: many_to_one
+        source: inferred
+  purchase_requests:
+    table: orbit_raw.purchase_requests
+    columns:
+      - name: purchase_request_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for purchase requests, formatted with a "pr_" prefix and sequential numbering.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifier for the account associated with each purchase request.
+      - name: requester_user_id
+        type: string
+        descriptions:
+          ai: Unique identifier of the user who submitted the purchase request.
+      - name: created_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when each purchase request was submitted, stored in UTC with timezone offset.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current approval state of a purchase request, such as "submitted" or "approved."
+      - name: amount_cents
+        type: number
+        descriptions:
+          ai: Monetary value of purchase requests, stored in cents (e.g., $251–$255).
+      - name: supplier_id
+        type: string
+        descriptions:
+          ai: Unique identifier referencing the vendor or supplier associated with a purchase request.
+    descriptions:
+      ai: Tracks employee or user-submitted purchase requests, capturing approval status, requested amounts, and associated suppliers for procurement workflow management.
+    joins:
+      - to: stg_approval_events
+        "on": purchase_requests.purchase_request_id = stg_approval_events.purchase_request_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_purchase_orders
+        "on": purchase_requests.purchase_request_id = stg_purchase_orders.purchase_request_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_purchase_requests
+        "on": purchase_requests.purchase_request_id = stg_purchase_requests.purchase_request_id
+        relationship: one_to_many
+        source: inferred
+      - to: approval_events
+        "on": purchase_requests.purchase_request_id = approval_events.purchase_request_id
+        relationship: one_to_many
+        source: inferred
+      - to: purchase_orders
+        "on": purchase_requests.purchase_request_id = purchase_orders.purchase_request_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_users
+        "on": purchase_requests.requester_user_id = stg_users.user_id
+        relationship: many_to_one
+        source: inferred
+      - to: stg_suppliers
+        "on": purchase_requests.supplier_id = stg_suppliers.supplier_id
+        relationship: many_to_one
+        source: inferred
+  refunds:
+    table: orbit_raw.refunds
+    columns:
+      - name: refund_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual refund transactions, formatted with a sequential numeric suffix.
+      - name: invoice_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking each refund to its originating invoice record.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking refunds to the associated customer or business account.
+      - name: amount_cents
+        type: number
+        descriptions:
+          ai: Monetary value of refunds in cents; all samples equal $10,000.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current state of the refund process, indicating whether the refund was successfully completed.
+      - name: refunded_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when a refund was officially processed and completed.
+      - name: reason
+        type: string
+        descriptions:
+          ai: Categorical explanation for why a refund was issued, such as board reconciliation credits.
+    descriptions:
+      ai: Records of processed financial refunds issued to accounts against invoices, tracking amounts, outcomes, and reasons for reconciliation purposes.
+    joins:
+      - to: stg_refunds
+        "on": refunds.refund_id = stg_refunds.refund_id
+        relationship: one_to_many
+        source: inferred
+      - to: accounts
+        "on": refunds.account_id = accounts.account_id
+        relationship: many_to_one
+        source: inferred
+      - to: invoices
+        "on": refunds.invoice_id = invoices.invoice_id
+        relationship: many_to_one
+        source: inferred
+  sessions:
+    table: orbit_raw.sessions
+    columns:
+      - name: session_id
+        type: string
+        descriptions:
+          ai: Unique sequential identifiers for individual user sessions, formatted with zero-padded numeric suffixes.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for customer or business accounts associated with each session.
+      - name: user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual users associated with each session record.
+      - name: started_at
+        type: time
+        descriptions:
+          ai: Timestamp marking when a user session began, stored in Pacific Time.
+      - name: duration_seconds
+        type: number
+        descriptions:
+          ai: Length of a user session measured in seconds, used for engagement analysis.
+      - name: is_internal
+        type: boolean
+        descriptions:
+          ai: Boolean flag indicating whether the session originated from internal company users or staff.
+      - name: is_test
+        type: boolean
+        descriptions:
+          ai: Boolean flag identifying whether the session was generated for testing purposes.
+    descriptions:
+      ai: Tracks user session activity across accounts, capturing login events, session duration, and timestamps for monitoring platform engagement and usage patterns.
+    joins:
+      - to: stg_sessions
+        "on": sessions.session_id = stg_sessions.session_id
+        relationship: one_to_many
+        source: inferred
+      - to: stg_users
+        "on": sessions.user_id = stg_users.user_id
+        relationship: many_to_one
+        source: inferred
+  subscriptions:
+    table: orbit_raw.subscriptions
+    columns:
+      - name: subscription_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual subscription records, prefixed with "sub_" followed by a sequential number.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking subscriptions to their associated customer accounts.
+      - name: contract_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking subscriptions to their associated contractual agreements with customers.
+      - name: plan_id
+        type: string
+        descriptions:
+          ai: Identifier referencing the pricing plan associated with a subscription, linking to a plans table.
+      - name: mrr_cents
+        type: number
+        descriptions:
+          ai: Monthly recurring revenue in cents for each subscription, used for billing and revenue tracking.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current state of a subscription, such as active, cancelled, or expired.
+      - name: started_at
+        type: time
+        descriptions:
+          ai: Timestamp marking when a subscription became active or billing period began.
+      - name: ended_at
+        type: time
+        descriptions:
+          ai: Timestamp marking when a subscription period expires or terminates, often a future contract end date.
+      - name: cancelled_at
+        type: time
+        descriptions:
+          ai: Timestamp marking when a subscription was cancelled; a far-future date (2099) indicates active, non-cancelled subscriptions.
+    descriptions:
+      ai: Tracks customer subscription lifecycle data, linking accounts to contracts and pricing plans, with billing amounts and active/inactive status periods.
+  supplier_onboarding_events:
+    table: orbit_raw.supplier_onboarding_events
+    columns:
+      - name: supplier_onboarding_event_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual supplier onboarding events, formatted with sequential numeric suffixes.
+      - name: supplier_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for suppliers being tracked through the onboarding process.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for accounts associated with supplier onboarding events, formatted as "acct_XXXX".
+      - name: event_type
+        type: string
+        descriptions:
+          ai: Stages in the supplier onboarding lifecycle, tracking progression from invitation to approval.
+      - name: event_at
+        type: time
+        descriptions:
+          ai: Timestamps recording when supplier onboarding events occurred, stored in Pacific Time zone.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current state of a supplier onboarding event, such as pending, completed, or blocked.
+    descriptions:
+      ai: Tracks milestone events during supplier onboarding workflows, capturing progression stages, statuses, and timestamps for managing supplier account activation processes.
+  suppliers:
+    table: orbit_raw.suppliers
+    columns:
+      - name: supplier_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for suppliers, formatted with a sequential numeric suffix.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique account identifiers linking suppliers to their associated accounts, formatted with an "acct_" prefix.
+      - name: supplier_name
+        type: string
+        descriptions:
+          ai: Official business name or label assigned to identify each supplier entity.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current lifecycle stage of a supplier relationship, tracking progression from invitation to active or inactive.
+      - name: created_at
+        type: time
+        descriptions:
+          ai: Timestamps recording when supplier records were created, stored in Pacific Time zone.
+    descriptions:
+      ai: Tracks vendor/supplier onboarding lifecycle, managing their registration status and account associations from initial invitation through active engagement.
+  support_tickets:
+    table: orbit_raw.support_tickets
+    columns:
+      - name: support_ticket_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for customer support tickets, formatted sequentially with a "ticket_" prefix.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking each support ticket to a specific customer account.
+      - name: requester_user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers of users who submitted or initiated the support ticket requests.
+      - name: severity
+        type: string
+        descriptions:
+          ai: Priority level of a support ticket, indicating urgency (e.g., critical, high).
+      - name: category
+        type: string
+        descriptions:
+          ai: Classification of the support issue type, such as approval routing workflows or processes.
+      - name: status
+        type: string
+        descriptions:
+          ai: Current state of a support ticket in its resolution workflow (e.g., open, closed).
+      - name: created_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when a support ticket was initially submitted or opened.
+      - name: resolved_at
+        type: time
+        descriptions:
+          ai: Timestamp indicating when a ticket was resolved; future sentinel date (2099) likely represents unresolved tickets.
+      - name: owner_user_id
+        type: string
+        descriptions:
+          ai: Unique identifier of the support agent or staff member assigned to handle the ticket.
+    descriptions:
+      ai: Tracks customer support requests, their severity, status, and ownership for managing issue resolution workflows across accounts.
+  users:
+    table: orbit_raw.users
+    columns:
+      - name: user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers for individual user records, formatted with a sequential numeric suffix.
+      - name: account_id
+        type: string
+        descriptions:
+          ai: Unique identifier linking users to their associated organizational accounts, formatted with an "acct_" prefix.
+      - name: email
+        type: string
+        descriptions:
+          ai: Email addresses of users, formatted with user and customer identifiers for multi-tenant accounts.
+      - name: role
+        type: string
+        descriptions:
+          ai: Functional access level or permission type assigned to each user within the system.
+      - name: is_requester
+        type: boolean
+        descriptions:
+          ai: Boolean flag indicating whether the user has the role of a requester within the system.
+      - name: is_internal
+        type: boolean
+        descriptions:
+          ai: Boolean flag indicating whether a user belongs to the internal organization or team.
+      - name: is_test
+        type: boolean
+        descriptions:
+          ai: Boolean flag identifying whether the user account is a test or dummy entry.
+      - name: created_at
+        type: time
+        descriptions:
+          ai: Timestamp recording when a user account was first created in the system.
+      - name: slack_user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking users to their corresponding Slack workspace accounts for integration purposes.
+      - name: looker_user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking users to their corresponding accounts in the Looker analytics platform.
+      - name: notion_user_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking users to their corresponding Notion workspace accounts.
+      - name: drive_owner_id
+        type: string
+        descriptions:
+          ai: Unique identifiers linking users to their associated Google Drive owner accounts.
+    descriptions:
+      ai: External customer user accounts with role-based access controls, integrated across Slack and Looker platforms for workflow and analytics management.

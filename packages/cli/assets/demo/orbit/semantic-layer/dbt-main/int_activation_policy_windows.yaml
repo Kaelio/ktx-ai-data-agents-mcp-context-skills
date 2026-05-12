@@ -1,0 +1,27 @@
+name: int_activation_policy_windows
+table: orbit_analytics.int_activation_policy_windows
+grain:
+  - policy_version
+columns:
+  - name: policy_version
+    type: string
+    descriptions:
+      user: pre_2026_01_15 or post_2026_01_15
+  - name: activated_account_count
+    type: number
+    descriptions:
+      ktx: Column activated account count from int_activation_policy_windows.
+  - name: window_start
+    type: time
+    descriptions:
+      ktx: Column window start from int_activation_policy_windows.
+  - name: window_end
+    type: time
+    descriptions:
+      ktx: Column window end from int_activation_policy_windows.
+joins: []
+measures:
+  - name: total_activated_accounts
+    expr: sum(activated_account_count)
+descriptions:
+  user: Activation cohort counts around the January 2026 policy change.

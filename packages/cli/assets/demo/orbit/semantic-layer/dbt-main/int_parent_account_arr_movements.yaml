@@ -1,0 +1,49 @@
+name: int_parent_account_arr_movements
+table: orbit_analytics.int_parent_account_arr_movements
+grain:
+  - arr_movement_id
+columns:
+  - name: arr_movement_id
+    type: string
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: parent_account_id
+    type: string
+    descriptions:
+      ktx: Identifier for the related parent account on int_parent_account_arr_movements.
+  - name: movement_type
+    type: string
+    descriptions:
+      user: "dbt: accepted_values [new, expansion, contraction, churn, reactivation]"
+  - name: is_discount_expiration_contraction
+    type: boolean
+    descriptions:
+      user: Discount expiration contraction flag used to keep discount movement separate from churn.
+  - name: movement_date
+    type: time
+    descriptions:
+      ktx: Date or time value for movement date on int_parent_account_arr_movements.
+  - name: arr_cents
+    type: number
+    descriptions:
+      ktx: Column arr cents from int_parent_account_arr_movements.
+joins: []
+measures:
+  - name: expansion_arr_cents
+    expr: sum(arr_cents)
+    filter: movement_type = 'expansion'
+    description: Sum of expansion ARR movements in cents.
+  - name: contraction_arr_cents
+    expr: sum(arr_cents)
+    filter: movement_type = 'contraction'
+    description: Sum of contraction ARR movements in cents.
+  - name: churn_arr_cents
+    expr: sum(arr_cents)
+    filter: movement_type = 'churn'
+    description: Sum of churn ARR movements in cents.
+  - name: discount_expiration_contraction_arr_cents
+    expr: sum(arr_cents)
+    filter: is_discount_expiration_contraction = true
+    description: Contraction ARR from discount expirations — kept separate from churn in NRR calculation.
+descriptions:
+  user: Parent-account movement rollups for retention metrics.

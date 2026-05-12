@@ -1,0 +1,37 @@
+name: mart_revenue_daily
+table: orbit_analytics.mart_revenue_daily
+grain:
+  - revenue_date
+columns:
+  - name: revenue_date
+    type: time
+    descriptions:
+      user: "dbt: not_null, unique"
+  - name: reconciliation_check
+    type: boolean
+    descriptions:
+      user: "dbt assertion: must be true on every row."
+  - name: net_revenue_cents
+    type: number
+    descriptions:
+      user: Daily net revenue in cents. February 2026 total covered by assert_february_2026_net_revenue.
+  - name: gross_revenue_cents
+    type: number
+    descriptions:
+      ktx: Column gross revenue cents from mart_revenue_daily.
+  - name: credit_cents
+    type: number
+    descriptions:
+      ktx: Column credit cents from mart_revenue_daily.
+  - name: refund_cents
+    type: number
+    descriptions:
+      ktx: Column refund cents from mart_revenue_daily.
+joins: []
+measures:
+  - name: total_net_revenue_cents
+    expr: sum(net_revenue_cents)
+  - name: total_gross_revenue_cents
+    expr: sum(gross_revenue_cents)
+descriptions:
+  user: "Daily revenue mart reconciling gross, credits, refunds, and net revenue. Governed metric: net_revenue. Owner: finance. See notion://notion_page_revenue_reporting_policy#gross-to-net-reconciliation."
