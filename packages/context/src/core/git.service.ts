@@ -31,6 +31,40 @@ export type SquashMergeResult =
   | { ok: true; squashSha: string; touchedPaths: string[] }
   | { ok: false; conflict: true; conflictPaths: string[] };
 
+function mergeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function extractUntrackedOverwritePaths(message: string): string[] {
+  const marker = 'The following untracked working tree files would be overwritten by merge:';
+  const markerIndex = message.indexOf(marker);
+  if (markerIndex === -1) {
+    return [];
+  }
+
+  const afterMarker = message.slice(markerIndex + marker.length);
+  const abortIndex = afterMarker.indexOf('Please move or remove them before you merge.');
+  const pathBlock = abortIndex === -1 ? afterMarker : afterMarker.slice(0, abortIndex);
+  return pathBlock
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && line !== 'Aborting')
+    .map((line) => line.replace(/^"(.+)"$/, '$1'));
+}
+
+function mergeConflictPaths(unmergedPaths: string[], mergeError: unknown): string[] {
+  const paths = new Set(unmergedPaths);
+  if (mergeError !== null) {
+    for (const path of extractUntrackedOverwritePaths(mergeErrorMessage(mergeError))) {
+      paths.add(path);
+    }
+  }
+  return [...paths];
+}
+
 export class GitService {
   private static readonly mutationQueues = new Map<string, Promise<void>>();
 
@@ -639,10 +673,11 @@ export class GitService {
     }
 
     const unmergedOut = await this.git.raw(['diff', '--name-only', '--diff-filter=U']).catch(() => '');
-    const conflictPaths = unmergedOut
+    const unmergedPaths = unmergedOut
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean);
+    const conflictPaths = mergeConflictPaths(unmergedPaths, mergeError);
 
     if (conflictPaths.length > 0 || mergeError !== null) {
       // `merge --abort` only works for an in-progress merge; squash sets MERGE_MSG but not
@@ -651,7 +686,7 @@ export class GitService {
       await this.git.raw(['reset', '--hard', 'HEAD']).catch(() => undefined);
       this.logger.warn(
         `squashMergeIntoMain: conflict merging ${branch} — aborted. conflictPaths=${conflictPaths.join(',')}` +
-          (mergeError ? ` error=${mergeError instanceof Error ? mergeError.message : String(mergeError)}` : ''),
+          (mergeError ? ` error=${mergeErrorMessage(mergeError)}` : ''),
       );
       return { ok: false, conflict: true, conflictPaths };
     }
