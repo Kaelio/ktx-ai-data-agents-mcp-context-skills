@@ -498,6 +498,31 @@ describe('local ingest adapters', () => {
     await expect(adapter?.listTargetConnectionIds?.('/tmp/staged-dbt')).resolves.toEqual(['warehouse']);
   });
 
+  it('passes primary warehouse connection ids to the local Notion adapter', async () => {
+    const adapters = createDefaultLocalIngestAdapters(
+      projectWithConnections({
+        notion: {
+          driver: 'notion',
+          auth_token: 'secret',
+          crawl_mode: 'selected_roots',
+          root_page_ids: ['page-1'],
+        },
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgresql://readonly@db.example.test/analytics',
+        },
+        docs: {
+          driver: 'dbt',
+          source_dir: './dbt',
+        },
+      } as never),
+    );
+
+    const notion = adapters.find((adapter) => adapter.source === 'notion');
+
+    await expect(notion?.listTargetConnectionIds?.('/tmp/staged-notion')).resolves.toEqual(['warehouse']);
+  });
+
   it('resolves MetricFlow auth_token_ref without writing literal tokens to config', async () => {
     const project = projectWithConnections({
       metricflow_main: {

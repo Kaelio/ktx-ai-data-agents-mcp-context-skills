@@ -32,6 +32,11 @@ interface NotionPullSucceededContext {
 export interface NotionSourceAdapterDeps {
   onPullSucceeded?: (ctx: NotionPullSucceededContext) => Promise<void>;
   logger?: NotionFetchLogger;
+  targetConnectionIds?: string[];
+}
+
+function uniqueSorted(values: readonly string[] | undefined): string[] {
+  return [...new Set(values ?? [])].sort((left, right) => left.localeCompare(right));
 }
 
 export class NotionSourceAdapter implements SourceAdapter {
@@ -71,6 +76,10 @@ export class NotionSourceAdapter implements SourceAdapter {
 
   describeScope(stagedDir: string): Promise<ScopeDescriptor> {
     return describeNotionScope(stagedDir);
+  }
+
+  async listTargetConnectionIds(_stagedDir: string): Promise<string[]> {
+    return uniqueSorted(this.deps.targetConnectionIds);
   }
 
   async getTriageSignals(stagedDir: string, externalId: string): Promise<TriageSignals> {

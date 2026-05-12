@@ -108,6 +108,7 @@ export function createDefaultLocalIngestAdapters(
     }),
     new MetricflowSourceAdapter({ homeDir: join(project.projectDir, '.ktx/cache') }),
     new NotionSourceAdapter({
+      targetConnectionIds: primaryWarehouseConnectionIds(project),
       ...(options.logger ? { logger: options.logger } : {}),
     }),
   ];

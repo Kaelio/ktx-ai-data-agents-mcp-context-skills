@@ -52,6 +52,14 @@ describe('NotionSourceAdapter', () => {
     expect(adapter.triageSupported).toBe(true);
   });
 
+  it('returns configured target warehouse connection ids', async () => {
+    const adapter = new NotionSourceAdapter({
+      targetConnectionIds: ['warehouse', 'warehouse', 'analytics'],
+    });
+
+    await expect(adapter.listTargetConnectionIds?.(stagedDir)).resolves.toEqual(['analytics', 'warehouse']);
+  });
+
   it('returns structural triage signals for a staged Notion page', async () => {
     await mkdir(join(stagedDir, 'pages', 'page-1'), { recursive: true });
     await writeFile(
