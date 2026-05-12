@@ -61,7 +61,7 @@ describe('runKtxKnowledge', () => {
         {
           command: 'write',
           projectDir,
-          key: 'metrics/revenue',
+          key: 'metrics-revenue',
           scope: 'GLOBAL',
           userId: 'local',
           summary: 'Revenue',
@@ -73,24 +73,53 @@ describe('runKtxKnowledge', () => {
         writeIo.io,
       ),
     ).resolves.toBe(0);
-    expect(writeIo.stdout()).toContain('Wrote knowledge/global/metrics/revenue.md');
+    expect(writeIo.stdout()).toContain('Wrote knowledge/global/metrics-revenue.md');
 
     const readIo = makeIo();
     await expect(
-      runKtxKnowledge({ command: 'read', projectDir, key: 'metrics/revenue', userId: 'local' }, readIo.io),
+      runKtxKnowledge({ command: 'read', projectDir, key: 'metrics-revenue', userId: 'local' }, readIo.io),
     ).resolves.toBe(0);
-    expect(readIo.stdout()).toContain('# metrics/revenue');
+    expect(readIo.stdout()).toContain('# metrics-revenue');
     expect(readIo.stdout()).toContain('Revenue is paid order value.');
 
     const listIo = makeIo();
     await expect(runKtxKnowledge({ command: 'list', projectDir, userId: 'local' }, listIo.io)).resolves.toBe(0);
-    expect(listIo.stdout()).toContain('GLOBAL\tmetrics/revenue\tRevenue');
+    expect(listIo.stdout()).toContain('GLOBAL\tmetrics-revenue\tRevenue');
 
     const searchIo = makeIo();
     await expect(
       runKtxKnowledge({ command: 'search', projectDir, query: 'paid order', userId: 'local' }, searchIo.io),
     ).resolves.toBe(0);
-    expect(searchIo.stdout()).toContain('metrics/revenue');
+    expect(searchIo.stdout()).toContain('metrics-revenue');
+  });
+
+  it('rejects slash-delimited write keys with a flat-key suggestion', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+
+    const writeIo = makeIo();
+    await expect(
+      runKtxKnowledge(
+        {
+          command: 'write',
+          projectDir,
+          key: 'orbit/company-overview',
+          scope: 'GLOBAL',
+          userId: 'local',
+          summary: 'Orbit',
+          content: 'Orbit overview.',
+          tags: [],
+          refs: [],
+          slRefs: [],
+        },
+        writeIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(writeIo.stderr()).toContain(
+      'Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".',
+    );
+    expect(writeIo.stdout()).toBe('');
   });
 
   it('explains empty search results for a project without wiki pages', async () => {
@@ -116,7 +145,7 @@ describe('runKtxKnowledge', () => {
         {
           command: 'write',
           projectDir,
-          key: 'historic-sql/active-contract-arr-open-tickets',
+          key: 'active-contract-arr-open-tickets',
           scope: 'GLOBAL',
           userId: 'local',
           summary: 'Active Contract ARR Ranked by Open Support Ticket Count',
@@ -138,7 +167,7 @@ describe('runKtxKnowledge', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(searchIo.stdout()).toContain('historic-sql/active-contract-arr-open-tickets');
+    expect(searchIo.stdout()).toContain('active-contract-arr-open-tickets');
     expect(searchIo.stderr()).toBe('');
   });
 });

@@ -58,12 +58,9 @@ function commandLines(commands: ReadonlyArray<{ command: string; description: st
 
 export function formatNextStepLines(indent = '  '): string[] {
   return [
-    `${indent}KTX context is ready for agents.`,
-    `${indent}Preferred route: CLI + Skills; installed rules call the pinned local CLI directly, so no MCP server is required.`,
-    `${indent}Direct CLI checks:`,
+    `${indent}KTX context is ready for agents. Open your coding agent in this directory and ask a data question.`,
+    `${indent}Verify with:`,
     ...commandLines(KTX_NEXT_STEP_DIRECT_COMMANDS, indent),
-    `${indent}Optional MCP:`,
-    ...commandLines(KTX_NEXT_STEP_MCP_COMMANDS, indent),
   ];
 }
 

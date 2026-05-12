@@ -117,7 +117,7 @@ describe('NotionSourceAdapter', () => {
         continuedFromCursor: false,
         partialSnapshot: true,
         maxPagesPerRun: 1,
-        maxKnowledgeCreatesPerRun: 5,
+        maxKnowledgeCreatesPerRun: 25,
         maxKnowledgeUpdatesPerRun: 20,
         skipped: [],
         warnings: ['maxPagesPerRun reached at 1'],
@@ -167,7 +167,7 @@ describe('NotionSourceAdapter', () => {
         continuedFromCursor: true,
         partialSnapshot: true,
         maxPagesPerRun: 100,
-        maxKnowledgeCreatesPerRun: 5,
+        maxKnowledgeCreatesPerRun: 25,
         maxKnowledgeUpdatesPerRun: 20,
         nextSuccessfulCursor: null,
         skipped: [],
@@ -218,7 +218,7 @@ describe('NotionSourceAdapter', () => {
         continuedFromCursor: false,
         partialSnapshot: false,
         maxPagesPerRun: 100,
-        maxKnowledgeCreatesPerRun: 5,
+        maxKnowledgeCreatesPerRun: 25,
         maxKnowledgeUpdatesPerRun: 20,
         skipped: [],
         warnings: [],
@@ -241,11 +241,56 @@ describe('NotionSourceAdapter', () => {
       dependencyPaths: ['manifest.json', 'pages/page-1/blocks.json'],
     });
     expect(result.workUnits[0].notes).toContain('Synthesize durable wiki and SL knowledge');
+    expect(result.workUnits[0].notes).toContain('emit_unmapped_fallback');
+    expect(result.workUnits[0].notes).toContain('use reason no_physical_table rather than no_connection_mapping');
+    expect(result.workUnits[0].notes).toContain('Do not create SL sources under the Notion connection');
+    expect(result.workUnits[0].notes).toContain(
+      'Wiki keys must be flat slugs like orbit-company-overview, not orbit/company-overview',
+    );
     expect(result.reconcileNotes).toEqual([
-      'Notion maxKnowledgeCreatesPerRun=5',
+      'Notion maxKnowledgeCreatesPerRun=25',
       'Notion maxKnowledgeUpdatesPerRun=20',
+      'Notion dataSourceCount is Notion-only; use sl_discover for warehouse/dbt mapping decisions.',
+      'Reconcile Notion wiki pages sharing tables/sl_refs before creating distinct artifacts.',
     ]);
     expect(result.contextReport).toEqual({ capped: false, warnings: [NOTION_ORG_KNOWLEDGE_WARNING] });
+  });
+
+  it('chunks retried pages when failed provenance makes unchanged raw files look added again', async () => {
+    await writeFile(
+      join(stagedDir, 'manifest.json'),
+      JSON.stringify({
+        source: 'notion',
+        apiVersion: '2026-03-11',
+        crawlMode: 'selected_roots',
+        rootPageIds: ['page-1'],
+        rootDatabaseIds: [],
+        rootDataSourceIds: [],
+        fetchedAt: '2026-04-28T00:00:00.000Z',
+        pageCount: 1,
+        databaseCount: 0,
+        dataSourceCount: 0,
+        capped: false,
+        continuedFromCursor: false,
+        partialSnapshot: false,
+        maxPagesPerRun: 100,
+        maxKnowledgeCreatesPerRun: 25,
+        maxKnowledgeUpdatesPerRun: 20,
+        skipped: [],
+        warnings: [],
+      }),
+      'utf-8',
+    );
+    await writePage('page-1', 'Retry Me');
+
+    const result = await adapter.chunk(stagedDir, {
+      added: ['pages/page-1/metadata.json', 'pages/page-1/page.md'],
+      modified: [],
+      deleted: [],
+      unchanged: ['manifest.json', 'pages/page-1/blocks.json'],
+    });
+
+    expect(result.workUnits.map((workUnit) => workUnit.unitKey)).toEqual(['notion-page-page-1']);
   });
 
   it('reports malformed manifests with a Notion-specific error', async () => {

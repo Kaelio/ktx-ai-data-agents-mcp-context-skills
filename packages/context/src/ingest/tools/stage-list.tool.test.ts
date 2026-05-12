@@ -19,7 +19,14 @@ describe('stage_list tool', () => {
             unitKey: 'u2',
             rawFiles: ['b.yml'],
             status: 'success',
-            actions: [{ target: 'wiki', type: 'created', key: 'page_b', detail: '' }],
+            actions: [
+              {
+                target: 'wiki',
+                type: 'created',
+                key: 'page_b',
+                detail: 'tables: orbit_analytics.customer',
+              },
+            ],
             touchedSlSources: [],
           },
         ],
@@ -36,6 +43,7 @@ describe('stage_list tool', () => {
     expect(out).toContain('src_a');
     expect(out).toContain('u2');
     expect(out).toContain('page_b');
+    expect(out).toContain('tables: orbit_analytics.customer');
   });
 
   it('says empty when no writes', async () => {

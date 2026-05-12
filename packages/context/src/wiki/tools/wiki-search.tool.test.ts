@@ -6,8 +6,8 @@ describe('WikiSearchTool', () => {
     const search = vi.fn(async () => ({
       results: [
         {
-          key: 'metrics/revenue',
-          path: 'knowledge/global/metrics/revenue.md',
+          key: 'metrics-revenue',
+          path: 'knowledge/global/metrics-revenue.md',
           scope: 'GLOBAL' as const,
           summary: 'Revenue metric definition',
           score: 0.02459016393442623,
@@ -27,8 +27,8 @@ describe('WikiSearchTool', () => {
     expect(result.structured).toEqual({
       results: [
         {
-          blockKey: 'metrics/revenue',
-          path: 'knowledge/global/metrics/revenue.md',
+          blockKey: 'metrics-revenue',
+          path: 'knowledge/global/metrics-revenue.md',
           summary: 'Revenue metric definition',
           score: 0.02459016393442623,
           matchReasons: ['lexical', 'token'],
@@ -36,6 +36,6 @@ describe('WikiSearchTool', () => {
       ],
       totalFound: 1,
     });
-    expect(result.markdown).toContain('**metrics/revenue**');
+    expect(result.markdown).toContain('**metrics-revenue**');
   });
 });

@@ -76,7 +76,7 @@ When `targetTable.ok === true`, the explore has a complete KTX backing target. B
 
 1. Use `targetTable.catalog`, `targetTable.schema`, and `targetTable.name` for `source_tables` preflight matching through `sl_discover` or `sl_read_source`.
 2. Use Looker field `sql`, labels, descriptions, and type metadata to derive source columns, measures, segments, joins, and grain.
-3. Call `sl_write_source` or `sl_edit_source` with `connectionId: targetWarehouseConnectionId`.
+3. Call `sl_write_source` or `sl_edit_source` with `connectionId: targetWarehouseConnectionId` and `rawPaths` set to the staged explore path.
 4. Set `source.name` to the deterministic API-derived source key, for example `looker__b2b__sales_pipeline`.
 5. Set `source.table` to `targetTable.canonicalTable`.
 6. Run `sl_validate` after every SL write.
@@ -85,13 +85,13 @@ The `table` field is `targetTable.canonicalTable`, not `rawSqlTableName`. Raw Lo
 
 Use `targetTable.{catalog,schema,name}` only for source_tables preflight. Do not put those tuple fields separately into the SL source unless the SL schema already asks for them.
 
-When `targetTable.ok === false`, keep the WU wiki-only for SL purposes. Capture durable domain semantics with `context_candidate_write`, then emit a fallback with the EXACT structured `reason` code from `targetTable.reason`. Put any human-readable context in `detail`, NOT in `reason`:
+When `targetTable.ok === false`, keep the WU wiki-only for SL purposes. Capture durable domain semantics with `context_candidate_write`, then emit a fallback with the EXACT structured `reason` code from `targetTable.reason`. Put any human-readable context in `clarification`, NOT in `reason`:
 
 ```json
 {
   "rawPath": "explores/b2b/sales_pipeline.json",
   "reason": "no_connection_mapping",
-  "detail": "Looker connection b2b_sandbox_bq is not mapped to a warehouse connection",
+  "clarification": "Looker connection b2b_sandbox_bq is not mapped to a warehouse connection",
   "fallback": "wiki_only"
 }
 ```

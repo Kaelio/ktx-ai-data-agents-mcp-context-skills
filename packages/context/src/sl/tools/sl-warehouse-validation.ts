@@ -4,6 +4,7 @@ import { SYSTEM_GIT_AUTHOR } from '../../tools/index.js';
 import type { SlConnectionCatalogPort, SlSourcesIndexPort } from '../ports.js';
 import { sourceOverlaySchema } from '../schemas.js';
 import { SemanticLayerService } from '../semantic-layer.service.js';
+import type { SemanticLayerSource } from '../types.js';
 import { sourceDefinitionSchema } from './base-semantic-layer.tool.js';
 
 export interface SlValidationDeps {
@@ -116,6 +117,14 @@ export async function validateSingleSource(
       );
     }
     return { errors, warnings };
+  }
+
+  if (!isOverlay && 'table' in result.data && result.data.table) {
+    errors.push(
+      ...(await deps.semanticLayerService.validatePhysicalTableReferences(connectionId, [
+        result.data as SemanticLayerSource,
+      ])),
+    );
   }
 
   const measures = (parsed.measures as Array<{ name: string }> | undefined) ?? [];

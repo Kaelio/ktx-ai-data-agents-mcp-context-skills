@@ -148,6 +148,7 @@ describe('reconciliation emit tools', () => {
       {
         rawPath: 'metrics/conversion.yml',
         reason: 'no_physical_table',
+        detail: expect.stringContaining('not present as a source'),
         fallback: 'flagged',
       },
     ]);
@@ -175,6 +176,7 @@ describe('reconciliation emit tools', () => {
       {
         rawPath: 'metrics/conversion.yml',
         reason: 'no_physical_table',
+        detail: expect.stringContaining('not present as a source'),
         fallback: 'flagged',
       },
     ]);
@@ -195,6 +197,27 @@ describe('reconciliation emit tools', () => {
 
     expect(output).toContain(
       'Error: rawPath "metrics/not-in-this-work-unit.yml" is not available to this ingest stage',
+    );
+    expect(stageIndex.unmappedFallbacks).toEqual([]);
+  });
+
+  it('rejects missing-table fallback decisions when the table resolves to an existing semantic source', async () => {
+    const stageIndex = makeStageIndex();
+    const tool = createEmitUnmappedFallbackTool({
+      stageIndex,
+      allowedPaths: new Set(['cards/revenue.json']),
+      tableRefExists: async (tableRef) => tableRef === 'orbit_analytics.mart_revenue_daily',
+    });
+
+    const output = await executeTool(tool, {
+      rawPath: 'cards/revenue.json',
+      reason: 'no_physical_table',
+      tableRef: 'orbit_analytics.mart_revenue_daily',
+      fallback: 'wiki_only',
+    });
+
+    expect(output).toContain(
+      'Error: tableRef "orbit_analytics.mart_revenue_daily" already resolves to a semantic source',
     );
     expect(stageIndex.unmappedFallbacks).toEqual([]);
   });

@@ -433,6 +433,11 @@ function setupRuntimeInstallPolicy(args: Extract<KtxSetupArgs, { command: 'run' 
   return args.inputMode === 'disabled' ? 'never' : 'prompt';
 }
 
+async function commitSetupConfigChanges(projectDir: string): Promise<void> {
+  const project = await loadKtxProject({ projectDir });
+  await project.git.commitFile('ktx.yaml', 'setup: update KTX project config', 'ktx setup', 'setup@ktx.local');
+}
+
 export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
   try {
     return await runKtxSetupInner(args, io, deps);
@@ -772,6 +777,8 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
 
     break;
   }
+
+  await commitSetupConfigChanges(projectResult.projectDir);
 
   const status = await readKtxSetupStatus(projectResult.projectDir);
   io.stdout.write(formatKtxSetupStatus(status));

@@ -3,8 +3,9 @@ import type { KnowledgeIndexPort } from '../ports.js';
 import type { KnowledgeEventPort } from '../ports.js';
 type BlockScope = 'GLOBAL' | 'USER';
 import { KnowledgeWikiService, type WikiFrontmatter } from '../index.js';
+import { validateFlatWikiKey } from '../keys.js';
 import { applySqlEdits } from '../../tools/sql-edit-replacer.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
 
 const MAX_USER_BLOCKS = 100;
 const SYSTEM_AUTHOR = 'System User';
@@ -37,6 +38,10 @@ const wikiWriteInputSchema = z.object({
   representative_sql: z.string().optional(),
   usage: historicSqlUsageFrontmatterSchema.optional(),
   fingerprints: z.array(z.string()).optional(),
+  rawPaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('In ingest sessions, raw source file paths that directly support this wiki action.'),
 });
 
 type WikiWriteInput = z.infer<typeof wikiWriteInputSchema>;
@@ -45,6 +50,7 @@ interface WikiWriteStructured {
   success: boolean;
   key: string;
   action?: 'created' | 'updated';
+  content?: string;
 }
 
 function looksLikeEscapedMarkdown(content: string): boolean {
@@ -63,6 +69,71 @@ function normalizeAccidentalEscapedMarkdownNewlines(content: string): string {
   return content.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n');
 }
 
+function isWikiPageKeyRef(ref: string): boolean {
+  return /^[a-z0-9][a-z0-9_-]*(?:-[a-z0-9_]+)*$/.test(ref);
+}
+
+function extractInlineWikiRefs(content: string): string[] {
+  const refs = new Set<string>();
+  const re = /\[\[([^\]\n]+)\]\]/g;
+  for (const match of content.matchAll(re)) {
+    const target = match[1]?.split('|', 1)[0]?.trim();
+    if (target && isWikiPageKeyRef(target)) {
+      refs.add(target);
+    }
+  }
+  return [...refs].sort();
+}
+
+async function visibleWikiPageKeys(
+  wikiService: KnowledgeWikiService,
+  scope: BlockScope,
+  scopeId: string | null,
+): Promise<Set<string>> {
+  const keys = new Set<string>();
+  if (scope === 'USER') {
+    for (const key of await wikiService.listPageKeys('GLOBAL', null)) {
+      keys.add(key);
+    }
+    for (const key of await wikiService.listPageKeys('USER', scopeId)) {
+      keys.add(key);
+    }
+    return keys;
+  }
+
+  for (const key of await wikiService.listPageKeys('GLOBAL', null)) {
+    keys.add(key);
+  }
+  return keys;
+}
+
+async function findMissingWikiRefs(input: {
+  wikiService: KnowledgeWikiService;
+  scope: BlockScope;
+  scopeId: string | null;
+  pageKey: string;
+  refs?: string[];
+  content: string;
+}): Promise<string[]> {
+  const candidates = new Set<string>();
+  for (const ref of input.refs ?? []) {
+    if (isWikiPageKeyRef(ref)) {
+      candidates.add(ref);
+    }
+  }
+  for (const ref of extractInlineWikiRefs(input.content)) {
+    candidates.add(ref);
+  }
+
+  if (candidates.size === 0) {
+    return [];
+  }
+
+  const available = await visibleWikiPageKeys(input.wikiService, input.scope, input.scopeId);
+  available.add(input.pageKey);
+  return [...candidates].filter((ref) => !available.has(ref)).sort();
+}
+
 export class WikiWriteTool extends BaseTool<typeof wikiWriteInputSchema> {
   readonly name = 'wiki_write';
 
@@ -77,6 +148,7 @@ export class WikiWriteTool extends BaseTool<typeof wikiWriteInputSchema> {
   get description(): string {
     return `<purpose>
 Create or update a knowledge page. Provide content for create/rewrite, or replacements for targeted edits.
+For existing pages, you may provide only frontmatter fields such as summary, tags, refs, or sl_refs to update metadata while preserving content.
 tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to clear, [values] to set.
 </purpose>`;
   }
@@ -89,10 +161,17 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
     const wikiService = context.session?.wikiService ?? this.wikiService;
     const writesGlobal = !!context.session;
     const skipIndex = context.session?.isWorktreeScoped === true;
-
-    if (!input.content && (!input.replacements || input.replacements.length === 0)) {
+    const keyValidation = validateFlatWikiKey(input.key);
+    if (!keyValidation.ok) {
       return {
-        markdown: 'Error: provide either content (for create/rewrite) or replacements (for edits).',
+        markdown: keyValidation.error,
+        structured: { success: false, key: input.key },
+      };
+    }
+    const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
+    if (!rawPathValidation.ok) {
+      return {
+        markdown: `Error: ${rawPathValidation.error}`,
         structured: { success: false, key: input.key },
       };
     }
@@ -100,6 +179,16 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
     const scope: BlockScope = writesGlobal ? 'GLOBAL' : 'USER';
     const scopeId = scope === 'USER' ? context.userId : null;
     const existing = await wikiService.readPage(scope, scopeId, input.key);
+
+    const content = input.content;
+    const hasContent = typeof content === 'string' && content.length > 0;
+    const hasReplacements = !!input.replacements && input.replacements.length > 0;
+    if (!existing && !hasContent && !hasReplacements) {
+      return {
+        markdown: 'Error: provide either content (for create/rewrite) or replacements (for edits).',
+        structured: { success: false, key: input.key },
+      };
+    }
 
     if (!existing && !input.content) {
       return {
@@ -140,9 +229,9 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
       fingerprints: input.fingerprints === undefined ? existingFm?.fingerprints : input.fingerprints,
     };
 
-    if (input.content) {
-      finalContent = normalizeAccidentalEscapedMarkdownNewlines(input.content);
-    } else {
+    if (hasContent) {
+      finalContent = normalizeAccidentalEscapedMarkdownNewlines(content);
+    } else if (hasReplacements) {
       const editResult = applySqlEdits(existing?.content ?? '', input.replacements ?? []);
       if (!editResult.success) {
         return {
@@ -151,6 +240,25 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
         };
       }
       finalContent = editResult.sql;
+    } else {
+      finalContent = existing?.content ?? '';
+    }
+
+    const missingRefs = await findMissingWikiRefs({
+      wikiService,
+      scope,
+      scopeId,
+      pageKey: input.key,
+      refs: finalFm.refs,
+      content: finalContent,
+    });
+    if (missingRefs.length > 0) {
+      return {
+        markdown:
+          `Error: wiki references target missing page(s): ${missingRefs.join(', ')}. ` +
+          'Create those pages first, retarget the links, or remove the refs.',
+        structured: { success: false, key: input.key },
+      };
     }
 
     await wikiService.writePage(scope, scopeId, input.key, finalFm, finalContent, SYSTEM_AUTHOR, SYSTEM_EMAIL);
@@ -172,12 +280,26 @@ tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to 
 
     const action = existing ? 'updated' : 'created';
     if (context.session) {
-      context.session.actions.push({ target: 'wiki', type: action, key: input.key, detail: input.summary });
+      context.session.actions.push({
+        target: 'wiki',
+        type: action,
+        key: input.key,
+        detail: input.summary,
+        ...(rawPathValidation.rawPaths ? { rawPaths: rawPathValidation.rawPaths } : {}),
+      });
     }
 
+    // When the LLM used `replacements` (edit mode), it doesn't have the
+    // post-edit content cached. Returning the result here prevents the
+    // common bug where a follow-up edit uses an oldText string that no
+    // longer matches because a prior edit already changed the page.
+    const markdown = hasReplacements
+      ? `Page "${input.key}" ${action}.\n\nCurrent content (use for subsequent edits):\n\n${finalContent}`
+      : `Page "${input.key}" ${action}.`;
+
     return {
-      markdown: `Page "${input.key}" ${action}.`,
-      structured: { success: true, key: input.key, action },
+      markdown,
+      structured: { success: true, key: input.key, action, content: finalContent },
     };
   }
 }

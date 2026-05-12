@@ -1,4 +1,11 @@
 export { buildKnowledgeSearchText } from './knowledge-search-text.js';
+export {
+  assertFlatWikiKey,
+  invalidFlatWikiKeyMessage,
+  isFlatWikiKey,
+  suggestFlatWikiKey,
+  validateFlatWikiKey,
+} from './keys.js';
 export { KnowledgeWikiService } from './knowledge-wiki.service.js';
 export * from './local-knowledge.js';
 export type {

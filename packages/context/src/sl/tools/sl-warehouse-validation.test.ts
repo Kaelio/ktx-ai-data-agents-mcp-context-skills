@@ -9,6 +9,7 @@ function makeDeps(opts: { sourceYaml: string; executeQuery: ReturnType<typeof vi
       listManifestSourceNames: vi.fn().mockResolvedValue([]),
       loadSource: vi.fn().mockResolvedValue(null),
       loadAllSources: vi.fn().mockResolvedValue([]),
+      validatePhysicalTableReferences: vi.fn().mockResolvedValue([]),
     } as never,
     connections: {
       executeQuery: opts.executeQuery,
@@ -116,5 +117,30 @@ joins: []
     const probeSql = executeQuery.mock.calls[0][1] as string;
     expect(probeSql).toMatch(/LIMIT 1\b/);
     expect(probeSql).not.toMatch(/LIMIT 0\b/);
+  });
+
+  it('adds physical manifest errors for table-backed sources', async () => {
+    const yaml = `name: int_active_contract_arr
+table: orbit_analytics.int_active_contract_arr
+grain: [contract_id]
+columns:
+  - {name: contract_id, type: string}
+  - {name: arr_cents, type: number}
+measures:
+  - {name: arr, expr: sum(arr_cents)}
+joins: []
+`;
+    const executeQuery = vi.fn();
+    const deps = makeDeps({ sourceYaml: yaml, executeQuery }) as any;
+    deps.semanticLayerService.validatePhysicalTableReferences.mockResolvedValue([
+      'int_active_contract_arr.yaml: declared column(s) absent from physical table: arr_cents',
+    ]);
+
+    const result = await validateSingleSource(deps, 'conn-1', 'int_active_contract_arr');
+
+    expect(result.errors).toContain(
+      'int_active_contract_arr.yaml: declared column(s) absent from physical table: arr_cents',
+    );
+    expect(executeQuery).not.toHaveBeenCalled();
   });
 });

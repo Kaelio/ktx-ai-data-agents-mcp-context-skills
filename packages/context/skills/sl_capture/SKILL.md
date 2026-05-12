@@ -190,6 +190,7 @@ use it) without changing its SQL expression or filters.
 - **`sl_edit_source`** is the workhorse for additive changes: add a measure, add a join, tweak a description, replace a filter. Cheap, targeted, preserves the rest of the file.
 - **`sl_write_source`** is for brand-new sources or when the entire file needs restructuring. It overwrites the file completely.
 - Do NOT modify existing measures or their descriptions unless the current turn explicitly corrects them.
+- During bundle/external ingest, include `rawPaths` on every `sl_write_source`/`sl_edit_source` call with only the raw files that directly support the SL action.
 
 ## Worked example — additive overlay
 

@@ -186,6 +186,91 @@ describe('runKtxIngest viz and replay', () => {
     expect(io.stdout()).toContain('Connection: warehouse');
   });
 
+  it('prints live viz final summaries as errors when the report has failed work units', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const io = makeIo({ isTTY: true, stdinIsTTY: true, columns: 120 });
+    const liveSession = {
+      update: vi.fn(),
+      close: vi.fn(),
+      isClosed: vi.fn(() => false),
+    };
+    const startLiveMemoryFlow = vi.fn(async (_input: MemoryFlowReplayInput, _io: unknown) => liveSession);
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> => {
+      input.memoryFlow?.emit({ type: 'source_acquired', adapter: 'notion', trigger: 'manual_resync', fileCount: 37 });
+      input.memoryFlow?.update({
+        syncId: 'sync-notion',
+        plannedWorkUnits: [
+          {
+            unitKey: 'notion-cluster-1',
+            rawFiles: ['pages/a.md'],
+            peerFileCount: 0,
+            dependencyCount: 0,
+          },
+        ],
+      });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 });
+      input.memoryFlow?.emit({
+        type: 'work_unit_finished',
+        unitKey: 'notion-cluster-1',
+        status: 'failed',
+        reason: 'notion-cluster-1 failed: {"error":"invalid_grant","error_description":"reauth related error (invalid_rapt)"}',
+      });
+      input.memoryFlow?.emit({ type: 'report_created', runId: 'live-failed' });
+      input.memoryFlow?.finish('done');
+
+      const failedWorkUnit = {
+        ...localFakeBundleReport('live-failed').body.workUnits[0],
+        unitKey: 'notion-cluster-1',
+        rawFiles: ['pages/a.md'],
+        status: 'failed' as const,
+        reason: 'notion-cluster-1 failed: {"error":"invalid_grant","error_description":"reauth related error (invalid_rapt)"}',
+        actions: [],
+        touchedSlSources: [],
+      };
+      const report = localFakeBundleReport('live-failed', {
+        id: 'report-live-failed',
+        runId: 'run-live-failed',
+        connectionId: input.connectionId,
+        sourceKey: input.adapter,
+        body: {
+          workUnits: [failedWorkUnit],
+          failedWorkUnits: [failedWorkUnit.unitKey],
+        },
+      });
+      return {
+        result: {
+          jobId: 'live-failed',
+          runId: report.runId,
+          syncId: report.body.syncId,
+          diffSummary: report.body.diffSummary,
+          workUnitCount: report.body.workUnits.length,
+          failedWorkUnits: report.body.failedWorkUnits,
+          artifactsWritten: report.body.provenanceRows.length,
+          commitSha: report.body.commitSha,
+        },
+        report,
+      };
+    });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'notion-main',
+          adapter: 'notion',
+          outputMode: 'viz',
+        },
+        io.io,
+        { runLocalIngest: runLocal, startLiveMemoryFlow },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stdout()).toContain('Memory-flow summary: error');
+    expect(io.stdout()).toContain('Notion authorization expired');
+  });
+
   it('falls back to text live rendering when the TUI live session is unavailable', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);

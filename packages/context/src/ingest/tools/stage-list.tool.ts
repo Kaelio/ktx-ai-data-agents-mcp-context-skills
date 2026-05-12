@@ -6,6 +6,10 @@ export interface StageListDeps {
   stageIndex: StageIndex;
 }
 
+function formatActionDetail(detail: string): string {
+  return detail.trim().replace(/\s+/g, ' ');
+}
+
 export function createStageListTool(deps: StageListDeps) {
   return tool({
     description:
@@ -20,7 +24,14 @@ export function createStageListTool(deps: StageListDeps) {
           const actions =
             wu.actions.length === 0
               ? '  (no actions)'
-              : wu.actions.map((a) => `  - ${a.target}:${a.type} ${a.key}`).join('\n');
+              : wu.actions
+                  .map((a) => {
+                    const detail = formatActionDetail(a.detail);
+                    return detail.length > 0
+                      ? `  - ${a.target}:${a.type} ${a.key}; detail: ${detail}`
+                      : `  - ${a.target}:${a.type} ${a.key}`;
+                  })
+                  .join('\n');
           return `- unitKey: ${wu.unitKey} (status=${wu.status})\n  rawFiles: ${wu.rawFiles.join(', ') || '(none)'}\n  actions:\n${actions}`;
         })
         .join('\n');

@@ -16,6 +16,7 @@ export interface MemoryAction {
   key: string;
   detail: string;
   targetConnectionId?: string | null;
+  rawPaths?: string[];
 }
 
 interface EvictionDecisionRecord {
@@ -45,6 +46,7 @@ export interface ToolSession {
   preHead: string | null;
   touchedSlSources: TouchedSlSourceSet;
   actions: MemoryAction[];
+  allowedRawPaths?: ReadonlySet<string>;
   semanticLayerService: SemanticLayerService;
   wikiService: KnowledgeWikiService;
   configService: KtxFileStorePort;

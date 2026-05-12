@@ -10,11 +10,12 @@ Parsimonious. Stage 3 WUs already loaded `ingest_triage` and handled conflicts t
 1. Load `ingest_triage`, then `sl_capture` + `knowledge_capture`.
 2. Call `stage_list()` for the full index of this job's writes. If it is empty AND you have no evictions, exit — the runner short-circuits this case but the skill still teaches you to bail fast.
 3. If the system prompt includes `<canonical_pins>`, apply those pins before flagging a same-name or near-duplicate conflict. A pinned `canonicalArtifactKey` keeps the contested name when it is present in the Stage Index; competing variants keep or receive disambiguated names.
-4. For each pair of WUs that wrote overlapping SL source names or wiki keys, call `stage_diff` to see the actual difference. If they're the same content, leave it. If they differ per `ingest_triage` rules, apply the correct resolution (rename + capture; election of canonical; silent replace for expression-only re-ingest change; or pinned canonical), then call `emit_conflict_resolution` with the artifact key and decision.
-5. Call `eviction_list()` for deleted raw paths. For each eviction: if inbound refs are empty, remove the artifact (`sl_delete`, `wiki_remove`); if inbound refs exist, retain with a deprecation marker. Then call `emit_eviction_decision` for every removed or retained artifact.
-6. If the Stage 4 sweep discovers a raw file whose only honest outcome is standalone SQL, wiki-only capture, or a human flag, call `emit_unmapped_fallback` with the raw path, reason, and fallback kind.
-7. Use `read_raw_span` to zoom into specific raw files when you need to resolve what two contested measures actually compute.
-8. Exit when you've processed every item.
+4. Sweep both exact-key conflicts and near-duplicate writes. Compare WUs that wrote overlapping SL source names, overlapping wiki keys, the same `tables:` or `sl_refs:` action details, or obviously equivalent topic titles under different wiki keys. Call `stage_diff` to see the actual difference, and use `wiki_read`/`sl_read_source` when two different keys appear to describe the same table, metric, or source-of-truth mapping. If they're the same content, leave one canonical artifact and record the duplicate as subsumed. If they differ per `ingest_triage` rules, apply the correct resolution (rename + capture; election of canonical; silent replace for expression-only re-ingest change; or pinned canonical), then call `emit_conflict_resolution` with the artifact key and decision.
+5. For any `wiki_write`, `wiki_remove`, `sl_write_source`, or `sl_edit_source` call you make during reconciliation, include `rawPaths` with only the raw paths that directly caused that reconciliation action.
+6. Call `eviction_list()` for deleted raw paths. For each eviction: if inbound refs are empty, remove the artifact (`sl_delete`, `wiki_remove`) and include that evicted raw path in `rawPaths`; if inbound refs exist, retain with a deprecation marker and include that evicted raw path in `rawPaths`. Then call `emit_eviction_decision` for every removed or retained artifact.
+7. If the Stage 4 sweep discovers a raw file whose only honest outcome is standalone SQL, wiki-only capture, or a human flag, call `emit_unmapped_fallback` with the raw path, reason, and fallback kind.
+8. Use `read_raw_span` to zoom into specific raw files when you need to resolve what two contested measures or wiki pages actually describe.
+9. Exit when you've processed every item.
 </workflow>
 
 <scope>

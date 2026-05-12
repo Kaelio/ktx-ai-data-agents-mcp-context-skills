@@ -3,13 +3,18 @@ import type { KnowledgeIndexPort } from '../ports.js';
 import type { KnowledgeEventPort } from '../ports.js';
 type BlockScope = 'GLOBAL' | 'USER';
 import { KnowledgeWikiService } from '../index.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { validateFlatWikiKey } from '../keys.js';
+import { BaseTool, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
 
 const SYSTEM_AUTHOR = 'System User';
 const SYSTEM_EMAIL = 'system@example.com';
 
 const wikiRemoveInputSchema = z.object({
   key: z.string().describe('The page key to remove'),
+  rawPaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('In ingest sessions, raw source file paths that directly support this removal.'),
 });
 
 type WikiRemoveInput = z.infer<typeof wikiRemoveInputSchema>;
@@ -42,11 +47,27 @@ export class WikiRemoveTool extends BaseTool<typeof wikiRemoveInputSchema> {
     const wikiService = context.session?.wikiService ?? this.wikiService;
     const writesGlobal = !!context.session;
     const skipIndex = context.session?.isWorktreeScoped === true;
+    const keyValidation = validateFlatWikiKey(input.key);
+    if (!keyValidation.ok) {
+      return {
+        markdown: keyValidation.error,
+        structured: { success: false, key: input.key },
+      };
+    }
+    const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
+    if (!rawPathValidation.ok) {
+      return {
+        markdown: `Error: ${rawPathValidation.error}`,
+        structured: { success: false, key: input.key },
+      };
+    }
 
     const scope: BlockScope = writesGlobal ? 'GLOBAL' : 'USER';
     const scopeId = scope === 'USER' ? context.userId : null;
 
-    const existing = await this.pagesRepository.findPageByKey(scope, scopeId, input.key);
+    const existing = context.session
+      ? await wikiService.readPage(scope, scopeId, input.key)
+      : await this.pagesRepository.findPageByKey(scope, scopeId, input.key);
     if (!existing) {
       return {
         markdown: `Page "${input.key}" not found.`,
@@ -74,6 +95,7 @@ export class WikiRemoveTool extends BaseTool<typeof wikiRemoveInputSchema> {
         type: 'removed',
         key: input.key,
         detail: `Removed page "${input.key}"`,
+        ...(rawPathValidation.rawPaths ? { rawPaths: rawPathValidation.rawPaths } : {}),
       });
     }
 

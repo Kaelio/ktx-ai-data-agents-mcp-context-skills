@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import type { MemoryFlowReplayInput } from '@ktx/context/ingest/memory-flow';
 import { loadPackagedDemoReplay } from './demo-assets.js';
 import { DEMO_LATEST_REPLAY_FILE, loadLatestDemoReplay } from './demo-replay-store.js';
-import { KTX_NEXT_STEP_COMMANDS, KTX_NEXT_STEP_COMMAND_WIDTH } from './next-steps.js';
+import { KTX_NEXT_STEP_COMMAND_WIDTH, KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 
 type SeededInspectReadiness = 'missing' | 'ready' | 'corrupt';
 
@@ -178,7 +178,7 @@ function sourceBundleFromManifest(manifest: DemoSeededManifest): SeededInspectSu
 }
 
 function nextCommands(): SeededInspectSummary['nextCommands'] {
-  return [...KTX_NEXT_STEP_COMMANDS];
+  return [...KTX_NEXT_STEP_DIRECT_COMMANDS];
 }
 
 function modeMetadataFromReplay(replay: MemoryFlowReplayInput | null): SeededInspectSummary['modeMetadata'] {

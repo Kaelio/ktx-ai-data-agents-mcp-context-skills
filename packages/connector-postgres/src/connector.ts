@@ -91,6 +91,7 @@ interface KtxPostgresClient {
 interface KtxPostgresPool {
   connect(): Promise<KtxPostgresClient>;
   end(): Promise<void>;
+  on?(event: 'error', listener: (error: Error) => void): void;
 }
 
 export interface KtxPostgresPoolFactory {
@@ -359,6 +360,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
   private readonly now: () => Date;
   private readonly dialect = new KtxPostgresDialect();
   private pool: KtxPostgresPool | null = null;
+  private lastIdlePoolError: Error | null = null;
   private resolvedEndpoint: KtxPostgresResolvedEndpoint | null = null;
 
   constructor(options: KtxPostgresScanConnectorOptions) {
@@ -677,11 +679,15 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         config = { ...config, host: endpoint.host, port: endpoint.port };
       }
       this.pool = this.poolFactory.createPool(config);
+      this.pool.on?.('error', (error) => {
+        this.lastIdlePoolError = error;
+      });
     }
     return this.pool;
   }
 
   private async queryRaw<T>(sql: string, params?: unknown[]): Promise<T[]> {
+    this.throwIdlePoolErrorIfPresent();
     const pool = await this.getPool();
     const client = await pool.connect();
     try {
@@ -693,6 +699,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
   }
 
   private async query(sql: string, params?: Record<string, unknown> | unknown[]): Promise<KtxQueryResult> {
+    this.throwIdlePoolErrorIfPresent();
     const pool = await this.getPool();
     const client = await pool.connect();
     try {
@@ -713,5 +720,14 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
     if (connectionId !== this.connectionId) {
       throw new Error(`PostgreSQL connector ${this.connectionId} cannot run scan for ${connectionId}`);
     }
+  }
+
+  private throwIdlePoolErrorIfPresent(): void {
+    if (!this.lastIdlePoolError) {
+      return;
+    }
+    const error = this.lastIdlePoolError;
+    this.lastIdlePoolError = null;
+    throw error;
   }
 }

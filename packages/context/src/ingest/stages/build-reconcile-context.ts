@@ -104,6 +104,10 @@ function curatorPassStateSummary(runState?: ReconcilePromptRunState): string {
   ].join('\n');
 }
 
+function formatStageActionDetail(detail: string): string {
+  return detail.trim().replace(/\s+/g, ' ');
+}
+
 export function buildReconcileUserPrompt(
   stageIndex: StageIndex,
   ev: EvictionUnit | undefined,
@@ -119,7 +123,14 @@ export function buildReconcileUserPrompt(
             const actions =
               wu.actions.length === 0
                 ? '  actions: (none)'
-                : wu.actions.map((a) => `  - ${a.target}:${a.type} ${a.key}`).join('\n');
+                : wu.actions
+                    .map((a) => {
+                      const detail = formatStageActionDetail(a.detail);
+                      return detail.length > 0
+                        ? `  - ${a.target}:${a.type} ${a.key}; detail: ${detail}`
+                        : `  - ${a.target}:${a.type} ${a.key}`;
+                    })
+                    .join('\n');
             return `- unitKey: ${wu.unitKey} (status=${wu.status})\n${actions}`;
           })
           .join('\n');

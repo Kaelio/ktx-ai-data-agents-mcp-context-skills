@@ -215,6 +215,47 @@ describe('setup context build state', () => {
     expect(io.stdout()).toContain('KTX context is ready for agents.');
   });
 
+  it('records only failed sources as retryable when the context build fails', async () => {
+    await writeReadyProject(tempDir);
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async (_project, _args, _io, hooks) => {
+      hooks.onSourceProgress?.([
+        { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 1000 },
+        { connectionId: 'docs', operation: 'source-ingest', status: 'failed', elapsedMs: 2000 },
+      ]);
+      return {
+        exitCode: 1,
+        detached: false,
+        reportIds: ['report-docs-failed'],
+        artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
+      };
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        {
+          runIdFactory: () => 'setup-context-local-failed',
+          now: () => new Date('2026-05-09T10:00:00.000Z'),
+          runContextBuild: runContextBuildMock,
+        },
+      ),
+    ).resolves.toEqual({ status: 'failed', projectDir: tempDir });
+
+    await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
+      runId: 'setup-context-local-failed',
+      status: 'failed',
+      reportIds: ['report-docs-failed'],
+      artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
+      retryableFailedTargets: ['docs'],
+      sourceProgress: [
+        { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 1000 },
+        { connectionId: 'docs', operation: 'source-ingest', status: 'failed', elapsedMs: 2000 },
+      ],
+    });
+  });
+
   it('marks context complete without prompting when initial source ingest already made agent context', async () => {
     await writeReadyProject(tempDir);
     await mkdir(join(tempDir, 'semantic-layer', 'dbt-main'), { recursive: true });

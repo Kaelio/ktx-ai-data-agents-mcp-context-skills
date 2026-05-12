@@ -211,6 +211,66 @@ describe('setup sources step', () => {
     expect(runMapping).toHaveBeenCalledWith(projectDir, 'prod_metabase', io.io);
   });
 
+  it('writes Notion config with the full default knowledge create budget', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=1' }));
+
+    await expect(
+      runKtxSetupSourcesStep(
+        {
+          projectDir,
+          inputMode: 'disabled',
+          source: 'notion',
+          sourceConnectionId: 'notion-main',
+          sourceApiKeyRef: 'env:NOTION_TOKEN',
+          notionCrawlMode: 'selected_roots',
+          notionRootPageIds: ['page-1'],
+          runInitialSourceIngest: false,
+          skipSources: false,
+        },
+        makeIo().io,
+        { validateNotion },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      root_page_ids: ['page-1'],
+      max_knowledge_creates_per_run: 25,
+      max_knowledge_updates_per_run: 20,
+    });
+  });
+
+  it('uses selected Notion roots when root page ids are provided even if crawl mode says all accessible', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=1' }));
+
+    await expect(
+      runKtxSetupSourcesStep(
+        {
+          projectDir,
+          inputMode: 'disabled',
+          source: 'notion',
+          sourceConnectionId: 'notion-main',
+          sourceApiKeyRef: 'env:NOTION_TOKEN',
+          notionCrawlMode: 'all_accessible',
+          notionRootPageIds: ['page-1'],
+          runInitialSourceIngest: false,
+          skipSources: false,
+        },
+        makeIo().io,
+        { validateNotion },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      root_page_ids: ['page-1'],
+      crawl_mode: 'selected_roots',
+    });
+  });
+
   it('defaults interactive Metabase and Looker source setup to the only warehouse connection', async () => {
     await addPrimarySource();
     const cases: Array<{

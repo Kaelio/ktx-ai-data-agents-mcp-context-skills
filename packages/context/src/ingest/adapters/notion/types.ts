@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const NOTION_API_VERSION = '2026-03-11';
 export const NOTION_SOURCE_KEY = 'notion';
+export const NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN = 25;
 
 export const notionPullConfigSchema = z.object({
   authToken: z.string().min(1),
@@ -10,7 +11,7 @@ export const notionPullConfigSchema = z.object({
   rootDatabaseIds: z.array(z.string().min(1)).default([]),
   rootDataSourceIds: z.array(z.string().min(1)).default([]),
   maxPagesPerRun: z.number().int().min(1).max(10_000).default(1000),
-  maxKnowledgeCreatesPerRun: z.number().int().min(0).max(25).default(5),
+  maxKnowledgeCreatesPerRun: z.number().int().min(0).max(25).default(NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN),
   maxKnowledgeUpdatesPerRun: z.number().int().min(0).max(100).default(20),
   lastSuccessfulCursor: z.string().nullable().default(null),
 });

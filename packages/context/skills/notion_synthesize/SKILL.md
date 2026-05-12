@@ -18,8 +18,8 @@ Each WorkUnit is either a single Notion page/span or a topical cluster of relate
 2. For each assigned page, call `read_raw_file`, or `read_raw_span` for oversized pages when the notes specify a span.
 3. Search `wiki_search` for existing pages that overlap the WorkUnit topics. Prefer updating an existing page over creating a duplicate.
 4. Use `context_evidence_search`, `context_evidence_read`, and `context_evidence_neighbors` to pull supporting chunks when indexed evidence is relevant. Pass `chunkId` and `documentId` values verbatim as returned by the evidence tools.
-5. Write durable business knowledge with `wiki_write`. Aim for a small number of high-quality pages per WorkUnit or cluster.
-6. When the Notion content defines a reusable dataset, metric, segment, join rule, source-of-truth mapping, or table with explicit columns, load `sl_capture`, discover existing sources first with `sl_discover` or `sl_read_source`, then use `sl_write_source` or `sl_edit_source`.
+5. Write durable business knowledge with `wiki_write`. Aim for a small number of high-quality pages per WorkUnit or cluster. Include `rawPaths` with the exact Notion raw files that support each page.
+6. When the Notion content defines a reusable dataset, metric, segment, join rule, source-of-truth mapping, or table with explicit columns, load `sl_capture`, discover existing sources first with `sl_discover` or `sl_read_source`, then use `sl_write_source` or `sl_edit_source` only for a confirmed mapped non-Notion target source. Include `rawPaths` with the exact Notion raw files that support the SL action. If no mapped target exists, call `emit_unmapped_fallback` and keep the content wiki-only.
 7. For every deleted raw path in the Eviction Set, call `eviction_list`, decide retention, then `context_eviction_decision_write`. Do this even when no wiki write is needed.
 
 ## What To Capture
@@ -46,6 +46,8 @@ Prefer fewer, stronger entries. Every wiki entry must cite at least one Notion p
 
 If a clustered WorkUnit includes several related pages, synthesize the shared rule or concept instead of writing one thin page per source. For oversized page spans, read only the assigned span unless the WorkUnit explicitly asks for neighboring context.
 
+Search existing wiki pages for the same `tables:` or `sl_refs:` frontmatter and for source-of-truth aliases before creating a new page. If an existing page already documents the same warehouse object or business concept, update it instead of creating a differently named duplicate.
+
 ## Citation Style
 
 ```md
@@ -61,9 +63,14 @@ If a clustered WorkUnit includes several related pages, synthesize the shared ru
 - Discover existing sources first with `sl_discover`; read existing source YAML before editing.
 - Prefer overlays on manifest-backed sources over standalone SQL.
 - If Notion describes a dashboard or metric but does not define executable logic, write a wiki page and attach `sl_refs` only after confirming the referenced source exists.
+- Notion `dataSourceCount` counts Notion databases/data sources only. It does not prove that a warehouse/dbt table has or lacks a mapped semantic-layer source.
+- Do not create SL sources under the Notion connection just because a page mentions a warehouse, dbt, Looker, or Metabase object. Use the mapped warehouse/source connection after discovery, or emit an unmapped fallback and write wiki-only.
+- Distinguish fallback reasons precisely: if a non-Notion warehouse/dbt connection exists but `sl_discover` cannot find the named table/source, use `no_physical_table`; reserve `no_connection_mapping` for cases where there is no plausible non-Notion target connection at all.
+- If `sl_discover` resolves the table/source, do not call `emit_unmapped_fallback` for that table. Use the resolved source for `sl_refs`, overlay edits, or wiki-only documentation.
+- When calling `emit_unmapped_fallback`, pass the table or source identifier as `tableRef` (e.g. `tableRef: "orbit_analytics.customer"`) — the tool generates the canonical detail string from the reason code and `tableRef`. Use the optional `clarification` field only to add context that does not contradict the reason. Do not restate the reason in `clarification`.
 
 ## Tools
 
-Allowed: `read_raw_file`, `read_raw_span`, `wiki_search`, `wiki_read`, `wiki_write`, `sl_discover`, `sl_read_source`, `sl_write_source`, `sl_edit_source`, `sl_validate`, `context_evidence_search`, `context_evidence_read`, `context_evidence_neighbors`, `eviction_list`, `context_eviction_decision_write`.
+Allowed: `read_raw_file`, `read_raw_span`, `wiki_search`, `wiki_read`, `wiki_write`, `sl_discover`, `sl_read_source`, `sl_write_source`, `sl_edit_source`, `sl_validate`, `context_evidence_search`, `context_evidence_read`, `context_evidence_neighbors`, `emit_unmapped_fallback`, `eviction_list`, `context_eviction_decision_write`.
 
 Not allowed: `context_candidate_write`, `context_candidate_mark`.

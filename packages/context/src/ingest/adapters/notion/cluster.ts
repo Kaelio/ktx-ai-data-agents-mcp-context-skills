@@ -8,6 +8,8 @@ import { notionMetadataSchema } from './types.js';
 export const MIN_PAGES_TO_CLUSTER = 5;
 const CLUSTER_TEXT_BODY_CHARS = 1024;
 const CLUSTER_SEED = 42;
+const NOTION_CLUSTER_SL_WRITE_GUIDANCE =
+  'Write wiki entries directly with wiki_write. Wiki keys must be flat slugs like orbit-company-overview, not orbit/company-overview. Search existing wiki pages for the same tables or sl_refs before creating a new page. Only write or edit SL sources after sl_discover/sl_read_source confirms a mapped non-Notion target source; if no mapped target exists, emit_unmapped_fallback and keep the fact wiki-only. Notion dataSourceCount counts Notion databases/data sources only, not warehouse/dbt mappings. If a warehouse/dbt connection exists but the named table or source is absent, use reason no_physical_table rather than no_connection_mapping. Do not create SL sources under the Notion connection just because a page mentions a warehouse table.';
 
 interface ClusterNotionWorkUnitsArgs {
   workUnits: WorkUnit[];
@@ -63,7 +65,7 @@ function mergeWorkUnits(bucket: WorkUnit[], clusterIndex: number): WorkUnit {
       `Synthesize durable wiki and SL knowledge from these ${bucket.length} related Notion pages. ` +
       'Read each page with read_raw_file (or read_raw_span for oversized pages). ' +
       'Search nearby evidence with context_evidence_search/_read/_neighbors when needed. ' +
-      'Write wiki entries directly with wiki_write and SL sources directly with sl_write_source. ' +
+      `${NOTION_CLUSTER_SL_WRITE_GUIDANCE} ` +
       'Do not call context_candidate_write.',
   };
 }
@@ -72,7 +74,7 @@ export async function clusterNotionWorkUnits(args: ClusterNotionWorkUnitsArgs): 
   const { workUnits, stagedDir, embedding } = args;
   if (workUnits.length < MIN_PAGES_TO_CLUSTER) return workUnits;
   const k = pickK(workUnits.length);
-  if (k <= 1) return workUnits;
+  if (k <= 1) return [mergeWorkUnits(workUnits, 0)];
   const texts = await Promise.all(workUnits.map((wu) => buildClusterText(wu, stagedDir)));
   let vectors: number[][];
   try {

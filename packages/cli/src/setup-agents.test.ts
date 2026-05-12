@@ -239,11 +239,11 @@ describe('setup agents', () => {
     const output = io.stdout();
     expect(output).toContain('Agent integration complete');
     expect(output).toContain('Claude Code');
-    expect(output).toContain('+ Skill installed');
+    expect(output).toContain('+ Skill installed — teaches your agent which KTX commands to run');
     expect(output).toContain('.claude/skills/ktx/SKILL.md');
-    expect(output).toContain('+ Rule installed');
+    expect(output).toContain('+ Rule installed — tells your agent when to use KTX');
     expect(output).toContain('.claude/rules/ktx.md');
-    expect(output).toContain('+ MCP config added');
+    expect(output).toContain('+ MCP config added — lets your agent talk to KTX over MCP');
     expect(output).toContain('.mcp.json');
   });
 
@@ -258,9 +258,9 @@ describe('setup agents', () => {
     );
 
     expect(summary).toContain('Cursor');
-    expect(summary).toContain('+ Rule installed');
+    expect(summary).toContain('+ Rule installed — tells your agent when to use KTX');
     expect(summary).toContain('.cursor/rules/ktx.mdc');
-    expect(summary).toContain('+ MCP config added');
+    expect(summary).toContain('+ MCP config added — lets your agent talk to KTX over MCP');
     expect(summary).toContain('.cursor/mcp.json');
     expect(summary).not.toContain(tempDir);
   });
@@ -280,9 +280,9 @@ describe('setup agents', () => {
     );
 
     expect(summary).toContain('Claude Code');
-    expect(summary).toContain('+ Skill installed');
-    expect(summary).toContain('+ Rule installed');
+    expect(summary).toContain('+ Skill installed — teaches your agent which KTX commands to run');
+    expect(summary).toContain('+ Rule installed — tells your agent when to use KTX');
     expect(summary).toContain('Codex');
-    expect(summary).toContain('+ MCP config added');
+    expect(summary).toContain('+ MCP config added — lets your agent talk to KTX over MCP');
   });
 });

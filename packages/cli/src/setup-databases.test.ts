@@ -532,8 +532,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
+        { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'continue', label: 'Continue setup' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -583,8 +583,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
+        { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'continue', label: 'Continue setup' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -618,8 +618,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
+        { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'continue', label: 'Continue setup' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -653,8 +653,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
+        { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'continue', label: 'Continue setup' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -696,8 +696,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
+        { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'continue', label: 'Continue setup' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -920,8 +920,18 @@ describe('setup databases step', () => {
         '│  ✓ Connection test passed',
         '│  Driver: PostgreSQL · Tables: 2',
         '│',
+      ].join('\n'),
+    );
+    expect(io.stdout()).toContain(
+      [
         '◇  Scanning postgres-warehouse',
-        '│  ✓ Structural scan completed',
+        '│  Running structural scan…',
+        '│',
+      ].join('\n'),
+    );
+    expect(io.stdout()).toContain(
+      [
+        '◇  Scan complete for postgres-warehouse',
         '│  Changes: 2 new tables',
         '│  Report: raw-sources/postgres-warehouse/live-database/.../scan-report.json',
         '│',
@@ -1009,7 +1019,7 @@ describe('setup databases step', () => {
     expect(config.connections['postgres-warehouse']).toMatchObject({
       schemas: ['orbit_analytics', 'orbit_raw'],
     });
-    expect(io.stdout()).toContain('Schemas: orbit_analytics, orbit_raw');
+    expect(io.stdout()).toContain('✓ orbit_analytics, orbit_raw');
   });
 
   it('auto-selects all discovered Postgres schemas in non-interactive setup', async () => {
@@ -1045,7 +1055,7 @@ describe('setup databases step', () => {
     expect(config.connections.warehouse).toMatchObject({
       schemas: ['orbit_analytics', 'orbit_raw', 'public'],
     });
-    expect(io.stdout()).toContain('Schemas: orbit_analytics, orbit_raw, public');
+    expect(io.stdout()).toContain('✓ orbit_analytics, orbit_raw, public');
   });
 
   it('adds one non-interactive Postgres URL connection, tests it, scans it, and marks databases complete', async () => {

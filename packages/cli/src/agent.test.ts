@@ -185,8 +185,8 @@ describe('runKtxAgent', () => {
       search: vi.fn(async () => ({
         results: [
           {
-            key: 'metrics/revenue',
-            path: 'knowledge/global/metrics/revenue.md',
+            key: 'metrics-revenue',
+            path: 'knowledge/global/metrics-revenue.md',
             scope: 'GLOBAL' as const,
             summary: 'Revenue metric definition',
             score: 0.02459016393442623,
@@ -207,8 +207,8 @@ describe('runKtxAgent', () => {
     expect(JSON.parse(io.stdout())).toEqual({
       results: [
         expect.objectContaining({
-          key: 'metrics/revenue',
-          path: 'knowledge/global/metrics/revenue.md',
+          key: 'metrics-revenue',
+          path: 'knowledge/global/metrics-revenue.md',
           matchReasons: ['lexical', 'token'],
         }),
       ],

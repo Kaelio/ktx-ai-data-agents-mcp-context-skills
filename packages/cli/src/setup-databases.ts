@@ -115,6 +115,56 @@ const DEFAULT_CONNECTION_IDS: Record<KtxSetupDatabaseDriver, string> = {
   snowflake: 'snowflake-warehouse',
 };
 
+interface ScopeDiscoverySpec {
+  noun: string;
+  nounPlural: string;
+  promptLabel: string;
+  configArrayField: string;
+  configSingleField: string;
+  defaultSelection: (values: string[]) => string[];
+}
+
+const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscoverySpec>> = {
+  postgres: {
+    noun: 'schema',
+    nounPlural: 'schemas',
+    promptLabel: 'PostgreSQL schemas',
+    configArrayField: 'schemas',
+    configSingleField: 'schema',
+    defaultSelection(schemas) {
+      const nonPublic = schemas.filter((s) => s !== 'public');
+      return nonPublic.length > 0 ? nonPublic : schemas;
+    },
+  },
+  sqlserver: {
+    noun: 'schema',
+    nounPlural: 'schemas',
+    promptLabel: 'SQL Server schemas',
+    configArrayField: 'schemas',
+    configSingleField: 'schema',
+    defaultSelection: (schemas) => schemas,
+  },
+  bigquery: {
+    noun: 'dataset',
+    nounPlural: 'datasets',
+    promptLabel: 'BigQuery datasets',
+    configArrayField: 'dataset_ids',
+    configSingleField: 'dataset_id',
+    defaultSelection: (datasets) => datasets,
+  },
+  snowflake: {
+    noun: 'schema',
+    nounPlural: 'schemas',
+    promptLabel: 'Snowflake schemas',
+    configArrayField: 'schema_names',
+    configSingleField: 'schema_name',
+    defaultSelection(schemas) {
+      const nonPublic = schemas.filter((s) => s !== 'PUBLIC');
+      return nonPublic.length > 0 ? nonPublic : schemas;
+    },
+  },
+};
+
 type UrlDriverType = Extract<KtxSetupDatabaseDriver, 'postgres' | 'mysql' | 'clickhouse' | 'sqlserver'>;
 
 const DRIVER_CONNECTION_DEFAULTS: Record<UrlDriverType, { port: string }> = {
@@ -263,16 +313,53 @@ async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Pr
 async function defaultListSchemas(projectDir: string, connectionId: string): Promise<string[]> {
   const project = await loadKtxProject({ projectDir });
   const connection = project.config.connections[connectionId];
-  const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('@ktx/connector-postgres');
-  if (!isKtxPostgresConnectionConfig(connection)) {
-    return [];
+  const driver = normalizeDriver(connection?.driver);
+
+  if (driver === 'postgres') {
+    const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('@ktx/connector-postgres');
+    if (!isKtxPostgresConnectionConfig(connection)) return [];
+    const connector = new KtxPostgresScanConnector({ connectionId, connection });
+    try {
+      return await connector.listSchemas();
+    } finally {
+      await connector.cleanup();
+    }
   }
-  const connector = new KtxPostgresScanConnector({ connectionId, connection });
-  try {
-    return await connector.listSchemas();
-  } finally {
-    await connector.cleanup();
+
+  if (driver === 'sqlserver') {
+    const { KtxSqlServerScanConnector, isKtxSqlServerConnectionConfig } = await import('@ktx/connector-sqlserver');
+    if (!isKtxSqlServerConnectionConfig(connection)) return [];
+    const connector = new KtxSqlServerScanConnector({ connectionId, connection });
+    try {
+      return await connector.listSchemas();
+    } finally {
+      await connector.cleanup();
+    }
   }
+
+  if (driver === 'bigquery') {
+    const { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig } = await import('@ktx/connector-bigquery');
+    if (!isKtxBigQueryConnectionConfig(connection)) return [];
+    const connector = new KtxBigQueryScanConnector({ connectionId, connection });
+    try {
+      return await connector.listDatasets();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'snowflake') {
+    const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('@ktx/connector-snowflake');
+    if (!isKtxSnowflakeConnectionConfig(connection)) return [];
+    const connector = new KtxSnowflakeScanConnector({ connectionId, connection });
+    try {
+      return await connector.listSchemas();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  return [];
 }
 
 function existingConnectionIdsByDriver(
@@ -309,8 +396,8 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
   return {
     message: `Primary sources already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
+      { value: 'continue', label: 'Continue to knowledge sources' },
       { value: 'add', label: 'Add another primary source' },
-      { value: 'continue', label: 'Continue setup' },
       { value: 'back', label: 'Back' },
     ],
   };
@@ -849,41 +936,44 @@ async function writeConnectionConfig(input: {
   }
 }
 
-function configuredSchemas(connection: KtxProjectConnectionConfig | undefined): string[] {
+function configuredScopeValues(
+  connection: KtxProjectConnectionConfig | undefined,
+  spec: ScopeDiscoverySpec,
+): string[] {
   if (!connection) return [];
-  if (Array.isArray(connection.schemas)) {
-    return connection.schemas
-      .filter((schema): schema is string => typeof schema === 'string' && schema.trim().length > 0)
-      .map((schema) => schema.trim());
+  const arrayVal = connection[spec.configArrayField];
+  if (Array.isArray(arrayVal)) {
+    return arrayVal
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      .map((v) => v.trim());
   }
-  return typeof connection.schema === 'string' && connection.schema.trim().length > 0 ? [connection.schema.trim()] : [];
+  const singleVal = connection[spec.configSingleField];
+  return typeof singleVal === 'string' && singleVal.trim().length > 0 ? [singleVal.trim()] : [];
 }
 
-function defaultSchemaSelection(schemas: string[]): string[] {
-  const nonPublic = schemas.filter((schema) => schema !== 'public');
-  return nonPublic.length > 0 ? nonPublic : schemas;
-}
-
-async function writeConnectionSchemas(input: {
+async function writeScopeConfig(input: {
   projectDir: string;
   connectionId: string;
-  schemas: string[];
+  values: string[];
+  spec: ScopeDiscoverySpec;
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
   if (!connection) return;
-  const { schema: _schema, ...connectionWithoutLegacySchema } = connection;
+  const cleaned = Object.fromEntries(
+    Object.entries(connection).filter(([key]) => key !== input.spec.configSingleField),
+  ) as KtxProjectConnectionConfig;
   await writeConnectionConfig({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
     connection: {
-      ...connectionWithoutLegacySchema,
-      schemas: unique(input.schemas),
+      ...cleaned,
+      [input.spec.configArrayField]: unique(input.values),
     },
   });
 }
 
-async function maybeConfigurePostgresSchemas(input: {
+async function maybeConfigureSchemaScope(input: {
   projectDir: string;
   connectionId: string;
   args: KtxSetupDatabasesArgs;
@@ -893,65 +983,78 @@ async function maybeConfigurePostgresSchemas(input: {
 }): Promise<boolean> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
-  if (normalizeDriver(connection?.driver) !== 'postgres') {
-    return true;
-  }
+  const driver = normalizeDriver(connection?.driver);
+  if (!driver) return true;
 
-  if (configuredSchemas(connection).length > 0) {
+  const spec = SCOPE_DISCOVERY_SPECS[driver];
+  if (!spec) return true;
+
+  const arrayVal = connection?.[spec.configArrayField];
+  if (Array.isArray(arrayVal) && arrayVal.length > 0) {
     return true;
   }
 
   if (input.args.databaseSchemas.length > 0) {
-    await writeConnectionSchemas({
+    await writeScopeConfig({
       projectDir: input.projectDir,
       connectionId: input.connectionId,
-      schemas: input.args.databaseSchemas,
+      values: input.args.databaseSchemas,
+      spec,
     });
     return true;
   }
 
-  let discoveredSchemas: string[];
+  writeSetupSection(input.io, `Discovering ${spec.promptLabel.toLowerCase()}`, [
+    `Connecting to ${input.connectionId}…`,
+  ]);
+
+  let discovered: string[];
   try {
-    discoveredSchemas = unique(
+    discovered = unique(
       await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId),
     );
   } catch (error) {
     input.io.stderr.write(
-      `Could not discover PostgreSQL schemas for ${input.connectionId}; continuing with existing schema scope. ` +
+      `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; continuing with existing ${spec.noun} scope. ` +
         `Pass --database-schema to set it explicitly. ${error instanceof Error ? error.message : String(error)}\n`,
     );
     return true;
   }
-  if (discoveredSchemas.length === 0) {
+  if (discovered.length === 0) {
     return true;
   }
 
-  let selectedSchemas: string[];
-  if (input.args.inputMode === 'disabled' || discoveredSchemas.length === 1) {
-    selectedSchemas = discoveredSchemas;
+  let selected: string[];
+  if (input.args.inputMode === 'disabled' || discovered.length === 1) {
+    const preconfigured = configuredScopeValues(connection, spec).filter((v) => discovered.includes(v));
+    selected = preconfigured.length > 0 ? preconfigured : discovered;
   } else {
-    const initialValues = defaultSchemaSelection(discoveredSchemas);
+    const preconfigured = configuredScopeValues(connection, spec).filter((v) => discovered.includes(v));
+    const initialValues = preconfigured.length > 0 ? preconfigured : spec.defaultSelection(discovered);
     const choices = await input.prompts.multiselect({
       message: withMultiselectNavigation(
-        'PostgreSQL schemas to scan\nKTX found multiple non-system schemas. Select every schema agents should use.',
+        `${spec.promptLabel} to scan\n` +
+          `KTX found multiple ${spec.nounPlural}. Select every ${spec.noun} agents should use.`,
       ),
-      options: discoveredSchemas.map((schema) => ({ value: schema, label: schema })),
+      options: discovered.map((v) => ({ value: v, label: v })),
       initialValues,
       required: true,
     });
     if (choices.includes('back')) {
       return false;
     }
-    selectedSchemas = choices.length > 0 ? choices : initialValues;
+    selected = choices.length > 0 ? choices : initialValues;
   }
 
-  await writeConnectionSchemas({
+  await writeScopeConfig({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
-    schemas: selectedSchemas,
+    values: selected,
+    spec,
   });
-  writeSetupSection(input.io, `Selecting schemas for ${input.connectionId}`, [
-    `Schemas: ${selectedSchemas.join(', ')}`,
+  const capitalNounPlural = spec.nounPlural[0]!.toUpperCase() + spec.nounPlural.slice(1);
+  writeSetupSection(input.io, `${capitalNounPlural} saved for ${input.connectionId}`, [
+    `✓ ${selected.join(', ')}`,
   ]);
   return true;
 }
@@ -1081,7 +1184,7 @@ async function validateAndScanConnection(input: {
   testLines.push(`Driver: ${driverDisplay}${Number.isFinite(tableCount) ? ` · Tables: ${tableCount}` : ''}`);
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
 
-  if (!(await maybeConfigurePostgresSchemas(input))) {
+  if (!(await maybeConfigureSchemaScope(input))) {
     return false;
   }
 
@@ -1091,6 +1194,9 @@ async function validateAndScanConnection(input: {
     io: input.io,
     deps: input.deps,
   });
+  writeSetupSection(input.io, `Scanning ${input.connectionId}`, [
+    'Running structural scan…',
+  ]);
   const scanIo = createBufferedCommandIo();
   const scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
   if (scanCode !== 0) {
@@ -1103,9 +1209,8 @@ async function validateAndScanConnection(input: {
   const reportPath = readOutputValue(scanOutput, 'Report');
   writeSetupSection(
     input.io,
-    `Scanning ${input.connectionId}`,
+    `Scan complete for ${input.connectionId}`,
     [
-      '✓ Structural scan completed',
       `Changes: ${summarizeScanChanges(scanOutput)}`,
       ...(reportPath ? [`Report: ${shortenScanReportPath(reportPath)}`] : []),
     ],

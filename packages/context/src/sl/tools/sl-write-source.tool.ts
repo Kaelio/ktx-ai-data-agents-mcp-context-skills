@@ -1,6 +1,6 @@
 import YAML from 'yaml';
 import { z } from 'zod';
-import { addTouchedSlSource, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { addTouchedSlSource, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
 import { sourceOverlaySchema } from '../schemas.js';
 import type { SemanticLayerService } from '../semantic-layer.service.js';
 import type { SemanticLayerSource } from '../types.js';
@@ -25,6 +25,10 @@ const slWriteSourceInputSchema = z.object({
     .optional()
     .describe('Source definition (standalone with table/sql) or overlay (measures, computed columns, etc.)'),
   delete: z.boolean().optional().describe('Set to true to delete this source entirely'),
+  rawPaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('In ingest sessions, raw source file paths that directly support this SL action.'),
 });
 
 type SlWriteSourceInput = z.infer<typeof slWriteSourceInputSchema>;
@@ -99,6 +103,10 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
 
     const semanticLayerService = context.session?.semanticLayerService ?? this.semanticLayerService;
     const skipIndex = context.session?.isWorktreeScoped === true;
+    const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
+    if (!rawPathValidation.ok) {
+      return this.buildOutput(false, [rawPathValidation.error], sourceName);
+    }
 
     // Handle delete
     if (input.delete) {
@@ -116,6 +124,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
             key: sourceName,
             detail: 'Deleted source',
             targetConnectionId: actionTargetConnectionId(context.session.connectionId, connectionId),
+            ...(rawPathValidation.rawPaths ? { rawPaths: rawPathValidation.rawPaths } : {}),
           });
         }
         return this.buildOutput(true, [], sourceName, { yaml: undefined, commitHash: undefined });
@@ -142,6 +151,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       context,
       semanticLayerService,
       skipIndex,
+      rawPathValidation.rawPaths,
     );
   }
 
@@ -154,6 +164,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
     context: ToolContext,
     semanticLayerService: SemanticLayerService,
     skipIndex: boolean,
+    rawPaths: string[] | undefined,
   ): Promise<ToolOutput<SemanticLayerStructured>> {
     const normalizedSource = normalizeSemanticLayerDescriptions(source, { fillMissing: !!context.session?.ingest });
     const isOverlay =
@@ -164,7 +175,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       ? `${isOverlay ? 'Update overlay' : 'Rewrite source'}: ${sourceName}`
       : `${isOverlay ? 'Create overlay' : 'Create source'}: ${sourceName}`;
 
-    const yamlContent = YAML.stringify(normalizedSource);
+    const yamlContent = YAML.stringify(normalizedSource, { indent: 2, lineWidth: 0, version: '1.1' });
 
     const orphanError = await this.rejectOrphanOverlay(semanticLayerService, connectionId, sourceName, yamlContent);
     if (orphanError) {
@@ -211,6 +222,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
           key: sourceName,
           detail: existing ? `Rewrote source` : `Created source`,
           targetConnectionId: actionTargetConnectionId(context.session.connectionId, connectionId),
+          ...(rawPaths ? { rawPaths } : {}),
         });
       }
 

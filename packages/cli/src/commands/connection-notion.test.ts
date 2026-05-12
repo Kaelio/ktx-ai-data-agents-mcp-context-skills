@@ -355,6 +355,53 @@ describe('runKtxConnectionNotion', () => {
     expect(io.stdout()).toContain('rootPageIds: 1');
   });
 
+  it('uses inline Notion auth_token for interactive discovery', async () => {
+    const projectDir = join(tempDir, 'project');
+    const initialized = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeProjectConfig(projectDir, {
+      ...initialized.config,
+      connections: {
+        'notion-main': {
+          driver: 'notion',
+          auth_token: 'ntn_inline_token',
+          crawl_mode: 'selected_roots',
+          root_page_ids: [PAGE_IDS.engineering],
+          root_database_ids: [],
+          root_data_source_ids: [],
+          max_pages_per_run: 12,
+          max_knowledge_creates_per_run: 2,
+          max_knowledge_updates_per_run: 7,
+          last_successful_cursor: null,
+        },
+      },
+    });
+    const api = fakeNotionApi([notionPage(PAGE_IDS.engineering, 'Engineering')]);
+    const createNotionApi = vi.fn((authToken: string) => {
+      expect(authToken).toBe('ntn_inline_token');
+      return api;
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxConnectionNotion(
+        {
+          command: 'pick',
+          projectDir,
+          connectionId: 'notion-main',
+          mode: 'interactive',
+        },
+        io.io,
+        {
+          createNotionApi,
+          renderPicker: vi.fn(async (): Promise<PickerRenderResult> => ({ kind: 'quit' })),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(createNotionApi).toHaveBeenCalledOnce();
+    expect(io.stdout()).toContain('No changes saved.');
+  });
+
   it('passes partial-discovery warnings into the TUI banner state', async () => {
     const projectDir = join(tempDir, 'project');
     const initialized = await initKtxProject({ projectDir, projectName: 'warehouse' });

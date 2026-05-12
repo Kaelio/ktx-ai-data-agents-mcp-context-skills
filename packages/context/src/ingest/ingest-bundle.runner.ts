@@ -5,9 +5,10 @@ import pLimit from 'p-limit';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../core/index.js';
 import type { CaptureSession, MemoryAction } from '../memory/index.js';
-import type { SlValidationDeps } from '../sl/index.js';
+import type { SemanticLayerService, SemanticLayerSource, SlValidationDeps } from '../sl/index.js';
 import { createTouchedSlSources, type ToolContext, type ToolSession } from '../tools/index.js';
 import { actionTargetConnectionId } from './action-identity.js';
+import { NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN } from './adapters/notion/types.js';
 import { selectRelevantCanonicalPins } from './canonical-pins.js';
 import { sanitizeMemoryFlowError } from './memory-flow/live-buffer.js';
 import type { MemoryFlowPlannedWorkUnit } from './memory-flow/types.js';
@@ -39,6 +40,11 @@ import { createReadRawSpanTool } from './tools/read-raw-span.tool.js';
 import { createStageDiffTool } from './tools/stage-diff.tool.js';
 import { createStageListTool } from './tools/stage-list.tool.js';
 import { type ToolCallLogEntry, wrapToolsWithLogger } from './tools/tool-call-logger.js';
+import {
+  createMutableToolTranscriptSummary,
+  recordToolTranscriptEntry,
+  type MutableToolTranscriptSummary,
+} from './tools/tool-transcript-summary.js';
 import type {
   EvictionUnit,
   IngestBundleJob,
@@ -47,14 +53,6 @@ import type {
   UnresolvedCardInfo,
   WorkUnit,
 } from './types.js';
-
-interface MutableToolTranscriptSummary {
-  unitKey: string;
-  path: string;
-  toolCallCount: number;
-  errorCount: number;
-  toolNames: Set<string>;
-}
 
 function workUnitToMemoryFlowPlannedWorkUnit(workUnit: WorkUnit): MemoryFlowPlannedWorkUnit {
   return {
@@ -80,27 +78,52 @@ function countMemoryFlowActions(actions: MemoryAction[], target: MemoryAction['t
   return actions.filter((action) => action.target === target).length;
 }
 
-function isStructuredToolFailure(output: unknown): boolean {
-  if (!output || typeof output !== 'object') {
-    return false;
-  }
-  const structured = (output as { structured?: unknown }).structured;
-  return !!structured && typeof structured === 'object' && (structured as { success?: unknown }).success === false;
-}
-
-function isFailedToolCall(entry: ToolCallLogEntry): boolean {
-  if (entry.error) {
-    return true;
-  }
-  return (entry.toolName === 'sl_write_source' || entry.toolName === 'wiki_write') && isStructuredToolFailure(entry.output);
-}
-
 function reportIdFromCreateResult(result: unknown): string | undefined {
   if (!result || typeof result !== 'object' || !('id' in result)) {
     return undefined;
   }
   const id = (result as { id?: unknown }).id;
   return typeof id === 'string' && id.length > 0 ? id : undefined;
+}
+
+function normalizeTableReference(value: string): string {
+  return value
+    .trim()
+    .replace(/["`]/g, '')
+    .replace(/[\[\]]/g, '')
+    .toLowerCase();
+}
+
+function finalReferenceSegment(value: string): string {
+  const parts = value.split('.').filter((part) => part.length > 0);
+  return parts.at(-1) ?? value;
+}
+
+function semanticSourceMatchesTableRef(source: SemanticLayerSource, tableRef: string): boolean {
+  const normalizedRef = normalizeTableReference(tableRef);
+  if (!normalizedRef) {
+    return false;
+  }
+
+  const refIsQualified = normalizedRef.includes('.');
+  const normalizedSourceName = normalizeTableReference(source.name);
+  if (normalizedSourceName === normalizedRef) {
+    return true;
+  }
+
+  const table = typeof source.table === 'string' ? normalizeTableReference(source.table) : '';
+  if (table && (table === normalizedRef || table.endsWith(`.${normalizedRef}`))) {
+    return true;
+  }
+  if (!refIsQualified && table && finalReferenceSegment(table) === normalizedRef) {
+    return true;
+  }
+
+  return false;
+}
+
+function rawPathsForAction(action: MemoryAction, fallbackRawPaths: string[]): string[] {
+  return action.rawPaths && action.rawPaths.length > 0 ? [...new Set(action.rawPaths)] : fallbackRawPaths;
 }
 
 export class IngestBundleRunner {
@@ -276,16 +299,44 @@ export class IngestBundleRunner {
     const blocks = await Promise.all(
       connectionIds.map(async (connectionId) => {
         try {
-          const files = await this.deps.semanticLayerService.listFilesForConnection(connectionId);
-          const names = files.filter((f) => !f.startsWith('_schema/')).map((f) => f.replace(/\.yaml$/, ''));
+          const sources = await this.deps.semanticLayerService.loadAllSources(connectionId);
+          const names = sources.map((source) => source.name).sort((left, right) => left.localeCompare(right));
           const body = names.length > 0 ? names.join('\n') : '(no sources yet)';
           return `## ${connectionId}\n${body}`;
         } catch {
-          return `## ${connectionId}\n(empty)`;
+          try {
+            const files = await this.deps.semanticLayerService.listFilesForConnection(connectionId);
+            const names = files
+              .filter((f) => !f.startsWith('_schema/'))
+              .map((f) => f.replace(/\.yaml$/, ''))
+              .sort((left, right) => left.localeCompare(right));
+            const body = names.length > 0 ? names.join('\n') : '(no sources yet)';
+            return `## ${connectionId}\n${body}`;
+          } catch {
+            return `## ${connectionId}\n(empty)`;
+          }
         }
       }),
     );
     return blocks.join('\n\n');
+  }
+
+  private async tableRefExistsInSemanticLayer(
+    semanticLayerService: SemanticLayerService,
+    connectionIds: string[],
+    tableRef: string,
+  ): Promise<boolean> {
+    for (const connectionId of connectionIds) {
+      try {
+        const sources = await semanticLayerService.loadAllSources(connectionId);
+        if (sources.some((source) => semanticSourceMatchesTableRef(source, tableRef))) {
+          return true;
+        }
+      } catch {
+        // Fallback diagnostics should not fail an ingest stage if an index lookup is temporarily unavailable.
+      }
+    }
+    return false;
   }
 
   private resolveContextCuratorBudget(
@@ -297,7 +348,9 @@ export class IngestBundleRunner {
         ? (bundleRef.config as Record<string, unknown>)
         : {};
     const configuredCreates =
-      typeof rawConfig.maxKnowledgeCreatesPerRun === 'number' ? rawConfig.maxKnowledgeCreatesPerRun : 5;
+      typeof rawConfig.maxKnowledgeCreatesPerRun === 'number'
+        ? rawConfig.maxKnowledgeCreatesPerRun
+        : NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN;
     const configuredUpdates =
       typeof rawConfig.maxKnowledgeUpdatesPerRun === 'number' ? rawConfig.maxKnowledgeUpdatesPerRun : 20;
     const wikiActions = stageIndex.workUnits.flatMap((wu) => wu.actions).filter((action) => action.target === 'wiki');
@@ -351,17 +404,8 @@ export class IngestBundleRunner {
       (path: string) =>
       (entry: ToolCallLogEntry): void => {
         const current =
-          transcriptSummaries.get(entry.wuKey) ??
-          ({
-            unitKey: entry.wuKey,
-            path,
-            toolCallCount: 0,
-            errorCount: 0,
-            toolNames: new Set<string>(),
-          } satisfies MutableToolTranscriptSummary);
-        current.toolCallCount += 1;
-        current.errorCount += isFailedToolCall(entry) ? 1 : 0;
-        current.toolNames.add(entry.toolName);
+          transcriptSummaries.get(entry.wuKey) ?? createMutableToolTranscriptSummary(entry.wuKey, path);
+        recordToolTranscriptEntry(current, entry);
         transcriptSummaries.set(entry.wuKey, current);
       };
     const overrideReport = await this.loadOverrideReport(job);
@@ -617,6 +661,7 @@ export class IngestBundleRunner {
             preHead: sessionWorktree.baseSha,
             touchedSlSources: session.touchedSlSources,
             actions: sessionActions,
+            allowedRawPaths: new Set(wu.rawFiles),
             semanticLayerService: scopedSemanticLayerService,
             wikiService: scopedWikiService,
             configService: sessionWorktree.config,
@@ -681,6 +726,8 @@ export class IngestBundleRunner {
             emit_unmapped_fallback: createEmitUnmappedFallbackTool({
               stageIndex,
               allowedPaths: new Set(wu.rawFiles),
+              tableRefExists: (tableRef) =>
+                this.tableRefExistsInSemanticLayer(scopedSemanticLayerService, slConnectionIds, tableRef),
             }),
           };
 
@@ -728,7 +775,7 @@ export class IngestBundleRunner {
               sourceKey: job.sourceKey,
               connectionId: job.connectionId,
               jobId: job.jobId,
-              toolFailureCount: (unitKey) => transcriptSummaries.get(unitKey)?.errorCount ?? 0,
+              toolFailureCount: (unitKey) => transcriptSummaries.get(unitKey)?.fatalErrorCount ?? 0,
               onStepFinish: ({ stepIndex, stepBudget }) => {
                 memoryFlow?.emit({ type: 'work_unit_step', unitKey: wu.unitKey, stepIndex, stepBudget });
               },
@@ -839,6 +886,10 @@ export class IngestBundleRunner {
       const reconcileActions: MemoryAction[] = [];
       const rcScopedWiki = this.deps.wikiService.forWorktree(sessionWorktree.workdir);
       const rcScopedSl = this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir);
+      const reconciliationAllowedRawPaths = new Set<string>([
+        ...currentHashes.keys(),
+        ...(eviction?.deletedRawPaths ?? []),
+      ]);
 
       const rcToolSession: ToolSession = {
         connectionId: job.connectionId,
@@ -846,6 +897,7 @@ export class IngestBundleRunner {
         preHead: reconcileSession.preHead,
         touchedSlSources: reconcileSession.touchedSlSources,
         actions: reconcileActions,
+        allowedRawPaths: reconciliationAllowedRawPaths,
         semanticLayerService: rcScopedSl,
         wikiService: rcScopedWiki,
         configService: sessionWorktree.config,
@@ -910,6 +962,7 @@ export class IngestBundleRunner {
         emit_unmapped_fallback: createEmitUnmappedFallbackTool({
           stageIndex,
           allowedPaths: allStagedPaths,
+          tableRefExists: (tableRef) => this.tableRefExistsInSemanticLayer(rcScopedSl, slConnectionIds, tableRef),
         }),
       };
 
@@ -1167,24 +1220,32 @@ export class IngestBundleRunner {
         return a.type === 'created' ? 'source_created' : 'measure_added';
       };
       const producedPaths = new Set<string>();
+      const pushActionProvenance = (rawPath: string, action: MemoryAction): void => {
+        const hash = currentHashes.get(rawPath) ?? 'unknown';
+        provenanceRows.push({
+          connectionId: job.connectionId,
+          sourceKey: job.sourceKey,
+          syncId,
+          rawPath,
+          rawContentHash: hash,
+          artifactKind: action.target,
+          artifactKey: action.key,
+          targetConnectionId: action.target === 'sl' ? actionTargetConnectionId(action, job.connectionId) : null,
+          artifactContentHash: null,
+          actionType: actionToType(action),
+        });
+        producedPaths.add(rawPath);
+      };
       for (const wu of stageIndex.workUnits) {
-        for (const rawPath of wu.rawFiles) {
-          const hash = currentHashes.get(rawPath) ?? 'unknown';
-          for (const action of wu.actions) {
-            provenanceRows.push({
-              connectionId: job.connectionId,
-              sourceKey: job.sourceKey,
-              syncId,
-              rawPath,
-              rawContentHash: hash,
-              artifactKind: action.target,
-              artifactKey: action.key,
-              targetConnectionId: action.target === 'sl' ? (action.targetConnectionId ?? null) : null,
-              artifactContentHash: null,
-              actionType: actionToType(action),
-            });
-            producedPaths.add(rawPath);
+        for (const action of wu.actions) {
+          for (const rawPath of rawPathsForAction(action, wu.rawFiles)) {
+            pushActionProvenance(rawPath, action);
           }
+        }
+      }
+      for (const action of reconcileActions) {
+        for (const rawPath of action.rawPaths ?? []) {
+          pushActionProvenance(rawPath, action);
         }
       }
       for (const resolution of stageIndex.artifactResolutions ?? []) {

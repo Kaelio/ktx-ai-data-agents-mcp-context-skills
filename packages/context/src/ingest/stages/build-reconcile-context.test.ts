@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildReconcileSystemPrompt, buildReconcileToolSet } from './build-reconcile-context.js';
+import { buildReconcileSystemPrompt, buildReconcileToolSet, buildReconcileUserPrompt } from './build-reconcile-context.js';
 
 describe('buildReconcileSystemPrompt', () => {
   it('appends canonical pins when relevant pins are supplied', () => {
@@ -36,6 +36,40 @@ describe('buildReconcileSystemPrompt', () => {
 
     expect(prompt).not.toContain('<canonical_pins>');
     expect(prompt).toContain('syncId: sync-1');
+  });
+});
+
+describe('buildReconcileUserPrompt', () => {
+  it('includes action details so reconciliation can compare different keys for the same table', () => {
+    const prompt = buildReconcileUserPrompt(
+      {
+        jobId: 'j1',
+        connectionId: 'notion',
+        workUnits: [
+          {
+            unitKey: 'notion-a',
+            rawFiles: ['pages/a/page.md'],
+            status: 'success',
+            actions: [
+              {
+                target: 'wiki',
+                type: 'created',
+                key: 'orbit-customer-source-reference',
+                detail: 'tables: orbit_analytics.customer',
+              },
+            ],
+            touchedSlSources: [],
+          },
+        ],
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+      },
+      undefined,
+    );
+
+    expect(prompt).toContain('orbit-customer-source-reference');
+    expect(prompt).toContain('tables: orbit_analytics.customer');
   });
 });
 

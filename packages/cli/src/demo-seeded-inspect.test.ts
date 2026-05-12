@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runDemoSeeded } from './demo-seeded.js';
 import { formatSeededInspect, inspectSeededProject } from './demo-seeded-inspect.js';
-import { KTX_NEXT_STEP_COMMANDS } from './next-steps.js';
+import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 
 describe('seeded demo inspect contract', () => {
   const projectDir = join(tmpdir(), `ktx-demo-seeded-inspect-${process.pid}`);
@@ -59,7 +59,7 @@ describe('seeded demo inspect contract', () => {
         reports: { primaryPath: 'reports/seeded-demo-report.json', fileCount: 1 },
         replays: { primaryPath: 'replays/replay.memory-flow.v1.json', latestPath: 'replays/latest.memory-flow.v1.json' },
       },
-      nextCommands: KTX_NEXT_STEP_COMMANDS,
+      nextCommands: KTX_NEXT_STEP_DIRECT_COMMANDS,
     });
 
     expect(inspect.generatedOutputs.replays.fileCount).toBeGreaterThanOrEqual(3);
@@ -91,10 +91,7 @@ describe('seeded demo inspect contract', () => {
     expect(output).toContain('Latest replay: seeded (packaged, prebuilt)');
     expect(output).toContain('  $ ktx agent tools --json');
     expect(output).toContain('  $ ktx agent context --json');
-    expect(output).toContain('  $ ktx serve --mcp stdio --user-id local');
-    expect(output.indexOf('ktx agent tools --json')).toBeLessThan(
-      output.indexOf('ktx serve --mcp stdio --user-id local'),
-    );
+    expect(output).not.toContain('ktx serve --mcp stdio --user-id local');
     expect(output).not.toContain('ktx ask');
     expect(output).not.toContain('deterministic mode');
   });

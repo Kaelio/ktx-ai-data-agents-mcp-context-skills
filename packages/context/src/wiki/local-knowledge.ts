@@ -4,6 +4,7 @@ import type { KtxEmbeddingPort, KtxFileWriteResult } from '../core/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { HybridSearchCore, type SearchCandidateGenerator } from '../search/index.js';
 import { buildKnowledgeSearchText } from './knowledge-search-text.js';
+import { assertFlatWikiKey, isFlatWikiKey } from './keys.js';
 import { SqliteKnowledgeIndex, type SqliteKnowledgeIndexPage } from './sqlite-knowledge-index.js';
 import type { HistoricSqlWikiUsageFrontmatter, WikiSearchLaneSummary, WikiSearchMatchReason } from './types.js';
 
@@ -67,28 +68,39 @@ function assertSafePathToken(kind: string, value: string): string {
   return value;
 }
 
-function assertSafeKnowledgeKey(key: string): string {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9_/-]*$/.test(key)) {
-    throw new Error(`Unsafe knowledge key: ${key}`);
-  }
-  return assertSafePathToken('knowledge key', key);
-}
-
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
 function knowledgePath(scope: LocalKnowledgeScope, userId: string | undefined, key: string): string {
-  const safeKey = assertSafeKnowledgeKey(key);
+  const safeKey = assertFlatWikiKey(key);
   if (scope === 'GLOBAL') {
     return `knowledge/global/${safeKey}.md`;
   }
   return `knowledge/user/${assertSafePathToken('user id', userId ?? 'local')}/${safeKey}.md`;
 }
 
-function keyFromKnowledgePath(path: string, scope: LocalKnowledgeScope, userId: string): string {
+function isHistoricSqlPathSegment(segment: string): boolean {
+  return /^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(segment);
+}
+
+function keyFromKnowledgePath(path: string, scope: LocalKnowledgeScope, userId: string): string | null {
   const prefix = scope === 'GLOBAL' ? 'knowledge/global/' : `knowledge/user/${assertSafePathToken('user id', userId)}/`;
-  return path.slice(prefix.length).replace(/\.md$/, '');
+  const key = path.slice(prefix.length).replace(/\.md$/, '');
+  if (isFlatWikiKey(key)) {
+    return key;
+  }
+  if (
+    scope === 'GLOBAL' &&
+    key.startsWith('historic-sql/') &&
+    key
+      .slice('historic-sql/'.length)
+      .split('/')
+      .every(isHistoricSqlPathSegment)
+  ) {
+    return key;
+  }
+  return null;
 }
 
 function parseKnowledgePage(key: string, path: string, scope: LocalKnowledgeScope, raw: string): LocalKnowledgePage {
@@ -187,6 +199,9 @@ export async function listLocalKnowledgePages(
     const listed = await project.fileStore.listFiles(root);
     for (const path of listed.files.filter((file) => file.endsWith('.md')).sort()) {
       const key = keyFromKnowledgePath(path, scope, userId);
+      if (!key) {
+        continue;
+      }
       const page = await readPageAtPath(project, key, path, scope);
       if (page) {
         pages.push({ key, path, scope, summary: page.summary });

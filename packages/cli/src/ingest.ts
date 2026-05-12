@@ -437,6 +437,21 @@ function initialRunMemoryFlowInput(
   };
 }
 
+function finalRunMemoryFlowInput(snapshot: MemoryFlowReplayInput, report: IngestReportSnapshot): MemoryFlowReplayInput {
+  const status = reportStatus(report);
+  return {
+    ...snapshot,
+    runId: report.runId,
+    connectionId: report.connectionId,
+    adapter: report.sourceKey,
+    status,
+    syncId: report.body.syncId,
+    reportId: report.id,
+    reportPath: report.id,
+    errors: status === 'error' ? report.body.failedWorkUnits : snapshot.errors,
+  };
+}
+
 function managedDaemonOptionsForIngestRun(
   args: Extract<KtxIngestArgs, { command: 'run' }>,
   io: KtxIngestIo,
@@ -592,7 +607,7 @@ export async function runKtxIngest(
           ...(memoryFlow ? { memoryFlow } : {}),
         });
         if (shouldUseLiveViz && memoryFlow) {
-          latestMemoryFlowSnapshot = memoryFlow.snapshot();
+          latestMemoryFlowSnapshot = finalRunMemoryFlowInput(memoryFlow.snapshot(), result.report);
           liveTui?.close();
           liveTui = null;
           io.stdout.write(formatMemoryFlowFinalSummary(latestMemoryFlowSnapshot));

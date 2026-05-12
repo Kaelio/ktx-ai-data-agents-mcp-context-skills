@@ -11,6 +11,7 @@ import { parseDbtStagedDir } from './parse.js';
 
 interface DbtSourceAdapterOptions {
   homeDir?: string;
+  targetConnectionIds?: string[];
 }
 
 export class DbtSourceAdapter implements SourceAdapter {
@@ -22,6 +23,10 @@ export class DbtSourceAdapter implements SourceAdapter {
 
   detect(stagedDir: string): Promise<boolean> {
     return detectDbtStagedDir(stagedDir);
+  }
+
+  async listTargetConnectionIds(_stagedDir: string): Promise<string[]> {
+    return [...new Set(this.options.targetConnectionIds ?? [])].sort((left, right) => left.localeCompare(right));
   }
 
   async fetch(pullConfig: unknown, stagedDir: string, ctx: FetchContext): Promise<void> {

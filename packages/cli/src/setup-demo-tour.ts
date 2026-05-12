@@ -52,6 +52,7 @@ function createTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTarge
     status: 'queued',
     detailLine: null,
     summaryText: null,
+    failureText: null,
     startedAt: null,
     elapsedMs: 0,
   };

@@ -22,6 +22,7 @@ export interface ContextBuildTargetState {
   status: 'queued' | 'running' | 'done' | 'failed';
   detailLine: string | null;
   summaryText: string | null;
+  failureText: string | null;
   startedAt: number | null;
   elapsedMs: number;
 }
@@ -133,7 +134,8 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean): string 
     return parts.join(' · ');
   }
   if (target.status === 'failed') {
-    return styled ? red('failed') : 'failed';
+    const failureText = target.failureText ?? 'failed';
+    return styled ? red(failureText) : failureText;
   }
   if (target.status === 'running') {
     const percent = extractPercent(target.detailLine);
@@ -327,6 +329,7 @@ export function viewStateFromSourceProgress(
     status: s.status,
     detailLine: null,
     summaryText: s.summaryText ?? null,
+    failureText: null,
     startedAt: s.startedAtMs ?? null,
     elapsedMs: s.status === 'running' && s.startedAtMs ? now - s.startedAtMs : (s.elapsedMs ?? 0),
   });
@@ -378,7 +381,8 @@ export function createRepainter(io: KtxCliIo) {
         }
         io.stdout.write('\r');
       }
-      io.stdout.write(content.replaceAll('\n', `${ESC}[K\n`));
+      io.stdout.write(`${ESC}[2K`);
+      io.stdout.write(content.replaceAll('\n', `\n${ESC}[2K`));
       io.stdout.write(`${ESC}[J`);
       hasPainted = true;
       lastCursorUpRows = cursorUpRowsAfterWrite(content);
@@ -440,7 +444,83 @@ export function defaultSetupKeystroke(onDetach: () => void, onCtrlC: () => void)
 // --- Orchestration ---
 
 function makeTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTargetState {
-  return { target, status: 'queued', detailLine: null, summaryText: null, startedAt: null, elapsedMs: 0 };
+  return {
+    target,
+    status: 'queued',
+    detailLine: null,
+    summaryText: null,
+    failureText: null,
+    startedAt: null,
+    elapsedMs: 0,
+  };
+}
+
+const NETWORK_ERROR_REASONS: Record<string, string> = {
+  EADDRNOTAVAIL: 'network address unavailable',
+  ECONNRESET: 'connection reset',
+  ECONNREFUSED: 'connection refused',
+  ENETUNREACH: 'network unreachable',
+  ENOTFOUND: 'host not found',
+  ETIMEDOUT: 'connection timed out',
+  EHOSTUNREACH: 'host unreachable',
+};
+
+function unknownErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function networkErrorCodeFromText(text: string): string | null {
+  for (const code of Object.keys(NETWORK_ERROR_REASONS)) {
+    if (new RegExp(`\\b${code}\\b`).test(text)) {
+      return code;
+    }
+  }
+  return null;
+}
+
+function networkErrorCode(error: unknown, capturedOutput = ''): string | null {
+  const directCode = typeof (error as { code?: unknown })?.code === 'string'
+    ? (error as { code: string }).code
+    : null;
+  if (directCode && NETWORK_ERROR_REASONS[directCode]) {
+    return directCode;
+  }
+  return networkErrorCodeFromText(`${unknownErrorMessage(error)}\n${capturedOutput}`);
+}
+
+function friendlyDriverName(driver: string): string {
+  const normalized = driver.toLowerCase();
+  if (normalized === 'postgres' || normalized === 'postgresql') return 'PostgreSQL';
+  if (normalized === 'mysql') return 'MySQL';
+  if (normalized === 'sqlserver') return 'SQL Server';
+  if (normalized === 'bigquery') return 'BigQuery';
+  if (normalized === 'snowflake') return 'Snowflake';
+  if (normalized === 'clickhouse') return 'ClickHouse';
+  if (normalized === 'sqlite') return 'SQLite';
+  return driver || 'the source';
+}
+
+function failedStepDetail(result: KtxPublicIngestTargetResult): string | null {
+  return result.steps.find((step) => step.status === 'failed')?.detail ?? null;
+}
+
+function failureTextForTarget(input: {
+  target: KtxPublicIngestPlanTarget;
+  projectDir: string;
+  capturedOutput?: string;
+  error?: unknown;
+  fallback?: string | null;
+}): string {
+  const code = networkErrorCode(input.error, input.capturedOutput);
+  if (code) {
+    const operation = input.target.operation === 'scan' ? 'scanning' : 'ingesting';
+    return [
+      `KTX lost its connection to ${friendlyDriverName(input.target.driver)} while ${operation} ${input.target.connectionId}.`,
+      `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
+      `Retry: ${resumeCommand(input.projectDir)}`,
+    ].join(' ');
+  }
+  return input.fallback ?? `${input.target.connectionId} failed.`;
 }
 
 export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuildViewState {
@@ -493,6 +573,7 @@ export async function runContextBuild(
   const artifactPaths = new Set<string>();
 
   let detached = false;
+  let exiting = false;
   let cleanupKeystroke: (() => void) | null = null;
 
   if (isTTY || deps.setupKeystroke) {
@@ -502,6 +583,7 @@ export async function runContextBuild(
     };
     cleanupKeystroke = (deps.setupKeystroke ?? defaultSetupKeystroke)(
       () => {
+        detached = true;
         cleanup();
         deps.onDetach?.();
         const bg = spawnBackgroundBuild(args.projectDir);
@@ -509,12 +591,14 @@ export async function runContextBuild(
         if (bg) io.stdout.write(`Log: ${bg.logPath}\n`);
         io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
         io.stdout.write(`Status: ktx setup context status --project-dir ${resolve(args.projectDir)}\n`);
+        exiting = true;
         process.exit(0);
       },
       () => {
         cleanup();
         io.stdout.write('\n\nContext build stopped. Nothing is running in the background.\n');
         io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
+        exiting = true;
         process.exit(130);
       },
     );
@@ -548,21 +632,38 @@ export async function runContextBuild(
         false,
       );
 
-      const result = await execTarget(targetState.target, runArgs, capture.io, {});
+      let result: KtxPublicIngestTargetResult | null = null;
+      let thrownError: unknown = null;
+      try {
+        result = await execTarget(targetState.target, runArgs, capture.io, {});
+      } catch (error) {
+        if (exiting) {
+          throw error;
+        }
+        thrownError = error;
+      }
 
       targetState.elapsedMs = nowFn() - (targetState.startedAt ?? nowFn());
-      const failed = result.steps.some((s) => s.status === 'failed');
+      const failed = thrownError !== null || result?.steps.some((s) => s.status === 'failed') === true;
       targetState.status = failed ? 'failed' : 'done';
       targetState.detailLine = null;
+      const capturedOutput = capture.captured();
+      const metadata = collectOutputMetadata(capturedOutput, targetState.target.operation);
+      for (const reportId of metadata.reportIds) reportIds.add(reportId);
+      for (const artifactPath of metadata.artifactPaths) artifactPaths.add(artifactPath);
       if (!failed) {
-        const capturedOutput = capture.captured();
-        const metadata = collectOutputMetadata(capturedOutput, targetState.target.operation);
-        for (const reportId of metadata.reportIds) reportIds.add(reportId);
-        for (const artifactPath of metadata.artifactPaths) artifactPaths.add(artifactPath);
         targetState.summaryText =
           targetState.target.operation === 'scan'
             ? parseScanSummary(capturedOutput)
             : parseIngestSummary(capturedOutput);
+      } else {
+        targetState.failureText = failureTextForTarget({
+          target: targetState.target,
+          projectDir: args.projectDir,
+          capturedOutput,
+          error: thrownError,
+          fallback: result ? failedStepDetail(result) : null,
+        });
       }
       if (failed) hasFailure = true;
 

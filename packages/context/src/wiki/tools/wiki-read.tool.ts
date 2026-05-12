@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { KnowledgeIndexPort } from '../ports.js';
 import { KnowledgeWikiService } from '../index.js';
+import { validateFlatWikiKey } from '../keys.js';
 import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
 
 const WikiReadInputSchema = z.object({
@@ -34,6 +35,7 @@ export class WikiReadTool extends BaseTool<typeof WikiReadInputSchema> {
     return (
       'Load the full content of a knowledge block by its key. ' +
       'Use this to retrieve detailed rules, preferences, or definitions listed in the <knowledge_index>. ' +
+      'The markdown output is the exact stored page body; use it verbatim for wiki_write replacements. ' +
       'Call this when the user query relates to a topic covered by an available knowledge block.'
     );
   }
@@ -43,7 +45,15 @@ export class WikiReadTool extends BaseTool<typeof WikiReadInputSchema> {
   }
 
   async call(input: WikiReadInput, context: ToolContext): Promise<ToolOutput<WikiReadStructured>> {
-    const page = await this.wikiService.readPageForUser(context.userId, input.key);
+    const keyValidation = validateFlatWikiKey(input.key);
+    if (!keyValidation.ok) {
+      return {
+        markdown: keyValidation.error,
+        structured: { blockKey: input.key, content: '', scope: '', found: false },
+      };
+    }
+    const wikiService = context.session?.wikiService ?? this.wikiService;
+    const page = await wikiService.readPageForUser(context.userId, input.key);
 
     if (!page) {
       return {
@@ -61,14 +71,8 @@ export class WikiReadTool extends BaseTool<typeof WikiReadInputSchema> {
       void this.pagesRepository.incrementUsageCount([indexEntry.id]);
     }
 
-    let md = `## ${page.pageKey}\n\n${page.content}`;
-    const refs = page.frontmatter.refs;
-    if (refs && refs.length > 0) {
-      md += `\n\nSee also: ${refs.map((r) => `[[${r}]]`).join(', ')}`;
-    }
-
     return {
-      markdown: md,
+      markdown: page.content,
       structured: {
         blockKey: page.pageKey,
         content: page.content,

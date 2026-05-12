@@ -42,9 +42,11 @@ If nothing is worth capturing, respond without calling any tool.
 2. **Before writing**, search for related content so cross-references are accurate:
    - `wiki_search` with the topic — find related wiki pages to populate `refs`.
    - `sl_discover` with the concept — if the page defines a metric (revenue, churn, retention, LTV, ARR, MRR, CAC, attribution, etc.), find matching SL sources or measures to populate `sl_refs`. If no matches, pass `sl_refs: []` so future readers know you checked.
-3. If updating an existing page, `wiki_read` it first. The read result begins with `[scope: ... | tags: ... | refs: ... | sl_refs: ...]` showing current frontmatter.
+3. If updating an existing page, `wiki_read` it first. Use the returned `structured.content` or markdown body as the exact stored text for targeted replacements; current tags, refs, and sl_refs are returned in structured metadata.
 4. `wiki_write` to create or update. Prefer merging into an existing page over creating a new one.
 5. `wiki_remove` only when a page is truly obsolete — not to replace stale content (update it instead).
+
+For bundle/external ingest, include `rawPaths` on every `wiki_write`/`wiki_remove` call with only the raw files that directly support that wiki action. This keeps ingest provenance tied to the actual source file, not every file in the WorkUnit.
 
 ## Keys, summaries, and content
 

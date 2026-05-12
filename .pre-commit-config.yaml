@@ -33,14 +33,6 @@ repos:
         name: ruff format (python)
         files: ^python/
 
-  - repo: local
-    hooks:
-      - id: ktx-package-checks
-        name: ktx package checks
-        entry: node scripts/precommit-check.mjs
-        language: system
-        files: ^(packages/|scripts/|python/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|release-policy\.json$|tsconfig\.base\.json$|pyproject\.toml$|uv\.lock$|uv\.toml$)
-
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:

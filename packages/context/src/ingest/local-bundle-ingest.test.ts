@@ -88,6 +88,35 @@ class WikiWritingAgentRunner extends AgentRunnerService {
   }
 }
 
+class WikiWritingWithRawPathAgentRunner extends AgentRunnerService {
+  override runLoop = vi.fn(async (params: any) => {
+    if (params.telemetryTags?.operationName === 'ingest-bundle-wu') {
+      const wikiWrite = params.toolSet.wiki_write;
+      if (!wikiWrite?.execute) {
+        throw new Error('wiki_write tool was not available to the WorkUnit');
+      }
+      const result = await wikiWrite.execute(
+        {
+          key: 'orders_context',
+          summary: 'Orders source context',
+          content: 'Orders are purchase records used for revenue analysis.',
+          tags: ['orders'],
+          rawPaths: ['orders/orders.json'],
+        },
+        { toolCallId: 'wiki-write' },
+      );
+      if (!result.structured.success) {
+        throw new Error(result.markdown);
+      }
+    }
+    return { stopReason: 'natural' as const };
+  });
+
+  constructor() {
+    super({ llmProvider: { getModel: () => ({}) as never } as never });
+  }
+}
+
 class HistoricSqlEvidenceAgentRunner extends AgentRunnerService {
   override runLoop = vi.fn(async (params: any) => {
     if (
@@ -366,12 +395,92 @@ describe('canonical local ingest', () => {
     expect(result.result.failedWorkUnits).toEqual([]);
     const db = new Database(join(project.projectDir, '.ktx', 'db.sqlite'), { readonly: true });
     try {
-      expect(db.prepare('SELECT key, summary FROM knowledge_pages ORDER BY key').all()).toEqual([
-        { key: 'orders_context', summary: 'Orders source context' },
+      expect(db.prepare('SELECT key, summary, embedding_json IS NOT NULL AS has_embedding FROM knowledge_pages ORDER BY key').all()).toEqual([
+        { key: 'orders_context', summary: 'Orders source context', has_embedding: 1 },
       ]);
     } finally {
       db.close();
     }
+  });
+
+  it('does not persist noop embedding vectors when local embeddings are disabled', async () => {
+    await writeFile(
+      join(project.projectDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        'ingest:',
+        '  adapters:',
+        '    - fake',
+        '  embeddings:',
+        '    backend: none',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    project = await loadKtxProject({ projectDir: project.projectDir });
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+    const agentRunner = new WikiWritingAgentRunner();
+
+    const result = await runLocalIngest({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      adapter: 'fake',
+      connectionId: 'warehouse',
+      sourceDir,
+      jobId: 'wiki-local-no-embeddings-1',
+      agentRunner,
+    });
+
+    expect(result.result.failedWorkUnits).toEqual([]);
+    const db = new Database(join(project.projectDir, '.ktx', 'db.sqlite'), { readonly: true });
+    try {
+      expect(db.prepare('SELECT key, summary, embedding_json IS NOT NULL AS has_embedding FROM knowledge_pages ORDER BY key').all()).toEqual([
+        { key: 'orders_context', summary: 'Orders source context', has_embedding: 0 },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('uses explicit action raw paths to avoid over-attributing work-unit provenance', async () => {
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+    await writeFile(join(sourceDir, 'orders', 'unrelated.json'), '{"name":"unrelated"}\n', 'utf-8');
+    const agentRunner = new WikiWritingWithRawPathAgentRunner();
+
+    const result = await runLocalIngest({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      adapter: 'fake',
+      connectionId: 'warehouse',
+      sourceDir,
+      jobId: 'wiki-raw-path-local-1',
+      agentRunner,
+    });
+
+    expect(result.result.failedWorkUnits).toEqual([]);
+    expect(result.report.body.provenanceRows).toEqual([
+      {
+        rawPath: 'orders/orders.json',
+        artifactKind: 'wiki',
+        artifactKey: 'orders_context',
+        targetConnectionId: null,
+        actionType: 'wiki_written',
+      },
+      {
+        rawPath: 'orders/unrelated.json',
+        artifactKind: null,
+        artifactKey: null,
+        targetConnectionId: null,
+        actionType: 'skipped',
+      },
+    ]);
   });
 
   it('runs historic-SQL evidence projection through the local bundle post-processor', async () => {

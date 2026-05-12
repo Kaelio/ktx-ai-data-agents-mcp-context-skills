@@ -1,4 +1,4 @@
-import { parseNotionConnectionConfig, resolveNotionAuthToken } from '@ktx/context/connections';
+import { parseNotionConnectionConfig, resolveNotionConnectionAuthToken } from '@ktx/context/connections';
 import { type NotionApi, type NotionBotInfo, NotionClient } from '@ktx/context/ingest';
 import {
   type KtxLocalProject,
@@ -223,7 +223,7 @@ export async function runKtxConnectionNotion(
       const project = await loadProject({ projectDir: args.projectDir });
       const rawConnection = notionConnection(project, args.connectionId);
       const notion = parseNotionConnectionConfig(rawConnection);
-      const authToken = await resolveNotionAuthToken(notion.auth_token_ref, { env: deps.env });
+      const authToken = await resolveNotionConnectionAuthToken(notion, { env: deps.env });
       const api = deps.createNotionApi ? deps.createNotionApi(authToken) : new NotionClient(authToken);
       const discovery = await discoverNotionPickerPages(api);
       const tree = buildPickerTree(discovery.pages);

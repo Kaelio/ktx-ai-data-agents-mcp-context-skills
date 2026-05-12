@@ -348,6 +348,12 @@ export function formatInstallSummary(
     idx += planned.length;
   }
 
+  const fileHints: Record<string, string> = {
+    skill: 'teaches your agent which KTX commands to run',
+    rule: 'tells your agent when to use KTX',
+    mcp: 'lets your agent talk to KTX over MCP',
+  };
+
   const lines: string[] = [];
   for (const install of installs) {
     const targetEntries = entriesByTarget.get(install.target) ?? [];
@@ -356,11 +362,13 @@ export function formatInstallSummary(
       const displayPath =
         install.scope === 'global' ? entry.path : relative(projectDir, entry.path);
       if (entry.kind === 'file') {
-        const label = entry.role === 'rule' ? 'Rule installed' : fileEntryLabels[install.target];
-        lines.push(`    + ${label}`);
+        const isRule = entry.role === 'rule' || fileEntryLabels[install.target] === 'Rule installed';
+        const label = isRule ? 'Rule installed' : fileEntryLabels[install.target];
+        const hint = fileHints[isRule ? 'rule' : (entry.role ?? 'skill')] ?? '';
+        lines.push(`    + ${label} — ${hint}`);
         lines.push(`      ${displayPath}`);
       } else {
-        lines.push(`    + MCP config added`);
+        lines.push(`    + MCP config added — ${fileHints.mcp}`);
         lines.push(`      ${displayPath}`);
       }
     }

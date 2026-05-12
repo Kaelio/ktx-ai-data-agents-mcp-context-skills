@@ -16,6 +16,7 @@ const ingestActionSchema = z.object({
   key: z.string(),
   detail: z.string(),
   targetConnectionId: z.string().nullable().default(null),
+  rawPaths: z.array(z.string()).optional(),
 });
 
 const touchedSlSourceSchema = z.object({
@@ -153,6 +154,7 @@ export const ingestReportSnapshotSchema = z
         ),
         failedWorkUnits: z.array(z.string()),
         reconciliationSkipped: z.boolean(),
+        reconciliationActions: z.array(ingestActionSchema).default([]),
         conflictsResolved: z.array(conflictResolvedSchema).default([]),
         evictionsApplied: z.array(evictionAppliedSchema).default([]),
         unmappedFallbacks: z.array(unmappedFallbackSchema).default([]),

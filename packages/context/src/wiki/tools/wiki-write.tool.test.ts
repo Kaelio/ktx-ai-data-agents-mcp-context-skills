@@ -6,6 +6,7 @@ import { WikiWriteTool } from './wiki-write.tool.js';
 function makeTool(overrides: any = {}) {
   const wikiService = {
     readPage: vi.fn().mockResolvedValue(null),
+    listPageKeys: vi.fn().mockResolvedValue([]),
     writePage: vi.fn().mockResolvedValue(undefined),
     syncSinglePage: vi.fn().mockResolvedValue(undefined),
     ...overrides.wikiService,
@@ -35,6 +36,21 @@ describe('WikiWriteTool', () => {
     expect(wikiService.writePage).toHaveBeenCalledTimes(1);
     expect(wikiService.syncSinglePage).toHaveBeenCalledTimes(1);
     expect(result.markdown).toMatch(/created/i);
+  });
+
+  it('rejects slash-delimited page keys with a flat-key suggestion', async () => {
+    const { tool, wikiService } = makeTool();
+    const result = await tool.call(
+      { key: 'orbit/company-overview', summary: 'Company overview', content: '# Orbit' } as any,
+      baseContext,
+    );
+
+    expect(result.structured).toEqual({ success: false, key: 'orbit/company-overview' });
+    expect(result.markdown).toContain(
+      'Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".',
+    );
+    expect(wikiService.readPage).not.toHaveBeenCalled();
+    expect(wikiService.writePage).not.toHaveBeenCalled();
   });
 
   it('normalizes accidentally escaped markdown newlines before writing', async () => {
@@ -100,12 +116,56 @@ describe('WikiWriteTool', () => {
     expect(result.markdown).toMatch(/content.*or.*replacements/i);
   });
 
+  it('updates frontmatter only on an existing page while preserving content', async () => {
+    const { tool, wikiService } = makeTool({
+      wikiService: {
+        readPage: vi.fn().mockResolvedValue({
+          pageKey: 'orbit-customers',
+          frontmatter: {
+            summary: 'Customer source details',
+            usage_mode: 'auto',
+            sort_order: 0,
+            tags: ['notion'],
+            refs: ['notion:old'],
+            sl_refs: ['postgres-warehouse/orbit_analytics.customer'],
+          },
+          content: '# Orbit Customers\n\nSource: Notion - Orbit Customers Source.',
+        }),
+      },
+    });
+
+    const result = await tool.call(
+      {
+        key: 'orbit-customers',
+        summary: 'Customer source details mapped to the warehouse customer view',
+        sl_refs: ['postgres-warehouse/orbit_analytics.customer', 'dbt-main/customer'],
+      } as any,
+      baseContext,
+    );
+
+    expect(result.structured).toMatchObject({ success: true, key: 'orbit-customers', action: 'updated' });
+    expect(wikiService.writePage).toHaveBeenCalledWith(
+      'USER',
+      'u',
+      'orbit-customers',
+      expect.objectContaining({
+        summary: 'Customer source details mapped to the warehouse customer view',
+        tags: ['notion'],
+        refs: ['notion:old'],
+        sl_refs: ['postgres-warehouse/orbit_analytics.customer', 'dbt-main/customer'],
+      }),
+      '# Orbit Customers\n\nSource: Notion - Orbit Customers Source.',
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
   it('writes historic-SQL frontmatter fields', async () => {
     const { tool, wikiService } = makeTool();
 
     await tool.call(
       {
-        key: 'queries/monthly-paid-orders',
+        key: 'monthly-paid-orders',
         summary: 'Monthly paid orders',
         tags: ['historic-sql', 'query-pattern'],
         sl_refs: ['analytics.orders'],
@@ -180,7 +240,7 @@ describe('WikiWriteTool', () => {
     const { tool, wikiService } = makeTool({
       wikiService: {
         readPage: vi.fn().mockResolvedValue({
-          pageKey: 'queries/monthly-paid-orders',
+          pageKey: 'monthly-paid-orders',
           frontmatter: existingFrontmatter,
           content: 'old body',
         }),
@@ -189,7 +249,7 @@ describe('WikiWriteTool', () => {
 
     await tool.call(
       {
-        key: 'queries/monthly-paid-orders',
+        key: 'monthly-paid-orders',
         summary: 'Monthly paid orders updated',
         content: '## Monthly paid order count updated',
       } as any,
@@ -200,5 +260,48 @@ describe('WikiWriteTool', () => {
       ...existingFrontmatter,
       summary: 'Monthly paid orders updated',
     });
+  });
+
+  it('rejects frontmatter refs that target missing wiki pages', async () => {
+    const { tool, wikiService } = makeTool({
+      wikiService: {
+        listPageKeys: vi.fn().mockResolvedValue(['orbit-company-overview']),
+      },
+    });
+
+    const result = await tool.call(
+      {
+        key: 'orbit-how-we-work',
+        summary: 'Operating norms',
+        content: '## How We Work',
+        refs: ['orbit-company-overview', 'orbit-team-lanes-detail'],
+      } as any,
+      baseContext,
+    );
+
+    expect(result.structured.success).toBe(false);
+    expect(result.markdown).toMatch(/orbit-team-lanes-detail/);
+    expect(wikiService.writePage).not.toHaveBeenCalled();
+  });
+
+  it('rejects inline wiki links that target missing wiki pages', async () => {
+    const { tool, wikiService } = makeTool({
+      wikiService: {
+        listPageKeys: vi.fn().mockResolvedValue(['orbit-company-overview']),
+      },
+    });
+
+    const result = await tool.call(
+      {
+        key: 'orbit-how-we-work',
+        summary: 'Operating norms',
+        content: 'See [[orbit-company-overview]] and [[orbit-team-lanes-detail]].',
+      } as any,
+      baseContext,
+    );
+
+    expect(result.structured.success).toBe(false);
+    expect(result.markdown).toMatch(/orbit-team-lanes-detail/);
+    expect(wikiService.writePage).not.toHaveBeenCalled();
   });
 });

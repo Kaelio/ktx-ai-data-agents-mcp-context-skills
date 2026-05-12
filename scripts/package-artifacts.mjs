@@ -1074,7 +1074,7 @@ try {
   requireStdout('ktx setup demo seeded', seeded, /Mode: seeded/);
   requireStdout('ktx setup demo seeded', seeded, /Source: packaged demo project/);
   requireStdout('ktx setup demo seeded', seeded, /LLM calls: none/);
-  requireStdout('ktx setup demo seeded', seeded, /ktx serve --mcp stdio/);
+  requireStdout('ktx setup demo seeded', seeded, /ktx agent context --json/);
   assert.doesNotMatch(seeded.stdout, new RegExp(['--mode', 'deterministic'].join(' ')));
   assert.doesNotMatch(seeded.stdout, /KTX memory flow/);
   requireProjectStderr('ktx setup demo seeded', seeded, projectDir);

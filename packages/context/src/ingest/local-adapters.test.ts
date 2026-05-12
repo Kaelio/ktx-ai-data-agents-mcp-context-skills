@@ -466,6 +466,38 @@ describe('local ingest adapters', () => {
     });
   });
 
+  it('exposes configured primary warehouses as dbt target connections', async () => {
+    const dbtProject: KtxLocalProject = {
+      ...projectWithConnections({
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgresql://example/db',
+        },
+        analytics_dbt: {
+          driver: 'dbt',
+          source_dir: '/repo/dbt',
+        },
+      }),
+      config: {
+        ...project.config,
+        setup: { database_connection_ids: ['warehouse'], completed_steps: [] },
+        connections: {
+          warehouse: {
+            driver: 'postgres',
+            url: 'postgresql://example/db',
+          },
+          analytics_dbt: {
+            driver: 'dbt',
+            source_dir: '/repo/dbt',
+          },
+        },
+      },
+    };
+    const adapter = createDefaultLocalIngestAdapters(dbtProject).find((candidate) => candidate.source === 'dbt');
+
+    await expect(adapter?.listTargetConnectionIds?.('/tmp/staged-dbt')).resolves.toEqual(['warehouse']);
+  });
+
   it('resolves MetricFlow auth_token_ref without writing literal tokens to config', async () => {
     const project = projectWithConnections({
       metricflow_main: {

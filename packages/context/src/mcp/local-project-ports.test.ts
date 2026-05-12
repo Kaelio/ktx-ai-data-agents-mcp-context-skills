@@ -617,7 +617,7 @@ describe('createLocalProjectMcpContextPorts', () => {
         userId: 'local-user',
         key: '../outside',
       }),
-    ).rejects.toThrow('Unsafe knowledge key');
+    ).rejects.toThrow('Invalid wiki key "../outside". Wiki keys must be flat; use "outside".');
 
     await expect(
       ports.semanticLayer?.readSource({

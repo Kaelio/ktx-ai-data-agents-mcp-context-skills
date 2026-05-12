@@ -36,6 +36,8 @@ import { writeProjectLocalSecretReference } from './setup-secrets.js';
 
 export type KtxSetupSourceType = 'dbt' | 'metricflow' | 'metabase' | 'looker' | 'lookml' | 'notion';
 
+const DEFAULT_NOTION_MAX_KNOWLEDGE_CREATES_PER_RUN = 25;
+
 export interface KtxSetupSourcesArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
@@ -508,8 +510,8 @@ function buildLookmlConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionC
 }
 
 function buildNotionConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionConfig {
-  const crawlMode = args.notionCrawlMode ?? 'selected_roots';
   const rootPageIds = args.notionRootPageIds ?? [];
+  const crawlMode = rootPageIds.length > 0 ? 'selected_roots' : (args.notionCrawlMode ?? 'selected_roots');
   if (crawlMode === 'selected_roots' && rootPageIds.length === 0) {
     throw new Error('Notion selected_roots requires --notion-root-page-id.');
   }
@@ -521,7 +523,7 @@ function buildNotionConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionC
     root_database_ids: [],
     root_data_source_ids: [],
     max_pages_per_run: 1000,
-    max_knowledge_creates_per_run: 5,
+    max_knowledge_creates_per_run: DEFAULT_NOTION_MAX_KNOWLEDGE_CREATES_PER_RUN,
     max_knowledge_updates_per_run: 20,
     last_successful_cursor: null,
   };
@@ -1185,10 +1187,10 @@ async function promptForInteractiveSource(
     },
     async (currentState) => {
       const crawlMode = await prompts.select({
-        message: 'Notion crawl mode',
+        message: 'Which Notion pages should KTX ingest?',
         options: [
-          { value: 'selected_roots', label: 'Selected roots' },
-          { value: 'all_accessible', label: 'All accessible pages' },
+          { value: 'selected_roots', label: 'Specific pages and their subpages (you\'ll paste page IDs)' },
+          { value: 'all_accessible', label: 'All pages the integration can access' },
           { value: 'back', label: 'Back' },
         ],
       });
@@ -1203,8 +1205,8 @@ async function promptForInteractiveSource(
       ? [
           async (currentState: SourcePromptState) => {
             const roots = await promptText(prompts, {
-              message: 'Notion root page ids',
-              placeholder: 'comma-separated ids',
+              message: 'Notion page IDs to ingest (each page includes all its subpages)',
+              placeholder: 'page-id-1, page-id-2',
             });
             if (roots === undefined) return 'back';
             currentState.notionRootPageIds = roots

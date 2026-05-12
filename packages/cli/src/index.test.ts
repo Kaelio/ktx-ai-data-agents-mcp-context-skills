@@ -1171,7 +1171,7 @@ describe('runKtxCli', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         cliVersion: '0.0.0-private',
-        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
         anthropicModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
@@ -1232,7 +1232,7 @@ describe('runKtxCli', () => {
         inputMode: 'disabled',
         skipLlm: true,
         embeddingBackend: 'openai',
-        embeddingApiKeyEnv: 'OPENAI_API_KEY',
+        embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
         skipEmbeddings: false,
       }),
       setupIo.io,
@@ -1333,7 +1333,7 @@ describe('runKtxCli', () => {
         source: 'metabase',
         sourceConnectionId: 'prod_metabase',
         sourceUrl: 'https://metabase.example.com',
-        sourceApiKeyRef: 'env:METABASE_API_KEY',
+        sourceApiKeyRef: 'env:METABASE_API_KEY', // pragma: allowlist secret
         sourceWarehouseConnectionId: 'warehouse',
         metabaseDatabaseId: 1,
       }),
@@ -1759,8 +1759,8 @@ describe('runKtxCli', () => {
           {
             results: [
               {
-                key: 'metrics/revenue',
-                path: 'knowledge/global/metrics/revenue.md',
+                key: 'metrics-revenue',
+                path: 'knowledge/global/metrics-revenue.md',
                 scope: 'GLOBAL',
                 summary: 'Revenue metric definition',
                 score: 0.02459016393442623,
@@ -1786,8 +1786,8 @@ describe('runKtxCli', () => {
     expect(JSON.parse(io.stdout())).toEqual({
       results: [
         expect.objectContaining({
-          key: 'metrics/revenue',
-          path: 'knowledge/global/metrics/revenue.md',
+          key: 'metrics-revenue',
+          path: 'knowledge/global/metrics-revenue.md',
           matchReasons: ['lexical', 'token'],
         }),
       ],

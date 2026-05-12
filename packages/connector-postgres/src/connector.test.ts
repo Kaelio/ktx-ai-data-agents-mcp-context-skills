@@ -358,4 +358,38 @@ describe('KtxPostgresScanConnector', () => {
     expect(snapshot.tables.length).toBeGreaterThan(0);
     expect(endCalled).toBe(true);
   });
+
+  it('attaches an error listener to the pg pool', async () => {
+    const on = vi.fn();
+    const poolFactory: KtxPostgresPoolFactory = {
+      createPool() {
+        return {
+          on,
+          async connect() {
+            return {
+              query: vi.fn(async () => ({ rows: [{ '?column?': 1 }], fields: [{ name: '?column?', dataTypeID: 23 }] })),
+              release: vi.fn(),
+            };
+          },
+          end: vi.fn(async () => undefined),
+        };
+      },
+    };
+    const connector = new KtxPostgresScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'postgres',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        password: 'test-password', // pragma: allowlist secret
+        readonly: true,
+      },
+      poolFactory,
+    });
+
+    await expect(connector.testConnection()).resolves.toEqual({ success: true });
+
+    expect(on).toHaveBeenCalledWith('error', expect.any(Function));
+  });
 });

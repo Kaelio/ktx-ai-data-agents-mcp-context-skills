@@ -84,6 +84,56 @@ describe('runKtxSl', () => {
     expect(listIo.stdout()).toContain('warehouse\torders\tcolumns=1\tmeasures=0\tjoins=0');
   });
 
+  it('fails validation when a table-backed source declares columns absent from a matching warehouse manifest', async () => {
+    const projectDir = join(tempDir, 'project');
+    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await project.fileStore.writeFile(
+      'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml',
+      `tables:
+  int_active_contract_arr:
+    table: orbit_analytics.int_active_contract_arr
+    columns:
+      - { name: contract_id, type: string }
+      - { name: contract_arr_cents, type: number }
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add warehouse manifest',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/dbt-main/int_active_contract_arr.yaml',
+      `name: int_active_contract_arr
+table: orbit_analytics.int_active_contract_arr
+grain: [contract_id]
+columns:
+  - { name: contract_id, type: string }
+  - { name: arr_cents, type: number }
+measures:
+  - { name: arr, expr: sum(arr_cents) }
+joins: []
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add invalid dbt source',
+    );
+
+    const validateIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'validate',
+          projectDir,
+          connectionId: 'dbt-main',
+          sourceName: 'int_active_contract_arr',
+        },
+        validateIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(validateIo.stderr()).toContain('arr_cents');
+    expect(validateIo.stderr()).toContain('absent from physical table');
+  });
+
   it('runs sl query and prints SQL output', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir, projectName: 'warehouse' });

@@ -7,6 +7,8 @@ import { notionManifestSchema, notionMetadataSchema } from './types.js';
 const MAX_NOTION_WORK_UNIT_CHARS = 40_000;
 export const NOTION_ORG_KNOWLEDGE_WARNING =
   'Anything accessible to this Notion integration can become organization knowledge.';
+const NOTION_SL_WRITE_GUIDANCE =
+  'Write wiki entries with wiki_write. Wiki keys must be flat slugs like orbit-company-overview, not orbit/company-overview. Search existing wiki pages for the same tables or sl_refs before creating a new page. Only write or edit SL sources after sl_discover/sl_read_source confirms a mapped non-Notion target source; if no mapped target exists, emit_unmapped_fallback and keep the fact wiki-only. Notion dataSourceCount counts Notion databases/data sources only, not warehouse/dbt mappings. If a warehouse/dbt connection exists but the named table or source is absent, use reason no_physical_table rather than no_connection_mapping. Do not create SL sources under the Notion connection just because a page mentions a warehouse table.';
 
 async function walk(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true, recursive: true });
@@ -92,7 +94,7 @@ export async function chunkNotionStagedDir(stagedDir: string, diffSet?: DiffSet)
           rawFiles,
           dependencyPaths,
           peerFileIndex,
-          notes: `Synthesize durable wiki and SL knowledge from this Notion page span only. Use read_raw_span on ${pagePath} for lines ${range.startLine}-${range.endLine}; do not call read_raw_file for oversized pages. Cite evidence chunk/page IDs.`,
+          notes: `Synthesize durable wiki and SL knowledge from this Notion page span only. Use read_raw_span on ${pagePath} for lines ${range.startLine}-${range.endLine}; do not call read_raw_file for oversized pages. ${NOTION_SL_WRITE_GUIDANCE} Cite evidence chunk/page IDs.`,
         });
       }
       continue;
@@ -105,7 +107,7 @@ export async function chunkNotionStagedDir(stagedDir: string, diffSet?: DiffSet)
       dependencyPaths,
       peerFileIndex,
       notes:
-        'Synthesize durable wiki and SL knowledge from this Notion page. Write wiki entries with wiki_write and SL sources with sl_write_source; cite evidence chunk/page IDs.',
+        `Synthesize durable wiki and SL knowledge from this Notion page. ${NOTION_SL_WRITE_GUIDANCE} Cite evidence chunk/page IDs.`,
     });
   }
 
@@ -115,6 +117,8 @@ export async function chunkNotionStagedDir(stagedDir: string, diffSet?: DiffSet)
     reconcileNotes: [
       `Notion maxKnowledgeCreatesPerRun=${manifest.maxKnowledgeCreatesPerRun}`,
       `Notion maxKnowledgeUpdatesPerRun=${manifest.maxKnowledgeUpdatesPerRun}`,
+      'Notion dataSourceCount is Notion-only; use sl_discover for warehouse/dbt mapping decisions.',
+      'Reconcile Notion wiki pages sharing tables/sl_refs before creating distinct artifacts.',
     ],
     contextReport: {
       capped: manifest.capped,

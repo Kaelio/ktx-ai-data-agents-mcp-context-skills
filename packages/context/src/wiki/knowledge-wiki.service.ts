@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import type { KtxEmbeddingPort, KtxFileStorePort, KtxLogger } from '../core/index.js';
 import { noopLogger } from '../core/index.js';
+import { assertFlatWikiKey, isFlatWikiKey } from './keys.js';
 import { buildKnowledgeSearchText } from './knowledge-search-text.js';
 import type { KnowledgeGitDiffPort, KnowledgeIndexPort, UpsertPageParams } from './ports.js';
 import type { WikiFrontmatter, WikiPage, WikiPageWithScope } from './types.js';
@@ -9,6 +10,10 @@ import type { WikiFrontmatter, WikiPage, WikiPageWithScope } from './types.js';
 const WIKI_PREFIX = 'knowledge';
 
 export type { WikiFrontmatter };
+
+function isHistoricSqlPathSegment(segment: string): boolean {
+  return /^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(segment);
+}
 
 export class KnowledgeWikiService {
   private isWorktreeScoped = false;
@@ -53,7 +58,7 @@ export class KnowledgeWikiService {
   }
 
   pagePath(scope: string, scopeId: string | null | undefined, pageKey: string): string {
-    return `${this.scopeDir(scope, scopeId)}/${pageKey}.md`;
+    return `${this.scopeDir(scope, scopeId)}/${assertFlatWikiKey(pageKey)}.md`;
   }
 
   // ── Parsing / serialization ───────────────────────────────────
@@ -140,7 +145,7 @@ export class KnowledgeWikiService {
           const name = f.replace(`${dir}/`, '').replace(/\.md$/, '');
           return name;
         })
-        .filter((name) => !name.includes('/'));
+        .filter(isFlatWikiKey);
     } catch {
       return [];
     }
@@ -417,6 +422,7 @@ export class KnowledgeWikiService {
  * Parse a `knowledge/<scope>/...` file path into its scope and page key.
  *   `knowledge/global/foo.md` → { scope: 'GLOBAL', scopeId: null, pageKey: 'foo' }
  *   `knowledge/user/<id>/bar.md` → { scope: 'USER', scopeId: '<id>', pageKey: 'bar' }
+ *   `knowledge/global/historic-sql/foo.md` → { scope: 'GLOBAL', scopeId: null, pageKey: 'historic-sql/foo' }
  */
 function parseKnowledgePath(path: string): { scope: string; scopeId: string | null; pageKey: string } | null {
   if (!path.endsWith('.md')) {
@@ -428,10 +434,19 @@ function parseKnowledgePath(path: string): { scope: string; scopeId: string | nu
   }
   const rest = segments.slice(1);
   if (rest.length === 2 && rest[0] === 'global') {
-    return { scope: 'GLOBAL', scopeId: null, pageKey: rest[1].replace(/\.md$/, '') };
+    const pageKey = rest[1].replace(/\.md$/, '');
+    return isFlatWikiKey(pageKey) ? { scope: 'GLOBAL', scopeId: null, pageKey } : null;
+  }
+  if (rest.length >= 3 && rest[0] === 'global' && rest[1] === 'historic-sql') {
+    const historicPath = rest.slice(2).join('/').replace(/\.md$/, '');
+    if (historicPath.split('/').every(isHistoricSqlPathSegment)) {
+      return { scope: 'GLOBAL', scopeId: null, pageKey: `historic-sql/${historicPath}` };
+    }
+    return null;
   }
   if (rest.length === 3 && rest[0] === 'user') {
-    return { scope: 'USER', scopeId: rest[1], pageKey: rest[2].replace(/\.md$/, '') };
+    const pageKey = rest[2].replace(/\.md$/, '');
+    return isFlatWikiKey(pageKey) ? { scope: 'USER', scopeId: rest[1], pageKey } : null;
   }
   return null;
 }
