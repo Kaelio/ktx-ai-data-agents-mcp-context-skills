@@ -153,10 +153,9 @@ describe('standalone example docs', () => {
     for (const command of [
       'ktx status --json',
       'ktx sl list --json',
-      'ktx sl read orders --json',
+      'ktx sl search "revenue" --json',
       'ktx sl query --json',
       'ktx wiki search "revenue recognition" --json',
-      'ktx wiki read order-status-definitions --json',
     ]) {
       assert.match(servingAgents, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }

@@ -34,11 +34,9 @@ description: Use local KTX semantic context and wiki knowledge for this project.
 Available commands:
 - `ktx status --json --project-dir /path/to/project`
 - `ktx sl list --json --project-dir /path/to/project`
-- `ktx sl list --json --project-dir /path/to/project --query '<text>'`
-- `ktx sl read '<sourceName>' --json --project-dir /path/to/project --connection-id '<id>'`
+- `ktx sl search '<text>' --json --project-dir /path/to/project --connection-id '<id>'`
 - `ktx sl query --json --project-dir /path/to/project --connection-id '<id>' --query-file '<path>' --execute --max-rows 100`
 - `ktx wiki search '<query>' --json --project-dir /path/to/project --limit 10`
-- `ktx wiki read '<pageId>' --json --project-dir /path/to/project`
 ```
 
 ### Workflow tips
@@ -127,12 +125,8 @@ All supported agent clients call the same KTX CLI commands:
 |---------|-------------|
 | `ktx status --json` | Return project setup and context readiness |
 | `ktx wiki search <query> --json` | Search knowledge pages |
-| `ktx wiki read <key> --json` | Read a knowledge page |
-| `ktx wiki write <key>` | Write or update a knowledge page |
 | `ktx sl list --json` | List semantic-layer sources |
-| `ktx sl list --query <text> --json` | Search semantic-layer sources |
-| `ktx sl read <source> --json --connection-id <id>` | Read a semantic source definition |
-| `ktx sl write <source> --connection-id <id>` | Write or update a semantic source |
+| `ktx sl search <query> --json` | Search semantic-layer sources |
 | `ktx sl validate <source> --connection-id <id>` | Validate semantic source definitions |
 | `ktx sl query --json` | Execute a semantic-layer query when semantic compute is configured |
 
