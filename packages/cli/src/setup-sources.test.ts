@@ -624,6 +624,32 @@ describe('setup sources step', () => {
     expect(options).toContainEqual({ value: 'notion', label: 'Notion' });
   });
 
+  it('shows already configured context sources in the interactive checklist', async () => {
+    await addPrimarySource();
+    await addConnection('notion-main', {
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      crawl_mode: 'all_accessible',
+    });
+    const io = makeIo();
+    const testPrompts = prompts({ multiselect: [['back']] });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        { prompts: testPrompts },
+      ),
+    ).resolves.toEqual({ status: 'back', projectDir });
+
+    expect(testPrompts.multiselect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialValues: ['notion'],
+        options: expect.arrayContaining([{ value: 'notion', label: 'Notion', hint: 'configured: notion-main' }]),
+      }),
+    );
+  });
+
   it('uses a source-specific editable connection name for new interactive connections', async () => {
     await addPrimarySource();
     const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
