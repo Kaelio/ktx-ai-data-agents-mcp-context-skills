@@ -369,14 +369,6 @@ function setExpanded(state: PickerState, nodeId: string, value: boolean | 'toggl
   return cloneState(state, { expanded });
 }
 
-function expandPath(state: PickerState, nodeId: string): PickerState {
-  const expanded = new Set(state.expanded);
-  for (const ancestorId of ancestorsOf(nodeId, state.byId)) {
-    expanded.add(ancestorId);
-  }
-  return cloneState(state, { expanded });
-}
-
 export function moveCursor(state: PickerState, dir: 'up' | 'down' | 'left' | 'right'): PickerState {
   const node = state.byId.get(state.cursorId);
   if (!node) {

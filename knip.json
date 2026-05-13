@@ -1,0 +1,114 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.mjs"],
+      "project": ["scripts/**/*.mjs"]
+    },
+    "packages/cli": {
+      "entry": [
+        "src/index.ts",
+        "src/bin.ts",
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "scripts/**/*.mjs"
+      ],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs", "vitest.config.ts"]
+    },
+    "packages/context": {
+      "entry": [
+        "src/index.ts",
+        "src/agent/index.ts",
+        "src/core/index.ts",
+        "src/connections/index.ts",
+        "src/daemon/index.ts",
+        "src/ingest/index.ts",
+        "src/ingest/memory-flow/index.ts",
+        "src/ingest/metabase-mapping.ts",
+        "src/scan/index.ts",
+        "src/search/index.ts",
+        "src/sql-analysis/index.ts",
+        "src/memory/index.ts",
+        "src/mcp/index.ts",
+        "src/project/index.ts",
+        "src/prompts/index.ts",
+        "src/skills/index.ts",
+        "src/sl/index.ts",
+        "src/sl/descriptions.ts",
+        "src/tools/index.ts",
+        "src/wiki/index.ts",
+        "src/**/*.test.ts",
+        "scripts/**/*.mjs"
+      ],
+      "project": ["src/**/*.ts", "scripts/**/*.mjs", "vitest.config.ts"]
+    },
+    "packages/llm": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts", "vitest.config.ts"]
+    },
+    "packages/connector-*": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "docs-site": {
+      "entry": [
+        "app/**/*.{ts,tsx}",
+        "components/**/*.{ts,tsx}",
+        "lib/**/*.{ts,tsx}",
+        "middleware.ts",
+        "next.config.mjs",
+        "source.config.ts",
+        "tests/**/*.mjs"
+      ],
+      "project": [
+        "app/**/*.{ts,tsx}",
+        "components/**/*.{ts,tsx}",
+        "lib/**/*.{ts,tsx}",
+        "*.ts",
+        "*.mjs",
+        "tests/**/*.mjs"
+      ],
+      "ignoreDependencies": ["tailwindcss"]
+    }
+  },
+  "ignore": [
+    "**/dist/**",
+    "**/coverage/**",
+    "**/.next/**",
+    "**/node_modules/**",
+    "**/*.gen.ts",
+    "**/*.generated.ts"
+  ],
+  "ignoreIssues": {
+    "packages/cli/src/clack.ts": ["exports"],
+    "packages/cli/src/commands/connection-metabase-setup.ts": ["exports", "types"],
+    "packages/cli/src/ingest.test-utils.ts": ["exports"],
+    "packages/cli/src/io/symbols.ts": ["exports"],
+    "packages/cli/src/managed-python-command.ts": ["types"],
+    "packages/cli/src/managed-python-daemon.ts": ["types"],
+    "packages/cli/src/managed-python-http.ts": ["exports", "types"],
+    "packages/cli/src/managed-python-runtime.ts": ["types"],
+    "packages/cli/src/memory-flow-tui.tsx": ["types"],
+    "packages/cli/src/next-steps.ts": ["exports"],
+    "packages/cli/src/print-command-tree.ts": ["exports"],
+    "packages/cli/src/setup-agents.ts": ["exports", "types"],
+    "packages/cli/src/setup-context.ts": ["types"],
+    "packages/cli/src/setup-demo-tour.ts": ["exports"],
+    "packages/cli/src/setup-models.ts": ["exports"],
+    "packages/cli/src/setup-project.ts": ["types"],
+    "packages/cli/src/setup-ready-menu.ts": ["types"],
+    "packages/cli/src/setup-sources.ts": ["types"],
+    "packages/context/src/ingest/adapters/historic-sql/pattern-inputs.ts": ["exports", "types"],
+    "packages/context/src/ingest/adapters/lookml/pull-config.ts": ["exports"],
+    "packages/context/src/ingest/adapters/metabase/serialize-card.ts": ["types"],
+    "packages/context/src/ingest/adapters/metabase/types.ts": ["exports"],
+    "packages/context/src/ingest/adapters/metricflow/parse.ts": ["types"],
+    "packages/context/src/ingest/ports.ts": ["types"],
+    "packages/context/src/ingest/stages/stage-3-work-units.ts": ["types"],
+    "packages/context/src/ingest/stages/stage-index.types.ts": ["types"],
+    "packages/context/src/project/config.ts": ["types"],
+    "packages/context/src/scan/relationship-candidates.ts": ["types"],
+    "packages/context/src/scan/relationship-diagnostics.ts": ["types"],
+    "packages/context/src/tools/context-evidence-tool-store.ts": ["types"]
+  }
+}

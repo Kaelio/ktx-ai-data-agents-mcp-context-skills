@@ -33,6 +33,19 @@ repos:
         name: ruff format (python)
         files: ^python/
 
+  - repo: local
+    hooks:
+      - id: biome-dead-code
+        name: biome dead-code check
+        entry: pnpm exec biome ci . --formatter-enabled=false --assist-enabled=false
+        language: system
+        pass_filenames: false
+      - id: knip-dead-code
+        name: knip dead-code check
+        entry: pnpm exec knip --reporter compact
+        language: system
+        pass_filenames: false
+
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:

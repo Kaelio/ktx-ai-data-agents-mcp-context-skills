@@ -126,10 +126,6 @@ async function writeSqliteScanConfig(projectDir: string, dbPath: string, enrich 
   );
 }
 
-function parseJsonOutput<T>(stdout: string): T {
-  return JSON.parse(stdout) as T;
-}
-
 function expectProjectStderr(result: CliResult, projectDir: string): void {
   expect(result).toMatchObject({ code: 0, stderr: `Project: ${projectDir}\n` });
 }

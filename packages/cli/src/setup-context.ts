@@ -474,16 +474,6 @@ async function markContextComplete(projectDir: string): Promise<void> {
   await markKtxSetupStateStepComplete(projectDir, 'context');
 }
 
-function writeBuildHeader(projectDir: string, runId: string, io: KtxCliIo): void {
-  const commands = contextBuildCommands(projectDir, runId);
-  io.stdout.write('\nKTX context build\n');
-  io.stdout.write(`Run: ${runId}\n`);
-  io.stdout.write(`Project: ${resolve(projectDir)}\n\n`);
-  io.stdout.write('Detach: press d to leave this running.\n');
-  io.stdout.write(`Resume: ${commands.watch}\n`);
-  io.stdout.write(`Status: ${commands.status}\n\n`);
-}
-
 function writeMissingCapabilities(missing: string[], io: KtxCliIo): void {
   io.stderr.write('KTX cannot build agent-ready context yet.\n\n');
   io.stderr.write('Missing:\n');

@@ -22,10 +22,6 @@ function publicPackagePattern(text) {
   return new RegExp(text.replaceAll('{package}', escapeRegExp(publicNpmPackageName())));
 }
 
-function runtimeWheelPackagePattern(text) {
-  return new RegExp(text.replaceAll('{package}', escapeRegExp(runtimeWheelPackageName())));
-}
-
 describe('standalone example docs', () => {
   it('documents the local warehouse example from the examples index', async () => {
     const examples = await readText('examples/README.md');

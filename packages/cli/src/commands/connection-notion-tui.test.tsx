@@ -1,6 +1,6 @@
 /* @jsxImportSource react */
 import { render as renderInkTest } from 'ink-testing-library';
-import React, { act, type ReactNode } from 'react';
+import { act, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildInitialState, buildPickerTree, type NotionPickerPageInput } from './connection-notion-tree.js';
 import {

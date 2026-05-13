@@ -53,7 +53,6 @@ function fixSuggestions(input: MemoryFlowReplayInput): string[] {
 
 export function formatMemoryFlowFinalSummary(input: MemoryFlowReplayInput): string {
   const sources = eventsOf(input.events, 'source_acquired');
-  const source = sources.at(-1);
   const totalFiles = sources.reduce((sum, s) => sum + s.fileCount, 0);
   const saved = latest(input.events, 'saved');
   const provenance = latest(input.events, 'provenance_recorded');

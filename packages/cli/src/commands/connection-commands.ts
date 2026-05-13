@@ -188,7 +188,7 @@ export function registerConnectionCommands(program: Command, context: KtxCliComm
   registerConnectionNotionCommands(connection, context);
 }
 
-export function registerConnectionMappingCommands(connection: Command, context: KtxCliCommandContext): void {
+function registerConnectionMappingCommands(connection: Command, context: KtxCliCommandContext): void {
   const mapping = connection
     .command('mapping')
     .description('Manage Metabase warehouse mappings')

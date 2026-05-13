@@ -1,0 +1,36 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "assist": {
+    "enabled": false
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "files": {
+    "includes": [
+      "scripts/**/*.mjs",
+      "packages/**/*.ts",
+      "packages/**/*.tsx",
+      "docs-site/**/*.ts",
+      "docs-site/**/*.tsx",
+      "docs-site/**/*.mjs",
+      "!**/dist/**",
+      "!**/coverage/**",
+      "!**/.next/**",
+      "!**/node_modules/**",
+      "!**/*.gen.ts",
+      "!**/*.generated.ts"
+    ]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "noUnusedPrivateClassMembers": "error"
+      }
+    }
+  }
+}
