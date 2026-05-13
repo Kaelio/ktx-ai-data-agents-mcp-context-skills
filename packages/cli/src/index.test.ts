@@ -611,15 +611,69 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('rejects removed public ingest shorthand', async () => {
+  it('routes public connection-centric ingest shorthand', async () => {
     const testIo = makeIo();
-    const ingest = vi.fn().mockResolvedValue(0);
+    const publicIngest = vi.fn().mockResolvedValue(0);
 
-    await expect(runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse'], testIo.io, { ingest }))
-      .resolves.toBe(1);
+    await expect(
+      runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse', '--fast', '--no-input'], testIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(0);
 
-    expect(ingest).not.toHaveBeenCalled();
-    expect(testIo.stderr()).toMatch(/unknown command|error:/);
+    expect(publicIngest).toHaveBeenCalledWith(
+      {
+        command: 'run',
+        projectDir: '/tmp/project',
+        targetConnectionId: 'warehouse',
+        all: false,
+        json: false,
+        inputMode: 'disabled',
+        depth: 'fast',
+        queryHistory: 'default',
+      },
+      testIo.io,
+    );
+    expect(testIo.stderr()).toBe('Project: /tmp/project\n');
+  });
+
+  it('routes public ingest --all --deep with JSON output', async () => {
+    const testIo = makeIo();
+    const publicIngest = vi.fn().mockResolvedValue(0);
+
+    await expect(
+      runKtxCli(['--project-dir', '/tmp/project', 'ingest', '--all', '--deep', '--json'], testIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(0);
+
+    expect(publicIngest).toHaveBeenCalledWith(
+      {
+        command: 'run',
+        projectDir: '/tmp/project',
+        all: true,
+        json: true,
+        inputMode: 'auto',
+        depth: 'deep',
+        queryHistory: 'default',
+      },
+      testIo.io,
+    );
+    expect(testIo.stderr()).toBe('');
+  });
+
+  it('rejects mutually exclusive public ingest depth flags before dispatch', async () => {
+    const testIo = makeIo();
+    const publicIngest = vi.fn().mockResolvedValue(0);
+
+    await expect(
+      runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse', '--fast', '--deep'], testIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(1);
+
+    expect(publicIngest).not.toHaveBeenCalled();
+    expect(testIo.stderr()).toMatch(/option '--(deep|fast)' cannot be used with option '--(fast|deep)'/);
   });
 
   it('prints ingest watch help from Commander', async () => {
@@ -715,13 +769,18 @@ describe('runKtxCli', () => {
 
     await expect(runKtxCli(['ingest', '--help'], testIo.io, { ingest })).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx ingest [options] [command]');
-    expect(testIo.stdout()).toContain('Run or inspect local ingest memory-flow output');
-    expect(testIo.stdout()).toContain('run');
+    expect(testIo.stdout()).toContain('Usage: ktx ingest [options] [connectionId]');
+    expect(testIo.stdout()).toContain('Build or inspect KTX context');
+    expect(testIo.stdout()).toContain('--all');
+    expect(testIo.stdout()).toContain('--fast');
+    expect(testIo.stdout()).toContain('--deep');
+    expect(testIo.stdout()).toContain('--query-history');
+    expect(testIo.stdout()).toContain('--no-query-history');
+    expect(testIo.stdout()).toContain('--query-history-window-days <days>');
     expect(testIo.stdout()).toContain('status');
-    expect(testIo.stdout()).toContain('watch');
     expect(testIo.stdout()).toContain('replay');
-    expect(testIo.stdout()).not.toContain('--all');
+    expect(testIo.stdout()).not.toMatch(/^  run\s/m);
+    expect(testIo.stdout()).not.toMatch(/^  watch\s/m);
     expect(testIo.stderr()).toBe('');
     expect(ingest).not.toHaveBeenCalled();
   });

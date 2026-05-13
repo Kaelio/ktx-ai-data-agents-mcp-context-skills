@@ -1,9 +1,15 @@
 import { resolve } from 'node:path';
 import { type Command, Option } from '@commander-js/extra-typings';
-import { type KtxCliCommandContext, type OutputModeOptions, resolveCommandProjectDir } from '../cli-program.js';
+import {
+  type KtxCliCommandContext,
+  type OutputModeOptions,
+  parsePositiveIntegerOption,
+  resolveCommandProjectDir,
+} from '../cli-program.js';
 import type { KtxCliDeps, KtxCliIo } from '../index.js';
 import type { KtxIngestArgs, KtxIngestOutputMode } from '../ingest.js';
 import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
+import type { KtxPublicIngestArgs } from '../public-ingest.js';
 import { profileMark } from '../startup-profile.js';
 
 profileMark('module:commands/ingest-commands');
@@ -41,6 +47,21 @@ function inputMode(options: OutputModeOptions): Pick<KtxIngestArgs, 'inputMode'>
   return options.input === false ? { inputMode: 'disabled' } : {};
 }
 
+function resolvedOptions<T extends object>(command: Command, fallback: T): T {
+  return (command.optsWithGlobals ? command.optsWithGlobals() : fallback) as T;
+}
+
+function assertOutputModeCompatible(options: OutputModeOptions): void {
+  const requested = [
+    options.plain === true ? '--plain' : undefined,
+    options.json === true ? '--json' : undefined,
+    options.viz === true ? '--viz' : undefined,
+  ].filter((option): option is string => option !== undefined);
+  if (requested.length > 1) {
+    throw new Error(`Output mode options cannot be used together: ${requested.join(', ')}`);
+  }
+}
+
 async function runIngestArgs(
   context: KtxCliCommandContext,
   args: KtxIngestArgs,
@@ -57,15 +78,45 @@ export function registerIngestCommands(
 ): void {
   const ingest = program
     .command('ingest')
-    .description('Run or inspect local ingest memory-flow output')
+    .description('Build or inspect KTX context')
+    .usage('[options] [connectionId]')
+    .argument('[connectionId]', 'Configured connection id to ingest')
+    .option('--all', 'Ingest all configured connections', false)
+    .addOption(new Option('--fast', 'Use deterministic database schema ingest').conflicts('deep'))
+    .addOption(new Option('--deep', 'Use AI-enriched database ingest').conflicts('fast'))
+    .addOption(new Option('--query-history', 'Include database query-history usage patterns').conflicts('noQueryHistory'))
+    .addOption(new Option('--no-query-history', 'Skip database query-history usage patterns'))
+    .option('--query-history-window-days <days>', 'Query-history lookback window for this run', parsePositiveIntegerOption)
+    .addOption(new Option('--plain', 'Print plain text output').conflicts(['json']))
+    .addOption(new Option('--json', 'Print JSON output').conflicts(['plain']))
+    .option('--no-input', 'Disable interactive terminal input')
     .showHelpAfterError();
+
+  ingest.action(async (connectionId: string | undefined, options, command) => {
+    const { runKtxPublicIngest } = await import('../public-ingest.js');
+    const queryHistory =
+      options.queryHistory === true ? 'enabled' : options.queryHistory === false ? 'disabled' : 'default';
+    const args: KtxPublicIngestArgs = {
+      command: 'run',
+      projectDir: resolveCommandProjectDir(command),
+      ...(connectionId ? { targetConnectionId: connectionId } : {}),
+      all: options.all === true,
+      json: options.json === true,
+      inputMode: options.input === false ? 'disabled' : 'auto',
+      ...(options.fast === true ? { depth: 'fast' as const } : {}),
+      ...(options.deep === true ? { depth: 'deep' as const } : {}),
+      queryHistory,
+      ...(options.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: options.queryHistoryWindowDays } : {}),
+    };
+    context.setExitCode(await (context.deps.publicIngest ?? runKtxPublicIngest)(args, context.io));
+  });
 
   ingest.hook('preAction', (_thisCommand, actionCommand) => {
     context.writeDebug?.('ingest', actionCommand);
   });
 
   ingest
-    .command('run')
+    .command('run', { hidden: true })
     .description('Run local ingest for one configured connection and source adapter')
     .requiredOption('--connection-id <connectionId>', 'KTX connection id')
     .requiredOption('--adapter <adapter>', 'Ingest source adapter name')
@@ -79,6 +130,8 @@ export function registerIngestCommands(
     .option('--yes', 'Install the managed Python runtime without prompting when required', false)
     .option('--no-input', 'Disable interactive terminal input for visualization')
     .action(async (options, command) => {
+      const commandOptionsWithGlobals = resolvedOptions(command, options);
+      assertOutputModeCompatible(commandOptionsWithGlobals);
       if (options.reportFile) {
         throw new Error('--report-file is only supported for ingest status/watch');
       }
@@ -87,15 +140,17 @@ export function registerIngestCommands(
         {
           command: 'run',
           projectDir: resolveCommandProjectDir(command),
-          connectionId: options.connectionId,
-          adapter: options.adapter,
-          sourceDir: options.sourceDir ? resolve(options.sourceDir) : undefined,
-          databaseIntrospectionUrl: options.databaseIntrospectionUrl || undefined,
+          connectionId: commandOptionsWithGlobals.connectionId,
+          adapter: commandOptionsWithGlobals.adapter,
+          sourceDir: commandOptionsWithGlobals.sourceDir ? resolve(commandOptionsWithGlobals.sourceDir) : undefined,
+          databaseIntrospectionUrl: commandOptionsWithGlobals.databaseIntrospectionUrl || undefined,
           cliVersion: context.packageInfo.version,
-          runtimeInstallPolicy: runtimeInstallPolicyFromFlags({ yes: options.yes }),
-          ...(options.debugLlmRequestFile ? { debugLlmRequestFile: resolve(options.debugLlmRequestFile) } : {}),
-          outputMode: outputMode(options),
-          ...inputMode(options),
+          runtimeInstallPolicy: runtimeInstallPolicyFromFlags({ yes: commandOptionsWithGlobals.yes }),
+          ...(commandOptionsWithGlobals.debugLlmRequestFile
+            ? { debugLlmRequestFile: resolve(commandOptionsWithGlobals.debugLlmRequestFile) }
+            : {}),
+          outputMode: outputMode(commandOptionsWithGlobals),
+          ...inputMode(commandOptionsWithGlobals),
         },
         commandOptions,
       );
@@ -111,22 +166,24 @@ export function registerIngestCommands(
     .addOption(new Option('--viz', 'Render memory-flow TUI output').conflicts(['plain', 'json']))
     .option('--no-input', 'Disable interactive terminal input for visualization')
     .action(async (runId: string | undefined, options, command) => {
+      const commandOptionsWithGlobals = resolvedOptions(command, options);
+      assertOutputModeCompatible(commandOptionsWithGlobals);
       await runIngestArgs(
         context,
         {
           command: 'status',
           projectDir: resolveCommandProjectDir(command),
           ...(runId ? { runId } : {}),
-          ...(options.reportFile ? { reportFile: resolve(options.reportFile) } : {}),
-          outputMode: outputMode(options),
-          ...inputMode(options),
+          ...(commandOptionsWithGlobals.reportFile ? { reportFile: resolve(commandOptionsWithGlobals.reportFile) } : {}),
+          outputMode: outputMode(commandOptionsWithGlobals),
+          ...inputMode(commandOptionsWithGlobals),
         },
         commandOptions,
       );
     });
 
   ingest
-    .command('watch')
+    .command('watch', { hidden: true })
     .description('Open the latest or selected stored ingest visual report')
     .argument('[runId]', 'Local ingest run id, report id, run id, or job id')
     .option('--report-file <path>', 'Bundle ingest report JSON file to render')
@@ -135,15 +192,17 @@ export function registerIngestCommands(
     .addOption(new Option('--viz', 'Render memory-flow TUI output').conflicts(['plain', 'json']))
     .option('--no-input', 'Disable interactive terminal input for visualization')
     .action(async (runId: string | undefined, options, command) => {
+      const commandOptionsWithGlobals = resolvedOptions(command, options);
+      assertOutputModeCompatible(commandOptionsWithGlobals);
       await runIngestArgs(
         context,
         {
           command: 'watch',
           projectDir: resolveCommandProjectDir(command),
           ...(runId ? { runId } : {}),
-          ...(options.reportFile ? { reportFile: resolve(options.reportFile) } : {}),
-          outputMode: watchOutputMode(options),
-          ...inputMode(options),
+          ...(commandOptionsWithGlobals.reportFile ? { reportFile: resolve(commandOptionsWithGlobals.reportFile) } : {}),
+          outputMode: watchOutputMode(commandOptionsWithGlobals),
+          ...inputMode(commandOptionsWithGlobals),
         },
         commandOptions,
       );
@@ -159,15 +218,17 @@ export function registerIngestCommands(
     .addOption(new Option('--viz', 'Render memory-flow TUI output').conflicts(['plain', 'json']))
     .option('--no-input', 'Disable interactive terminal input for visualization')
     .action(async (runId: string, options, command) => {
+      const commandOptionsWithGlobals = resolvedOptions(command, options);
+      assertOutputModeCompatible(commandOptionsWithGlobals);
       await runIngestArgs(
         context,
         {
           command: 'replay',
           projectDir: resolveCommandProjectDir(command),
           runId,
-          ...(options.reportFile ? { reportFile: resolve(options.reportFile) } : {}),
-          outputMode: outputMode(options),
-          ...inputMode(options),
+          ...(commandOptionsWithGlobals.reportFile ? { reportFile: resolve(commandOptionsWithGlobals.reportFile) } : {}),
+          outputMode: outputMode(commandOptionsWithGlobals),
+          ...inputMode(commandOptionsWithGlobals),
         },
         commandOptions,
       );

@@ -133,10 +133,6 @@ describe('dev Commander tree', () => {
       argv: ['scan', '--help'],
       expected: ['Usage: ktx scan [options] <connectionId>', '--mode <mode>', 'structural', 'relationships', '--dry-run'],
     },
-    {
-      argv: ['ingest', 'run', '--help'],
-      expected: ['Usage: ktx ingest run [options]', '--connection-id <connectionId>', '--adapter <adapter>'],
-    },
   ])('prints generated nested help for $argv', async ({ argv, expected }) => {
     const io = makeIo();
     const doctor = vi.fn(async () => 0);
@@ -156,6 +152,27 @@ describe('dev Commander tree', () => {
     expect(doctor).not.toHaveBeenCalled();
     expect(ingest).not.toHaveBeenCalled();
     expect(scan).not.toHaveBeenCalled();
+  });
+
+  it('keeps legacy adapter-backed ingest run callable but hidden from ingest help', async () => {
+    const helpIo = makeIo();
+    const runIo = makeIo();
+    const ingest = vi.fn(async () => 0);
+
+    await expect(runKtxCli(['ingest', '--help'], helpIo.io, { ingest })).resolves.toBe(0);
+    await expect(
+      runKtxCli(
+        ['ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase', '--project-dir', '/tmp/project'],
+        runIo.io,
+        { ingest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(helpIo.stdout()).not.toMatch(/^  run\s/m);
+    expect(ingest).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'run', connectionId: 'warehouse', adapter: 'metabase' }),
+      runIo.io,
+    );
   });
 
   it('dispatches top-level scan through Commander with injected dependencies', async () => {
