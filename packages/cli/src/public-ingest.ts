@@ -58,6 +58,7 @@ export interface KtxPublicIngestPlanTarget {
     enabled: boolean;
     dialect?: HistoricSqlDialect;
     windowDays?: number;
+    pullConfig?: Record<string, unknown>;
     unsupported?: boolean;
     skippedStoredByFast?: boolean;
   };
@@ -203,6 +204,19 @@ function positiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
+function queryHistoryPullConfig(input: {
+  stored: Record<string, unknown>;
+  dialect: HistoricSqlDialect;
+  windowDays?: number;
+}): Record<string, unknown> {
+  const { enabled: _enabled, dialect: _dialect, ...storedConfig } = input.stored;
+  return {
+    ...storedConfig,
+    dialect: input.dialect,
+    ...(input.windowDays !== undefined ? { windowDays: input.windowDays } : {}),
+  };
+}
+
 function depthFromLegacyScanMode(
   mode: Extract<KtxScanArgs, { command: 'run' }>['mode'] | undefined,
 ): KtxPublicIngestDepth | undefined {
@@ -265,7 +279,16 @@ function resolveDatabaseTargetOptions(input: {
     depth = 'deep';
     return {
       databaseDepth: depth,
-      queryHistory: { ...queryHistory, enabled: true, dialect },
+      queryHistory: {
+        ...queryHistory,
+        enabled: true,
+        dialect,
+        pullConfig: queryHistoryPullConfig({
+          stored: storedQh,
+          dialect,
+          windowDays: queryHistory.windowDays,
+        }),
+      },
       steps: ['database-schema', 'query-history'],
     };
   }
@@ -627,10 +650,11 @@ export async function executePublicIngestTarget(
         outputMode: sourceIngestOutputMode(args, io),
         inputMode: args.inputMode,
         allowImplicitAdapter: true,
-        historicSqlPullConfigOverride: {
-          dialect: target.queryHistory.dialect,
-          ...(target.queryHistory.windowDays !== undefined ? { windowDays: target.queryHistory.windowDays } : {}),
-        },
+        historicSqlPullConfigOverride:
+          target.queryHistory.pullConfig ?? {
+            dialect: target.queryHistory.dialect,
+            ...(target.queryHistory.windowDays !== undefined ? { windowDays: target.queryHistory.windowDays } : {}),
+          },
       };
       const qhExitCode = await runIngest(ingestArgs, io);
       if (qhExitCode !== 0) {

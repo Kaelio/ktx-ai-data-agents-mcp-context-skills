@@ -1,6 +1,11 @@
 import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '@ktx/context/project';
 import { describe, expect, it, vi } from 'vitest';
-import { buildPublicIngestPlan, type KtxPublicIngestProject, runKtxPublicIngest } from './public-ingest.js';
+import {
+  buildPublicIngestPlan,
+  type KtxPublicIngestDeps,
+  type KtxPublicIngestProject,
+  runKtxPublicIngest,
+} from './public-ingest.js';
 
 function makeIo(options: { isTTY?: boolean; interactive?: boolean } = {}) {
   let stdout = '';
@@ -353,7 +358,7 @@ describe('runKtxPublicIngest', () => {
       warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true, windowDays: 90 } } },
     });
     const runScan = vi.fn(async () => 0);
-    const runIngest = vi.fn(async () => 0);
+    const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async () => 0);
 
     await expect(
       runKtxPublicIngest(
@@ -386,6 +391,73 @@ describe('runKtxPublicIngest', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('preserves configured query-history pull fields while overriding the current-run window', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: {
+        driver: 'postgres',
+        context: {
+          queryHistory: {
+            enabled: true,
+            windowDays: 90,
+            minExecutions: 7,
+            concurrency: 3,
+            staleArchiveAfterDays: 120,
+            filters: {
+              dropTrivialProbes: true,
+              serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
+              orchestrators: { mode: 'mark-only' },
+              dropFailedBelow: { errorRate: 0.5, executions: 3 },
+            },
+            redactionPatterns: ['(?i)secret'],
+          },
+        },
+      },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+          queryHistoryWindowDays: 30,
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    const ingestArgs = runIngest.mock.calls[0]?.[0];
+    expect(ingestArgs).toMatchObject({
+      command: 'run',
+      connectionId: 'warehouse',
+      adapter: 'historic-sql',
+      allowImplicitAdapter: true,
+      historicSqlPullConfigOverride: {
+        dialect: 'postgres',
+        windowDays: 30,
+        minExecutions: 7,
+        concurrency: 3,
+        staleArchiveAfterDays: 120,
+        filters: {
+          dropTrivialProbes: true,
+          serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
+          orchestrators: { mode: 'mark-only' },
+          dropFailedBelow: { errorRate: 0.5, executions: 3 },
+        },
+        redactionPatterns: ['(?i)secret'],
+      },
+    });
+    expect(ingestArgs?.historicSqlPullConfigOverride).not.toHaveProperty('enabled');
   });
 
   it('prints the schema-first notice for explicit query-history runs', async () => {
