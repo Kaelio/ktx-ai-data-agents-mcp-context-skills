@@ -26,10 +26,7 @@ ktx status --json
 # List sources
 ktx sl list --json
 ktx sl list --json --connection-id my-postgres
-ktx sl list --json --query "revenue"
-
-# Read a source
-ktx sl read orders --json --connection-id my-postgres
+ktx sl search "revenue" --json
 
 # Run a query from a JSON file
 ktx sl query --json \
@@ -44,9 +41,6 @@ ktx sl query --json \
 ```bash
 # Search knowledge pages
 ktx wiki search "revenue recognition" --json --limit 10
-
-# Read a specific page
-ktx wiki read order-status-definitions --json
 ```
 
 ## Setting Up Your Agent

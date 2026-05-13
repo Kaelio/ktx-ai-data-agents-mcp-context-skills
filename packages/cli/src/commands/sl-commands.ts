@@ -41,7 +41,7 @@ async function runSlArgs(context: KtxCliCommandContext, args: KtxSlArgs): Promis
 export function registerSlCommands(program: Command, context: KtxCliCommandContext, commandName = 'sl'): void {
   const sl = program
     .command(commandName)
-    .description('List, read, validate, query, or write local semantic-layer sources')
+    .description('List, search, validate, or query local semantic-layer sources')
     .showHelpAfterError()
     .addHelpText(
       'after',
@@ -51,7 +51,31 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
   sl.command('list')
     .description('List semantic-layer sources')
     .option('--connection-id <id>', 'KTX connection id')
-    .option('--query <text>', 'Search source names and descriptions')
+    .addOption(
+      new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
+        'pretty',
+        'plain',
+        'json',
+      ]),
+    )
+    .option('--json', 'Shortcut for --output=json (overrides --output)', false)
+    .action(
+      async (options: { connectionId?: string; output?: 'pretty' | 'plain' | 'json'; json?: boolean }, command) => {
+        await runSlArgs(context, {
+          command: 'list',
+          projectDir: resolveCommandProjectDir(command),
+          connectionId: options.connectionId,
+          output: options.output,
+          json: options.json,
+        });
+      },
+    );
+
+  sl.command('search')
+    .description('Search semantic-layer sources')
+    .argument('<query>', 'Search query')
+    .option('--connection-id <id>', 'KTX connection id')
+    .option('--limit <number>', 'Maximum search results', parsePositiveIntegerOption)
     .addOption(
       new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
         'pretty',
@@ -62,34 +86,21 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
     .option('--json', 'Shortcut for --output=json (overrides --output)', false)
     .action(
       async (
-        options: { connectionId?: string; query?: string; output?: 'pretty' | 'plain' | 'json'; json?: boolean },
+        query: string,
+        options: { connectionId?: string; limit?: number; output?: 'pretty' | 'plain' | 'json'; json?: boolean },
         command,
       ) => {
-      await runSlArgs(context, {
-        command: 'list',
-        projectDir: resolveCommandProjectDir(command),
-        connectionId: options.connectionId,
-        query: options.query,
-        output: options.output,
-        json: options.json,
-      });
+        await runSlArgs(context, {
+          command: 'search',
+          projectDir: resolveCommandProjectDir(command),
+          connectionId: options.connectionId,
+          query,
+          ...(options.limit !== undefined ? { limit: options.limit } : {}),
+          output: options.output,
+          json: options.json,
+        });
       },
     );
-
-  sl.command('read')
-    .description('Read a semantic-layer source')
-    .argument('<sourceName>', 'Semantic-layer source name')
-    .requiredOption('--connection-id <id>', 'KTX connection id')
-    .option('--json', 'Print JSON output', false)
-    .action(async (sourceName: string, options: { connectionId: string; json?: boolean }, command) => {
-      await runSlArgs(context, {
-        command: 'read',
-        projectDir: resolveCommandProjectDir(command),
-        connectionId: options.connectionId,
-        sourceName,
-        json: options.json,
-      });
-    });
 
   sl.command('validate')
     .description('Validate a semantic-layer source')
@@ -101,21 +112,6 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
         projectDir: resolveCommandProjectDir(command),
         connectionId: options.connectionId,
         sourceName,
-      });
-    });
-
-  sl.command('write')
-    .description('Write a semantic-layer source')
-    .argument('<sourceName>', 'Semantic-layer source name')
-    .requiredOption('--connection-id <id>', 'KTX connection id')
-    .requiredOption('--yaml <yaml>', 'Semantic-layer source YAML')
-    .action(async (sourceName: string, options: { connectionId: string; yaml: string }, command) => {
-      await runSlArgs(context, {
-        command: 'write',
-        projectDir: resolveCommandProjectDir(command),
-        connectionId: options.connectionId,
-        sourceName,
-        yaml: options.yaml,
       });
     });
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initKtxProject } from '@ktx/context/project';
 import type { KtxEmbeddingPort } from '@ktx/context';
+import { type LocalKnowledgeScope, writeLocalKnowledgePage } from '@ktx/context/wiki';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runKtxKnowledge } from './knowledge.js';
 
@@ -40,6 +41,29 @@ class FakeEmbeddingPort implements KtxEmbeddingPort {
   }
 }
 
+async function seedKnowledgePage(input: {
+  projectDir: string;
+  key: string;
+  summary: string;
+  content: string;
+  scope?: LocalKnowledgeScope;
+  tags?: string[];
+  refs?: string[];
+  slRefs?: string[];
+}): Promise<void> {
+  const project = await initKtxProject({ projectDir: input.projectDir, projectName: 'warehouse' });
+  await writeLocalKnowledgePage(project, {
+    key: input.key,
+    scope: input.scope ?? 'GLOBAL',
+    userId: 'local',
+    summary: input.summary,
+    content: input.content,
+    tags: input.tags ?? [],
+    refs: input.refs ?? [],
+    slRefs: input.slRefs ?? [],
+  });
+}
+
 describe('runKtxKnowledge', () => {
   let tempDir: string;
 
@@ -51,36 +75,16 @@ describe('runKtxKnowledge', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('writes, reads, lists, and searches knowledge pages', async () => {
+  it('lists and searches knowledge pages', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    const writeIo = makeIo();
-    await expect(
-      runKtxKnowledge(
-        {
-          command: 'write',
-          projectDir,
-          key: 'metrics-revenue',
-          scope: 'GLOBAL',
-          userId: 'local',
-          summary: 'Revenue',
-          content: 'Revenue is paid order value.',
-          tags: ['finance'],
-          refs: [],
-          slRefs: ['orders'],
-        },
-        writeIo.io,
-      ),
-    ).resolves.toBe(0);
-    expect(writeIo.stdout()).toContain('Wrote knowledge/global/metrics-revenue.md');
-
-    const readIo = makeIo();
-    await expect(
-      runKtxKnowledge({ command: 'read', projectDir, key: 'metrics-revenue', userId: 'local' }, readIo.io),
-    ).resolves.toBe(0);
-    expect(readIo.stdout()).toContain('# metrics-revenue');
-    expect(readIo.stdout()).toContain('Revenue is paid order value.');
+    await seedKnowledgePage({
+      projectDir,
+      key: 'metrics-revenue',
+      summary: 'Revenue',
+      content: 'Revenue is paid order value.',
+      tags: ['finance'],
+      slRefs: ['orders'],
+    });
 
     const listIo = makeIo();
     await expect(runKtxKnowledge({ command: 'list', projectDir, userId: 'local' }, listIo.io)).resolves.toBe(0);
@@ -93,27 +97,16 @@ describe('runKtxKnowledge', () => {
     expect(searchIo.stdout()).toContain('metrics-revenue');
   });
 
-  it('prints wiki list, search, and read as public JSON envelopes', async () => {
+  it('prints wiki list and search as public JSON envelopes', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    await expect(
-      runKtxKnowledge(
-        {
-          command: 'write',
-          projectDir,
-          key: 'metrics-revenue',
-          scope: 'GLOBAL',
-          userId: 'local',
-          summary: 'Revenue',
-          content: 'Revenue is paid order value.',
-          tags: ['finance'],
-          refs: [],
-          slRefs: ['orders'],
-        },
-        makeIo().io,
-      ),
-    ).resolves.toBe(0);
+    await seedKnowledgePage({
+      projectDir,
+      key: 'metrics-revenue',
+      summary: 'Revenue',
+      content: 'Revenue is paid order value.',
+      tags: ['finance'],
+      slRefs: ['orders'],
+    });
 
     const listIo = makeIo();
     await expect(runKtxKnowledge({ command: 'list', projectDir, userId: 'local', json: true }, listIo.io)).resolves.toBe(
@@ -137,48 +130,6 @@ describe('runKtxKnowledge', () => {
       data: { items: [expect.objectContaining({ key: 'metrics-revenue', summary: 'Revenue' })] },
       meta: { command: 'wiki search' },
     });
-
-    const readIo = makeIo();
-    await expect(
-      runKtxKnowledge({ command: 'read', projectDir, key: 'metrics-revenue', userId: 'local', json: true }, readIo.io),
-    ).resolves.toBe(0);
-    expect(JSON.parse(readIo.stdout())).toMatchObject({
-      kind: 'wiki.page',
-      data: {
-        key: 'metrics-revenue',
-        summary: 'Revenue',
-        content: 'Revenue is paid order value.',
-      },
-    });
-  });
-
-  it('rejects slash-delimited write keys with a flat-key suggestion', async () => {
-    const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    const writeIo = makeIo();
-    await expect(
-      runKtxKnowledge(
-        {
-          command: 'write',
-          projectDir,
-          key: 'orbit/company-overview',
-          scope: 'GLOBAL',
-          userId: 'local',
-          summary: 'Orbit',
-          content: 'Orbit overview.',
-          tags: [],
-          refs: [],
-          slRefs: [],
-        },
-        writeIo.io,
-      ),
-    ).resolves.toBe(1);
-
-    expect(writeIo.stderr()).toContain(
-      'Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".',
-    );
-    expect(writeIo.stdout()).toBe('');
   });
 
   it('explains empty search results for a project without wiki pages', async () => {
@@ -192,30 +143,19 @@ describe('runKtxKnowledge', () => {
 
     expect(searchIo.stdout()).toBe('');
     expect(searchIo.stderr()).toContain('No local wiki pages found');
-    expect(searchIo.stderr()).toContain('ktx wiki write');
+    expect(searchIo.stderr()).toContain('Run ingest');
+    expect(searchIo.stderr()).not.toContain('ktx wiki write');
   });
 
   it('uses configured embeddings for semantic wiki search', async () => {
     const projectDir = join(tempDir, 'semantic-project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    await expect(
-      runKtxKnowledge(
-        {
-          command: 'write',
-          projectDir,
-          key: 'active-contract-arr-open-tickets',
-          scope: 'GLOBAL',
-          userId: 'local',
-          summary: 'Active Contract ARR Ranked by Open Support Ticket Count',
-          content: 'Accounts ranked by annual recurring contract value and support ticket load.',
-          tags: ['historic-sql'],
-          refs: [],
-          slRefs: [],
-        },
-        makeIo().io,
-      ),
-    ).resolves.toBe(0);
+    await seedKnowledgePage({
+      projectDir,
+      key: 'active-contract-arr-open-tickets',
+      summary: 'Active Contract ARR Ranked by Open Support Ticket Count',
+      content: 'Accounts ranked by annual recurring contract value and support ticket load.',
+      tags: ['historic-sql'],
+    });
 
     const searchIo = makeIo();
     await expect(

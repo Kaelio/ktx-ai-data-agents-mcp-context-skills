@@ -1,6 +1,6 @@
 ---
 title: "ktx wiki"
-description: "List, read, search, or write knowledge pages."
+description: "List or search knowledge pages."
 ---
 
 Manage knowledge pages in your KTX project. Knowledge pages are Markdown documents that capture business definitions, rules, and gotchas. Agents search them for context when answering questions about your data.
@@ -16,20 +16,11 @@ ktx wiki <subcommand> [options]
 | Subcommand | Description |
 |-----------|-------------|
 | `list` | List local wiki pages |
-| `read <key>` | Read one local wiki page |
 | `search <query>` | Search local wiki pages |
-| `write <key>` | Write one local wiki page |
 
 ## Options
 
 ### `wiki list`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--json` | Print JSON output | `false` |
-| `--user-id <id>` | Local user id | `local` |
-
-### `wiki read`
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -44,18 +35,6 @@ ktx wiki <subcommand> [options]
 | `--user-id <id>` | Local user id | `local` |
 | `--limit <number>` | Maximum search results | — |
 
-### `wiki write`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--user-id <id>` | Local user id | `local` |
-| `--scope <scope>` | Scope: `global` or `user` | `global` |
-| `--summary <summary>` | Wiki page summary (required) | — |
-| `--content <content>` | Wiki page content (required) | — |
-| `--tag <tag>` | Wiki tag; repeatable | — |
-| `--ref <ref>` | Wiki ref; repeatable | — |
-| `--sl-ref <ref>` | Semantic-layer ref; repeatable | — |
-
 ## Examples
 
 ```bash
@@ -65,48 +44,16 @@ ktx wiki list
 # List all wiki pages as JSON
 ktx wiki list --json
 
-# Read a specific wiki page
-ktx wiki read revenue-definitions
-
-# Read a specific wiki page as JSON
-ktx wiki read revenue-definitions --json
-
 # Search wiki pages
 ktx wiki search "monthly recurring revenue"
 
 # Search wiki pages as JSON
 ktx wiki search "monthly recurring revenue" --json --limit 10
-
-# Write a global knowledge page
-ktx wiki write revenue-definitions \
-  --summary "Canonical revenue metric definitions" \
-  --content "## MRR\nMonthly Recurring Revenue is calculated as..."
-
-# Write a user-scoped knowledge page
-ktx wiki write my-notes \
-  --scope user \
-  --summary "Personal analysis notes" \
-  --content "Things to check when revenue numbers look off..."
-
-# Write a page with tags and references
-ktx wiki write churn-rules \
-  --summary "Churn calculation business rules" \
-  --content "A customer is considered churned when..." \
-  --tag finance \
-  --tag retention \
-  --sl-ref customers \
-  --sl-ref subscriptions
-
-# Write a page with external references
-ktx wiki write data-freshness \
-  --summary "Data pipeline SLAs and freshness guarantees" \
-  --content "The orders table refreshes every 15 minutes..." \
-  --ref "https://wiki.example.com/data-pipelines"
 ```
 
 ## Output
 
-Wiki commands print local knowledge pages and search results. Agents should search first, then read the most relevant page by key.
+Wiki commands print local knowledge pages and search results.
 
 ```json
 {
@@ -127,7 +74,5 @@ Wiki commands print local knowledge pages and search results. Agents should sear
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Search returns no results | The query terms do not match summaries, tags, or content | Retry with business synonyms, then create a page if the knowledge is missing |
-| Read fails for a key | The page key is wrong or scoped to a different user | Run `ktx wiki list` or search again to get the exact key |
-| Write fails due to missing fields | `--summary` or `--content` was omitted | Pass both fields, and keep the summary short enough for search results |
-| Agent writes duplicate pages | It did not search existing pages first | Always run `ktx wiki search` before `ktx wiki write` |
+| Search returns no results | The query terms do not match summaries, tags, or content | Retry with business synonyms or run ingest to capture more context |
+| A page is missing | The page has not been created by ingest or memory capture yet | Run ingest, then search again with `ktx wiki search` |

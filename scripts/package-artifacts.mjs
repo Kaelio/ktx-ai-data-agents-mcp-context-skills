@@ -729,23 +729,22 @@ try {
     'exec',
     'ktx',
     'sl',
-    'list',
+    'search',
+    'orders',
     '--json',
     '--connection-id',
     'warehouse',
-    '--query',
-    'orders',
     '--project-dir',
     projectDir,
   ]);
-  const slSearchJson = parseJsonResult('ktx sl list', slSearch);
+  const slSearchJson = parseJsonResult('ktx sl search', slSearch);
   assert.equal(slSearchJson.kind, 'list');
   assert.equal(slSearchJson.data.items.length, 1);
   assert.equal(slSearchJson.data.items[0].connectionId, 'warehouse');
   assert.equal(slSearchJson.data.items[0].name, 'orders');
   assert.equal(typeof slSearchJson.data.items[0].score, 'number');
   requireIncludes(slSearchJson.data.items[0].matchReasons, 'lexical', 'sl search match reasons');
-  process.stdout.write('ktx sl list hybrid metadata verified\\n');
+  process.stdout.write('ktx sl search hybrid metadata verified\\n');
 
   const slQuery = await run('pnpm', ['exec', 'ktx', 'sl', 'query',
     '--connection-id',

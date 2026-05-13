@@ -139,6 +139,56 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe('');
   });
 
+  it('rejects removed public wiki and sl read/write commands', async () => {
+    const sl = vi.fn(async () => 0);
+    const knowledge = vi.fn(async () => 0);
+
+    for (const argv of [
+      ['--project-dir', tempDir, 'wiki', 'read', 'revenue'],
+      ['--project-dir', tempDir, 'wiki', 'write', 'revenue', '--summary', 'Revenue', '--content', 'Revenue.'],
+      ['--project-dir', tempDir, 'sl', 'read', 'orders', '--connection-id', 'warehouse'],
+      ['--project-dir', tempDir, 'sl', 'write', 'orders', '--connection-id', 'warehouse', '--yaml', 'name: orders'],
+    ]) {
+      const io = makeIo();
+      await expect(runKtxCli(argv, io.io, { knowledge, sl })).resolves.toBe(1);
+      expect(io.stderr()).toMatch(/unknown command|error:/);
+    }
+
+    expect(knowledge).not.toHaveBeenCalled();
+    expect(sl).not.toHaveBeenCalled();
+  });
+
+  it('routes sl search and rejects the old sl list --query flag', async () => {
+    const sl = vi.fn(async () => 0);
+
+    const searchIo = makeIo();
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'sl', 'search', 'revenue', '--connection-id', 'warehouse', '--limit', '5', '--json'],
+        searchIo.io,
+        { sl },
+      ),
+    ).resolves.toBe(0);
+    expect(sl).toHaveBeenCalledWith(
+      {
+        command: 'search',
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        query: 'revenue',
+        limit: 5,
+        json: true,
+        output: undefined,
+      },
+      searchIo.io,
+    );
+
+    const listIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'sl', 'list', '--query', 'revenue'], listIo.io, { sl }),
+    ).resolves.toBe(1);
+    expect(listIo.stderr()).toContain("unknown option '--query'");
+  });
+
   it('routes runtime management commands with the CLI package version', async () => {
     const runtime = vi.fn(async () => 0);
     const installIo = makeIo();

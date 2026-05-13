@@ -38,6 +38,22 @@ function makeIo() {
   };
 }
 
+async function seedSlSource(input: {
+  projectDir: string;
+  connectionId?: string;
+  sourceName?: string;
+  yaml?: string;
+}): Promise<void> {
+  const project = await initKtxProject({ projectDir: input.projectDir, projectName: 'warehouse' });
+  await project.fileStore.writeFile(
+    `semantic-layer/${input.connectionId ?? 'warehouse'}/${input.sourceName ?? 'orders'}.yaml`,
+    input.yaml ?? ORDERS_YAML,
+    'ktx',
+    'ktx@example.com',
+    'Add semantic-layer source',
+  );
+}
+
 describe('runKtxSl', () => {
   let tempDir: string;
 
@@ -49,24 +65,9 @@ describe('runKtxSl', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('writes, validates, reads, and lists semantic-layer sources', async () => {
+  it('validates, lists, and searches semantic-layer sources', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    const writeIo = makeIo();
-    await expect(
-      runKtxSl(
-        {
-          command: 'write',
-          projectDir,
-          connectionId: 'warehouse',
-          sourceName: 'orders',
-          yaml: ORDERS_YAML,
-        },
-        writeIo.io,
-      ),
-    ).resolves.toBe(0);
-    expect(writeIo.stdout()).toContain('Wrote semantic-layer/warehouse/orders.yaml');
+    await seedSlSource({ projectDir });
 
     const validateIo = makeIo();
     await expect(
@@ -74,62 +75,49 @@ describe('runKtxSl', () => {
     ).resolves.toBe(0);
     expect(validateIo.stdout()).toContain('Valid semantic-layer source: warehouse/orders');
 
-    const readIo = makeIo();
-    await expect(runKtxSl({ command: 'read', projectDir, connectionId: 'warehouse', sourceName: 'orders' }, readIo.io))
-      .resolves.toBe(0);
-    expect(readIo.stdout()).toContain('name: orders');
-
     const listIo = makeIo();
     await expect(runKtxSl({ command: 'list', projectDir, connectionId: 'warehouse' }, listIo.io)).resolves.toBe(0);
     expect(listIo.stdout()).toContain('warehouse\torders\tcolumns=1\tmeasures=0\tjoins=0');
+
+    const searchIo = makeIo();
+    await expect(
+      runKtxSl({ command: 'search', projectDir, connectionId: 'warehouse', query: 'order', json: true }, searchIo.io),
+    ).resolves.toBe(0);
+    expect(JSON.parse(searchIo.stdout())).toMatchObject({
+      kind: 'list',
+      data: {
+        items: [
+          expect.objectContaining({
+            connectionId: 'warehouse',
+            name: 'orders',
+            score: expect.any(Number),
+          }),
+        ],
+      },
+      meta: { command: 'sl search' },
+    });
   });
 
-  it('prints semantic-layer reads and searched lists as public JSON envelopes', async () => {
+  it('prints semantic-layer list and search as public JSON envelopes', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    await expect(
-      runKtxSl(
-        {
-          command: 'write',
-          projectDir,
-          connectionId: 'warehouse',
-          sourceName: 'orders',
-          yaml: [
-            'name: orders',
-            'table: public.orders',
-            'description: Paid order facts',
-            'grain: [order_id]',
-            'columns:',
-            '  - name: order_id',
-            '    type: string',
-            '',
-          ].join('\n'),
-        },
-        makeIo().io,
-      ),
-    ).resolves.toBe(0);
-
-    const readIo = makeIo();
-    await expect(
-      runKtxSl(
-        { command: 'read', projectDir, connectionId: 'warehouse', sourceName: 'orders', json: true },
-        readIo.io,
-      ),
-    ).resolves.toBe(0);
-    expect(JSON.parse(readIo.stdout())).toMatchObject({
-      kind: 'sl.source',
-      data: {
-        connectionId: 'warehouse',
-        name: 'orders',
-        yaml: expect.stringContaining('name: orders'),
-      },
+    await seedSlSource({
+      projectDir,
+      yaml: [
+        'name: orders',
+        'table: public.orders',
+        'description: Paid order facts',
+        'grain: [order_id]',
+        'columns:',
+        '  - name: order_id',
+        '    type: string',
+        '',
+      ].join('\n'),
     });
 
     const listIo = makeIo();
     await expect(
       runKtxSl(
-        { command: 'list', projectDir, connectionId: 'warehouse', query: 'paid', json: true },
+        { command: 'search', projectDir, connectionId: 'warehouse', query: 'paid', json: true },
         listIo.io,
       ),
     ).resolves.toBe(0);
@@ -145,7 +133,7 @@ describe('runKtxSl', () => {
           }),
         ],
       },
-      meta: { command: 'sl list' },
+      meta: { command: 'sl search' },
     });
   });
 
@@ -566,13 +554,7 @@ joins: []
 
   it('emits sl list as a JSON envelope when output=json', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    const writeIo = makeIo();
-    await runKtxSl(
-      { command: 'write', projectDir, connectionId: 'warehouse', sourceName: 'orders', yaml: ORDERS_YAML },
-      writeIo.io,
-    );
+    await seedSlSource({ projectDir });
 
     const listIo = makeIo();
     const code = await runKtxSl(
@@ -604,13 +586,7 @@ joins: []
 
   it('emits sl list with grouping and Clack-style framing when output=pretty', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-
-    const writeIo = makeIo();
-    await runKtxSl(
-      { command: 'write', projectDir, connectionId: 'warehouse', sourceName: 'orders', yaml: ORDERS_YAML },
-      writeIo.io,
-    );
+    await seedSlSource({ projectDir });
 
     const listIo = makeIo();
     const code = await runKtxSl(

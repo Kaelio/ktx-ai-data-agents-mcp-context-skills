@@ -10,11 +10,11 @@ After building context through scanning and ingestion, you'll want to refine it 
 Agents should refine context in this order:
 
 1. `ktx sl list --json` — discover available sources and connection ids.
-2. `ktx sl read <source> --connection-id <id>` — inspect the current YAML.
-3. Edit the source YAML directly or use `ktx sl write`.
+2. `ktx sl search <query> --json` — find source candidates for a concept.
+3. Edit the source YAML directly in `semantic-layer/<connection-id>/`.
 4. `ktx sl validate <source> --connection-id <id>` — verify columns, joins, and table references.
 5. `ktx sl query ... --format sql` — compile a representative query without executing it.
-6. `ktx wiki search ...` and `ktx wiki write ...` — add business context that does not belong in schema YAML.
+6. `ktx wiki search ...` — check business context captured by ingest or memory.
 
 ## Semantic Sources
 
@@ -33,13 +33,14 @@ ktx sl list --connection-id my-postgres
 ktx sl list --json
 ```
 
-### Reading a source
+### Searching sources
 
 ```bash
-ktx sl read orders --connection-id my-postgres
+ktx sl search "revenue" --connection-id my-postgres --json
 ```
 
-This prints the full YAML definition for the source.
+Search returns ranked source summaries. To inspect or edit a source, open the
+YAML file under `semantic-layer/<connection-id>/`.
 
 ### The source schema
 
@@ -147,25 +148,10 @@ Column visibility controls what agents see:
 | `internal` | Available for joins and measures but not shown to agents |
 | `hidden` | Excluded entirely — useful for ETL columns |
 
-### Writing a source
+### Editing a source
 
-```bash
-ktx sl write orders --connection-id my-postgres --yaml '
-name: orders
-table: public.orders
-grain: [order_id]
-columns:
-  - name: order_id
-    type: string
-  - name: total_amount
-    type: number
-measures:
-  - name: total_revenue
-    expr: SUM(total_amount)
-'
-```
-
-You can also edit source files directly — they live at `semantic-layer/<connection-id>/<source-name>.yaml` in your project directory.
+Edit source files directly. They live at
+`semantic-layer/<connection-id>/<source-name>.yaml` in your project directory.
 
 ### Validating sources
 
@@ -225,11 +211,10 @@ The query planner is grain-aware — it understands the cardinality of joins and
 
 ### Workflow: edit and validate a source
 
-1. `ktx sl read orders --connection-id my-postgres > /tmp/orders.yaml` — capture the current definition.
-2. Edit `/tmp/orders.yaml` to add columns, measures, joins, or descriptions.
-3. `ktx sl write orders --connection-id my-postgres --yaml "$(cat /tmp/orders.yaml)"` — write the updated source.
-4. `ktx sl validate orders --connection-id my-postgres` — check the definition against the live schema.
-5. `ktx sl query --connection-id my-postgres --measure total_revenue --dimension order_date --format sql` — compile a representative query.
+1. Open `semantic-layer/my-postgres/orders.yaml`.
+2. Edit the file to add columns, measures, joins, or descriptions.
+3. `ktx sl validate orders --connection-id my-postgres` — check the definition against the live schema.
+4. `ktx sl query --connection-id my-postgres --measure total_revenue --dimension order_date --format sql` — compile a representative query.
 
 If validation fails, fix the YAML before asking an agent to use the source. Common validation failures are missing columns, invalid join targets, and measure expressions that reference fields outside the source.
 
@@ -260,42 +245,16 @@ knowledge/
 - **Global pages** apply across all connections — business definitions, metric standards, company terminology.
 - **User-scoped pages** are private to a user ID — personal notes, local gotchas, or context you do not want shared globally.
 
-### Writing pages
+### Editing pages
 
-```bash
-ktx wiki write order-status-definitions \
-  --scope global \
-  --summary "Business definitions for order status values" \
-  --content "## Order Statuses
-
-- **pending**: Order placed but not yet processed
-- **confirmed**: Payment received, awaiting fulfillment
-- **shipped**: Order dispatched to carrier
-- **delivered**: Order received by customer
-- **cancelled**: Order cancelled before shipment
-
-Orders in pending status for more than 48 hours are flagged for review." \
-  --tag orders \
-  --tag definitions \
-  --sl-ref orders
-```
-
-Write flags:
-
-| Flag | Description |
-|------|-------------|
-| `--scope <scope>` | `global` (default) or `user` |
-| `--summary <text>` | Short description for search results (required) |
-| `--content <text>` | Full Markdown content (required) |
-| `--tag <tag>` | Categorization tag (repeatable) |
-| `--ref <ref>` | Reference to external resources (repeatable) |
-| `--sl-ref <ref>` | Link to a semantic source (repeatable) |
+Create and edit knowledge pages directly as Markdown files in the `knowledge/`
+directory. Ingest and memory capture also create these pages automatically.
 
 Knowledge page fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| Key | Yes | Stable page identifier passed to `ktx wiki read` |
+| Key | Yes | Stable page identifier used as the Markdown filename |
 | Summary | Yes | Short text shown in search results |
 | Content | Yes | Full Markdown business context |
 | Scope | No | `global` for shared context or `user` for user-scoped notes |
@@ -303,18 +262,10 @@ Knowledge page fields:
 | External refs | No | Links or identifiers for source-of-truth systems |
 | Semantic-layer refs | No | Source names the page explains or constrains |
 
-You can also create and edit knowledge pages directly as Markdown files in the `knowledge/` directory.
-
 ### Listing pages
 
 ```bash
 ktx wiki list
-```
-
-### Reading a page
-
-```bash
-ktx wiki read order-status-definitions
 ```
 
 ### Searching
@@ -328,9 +279,9 @@ Search uses both full-text matching and semantic similarity — it finds relevan
 ### Workflow: add searchable business context
 
 1. Search first: `ktx wiki search "order status definitions"`.
-2. If no page already covers the rule, write a page with `ktx wiki write`.
-3. Include a concise `--summary`; agents see this before loading full content.
-4. Add `--tag` values for the business area and `--sl-ref` values for related semantic sources.
+2. If no page already covers the rule, create or edit a Markdown file under `knowledge/global/`.
+3. Include concise frontmatter; agents see the summary before loading full content.
+4. Add `tags` values for the business area and `sl_refs` values for related semantic sources.
 5. Search again with the user's likely wording to confirm the page is discoverable.
 
 ## Common errors
@@ -341,4 +292,4 @@ Search uses both full-text matching and semantic similarity — it finds relevan
 | Query compilation double-counts a measure | Join relationship or grain is missing or wrong | Add `grain` and explicit `relationship` values, then validate and recompile |
 | Agent cannot find a metric | Measure name or description does not match business terminology | Add a measure description and a knowledge page with common synonyms |
 | Knowledge search misses a page | Summary and tags do not include likely user wording | Rewrite the summary and add relevant tags, then search again |
-| `ktx sl write` changes are hard to review | Large YAML was passed inline | Edit the source file directly or write from a temporary file, then review the git diff |
+| Semantic-layer changes are hard to review | The YAML edit is too large or unfocused | Split the change into smaller source-file edits, then review the git diff |
