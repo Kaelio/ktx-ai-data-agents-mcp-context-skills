@@ -77,7 +77,7 @@ describe('memory runtime assets', () => {
     const registry = new SkillsRegistryService({ skillsDir });
     const skills = await registry.listSkills([...DEFAULT_SKILL_NAMES], 'memory_agent');
 
-    expect(skills.map((skill) => skill.name).sort()).toEqual(['wiki_capture', 'sl', 'sl_capture']);
+    expect(skills.map((skill) => skill.name).sort()).toEqual(['sl', 'sl_capture', 'wiki_capture']);
 
     for (const skill of skills) {
       const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');

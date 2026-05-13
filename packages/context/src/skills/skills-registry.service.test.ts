@@ -157,7 +157,7 @@ describe('SkillsRegistryService', () => {
 
     it('memory_agent caller sees memory-only and open skills', async () => {
       const skills = await service.listSkills('memory_agent');
-      expect(skills.map((skill) => skill.name).sort()).toEqual(['wiki_capture', 'sl', 'sl_capture']);
+      expect(skills.map((skill) => skill.name).sort()).toEqual(['sl', 'sl_capture', 'wiki_capture']);
     });
 
     it('listSkills with names and caller intersects both filters', async () => {
