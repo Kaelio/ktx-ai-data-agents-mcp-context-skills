@@ -1565,63 +1565,20 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toContain('[debug] dispatch=connection');
   });
 
-  it('routes scan through the top-level command with top-level project-dir', async () => {
+  it.each([
+    { argv: ['scan'] },
+    { argv: ['scan', '--help'] },
+    { argv: ['scan', 'warehouse'] },
+    { argv: ['scan', 'warehouse', '--project-dir', '/tmp/project'] },
+    { argv: ['scan', 'warehouse', '--mode', 'relationships'] },
+  ])('rejects removed top-level scan command $argv', async ({ argv }) => {
     const testIo = makeIo();
-    const scan = vi.fn().mockResolvedValue(0);
+    const ingest = vi.fn().mockResolvedValue(0);
 
-    await expect(runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse'], testIo.io, { scan })).resolves.toBe(
-      0,
-    );
+    await expect(runKtxCli(argv, testIo.io, { ingest })).resolves.toBe(1);
 
-    expect(scan).toHaveBeenCalledWith(
-      {
-        command: 'run',
-        projectDir: tempDir,
-        connectionId: 'warehouse',
-        mode: 'structural',
-        detectRelationships: false,
-        dryRun: false,
-        databaseIntrospectionUrl: undefined,
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'prompt',
-      },
-      testIo.io,
-    );
-  });
-
-  it('routes scan managed runtime install policies', async () => {
-    const autoIo = makeIo();
-    const neverIo = makeIo();
-    const conflictIo = makeIo();
-    const scan = vi.fn().mockResolvedValue(0);
-
-    await expect(runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse', '--yes'], autoIo.io, { scan }))
-      .resolves.toBe(0);
-    await expect(runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse', '--no-input'], neverIo.io, { scan }))
-      .resolves.toBe(0);
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse', '--yes', '--no-input'], conflictIo.io, {
-        scan,
-      }),
-    ).resolves.toBe(1);
-
-    expect(scan).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        command: 'run',
-        runtimeInstallPolicy: 'auto',
-      }),
-      autoIo.io,
-    );
-    expect(scan).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        command: 'run',
-        runtimeInstallPolicy: 'never',
-      }),
-      neverIo.io,
-    );
-    expect(conflictIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
+    expect(testIo.stderr()).toMatch(/unknown command|error:/);
+    expect(ingest).not.toHaveBeenCalled();
   });
 
   it('rejects removed public serve command options before dispatch', async () => {
@@ -1669,25 +1626,15 @@ describe('runKtxCli', () => {
   it('rejects removed dev command groups without invoking execution', async () => {
     for (const command of ['scan', 'ingest', 'mapping']) {
       const testIo = makeIo();
-      const scan = vi.fn().mockResolvedValue(0);
+      const ingest = vi.fn().mockResolvedValue(0);
       const sl = vi.fn().mockResolvedValue(0);
 
-      await expect(runKtxCli(['dev', command], testIo.io, { scan, sl })).resolves.toBe(1);
+      await expect(runKtxCli(['dev', command], testIo.io, { ingest, sl })).resolves.toBe(1);
 
       expect(testIo.stderr()).toMatch(/unknown command|error:/);
-      expect(scan).not.toHaveBeenCalled();
+      expect(ingest).not.toHaveBeenCalled();
       expect(sl).not.toHaveBeenCalled();
     }
-  });
-
-  it('rejects removed scan subcommands without invoking scan execution', async () => {
-    const testIo = makeIo();
-    const scan = vi.fn().mockResolvedValue(0);
-
-    await expect(runKtxCli(['scan', 'report'], testIo.io, { scan })).resolves.toBe(1);
-
-    expect(testIo.stderr()).toMatch(/too many arguments|unknown command|error:/);
-    expect(scan).not.toHaveBeenCalled();
   });
 
   it('rejects removed reserved dev subcommands', async () => {

@@ -3,7 +3,6 @@ import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerIngestCommands } from './commands/ingest-commands.js';
 import { registerWikiCommands } from './commands/knowledge-commands.js';
-import { registerScanCommands } from './commands/scan-commands.js';
 import { registerSetupCommands } from './commands/setup-commands.js';
 import { registerSlCommands } from './commands/sl-commands.js';
 import { registerStatusCommands } from './commands/status-commands.js';
@@ -53,7 +52,8 @@ type CommandPathNode = CommandWithGlobalOptions & {
   parent?: CommandPathNode | null;
 };
 
-const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'scan']);
+const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status']);
+const REMOVED_ROOT_COMMANDS = new Set(['scan']);
 
 export interface CommandWithGlobalOptions {
   opts: () => object;
@@ -313,7 +313,6 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
     runIngestWithProgress: async (ingestArgs, ingestIo, ingestDeps, defaultRunIngest) =>
       await (ingestDeps.ingest ?? defaultRunIngest)(ingestArgs, ingestIo),
   });
-  registerScanCommands(program, context);
   registerWikiCommands(program, context);
   registerSlCommands(program, context);
   registerStatusCommands(program, context);
@@ -365,6 +364,11 @@ export async function runCommanderKtxCli(
     }
     program.outputHelp();
     return 0;
+  }
+
+  if (REMOVED_ROOT_COMMANDS.has(argv[0] ?? '')) {
+    io.stderr.write(`error: unknown command '${argv[0]}'\n`);
+    return 1;
   }
 
   try {

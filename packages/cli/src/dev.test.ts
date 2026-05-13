@@ -129,17 +129,12 @@ describe('dev Commander tree', () => {
       argv: ['dev', 'runtime', '--help'],
       expected: ['Usage: ktx dev runtime', 'install', 'start', 'stop', 'status'],
     },
-    {
-      argv: ['scan', '--help'],
-      expected: ['Usage: ktx scan [options] <connectionId>', '--mode <mode>', 'structural', 'relationships', '--dry-run'],
-    },
   ])('prints generated nested help for $argv', async ({ argv, expected }) => {
     const io = makeIo();
     const doctor = vi.fn(async () => 0);
     const ingest = vi.fn(async () => 0);
-    const scan = vi.fn(async () => 0);
 
-    await expect(runKtxCli(argv, io.io, { doctor, ingest, scan })).resolves.toBe(0);
+    await expect(runKtxCli(argv, io.io, { doctor, ingest })).resolves.toBe(0);
 
     for (const text of expected) {
       expect(io.stdout()).toContain(text);
@@ -151,7 +146,6 @@ describe('dev Commander tree', () => {
     expect(io.stderr()).toBe('');
     expect(doctor).not.toHaveBeenCalled();
     expect(ingest).not.toHaveBeenCalled();
-    expect(scan).not.toHaveBeenCalled();
   });
 
   it('keeps legacy adapter-backed ingest run callable but hidden from ingest help', async () => {
@@ -175,100 +169,20 @@ describe('dev Commander tree', () => {
     );
   });
 
-  it('dispatches top-level scan through Commander with injected dependencies', async () => {
-    const scanIo = makeIo();
-    const scan = vi.fn(async () => 0);
-
-    await expect(
-      runKtxCli(['scan', 'warehouse', '--project-dir', '/tmp/project', '--dry-run'], scanIo.io, { scan }),
-    ).resolves.toBe(0);
-
-    expect(scan).toHaveBeenCalledWith(
-      {
-        command: 'run',
-        projectDir: '/tmp/project',
-        connectionId: 'warehouse',
-        mode: 'structural',
-        detectRelationships: false,
-        dryRun: true,
-        databaseIntrospectionUrl: undefined,
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'prompt',
-      },
-      scanIo.io,
-    );
-    expect(scanIo.stderr()).toBe('Project: /tmp/project\n');
-  });
-
-  it('dispatches top-level scan --mode relationships through Commander', async () => {
-    const io = makeIo();
-    const scan = vi.fn(async () => 0);
-
-    await expect(
-      runKtxCli(['scan', 'warehouse', '--project-dir', '/tmp/project', '--mode', 'relationships'], io.io, {
-        scan,
-      }),
-    ).resolves.toBe(0);
-
-    expect(scan).toHaveBeenCalledWith(
-      {
-        command: 'run',
-        projectDir: '/tmp/project',
-        connectionId: 'warehouse',
-        mode: 'relationships',
-        detectRelationships: true,
-        dryRun: false,
-        databaseIntrospectionUrl: undefined,
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'prompt',
-      },
-      io.io,
-    );
-    expect(io.stderr()).toBe('Project: /tmp/project\n');
-  });
-
-  it.each(['--enrich', '--detect-relationships'])('rejects removed scan shorthand option %s', async (option) => {
-    const io = makeIo();
-    const scan = vi.fn(async () => 0);
-
-    await expect(runKtxCli(['scan', 'warehouse', option], io.io, { scan })).resolves.toBe(1);
-
-    expect(scan).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain(`unknown option '${option}'`);
-  });
-
-  it('rejects scan without a connection id', async () => {
-    const io = makeIo();
-    const scan = vi.fn(async () => 0);
-
-    await expect(runKtxCli(['scan', '--dry-run'], io.io, { scan })).resolves.toBe(1);
-
-    expect(scan).not.toHaveBeenCalled();
-    expect(io.stderr()).toMatch(/missing required argument/i);
-  });
-
-  it('rejects invalid scan modes before dispatch', async () => {
-    const io = makeIo();
-    const scan = vi.fn(async () => 0);
-
-    await expect(runKtxCli(['scan', 'warehouse', '--mode', 'deep'], io.io, { scan })).resolves.toBe(1);
-
-    expect(scan).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain("argument 'deep' is invalid");
-    expect(io.stderr()).toContain('Allowed choices are structural, enriched, relationships');
-  });
-
   it.each([
-    ['scan', 'report', 'scan-run-1'],
-    ['scan', 'relationships', 'scan-run-1'],
-  ])('rejects removed scan subcommand %s %s', async (command, subcommand, runId) => {
+    { argv: ['scan'] },
+    { argv: ['scan', '--help'] },
+    { argv: ['scan', 'warehouse'] },
+    { argv: ['scan', 'warehouse', '--project-dir', '/tmp/project', '--dry-run'] },
+    { argv: ['scan', 'warehouse', '--project-dir', '/tmp/project', '--mode', 'relationships'] },
+  ])('rejects removed top-level scan command $argv', async ({ argv }) => {
     const io = makeIo();
-    const scan = vi.fn(async () => 0);
+    const ingest = vi.fn(async () => 0);
 
-    await expect(runKtxCli([command, subcommand, runId], io.io, { scan })).resolves.toBe(1);
+    await expect(runKtxCli(argv, io.io, { ingest })).resolves.toBe(1);
 
-    expect(scan).not.toHaveBeenCalled();
-    expect(io.stderr()).toMatch(/too many arguments|unknown command|error:/);
+    expect(ingest).not.toHaveBeenCalled();
+    expect(io.stderr()).toMatch(/unknown command|error:/);
   });
 
   it('dispatches top-level ingest run through the low-level ingest Commander registration', async () => {
