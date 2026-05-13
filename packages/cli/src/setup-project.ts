@@ -113,6 +113,55 @@ async function existingFolderState(
   }
 }
 
+type ConfirmProjectDirResult =
+  | { status: 'confirmed'; confirmedCreation: boolean }
+  | { status: 'choose-another' }
+  | { status: 'back' }
+  | { status: 'cancelled' }
+  | { status: 'not-directory' };
+
+async function confirmProjectDir(
+  selectedDir: string,
+  io: KtxCliIo,
+  prompts: KtxSetupProjectPromptAdapter,
+): Promise<ConfirmProjectDirResult> {
+  const state = await existingFolderState(selectedDir);
+
+  if (state === 'not-directory') {
+    io.stderr.write(`Project folder path exists and is not a directory: ${selectedDir}\n`);
+    return { status: 'not-directory' };
+  }
+
+  if (state === 'non-empty-directory') {
+    const action = await prompts.select({
+      message: `That folder already exists and is not empty: ${selectedDir}`,
+      options: [
+        { value: 'use-existing', label: 'Yes, create KTX files there' },
+        { value: 'choose-another', label: 'Choose another folder' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    if (action === 'choose-another') return { status: 'choose-another' };
+    if (action === 'back') return { status: 'back' };
+    if (action !== 'use-existing') return { status: 'cancelled' };
+    return { status: 'confirmed', confirmedCreation: true };
+  }
+
+  io.stdout.write(`│  KTX will create:\n│    ${selectedDir}\n`);
+  const action = await prompts.select({
+    message: `Create KTX project at ${selectedDir}?`,
+    options: [
+      { value: 'create', label: 'Create project' },
+      { value: 'choose-another', label: 'Choose another folder' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (action === 'choose-another') return { status: 'choose-another' };
+  if (action === 'back') return { status: 'back' };
+  if (action !== 'create') return { status: 'cancelled' };
+  return { status: 'confirmed', confirmedCreation: true };
+}
+
 async function normalizeSetupGitignore(projectDir: string): Promise<void> {
   const gitignorePath = join(projectDir, '.ktx/.gitignore');
   await mkdir(join(projectDir, '.ktx'), { recursive: true });
@@ -193,55 +242,12 @@ async function promptForNewProjectDir(
       return { status: 'cancelled', projectDir };
     }
 
-    const state = await existingFolderState(selectedDir);
-    let confirmedCreation = false;
-    if (state === 'not-directory') {
-      io.stderr.write(`Project folder path exists and is not a directory: ${selectedDir}\n`);
-      return { status: 'missing-input', projectDir };
-    }
-    if (state === 'non-empty-directory') {
-      const existingAction = await prompts.select({
-        message: `That folder already exists and is not empty: ${selectedDir}`,
-        options: [
-          { value: 'use-existing', label: 'Yes, create KTX files there' },
-          { value: 'choose-another', label: 'Choose another folder' },
-          { value: 'back', label: 'Back' },
-        ],
-      });
-      if (existingAction === 'choose-another') {
-        continue;
-      }
-      if (existingAction === 'back') {
-        return { status: 'back', projectDir };
-      }
-      if (existingAction !== 'use-existing') {
-        return { status: 'cancelled', projectDir };
-      }
-      confirmedCreation = true;
-    }
-
-    io.stdout.write(`│  KTX will create:\n│    ${selectedDir}\n`);
-    if (state !== 'non-empty-directory') {
-      const createAction = await prompts.select({
-        message: `Create KTX project at ${selectedDir}?`,
-        options: [
-          { value: 'create', label: 'Create project' },
-          { value: 'choose-another', label: 'Choose another folder' },
-          { value: 'back', label: 'Back' },
-        ],
-      });
-      if (createAction === 'choose-another') {
-        continue;
-      }
-      if (createAction === 'back') {
-        return { status: 'back', projectDir };
-      }
-      if (createAction !== 'create') {
-        return { status: 'cancelled', projectDir };
-      }
-      confirmedCreation = true;
-    }
-    return { status: 'selected', projectDir: selectedDir, confirmedCreation };
+    const confirmed = await confirmProjectDir(selectedDir, io, prompts);
+    if (confirmed.status === 'not-directory') return { status: 'missing-input', projectDir };
+    if (confirmed.status === 'choose-another') continue;
+    if (confirmed.status === 'back') return { status: 'back', projectDir };
+    if (confirmed.status === 'cancelled') return { status: 'cancelled', projectDir };
+    return { status: 'selected', projectDir: selectedDir, confirmedCreation: confirmed.confirmedCreation };
   }
 }
 
@@ -323,15 +329,17 @@ export async function runKtxSetupProjectStep(
   }
 
   const prompts = deps.prompts ?? createClackSetupProjectPromptAdapter();
+  const defaultProjectDir = join(projectDir, DEFAULT_NEW_PROJECT_FOLDER_NAME);
   io.stdout.write(
     '│  Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
   );
   while (true) {
     const choice = await prompts.select({
-      message: 'Which KTX project should setup use?',
+      message: 'Where should KTX create the project?',
       options: [
-        { value: 'current', label: 'Use current directory' },
-        { value: 'new', label: 'Create a new project folder' },
+        { value: 'current', label: 'Current directory' },
+        { value: 'new-default', label: 'New subfolder (./ktx-project)' },
+        { value: 'new-custom', label: 'Custom path' },
         ...(args.allowBack ? [{ value: 'back', label: 'Back' }] : []),
         ...(args.allowBack ? [] : [{ value: 'exit', label: 'Exit' }]),
       ],
@@ -346,27 +354,53 @@ export async function runKtxSetupProjectStep(
       return { status: 'cancelled', projectDir };
     }
 
-    let selectedDir = projectDir;
-    let confirmedCreation = false;
-    if (choice === 'new') {
-      const selected = await promptForNewProjectDir(projectDir, homeDir, io, prompts);
-      if (selected.status === 'back') {
-        continue;
-      }
-      if (selected.status !== 'selected') {
-        return selected;
-      }
-      selectedDir = selected.projectDir;
-      confirmedCreation = selected.confirmedCreation;
+    if (choice === 'current') {
+      const project = await createProject(projectDir, deps);
+      printProjectSummary(io, projectDir);
+      return { status: 'ready', projectDir, project };
     }
 
-    if (choice !== 'current' && choice !== 'new') {
-      prompts.cancel('Setup cancelled.');
-      return { status: 'cancelled', projectDir };
+    if (choice === 'new-default') {
+      const confirmed = await confirmProjectDir(defaultProjectDir, io, prompts);
+      if (confirmed.status === 'choose-another' || confirmed.status === 'back') continue;
+      if (confirmed.status === 'not-directory') return { status: 'missing-input', projectDir };
+      if (confirmed.status === 'cancelled') return { status: 'cancelled', projectDir };
+      const project = await createProject(defaultProjectDir, deps);
+      printProjectSummary(io, defaultProjectDir);
+      return {
+        status: 'ready',
+        projectDir: defaultProjectDir,
+        project,
+        confirmedCreation: confirmed.confirmedCreation,
+      };
     }
 
-    const project = await createProject(selectedDir, deps);
-    printProjectSummary(io, selectedDir);
-    return { status: 'ready', projectDir: selectedDir, project, confirmedCreation };
+    if (choice === 'new-custom') {
+      io.stdout.write(`│  Relative paths are resolved from:\n│    ${projectDir}\n`);
+      io.stdout.write(`│  Home paths are resolved from:\n│    ${homeDir}\n`);
+      const rawPath = await prompts.text({
+        message: withTextInputNavigation('Project folder path'),
+        placeholder: './analytics-ktx, ~/analytics-ktx, or /Users/you/projects/analytics-ktx',
+      });
+      if (rawPath === undefined) continue;
+      const trimmed = rawPath.trim();
+      if (trimmed.length === 0) {
+        io.stderr.write(
+          'Enter a relative path like ./analytics-ktx, a home path like ~/analytics-ktx, or an absolute path.\n',
+        );
+        return { status: 'missing-input', projectDir };
+      }
+      const customDir = resolveFromProjectDir(projectDir, trimmed, homeDir);
+      const confirmed = await confirmProjectDir(customDir, io, prompts);
+      if (confirmed.status === 'choose-another' || confirmed.status === 'back') continue;
+      if (confirmed.status === 'not-directory') return { status: 'missing-input', projectDir };
+      if (confirmed.status === 'cancelled') return { status: 'cancelled', projectDir };
+      const project = await createProject(customDir, deps);
+      printProjectSummary(io, customDir);
+      return { status: 'ready', projectDir: customDir, project, confirmedCreation: confirmed.confirmedCreation };
+    }
+
+    prompts.cancel('Setup cancelled.');
+    return { status: 'cancelled', projectDir };
   }
 }
