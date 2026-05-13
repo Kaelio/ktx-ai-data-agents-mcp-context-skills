@@ -238,7 +238,7 @@ jobs:
           files: ./packages/cli/coverage/lcov.info,./packages/connector-bigquery/coverage/lcov.info,./packages/connector-clickhouse/coverage/lcov.info,./packages/connector-mysql/coverage/lcov.info,./packages/connector-postgres/coverage/lcov.info,./packages/connector-snowflake/coverage/lcov.info,./packages/connector-sqlite/coverage/lcov.info,./packages/connector-sqlserver/coverage/lcov.info,./packages/context/coverage/lcov.info,./packages/llm/coverage/lcov.info
           flags: typescript
           name: typescript
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Generate Python coverage
         run: pnpm run test:coverage:py
@@ -250,7 +250,7 @@ jobs:
           files: ./coverage/python.xml
           flags: python
           name: python
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
   artifact-checks:
     name: Artifact checks

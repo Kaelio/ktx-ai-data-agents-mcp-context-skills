@@ -1108,13 +1108,13 @@ describe('setup sources step', () => {
     });
     expect(discoverMetabaseDatabases).toHaveBeenCalledWith({
       sourceUrl: 'https://metabase-new.example.com',
-      sourceApiKeyRef: 'env:METABASE_API_KEY',
+      sourceApiKeyRef: 'env:METABASE_API_KEY', // pragma: allowlist secret
       sourceConnectionId: 'metabase-main',
     });
     expect((await readConfig()).connections['metabase-main']).toMatchObject({
       driver: 'metabase',
       api_url: 'https://metabase-new.example.com',
-      api_key_ref: 'env:METABASE_API_KEY',
+      api_key_ref: 'env:METABASE_API_KEY', // pragma: allowlist secret
       mappings: {
         databaseMappings: { '2': 'warehouse' },
         syncEnabled: { '2': true },
