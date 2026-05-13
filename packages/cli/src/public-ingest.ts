@@ -477,6 +477,7 @@ export async function executePublicIngestTarget(
     ...(target.sourceDir ? { sourceDir: target.sourceDir } : {}),
     outputMode: sourceIngestOutputMode(args, io),
     inputMode: args.inputMode,
+    allowImplicitAdapter: true,
   };
   const runIngest = deps.runIngest ?? runKtxIngest;
   const exitCode = deps.ingestProgress

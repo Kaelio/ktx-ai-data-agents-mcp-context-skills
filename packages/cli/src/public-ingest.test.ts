@@ -485,6 +485,42 @@ describe('runKtxPublicIngest', () => {
     );
   });
 
+  it('bypasses adapter allow-lists for connection-centric source ingest', async () => {
+    const runIngest = vi.fn(async () => 0);
+    const io = makeIo();
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/ktx',
+          targetConnectionId: 'docs',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+        },
+        io.io,
+        {
+          loadProject: async () =>
+            projectWithConnections({
+              docs: { driver: 'notion' },
+            }),
+          runIngest,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runIngest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        connectionId: 'docs',
+        adapter: 'notion',
+        allowImplicitAdapter: true,
+      }),
+      io.io,
+    );
+  });
+
   it('routes public status and watch to the ingest status renderer', async () => {
     const runIngest = vi.fn(async () => 0);
     const statusIo = makeIo();
