@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { readKtxSetupState } from '@ktx/context/project';
 import {
   contextBuildCommands,
   readKtxSetupContextState,
@@ -203,7 +204,7 @@ describe('setup context build state', () => {
       expect.objectContaining({ onDetach: expect.any(Function) }),
     );
     expect(verifyContextReady).toHaveBeenCalledWith(tempDir);
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('    - context');
+    expect(await readKtxSetupState(tempDir)).toMatchObject({ completed_steps: expect.arrayContaining(['context']) });
     await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
       runId: 'setup-context-local-abc123',
       status: 'completed',
@@ -284,7 +285,7 @@ describe('setup context build state', () => {
     ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-existing' });
 
     expect(runContextBuildMock).not.toHaveBeenCalled();
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('    - context');
+    expect(await readKtxSetupState(tempDir)).toMatchObject({ completed_steps: expect.arrayContaining(['context']) });
     await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
       runId: 'setup-context-local-existing',
       status: 'completed',
@@ -484,6 +485,87 @@ describe('setup context build state', () => {
     ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-auto-watch' });
     expect(select).not.toHaveBeenCalled();
     expect(io.stdout()).toContain('KTX context built: yes');
+  });
+
+  it('continues the full context build after auto-watching a completed primary scan prefetch', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-prefetch',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-prefetch'),
+      sourceProgress: [
+        { connectionId: 'warehouse', operation: 'scan' as const, status: 'running' as const, startedAtMs: Date.now() },
+      ],
+    });
+    const io = makeIo();
+    const completePrefetch = async () => {
+      await writeKtxSetupContextState(tempDir, {
+        runId: 'setup-context-local-prefetch',
+        status: 'paused',
+        startedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: '2026-05-09T10:02:00.000Z',
+        primarySourceConnectionIds: ['warehouse'],
+        contextSourceConnectionIds: [],
+        reportIds: ['warehouse-report'],
+        artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
+        retryableFailedTargets: [],
+        commands: contextBuildCommands(tempDir, 'setup-context-local-prefetch'),
+        sourceProgress: [
+          { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 120000 },
+        ],
+      });
+    };
+    const runContextBuildMock = vi.fn(async () => ({
+      exitCode: 0,
+      detached: false,
+      reportIds: ['docs-report'],
+      artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
+    }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['warehouse: enriched scan complete', 'docs: memory update complete'],
+    }));
+    const select = vi.fn(async () => {
+      throw new Error('should not prompt while auto-watching a prefetch');
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          sleep: completePrefetch,
+          watchIntervalMs: 1,
+          runIdFactory: () => 'setup-context-local-final',
+          now: () => new Date('2026-05-09T10:03:00.000Z'),
+          runContextBuild: runContextBuildMock,
+          verifyContextReady,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-final' });
+
+    expect(select).not.toHaveBeenCalled();
+    expect(runContextBuildMock).toHaveBeenCalledWith(
+      expect.objectContaining({ projectDir: tempDir }),
+      expect.objectContaining({
+        projectDir: tempDir,
+        completedSourceProgress: [
+          { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 120000 },
+        ],
+      }),
+      io.io,
+      expect.anything(),
+    );
   });
 
   it('renders the progress view when watching a build with sourceProgress', async () => {

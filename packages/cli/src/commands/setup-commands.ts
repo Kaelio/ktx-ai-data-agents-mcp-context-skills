@@ -311,6 +311,14 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     )
     .option('--skip-initial-source-ingest', 'Validate source setup without building source context during setup', false)
     .option('--skip-sources', 'Mark optional source setup complete with no sources', false)
+    .addOption(new Option('--internal-primary-scan-prefetch', 'Run the internal setup primary scan prefetch worker').hideHelp().default(false))
+    .addOption(new Option('--primary-scan-prefetch-run-id <id>', 'Internal setup primary scan prefetch run id').hideHelp())
+    .addOption(
+      new Option('--primary-scan-prefetch-connection-id <id>', 'Internal setup primary scan target connection id')
+        .hideHelp()
+        .argParser((value, previous: string[]) => [...previous, value])
+        .default([] as string[]),
+    )
     .showHelpAfterError();
 
   setup.hook('preAction', (_thisCommand, actionCommand) => {
@@ -318,6 +326,17 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
   });
 
   setup.action(async (options, command) => {
+    if (options.internalPrimaryScanPrefetch) {
+      await runSetupArgs(context, {
+        command: 'primary-scan-prefetch',
+        projectDir: resolveCommandProjectDir(command),
+        ...(options.primaryScanPrefetchRunId ? { runId: options.primaryScanPrefetchRunId } : {}),
+        ...(options.primaryScanPrefetchConnectionId.length > 0
+          ? { connectionIds: options.primaryScanPrefetchConnectionId }
+          : {}),
+      });
+      return;
+    }
     if (options.anthropicApiKeyEnv && options.anthropicApiKeyFile) {
       context.io.stderr.write(
         'Choose only one Anthropic credential source: --anthropic-api-key-env or --anthropic-api-key-file.\n',

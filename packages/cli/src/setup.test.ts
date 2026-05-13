@@ -584,13 +584,13 @@ describe('setup status', () => {
 
     expect(projectPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Which KTX project should setup use?',
+        message: 'Where should KTX create the project?',
         options: expect.arrayContaining([expect.objectContaining({ value: 'back', label: 'Back' })]),
       }),
     );
     expect(projectPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Which KTX project should setup use?',
+        message: 'Where should KTX create the project?',
         options: expect.not.arrayContaining([expect.objectContaining({ value: 'exit', label: 'Exit' })]),
       }),
     );
@@ -920,7 +920,7 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: false,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: true,
@@ -937,7 +937,7 @@ describe('setup status', () => {
       expect.objectContaining({
         projectDir: tempDir,
         inputMode: 'disabled',
-        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
         anthropicModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
@@ -961,11 +961,11 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: true,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
-          embeddingApiKeyEnv: 'OPENAI_API_KEY',
+          embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
           skipEmbeddings: false,
           databaseSchemas: [],
           skipDatabases: true,
@@ -983,7 +983,7 @@ describe('setup status', () => {
         cliVersion: '0.2.0',
         runtimeInstallPolicy: 'auto',
         embeddingBackend: 'openai',
-        embeddingApiKeyEnv: 'OPENAI_API_KEY',
+        embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
         skipEmbeddings: false,
       }),
       testIo.io,
@@ -1181,11 +1181,11 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: false,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
-          embeddingApiKeyEnv: 'OPENAI_API_KEY',
+          embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
           skipEmbeddings: false,
           databaseDrivers: ['postgres'],
           databaseConnectionId: 'warehouse',
@@ -1259,6 +1259,68 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources']);
+  });
+
+  it('starts primary source context prefetch after database setup before context source setup', async () => {
+    const calls: string[] = [];
+    const io = makeIo();
+    await writeFile(join(tempDir, 'ktx.yaml'), ['project: revenue', 'connections: {}', ''].join('\n'), 'utf-8');
+
+    const primaryScanPrefetch = vi.fn(async () => {
+      calls.push('prefetch');
+      return { status: 'started' as const, projectDir: tempDir, runId: 'setup-context-prefetch-test' };
+    });
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'existing',
+          agents: false,
+          inputMode: 'auto',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          skipDatabases: false,
+          skipSources: true,
+          skipAgents: true,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          model: async () => {
+            calls.push('model');
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          embeddings: async () => {
+            calls.push('embeddings');
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          databases: async () => {
+            calls.push('databases');
+            return { status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] };
+          },
+          primaryScanPrefetch,
+          sources: async () => {
+            calls.push('sources');
+            return { status: 'skipped', projectDir: tempDir };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(primaryScanPrefetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        inputMode: 'auto',
+        yes: true,
+        connectionIds: ['warehouse'],
+      }),
+      io.io,
+    );
+    expect(calls).toEqual(['model', 'embeddings', 'databases', 'prefetch', 'sources']);
   });
 
   it.each([
@@ -2041,7 +2103,7 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: false,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: false,

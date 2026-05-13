@@ -26,6 +26,13 @@ import {
 } from './setup-databases.js';
 import { type KtxSetupEmbeddingsDeps, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
 import { type KtxSetupModelDeps, isKtxSetupLlmConfigReady, runKtxSetupAnthropicModelStep } from './setup-models.js';
+import {
+  type KtxPrimaryScanPrefetchArgs,
+  type KtxPrimaryScanPrefetchResult,
+  type KtxPrimaryScanPrefetchDeps,
+  runPrimaryScanPrefetchWorker,
+  startPrimaryScanPrefetch,
+} from './setup-primary-scan-prefetch.js';
 import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
 import {
   isKtxPreAgentSetupReady,
@@ -55,6 +62,12 @@ export interface KtxSetupStatus {
 }
 
 export type KtxSetupArgs =
+  | {
+      command: 'primary-scan-prefetch';
+      projectDir: string;
+      runId?: string;
+      connectionIds?: string[];
+    }
   | {
       command: 'run';
       projectDir: string;
@@ -137,6 +150,8 @@ export interface KtxSetupDeps {
     io: KtxCliIo,
   ) => Promise<Awaited<ReturnType<typeof runKtxSetupAgentsStep>>>;
   agentsDeps?: KtxSetupAgentsDeps;
+  primaryScanPrefetch?: (args: KtxPrimaryScanPrefetchArgs, io: KtxCliIo) => Promise<KtxPrimaryScanPrefetchResult>;
+  primaryScanPrefetchDeps?: KtxPrimaryScanPrefetchDeps;
   context?: (args: Parameters<typeof runKtxSetupContextStep>[0], io: KtxCliIo) => Promise<KtxSetupContextResult>;
   contextDeps?: KtxSetupContextDeps;
   readyMenuDeps?: KtxSetupReadyMenuDeps;
@@ -442,6 +457,10 @@ export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSet
 }
 
 async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
+  if (args.command === 'primary-scan-prefetch') {
+    return await runPrimaryScanPrefetchWorker(args, io, deps.primaryScanPrefetchDeps);
+  }
+
   io.stdout.write('KTX setup\n');
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
@@ -549,6 +568,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     }
 
     const forcePromptSteps = new Set<KtxSetupFlowStep>();
+    let autoWatchPrefetchAtContext = false;
     const isNavigableSetupStep = (step: KtxSetupFlowStep): boolean => {
       if (step === 'models') return !args.skipLlm && shouldRunModels;
       if (step === 'embeddings') return !args.skipEmbeddings && shouldRunEmbeddings;
@@ -677,9 +697,11 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             inputMode: args.inputMode,
             forcePrompt: forcePromptSteps.has('context') || runOnly === 'context',
             allowEmpty: true,
+            ...(autoWatchPrefetchAtContext ? { autoWatch: true } : {}),
           },
           io,
         );
+        autoWatchPrefetchAtContext = false;
       } else {
         const agentsRunner =
           deps.agents ?? ((agentArgs, agentIo) => runKtxSetupAgentsStep(agentArgs, agentIo, deps.agentsDeps));
@@ -723,6 +745,26 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             return args.inputMode === 'disabled' ? 1 : 0;
           }
           return 0;
+        }
+      }
+      if (step === 'databases' && stepResult.status === 'ready' && shouldRunContext) {
+        const databaseResult = stepResult as Awaited<ReturnType<typeof runKtxSetupDatabasesStep>>;
+        const connectionIds = 'connectionIds' in databaseResult ? databaseResult.connectionIds : [];
+        const primaryScanPrefetch =
+          deps.primaryScanPrefetch ??
+          ((prefetchArgs, prefetchIo) =>
+            startPrimaryScanPrefetch(prefetchArgs, prefetchIo, deps.primaryScanPrefetchDeps));
+        const prefetchResult = await primaryScanPrefetch(
+          {
+            projectDir: projectResult.projectDir,
+            inputMode: args.inputMode,
+            yes: args.yes,
+            connectionIds,
+          },
+          io,
+        );
+        if (prefetchResult.status === 'started' || prefetchResult.status === 'running') {
+          autoWatchPrefetchAtContext = true;
         }
       }
 

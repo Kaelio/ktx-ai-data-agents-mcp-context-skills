@@ -40,6 +40,9 @@ export interface ContextBuildArgs {
   inputMode: 'auto' | 'disabled';
   scanMode?: 'structural' | 'enriched';
   detectRelationships?: boolean;
+  targetOperations?: Array<'scan' | 'source-ingest'>;
+  targetConnectionIds?: string[];
+  completedSourceProgress?: ContextBuildSourceProgressUpdate[];
 }
 
 export interface ContextBuildResult {
@@ -523,10 +526,33 @@ function failureTextForTarget(input: {
   return input.fallback ?? `${input.target.connectionId} failed.`;
 }
 
-export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuildViewState {
+function progressKey(input: Pick<ContextBuildSourceProgressUpdate, 'connectionId' | 'operation'>): string {
+  return `${input.operation}:${input.connectionId}`;
+}
+
+export function initViewState(
+  targets: KtxPublicIngestPlanTarget[],
+  completedSourceProgress: ContextBuildSourceProgressUpdate[] = [],
+): ContextBuildViewState {
+  const completedByKey = new Map(
+    completedSourceProgress.filter((source) => source.status === 'done').map((source) => [progressKey(source), source]),
+  );
+  const makeTargetWithProgress = (target: KtxPublicIngestPlanTarget): ContextBuildTargetState => {
+    const completed = completedByKey.get(progressKey(target));
+    const state = makeTargetState(target);
+    if (!completed) {
+      return state;
+    }
+    return {
+      ...state,
+      status: 'done',
+      elapsedMs: completed.elapsedMs ?? 0,
+      summaryText: completed.summaryText ?? null,
+    };
+  };
   return {
-    primarySources: targets.filter((t) => t.operation === 'scan').map(makeTargetState),
-    contextSources: targets.filter((t) => t.operation === 'source-ingest').map(makeTargetState),
+    primarySources: targets.filter((t) => t.operation === 'scan').map(makeTargetWithProgress),
+    contextSources: targets.filter((t) => t.operation === 'source-ingest').map(makeTargetWithProgress),
     frame: 0,
     startedAt: null,
     totalElapsedMs: 0,
@@ -540,7 +566,12 @@ export async function runContextBuild(
   deps: ContextBuildDeps = {},
 ): Promise<ContextBuildResult> {
   const plan = buildPublicIngestPlan(project, { projectDir: args.projectDir, all: true });
-  const state = initViewState(plan.targets);
+  const targetOperations = new Set(args.targetOperations ?? ['scan', 'source-ingest']);
+  const targetConnectionIds = args.targetConnectionIds ? new Set(args.targetConnectionIds) : null;
+  const targets = plan.targets.filter(
+    (target) => targetOperations.has(target.operation) && (!targetConnectionIds || targetConnectionIds.has(target.connectionId)),
+  );
+  const state = initViewState(targets, args.completedSourceProgress);
   const isTTY = io.stdout.isTTY === true;
   const nowFn = deps.now ?? (() => Date.now());
 
@@ -618,6 +649,7 @@ export async function runContextBuild(
   try {
     for (const targetState of orderedTargets) {
       if (detached) break;
+      if (targetState.status === 'done') continue;
 
       targetState.status = 'running';
       targetState.startedAt = nowFn();

@@ -474,6 +474,39 @@ describe('runContextBuild', () => {
     );
   });
 
+  it('skips targets already completed by an earlier primary scan prefetch', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+      dbt_main: { driver: 'dbt' },
+    });
+    const executeTarget = vi.fn(async (target) => successResult(target.connectionId, target.driver, target.operation));
+
+    const result = await runContextBuild(
+      project,
+      {
+        projectDir: '/tmp/project',
+        inputMode: 'disabled',
+        completedSourceProgress: [
+          { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 120000, summaryText: '42 tables' },
+        ],
+      },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toEqual({ exitCode: 0, detached: false });
+    expect(executeTarget).toHaveBeenCalledTimes(1);
+    expect(executeTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'dbt_main', operation: 'source-ingest' }),
+      expect.anything(),
+      expect.anything(),
+      {},
+    );
+    expect(io.stdout()).toContain('warehouse');
+    expect(io.stdout()).toContain('42 tables');
+  });
+
   it('exits immediately with paused message when d is pressed', async () => {
     const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit');
