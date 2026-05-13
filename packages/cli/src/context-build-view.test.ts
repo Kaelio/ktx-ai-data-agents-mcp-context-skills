@@ -2,6 +2,7 @@ import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '@ktx/contex
 import { describe, expect, it, vi } from 'vitest';
 import type { KtxPublicIngestProject, KtxPublicIngestTargetResult } from './public-ingest.js';
 import {
+  type ContextBuildTargetState,
   extractProgressMessage,
   createRepainter,
   initViewState,
@@ -45,27 +46,39 @@ function projectWithConnections(connections: KtxProjectConfig['connections']): K
   };
 }
 
-function successResult(connectionId: string, driver: string, operation: 'scan' | 'source-ingest'): KtxPublicIngestTargetResult {
+function successResult(
+  connectionId: string,
+  driver: string,
+  operation: 'database-ingest' | 'source-ingest',
+): KtxPublicIngestTargetResult {
   return {
     connectionId,
     driver,
     steps: [
-      { operation: 'scan', status: operation === 'scan' ? 'done' : 'skipped' },
+      { operation: 'database-schema', status: operation === 'database-ingest' ? 'done' : 'skipped' },
+      { operation: 'query-history', status: 'skipped' },
       { operation: 'source-ingest', status: operation === 'source-ingest' ? 'done' : 'skipped' },
-      { operation: 'enrich', status: 'skipped' },
       { operation: 'memory-update', status: operation === 'source-ingest' ? 'done' : 'skipped' },
     ],
   };
 }
 
-function failedResult(connectionId: string, driver: string, operation: 'scan' | 'source-ingest'): KtxPublicIngestTargetResult {
+function failedResult(
+  connectionId: string,
+  driver: string,
+  operation: 'database-ingest' | 'source-ingest',
+): KtxPublicIngestTargetResult {
   return {
     connectionId,
     driver,
     steps: [
-      { operation: 'scan', status: operation === 'scan' ? 'failed' : 'skipped', detail: `${connectionId} failed at scan.` },
+      {
+        operation: 'database-schema',
+        status: operation === 'database-ingest' ? 'failed' : 'skipped',
+        detail: `${connectionId} failed at database-schema.`,
+      },
+      { operation: 'query-history', status: 'skipped' },
       { operation: 'source-ingest', status: operation === 'source-ingest' ? 'failed' : 'skipped' },
-      { operation: 'enrich', status: 'skipped' },
       { operation: 'memory-update', status: 'not-run' },
     ],
   };
@@ -100,15 +113,19 @@ describe('parseScanSummary', () => {
 });
 
 describe('parseIngestSummary', () => {
-  it('extracts work units and saved memory', () => {
-    expect(parseIngestSummary('Work units: 5\nSaved memory: 3 wiki, 2 SL')).toBe('3 wiki, 2 SL');
+  it('extracts task count and saved memory', () => {
+    expect(parseIngestSummary('Tasks: 5\nSaved memory: 3 wiki, 2 SL')).toBe('3 wiki, 2 SL');
   });
 
-  it('extracts work units alone when no saved memory', () => {
-    expect(parseIngestSummary('Work units: 5\nStatus: done')).toBe('5 work units');
+  it('extracts task count alone when no saved memory', () => {
+    expect(parseIngestSummary('Tasks: 5\nStatus: done')).toBe('5 tasks');
   });
 
-  it('extracts saved memory alone when no work units', () => {
+  it('still parses the legacy "Work units:" wording for backward compat', () => {
+    expect(parseIngestSummary('Work units: 7\nStatus: done')).toBe('7 tasks');
+  });
+
+  it('extracts saved memory alone when no task count', () => {
     expect(parseIngestSummary('Saved memory: 3 wiki, 2 SL')).toBe('3 wiki, 2 SL');
   });
 
@@ -120,7 +137,7 @@ describe('parseIngestSummary', () => {
 describe('initViewState', () => {
   it('partitions targets into primary and context sources', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
       { connectionId: 'dbt-main', driver: 'dbt', operation: 'source-ingest', adapter: 'dbt', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
     ]);
 
@@ -133,7 +150,7 @@ describe('initViewState', () => {
 
   it('initializes global timing fields', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     expect(state.startedAt).toBeNull();
     expect(state.totalElapsedMs).toBe(0);
@@ -143,7 +160,7 @@ describe('initViewState', () => {
 describe('renderContextBuildView', () => {
   it('renders all-queued state with ○ icon and progress counter', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
       { connectionId: 'dbt-main', driver: 'dbt', operation: 'source-ingest', adapter: 'dbt', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
     ]);
 
@@ -151,7 +168,7 @@ describe('renderContextBuildView', () => {
     expect(output).toContain('Building KTX context');
     expect(output).toContain('(0/2)');
     expect(output).toContain('○');
-    expect(output).toContain('Primary sources:');
+    expect(output).toContain('Databases:');
     expect(output).toContain('warehouse');
     expect(output).toContain('queued');
     expect(output).toContain('Context sources:');
@@ -184,7 +201,7 @@ describe('renderContextBuildView', () => {
 
   it('renders header with total elapsed time when set', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.totalElapsedMs = 65000;
 
@@ -194,16 +211,62 @@ describe('renderContextBuildView', () => {
 
   it('renders project directory when provided', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
 
     const output = renderContextBuildView(state, { styled: false, projectDir: '/tmp/project' });
     expect(output).toContain('Project: /tmp/project');
   });
 
+  it('renders public warnings in the foreground view', () => {
+    const state = initViewState([
+      {
+        connectionId: 'docs',
+        driver: 'notion',
+        operation: 'source-ingest',
+        adapter: 'notion',
+        debugCommand: 'ktx ingest docs --debug',
+        steps: ['source-ingest', 'memory-update'],
+      },
+    ]);
+
+    const rendered = renderContextBuildView(state, {
+      styled: false,
+      warnings: ['--deep affects database ingest only; ignoring it for docs.'],
+    });
+
+    expect(rendered).toContain('Warnings:');
+    expect(rendered).toContain('--deep affects database ingest only; ignoring it for docs.');
+  });
+
+  it('renders public notices in the foreground view before warnings', () => {
+    const state = initViewState([
+      {
+        connectionId: 'warehouse',
+        driver: 'postgres',
+        operation: 'database-ingest',
+        debugCommand: 'ktx ingest warehouse --debug',
+        steps: ['database-schema', 'query-history'],
+        databaseDepth: 'deep',
+        detectRelationships: true,
+        queryHistory: { enabled: true, dialect: 'postgres' },
+      },
+    ]);
+
+    const rendered = renderContextBuildView(state, {
+      styled: false,
+      notices: ['Schema ingest runs before query history for warehouse.'],
+      warnings: ['--query-history requires deep ingest; running warehouse with --deep.'],
+    });
+
+    expect(rendered.indexOf('Notices:')).toBeLessThan(rendered.indexOf('Warnings:'));
+    expect(rendered).toContain('Schema ingest runs before query history for warehouse.');
+    expect(rendered).toContain('--query-history requires deep ingest; running warehouse with --deep.');
+  });
+
   it('renders dynamic separator matching header width', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.totalElapsedMs = 120000;
 
@@ -216,7 +279,7 @@ describe('renderContextBuildView', () => {
 
   it('renders completed state with summary', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.primarySources[0].status = 'done';
     state.primarySources[0].elapsedMs = 72000;
@@ -230,19 +293,19 @@ describe('renderContextBuildView', () => {
 
   it('renders running target with elapsed time', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.primarySources[0].status = 'running';
     state.primarySources[0].elapsedMs = 30000;
 
     const output = renderContextBuildView(state, { styled: false });
-    expect(output).toContain('scanning...');
+    expect(output).toContain('reading schema');
     expect(output).toContain('(30s)');
   });
 
   it('renders running target with progress bar when percentage is available', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.primarySources[0].status = 'running';
     state.primarySources[0].detailLine = '[50%] Scanning tables...';
@@ -263,11 +326,11 @@ describe('renderContextBuildView', () => {
     state.contextSources[0].startedAt = 1_000;
     state.contextSources[0].elapsedMs = 113_000;
     state.contextSources[0].progressUpdatedAtMs = 46_000;
-    state.contextSources[0].detailLine = '[45%] No work units to process; finalizing ingest';
+    state.contextSources[0].detailLine = '[45%] No tasks to process; finalizing ingest';
 
     const output = renderContextBuildView(state, { styled: false });
 
-    expect(output).toContain('No work units to process; finalizing ingest');
+    expect(output).toContain('No tasks to process; finalizing ingest');
     expect(output).toContain('last update 1m08s ago');
     expect(output).toContain('(1m53s)');
   });
@@ -280,7 +343,7 @@ describe('renderContextBuildView', () => {
     state.contextSources[0].startedAt = 1_000;
     state.contextSources[0].elapsedMs = 40_000;
     state.contextSources[0].progressUpdatedAtMs = 25_000;
-    state.contextSources[0].detailLine = '[45%] Planning work units';
+    state.contextSources[0].detailLine = '[45%] Planning tasks';
 
     const output = renderContextBuildView(state, { styled: false });
 
@@ -289,7 +352,7 @@ describe('renderContextBuildView', () => {
 
   it('renders completion summary when all targets are done', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
       { connectionId: 'dbt-main', driver: 'dbt', operation: 'source-ingest', adapter: 'dbt', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
     ]);
     state.primarySources[0].status = 'done';
@@ -304,7 +367,7 @@ describe('renderContextBuildView', () => {
 
   it('renders singular source label in completion summary', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.primarySources[0].status = 'done';
     state.primarySources[0].elapsedMs = 5000;
@@ -316,7 +379,7 @@ describe('renderContextBuildView', () => {
 
   it('does not render completion summary while targets are still active', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
       { connectionId: 'dbt-main', driver: 'dbt', operation: 'source-ingest', adapter: 'dbt', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
     ]);
     state.primarySources[0].status = 'done';
@@ -329,14 +392,14 @@ describe('renderContextBuildView', () => {
 
   it('renders failed state', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.primarySources[0].status = 'failed';
-    state.primarySources[0].failureText = 'KTX lost its connection to PostgreSQL while scanning warehouse.';
+    state.primarySources[0].failureText = 'KTX lost its connection to PostgreSQL while reading schema for warehouse.';
 
     const output = renderContextBuildView(state, { styled: false });
     expect(output).toContain('✗');
-    expect(output).toContain('KTX lost its connection to PostgreSQL while scanning warehouse.');
+    expect(output).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
   });
 
   it('omits empty groups', () => {
@@ -345,31 +408,174 @@ describe('renderContextBuildView', () => {
     ]);
 
     const output = renderContextBuildView(state, { styled: false });
-    expect(output).not.toContain('Primary sources:');
+    expect(output).not.toContain('Databases:');
     expect(output).toContain('Context sources:');
   });
 
-  it('preserves detach hint while targets are active', () => {
+  it('renders foreground-only progress hints without detach or resume commands', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      {
+        connectionId: 'warehouse',
+        driver: 'postgres',
+        operation: 'database-ingest',
+        debugCommand: 'ktx ingest warehouse --debug',
+        steps: ['database-schema'],
+      },
     ]);
     state.primarySources[0].status = 'running';
 
-    const output = renderContextBuildView(state, { styled: false, showHint: true, projectDir: '/tmp/project' });
-    expect(output).toContain('d to detach');
-    expect(output).toContain('ktx setup --project-dir /tmp/project');
-    expect(output).toContain('to resume');
+    const rendered = renderContextBuildView(state, { styled: false, showHint: true, projectDir: '/tmp/project' });
+
+    expect(rendered).toContain('Ctrl+C to stop');
+    expect(rendered).not.toContain('d to detach');
+    expect(rendered).not.toContain('resume');
   });
 
   it('omits detach hint when all targets are done', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.primarySources[0].status = 'done';
     state.totalElapsedMs = 5000;
 
     const output = renderContextBuildView(state, { styled: false, showHint: true });
-    expect(output).not.toContain('d to detach');
+    expect(output).not.toContain('Ctrl+C to stop');
+  });
+});
+
+describe('renderContextBuildView phase rows', () => {
+  function dbTarget(connectionId: string, queryHistoryEnabled = false) {
+    return {
+      connectionId,
+      driver: 'postgres',
+      operation: 'database-ingest' as const,
+      debugCommand: '',
+      steps: queryHistoryEnabled
+        ? (['database-schema', 'query-history'] as ('database-schema' | 'query-history')[])
+        : (['database-schema'] as ('database-schema' | 'query-history')[]),
+      ...(queryHistoryEnabled ? { queryHistory: { enabled: true, dialect: 'postgres' as const } } : {}),
+    };
+  }
+
+  function sourceTarget(connectionId: string) {
+    return {
+      connectionId,
+      driver: 'dbt',
+      operation: 'source-ingest' as const,
+      adapter: 'dbt',
+      debugCommand: '',
+      steps: ['source-ingest', 'memory-update'] as ('source-ingest' | 'memory-update')[],
+    };
+  }
+
+  function setPhase(
+    state: ReturnType<typeof initViewState>,
+    connectionId: string,
+    phaseKey: 'database-schema' | 'query-history' | 'source-ingest',
+    patch: Partial<ContextBuildTargetState['phases'][number]>,
+  ): void {
+    const target = [...state.primarySources, ...state.contextSources].find((t) => t.target.connectionId === connectionId);
+    const phase = target?.phases.find((p) => p.key === phaseKey);
+    if (!phase) throw new Error(`No phase ${phaseKey} on ${connectionId}`);
+    Object.assign(phase, patch);
+  }
+
+  it('renders two phase rows for a database-ingest target with query history', () => {
+    const state = initViewState([dbTarget('warehouse', true)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', {
+      status: 'done',
+      percent: 100,
+      summary: '172 tables',
+      elapsedMs: 52_000,
+    });
+    setPhase(state, 'warehouse', 'query-history', {
+      status: 'running',
+      percent: 7,
+      detail: '12/172 · arr-movements',
+      elapsedMs: 36_000,
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Schema');
+    expect(output).toContain('100%');
+    expect(output).toContain('172 tables');
+    expect(output).toContain('(52s)');
+    expect(output).toContain('Query history');
+    expect(output).toContain('7%');
+    expect(output).toContain('12/172 · arr-movements');
+    expect(output).toContain('(36s)');
+  });
+
+  it('renders a single Schema phase row when query history is disabled', () => {
+    const state = initViewState([dbTarget('warehouse', false)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', {
+      status: 'running',
+      percent: 42,
+      detail: 'Profiling 73/172 tables',
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Schema');
+    expect(output).toContain('42%');
+    expect(output).toContain('Profiling 73/172 tables');
+    expect(output).not.toContain('Query history');
+  });
+
+  it('renders Source ingest phase row for a source-ingest target', () => {
+    const state = initViewState([sourceTarget('dbt-main')]);
+    state.contextSources[0].status = 'running';
+    setPhase(state, 'dbt-main', 'source-ingest', {
+      status: 'running',
+      percent: 25,
+      detail: 'Reading models',
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Source ingest');
+    expect(output).toContain('25%');
+    expect(output).toContain('Reading models');
+    expect(output).not.toContain('Schema  ');
+  });
+
+  it('renders skipped Query history when schema phase fails', () => {
+    const state = initViewState([dbTarget('warehouse', true)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', { status: 'failed', percent: 30 });
+    setPhase(state, 'warehouse', 'query-history', { status: 'skipped' });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Schema');
+    expect(output).toContain('failed');
+    expect(output).toContain('Query history');
+    expect(output).toContain('skipped');
+  });
+
+  it('renders queued Query history with an em-dash and empty bar', () => {
+    const state = initViewState([dbTarget('warehouse', true)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', {
+      status: 'running',
+      percent: 12,
+      detail: 'Introspecting',
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Query history');
+    expect(output).toContain('queued');
+    expect(output).toContain('—');
+  });
+
+  it('falls back to single-line legacy detail when no phase has started yet', () => {
+    const state = initViewState([dbTarget('warehouse', false)]);
+    state.primarySources[0].status = 'running';
+    state.primarySources[0].detailLine = '[5%] Preparing database ingest';
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Preparing database ingest');
+    expect(output).toContain('5%');
+    expect(output).not.toContain('○ Schema');
   });
 });
 
@@ -429,8 +635,45 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 0, detached: false });
+    expect(result).toEqual({ exitCode: 0 });
     expect(callOrder).toEqual(['warehouse', 'dbt_main']);
+  });
+
+  it('runs only the requested connection when foreground build receives a target', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+      docs: { driver: 'notion' },
+    });
+    const executeTarget = vi.fn(async (target) =>
+      successResult(target.connectionId, target.driver, target.operation),
+    );
+
+    await expect(
+      runContextBuild(
+        project,
+        {
+          projectDir: '/tmp/project',
+          inputMode: 'disabled',
+          targetConnectionId: 'warehouse',
+          all: false,
+          depth: 'fast',
+          queryHistory: 'default',
+        },
+        io.io,
+        { executeTarget, now: () => 1000 },
+      ),
+    ).resolves.toMatchObject({ exitCode: 0 });
+
+    expect(executeTarget).toHaveBeenCalledTimes(1);
+    expect(executeTarget.mock.calls[0]?.[0]).toMatchObject({
+      connectionId: 'warehouse',
+      operation: 'database-ingest',
+      databaseDepth: 'fast',
+    });
+    expect(io.stdout()).toContain('Databases:');
+    expect(io.stdout()).toContain('warehouse');
+    expect(io.stdout()).not.toContain('docs');
   });
 
   it('returns exit code 1 when any target fails', async () => {
@@ -447,7 +690,7 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 1, detached: false });
+    expect(result).toEqual({ exitCode: 1 });
   });
 
   it('renders a friendly network failure when target output contains a network error code', async () => {
@@ -467,11 +710,89 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 1, detached: false });
-    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while scanning warehouse.');
+    expect(result).toEqual({ exitCode: 1 });
+    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
     expect(io.stdout()).toContain('network address unavailable (EADDRNOTAVAIL)');
     expect(io.stdout()).toContain('Retry: ktx setup --project-dir /tmp/project');
     expect(io.stdout()).not.toContain('BoundPool');
+  });
+
+  it('renders localhost SQL analysis refusal as a runtime failure during query history', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { depth: 'deep', queryHistory: { enabled: true } } },
+    });
+    const executeTarget = vi.fn(async (target, _args, targetIo) => {
+      targetIo.stderr.write('connect ECONNREFUSED 127.0.0.1:8765\n');
+      return {
+        connectionId: target.connectionId,
+        driver: target.driver,
+        steps: [
+          { operation: 'database-schema', status: 'done' },
+          { operation: 'query-history', status: 'failed', detail: 'warehouse failed at query-history.' },
+          { operation: 'source-ingest', status: 'skipped' },
+          { operation: 'memory-update', status: 'skipped' },
+        ],
+      } satisfies KtxPublicIngestTargetResult;
+    });
+
+    const result = await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toEqual({ exitCode: 1 });
+    expect(io.stdout()).toContain(
+      'KTX could not reach the local SQL analysis runtime while processing query history for warehouse.',
+    );
+    expect(io.stdout()).toContain('connection refused (ECONNREFUSED)');
+    expect(io.stdout()).toContain('Retry: ktx setup --project-dir /tmp/project');
+    expect(io.stdout()).not.toContain('KTX lost its connection to PostgreSQL');
+  });
+
+  it('uses captured query-history stderr instead of generic failed-at detail', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { depth: 'deep', queryHistory: { enabled: true } } },
+    });
+    const executeTarget = vi.fn(async (target, _args, targetIo) => {
+      targetIo.stdout.write('KTX scan completed\n');
+      targetIo.stdout.write('Mode: enriched\n');
+      targetIo.stderr.write('Missing bundled Python runtime manifest: /tmp/assets/python/manifest.json\n');
+      targetIo.stderr.write('In a source checkout, build the local runtime assets with: pnpm run artifacts:build\n');
+      targetIo.stderr.write('Then retry the runtime-backed KTX command.\n');
+      return {
+        connectionId: target.connectionId,
+        driver: target.driver,
+        steps: [
+          { operation: 'database-schema', status: 'done' },
+          {
+            operation: 'query-history',
+            status: 'failed',
+            detail:
+              'warehouse failed at query-history. Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history',
+          },
+          { operation: 'source-ingest', status: 'skipped' },
+          { operation: 'memory-update', status: 'skipped' },
+        ],
+      } satisfies KtxPublicIngestTargetResult;
+    });
+
+    const result = await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled', entrypoint: 'ingest' },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toEqual({ exitCode: 1 });
+    expect(io.stdout()).toContain('Missing bundled Python runtime manifest: /tmp/assets/python/manifest.json.');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
+    expect(io.stdout()).not.toContain('warehouse failed at query-history');
+    expect(io.stdout().match(/Retry: /g)).toHaveLength(1);
   });
 
   it('renders a friendly network failure when target execution throws', async () => {
@@ -491,9 +812,139 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 1, detached: false });
-    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while scanning warehouse.');
+    expect(result).toEqual({ exitCode: 1 });
+    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
     expect(io.stdout()).toContain('connection reset (ECONNRESET)');
+  });
+
+  it('uses direct ingest retry guidance for public ingest failures', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+    const executeTarget = vi.fn(async (target) => failedResult(target.connectionId, target.driver, target.operation));
+
+    await runContextBuild(
+      project,
+      {
+        projectDir: '/tmp/project',
+        inputMode: 'disabled',
+        targetConnectionId: 'warehouse',
+        all: false,
+        entrypoint: 'ingest',
+      },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project');
+    expect(io.stdout()).not.toContain('Retry: ktx setup');
+  });
+
+  it('renders query-history progress without the historic-sql adapter key', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true } } },
+    });
+    const executeTarget = vi.fn(async (target, _args, _targetIo, deps) => {
+      deps.ingestProgress?.({ percent: 5, message: 'Fetching source files for warehouse/historic-sql' });
+      return successResult(target.connectionId, target.driver, target.operation);
+    });
+
+    await runContextBuild(
+      project,
+      {
+        projectDir: '/tmp/project',
+        inputMode: 'disabled',
+        targetConnectionId: 'warehouse',
+        all: false,
+        entrypoint: 'ingest',
+      },
+      io.io,
+      { executeTarget, now: () => 1000, sourceProgressThrottleMs: 0 },
+    );
+
+    expect(io.stdout()).toContain('Fetching query history for warehouse');
+    expect(io.stdout()).not.toContain('historic-sql');
+  });
+
+  it('renders database ingest progress without scan wording', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const executeTarget = vi.fn(async (target, _args, _targetIo, deps) => {
+      await deps.scanProgress?.update(0.05, 'Preparing scan');
+      await deps.scanProgress?.update(0.15, 'Inspecting database schema');
+      await deps.scanProgress?.update(0.7, 'Writing schema artifacts');
+      return successResult(target.connectionId, target.driver, target.operation);
+    });
+
+    await expect(
+      runContextBuild(
+        project,
+        {
+          projectDir: '/tmp/project',
+          inputMode: 'disabled',
+          targetConnectionId: 'warehouse',
+          all: false,
+        },
+        io.io,
+        { executeTarget, now: () => 1000, sourceProgressThrottleMs: 0 },
+      ),
+    ).resolves.toMatchObject({ exitCode: 0 });
+
+    expect(io.stdout()).toContain('Preparing database ingest');
+    expect(io.stdout()).toContain('Reading database schema');
+    expect(io.stdout()).toContain('Writing schema context');
+    expect(io.stdout()).not.toContain('Preparing scan');
+    expect(io.stdout()).not.toMatch(/\bscan\b/i);
+  });
+
+  it('passes schema-first notices from the plan into foreground output', async () => {
+    const io = makeIo();
+    const project: KtxPublicIngestProject = {
+      ...projectWithConnections({
+        warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      }),
+      config: {
+        ...projectWithConnections({ warehouse: { driver: 'postgres' } }).config,
+        connections: {
+          warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+        },
+        llm: {
+          provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
+          models: { default: 'gpt-test' },
+        },
+        scan: {
+          ...projectWithConnections({ warehouse: { driver: 'postgres' } }).config.scan,
+          enrichment: {
+            mode: 'llm',
+            embeddings: {
+              backend: 'openai',
+              model: 'text-embedding-3-small',
+              dimensions: 1536,
+            },
+          },
+        },
+      },
+    };
+    const executeTarget = vi.fn(async (target) => successResult(target.connectionId, target.driver, target.operation));
+
+    await expect(
+      runContextBuild(
+        project,
+        {
+          projectDir: '/tmp/project',
+          inputMode: 'disabled',
+          targetConnectionId: 'warehouse',
+          all: false,
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { executeTarget, now: () => 1000 },
+      ),
+    ).resolves.toMatchObject({ exitCode: 0 });
+
+    expect(io.stdout()).toContain('Schema ingest runs before query history for warehouse.');
   });
 
   it('renders final view for non-TTY output', async () => {
@@ -514,7 +965,7 @@ describe('runContextBuild', () => {
     const output = io.stdout();
     expect(output).toContain('Building KTX context');
     expect(output).toContain('Project: /tmp/project');
-    expect(output).toContain('Primary sources:');
+    expect(output).toContain('Databases:');
     expect(output).toContain('warehouse');
     expect(output).toContain('Context sources:');
     expect(output).toContain('dbt_main');
@@ -533,7 +984,7 @@ describe('runContextBuild', () => {
     );
 
     expect(executeTarget).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'warehouse', operation: 'scan' }),
+      expect.objectContaining({ connectionId: 'warehouse', operation: 'database-ingest' }),
       expect.objectContaining({ scanMode: 'enriched', detectRelationships: true }),
       expect.anything(),
       expect.objectContaining({
@@ -541,44 +992,6 @@ describe('runContextBuild', () => {
         ingestProgress: expect.any(Function),
       }),
     );
-  });
-
-  it('exits immediately with paused message when d is pressed', async () => {
-    const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit');
-    });
-    const io = makeIo();
-    const project = projectWithConnections({
-      warehouse: { driver: 'postgres' },
-      dbt_main: { driver: 'dbt' },
-    });
-    let triggerDetach: (() => void) | null = null;
-    const executeTarget = vi.fn(async (target) => {
-      if (target.connectionId === 'warehouse') triggerDetach?.();
-      return successResult(target.connectionId, target.driver, target.operation);
-    });
-
-    await expect(
-      runContextBuild(
-        project,
-        { projectDir: '/tmp/project', inputMode: 'disabled' },
-        io.io,
-        {
-          executeTarget,
-          now: () => 1000,
-          setupKeystroke: (onDetach) => {
-            triggerDetach = onDetach;
-            return () => {};
-          },
-        },
-      ),
-    ).rejects.toThrow('process.exit');
-
-    expect(mockExit).toHaveBeenCalledWith(0);
-    expect(io.stdout()).toContain('Context build continuing in the background.');
-    expect(io.stdout()).toContain('Resume: ktx setup --project-dir /tmp/project');
-    expect(io.stdout()).toContain('Status: ktx status --project-dir /tmp/project');
-    mockExit.mockRestore();
   });
 
   it('calls onSourceProgress when sources start and finish', async () => {
@@ -666,7 +1079,7 @@ describe('runContextBuild', () => {
       dbt_main: { driver: 'dbt' },
     });
     const executeTarget = vi.fn(async (target, _args, targetIo) => {
-      if (target.operation === 'scan') {
+      if (target.operation === 'database-ingest') {
         targetIo.stdout.write('Report: raw-sources/warehouse/live-database/sync-1/scan-report.json\n');
         targetIo.stdout.write('Raw sources: raw-sources/warehouse/live-database/sync-1\n');
       } else {
@@ -685,7 +1098,6 @@ describe('runContextBuild', () => {
 
     expect(result).toMatchObject({
       exitCode: 0,
-      detached: false,
       reportIds: ['report-dbt-1'],
       artifactPaths: [
         'raw-sources/warehouse/live-database/sync-1/scan-report.json',
@@ -701,12 +1113,12 @@ describe('runContextBuild', () => {
       dbt_main: { driver: 'dbt' },
     });
     const executeTarget = vi.fn(async (target, _args, targetIo) => {
-      if (target.operation === 'scan') {
+      if (target.operation === 'database-ingest') {
         return successResult(target.connectionId, target.driver, target.operation);
       }
 
       targetIo.stdout.write('Report: report-dbt-failed\n');
-      targetIo.stdout.write('Work units: 3\n');
+      targetIo.stdout.write('Tasks: 3\n');
       return failedResult(target.connectionId, target.driver, target.operation);
     });
 
@@ -719,7 +1131,6 @@ describe('runContextBuild', () => {
 
     expect(result).toMatchObject({
       exitCode: 1,
-      detached: false,
       reportIds: ['report-dbt-failed'],
     });
   });
@@ -729,7 +1140,7 @@ describe('viewStateFromSourceProgress', () => {
   it('partitions sources into primary and context groups', () => {
     const state = viewStateFromSourceProgress(
       [
-        { connectionId: 'warehouse', operation: 'scan', status: 'running', startedAtMs: 900 },
+        { connectionId: 'warehouse', operation: 'database-ingest', status: 'running', startedAtMs: 900 },
         { connectionId: 'dbt-main', operation: 'source-ingest', status: 'queued' },
       ],
       1000,
@@ -748,7 +1159,7 @@ describe('viewStateFromSourceProgress', () => {
 
   it('uses stored elapsedMs for completed sources', () => {
     const state = viewStateFromSourceProgress(
-      [{ connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 72000, summaryText: '42 tables' }],
+      [{ connectionId: 'warehouse', operation: 'database-ingest', status: 'done', elapsedMs: 72000, summaryText: '42 tables' }],
       99999,
     );
 
@@ -759,7 +1170,7 @@ describe('viewStateFromSourceProgress', () => {
   it('renders the same view format as the foreground build', () => {
     const state = viewStateFromSourceProgress(
       [
-        { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 72000, summaryText: '42 tables' },
+        { connectionId: 'warehouse', operation: 'database-ingest', status: 'done', elapsedMs: 72000, summaryText: '42 tables' },
         { connectionId: 'dbt-main', operation: 'source-ingest', status: 'running', startedAtMs: 900 },
       ],
       1000,
@@ -768,7 +1179,7 @@ describe('viewStateFromSourceProgress', () => {
 
     const output = renderContextBuildView(state, { styled: false });
     expect(output).toContain('Building KTX context');
-    expect(output).toContain('Primary sources:');
+    expect(output).toContain('Databases:');
     expect(output).toContain('warehouse');
     expect(output).toContain('42 tables');
     expect(output).toContain('Context sources:');
@@ -781,7 +1192,7 @@ describe('viewStateFromSourceProgress', () => {
       [
         {
           connectionId: 'warehouse',
-          operation: 'scan',
+          operation: 'database-ingest',
           status: 'running',
           startedAtMs: 900,
           percent: 63,

@@ -1,9 +1,8 @@
-import { spawn } from 'node:child_process';
-import { mkdirSync, openSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import type { KtxProgressPort, KtxProgressUpdateOptions } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestProgressUpdate } from './ingest.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
+import { publicDatabaseIngestMessage, publicQueryHistoryMessage } from './public-ingest-copy.js';
 import type {
   KtxPublicIngestArgs,
   KtxPublicIngestDeps,
@@ -20,6 +19,21 @@ profileMark('module:context-build-view');
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const ESC = String.fromCharCode(0x1b);
 
+type PhaseKey = 'database-schema' | 'query-history' | 'source-ingest';
+type PhaseStatus = 'queued' | 'running' | 'done' | 'failed' | 'skipped';
+
+interface PhaseState {
+  key: PhaseKey;
+  name: string;
+  status: PhaseStatus;
+  percent: number;
+  detail: string | null;
+  summary: string | null;
+  startedAt: number | null;
+  elapsedMs: number;
+  progressUpdatedAtMs: number | null;
+}
+
 export interface ContextBuildTargetState {
   target: KtxPublicIngestPlanTarget;
   status: 'queued' | 'running' | 'done' | 'failed';
@@ -29,6 +43,35 @@ export interface ContextBuildTargetState {
   startedAt: number | null;
   elapsedMs: number;
   progressUpdatedAtMs: number | null;
+  phases: PhaseState[];
+}
+
+const PHASE_LABELS: Record<PhaseKey, string> = {
+  'database-schema': 'Schema',
+  'query-history': 'Query history',
+  'source-ingest': 'Source ingest',
+};
+
+function makePhasesForTarget(target: KtxPublicIngestPlanTarget): PhaseState[] {
+  const make = (key: PhaseKey): PhaseState => ({
+    key,
+    name: PHASE_LABELS[key],
+    status: 'queued',
+    percent: 0,
+    detail: null,
+    summary: null,
+    startedAt: null,
+    elapsedMs: 0,
+    progressUpdatedAtMs: null,
+  });
+  if (target.operation === 'database-ingest') {
+    const phases: PhaseState[] = [make('database-schema')];
+    if (target.queryHistory?.enabled === true) {
+      phases.push(make('query-history'));
+    }
+    return phases;
+  }
+  return [make('source-ingest')];
 }
 
 export interface ContextBuildViewState {
@@ -42,20 +85,27 @@ export interface ContextBuildViewState {
 export interface ContextBuildArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
-  scanMode?: 'structural' | 'enriched';
+  targetConnectionId?: string;
+  all?: boolean;
+  entrypoint?: 'setup' | 'ingest';
+  depth?: Extract<KtxPublicIngestArgs, { command: 'run' }>['depth'];
+  queryHistory?: Extract<KtxPublicIngestArgs, { command: 'run' }>['queryHistory'];
+  queryHistoryWindowDays?: number;
+  scanMode?: Extract<KtxPublicIngestArgs, { command: 'run' }>['scanMode'];
   detectRelationships?: boolean;
+  cliVersion?: string;
+  runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
 }
 
 export interface ContextBuildResult {
   exitCode: number;
-  detached: boolean;
   reportIds?: string[];
   artifactPaths?: string[];
 }
 
 export interface ContextBuildSourceProgressUpdate {
   connectionId: string;
-  operation: 'scan' | 'source-ingest';
+  operation: 'database-ingest' | 'source-ingest';
   status: 'queued' | 'running' | 'done' | 'failed';
   startedAtMs?: number;
   elapsedMs?: number;
@@ -81,13 +131,13 @@ interface ContextBuildRenderOptions {
   scanRunningText?: string;
   sourceIngestRunningText?: string;
   completedItemName?: CompletedItemName;
+  notices?: string[];
+  warnings?: string[];
 }
 
 export interface ContextBuildDeps {
   executeTarget?: typeof executePublicIngestTarget;
   now?: () => number;
-  setupKeystroke?: (onDetach: () => void, onCtrlC: () => void) => (() => void) | null;
-  onDetach?: () => void;
   onSourceProgress?: (sources: ContextBuildSourceProgressUpdate[]) => void;
   sourceProgressThrottleMs?: number;
 }
@@ -135,6 +185,34 @@ function statusIcon(status: ContextBuildTargetState['status'], frame: number, st
   }
 }
 
+function phaseStatusIcon(status: PhaseStatus, frame: number, styled: boolean): string {
+  const raw = (() => {
+    switch (status) {
+      case 'done':
+        return '✓';
+      case 'failed':
+        return '✗';
+      case 'running':
+        return SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? '⠋';
+      case 'skipped':
+        return '·';
+      default:
+        return '○';
+    }
+  })();
+  if (!styled) return raw;
+  switch (status) {
+    case 'done':
+      return green(raw);
+    case 'failed':
+      return red(raw);
+    case 'running':
+      return cyan(raw);
+    default:
+      return dim(raw);
+  }
+}
+
 function extractPercent(detailLine: string | null): number | null {
   if (!detailLine) return null;
   const match = detailLine.match(/^\[(\d+)%\]/);
@@ -179,9 +257,10 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean, options:
   }
   if (target.status === 'running') {
     const percent = extractPercent(target.detailLine);
-    const progressText = target.detailLine?.replace(/^\[\d+%\]\s*/, '')
-      ?? (target.target.operation === 'scan'
-        ? (options.scanRunningText ?? 'scanning...')
+    const progressText =
+      target.detailLine?.replace(/^\[\d+%\]\s*/, '') ??
+      (target.target.operation === 'database-ingest'
+        ? (options.scanRunningText ?? 'reading schema')
         : (options.sourceIngestRunningText ?? 'ingesting...'));
     const elapsed = target.elapsedMs > 0 ? `(${formatDuration(target.elapsedMs)})` : null;
     const parts: string[] = [];
@@ -197,19 +276,76 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean, options:
   return styled ? dim('queued') : 'queued';
 }
 
+const PHASE_NAME_WIDTH = 14;
+
+function renderRunningTargetHeaderDetail(target: ContextBuildTargetState, styled: boolean): string {
+  const elapsed = target.elapsedMs > 0 ? `(${formatDuration(target.elapsedMs)})` : '';
+  if (!elapsed) return '';
+  return styled ? dim(elapsed) : elapsed;
+}
+
+function renderPhaseRow(phase: PhaseState, frame: number, styled: boolean): string {
+  const icon = phaseStatusIcon(phase.status, frame, styled);
+  const name = phase.name.padEnd(PHASE_NAME_WIDTH);
+  const segments: string[] = [];
+  if (phase.status === 'queued' || phase.status === 'skipped') {
+    const emptyBar = BAR_EMPTY.repeat(BAR_WIDTH);
+    segments.push(styled ? dim(emptyBar) : emptyBar);
+    segments.push(styled ? dim('  —') : '  —');
+  } else {
+    const pct = Math.max(0, Math.min(100, Math.round(phase.percent)));
+    segments.push(renderProgressBar(pct, styled));
+    segments.push(`${String(pct).padStart(3)}%`);
+  }
+  let trailing = '';
+  if (phase.status === 'done') {
+    const parts: string[] = [];
+    if (phase.summary) parts.push(phase.summary);
+    if (phase.elapsedMs > 0) {
+      const elapsed = `(${formatDuration(phase.elapsedMs)})`;
+      parts.push(styled ? dim(elapsed) : elapsed);
+    }
+    trailing = parts.join('  ');
+  } else if (phase.status === 'running') {
+    const parts: string[] = [];
+    if (phase.detail) parts.push(phase.detail);
+    if (phase.elapsedMs > 0) {
+      const elapsed = `(${formatDuration(phase.elapsedMs)})`;
+      parts.push(styled ? dim(elapsed) : elapsed);
+    }
+    trailing = parts.join('  ');
+  } else if (phase.status === 'queued') {
+    trailing = styled ? dim('queued') : 'queued';
+  } else if (phase.status === 'skipped') {
+    trailing = styled ? dim('skipped') : 'skipped';
+  } else if (phase.status === 'failed') {
+    trailing = styled ? red('failed') : 'failed';
+  }
+  const bar = `${segments.join(' ')}  ${trailing}`.trimEnd();
+  return `        ${icon} ${name} ${bar}`;
+}
+
 function columnWidth(state: ContextBuildViewState): number {
   const all = [...state.primarySources, ...state.contextSources];
   return Math.max(12, ...all.map((t) => t.target.connectionId.length)) + 2;
 }
 
-function renderTargetLine(
+function renderTargetRows(
   target: ContextBuildTargetState,
   frame: number,
   styled: boolean,
   width: number,
   options: ContextBuildRenderOptions,
-): string {
-  return `    ${statusIcon(target.status, frame, styled)} ${target.target.connectionId.padEnd(width)} ${targetDetail(target, styled, options)}`;
+): string[] {
+  const icon = statusIcon(target.status, frame, styled);
+  const name = target.target.connectionId.padEnd(width);
+  const anyPhaseStarted = target.phases.some((p) => p.status !== 'queued');
+  if (target.status === 'running' && target.phases.length > 0 && anyPhaseStarted) {
+    const headerDetail = renderRunningTargetHeaderDetail(target, styled);
+    const headerLine = `    ${icon} ${name} ${headerDetail}`.trimEnd();
+    return [headerLine, ...target.phases.map((phase) => renderPhaseRow(phase, frame, styled))];
+  }
+  return [`    ${icon} ${name} ${targetDetail(target, styled, options)}`];
 }
 
 function renderTargetGroup(
@@ -221,11 +357,34 @@ function renderTargetGroup(
   options: ContextBuildRenderOptions,
 ): string[] {
   if (targets.length === 0) return [];
-  return ['', `  ${label}:`, ...targets.map((t) => renderTargetLine(t, frame, styled, width, options))];
+  return ['', `  ${label}:`, ...targets.flatMap((t) => renderTargetRows(t, frame, styled, width, options))];
 }
 
-function resumeCommand(projectDir?: string): string {
-  return projectDir ? `ktx setup --project-dir ${projectDir}` : 'ktx setup';
+function renderMessageGroup(label: string, messages: string[], styled: boolean): string[] {
+  if (messages.length === 0) return [];
+  const renderedMessages = messages.map((message) => `    - ${message}`);
+  return ['', `  ${label}:`, ...renderedMessages.map((line) => (styled ? dim(line) : line))];
+}
+
+function retryCommand(input: {
+  projectDir?: string;
+  entrypoint?: 'setup' | 'ingest';
+  connectionId?: string;
+  depth?: 'fast' | 'deep';
+  queryHistory?: boolean;
+  queryHistoryWindowDays?: number;
+}): string {
+  const projectPart = input.projectDir ? ` --project-dir ${input.projectDir}` : '';
+  if (input.entrypoint === 'ingest' && input.connectionId) {
+    const depthPart = input.depth ? ` --${input.depth}` : '';
+    const queryHistoryPart = input.queryHistory ? ' --query-history' : '';
+    const windowPart =
+      input.queryHistory && input.queryHistoryWindowDays !== undefined
+        ? ` --query-history-window-days ${input.queryHistoryWindowDays}`
+        : '';
+    return `ktx ingest ${input.connectionId}${projectPart}${depthPart}${queryHistoryPart}${windowPart}`;
+  }
+  return input.projectDir ? `ktx setup --project-dir ${input.projectDir}` : 'ktx setup';
 }
 
 export function renderContextBuildView(
@@ -256,8 +415,10 @@ export function renderContextBuildView(
     header,
     separator,
     ...(options.projectDir ? [`  Project: ${options.projectDir}`] : []),
-    ...renderTargetGroup(options.primaryGroupLabel ?? 'Primary sources', state.primarySources, state.frame, styled, width, options),
+    ...renderTargetGroup(options.primaryGroupLabel ?? 'Databases', state.primarySources, state.frame, styled, width, options),
     ...renderTargetGroup(options.contextGroupLabel ?? 'Context sources', state.contextSources, state.frame, styled, width, options),
+    ...renderMessageGroup('Notices', options.notices ?? [], styled),
+    ...renderMessageGroup('Warnings', options.warnings ?? [], styled),
     '',
   ];
 
@@ -270,7 +431,7 @@ export function renderContextBuildView(
   }
 
   if (options.showHint && hasActive) {
-    const hintContent = options.hintText ?? `d to detach · ${resumeCommand(options.projectDir)} to resume`;
+    const hintContent = options.hintText ?? 'Ctrl+C to stop';
     const hint = `  ${hintContent}`;
     lines.push(styled ? dim(hint) : hint);
     lines.push('');
@@ -297,8 +458,8 @@ export function parseScanSummary(output: string): string | null {
 export function parseIngestSummary(output: string): string | null {
   const savedMemory = output.match(/Saved memory: (.+)/);
   if (savedMemory) return savedMemory[1];
-  const workUnits = output.match(/Work units: (\d+)/);
-  if (workUnits) return `${workUnits[1]} work units`;
+  const tasks = output.match(/(?:Tasks|Work units): (\d+)/);
+  if (tasks) return `${tasks[1]} tasks`;
   return null;
 }
 
@@ -314,7 +475,7 @@ function collectOutputMetadata(
     if (reportLine) {
       const value = reportLine[1].trim();
       if (value && value !== 'none') {
-        if (operation === 'scan') artifactPaths.add(value);
+        if (operation === 'database-ingest') artifactPaths.add(value);
         else reportIds.add(value);
       }
     }
@@ -413,10 +574,11 @@ export function viewStateFromSourceProgress(
     startedAt: s.startedAtMs ?? null,
     elapsedMs: s.status === 'running' && s.startedAtMs ? now - s.startedAtMs : (s.elapsedMs ?? 0),
     progressUpdatedAtMs: s.updatedAtMs ?? null,
+    phases: [],
   });
 
   return {
-    primarySources: sources.filter((s) => s.operation === 'scan').map(makeTarget),
+    primarySources: sources.filter((s) => s.operation === 'database-ingest').map(makeTarget),
     contextSources: sources.filter((s) => s.operation === 'source-ingest').map(makeTarget),
     frame: 0,
     startedAt: startedAtMs ?? null,
@@ -471,57 +633,6 @@ export function createRepainter(io: KtxCliIo) {
   };
 }
 
-// --- Background build ---
-
-function resolveKtxEntryScript(): string | null {
-  const argv1 = process.argv[1];
-  if (argv1 && (argv1.endsWith('.js') || argv1.endsWith('.ts') || argv1.endsWith('.mjs'))) {
-    return argv1;
-  }
-  return null;
-}
-
-function spawnBackgroundBuild(projectDir: string): { logPath: string } | null {
-  const entryScript = resolveKtxEntryScript();
-  if (!entryScript) return null;
-
-  const resolvedDir = resolve(projectDir);
-  const logDir = join(resolvedDir, '.ktx', 'setup');
-  mkdirSync(logDir, { recursive: true });
-  const logPath = join(logDir, 'context-build.log');
-  const logFd = openSync(logPath, 'w');
-
-  const child = spawn(
-    process.execPath,
-    [entryScript, 'setup', '--project-dir', resolvedDir, '--no-input'],
-    { detached: true, stdio: ['ignore', logFd, logFd] },
-  );
-  child.unref();
-  return { logPath };
-}
-
-// --- Keystroke handling ---
-
-export function defaultSetupKeystroke(onDetach: () => void, onCtrlC: () => void): (() => void) | null {
-  const stdin = process.stdin;
-  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
-    return null;
-  }
-  stdin.setRawMode(true);
-  stdin.resume();
-  const onData = (data: Buffer) => {
-    const char = data.toString();
-    if (char === 'd' || char === 'D') onDetach();
-    else if (char === '\x03') onCtrlC();
-  };
-  stdin.on('data', onData);
-  return () => {
-    stdin.off('data', onData);
-    if (typeof stdin.setRawMode === 'function') stdin.setRawMode(false);
-    stdin.pause();
-  };
-}
-
 // --- Orchestration ---
 
 function makeTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTargetState {
@@ -534,6 +645,7 @@ function makeTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTargetS
     startedAt: null,
     elapsedMs: 0,
     progressUpdatedAtMs: null,
+    phases: makePhasesForTarget(target),
   };
 }
 
@@ -570,6 +682,11 @@ function networkErrorCode(error: unknown, capturedOutput = ''): string | null {
   return networkErrorCodeFromText(`${unknownErrorMessage(error)}\n${capturedOutput}`);
 }
 
+function isLocalSqlAnalysisConnectionRefused(input: { capturedOutput?: string; fallback?: string | null }): boolean {
+  const text = `${input.capturedOutput ?? ''}\n${input.fallback ?? ''}`;
+  return /\bECONNREFUSED\b/.test(text) && /\b(?:127\.0\.0\.1|localhost):8765\b/.test(text);
+}
+
 function friendlyDriverName(driver: string): string {
   const normalized = driver.toLowerCase();
   if (normalized === 'postgres' || normalized === 'postgresql') return 'PostgreSQL';
@@ -586,28 +703,102 @@ function failedStepDetail(result: KtxPublicIngestTargetResult): string | null {
   return result.steps.find((step) => step.status === 'failed')?.detail ?? null;
 }
 
+const INTERNAL_FAILURE_LINE_RE =
+  /^(Report|Run|Job|Status|Adapter|Connection|Sync|Mode|Dry run|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
+const ACTIONABLE_FAILURE_LINE_RE =
+  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
+
+function firstCapturedFailureLine(output: string | undefined): string | null {
+  const lines = (output ?? '')
+    .split(/\r?\n/)
+    .map((candidate) => candidate.trim())
+    .filter((candidate) => candidate.length > 0)
+    .filter((candidate) => !candidate.startsWith('KTX scan completed'))
+    .filter((candidate) => !INTERNAL_FAILURE_LINE_RE.test(candidate));
+  return lines.find((candidate) => ACTIONABLE_FAILURE_LINE_RE.test(candidate)) ?? lines.at(-1) ?? null;
+}
+
+function isGenericFailedAtDetail(target: KtxPublicIngestPlanTarget, detail: string | null | undefined): boolean {
+  return new RegExp(`^${target.connectionId} failed at [a-z-]+\\.?(?: Retry: .*)?$`).test(detail ?? '');
+}
+
+function appendRetryIfNeeded(input: {
+  message: string;
+  target: KtxPublicIngestPlanTarget;
+  projectDir: string;
+  entrypoint?: 'setup' | 'ingest';
+}): string {
+  const base = input.message.trim().replace(/\.+$/, '');
+  if (/\bRetry:\s/.test(base)) {
+    return base;
+  }
+  return `${base}. Retry: ${retryCommand({
+    projectDir: input.projectDir,
+    entrypoint: input.entrypoint,
+    connectionId: input.target.connectionId,
+    depth: input.target.databaseDepth,
+    queryHistory: input.target.queryHistory?.enabled === true,
+    queryHistoryWindowDays: input.target.queryHistory?.windowDays,
+  })}`;
+}
+
 function failureTextForTarget(input: {
   target: KtxPublicIngestPlanTarget;
   projectDir: string;
+  entrypoint?: 'setup' | 'ingest';
   capturedOutput?: string;
   error?: unknown;
   fallback?: string | null;
 }): string {
   const code = networkErrorCode(input.error, input.capturedOutput);
+  if (code && isLocalSqlAnalysisConnectionRefused({ capturedOutput: input.capturedOutput, fallback: input.fallback })) {
+    return [
+      `KTX could not reach the local SQL analysis runtime while processing query history for ${input.target.connectionId}.`,
+      `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
+      `Retry: ${retryCommand({
+        projectDir: input.projectDir,
+        entrypoint: input.entrypoint,
+        connectionId: input.target.connectionId,
+        depth: input.target.databaseDepth,
+        queryHistory: input.target.queryHistory?.enabled === true,
+        queryHistoryWindowDays: input.target.queryHistory?.windowDays,
+      })}`,
+    ].join(' ');
+  }
   if (code) {
-    const operation = input.target.operation === 'scan' ? 'scanning' : 'ingesting';
+    const operation = input.target.operation === 'database-ingest' ? 'reading schema for' : 'ingesting';
     return [
       `KTX lost its connection to ${friendlyDriverName(input.target.driver)} while ${operation} ${input.target.connectionId}.`,
       `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
-      `Retry: ${resumeCommand(input.projectDir)}`,
+      `Retry: ${retryCommand({
+        projectDir: input.projectDir,
+        entrypoint: input.entrypoint,
+        connectionId: input.target.connectionId,
+        depth: input.target.databaseDepth,
+        queryHistory: input.target.queryHistory?.enabled === true,
+        queryHistoryWindowDays: input.target.queryHistory?.windowDays,
+      })}`,
     ].join(' ');
   }
-  return input.fallback ?? `${input.target.connectionId} failed.`;
+  const capturedFailure = firstCapturedFailureLine(input.capturedOutput);
+  const fallback =
+    capturedFailure && isGenericFailedAtDetail(input.target, input.fallback)
+      ? capturedFailure
+      : (input.fallback ?? capturedFailure ?? `${input.target.connectionId} failed.`);
+  if (input.entrypoint === 'ingest') {
+    return appendRetryIfNeeded({
+      message: fallback,
+      target: input.target,
+      projectDir: input.projectDir,
+      entrypoint: input.entrypoint,
+    });
+  }
+  return fallback;
 }
 
 export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuildViewState {
   return {
-    primarySources: targets.filter((t) => t.operation === 'scan').map(makeTargetState),
+    primarySources: targets.filter((t) => t.operation === 'database-ingest').map(makeTargetState),
     contextSources: targets.filter((t) => t.operation === 'source-ingest').map(makeTargetState),
     frame: 0,
     startedAt: null,
@@ -615,9 +806,23 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
   };
 }
 
-function formatProgressDetail(update: Pick<KtxIngestProgressUpdate, 'percent' | 'message'>): string {
+function publicProgressMessage(message: string, target: KtxPublicIngestPlanTarget): string {
+  let current = message;
+  if (target.operation === 'database-ingest') {
+    current = publicDatabaseIngestMessage(current);
+  }
+  if (target.steps.includes('query-history')) {
+    current = publicQueryHistoryMessage(current, target.connectionId);
+  }
+  return current;
+}
+
+function formatProgressDetail(
+  update: Pick<KtxIngestProgressUpdate, 'percent' | 'message'>,
+  target: KtxPublicIngestPlanTarget,
+): string {
   const percent = Math.max(0, Math.min(100, Math.round(update.percent)));
-  return `[${percent}%] ${update.message}`;
+  return `[${percent}%] ${publicProgressMessage(update.message, target)}`;
 }
 
 function createContextBuildProgressPort(
@@ -649,7 +854,15 @@ export async function runContextBuild(
   io: KtxCliIo,
   deps: ContextBuildDeps = {},
 ): Promise<ContextBuildResult> {
-  const plan = buildPublicIngestPlan(project, { projectDir: args.projectDir, all: true });
+  const plan = buildPublicIngestPlan(project, {
+    projectDir: args.projectDir,
+    ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
+    all: args.all ?? true,
+    ...(args.depth ? { depth: args.depth } : {}),
+    ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
+    ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+    ...(args.scanMode ? { scanMode: args.scanMode } : {}),
+  });
   const state = initViewState(plan.targets);
   const isTTY = io.stdout.isTTY === true;
   const nowFn = deps.now ?? (() => Date.now());
@@ -657,7 +870,12 @@ export async function runContextBuild(
   state.startedAt = nowFn();
 
   const repainter = isTTY ? createRepainter(io) : null;
-  const viewOpts = { styled: true, projectDir: args.projectDir };
+  const viewOpts = {
+    styled: true,
+    projectDir: args.projectDir,
+    notices: plan.notices ?? [],
+    warnings: plan.warnings,
+  };
   const paint = (hint: boolean) => repainter?.paint(renderContextBuildView(state, { ...viewOpts, showHint: hint }));
   paint(true);
 
@@ -671,6 +889,11 @@ export async function runContextBuild(
       for (const t of [...state.primarySources, ...state.contextSources]) {
         if (t.status === 'running' && t.startedAt !== null) {
           t.elapsedMs = nowFn() - t.startedAt;
+        }
+        for (const phase of t.phases) {
+          if (phase.status === 'running' && phase.startedAt !== null) {
+            phase.elapsedMs = nowFn() - phase.startedAt;
+          }
         }
       }
       paint(true);
@@ -695,78 +918,112 @@ export async function runContextBuild(
     return true;
   };
 
-  let detached = false;
-  let exiting = false;
-  let cleanupKeystroke: (() => void) | null = null;
-
-  if (isTTY || deps.setupKeystroke) {
-    const cleanup = () => {
-      if (spinnerInterval) clearInterval(spinnerInterval);
-      cleanupKeystroke?.();
-    };
-    cleanupKeystroke = (deps.setupKeystroke ?? defaultSetupKeystroke)(
-      () => {
-        detached = true;
-        cleanup();
-        deps.onDetach?.();
-        const bg = spawnBackgroundBuild(args.projectDir);
-        io.stdout.write('\n\nContext build continuing in the background.\n');
-        if (bg) io.stdout.write(`Log: ${bg.logPath}\n`);
-        io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
-        io.stdout.write(`Status: ktx status --project-dir ${resolve(args.projectDir)}\n`);
-        exiting = true;
-        process.exit(0);
-      },
-      () => {
-        cleanup();
-        io.stdout.write('\n\nContext build stopped. Nothing is running in the background.\n');
-        io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
-        exiting = true;
-        process.exit(130);
-      },
-    );
-  }
   const runArgs: Extract<KtxPublicIngestArgs, { command: 'run' }> = {
     command: 'run',
     projectDir: args.projectDir,
-    all: true,
+    ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
+    all: args.all ?? true,
     json: false,
     inputMode: args.inputMode,
-    scanMode: args.scanMode,
-    detectRelationships: args.detectRelationships,
+    ...(args.depth ? { depth: args.depth } : {}),
+    ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
+    ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+    ...(args.scanMode ? { scanMode: args.scanMode } : {}),
+    ...(args.detectRelationships !== undefined ? { detectRelationships: args.detectRelationships } : {}),
+    ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+    ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
   };
 
   let hasFailure = false;
 
   try {
     for (const targetState of orderedTargets) {
-      if (detached) break;
-
       targetState.status = 'running';
       targetState.startedAt = nowFn();
       paint(true);
       publishSourceProgress(true);
       let hasPendingProgressPublish = false;
+      const ingestPhaseKeyForTarget: PhaseKey =
+        targetState.target.operation === 'database-ingest' ? 'query-history' : 'source-ingest';
 
-      const updateTargetProgress = (update: KtxIngestProgressUpdate) => {
-        targetState.detailLine = formatProgressDetail(update);
+      const updateNamedPhase = (key: PhaseKey, update: KtxIngestProgressUpdate): void => {
+        const phase = targetState.phases.find((p) => p.key === key);
+        if (phase) {
+          if (phase.status === 'queued') {
+            phase.status = 'running';
+            phase.startedAt = nowFn();
+          }
+          const sanitizedMessage = update.message.replace(/^\[\d+%\]\s*/, '');
+          phase.detail = publicProgressMessage(sanitizedMessage, targetState.target);
+          phase.percent = Math.max(phase.percent, Math.max(0, Math.min(100, Math.round(update.percent))));
+          phase.progressUpdatedAtMs = nowFn();
+        }
+        targetState.detailLine = formatProgressDetail(update, targetState.target);
         targetState.progressUpdatedAtMs = nowFn();
+        if (!repainter) {
+          io.stdout.write(`${targetState.detailLine}\n`);
+        }
         paint(true);
         hasPendingProgressPublish = !publishSourceProgress(false);
       };
 
+      const updateSchemaPhase = (update: KtxIngestProgressUpdate): void => updateNamedPhase('database-schema', update);
+      const updateIngestPhase = (update: KtxIngestProgressUpdate): void => updateNamedPhase(ingestPhaseKeyForTarget, update);
+
       const capture = createCaptureIo(
         (message) => {
-          targetState.detailLine = message;
+          targetState.detailLine = publicProgressMessage(message, targetState.target);
           targetState.progressUpdatedAtMs = nowFn();
+          if (!repainter) {
+            io.stdout.write(`${targetState.detailLine}\n`);
+          }
           paint(true);
           hasPendingProgressPublish = !publishSourceProgress(false);
         },
         false,
       );
+
+      const onPhaseStart = (key: PhaseKey): void => {
+        const phase = targetState.phases.find((p) => p.key === key);
+        if (!phase) return;
+        phase.status = 'running';
+        if (phase.startedAt === null) phase.startedAt = nowFn();
+        phase.progressUpdatedAtMs = nowFn();
+        paint(true);
+        hasPendingProgressPublish = !publishSourceProgress(false);
+      };
+
+      const onPhaseEnd = (key: PhaseKey, status: 'done' | 'failed' | 'skipped', summary?: string): void => {
+        const phase = targetState.phases.find((p) => p.key === key);
+        if (!phase) return;
+        phase.status = status;
+        if (phase.startedAt !== null) {
+          phase.elapsedMs = nowFn() - phase.startedAt;
+        }
+        if (status === 'done') {
+          phase.percent = 100;
+        }
+        let resolvedSummary = summary;
+        if (status === 'done' && !resolvedSummary) {
+          const captured = capture.captured();
+          if (key === 'database-schema') {
+            resolvedSummary = parseScanSummary(captured) ?? undefined;
+          } else if (key === 'query-history' || key === 'source-ingest') {
+            resolvedSummary = parseIngestSummary(captured) ?? undefined;
+          }
+        }
+        if (resolvedSummary) {
+          phase.summary = resolvedSummary;
+        }
+        paint(true);
+        hasPendingProgressPublish = !publishSourceProgress(false);
+      };
+
       const progressDeps: KtxPublicIngestDeps = {
-        scanProgress: createContextBuildProgressPort(updateTargetProgress),
-        ingestProgress: updateTargetProgress,
+        scanProgress: createContextBuildProgressPort(updateSchemaPhase),
+        ingestProgress: updateIngestPhase,
+        onPhaseStart,
+        onPhaseEnd,
       };
 
       let result: KtxPublicIngestTargetResult | null = null;
@@ -774,9 +1031,6 @@ export async function runContextBuild(
       try {
         result = await execTarget(targetState.target, runArgs, capture.io, progressDeps);
       } catch (error) {
-        if (exiting) {
-          throw error;
-        }
         thrownError = error;
       }
 
@@ -794,13 +1048,14 @@ export async function runContextBuild(
       for (const artifactPath of metadata.artifactPaths) artifactPaths.add(artifactPath);
       if (!failed) {
         targetState.summaryText =
-          targetState.target.operation === 'scan'
+          targetState.target.operation === 'database-ingest'
             ? parseScanSummary(capturedOutput)
             : parseIngestSummary(capturedOutput);
       } else {
         targetState.failureText = failureTextForTarget({
           target: targetState.target,
           projectDir: args.projectDir,
+          entrypoint: args.entrypoint,
           capturedOutput,
           error: thrownError,
           fallback: result ? failedStepDetail(result) : null,
@@ -813,15 +1068,10 @@ export async function runContextBuild(
     }
   } finally {
     if (spinnerInterval) clearInterval(spinnerInterval);
-    cleanupKeystroke?.();
   }
 
   if (state.startedAt !== null) {
     state.totalElapsedMs = nowFn() - state.startedAt;
-  }
-
-  if (detached) {
-    return { exitCode: 0, detached: true };
   }
 
   if (!repainter) {
@@ -832,7 +1082,6 @@ export async function runContextBuild(
 
   return {
     exitCode: hasFailure ? 1 : 0,
-    detached: false,
     ...(reportIds.size > 0 ? { reportIds: [...reportIds] } : {}),
     ...(artifactPaths.size > 0 ? { artifactPaths: [...artifactPaths] } : {}),
   };

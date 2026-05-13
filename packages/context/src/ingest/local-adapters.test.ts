@@ -194,12 +194,52 @@ describe('local ingest adapters', () => {
     await expect(localPullConfigForAdapter(postgresProject, historicSql!, 'warehouse')).resolves.toEqual({
       dialect: 'postgres',
       minExecutions: 7,
+      enabledTables: [],
       filters: {
         serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
         dropTrivialProbes: true,
       },
       redactionPatterns: [],
       staleArchiveAfterDays: 90,
+    });
+  });
+
+  it('maps connection context.queryHistory to historic-sql pull config', async () => {
+    const project = projectWithConnections({
+      warehouse: {
+        driver: 'postgres',
+        context: {
+          queryHistory: {
+            enabled: true,
+            windowDays: 45,
+            minExecutions: 7,
+            filters: { dropTrivialProbes: true },
+          },
+        },
+      },
+    });
+    const adapter = { source: 'historic-sql' } as never;
+
+    await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
+      dialect: 'postgres',
+      minExecutions: 7,
+      filters: { dropTrivialProbes: true },
+    });
+  });
+
+  it('prefers context.queryHistory over legacy historicSql', async () => {
+    const project = projectWithConnections({
+      warehouse: {
+        driver: 'postgres',
+        historicSql: { enabled: true, dialect: 'postgres', windowDays: 90 },
+        context: { queryHistory: { enabled: true, windowDays: 30 } },
+      },
+    });
+    const adapter = { source: 'historic-sql' } as never;
+
+    await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
+      dialect: 'postgres',
+      minExecutions: 5,
     });
   });
 
@@ -234,7 +274,7 @@ describe('local ingest adapters', () => {
     });
 
     await expect(localPullConfigForAdapter(postgresProject, historicSql!, 'warehouse')).rejects.toThrow(
-      'Connection "warehouse" does not have historicSql.enabled: true',
+      'Connection "warehouse" does not have context.queryHistory.enabled: true',
     );
   });
 

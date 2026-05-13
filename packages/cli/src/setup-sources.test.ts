@@ -255,6 +255,37 @@ describe('setup sources step', () => {
     expect((await readConfig()).connections['notion-main']?.last_successful_cursor).toBeUndefined();
   });
 
+  it('accepts former ingest subcommand names as interactive source connection ids', async () => {
+    await addPrimarySource();
+    const io = makeIo();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'workspace=ok' }));
+
+    const result = await runKtxSetupSourcesStep(
+      {
+        projectDir,
+        inputMode: 'auto',
+        runInitialSourceIngest: false,
+        skipSources: false,
+      },
+      io.io,
+      {
+        prompts: prompts({
+          multiselect: [['notion']],
+          text: ['status', 'env:NOTION_TOKEN'],
+          select: ['env', 'all_accessible'],
+        }),
+        validateNotion,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = await readConfig();
+    expect(config.connections.status).toMatchObject({
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+    });
+  });
+
   it('uses selected Notion roots when root page ids are provided even if crawl mode says all accessible', async () => {
     await addPrimarySource();
     const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=1' }));
@@ -756,7 +787,7 @@ describe('setup sources step', () => {
     expect(testPrompts.text).toHaveBeenCalledTimes(4);
   });
 
-  it('enables the dbt adapter when adding a dbt source connection', async () => {
+  it('adds a dbt source connection and enables its adapter', async () => {
     await addPrimarySource();
     const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
 
@@ -776,7 +807,10 @@ describe('setup sources step', () => {
       ),
     ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
 
-    expect((await readConfig()).ingest.adapters).toContain('dbt');
+    const configText = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect((await readConfig()).ingest.adapters).toEqual(['dbt']);
   });
 
   it('lets interactive setup retry or continue after initial source ingest fails', async () => {
@@ -805,7 +839,9 @@ describe('setup sources step', () => {
     expect(runInitialIngest).toHaveBeenCalledTimes(1);
     expect((await readConfig()).connections['dbt-main']).toMatchObject({ driver: 'dbt', source_dir: '/repo/dbt' });
     expect(io.stdout()).toContain('Context source saved without a completed context build for dbt-main.');
-    expect(io.stdout()).toContain('Run later: ktx ingest run --connection-id dbt-main --adapter <adapter>');
+    expect(io.stdout()).toContain('Run later: ktx ingest dbt-main');
+    expect(io.stdout()).not.toContain('ktx ingest run --connection-id');
+    expect(io.stdout()).not.toContain('--adapter');
   });
 
   it('retries initial source ingest from the failure menu', async () => {
@@ -1472,7 +1508,7 @@ describe('setup sources step', () => {
     }
   });
 
-  it('does not offer context sources until a primary source exists', async () => {
+  it('does not offer context sources until a database exists', async () => {
     const io = makeIo();
     const testPrompts = prompts({ multiselect: [['notion']] });
 
@@ -1485,7 +1521,7 @@ describe('setup sources step', () => {
     ).resolves.toEqual({ status: 'skipped', projectDir });
 
     expect(testPrompts.multiselect).not.toHaveBeenCalled();
-    expect(io.stdout()).toContain('Connect a primary source before adding context sources.');
+    expect(io.stdout()).toContain('Connect a database before adding context sources.');
     expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 

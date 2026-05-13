@@ -1,7 +1,7 @@
 export const KTX_CONTEXT_BUILD_COMMANDS = [
   {
-    command: 'ktx setup',
-    description: 'Build or resume agent-ready context from configured sources',
+    command: 'ktx ingest --all',
+    description: 'Build or refresh agent-ready context from configured connections',
   },
   {
     command: 'ktx status',
@@ -69,7 +69,7 @@ export function formatSetupNextStepLines(state: KtxSetupNextStepState, indent = 
   if (!state.contextReady) {
     return [
       `${indent}Build KTX context next.`,
-      `${indent}Preferred route: run the CLI build; it covers primary-source scans and context-source ingests.`,
+      `${indent}Run ingest to build database schema context before context-source ingest.`,
       ...commandLines(KTX_CONTEXT_BUILD_COMMANDS, indent),
     ];
   }

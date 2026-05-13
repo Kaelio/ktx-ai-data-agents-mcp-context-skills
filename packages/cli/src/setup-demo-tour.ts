@@ -30,7 +30,7 @@ function dim(text: string): string {
 
 function createDemoTarget(
   connectionId: string,
-  operation: 'scan' | 'source-ingest',
+  operation: 'database-ingest' | 'source-ingest',
   driver: string,
 ): KtxPublicIngestPlanTarget {
   const adapter = operation === 'source-ingest' ? driver : undefined;
@@ -40,9 +40,9 @@ function createDemoTarget(
     operation,
     ...(adapter ? { adapter } : {}),
     debugCommand: `ktx setup --project-dir <project-dir>`,
-    steps: operation === 'scan'
-      ? ['scan', 'enrich', 'memory-update']
-      : ['source-ingest', 'enrich', 'memory-update'],
+    steps: operation === 'database-ingest'
+      ? ['database-schema']
+      : ['source-ingest', 'memory-update'],
   };
 }
 
@@ -56,6 +56,7 @@ function createTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTarge
     startedAt: null,
     elapsedMs: 0,
     progressUpdatedAtMs: null,
+    phases: [],
   };
 }
 
@@ -195,7 +196,7 @@ export interface DemoReplayEvent {
 
 export const DEMO_REPLAY_TARGETS = {
   primarySources: [
-    createDemoTarget('postgres-warehouse', 'scan', 'postgres'),
+    createDemoTarget('postgres-warehouse', 'database-ingest', 'postgres'),
   ],
   contextSources: [
     createDemoTarget('dbt-main', 'source-ingest', 'dbt'),
@@ -206,10 +207,10 @@ export const DEMO_REPLAY_TARGETS = {
 
 export function buildDemoReplayTimeline(): DemoReplayEvent[] {
   return [
-    // postgres-warehouse: scan
+    // postgres-warehouse: database schema context
     { delayMs: 0, connectionId: 'postgres-warehouse', status: 'running', detailLine: null, summaryText: null },
-    { delayMs: 1200, connectionId: 'postgres-warehouse', status: 'running', detailLine: '[50%] scanning tables...', summaryText: null },
-    { delayMs: 2400, connectionId: 'postgres-warehouse', status: 'done', detailLine: null, summaryText: '56 tables scanned' },
+    { delayMs: 1200, connectionId: 'postgres-warehouse', status: 'running', detailLine: '[50%] reading schema...', summaryText: null },
+    { delayMs: 2400, connectionId: 'postgres-warehouse', status: 'done', detailLine: null, summaryText: '56 tables' },
     // dbt-main
     { delayMs: 2400, connectionId: 'dbt-main', status: 'running', detailLine: null, summaryText: null },
     { delayMs: 3600, connectionId: 'dbt-main', status: 'running', detailLine: '[60%] ingesting models...', summaryText: null },

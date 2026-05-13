@@ -7,7 +7,7 @@ import { writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
-import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
+import { contextBuildCommands, readKtxSetupContextState, writeKtxSetupContextState } from './setup-context.js';
 import { runDemoTour } from './setup-demo-tour.js';
 import { formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from './setup.js';
 
@@ -297,10 +297,10 @@ describe('setup status', () => {
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
       context: {
         ready: false,
-        status: 'running',
+        status: 'stale',
         runId: 'setup-context-local-abc123',
-        watchCommand: `ktx setup --project-dir ${tempDir}`,
         statusCommand: `ktx status --project-dir ${tempDir}`,
+        detail: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
       },
     });
   });
@@ -377,6 +377,8 @@ describe('setup status', () => {
     expect(rendered).toContain(`KTX project: ${tempDir}`);
     expect(rendered).toContain('Project ready: yes');
     expect(rendered).toContain('LLM ready: no');
+    expect(rendered).toContain('Databases configured: no');
+    expect(rendered).not.toContain(['Primary sources', 'configured'].join(' '));
     expect(rendered).toContain('KTX context built: no');
     expect(rendered).not.toContain('No KTX project found.');
   });
@@ -1141,11 +1143,11 @@ describe('setup status', () => {
 
     expect(databasePrompts.select).not.toHaveBeenCalled();
     expect(testIo.stdout()).toContain(
-      'KTX cannot work without at least one primary source. Select a source or press Escape to go back.',
+      'KTX cannot work without at least one database. Select a database or press Escape to go back.',
     );
     expect(embeddings).toHaveBeenCalledTimes(2);
     expect(embeddings).toHaveBeenNthCalledWith(2, expect.objectContaining({ forcePrompt: true }), testIo.io);
-    expect(testIo.stderr()).not.toContain('No primary sources selected.');
+    expect(testIo.stderr()).not.toContain('No databases selected.');
   });
 
   it('lets Back from the first setup step return to the entry menu instead of exiting', async () => {
@@ -1221,6 +1223,11 @@ describe('setup status', () => {
           databaseConnectionId: 'warehouse',
           databaseUrl: 'env:DATABASE_URL',
           databaseSchemas: ['public'],
+          enableQueryHistory: true,
+          queryHistoryWindowDays: 30,
+          queryHistoryMinExecutions: 12,
+          queryHistoryServiceAccountPatterns: ['^svc_'],
+          queryHistoryRedactionPatterns: ['(?i)secret'],
           skipDatabases: false,
           skipSources: true,
         },
@@ -1237,6 +1244,11 @@ describe('setup status', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: ['public'],
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 30,
+        queryHistoryMinExecutions: 12,
+        queryHistoryServiceAccountPatterns: ['^svc_'],
+        queryHistoryRedactionPatterns: ['(?i)secret'],
         skipDatabases: false,
       }),
       testIo.io,
@@ -1621,51 +1633,7 @@ describe('setup status', () => {
     expect(io.stderr()).toContain('KTX context is not ready for agents.');
   });
 
-  it('does not install agents when full setup context build is detached', async () => {
-    const calls: string[] = [];
-    const io = makeIo();
-    await writeFile(join(tempDir, 'ktx.yaml'), ['project: revenue', 'connections: {}', ''].join('\n'), 'utf-8');
-
-    await expect(
-      runKtxSetup(
-        {
-          command: 'run',
-          projectDir: tempDir,
-          mode: 'existing',
-          agents: false,
-          inputMode: 'disabled',
-          yes: true,
-          cliVersion: '0.2.0',
-          skipLlm: true,
-          skipEmbeddings: true,
-          skipDatabases: true,
-          skipSources: true,
-          skipAgents: false,
-          databaseSchemas: [],
-        },
-        io.io,
-        {
-          context: async () => {
-            calls.push('context');
-            return { status: 'detached', projectDir: tempDir, runId: 'setup-context-local-test' };
-          },
-          agents: async () => {
-            calls.push('agents');
-            return {
-              status: 'ready',
-              projectDir: tempDir,
-              installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
-            };
-          },
-        },
-      ),
-    ).resolves.toBe(0);
-
-    expect(calls).toEqual(['context']);
-  });
-
-  it('resumes an active context build before prompting for earlier setup steps', async () => {
-    const io = makeIo();
+  it('does not offer background watch choices from setup status', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -1682,122 +1650,22 @@ describe('setup status', () => {
       'utf-8',
     );
     await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-active',
+      runId: 'setup-context-local-stale',
       status: 'running',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
+      startedAt: '2026-05-09T09:00:00.000Z',
+      updatedAt: '2026-05-09T09:00:00.000Z',
       primarySourceConnectionIds: ['warehouse'],
       contextSourceConnectionIds: [],
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-active'),
-    });
-    const context = vi.fn(async () => ({
-      status: 'detached' as const,
-      projectDir: tempDir,
-      runId: 'setup-context-local-active',
-    }));
-    const databases = vi.fn(async () => {
-      throw new Error('database setup should not run while context build is active');
+      commands: contextBuildCommands(tempDir, 'setup-context-local-stale'),
     });
 
-    await expect(
-      runKtxSetup(
-        {
-          command: 'run',
-          projectDir: tempDir,
-          mode: 'existing',
-          agents: false,
-          inputMode: 'auto',
-          yes: false,
-          cliVersion: '0.2.0',
-          skipLlm: false,
-          skipEmbeddings: false,
-          skipDatabases: false,
-          skipSources: false,
-          skipAgents: false,
-          databaseSchemas: [],
-        },
-        io.io,
-        { context, databases },
-      ),
-    ).resolves.toBe(0);
-
-    expect(context).toHaveBeenCalledWith(
-      { projectDir: tempDir, inputMode: 'auto', allowEmpty: true },
-      io.io,
-    );
-    expect(databases).not.toHaveBeenCalled();
-  });
-
-  it('skips entry menu and auto-watches when context build is active and showEntryMenu is true', async () => {
-    const io = makeIo();
-    await writeFile(
-      join(tempDir, 'ktx.yaml'),
-      [
-        'project: revenue',
-        'setup:',
-        '  database_connection_ids:',
-        '    - warehouse',
-        'connections:',
-        '  warehouse:',
-        '    driver: postgres',
-        '    url: env:DATABASE_URL',
-        '',
-      ].join('\n'),
-      'utf-8',
-    );
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-active',
-      status: 'detached',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: [],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-active'),
-    });
-    const context = vi.fn(async () => ({
-      status: 'detached' as const,
-      projectDir: tempDir,
-      runId: 'setup-context-local-active',
-    }));
-    const entryMenuSelect = vi.fn(async () => 'exit');
-
-    await expect(
-      runKtxSetup(
-        {
-          command: 'run',
-          projectDir: tempDir,
-          mode: 'existing',
-          agents: false,
-          inputMode: 'auto',
-          yes: false,
-          cliVersion: '0.2.0',
-          skipLlm: false,
-          skipEmbeddings: false,
-          skipDatabases: false,
-          skipSources: false,
-          skipAgents: false,
-          databaseSchemas: [],
-          showEntryMenu: true,
-        },
-        io.io,
-        {
-          context,
-          entryMenuDeps: { prompts: { select: entryMenuSelect, cancel: vi.fn() } },
-        },
-      ),
-    ).resolves.toBe(0);
-
-    expect(entryMenuSelect).not.toHaveBeenCalled();
-    expect(context).toHaveBeenCalledWith(
-      { projectDir: tempDir, inputMode: 'auto', allowEmpty: true, autoWatch: true },
-      io.io,
-    );
+    const status = await readKtxSetupStatus(tempDir);
+    expect(status.context.status).toBe('stale');
+    const state = await readKtxSetupContextState(tempDir);
+    expect(state.status).toBe('stale');
   });
 
   it('routes a ready project menu selection to agent setup', async () => {

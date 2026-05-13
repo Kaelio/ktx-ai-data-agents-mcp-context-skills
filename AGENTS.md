@@ -187,6 +187,11 @@ normal development workflow is agent-based.
 - Use `@clack/prompts` for interactive flows. Always handle cancellation with
   `isCancel` plus `cancel`, stop active spinners before exiting, and keep prompts
   grouped or factored so multi-step setup flows share cancellation behavior.
+- When CLI behavior is shared by the `ktx setup` wizard and other `ktx`
+  commands, reuse or extract components in `packages/cli/src` instead of
+  duplicating setup-only logic. Prefer neutral helpers such as `clack.ts`,
+  `prompt-navigation.ts`, and command-independent prompt adapters over imports
+  from setup command internals.
 - Keep command behavior scriptable: prefer flags and config over prompts when
   values are supplied, and reserve prompts for interactive missing input or
   explicit setup flows.

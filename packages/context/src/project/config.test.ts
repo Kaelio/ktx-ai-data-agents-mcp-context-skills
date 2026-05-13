@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { buildDefaultKtxProjectConfig, parseKtxProjectConfig, serializeKtxProjectConfig } from './config.js';
 
 describe('KTX project config', () => {
+  it.each(['status', 'replay', 'run', 'watch'])('accepts former ingest subcommand name "%s" as a connection id', (connectionId) => {
+    expect(
+      parseKtxProjectConfig(`
+project: reserved-test
+connections:
+  ${connectionId}:
+    driver: postgres
+`),
+    ).toMatchObject({
+      connections: {
+        [connectionId]: { driver: 'postgres' },
+      },
+    });
+  });
+
   it('builds the default standalone project config', () => {
     expect(buildDefaultKtxProjectConfig('warehouse')).toEqual({
       project: 'warehouse',
@@ -21,7 +36,7 @@ describe('KTX project config', () => {
         models: {},
       },
       ingest: {
-        adapters: ['live-database', 'lookml', 'metabase', 'metricflow', 'notion'],
+        adapters: [],
         embeddings: {
           backend: 'deterministic',
           model: 'deterministic',
@@ -67,13 +82,12 @@ describe('KTX project config', () => {
     const parsed = parseKtxProjectConfig(serialized);
 
     expect(serialized).toContain('project: warehouse');
-    expect(serialized).toContain('live-database');
-    expect(serialized).toContain('notion');
+    expect(serialized).not.toContain('live-database');
     expect(serialized).toContain(
       '  embeddings:\n    backend: deterministic\n    model: deterministic\n    dimensions: 8',
     );
     expect(parsed.project).toBe('warehouse');
-    expect(parsed.ingest.adapters).toEqual(['live-database', 'lookml', 'metabase', 'metricflow', 'notion']);
+    expect(parsed.ingest.adapters).toEqual([]);
     expect(parsed.ingest.embeddings).toEqual({
       backend: 'deterministic',
       model: 'deterministic',

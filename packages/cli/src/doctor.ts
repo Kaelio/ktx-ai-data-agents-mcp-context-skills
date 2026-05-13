@@ -4,6 +4,7 @@ import { access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import type { BuildProjectStatusOptions } from './status-project.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -54,7 +55,7 @@ interface SetupDoctorDeps {
   importBetterSqlite3?: () => Promise<unknown>;
 }
 
-interface KtxDoctorDeps {
+interface KtxDoctorDeps extends BuildProjectStatusOptions {
   runSetupChecks?: () => Promise<DoctorCheck[]>;
 }
 
@@ -462,7 +463,7 @@ export async function runKtxDoctor(
       const { loadKtxProject } = await import('@ktx/context/project');
       const { buildProjectStatus, renderProjectStatus } = await import('./status-project.js');
       const project = await loadKtxProject({ projectDir: args.projectDir });
-      const projectStatus = buildProjectStatus(project);
+      const projectStatus = await buildProjectStatus(project, deps);
       const verbose = args.verbose ?? false;
       const toolchainChecks = verbose ? await runSetupChecks() : undefined;
       if (args.outputMode === 'json') {

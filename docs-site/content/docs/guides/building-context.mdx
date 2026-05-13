@@ -1,39 +1,48 @@
 ---
 title: Building Context
-description: Scan your database schema and ingest context from dbt, Looker, Metabase, and more.
+description: Build database and source context from configured KTX connections.
 ---
 
-Building context is a two-step process. First, you **scan** your database to discover its structure — tables, columns, types, constraints, and relationships. Then you **ingest** from your existing tools to enrich that structure with semantic meaning — metric definitions, business descriptions, join logic, and knowledge that agents need to generate correct analytics.
+Building context reads your configured connections and writes local context that
+agents can use. Database connections produce schema context, and source
+connections such as dbt, Looker, Metabase, and Notion produce semantic sources
+and wiki pages.
 
-## Scanning
+## Database ingest
 
-Scanning connects to your database and extracts structural metadata. KTX stores the results locally so agents can understand your schema without querying the database directly.
+Database ingest connects to your warehouse and extracts structural metadata.
+KTX stores the results locally so agents can understand your schema without
+querying the database directly.
 
-### Running a scan
+### Running database ingest
 
 ```bash
-ktx scan <connection-id>
+ktx ingest <connection-id>
 ```
 
-This runs a structural scan by default. You can control what the scan does with the `--mode` flag:
+This runs a fast schema ingest by default. You can choose the depth with public
+flags:
 
-| Mode | What it does |
+| Flag | What it does |
 |------|-------------|
-| `structural` | Tables, columns, types, constraints, row counts (default) |
-| `enriched` | Structural scan plus LLM-generated column descriptions |
-| `relationships` | Structural scan plus foreign key relationship detection |
+| `--fast` | Tables, columns, types, constraints, and row counts |
+| `--deep` | Fast ingest plus AI-enriched database context |
 
 ```bash
-# Scan with relationship detection
-ktx scan my-postgres --mode relationships
+# Build one connection quickly
+ktx ingest my-postgres --fast
 
-# Preview without writing results
-ktx scan my-postgres --dry-run
+# Build AI-enriched database context
+ktx ingest my-postgres --deep
+
+# Build all configured connections
+ktx ingest --all
 ```
 
-### Checking scan results
+### Checking results
 
-Every scan prints a summary and writes local artifacts. Use `ktx status` after a scan to review project readiness and follow-up setup work:
+Every ingest prints a summary and writes local artifacts. Use `ktx status`
+after ingest to review project readiness and follow-up setup work:
 
 ```bash
 ktx status
@@ -49,7 +58,9 @@ Many databases lack declared foreign keys. KTX infers relationships by scoring c
 | 0.55 &ndash; 0.84 | `review` | Plausible — needs human review |
 | &lt; 0.55 | `rejected` | Low confidence — not applied |
 
-Relationship scans run with `ktx scan <connection-id> --mode relationships`. This command only executes the scan; relationship review and calibration subcommands are not part of the current CLI surface.
+Deep database ingest can include relationship evidence where the connector can
+provide it. Relationship review and calibration subcommands are not part of the
+current public CLI surface.
 
 ## Ingestion
 
@@ -66,50 +77,34 @@ Each ingest run follows this flow:
 ### Running an ingest
 
 ```bash
-ktx ingest run --connection-id my-dbt-source --adapter dbt
+ktx ingest my-dbt-source
 ```
 
-Useful low-level flags:
+Useful output flags:
 
 | Flag | Description |
 |------|-------------|
-| `--source-dir <path>` | Directory containing source files (e.g., your dbt project) |
-| `--viz` | Render the memory-flow TUI for real-time progress |
 | `--json` | Output as JSON |
 | `--plain` | Plain text output |
 
-### Watching progress
+Foreground context builds do not detach into background control sessions. If a
+run is interrupted, rerun `ktx ingest <connection-id>` or `ktx ingest --all`.
 
-```bash
-# Check status of the latest ingest
-ktx ingest status
+### Supported context sources
 
-# Check a specific run
-ktx ingest status <run-id>
-
-# Open the visual ingest report (TUI)
-ktx ingest watch
-
-# Replay a past ingest run
-ktx ingest replay <run-id>
-```
-
-The `watch` command opens an interactive TUI that shows the memory-flow output — every tool call, LLM decision, and artifact written during the ingest.
-
-### Available adapters
-
-| Adapter | Source | What gets ingested |
-|---------|--------|--------------------|
+| Driver | Source | What gets ingested |
+|--------|--------|--------------------|
 | `dbt` | dbt project | Model definitions, column descriptions, tests, tags |
 | `metricflow` | MetricFlow semantic models | Metrics, dimensions, entities, semantic joins |
 | `lookml` | LookML files | Views, explores, dimensions, measures, joins |
 | `looker` | Looker API | Explores, looks, dashboard metadata |
 | `metabase` | Metabase API | Questions, dashboards, table metadata |
 | `notion` | Notion API | Database pages, knowledge articles |
-| `historic-sql` | Query history | Frequent queries, usage patterns, runtime stats |
-| `live-database` | Direct DB connection | Live schema introspection |
 
-See [Context Sources](/docs/integrations/context-sources) for adapter-specific setup and auth configuration.
+Query history is a database connection facet. Enable it with
+`connections.<id>.context.queryHistory` or pass `--query-history` for a current
+run. See [Context Sources](/docs/integrations/context-sources) for
+driver-specific setup and auth configuration.
 
 ### What gets generated
 
@@ -169,12 +164,8 @@ sl_refs: [orders]
 Orders in "pending" status for more than 48 hours are flagged for review.
 ```
 
-### Deterministic replay
+### Ingest transcripts
 
-Every ingest session records a full transcript — tool calls, LLM responses, and write decisions. You can replay any session to debug why a source was written a certain way:
-
-```bash
-ktx ingest replay <run-id> --viz
-```
-
-This opens the same TUI view as the original run, letting you step through the agent's reasoning.
+Every ingest session records a full transcript: tool calls, LLM responses, and
+write decisions. Inspect the stored transcript files when you need to debug why
+a source was written a certain way.

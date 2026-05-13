@@ -35,7 +35,7 @@ import { profileMark } from './startup-profile.js';
 
 profileMark('module:ingest');
 
-export type KtxIngestOutputMode = 'plain' | 'json' | 'viz';
+type KtxIngestOutputMode = 'plain' | 'json' | 'viz';
 type KtxIngestInputMode = 'auto' | 'disabled';
 
 export type KtxIngestArgs =
@@ -49,6 +49,8 @@ export type KtxIngestArgs =
       cliVersion?: string;
       runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
       debugLlmRequestFile?: string;
+      allowImplicitAdapter?: boolean;
+      historicSqlPullConfigOverride?: Record<string, unknown>;
       outputMode: KtxIngestOutputMode;
       inputMode?: KtxIngestInputMode;
     }
@@ -101,19 +103,42 @@ function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
   return report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
 }
 
+const REPORT_SOURCE_LABELS = new Map<string, string>([
+  ['live-database', 'Database schema'],
+  ['historic-sql', 'Query history'],
+  ['dbt', 'dbt'],
+  ['metricflow', 'MetricFlow'],
+  ['lookml', 'LookML'],
+  ['looker', 'Looker'],
+  ['metabase', 'Metabase'],
+  ['notion', 'Notion'],
+]);
+
+function reportSourceLabel(sourceKey: string): string {
+  const label = REPORT_SOURCE_LABELS.get(sourceKey);
+  if (label) {
+    return label;
+  }
+  return sourceKey
+    .split(/[-_]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+    .join(' ');
+}
+
 function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void {
   const counts = savedMemoryCountsForReport(report);
   io.stdout.write(`Report: ${report.id}\n`);
   io.stdout.write(`Run: ${report.runId}\n`);
   io.stdout.write(`Job: ${report.jobId}\n`);
   io.stdout.write(`Status: ${reportStatus(report)}\n`);
-  io.stdout.write(`Adapter: ${report.sourceKey}\n`);
+  io.stdout.write(`Source: ${reportSourceLabel(report.sourceKey)}\n`);
   io.stdout.write(`Connection: ${report.connectionId}\n`);
   io.stdout.write(`Sync: ${report.body.syncId}\n`);
   io.stdout.write(
     `Diff: +${report.body.diffSummary.added}/~${report.body.diffSummary.modified}/-${report.body.diffSummary.deleted}/=${report.body.diffSummary.unchanged}\n`,
   );
-  io.stdout.write(`Work units: ${report.body.workUnits.length}\n`);
+  io.stdout.write(`Tasks: ${report.body.workUnits.length}\n`);
   io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   io.stdout.write(`Provenance rows: ${report.body.provenanceRows.length}\n`);
 }
@@ -133,8 +158,8 @@ function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIng
   io.stdout.write(`Source: ${result.metabaseConnectionId}\n`);
   io.stdout.write(`Children: ${result.children.length}\n`);
   if (result.totals) {
-    io.stdout.write(`Work units: ${result.totals.workUnits}\n`);
-    io.stdout.write(`Failed work units: ${result.totals.failedWorkUnits}\n`);
+    io.stdout.write(`Tasks: ${result.totals.workUnits}\n`);
+    io.stdout.write(`Failed tasks: ${result.totals.failedWorkUnits}\n`);
   }
   io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   for (const child of result.children) {
@@ -255,19 +280,19 @@ function plainIngestEventProgress(
       if (event.workUnitCount === 0) {
         return {
           percent: 80,
-          message: 'No work units to process; finalizing ingest',
+          message: 'No tasks to process; finalizing ingest',
         };
       }
       return {
         percent: 45,
-        message: `Planned ${pluralize(event.workUnitCount, 'work unit')}`,
+        message: `Planned ${pluralize(event.workUnitCount, 'task')}`,
       };
     case 'stage_skipped':
       return { percent: 45, message: `Skipped ${event.stage}: ${event.reason}` };
     case 'work_unit_started': {
       const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
       const ordinal = workUnitOrdinalThrough(snapshot, eventIndex, event.unitKey);
-      const progress = total > 0 ? `${ordinal}/${total} work units: ` : '';
+      const progress = total > 0 ? `${ordinal}/${total} tasks: ` : '';
       return { percent: 55, message: `Processing ${progress}${event.unitKey}` };
     }
     case 'work_unit_step': {
@@ -279,7 +304,7 @@ function plainIngestEventProgress(
       const latest = `${event.unitKey} step ${event.stepIndex}/${event.stepBudget}`;
       return {
         percent,
-        message: `Processing work units: ${completed}/${total} complete, ${active} active; latest ${latest}`,
+        message: `Processing tasks: ${completed}/${total} complete, ${active} active; latest ${latest}`,
         transient: true,
       };
     }
@@ -289,7 +314,7 @@ function plainIngestEventProgress(
       const percent = total > 0 ? 55 + Math.round((completed / total) * 25) : 80;
       return {
         percent,
-        message: `Processed ${completed}/${total} work units`,
+        message: `Processed ${completed}/${total} tasks`,
       };
     }
     case 'reconciliation_finished':
@@ -571,6 +596,19 @@ export async function runKtxIngest(
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
+      const ingestProject =
+        args.allowImplicitAdapter && !project.config.ingest.adapters.includes(args.adapter)
+          ? {
+              ...project,
+              config: {
+                ...project.config,
+                ingest: {
+                  ...project.config.ingest,
+                  adapters: [...project.config.ingest.adapters, args.adapter],
+                },
+              },
+            }
+          : project;
       const createAdapters =
         deps.createAdapters ??
         (deps.runLocalIngest || deps.runLocalMetabaseIngest ? () => [] : createKtxCliLocalIngestAdapters);
@@ -583,11 +621,14 @@ export async function runKtxIngest(
         ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
         ...(managedDaemon ? { managedDaemon } : {}),
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
+        ...(args.historicSqlPullConfigOverride
+          ? { historicSqlPullConfigOverride: args.historicSqlPullConfigOverride }
+          : {}),
         logger: operationalLogger,
       };
       const queryExecutor =
         localIngestOptions.queryExecutor ??
-        (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(project);
+        (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(ingestProject);
       if (args.adapter === 'metabase' && args.sourceDir) {
         throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
       }
@@ -604,8 +645,8 @@ export async function runKtxIngest(
                 deps.progress,
               );
         const result = await executeMetabaseFanout({
-          project,
-          adapters: createAdapters(project, adapterOptions),
+          project: ingestProject,
+          adapters: createAdapters(ingestProject, adapterOptions),
           metabaseConnectionId: args.connectionId,
           ...localIngestOptions,
           queryExecutor,
@@ -668,8 +709,8 @@ export async function runKtxIngest(
 
       try {
         const result = await executeLocalIngest({
-          project,
-          adapters: createAdapters(project, adapterOptions),
+          project: ingestProject,
+          adapters: createAdapters(ingestProject, adapterOptions),
           adapter: args.adapter,
           connectionId: args.connectionId,
           sourceDir: args.sourceDir,
@@ -720,7 +761,7 @@ export async function runKtxIngest(
       throw new Error(
         args.runId
           ? `Local ingest run or report "${args.runId}" was not found`
-          : 'No local ingest reports were found. Run `ktx ingest run --connection-id <id> --adapter <adapter>` first.',
+          : 'No local ingest reports were found. Run `ktx ingest <connectionId>` first.',
       );
     }
     await writeReportRecord(report, args.outputMode, io, {

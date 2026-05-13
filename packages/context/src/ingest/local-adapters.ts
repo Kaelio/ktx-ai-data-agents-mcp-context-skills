@@ -53,6 +53,7 @@ export interface DefaultLocalIngestAdaptersOptions {
     postgresQueryClient?: KtxPostgresQueryClient;
     now?: () => Date;
   };
+  historicSqlPullConfigOverride?: Record<string, unknown>;
   looker?: {
     daemonBaseUrl?: string;
     client?: Pick<LookerMappingClient, 'listLookmlModels' | 'getExplore'>;
@@ -163,6 +164,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+const historicSqlDialectByDriver = new Map<string, 'postgres' | 'bigquery' | 'snowflake'>([
+  ['postgres', 'postgres'],
+  ['postgresql', 'postgres'],
+  ['bigquery', 'bigquery'],
+  ['snowflake', 'snowflake'],
+]);
+
+function queryHistoryRecord(connection: unknown): Record<string, unknown> | null {
+  if (!isRecord(connection)) return null;
+  const context = isRecord(connection.context) ? connection.context : null;
+  const queryHistory = isRecord(context?.queryHistory) ? context.queryHistory : null;
+  return queryHistory;
+}
+
+function queryHistoryPullConfig(connection: unknown): Record<string, unknown> | null {
+  const queryHistory = queryHistoryRecord(connection);
+  if (queryHistory?.enabled !== true || !isRecord(connection)) return null;
+  const dialect = historicSqlDialectByDriver.get(String(connection.driver ?? '').toLowerCase());
+  if (!dialect) return null;
+  return { ...queryHistory, dialect };
+}
+
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
@@ -213,14 +236,21 @@ export async function localPullConfigForAdapter(
 ): Promise<unknown> {
   if (adapter.source === 'metabase') {
     throw new Error(
-      'Metabase scheduled pulls fan out by mapping. Call runLocalMetabaseIngest() or use `ktx ingest run --adapter metabase --connection-id <metabase-source-id>` from the CLI.',
+      'Metabase scheduled pulls fan out by mapping. Call runLocalMetabaseIngest() or use `ktx ingest <metabase-source-id>` from the CLI.',
     );
   }
   const connection = project.config.connections[connectionId];
   if (adapter.source === HISTORIC_SQL_SOURCE_KEY) {
+    if (options.historicSqlPullConfigOverride) {
+      return historicSqlUnifiedPullConfigSchema.parse(options.historicSqlPullConfigOverride);
+    }
+    const queryHistory = queryHistoryPullConfig(connection);
+    if (queryHistory) {
+      return historicSqlUnifiedPullConfigSchema.parse(queryHistory);
+    }
     const historicSql = isRecord(connection?.historicSql) ? connection.historicSql : null;
     if (historicSql?.enabled !== true) {
-      throw new Error(`Connection "${connectionId}" does not have historicSql.enabled: true`);
+      throw new Error(`Connection "${connectionId}" does not have context.queryHistory.enabled: true`);
     }
     return historicSqlUnifiedPullConfigSchema.parse({
       ...historicSql,

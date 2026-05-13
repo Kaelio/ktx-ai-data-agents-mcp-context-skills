@@ -71,7 +71,6 @@ describe('standalone local warehouse example', () => {
 
   it('runs local CLI commands against the copied example project', async () => {
     const projectDir = await copyExampleProject(tempDir);
-    const sourceDir = join(projectDir, 'source');
 
     const knowledgeList = await runBuiltCli(['wiki', 'search', 'revenue', '--json', '--project-dir', projectDir]);
     expect(knowledgeList).toMatchObject({ code: 0, stderr: '' });
@@ -105,19 +104,13 @@ describe('standalone local warehouse example', () => {
     const ingest = await runBuiltCli([
       'ingest',
       'run',
-      '--project-dir',
-      projectDir,
       '--connection-id',
       'warehouse',
       '--adapter',
       'fake',
-      '--source-dir',
-      sourceDir,
     ]);
     expect(ingest).toMatchObject({ code: 1, stdout: '' });
-    expect(ingest.stderr).toContain(
-      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
-    );
+    expect(ingest.stderr).toContain("unknown option '--connection-id'");
   }, 30_000);
 
 });

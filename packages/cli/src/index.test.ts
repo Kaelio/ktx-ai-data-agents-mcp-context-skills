@@ -124,9 +124,10 @@ describe('runKtxCli', () => {
 
     expect(testIo.stdout()).toContain('Usage: ktx [options] [command]');
     expect(testIo.stdout()).toContain('KTX data agent context layer CLI');
-    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'scan']) {
+    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'dev']) {
       expect(testIo.stdout()).toContain(`${command}`);
     }
+    expect(testIo.stdout()).not.toMatch(/^  scan\s/m);
     for (const removed of ['demo', 'init', 'connect', 'ask', 'knowledge', 'agent', 'completion', 'serve']) {
       expect(testIo.stdout()).not.toMatch(new RegExp(`^\\s+${removed}(?:\\s|\\[|$)`, 'm'));
     }
@@ -134,69 +135,58 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).toContain('KTX_PROJECT_DIR');
     expect(testIo.stdout()).toContain('--debug');
     expect(testIo.stdout()).not.toContain('--' + 'verbose');
-    expect(testIo.stdout()).toContain('Advanced:');
-    expect(testIo.stdout()).toContain('ktx dev');
+    expect(testIo.stdout()).not.toContain('Advanced:');
     expect(testIo.stderr()).toBe('');
   });
 
-  it('routes public wiki read and write commands', async () => {
+  it('routes supported public wiki commands', async () => {
     const knowledge = vi.fn(async () => 0);
 
-    const readIo = makeIo();
-    await expect(runKtxCli(['--project-dir', tempDir, 'wiki', 'read', 'revenue', '--json'], readIo.io, { knowledge }))
+    const listIo = makeIo();
+    await expect(runKtxCli(['--project-dir', tempDir, 'wiki', 'list', '--json'], listIo.io, { knowledge }))
       .resolves.toBe(0);
     expect(knowledge).toHaveBeenCalledWith(
       {
-        command: 'read',
+        command: 'list',
         projectDir: tempDir,
-        key: 'revenue',
         userId: 'local',
         json: true,
       },
-      readIo.io,
+      listIo.io,
     );
 
-    const writeIo = makeIo();
+    const searchIo = makeIo();
     await expect(
-      runKtxCli(
-        [
-          '--project-dir',
-          tempDir,
-          'wiki',
-          'write',
-          'revenue',
-          '--scope',
-          'user',
-          '--summary',
-          'Revenue',
-          '--content',
-          'Revenue.',
-          '--tag',
-          'finance',
-          '--ref',
-          'https://example.com/revenue',
-          '--sl-ref',
-          'orders',
-        ],
-        writeIo.io,
-        { knowledge },
-      ),
+      runKtxCli(['--project-dir', tempDir, 'wiki', 'search', 'revenue', '--limit', '5'], searchIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
       {
-        command: 'write',
+        command: 'search',
         projectDir: tempDir,
-        key: 'revenue',
-        scope: 'USER',
+        query: 'revenue',
         userId: 'local',
-        summary: 'Revenue',
-        content: 'Revenue.',
-        tags: ['finance'],
-        refs: ['https://example.com/revenue'],
-        slRefs: ['orders'],
+        json: false,
+        limit: 5,
       },
-      writeIo.io,
+      searchIo.io,
     );
+  });
+
+  it('rejects removed public wiki read and write commands', async () => {
+    const knowledge = vi.fn(async () => 0);
+
+    for (const argv of [
+      ['--project-dir', tempDir, 'wiki', 'read', 'revenue', '--json'],
+      ['--project-dir', tempDir, 'wiki', 'write', 'revenue', '--summary', 'Revenue', '--content', 'Revenue.'],
+    ]) {
+      const io = makeIo();
+
+      await expect(runKtxCli(argv, io.io, { knowledge })).resolves.toBe(1);
+
+      expect(io.stderr()).toMatch(/unknown command|error:/);
+    }
+
+    expect(knowledge).not.toHaveBeenCalled();
   });
 
   it('rejects removed public sl read/write commands', async () => {
@@ -349,23 +339,15 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('skips the project directory line for JSON and TUI output modes', async () => {
-    const ingest = vi.fn(async () => 0);
+  it('skips the project directory line for JSON output mode', async () => {
+    const publicIngest = vi.fn(async () => 0);
     const jsonIo = makeIo();
-    const vizIo = makeIo({ stdoutIsTty: true });
 
-    await expect(runKtxCli(['--project-dir', tempDir, 'ingest', 'status', 'run-1', '--json'], jsonIo.io, { ingest }))
-      .resolves.toBe(0);
     await expect(
-      runKtxCli(
-        ['--project-dir', tempDir, 'ingest', 'status', 'run-1', '--viz'],
-        vizIo.io,
-        { ingest },
-      ),
+      runKtxCli(['--project-dir', tempDir, 'ingest', 'warehouse', '--json'], jsonIo.io, { publicIngest }),
     ).resolves.toBe(0);
 
     expect(jsonIo.stderr()).toBe('');
-    expect(vizIo.stderr()).toBe('');
   });
 
   it('documents runtime stop all in command help', async () => {
@@ -476,6 +458,12 @@ describe('runKtxCli', () => {
       '--new-database-connection-id',
       '--enable-historic-sql',
       '--historic-sql-min-executions',
+      '--enable-query-history',
+      '--disable-query-history',
+      '--query-history-window-days',
+      '--query-history-min-executions',
+      '--query-history-service-account-pattern',
+      '--query-history-redaction-pattern',
       '--skip-databases',
       '--source ',
       '--source-connection-id',
@@ -492,6 +480,8 @@ describe('runKtxCli', () => {
       expect(stdout).not.toContain(hiddenFlag);
     }
     expect(stdout).not.toMatch(/^  --project\s/m);
+    expect(stdout).not.toContain('primary ' + 'source');
+    expect(stdout).not.toContain('primary ' + 'sources');
     expect(testIo.stderr()).toBe('');
   });
 
@@ -661,72 +651,103 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('rejects removed public ingest shorthand', async () => {
+  it('routes public connection-centric ingest shorthand', async () => {
     const testIo = makeIo();
-    const ingest = vi.fn().mockResolvedValue(0);
+    const publicIngest = vi.fn().mockResolvedValue(0);
 
-    await expect(runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse'], testIo.io, { ingest }))
-      .resolves.toBe(1);
+    await expect(
+      runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse', '--fast', '--no-input'], testIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(0);
 
-    expect(ingest).not.toHaveBeenCalled();
-    expect(testIo.stderr()).toMatch(/unknown command|error:/);
+    expect(publicIngest).toHaveBeenCalledWith(
+      {
+        command: 'run',
+        projectDir: '/tmp/project',
+        targetConnectionId: 'warehouse',
+        all: false,
+        json: false,
+        inputMode: 'disabled',
+        depth: 'fast',
+        queryHistory: 'default',
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'never',
+      },
+      testIo.io,
+    );
+    expect(testIo.stderr()).toBe('Project: /tmp/project\n');
   });
 
-  it('prints ingest watch help from Commander', async () => {
+  it('routes public ingest --all --deep with JSON output', async () => {
     const testIo = makeIo();
-    const ingest = vi.fn(async () => 0);
+    const publicIngest = vi.fn().mockResolvedValue(0);
 
-    await expect(runKtxCli(['ingest', 'watch', '--help'], testIo.io, { ingest })).resolves.toBe(0);
+    await expect(
+      runKtxCli(['--project-dir', '/tmp/project', 'ingest', '--all', '--deep', '--json'], testIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx ingest watch [options] [runId]');
-    expect(testIo.stdout()).toContain('[runId]');
-    expect(testIo.stdout()).toContain('--project-dir <path>');
-    expect(testIo.stdout()).toContain('--json');
-    expect(testIo.stdout()).toContain('--no-input');
+    expect(publicIngest).toHaveBeenCalledWith(
+      {
+        command: 'run',
+        projectDir: '/tmp/project',
+        all: true,
+        json: true,
+        inputMode: 'auto',
+        depth: 'deep',
+        queryHistory: 'default',
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'prompt',
+      },
+      testIo.io,
+    );
     expect(testIo.stderr()).toBe('');
-    expect(ingest).not.toHaveBeenCalled();
   });
 
-  it('dispatches ingest status and watch through Commander', async () => {
-    const statusIo = makeIo();
-    const watchIo = makeIo();
-    const ingest = vi.fn(async () => 0);
+  it('rejects mutually exclusive public ingest depth flags before dispatch', async () => {
+    const testIo = makeIo();
+    const publicIngest = vi.fn().mockResolvedValue(0);
 
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'ingest', 'status', 'run-1', '--json', '--no-input'], statusIo.io, {
-        ingest,
+      runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse', '--fast', '--deep'], testIo.io, {
+        publicIngest,
       }),
-    ).resolves.toBe(0);
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'ingest', 'watch', '--no-input'], watchIo.io, {
-        ingest,
-      }),
-    ).resolves.toBe(0);
+    ).resolves.toBe(1);
 
-    expect(ingest).toHaveBeenNthCalledWith(
-      1,
-      {
-        command: 'status',
-        projectDir: tempDir,
-        runId: 'run-1',
-        outputMode: 'json',
-        inputMode: 'disabled',
-      },
-      statusIo.io,
-    );
-    expect(ingest).toHaveBeenNthCalledWith(
-      2,
-      {
-        command: 'watch',
-        projectDir: tempDir,
-        outputMode: 'viz',
-        inputMode: 'disabled',
-      },
-      watchIo.io,
-    );
-    expect(statusIo.stderr()).toBe('');
-    expect(watchIo.stderr()).toBe('');
+    expect(publicIngest).not.toHaveBeenCalled();
+    expect(testIo.stderr()).toMatch(/option '--(deep|fast)' cannot be used with option '--(fast|deep)'/);
   });
+
+  it.each(['run', 'status', 'watch', 'replay'])(
+    'routes former ingest subcommand name "%s" as a connection id',
+    async (connectionId) => {
+      const testIo = makeIo();
+      const publicIngest = vi.fn(async () => 0);
+
+      await expect(
+        runKtxCli(['--project-dir', '/tmp/project', 'ingest', connectionId, '--no-input'], testIo.io, {
+          publicIngest,
+        }),
+      ).resolves.toBe(0);
+
+      expect(publicIngest).toHaveBeenCalledWith(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: connectionId,
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'default',
+          cliVersion: '0.0.0-private',
+          runtimeInstallPolicy: 'never',
+        },
+        testIo.io,
+      );
+    },
+  );
 
   it('rejects standalone demo commands', async () => {
     const testIo = makeIo();
@@ -778,21 +799,26 @@ describe('runKtxCli', () => {
 
   it('prints ingest help without invoking ingest execution', async () => {
     const testIo = makeIo();
-    const ingest = vi.fn();
+    const publicIngest = vi.fn();
 
-    await expect(runKtxCli(['ingest', '--help'], testIo.io, { ingest })).resolves.toBe(0);
+    await expect(runKtxCli(['ingest', '--help'], testIo.io, { publicIngest })).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx ingest [options] [command]');
-    expect(testIo.stdout()).toContain('Run or inspect local ingest memory-flow output');
-    expect(testIo.stdout()).toContain('run');
+    expect(testIo.stdout()).toContain('Usage: ktx ingest');
+    expect(testIo.stdout()).toContain('Build or inspect KTX context');
+    expect(testIo.stdout()).toContain('--all');
+    expect(testIo.stdout()).toContain('--fast');
+    expect(testIo.stdout()).toContain('--deep');
+    expect(testIo.stdout()).toContain('--query-history');
+    expect(testIo.stdout()).toContain('--no-query-history');
+    expect(testIo.stdout()).toContain('--query-history-window-days <days>');
     expect(testIo.stdout()).toContain('text');
-    expect(testIo.stdout()).toContain('status');
-    expect(testIo.stdout()).toContain('watch');
-    expect(testIo.stdout()).toContain('replay');
+    expect(testIo.stdout()).not.toMatch(/^  status\s/m);
+    expect(testIo.stdout()).not.toMatch(/^  replay\s/m);
+    expect(testIo.stdout()).not.toMatch(/^  run\s/m);
+    expect(testIo.stdout()).not.toMatch(/^  watch\s/m);
     expect(testIo.stdout()).not.toContain('--manifest');
-    expect(testIo.stdout()).not.toContain('--all');
     expect(testIo.stderr()).toBe('');
-    expect(ingest).not.toHaveBeenCalled();
+    expect(publicIngest).not.toHaveBeenCalled();
   });
 
   it('routes text memory ingest through Commander without exposing chat ids', async () => {
@@ -852,32 +878,30 @@ describe('runKtxCli', () => {
     expect(textIngest).not.toHaveBeenCalled();
   });
 
-  it('routes ingest run at the top level and rejects removed dev ingest', async () => {
-    const runIo = makeIo();
+  it('rejects old adapter-backed ingest flags at the top level and under dev', async () => {
+    const rootRunIo = makeIo();
     const devRunIo = makeIo();
-    const ingest = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
 
     await expect(
-      runKtxCli(['ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], runIo.io, { ingest }),
-    ).resolves.toBe(0);
-    await expect(
-      runKtxCli(['dev', 'ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], devRunIo.io, {
-        ingest,
+      runKtxCli(['ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], rootRunIo.io, {
+        publicIngest,
       }),
     ).resolves.toBe(1);
-    expect(ingest).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'run', connectionId: 'warehouse', adapter: 'metabase' }),
-      expect.anything(),
-    );
+    await expect(
+      runKtxCli(['dev', 'ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], devRunIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(1);
+    expect(publicIngest).not.toHaveBeenCalled();
+    expect(rootRunIo.stderr()).toMatch(/unknown option '--connection-id'|error:/);
     expect(devRunIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('rejects removed dev doctor while keeping ingest parser cases at the root', async () => {
+  it('rejects removed dev doctor and removed ingest parser cases', async () => {
     const doctor = vi.fn(async () => 0);
-    const ingest = vi.fn(async () => 0);
     const doctorIo = makeIo();
     const ingestRunIo = makeIo();
-    const ingestReplayHelpIo = makeIo();
 
     await expect(runKtxCli(['dev', 'doctor', 'setup', '--json', '--no-input'], doctorIo.io, { doctor })).resolves.toBe(1);
     await expect(
@@ -899,94 +923,13 @@ describe('runKtxCli', () => {
           '--no-input',
         ],
         ingestRunIo.io,
-        { ingest },
+        {},
       ),
-    ).resolves.toBe(0);
-    await expect(runKtxCli(['ingest', 'replay', '--help'], ingestReplayHelpIo.io, { ingest })).resolves.toBe(0);
+    ).resolves.toBe(1);
 
     expect(doctor).not.toHaveBeenCalled();
-    expect(ingest).toHaveBeenCalledWith(
-      {
-        command: 'run',
-        projectDir: tempDir,
-        connectionId: 'warehouse',
-        adapter: 'fake',
-        sourceDir: tempDir,
-        databaseIntrospectionUrl: undefined,
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'prompt',
-        debugLlmRequestFile: `${tempDir}/debug.jsonl`,
-        outputMode: 'json',
-        inputMode: 'disabled',
-      },
-      ingestRunIo.io,
-    );
-    expect(ingestReplayHelpIo.stdout()).toContain('Usage: ktx ingest replay [options] <runId>');
-    expect(ingestReplayHelpIo.stdout()).toContain('<runId>');
     expect(doctorIo.stderr()).toMatch(/unknown command|error:/);
-    expect(ingestRunIo.stderr()).toBe('');
-    expect(ingestReplayHelpIo.stderr()).toBe('');
-  });
-
-  it('routes ingest managed runtime install policy separately from visualization input mode', async () => {
-    const autoIo = makeIo();
-    const nonInteractiveIo = makeIo();
-    const ingest = vi.fn(async () => 0);
-
-    await expect(
-      runKtxCli(
-        [
-          'ingest',
-          'run',
-          '--project-dir',
-          tempDir,
-          '--connection-id',
-          'warehouse',
-          '--adapter',
-          'looker',
-          '--yes',
-        ],
-        autoIo.io,
-        { ingest },
-      ),
-    ).resolves.toBe(0);
-    await expect(
-      runKtxCli(
-        [
-          'ingest',
-          'run',
-          '--project-dir',
-          tempDir,
-          '--connection-id',
-          'warehouse',
-          '--adapter',
-          'looker',
-          '--yes',
-          '--no-input',
-        ],
-        nonInteractiveIo.io,
-        { ingest },
-      ),
-    ).resolves.toBe(0);
-
-    expect(ingest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'run',
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'auto',
-      }),
-      autoIo.io,
-    );
-    expect(ingest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'run',
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'auto',
-        inputMode: 'disabled',
-      }),
-      nonInteractiveIo.io,
-    );
-    expect(nonInteractiveIo.stderr()).toBe(`Project: ${tempDir}\n`);
+    expect(ingestRunIo.stderr()).toMatch(/unknown option '--connection-id'|error:/);
   });
 
   it('dispatches public connection through the existing connection implementation', async () => {
@@ -1208,10 +1151,10 @@ describe('runKtxCli', () => {
           'env:DATABASE_URL',
           '--database-schema',
           'public',
-          '--enable-historic-sql',
-          '--historic-sql-window-days',
+          '--enable-query-history',
+          '--query-history-window-days',
           '30',
-          '--historic-sql-min-executions',
+          '--query-history-min-executions',
           '12',
         ],
         setupIo.io,
@@ -1232,12 +1175,29 @@ describe('runKtxCli', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: ['public'],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 30,
-        historicSqlMinExecutions: 12,
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 30,
+        queryHistoryMinExecutions: 12,
         skipDatabases: false,
       }),
       setupIo.io,
+    );
+  });
+
+  it('dispatches setup database connection ids that match former ingest subcommand names', async () => {
+    const testIo = makeIo();
+    const setup = vi.fn(async () => 0);
+
+    await expect(
+      runKtxCli(['setup', '--new-database-connection-id', 'status', '--no-input'], testIo.io, { setup }),
+    ).resolves.toBe(0);
+
+    expect(setup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        databaseConnectionId: 'status',
+      }),
+      testIo.io,
     );
   });
 
@@ -1399,18 +1359,20 @@ describe('runKtxCli', () => {
     expect(setupIo.stderr()).toContain('Choose only one embedding credential source');
   });
 
-  it('rejects conflicting Historic SQL setup flags', async () => {
+  it('rejects conflicting query-history setup flags', async () => {
     const setup = vi.fn(async () => 0);
     const setupIo = makeIo();
 
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', '--enable-historic-sql', '--disable-historic-sql'], setupIo.io, {
+      runKtxCli(['--project-dir', tempDir, 'setup', '--enable-query-history', '--disable-query-history'], setupIo.io, {
         setup,
       }),
     ).resolves.toBe(1);
 
     expect(setup).not.toHaveBeenCalled();
-    expect(setupIo.stderr()).toContain('Choose only one Historic SQL action');
+    expect(setupIo.stderr()).toContain(
+      'Choose only one query-history action: --enable-query-history or --disable-query-history.',
+    );
   });
 
   it('rejects the removed hidden agent command', async () => {
@@ -1601,63 +1563,20 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toContain('[debug] dispatch=connection');
   });
 
-  it('routes scan through the top-level command with top-level project-dir', async () => {
+  it.each([
+    { argv: ['scan'] },
+    { argv: ['scan', '--help'] },
+    { argv: ['scan', 'warehouse'] },
+    { argv: ['scan', 'warehouse', '--project-dir', '/tmp/project'] },
+    { argv: ['scan', 'warehouse', '--mode', 'relationships'] },
+  ])('rejects removed top-level scan command $argv', async ({ argv }) => {
     const testIo = makeIo();
-    const scan = vi.fn().mockResolvedValue(0);
+    const publicIngest = vi.fn().mockResolvedValue(0);
 
-    await expect(runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse'], testIo.io, { scan })).resolves.toBe(
-      0,
-    );
+    await expect(runKtxCli(argv, testIo.io, { publicIngest })).resolves.toBe(1);
 
-    expect(scan).toHaveBeenCalledWith(
-      {
-        command: 'run',
-        projectDir: tempDir,
-        connectionId: 'warehouse',
-        mode: 'structural',
-        detectRelationships: false,
-        dryRun: false,
-        databaseIntrospectionUrl: undefined,
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'prompt',
-      },
-      testIo.io,
-    );
-  });
-
-  it('routes scan managed runtime install policies', async () => {
-    const autoIo = makeIo();
-    const neverIo = makeIo();
-    const conflictIo = makeIo();
-    const scan = vi.fn().mockResolvedValue(0);
-
-    await expect(runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse', '--yes'], autoIo.io, { scan }))
-      .resolves.toBe(0);
-    await expect(runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse', '--no-input'], neverIo.io, { scan }))
-      .resolves.toBe(0);
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'scan', 'warehouse', '--yes', '--no-input'], conflictIo.io, {
-        scan,
-      }),
-    ).resolves.toBe(1);
-
-    expect(scan).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        command: 'run',
-        runtimeInstallPolicy: 'auto',
-      }),
-      autoIo.io,
-    );
-    expect(scan).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        command: 'run',
-        runtimeInstallPolicy: 'never',
-      }),
-      neverIo.io,
-    );
-    expect(conflictIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
+    expect(testIo.stderr()).toMatch(/unknown command|error:/);
+    expect(publicIngest).not.toHaveBeenCalled();
   });
 
   it('rejects removed public serve command options before dispatch', async () => {
@@ -1705,25 +1624,15 @@ describe('runKtxCli', () => {
   it('rejects removed dev command groups without invoking execution', async () => {
     for (const command of ['scan', 'ingest', 'mapping']) {
       const testIo = makeIo();
-      const scan = vi.fn().mockResolvedValue(0);
+      const publicIngest = vi.fn().mockResolvedValue(0);
       const sl = vi.fn().mockResolvedValue(0);
 
-      await expect(runKtxCli(['dev', command], testIo.io, { scan, sl })).resolves.toBe(1);
+      await expect(runKtxCli(['dev', command], testIo.io, { publicIngest, sl })).resolves.toBe(1);
 
       expect(testIo.stderr()).toMatch(/unknown command|error:/);
-      expect(scan).not.toHaveBeenCalled();
+      expect(publicIngest).not.toHaveBeenCalled();
       expect(sl).not.toHaveBeenCalled();
     }
-  });
-
-  it('rejects removed scan subcommands without invoking scan execution', async () => {
-    const testIo = makeIo();
-    const scan = vi.fn().mockResolvedValue(0);
-
-    await expect(runKtxCli(['scan', 'report'], testIo.io, { scan })).resolves.toBe(1);
-
-    expect(testIo.stderr()).toMatch(/too many arguments|unknown command|error:/);
-    expect(scan).not.toHaveBeenCalled();
   });
 
   it('rejects removed reserved dev subcommands', async () => {
@@ -1734,19 +1643,16 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('rejects mutually exclusive output modes before invoking runners', async () => {
-    const ingest = vi.fn(async () => 0);
+  it('rejects mutually exclusive public ingest output modes before invoking runners', async () => {
+    const publicIngest = vi.fn(async () => 0);
 
-    for (const argv of [
-      ['ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'fake', '--json', '--plain'],
-      ['ingest', 'status', 'run-1', '--json', '--viz'],
-    ]) {
-      const testIo = makeIo();
-      await expect(runKtxCli(argv, testIo.io, { ingest })).resolves.toBe(1);
-      expect(testIo.stderr()).toMatch(/conflict|cannot be used/i);
-    }
+    const testIo = makeIo();
+    await expect(runKtxCli(['ingest', 'warehouse', '--json', '--plain'], testIo.io, { publicIngest })).resolves.toBe(
+      1,
+    );
 
-    expect(ingest).not.toHaveBeenCalled();
+    expect(testIo.stderr()).toMatch(/conflict|cannot be used/i);
+    expect(publicIngest).not.toHaveBeenCalled();
   });
 
   it('does not expose root init after setup owns project creation', async () => {

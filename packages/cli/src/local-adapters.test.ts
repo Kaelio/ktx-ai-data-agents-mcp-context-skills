@@ -67,6 +67,38 @@ describe('CLI local ingest adapters', () => {
     ]);
   });
 
+  it('registers Postgres historic SQL from connection context query history', async () => {
+    await writeProject(
+      tempDir,
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    readonly: true',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+
+    const adapters = createKtxCliLocalIngestAdapters(project, {
+      historicSqlConnectionId: 'warehouse',
+      sqlAnalysis: sqlAnalysisStub(),
+    });
+
+    expect(adapters.find((adapter) => adapter.source === 'historic-sql')?.skillNames).toEqual([
+      'historic_sql_table_digest',
+      'historic_sql_patterns',
+    ]);
+  });
+
   it('registers BigQuery historic SQL from the requested connection', async () => {
     await writeProject(
       tempDir,
@@ -134,5 +166,35 @@ describe('CLI local ingest adapters', () => {
       'historic_sql_table_digest',
       'historic_sql_patterns',
     ]);
+  });
+
+  it('uses query-history wording for public BigQuery capability errors', async () => {
+    await writeProject(
+      tempDir,
+      [
+        'project: warehouse',
+        'connections:',
+        '  bq:',
+        '    driver: bigquery',
+        '    readonly: true',
+        '    dataset_id: analytics',
+        '    credentials_json: "{}"',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+
+    expect(() =>
+      createKtxCliLocalIngestAdapters(project, {
+        historicSqlConnectionId: 'bq',
+        sqlAnalysis: sqlAnalysisStub(),
+      }),
+    ).toThrow('Query history BigQuery connection requires credentials_json.project_id');
   });
 });

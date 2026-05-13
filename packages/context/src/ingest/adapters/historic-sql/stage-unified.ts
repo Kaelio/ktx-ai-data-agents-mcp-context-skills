@@ -39,7 +39,13 @@ interface StageHistoricSqlAggregatedSnapshotInput {
 interface ParsedTemplate {
   template: AggregatedTemplate;
   tablesTouched: string[];
+  includedTables: string[];
   columnsByClause: Record<string, string[]>;
+}
+
+interface EnabledTableFilter {
+  exact: Set<string>;
+  uniqueUnqualified: Set<string>;
 }
 
 interface TableAccumulator {
@@ -101,6 +107,45 @@ function shouldDropTemplate(template: AggregatedTemplate, config: HistoricSqlUni
   if (shouldDropByUsers(template, config)) return true;
   if (shouldDropByFailure(template, config)) return true;
   return false;
+}
+
+function normalizeTableIdentifier(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function unqualifiedTableIdentifier(value: string): string {
+  const parts = normalizeTableIdentifier(value).split('.').filter(Boolean);
+  return parts.at(-1) ?? '';
+}
+
+function buildEnabledTableFilter(enabledTables: string[]): EnabledTableFilter | null {
+  if (enabledTables.length === 0) {
+    return null;
+  }
+  const exact = new Set(enabledTables.map(normalizeTableIdentifier).filter((value) => value.length > 0));
+  const unqualifiedCounts = new Map<string, number>();
+  for (const table of exact) {
+    const unqualified = unqualifiedTableIdentifier(table);
+    if (unqualified.length > 0) {
+      unqualifiedCounts.set(unqualified, (unqualifiedCounts.get(unqualified) ?? 0) + 1);
+    }
+  }
+  return {
+    exact,
+    uniqueUnqualified: new Set(
+      [...unqualifiedCounts.entries()]
+        .filter(([, count]) => count === 1)
+        .map(([table]) => table),
+    ),
+  };
+}
+
+function isEnabledTable(table: string, filter: EnabledTableFilter | null): boolean {
+  if (!filter) {
+    return true;
+  }
+  const normalized = normalizeTableIdentifier(table);
+  return filter.exact.has(normalized) || filter.uniqueUnqualified.has(unqualifiedTableIdentifier(normalized));
 }
 
 function historicSqlWindowDays(config: HistoricSqlUnifiedPullConfig): number {
@@ -235,6 +280,7 @@ function toPatternsInput(parsedTemplates: ParsedTemplate[]): StagedPatternsInput
 
 export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSqlAggregatedSnapshotInput): Promise<void> {
   const config = historicSqlUnifiedPullConfigSchema.parse(input.pullConfig);
+  const enabledTableFilter = buildEnabledTableFilter(config.enabledTables);
   const redactors = compileHistoricSqlRedactionPatterns(config.redactionPatterns);
   const now = input.now ?? new Date();
   const windowStart = new Date(now.getTime() - historicSqlWindowDays(config) * 24 * 60 * 60 * 1000);
@@ -263,12 +309,14 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
       continue;
     }
     const tablesTouched = [...new Set(parsed.tablesTouched)].filter((table) => table.length > 0).sort();
-    if (tablesTouched.length === 0) {
+    const includedTables = tablesTouched.filter((table) => isEnabledTable(table, enabledTableFilter));
+    if (includedTables.length === 0) {
       continue;
     }
     parsedTemplates.push({
       template: redactTemplateSql(template, redactors),
       tablesTouched,
+      includedTables,
       columnsByClause: Object.fromEntries(
         Object.entries(parsed.columnsByClause).map(([clause, columns]) => [clause, [...new Set(columns)].sort()]),
       ),
@@ -277,7 +325,7 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
 
   const byTable = new Map<string, TableAccumulator>();
   for (const parsed of parsedTemplates) {
-    for (const table of parsed.tablesTouched) {
+    for (const table of parsed.includedTables) {
       const acc = byTable.get(table) ?? accumulatorFor(table);
       addTemplate(acc, parsed);
       byTable.set(table, acc);

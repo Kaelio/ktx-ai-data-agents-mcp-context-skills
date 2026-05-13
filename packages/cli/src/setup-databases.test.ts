@@ -86,7 +86,15 @@ function makePromptAdapter(options: {
   const passwordValues = [...(options.passwordValues ?? [])];
   return {
     multiselect: vi.fn(async () => multiselectValues.shift() ?? ['postgres']),
-    select: vi.fn(async () => selectValues.shift() ?? 'finish'),
+    select: vi.fn(async ({ message }) => {
+      if (message.includes('How much database context should KTX build?')) {
+        const nextValue = selectValues[0];
+        return nextValue === 'fast' || nextValue === 'deep' || nextValue === 'back'
+          ? (selectValues.shift() ?? 'fast')
+          : 'fast';
+      }
+      return selectValues.shift() ?? 'finish';
+    }),
     text: vi.fn(async () => (textValues.length > 0 ? textValues.shift() : '')),
     password: vi.fn(async () => (passwordValues.length > 0 ? passwordValues.shift() : '')),
     cancel: vi.fn(),
@@ -118,7 +126,7 @@ describe('setup databases step', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('shows every supported primary source in the interactive checklist', async () => {
+  it('shows every supported database in the interactive checklist', async () => {
     const prompts = makePromptAdapter({ multiselectValues: [['back']] });
 
     const result = await runKtxSetupDatabasesStep(
@@ -130,7 +138,7 @@ describe('setup databases step', () => {
     expect(result.status).toBe('back');
     expect(prompts.multiselect).toHaveBeenCalledWith({
       message:
-        'Which primary sources should KTX connect to?\n' +
+        'Which databases should KTX connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
       options: [
         { value: 'sqlite', label: 'SQLite' },
@@ -145,7 +153,7 @@ describe('setup databases step', () => {
     });
   });
 
-  it('requires choosing a primary source after an empty interactive selection', async () => {
+  it('requires choosing a database after an empty interactive selection', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({
       multiselectValues: [[], ['back']],
@@ -161,12 +169,12 @@ describe('setup databases step', () => {
     expect(result.status).toBe('back');
     expect(prompts.select).not.toHaveBeenCalled();
     expect(io.stdout()).toContain(
-      'KTX cannot work without at least one primary source. Select a source or press Escape to go back.',
+      'KTX cannot work without at least one database. Select a database or press Escape to go back.',
     );
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
   });
 
-  it('lets Back from connection method selection return to primary source selection when adding a new driver', async () => {
+  it('lets Back from connection method selection return to database selection when adding a new driver', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['back']],
       selectValues: ['back'],
@@ -189,12 +197,12 @@ describe('setup databases step', () => {
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
     expect(vi.mocked(prompts.multiselect).mock.calls[1]?.[0].message).toBe(
-      'Which primary sources should KTX connect to?\n' +
+      'Which databases should KTX connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
     );
   });
 
-  it('offers connection URL paste first for URL-capable primary sources', async () => {
+  it('offers connection URL paste first for URL-capable databases', async () => {
     const cases: Array<{ driver: KtxSetupDatabaseDriver; label: string }> = [
       { driver: 'postgres', label: 'PostgreSQL' },
       { driver: 'mysql', label: 'MySQL' },
@@ -319,10 +327,12 @@ describe('setup databases step', () => {
     });
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', expect.anything());
     expect(scanConnection).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', expect.anything());
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections['postgres-warehouse']).toEqual({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
+      context: { depth: 'fast' },
     });
   });
 
@@ -545,7 +555,7 @@ describe('setup databases step', () => {
     }
   });
 
-  it('lets Back from connection method selection return to primary source selection', async () => {
+  it('lets Back from connection method selection return to database selection', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['back']],
       selectValues: ['back'],
@@ -553,11 +563,19 @@ describe('setup databases step', () => {
     });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => []);
+    const listTables = vi.fn(async () => []);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
-      { prompts, testConnection, scanConnection },
+      { prompts, testConnection, scanConnection, listSchemas, listTables },
     );
 
     expect(result.status).toBe('back');
@@ -574,7 +592,7 @@ describe('setup databases step', () => {
     expect(scanConnection).not.toHaveBeenCalled();
   });
 
-  it('shows a configured primary source menu instead of the type checklist when a primary source exists', async () => {
+  it('shows a configured database menu instead of the type checklist when a database exists', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -596,7 +614,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
       { prompts, testConnection, scanConnection },
     );
@@ -604,18 +628,18 @@ describe('setup databases step', () => {
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
     expect(prompts.multiselect).not.toHaveBeenCalled();
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add additional primary sources' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
     expect(scanConnection).not.toHaveBeenCalled();
   });
 
-  it('preserves existing primary source ids when adding another source from the configured menu', async () => {
+  it('preserves existing database ids when adding another database from the configured menu', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -641,7 +665,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
       { prompts, testConnection, scanConnection },
     );
@@ -657,20 +687,21 @@ describe('setup databases step', () => {
       required: true,
     }));
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add additional primary sources' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
     expect(testConnection).toHaveBeenCalledTimes(1);
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'mysql-warehouse', expect.anything());
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.setup?.database_connection_ids).toEqual(['warehouse', 'mysql-warehouse']);
   });
 
-  it('lets users add another primary source after completing the first one', async () => {
+  it('lets users add another database after completing the first one', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['mysql']],
       selectValues: ['url', 'add', 'url', 'continue'],
@@ -680,7 +711,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
       { prompts, testConnection, scanConnection },
     );
@@ -696,11 +733,11 @@ describe('setup databases step', () => {
       required: true,
     }));
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add additional primary sources' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -718,7 +755,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       io.io,
       { prompts, testConnection, scanConnection },
     );
@@ -733,13 +776,13 @@ describe('setup databases step', () => {
       initialValues: ['postgres'],
       required: true,
     }));
-    expect(io.stdout()).not.toContain('KTX cannot work without at least one primary source');
-    expect(prompts.select).toHaveBeenNthCalledWith(2, {
-      message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
+    expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
+    expect(prompts.select).toHaveBeenNthCalledWith(3, {
+      message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add additional primary sources' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
   });
@@ -778,18 +821,18 @@ describe('setup databases step', () => {
       initialValues: ['postgres'],
       required: true,
     }));
-    expect(io.stdout()).not.toContain('KTX cannot work without at least one primary source');
+    expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
-      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add additional primary sources' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
   });
 
-  it('returns from primary source edit selection back to the configured source menu', async () => {
+  it('returns from database edit selection back to the configured source menu', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -820,18 +863,18 @@ describe('setup databases step', () => {
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
-      message: 'Primary source to edit',
+      message: 'Database to edit',
       options: [
         { value: 'warehouse', label: 'warehouse (PostgreSQL)' },
         { value: 'back', label: 'Back' },
       ],
     });
     expect(prompts.select).toHaveBeenNthCalledWith(3, {
-      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add additional primary sources' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
@@ -864,12 +907,13 @@ describe('setup databases step', () => {
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
-      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
       return 'back';
     });
     const testConnection = vi.fn(async () => 0);
@@ -909,7 +953,7 @@ describe('setup databases step', () => {
     });
   });
 
-  it('preselects existing schema and table choices when editing a primary source', async () => {
+  it('preselects existing schema and table choices when editing a database', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -936,12 +980,13 @@ describe('setup databases step', () => {
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
-      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
       return 'back';
     });
     const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
@@ -1008,12 +1053,13 @@ describe('setup databases step', () => {
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
-      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
       return 'back';
     });
     const testConnection = vi.fn(async () => 0);
@@ -1074,12 +1120,13 @@ describe('setup databases step', () => {
     const prompts = makePromptAdapter({ textValues: ['env:DATABASE_URL'] });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
-      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
       return 'back';
     });
     const testConnection = vi.fn(async () => 0);
@@ -1116,7 +1163,7 @@ describe('setup databases step', () => {
     });
   });
 
-  it('restores an existing primary source edit when the follow-up scan fails', async () => {
+  it('restores an existing database edit when the follow-up scan fails', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -1141,9 +1188,10 @@ describe('setup databases step', () => {
       textValues: ['env:DATABASE_URL'],
     });
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') return 'edit';
-      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') return 'edit';
+      if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
       return 'back';
     });
     const listTables = vi.fn(async () => [
@@ -1186,15 +1234,15 @@ describe('setup databases step', () => {
         databaseDrivers: ['postgres'],
         databaseSchemas: [],
         skipDatabases: false,
+        disableQueryHistory: true,
       },
       makeIo().io,
       { prompts, testConnection, scanConnection },
     );
 
     expect(result.status).toBe('ready');
-    expect(prompts.select).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(prompts.select).mock.calls[0]?.[0].message).toBe('How do you want to connect to PostgreSQL?');
-    expect(vi.mocked(prompts.select).mock.calls[1]?.[0].message).toBe('How do you want to connect to PostgreSQL?');
+    const selectMessages = vi.mocked(prompts.select).mock.calls.map(([options]) => options.message);
+    expect(selectMessages.filter((message) => message === 'How do you want to connect to PostgreSQL?')).toHaveLength(2);
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', expect.anything());
   });
 
@@ -1219,15 +1267,15 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message:
         'Some PostgreSQL connection details are missing.\n' +
-        'Continue entering details, or go back to primary source selection.',
+        'Continue entering details, or go back to database selection.',
       options: [
         { value: 'retry', label: 'Continue entering PostgreSQL details' },
-        { value: 'back', label: 'Back to primary source selection' },
+        { value: 'back', label: 'Back to database selection' },
       ],
     });
   });
 
-  it('lets Escape from connection name return to primary source selection', async () => {
+  it('lets Escape from connection name return to database selection', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['back']],
       textValues: [undefined],
@@ -1276,7 +1324,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     const connection = config.connections['postgres-warehouse'];
     expect(connection).toMatchObject({
       driver: 'postgres',
@@ -1315,7 +1364,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     const connection = config.connections['postgres-warehouse'];
     expect(connection.url).toBe(`file:${resolve(tempDir, '.ktx/secrets/postgres-warehouse-url')}`);
     expect(connection.driver).toBe('postgres');
@@ -1336,7 +1386,7 @@ describe('setup databases step', () => {
       return 0;
     });
     const scanConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
-      commandIo.stdout.write('Scanning postgres-warehouse for context. Large primary sources can take a while.\n');
+      commandIo.stdout.write('Scanning postgres-warehouse for context. Large databases can take a while.\n');
       commandIo.stdout.write('[5%] Preparing scan\n');
       commandIo.stdout.write('[15%] Inspecting database schema\n');
       commandIo.stdout.write('[55%] Semantic layer comparison found 2 changes across 2 tables\n');
@@ -1390,23 +1440,18 @@ describe('setup databases step', () => {
       ].join('\n'),
     );
     expect(io.stdout()).not.toContain('Tables: 2');
-    expect(io.stdout()).toContain(
-      [
-        '◇  Scanning postgres-warehouse',
-        '│  Running structural scan…',
-        '│',
-      ].join('\n'),
-    );
-    expect(io.stdout()).toContain(
-      [
-        '◇  Scan complete for postgres-warehouse',
-        '│  Changes: 2 new tables',
-        '│  Report: raw-sources/postgres-warehouse/live-database/.../scan-report.json',
-        '│',
-        '◇  Primary source ready',
-        '│  postgres-warehouse · PostgreSQL · structural scan complete',
-      ].join('\n'),
-    );
+    expect(io.stdout()).toContain('◇  Building schema context for postgres-warehouse');
+    expect(io.stdout()).toContain('│  Running fast database ingest…');
+    expect(io.stdout()).toContain('◇  Schema context complete for postgres-warehouse');
+    expect(io.stdout()).toContain('│  Changes: 2 new tables');
+    expect(io.stdout()).toContain('◇  Database ready');
+    expect(io.stdout()).not.toContain(['Primary source', 'ready'].join(' '));
+    expect(io.stdout()).toContain('│  postgres-warehouse · PostgreSQL · schema context complete');
+    expect(io.stdout()).not.toContain('Scanning postgres-warehouse');
+    expect(io.stdout()).not.toContain('Scan complete for postgres-warehouse');
+    expect(io.stdout()).not.toContain('structural scan complete');
+    expect(io.stdout()).not.toContain('Report: raw-sources');
+    expect(io.stdout()).not.toContain('live-database');
     expect(io.stdout()).not.toContain('[5%] Preparing scan');
     expect(io.stdout()).not.toContain('What changed');
     expect(io.stdout()).not.toContain('Next:');
@@ -1556,6 +1601,7 @@ describe('setup databases step', () => {
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: ['public'],
         skipDatabases: false,
+        disableQueryHistory: true,
       },
       io.io,
       { testConnection, scanConnection, listSchemas },
@@ -1570,12 +1616,14 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       schemas: ['public'],
+      context: { queryHistory: { enabled: false }, depth: 'fast' },
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
     });
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
-    expect(io.stdout()).toContain('Primary source ready');
+    expect(io.stdout()).toContain('Database ready');
+    expect(io.stdout()).not.toContain(['Primary source', 'ready'].join(' '));
     expect(io.stdout()).not.toContain('DATABASE_URL=');
   });
 
@@ -1607,6 +1655,7 @@ describe('setup databases step', () => {
     expect(config.connections.warehouse).toEqual({
       driver: 'sqlite',
       path: './warehouse.sqlite',
+      context: { depth: 'fast' },
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
@@ -1684,9 +1733,11 @@ describe('setup databases step', () => {
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({ driver: 'postgres', url: 'env:DATABASE_URL' });
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
-    expect(io.stderr()).toContain('Structural scan failed for warehouse.');
-    expect(io.stderr()).toContain('│  Structural scan failed for warehouse.');
-    expect(io.stderr()).not.toMatch(/^Structural scan failed for warehouse\./m);
+    expect(io.stderr()).toContain('Fast database ingest failed for warehouse.');
+    expect(io.stderr()).toContain('│  Fast database ingest failed for warehouse.');
+    expect(io.stderr()).toContain(`Debug command: ktx ingest warehouse --project-dir ${tempDir} --fast --debug`);
+    expect(io.stderr()).not.toContain('Structural scan failed for warehouse.');
+    expect(io.stderr()).not.toMatch(/^Fast database ingest failed for warehouse\./m);
   });
 
   it('prints the native SQLite rebuild command when scanning hits a Node ABI mismatch', async () => {
@@ -1725,7 +1776,8 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('│  Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('Fix: pnpm run native:rebuild');
-    expect(io.stderr()).toContain(`Retry: ktx scan --project-dir ${tempDir} warehouse`);
+    expect(io.stderr()).toContain(`Retry: ktx ingest warehouse --project-dir ${tempDir} --fast`);
+    expect(io.stderr()).not.toContain('ktx scan');
     expect(io.stderr()).not.toContain('npm rebuild');
     expect(io.stderr()).not.toMatch(/^Native SQLite is built for a different Node.js ABI\./m);
   });
@@ -1781,10 +1833,11 @@ describe('setup databases step', () => {
     expect(scanConnection).toHaveBeenCalledTimes(2);
     expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('Rebuilding Native SQLite with pnpm run native:rebuild…');
-    expect(io.stdout()).toContain('◇  Scan complete for warehouse');
+    expect(io.stdout()).toContain('◇  Schema context complete for warehouse');
+    expect(io.stdout()).toContain('│  Changes: 0 changes across 56 tables');
   });
 
-  it('writes Historic SQL config for supported Snowflake databases after validation succeeds', async () => {
+  it('writes query history config for supported Snowflake databases after validation succeeds', async () => {
     const io = makeIo();
     const result = await runKtxSetupDatabasesStep(
       {
@@ -1793,10 +1846,10 @@ describe('setup databases step', () => {
         databaseDrivers: ['snowflake'],
         databaseConnectionId: 'snowflake',
         databaseSchemas: [],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 30,
-        historicSqlServiceAccountPatterns: ['^svc_'],
-        historicSqlRedactionPatterns: ['(?i)secret'],
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 30,
+        queryHistoryServiceAccountPatterns: ['^svc_'],
+        queryHistoryRedactionPatterns: ['(?i)secret'],
         skipDatabases: false,
       },
       io.io,
@@ -1811,28 +1864,34 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections.snowflake).toMatchObject({
       driver: 'snowflake',
       authMethod: 'password',
-      historicSql: {
-        enabled: true,
-        dialect: 'snowflake',
-        windowDays: 30,
-        filters: {
-          dropTrivialProbes: true,
-          serviceAccounts: {
-            patterns: ['^svc_'],
-            mode: 'exclude',
+      context: {
+        queryHistory: {
+          enabled: true,
+          windowDays: 30,
+          filters: {
+            dropTrivialProbes: true,
+            serviceAccounts: {
+              patterns: ['^svc_'],
+              mode: 'exclude',
+            },
           },
+          redactionPatterns: ['(?i)secret'],
         },
-        redactionPatterns: ['(?i)secret'],
       },
     });
-    expect(config.ingest.adapters).toContain('historic-sql');
+    expect(config.connections.snowflake.historicSql).toBeUndefined();
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect(configText).not.toMatch(/^\s+adapters:/m);
+    expect(config.ingest.adapters).toEqual([]);
   });
 
-  it('writes Postgres Historic SQL config with minExecutions and ignores window/redaction output', async () => {
+  it('writes Postgres query history config with minExecutions and ignores window/redaction output', async () => {
     const io = makeIo();
     const result = await runKtxSetupDatabasesStep(
       {
@@ -1842,11 +1901,11 @@ describe('setup databases step', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: ['public'],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 30,
-        historicSqlMinExecutions: 12,
-        historicSqlServiceAccountPatterns: ['^svc_'],
-        historicSqlRedactionPatterns: ['(?i)secret'],
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 30,
+        queryHistoryMinExecutions: 12,
+        queryHistoryServiceAccountPatterns: ['^svc_'],
+        queryHistoryRedactionPatterns: ['(?i)secret'],
         skipDatabases: false,
       },
       io.io,
@@ -1858,33 +1917,126 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections.warehouse).toMatchObject({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       schemas: ['public'],
-      historicSql: {
-        enabled: true,
-        dialect: 'postgres',
-        minExecutions: 12,
-        filters: {
-          dropTrivialProbes: true,
-          serviceAccounts: {
-            patterns: ['^svc_'],
-            mode: 'exclude',
+      context: {
+        queryHistory: {
+          enabled: true,
+          minExecutions: 12,
+          filters: {
+            dropTrivialProbes: true,
+            serviceAccounts: {
+              patterns: ['^svc_'],
+              mode: 'exclude',
+            },
           },
         },
       },
     });
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty('windowDays');
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty('redactionPatterns');
-    expect(config.ingest.adapters).toContain('historic-sql');
+    expect(config.connections.warehouse.historicSql).toBeUndefined();
+    const warehouseContext =
+      config.connections.warehouse.context &&
+      typeof config.connections.warehouse.context === 'object' &&
+      !Array.isArray(config.connections.warehouse.context)
+        ? (config.connections.warehouse.context as Record<string, unknown>)
+        : {};
+    expect(warehouseContext.queryHistory).not.toHaveProperty('windowDays');
+    expect(warehouseContext.queryHistory).not.toHaveProperty('redactionPatterns');
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect(configText).not.toMatch(/^\s+adapters:/m);
+    expect(config.ingest.adapters).toEqual([]);
     expect(config.ingest.workUnits.maxConcurrency).toBe(6);
-    expect(io.stdout()).toContain('Historic SQL probe...');
+    expect(io.stdout()).toContain('Query history probe...');
+    expect(io.stdout()).not.toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements ready');
   });
 
-  it('writes Historic SQL config for supported existing database connections', async () => {
+  it('asks interactive Postgres setup whether to enable query history', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    readonly: true',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        'scan:',
+        '  enrichment:',
+        '    mode: llm',
+        '    embeddings:',
+        '      backend: openai',
+        '      model: text-embedding-3-small',
+        '      dimensions: 1536',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['yes', 'deep'] });
+    const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseConnectionIds: ['warehouse'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlProbe,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.select).toHaveBeenCalledWith({
+      message: 'Enable query-history ingest for this PostgreSQL connection?',
+      options: [
+        { value: 'yes', label: 'Enable query history' },
+        { value: 'no', label: 'Do not enable query history' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect(prompts.select).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        message: expect.stringContaining('How much database context should KTX build?'),
+      }),
+    );
+    expect(historicSqlProbe).toHaveBeenCalledWith({
+      projectDir: tempDir,
+      connectionId: 'warehouse',
+      dialect: 'postgres',
+    });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      context: {
+        queryHistory: {
+          enabled: true,
+          minExecutions: 5,
+          filters: { dropTrivialProbes: true },
+        },
+        depth: 'deep',
+      },
+    });
+  });
+
+  it('writes query history config for supported existing database connections', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -1906,8 +2058,8 @@ describe('setup databases step', () => {
         inputMode: 'disabled',
         databaseConnectionIds: ['analytics'],
         databaseSchemas: [],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 45,
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 45,
         skipDatabases: false,
       },
       io.io,
@@ -1918,22 +2070,28 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections.analytics).toMatchObject({
-      historicSql: {
-        enabled: true,
-        dialect: 'bigquery',
-        windowDays: 45,
-        filters: {
-          dropTrivialProbes: true,
+      context: {
+        queryHistory: {
+          enabled: true,
+          windowDays: 45,
+          filters: {
+            dropTrivialProbes: true,
+          },
+          redactionPatterns: [],
         },
-        redactionPatterns: [],
       },
     });
-    expect(config.ingest.adapters).toContain('historic-sql');
+    expect(config.connections.analytics.historicSql).toBeUndefined();
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect(configText).not.toMatch(/^\s+adapters:/m);
+    expect(config.ingest.adapters).toEqual([]);
   });
 
-  it('enables Historic SQL on an existing Postgres connection', async () => {
+  it('enables query history on an existing Postgres connection', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -1954,8 +2112,8 @@ describe('setup databases step', () => {
         inputMode: 'disabled',
         databaseConnectionIds: ['warehouse'],
         databaseSchemas: [],
-        enableHistoricSql: true,
-        historicSqlMinExecutions: 8,
+        enableQueryHistory: true,
+        queryHistoryMinExecutions: 8,
         skipDatabases: false,
       },
       io.io,
@@ -1969,18 +2127,94 @@ describe('setup databases step', () => {
     expect(result.status).toBe('ready');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
-      historicSql: {
+      context: {
+        queryHistory: {
+          enabled: true,
+          minExecutions: 8,
+          filters: {
+            dropTrivialProbes: true,
+          },
+        },
+      },
+    });
+    expect(config.connections.warehouse.historicSql).toBeUndefined();
+  });
+
+  it('migrates legacy historicSql to context.queryHistory during database setup', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    readonly: true',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      windowDays: 45',
+        '      minExecutions: 9',
+        '      concurrency: 3',
+        '      staleArchiveAfterDays: 120',
+        '      filters:',
+        '        dropTrivialProbes: true',
+        '        serviceAccounts:',
+        '          mode: exclude',
+        '          patterns:',
+        "            - '^svc_'",
+        '        orchestrators:',
+        '          mode: exclude',
+        '          patterns:',
+        '            - airflow',
+        '        dropFailedBelow: 2',
+        '      redactionPatterns:',
+        "        - '(?i)secret'",
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupDatabasesStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          databaseConnectionIds: ['warehouse'],
+          databaseSchemas: [],
+          skipDatabases: false,
+        },
+        io.io,
+        {
+          testConnection: vi.fn(async () => 0),
+          scanConnection: vi.fn(async () => 0),
+          historicSqlProbe: vi.fn(async () => ({ ok: true, lines: [] })),
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse.historicSql).toBeUndefined();
+    expect(config.connections.warehouse.context).toMatchObject({
+      queryHistory: {
         enabled: true,
-        dialect: 'postgres',
-        minExecutions: 8,
+        windowDays: 45,
+        minExecutions: 9,
+        concurrency: 3,
+        staleArchiveAfterDays: 120,
         filters: {
           dropTrivialProbes: true,
+          serviceAccounts: { mode: 'exclude', patterns: ['^svc_'] },
+          orchestrators: { mode: 'exclude', patterns: ['airflow'] },
+          dropFailedBelow: 2,
         },
+        redactionPatterns: ['(?i)secret'],
       },
     });
   });
 
-  it('prints a non-blocking Postgres Historic SQL probe failure after connection test succeeds', async () => {
+  it('prints a non-blocking Postgres query history probe failure after connection test succeeds', async () => {
     const io = makeIo();
     const historicSqlProbe = vi.fn(async () => ({
       ok: false,
@@ -1999,7 +2233,7 @@ describe('setup databases step', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: [],
-        enableHistoricSql: true,
+        enableQueryHistory: true,
         skipDatabases: false,
       },
       io.io,
@@ -2018,12 +2252,13 @@ describe('setup databases step', () => {
         dialect: 'postgres',
       }),
     );
-    expect(io.stdout()).toContain('Historic SQL probe...');
+    expect(io.stdout()).toContain('Query history probe...');
+    expect(io.stdout()).not.toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements extension is not installed');
     expect(io.stdout()).toContain('Setup written; first ingest run will fail until fixed.');
   });
 
-  it('does not run the Historic SQL probe when the regular connection test fails', async () => {
+  it('does not run the query history probe when the regular connection test fails', async () => {
     const io = makeIo();
     const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
 
@@ -2035,7 +2270,7 @@ describe('setup databases step', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: [],
-        enableHistoricSql: true,
+        enableQueryHistory: true,
         skipDatabases: false,
       },
       io.io,
@@ -2068,7 +2303,35 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('Missing database connection id');
   });
 
-  it('leaves setup incomplete when primary sources are skipped', async () => {
+  it('accepts former ingest subcommand names as non-interactive database connection ids', async () => {
+    const io = makeIo();
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'replay',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.replay).toMatchObject({
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    });
+  });
+
+  it('leaves setup incomplete when databases are skipped', async () => {
     const io = makeIo();
 
     const result = await runKtxSetupDatabasesStep(
@@ -2077,7 +2340,7 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('skipped');
-    expect(io.stdout()).toContain('KTX cannot work until you add a primary source.');
+    expect(io.stdout()).toContain('KTX cannot work until you add a database.');
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 });

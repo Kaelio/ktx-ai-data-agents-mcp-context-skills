@@ -215,8 +215,8 @@ node "$KTX_BIN" --project-dir "$PROJECT_DIR" setup \
   --new-database-connection-id warehouse \
   --database-url env:WAREHOUSE_DATABASE_URL \
   --database-schema public \
-  --enable-historic-sql \
-  --historic-sql-min-executions 2 \
+  --enable-query-history \
+  --query-history-min-executions 2 \
   --yes \
   --no-input
 

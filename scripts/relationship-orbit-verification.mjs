@@ -41,8 +41,8 @@ export function defaultOrbitVerificationProjectDir() {
   return defaultProjectDir;
 }
 
-function shellCommand(argv) {
-  return ['pnpm', 'run', 'ktx', '--', ...argv].join(' ');
+function internalScanCommand(input) {
+  return `internal runKtxScan connection=${input.connectionId} mode=relationships projectDir=${input.projectDir}`;
 }
 
 function firstNonEmptyLine(...values) {
@@ -55,7 +55,7 @@ function firstNonEmptyLine(...values) {
       return line;
     }
   }
-  return 'Orbit scan command failed before producing diagnostic output';
+  return 'Orbit relationship scan failed before producing diagnostic output';
 }
 
 function parseArgs(argv) {
@@ -88,8 +88,15 @@ function parseArgs(argv) {
   return options;
 }
 
-export function buildOrbitScanArgv(input) {
-  return ['scan', input.connectionId, '--mode', 'relationships', '--project-dir', input.projectDir];
+export function buildOrbitScanArgs(input) {
+  return {
+    command: 'run',
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    mode: 'relationships',
+    detectRelationships: true,
+    dryRun: false,
+  };
 }
 
 export function extractRunId(stdout) {
@@ -171,7 +178,7 @@ function formatBlocked(result) {
     '',
     '## Evidence',
     '',
-    '- Orbit verification was not executed because the current local Orbit scan command failed.',
+    '- Orbit verification was not executed because the current local Orbit relationship scan failed.',
     '- Re-run with `--report-path` to write verification evidence to a custom location.',
     '',
     'Scan stdout:',
@@ -228,6 +235,36 @@ async function runBufferedWorkspaceKtx(runner, argv, rootDir, execFile) {
   };
 }
 
+function cliScanModulePath(rootDir) {
+  return resolve(rootDir, 'packages/cli/dist/scan.js');
+}
+
+async function loadRunKtxScan(rootDir) {
+  const module = await import(pathToFileURL(cliScanModulePath(rootDir)).href);
+  return module.runKtxScan;
+}
+
+async function runBufferedInternalScan(input) {
+  const stdout = new BufferWriter();
+  const stderr = new BufferWriter();
+  let runKtxScan = input.runKtxScan;
+
+  if (!runKtxScan) {
+    const build = await runBufferedWorkspaceKtx(input.runner, ['--version'], input.rootDir, input.execFile);
+    if (build.exitCode !== 0) {
+      return build;
+    }
+    runKtxScan = await loadRunKtxScan(input.rootDir);
+  }
+
+  const exitCode = await runKtxScan(input.scanArgs, { stdout, stderr });
+  return {
+    exitCode,
+    stdout: stdout.text(),
+    stderr: stderr.text(),
+  };
+}
+
 function orbitVerificationEnv(projectDir) {
   if (projectDir !== defaultProjectDir) {
     return process.env;
@@ -253,8 +290,15 @@ export async function runOrbitVerification(options = {}) {
   const env = options.env ?? orbitVerificationEnv(projectDir);
   const runWithEnv = (argv, runnerOptions) => runner(argv, { ...runnerOptions, env });
 
-  const scanArgv = buildOrbitScanArgv({ connectionId, projectDir });
-  const scan = await runBufferedWorkspaceKtx(runWithEnv, scanArgv, rootDir, execFile);
+  const scanArgs = buildOrbitScanArgs({ connectionId, projectDir });
+  const scanCommand = internalScanCommand({ connectionId, projectDir });
+  const scan = await runBufferedInternalScan({
+    scanArgs,
+    rootDir,
+    execFile,
+    runner: runWithEnv,
+    runKtxScan: options.runKtxScan,
+  });
   let result;
 
   if (scan.exitCode !== 0) {
@@ -263,7 +307,7 @@ export async function runOrbitVerification(options = {}) {
       date,
       connectionId,
       projectDir,
-      scanCommand: shellCommand(scanArgv),
+      scanCommand,
       scanExitCode: scan.exitCode,
       blocker: firstNonEmptyLine(scan.stderr, scan.stdout),
       scanStdout: scan.stdout,
@@ -277,7 +321,7 @@ export async function runOrbitVerification(options = {}) {
         date,
         connectionId,
         projectDir,
-        scanCommand: shellCommand(scanArgv),
+        scanCommand,
         scanExitCode: scan.exitCode,
         blocker: 'KTX scan completed without printing a Run id',
         scanStdout: scan.stdout,
@@ -291,7 +335,7 @@ export async function runOrbitVerification(options = {}) {
           date,
           connectionId,
           projectDir,
-          scanCommand: shellCommand(scanArgv),
+          scanCommand,
           scanExitCode: scan.exitCode,
           blocker: 'KTX scan completed without printing a report artifact path',
           scanStdout: scan.stdout,
@@ -304,7 +348,7 @@ export async function runOrbitVerification(options = {}) {
           date,
           connectionId,
           projectDir,
-          scanCommand: shellCommand(scanArgv),
+          scanCommand,
           reportPath: fullScanReportPath,
           scanExitCode: scan.exitCode,
           scanStdout: scan.stdout,

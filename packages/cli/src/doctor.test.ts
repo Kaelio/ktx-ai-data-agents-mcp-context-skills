@@ -329,6 +329,68 @@ describe('runKtxDoctor', () => {
     delete process.env.OPENAI_API_KEY;
   });
 
+  it('includes Postgres query-history readiness in project doctor output', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
+    process.env.OPENAI_API_KEY = 'test-key'; // pragma: allowlist secret
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        'ingest:',
+        '  adapters:',
+        '    - live-database',
+        '    - historic-sql',
+        '  embeddings:',
+        '    backend: openai',
+        '    model: text-embedding-3-small',
+        '    dimensions: 1536',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+    let probeCalls = 0;
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {
+          postgresQueryHistoryProbe: async () => {
+            probeCalls += 1;
+            return {
+              pgServerVersion: 'PostgreSQL 16.4',
+              warnings: [],
+              info: [
+                'pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
+              ],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const out = testIo.stdout();
+    expect(probeCalls).toBe(1);
+    expect(out).toContain('Query history');
+    expect(out).toContain('warehouse');
+    expect(out).toContain('pg_stat_statements ready (PostgreSQL 16.4)');
+    expect(out).toContain('info: pg_stat_statements.max is 1000');
+    expect(out).not.toContain('Update the Postgres parameter group or config');
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+  });
+
   it('returns blocked verdict when LLM is not configured', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -398,7 +460,13 @@ describe('runKtxDoctor', () => {
       runKtxDoctor(
         { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
         testIo.io,
-        {},
+        {
+          postgresQueryHistoryProbe: async () => ({
+            pgServerVersion: 'PostgreSQL 16.4',
+            warnings: [],
+            info: [],
+          }),
+        },
       ),
     ).resolves.toBe(0);
 

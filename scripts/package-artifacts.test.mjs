@@ -464,7 +464,7 @@ describe('verification snippets', () => {
     assert.match(source, /node:sqlite/);
     assert.match(source, /driver: sqlite/);
     assert.match(source, /path: warehouse\.db/);
-    assert.match(source, /live-database/);
+    assert.doesNotMatch(source, /live-database/);
     assert.match(source, /'--execute'/);
     assert.match(source, /"mode": "compile_only"/);
     assert.match(source, /"mode": "executed"/);
@@ -488,18 +488,18 @@ describe('verification snippets', () => {
     assert.match(source, /ktx dev runtime stop/);
     assert.doesNotMatch(source, /ktx dev runtime prune/);
     assert.doesNotMatch(source, /staleRuntimeDir/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'scan',\s*'warehouse'/);
-    assert.match(source, /'--mode',\s*'enriched'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'ingest',\s*'warehouse'/);
+    assert.match(source, /'--deep'/);
     assert.doesNotMatch(source, /'--enrich'/);
-    assert.match(source, /ktx scan structural verified/);
-    assert.match(source, /ktx scan enriched verified/);
+    assert.match(source, /ktx ingest fast verified/);
+    assert.match(source, /ktx ingest deep readiness guard verified/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
-    assert.match(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
+    assert.doesNotMatch(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
     assert.match(source, /access\(join\(projectDir, '\.ktx', 'db\.sqlite'\)\)/);
     assert.match(source, /SQLite wiki index/);
-    assert.match(source, /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
-    assert.match(source, /ktx ingest provider guard verified/);
+    assert.doesNotMatch(source, /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
+    assert.match(source, /ktx ingest state verified/);
   });
 
   describe('npmCliSmokeSource', () => {
@@ -511,6 +511,8 @@ describe('verification snippets', () => {
       assert.match(source, /Usage: ktx setup/);
       assert.doesNotMatch(source, new RegExp(["'demo'", "'--mode'", "'deterministic'"].join(', ')));
       assert.match(source, /'status', '--verbose', '--no-input'/);
+      assert.match(source, /KTX status/);
+      assert.match(source, /No project here yet/);
       assert.doesNotMatch(source, /function requireProjectStderr/);
       assert.match(source, /Object\.keys\(packageJson\.dependencies\)/);
       assert.match(source, /'@kaelio\/ktx'/);

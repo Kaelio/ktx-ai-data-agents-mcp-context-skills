@@ -1,13 +1,21 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
+import {
+  buildDefaultKtxProjectConfig,
+  parseKtxProjectConfig,
+  readKtxSetupState,
+  serializeKtxProjectConfig,
+  type KtxProjectConfig,
+  writeKtxSetupState,
+} from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   contextBuildCommands,
   readKtxSetupContextState,
   runKtxSetupContextStep,
+  type KtxSetupContextDeps,
   writeKtxSetupContextState,
 } from './setup-context.js';
 
@@ -32,39 +40,79 @@ function makeIo() {
   };
 }
 
-async function writeReadyProject(projectDir: string) {
-  await writeFile(
-    join(projectDir, 'ktx.yaml'),
-    [
-      'project: revenue',
-      'setup:',
-      '  database_connection_ids:',
-      '    - warehouse',
-      'connections:',
-      '  warehouse:',
-      '    driver: postgres',
-      '    url: env:DATABASE_URL',
-      '  docs:',
-      '    driver: notion',
-      '    auth_token_ref: env:NOTION_TOKEN',
-      '    crawl_mode: all_accessible',
-      'llm:',
-      '  provider:',
-      '    backend: anthropic',
-      '  models:',
-      '    default: claude-sonnet-4-6',
-      'ingest:',
-      '  embeddings:',
-      '    backend: openai',
-      '    model: text-embedding-3-small',
-      '    dimensions: 1536',
-      'scan:',
-      '  enrichment:',
-      '    mode: llm',
-      '',
-    ].join('\n'),
-    'utf-8',
-  );
+type ReadyProjectOverrides = Omit<Partial<KtxProjectConfig>, 'ingest' | 'llm' | 'scan'> & {
+  ingest?: Partial<KtxProjectConfig['ingest']>;
+  llm?: Partial<KtxProjectConfig['llm']>;
+  scan?: Omit<Partial<KtxProjectConfig['scan']>, 'enrichment' | 'relationships'> & {
+    enrichment?: Partial<KtxProjectConfig['scan']['enrichment']>;
+    relationships?: Partial<KtxProjectConfig['scan']['relationships']>;
+  };
+};
+
+async function writeReadyProject(projectDir: string, overrides: ReadyProjectOverrides = {}) {
+  const defaults = buildDefaultKtxProjectConfig('revenue');
+  const readyConfig: KtxProjectConfig = {
+    ...defaults,
+    setup: { database_connection_ids: ['warehouse'] },
+    connections: {
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL', context: { depth: 'deep' } },
+      docs: { driver: 'notion', auth_token_ref: 'env:NOTION_TOKEN', crawl_mode: 'all_accessible' },
+    },
+    llm: {
+      provider: { backend: 'anthropic' },
+      models: { default: 'claude-sonnet-4-6' },
+    },
+    ingest: {
+      ...defaults.ingest,
+      embeddings: {
+        backend: 'openai',
+        model: 'text-embedding-3-small',
+        dimensions: 1536,
+      },
+    },
+    scan: {
+      ...defaults.scan,
+      enrichment: {
+        mode: 'llm',
+        embeddings: {
+          backend: 'openai',
+          model: 'text-embedding-3-small',
+          dimensions: 1536,
+        },
+      },
+    },
+  };
+  const nextConfig: KtxProjectConfig = {
+    ...readyConfig,
+    ...overrides,
+    setup: overrides.setup ?? readyConfig.setup,
+    connections: overrides.connections ?? readyConfig.connections,
+    llm: {
+      ...readyConfig.llm,
+      ...overrides.llm,
+      provider: overrides.llm?.provider ?? readyConfig.llm.provider,
+      models: overrides.llm?.models ?? readyConfig.llm.models,
+    },
+    ingest: {
+      ...readyConfig.ingest,
+      ...overrides.ingest,
+      embeddings: overrides.ingest?.embeddings ?? readyConfig.ingest.embeddings,
+      workUnits: overrides.ingest?.workUnits ?? readyConfig.ingest.workUnits,
+    },
+    scan: {
+      ...readyConfig.scan,
+      ...overrides.scan,
+      enrichment: {
+        ...readyConfig.scan.enrichment,
+        ...(overrides.scan?.enrichment ?? {}),
+      },
+      relationships: {
+        ...readyConfig.scan.relationships,
+        ...(overrides.scan?.relationships ?? {}),
+      },
+    },
+  };
+  await writeFile(join(projectDir, 'ktx.yaml'), serializeKtxProjectConfig(nextConfig), 'utf-8');
   await writeKtxSetupState(projectDir, {
     completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources'],
   });
@@ -73,7 +121,15 @@ async function writeReadyProject(projectDir: string) {
 async function writeScanReport(
   projectDir: string,
   syncId: string,
-  report: { mode: string; tableDescriptions: string; columnDescriptions: string; embeddings: string },
+  report: {
+    mode: string;
+    tableDescriptions: string;
+    columnDescriptions: string;
+    embeddings: string;
+    manifestShards?: string[];
+    completedStages?: string[];
+    relationships?: { accepted: number; review: number; rejected: number; skipped: number };
+  },
 ) {
   const reportDir = join(projectDir, 'raw-sources', 'warehouse', 'live-database', syncId);
   await mkdir(reportDir, { recursive: true });
@@ -85,7 +141,7 @@ async function writeScanReport(
         mode: report.mode,
         dryRun: false,
         artifactPaths: {
-          manifestShards: ['semantic-layer/warehouse/_schema/public.yaml'],
+          manifestShards: report.manifestShards ?? ['semantic-layer/warehouse/_schema/public.yaml'],
           enrichmentArtifacts:
             report.mode === 'enriched'
               ? [`raw-sources/warehouse/live-database/${syncId}/enrichment/descriptions.json`]
@@ -95,9 +151,11 @@ async function writeScanReport(
           tableDescriptions: report.tableDescriptions,
           columnDescriptions: report.columnDescriptions,
           embeddings: report.embeddings,
+          ...(report.relationships ? { relationships: report.relationships } : {}),
         },
         enrichmentState: {
-          completedStages: report.tableDescriptions === 'completed' ? ['descriptions', 'embeddings'] : [],
+          completedStages:
+            report.completedStages ?? (report.tableDescriptions === 'completed' ? ['descriptions', 'embeddings'] : []),
           failedStages: report.tableDescriptions === 'failed' ? ['descriptions'] : [],
         },
         createdAt: syncId,
@@ -108,12 +166,19 @@ async function writeScanReport(
   );
 }
 
-async function writeReadyEnrichedScanReport(projectDir: string, syncId = '2026-05-09T10:00:00.000Z') {
+async function writeReadyEnrichedScanReport(
+  projectDir: string,
+  syncId = '2026-05-09T10:00:00.000Z',
+  overrides: Partial<Parameters<typeof writeScanReport>[2]> = {},
+) {
   await writeScanReport(projectDir, syncId, {
     mode: 'enriched',
     tableDescriptions: 'completed',
     columnDescriptions: 'completed',
     embeddings: 'completed',
+    completedStages: ['descriptions', 'embeddings', 'relationships'],
+    relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+    ...overrides,
   });
 }
 
@@ -145,7 +210,7 @@ describe('setup context build state', () => {
       sourceProgress: [
         {
           connectionId: 'warehouse',
-          operation: 'scan',
+          operation: 'database-ingest',
           status: 'running',
           percent: 42,
           message: 'Generating descriptions 4/10 tables',
@@ -157,18 +222,18 @@ describe('setup context build state', () => {
     const state = await readKtxSetupContextState(tempDir);
     expect(state).toMatchObject({
       runId: 'setup-context-local-abc123',
-      status: 'running',
+      status: 'stale',
       primarySourceConnectionIds: ['warehouse'],
       contextSourceConnectionIds: ['docs'],
       commands: {
-        watch: `ktx setup --project-dir ${tempDir}`,
+        build: `ktx setup --project-dir ${tempDir}`,
         status: `ktx status --project-dir ${tempDir}`,
-        resume: `ktx setup --project-dir ${tempDir}`,
       },
+      failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
       sourceProgress: [
         {
           connectionId: 'warehouse',
-          operation: 'scan',
+          operation: 'database-ingest',
           status: 'running',
           percent: 42,
           message: 'Generating descriptions 4/10 tables',
@@ -185,7 +250,6 @@ describe('setup context build state', () => {
     const io = makeIo();
     const runContextBuildMock = vi.fn(async () => ({
       exitCode: 0,
-      detached: false,
       reportIds: ['report-docs-1'],
       artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
     }));
@@ -214,11 +278,9 @@ describe('setup context build state', () => {
       expect.objectContaining({
         projectDir: tempDir,
         inputMode: 'disabled',
-        scanMode: 'enriched',
-        detectRelationships: true,
       }),
       io.io,
-      expect.objectContaining({ onDetach: expect.any(Function) }),
+      expect.objectContaining({ onSourceProgress: expect.any(Function) }),
     );
     expect(verifyContextReady).toHaveBeenCalledWith(tempDir);
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
@@ -231,6 +293,8 @@ describe('setup context build state', () => {
       artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
     });
     expect(io.stdout()).toContain('KTX context is ready for agents.');
+    expect(io.stdout()).toContain('Databases:');
+    expect(io.stdout()).not.toContain(['Primary sources', ':'].join(''));
   });
 
   it('records only failed sources as retryable when the context build fails', async () => {
@@ -238,12 +302,11 @@ describe('setup context build state', () => {
     const io = makeIo();
     const runContextBuildMock = vi.fn(async (_project, _args, _io, hooks) => {
       hooks.onSourceProgress?.([
-        { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 1000 },
+        { connectionId: 'warehouse', operation: 'database-ingest', status: 'done', elapsedMs: 1000 },
         { connectionId: 'docs', operation: 'source-ingest', status: 'failed', elapsedMs: 2000 },
       ]);
       return {
         exitCode: 1,
-        detached: false,
         reportIds: ['report-docs-failed'],
         artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
       };
@@ -268,7 +331,7 @@ describe('setup context build state', () => {
       artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
       retryableFailedTargets: ['docs'],
       sourceProgress: [
-        { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 1000 },
+        { connectionId: 'warehouse', operation: 'database-ingest', status: 'done', elapsedMs: 1000 },
         { connectionId: 'docs', operation: 'source-ingest', status: 'failed', elapsedMs: 2000 },
       ],
     });
@@ -282,7 +345,9 @@ describe('setup context build state', () => {
     await writeFile(join(tempDir, 'wiki', 'global', 'metrics.md'), '# Metrics\n');
     await writeReadyEnrichedScanReport(tempDir);
     const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0, detached: false }));
+    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
+      exitCode: 0,
+    }));
 
     await expect(
       runKtxSetupContextStep(
@@ -312,6 +377,7 @@ describe('setup context build state', () => {
       contextSourceConnectionIds: ['docs'],
     });
     expect(io.stdout()).toContain('KTX context is ready for agents.');
+    expect(io.stdout()).not.toContain(['Primary sources', ':'].join(''));
   });
 
   it('does not mark context ready until primary scans have completed description enrichment', async () => {
@@ -327,7 +393,7 @@ describe('setup context build state', () => {
     const io = makeIo();
     const runContextBuildMock = vi.fn(async () => {
       await writeReadyEnrichedScanReport(tempDir, '2026-05-09T10:00:00.000Z');
-      return { exitCode: 0, detached: false };
+      return { exitCode: 0 };
     });
 
     await expect(
@@ -346,32 +412,183 @@ describe('setup context build state', () => {
     expect(io.stdout()).not.toContain('Existing context artifacts were found from setup ingest.');
   });
 
-  it('does not treat schema-only scan shards as completed setup context', async () => {
-    await writeReadyProject(tempDir);
+  it('treats fast database context as ready from schema manifest shards without AI artifacts', async () => {
+    await writeReadyProject(tempDir, {
+      connections: {
+        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'fast' } },
+      },
+      llm: { provider: { backend: 'none' }, models: {} },
+      scan: { enrichment: { mode: 'none' } },
+    });
     await mkdir(join(tempDir, 'semantic-layer', 'warehouse', '_schema'), { recursive: true });
     await writeFile(join(tempDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'), 'tables: {}\n');
-    const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => {
-      await mkdir(join(tempDir, 'wiki', 'global'), { recursive: true });
-      await writeFile(join(tempDir, 'wiki', 'global', 'metrics.md'), '# Metrics\n');
-      await writeReadyEnrichedScanReport(tempDir);
-      return { exitCode: 0, detached: false };
+    await writeScanReport(tempDir, '2026-05-09T10:00:00.000Z', {
+      mode: 'structural',
+      tableDescriptions: 'skipped',
+      columnDescriptions: 'skipped',
+      embeddings: 'skipped',
+      manifestShards: ['semantic-layer/warehouse/_schema/public.yaml'],
     });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
+      exitCode: 0,
+    }));
 
     await expect(
       runKtxSetupContextStep(
         { projectDir: tempDir, inputMode: 'disabled' },
         io.io,
         {
-          runIdFactory: () => 'setup-context-local-schema-only',
-          now: () => new Date('2026-05-09T10:00:00.000Z'),
           runContextBuild: runContextBuildMock,
         },
       ),
-    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-schema-only' });
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(runContextBuildMock).not.toHaveBeenCalled();
+    expect(io.stdout()).toContain('Existing context artifacts were found from setup ingest.');
+  });
+
+  it('stores fast context depth non-interactively when deep readiness is missing', async () => {
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'postgres', readonly: true } },
+      llm: { provider: { backend: 'none' }, models: {} },
+      scan: { enrichment: { mode: 'none' } },
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
+      exitCode: 0,
+    }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['ready'],
+    }));
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        { runContextBuild: runContextBuildMock, verifyContextReady },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse.context).toMatchObject({ depth: 'fast' });
+    expect(runContextBuildMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ projectDir: tempDir, inputMode: 'disabled' }),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(runContextBuildMock.mock.calls[0]?.[1]).not.toMatchObject({
+      scanMode: 'enriched',
+      detectRelationships: true,
+    });
+  });
+
+  it('prompts for database context depth after final readiness is known', async () => {
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'postgres', readonly: true } },
+      llm: {
+        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
+        models: { default: 'gpt-test' },
+      },
+      scan: {
+        enrichment: {
+          mode: 'llm',
+          embeddings: { backend: 'openai', model: 'text-embedding-3-small', dimensions: 1536 },
+        },
+      },
+    });
+    const io = makeIo();
+    const select = vi.fn(async () => 'deep');
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['ready'],
+    }));
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto' },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          runContextBuild: runContextBuildMock,
+          verifyContextReady,
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('How much database context should KTX build?'),
+      }),
+    );
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse.context).toMatchObject({ depth: 'deep' });
+  });
+
+  it('requires completed relationships for deep context when relationship discovery is enabled', async () => {
+    await writeReadyProject(tempDir, {
+      connections: {
+        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'deep' } },
+      },
+      scan: { relationships: { enabled: true } },
+    });
+    await mkdir(join(tempDir, 'semantic-layer', 'dbt-main'), { recursive: true });
+    await writeFile(join(tempDir, 'semantic-layer', 'dbt-main', 'mart_revenue_daily.yaml'), 'name: mart_revenue_daily\n');
+    await writeReadyEnrichedScanReport(tempDir, '2026-05-09T10:00:00.000Z', {
+      completedStages: ['descriptions', 'embeddings'],
+      relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => {
+      await writeReadyEnrichedScanReport(tempDir, '2026-05-09T10:01:00.000Z', {
+        completedStages: ['descriptions', 'embeddings', 'relationships'],
+        relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+      });
+      return { exitCode: 0 };
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        { runContextBuild: runContextBuildMock },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
 
     expect(runContextBuildMock).toHaveBeenCalledOnce();
-    expect(io.stdout()).not.toContain('Existing context artifacts were found from setup ingest.');
+  });
+
+  it('does not require relationships for deep context when relationship discovery is disabled', async () => {
+    await writeReadyProject(tempDir, {
+      connections: {
+        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'deep' } },
+      },
+      scan: { relationships: { enabled: false } },
+    });
+    await mkdir(join(tempDir, 'semantic-layer', 'dbt-main'), { recursive: true });
+    await writeFile(join(tempDir, 'semantic-layer', 'dbt-main', 'mart_revenue_daily.yaml'), 'name: mart_revenue_daily\n');
+    await writeReadyEnrichedScanReport(tempDir, '2026-05-09T10:00:00.000Z', {
+      completedStages: ['descriptions', 'embeddings'],
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        { runContextBuild: runContextBuildMock },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(runContextBuildMock).not.toHaveBeenCalled();
   });
 
   it('refuses empty setup context builds', async () => {
@@ -404,280 +621,63 @@ describe('setup context build state', () => {
       ),
     ).resolves.toEqual({ status: 'failed', projectDir: tempDir });
 
-    expect(io.stderr()).toContain('No primary or context sources are configured for a KTX context build.');
+    expect(io.stderr()).toContain('No databases or context sources are configured for a KTX context build.');
   });
 
-  it('watches an already-running setup context build from the resume prompt', async () => {
+  it('normalizes legacy detached and paused setup context states to stale', async () => {
     await writeReadyProject(tempDir);
     await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-resume-watch',
-      status: 'detached',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: ['docs'],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-resume-watch'),
-    });
-    const io = makeIo();
-    const completeRun = async () => {
-      await writeKtxSetupContextState(tempDir, {
-        runId: 'setup-context-local-resume-watch',
-        status: 'completed',
-        startedAt: '2026-05-09T10:00:00.000Z',
-        updatedAt: '2026-05-09T10:02:00.000Z',
-        completedAt: '2026-05-09T10:02:00.000Z',
-        primarySourceConnectionIds: ['warehouse'],
-        contextSourceConnectionIds: ['docs'],
-        reportIds: [],
-        artifactPaths: [],
-        retryableFailedTargets: [],
-        commands: contextBuildCommands(tempDir, 'setup-context-local-resume-watch'),
-      });
-    };
-    const select = vi.fn(async (options: { options: Array<{ value: string; label: string }> }) => {
-      expect(options.options.map((option) => option.label)).toContain('Watch progress');
-      return 'watch';
-    });
-
-    await expect(
-      runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'auto' },
-        io.io,
-        {
-          prompts: { select, cancel: vi.fn() },
-          sleep: completeRun,
-          watchIntervalMs: 1,
-        },
-      ),
-    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-resume-watch' });
-    expect(io.stdout()).toContain('KTX context built: detached');
-    expect(io.stdout()).toContain('KTX context built: yes');
-  });
-
-  it('auto-watches a running build without prompting when autoWatch is true', async () => {
-    await writeReadyProject(tempDir);
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-auto-watch',
-      status: 'detached',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
+      runId: 'setup-context-local-old',
+      status: 'detached' as never,
+      startedAt: '2026-05-09T09:00:00.000Z',
+      updatedAt: '2026-05-09T09:00:00.000Z',
       primarySourceConnectionIds: ['warehouse'],
       contextSourceConnectionIds: [],
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-auto-watch'),
-    });
-    const io = makeIo();
-    const completeRun = async () => {
-      await writeKtxSetupContextState(tempDir, {
-        runId: 'setup-context-local-auto-watch',
-        status: 'completed',
-        startedAt: '2026-05-09T10:00:00.000Z',
-        updatedAt: '2026-05-09T10:02:00.000Z',
-        completedAt: '2026-05-09T10:02:00.000Z',
-        primarySourceConnectionIds: ['warehouse'],
-        contextSourceConnectionIds: [],
-        reportIds: [],
-        artifactPaths: [],
-        retryableFailedTargets: [],
-        commands: contextBuildCommands(tempDir, 'setup-context-local-auto-watch'),
-      });
-    };
-    const select = vi.fn(async () => {
-      throw new Error('should not prompt when autoWatch is true');
+      commands: contextBuildCommands(tempDir, 'setup-context-local-old'),
     });
 
-    await expect(
-      runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
-        io.io,
-        {
-          prompts: { select, cancel: vi.fn() },
-          sleep: completeRun,
-          watchIntervalMs: 1,
-        },
-      ),
-    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-auto-watch' });
-    expect(select).not.toHaveBeenCalled();
-    expect(io.stdout()).toContain('KTX context built: yes');
+    await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
+      status: 'stale',
+      failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
+    });
   });
 
-  it('renders the progress view when watching a build with sourceProgress', async () => {
-    await writeReadyProject(tempDir);
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-progress',
-      status: 'detached',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: ['docs'],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-progress'),
-      sourceProgress: [
-        { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 30000 },
-        { connectionId: 'docs', operation: 'source-ingest' as const, status: 'running' as const, startedAtMs: Date.now() - 5000 },
-      ],
+  it('starts a fresh foreground build when a stale running state is found', async () => {
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'postgres', readonly: true, context: { depth: 'fast' } } },
     });
-    const io = makeIo();
-    const completeRun = async () => {
-      await writeKtxSetupContextState(tempDir, {
-        runId: 'setup-context-local-progress',
-        status: 'completed',
-        startedAt: '2026-05-09T10:00:00.000Z',
-        updatedAt: '2026-05-09T10:02:00.000Z',
-        completedAt: '2026-05-09T10:02:00.000Z',
-        primarySourceConnectionIds: ['warehouse'],
-        contextSourceConnectionIds: ['docs'],
-        reportIds: [],
-        artifactPaths: [],
-        retryableFailedTargets: [],
-        commands: contextBuildCommands(tempDir, 'setup-context-local-progress'),
-        sourceProgress: [
-          { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 30000 },
-          { connectionId: 'docs', operation: 'source-ingest' as const, status: 'done' as const, elapsedMs: 60000 },
-        ],
-      });
-    };
-    const select = vi.fn(async () => 'watch');
-
-    await expect(
-      runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'auto' },
-        io.io,
-        {
-          prompts: { select, cancel: vi.fn() },
-          sleep: completeRun,
-          watchIntervalMs: 1,
-        },
-      ),
-    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-progress' });
-
-    const output = io.stdout();
-    expect(output).toContain('Building KTX context');
-    expect(output).toContain('Primary sources:');
-    expect(output).toContain('warehouse');
-    expect(output).toContain('Context sources:');
-    expect(output).toContain('docs');
-    expect(output).not.toContain('KTX context built: detached');
-  });
-
-  it('re-renders the compact progress view when watched source messages change', async () => {
-    await writeReadyProject(tempDir);
     await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-progress-message',
-      status: 'detached',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: [],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-progress-message'),
-      sourceProgress: [
-        {
-          connectionId: 'warehouse',
-          operation: 'scan' as const,
-          status: 'running' as const,
-          startedAtMs: Date.now() - 5000,
-          percent: 35,
-          message: 'Inspecting database schema',
-          updatedAtMs: 1000,
-        },
-      ],
-    });
-    const io = makeIo();
-    let polls = 0;
-    const updateRun = async () => {
-      polls++;
-      await writeKtxSetupContextState(tempDir, {
-        runId: 'setup-context-local-progress-message',
-        status: polls === 1 ? 'detached' : 'completed',
-        startedAt: '2026-05-09T10:00:00.000Z',
-        updatedAt: polls === 1 ? '2026-05-09T10:00:01.000Z' : '2026-05-09T10:00:02.000Z',
-        ...(polls === 1 ? {} : { completedAt: '2026-05-09T10:00:02.000Z' }),
-        primarySourceConnectionIds: ['warehouse'],
-        contextSourceConnectionIds: [],
-        reportIds: [],
-        artifactPaths: [],
-        retryableFailedTargets: [],
-        commands: contextBuildCommands(tempDir, 'setup-context-local-progress-message'),
-        sourceProgress: [
-          {
-            connectionId: 'warehouse',
-            operation: 'scan' as const,
-            status: polls === 1 ? ('running' as const) : ('done' as const),
-            startedAtMs: Date.now() - 5000,
-            elapsedMs: polls === 1 ? undefined : 6000,
-            percent: polls === 1 ? 76 : undefined,
-            message: polls === 1 ? 'Building embeddings 3/4 batches' : undefined,
-            updatedAtMs: polls === 1 ? 2000 : undefined,
-            summaryText: polls === 1 ? undefined : '42 tables',
-          },
-        ],
-      });
-    };
-
-    await expect(
-      runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
-        io.io,
-        {
-          sleep: updateRun,
-          watchIntervalMs: 1,
-        },
-      ),
-    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-progress-message' });
-
-    expect(io.stdout()).toContain('Inspecting database schema');
-    expect(io.stdout()).toContain('Building embeddings 3/4 batches');
-    expect(io.stdout()).toContain('warehouse');
-  });
-
-  it('supports d to detach from the progress watch view', async () => {
-    await writeReadyProject(tempDir);
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-detach',
+      runId: 'setup-context-local-running',
       status: 'running',
-      startedAt: '2026-05-09T10:00:00.000Z',
-      updatedAt: '2026-05-09T10:00:00.000Z',
+      startedAt: '2026-05-09T09:00:00.000Z',
+      updatedAt: '2026-05-09T09:00:00.000Z',
       primarySourceConnectionIds: ['warehouse'],
       contextSourceConnectionIds: [],
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-detach'),
-      sourceProgress: [
-        { connectionId: 'warehouse', operation: 'scan' as const, status: 'running' as const, startedAtMs: Date.now() },
-      ],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-running'),
     });
     const io = makeIo();
-    let triggerDetach: (() => void) | null = null;
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['ready'],
+    }));
 
     await expect(
       runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
+        { projectDir: tempDir, inputMode: 'disabled' },
         io.io,
-        {
-          sleep: async () => { triggerDetach?.(); },
-          watchIntervalMs: 1,
-          setupKeystroke: (onDetach) => {
-            triggerDetach = onDetach;
-            return () => {};
-          },
-        },
+        { runContextBuild: runContextBuildMock, verifyContextReady },
       ),
-    ).resolves.toMatchObject({ status: 'detached' });
+    ).resolves.toMatchObject({ status: 'ready' });
 
-    const output = io.stdout();
-    expect(output).toContain('Building KTX context');
-    expect(output).toContain('Context build continuing in the background.');
-    expect(output).toContain('Resume: ktx setup --project-dir');
+    expect(runContextBuildMock).toHaveBeenCalledOnce();
   });
 });

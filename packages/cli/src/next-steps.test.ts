@@ -10,8 +10,8 @@ describe('KTX demo next steps', () => {
   it('uses supported context-build commands before agent usage', () => {
     expect(KTX_CONTEXT_BUILD_COMMANDS).toEqual([
       {
-        command: 'ktx setup',
-        description: 'Build or resume agent-ready context from configured sources',
+        command: 'ktx ingest --all',
+        description: 'Build or refresh agent-ready context from configured connections',
       },
       {
         command: 'ktx status',
@@ -64,8 +64,10 @@ describe('KTX demo next steps', () => {
     }).join('\n');
 
     expect(rendered).toContain('Build KTX context next.');
-    expect(rendered).toContain('primary-source scans and context-source ingests');
-    expect(rendered).toContain('ktx setup');
+    expect(rendered).toContain('Run ingest to build database schema context before context-source ingest.');
+    expect(rendered).toContain('ktx ingest --all');
+    expect(rendered).not.toContain('resume');
+    expect(rendered).not.toContain('scan');
     expect(rendered).toContain('ktx status');
     expect(rendered).not.toContain('ktx agent context --json');
     expect(rendered).not.toContain('ktx serve --mcp');

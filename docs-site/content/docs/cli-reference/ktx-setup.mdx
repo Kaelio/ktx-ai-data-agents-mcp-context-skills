@@ -30,7 +30,7 @@ ktx setup [options]
 | `--global` | Install agent integration into the global target scope (Claude Code and Codex only) | `false` |
 
 The setup wizard is the public configuration interface. It prompts for LLM
-credentials, embeddings, database connections, context sources, Historic SQL,
+credentials, embeddings, database connections, context sources, query history,
 and agent integration when those values are needed.
 
 ## Examples
@@ -62,7 +62,7 @@ KTX project: /home/user/analytics
 Project ready: yes
 LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
-Primary sources configured: yes (postgres-warehouse)
+Databases configured: yes (postgres-warehouse)
 Context sources configured: yes (dbt-main)
 KTX context built: yes
 Agent integration ready: yes (codex:project)

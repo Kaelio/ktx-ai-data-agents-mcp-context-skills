@@ -81,7 +81,8 @@ ktx dev runtime start --feature local-embeddings
 
 ## Step 3: Connect a database
 
-Select one or more databases for KTX to scan. The wizard supports SQLite, PostgreSQL, MySQL, ClickHouse, SQL Server, BigQuery, and Snowflake.
+Select one or more databases for KTX to connect to. The wizard supports
+SQLite, PostgreSQL, MySQL, ClickHouse, SQL Server, BigQuery, and Snowflake.
 
 For PostgreSQL, you can enter connection details field by field or paste a connection URL:
 
@@ -93,22 +94,27 @@ For PostgreSQL, you can enter connection details field by field or paste a conne
 
 If your URL contains credentials, KTX saves it to `.ktx/secrets/` and writes a `file:` reference in `ktx.yaml`. You can also use `env:DATABASE_URL` to reference an environment variable.
 
-After connecting, KTX automatically runs a connection test and a structural scan:
+After connecting, KTX automatically runs a connection test and builds fast
+schema context:
 
 ```
-◇  Testing postgres-warehouse
-│  ✓ Connection test passed
-│  Driver: PostgreSQL · Tables: 42
-│
-◇  Scanning postgres-warehouse
-│  ✓ Structural scan completed
-│  Changes: 42 new tables
-│
-◇  Primary source ready
-│  postgres-warehouse · PostgreSQL · structural scan complete
+Testing postgres-warehouse
+  Connection test passed
+  Driver: PostgreSQL - Tables: 42
+
+Building schema context for postgres-warehouse
+  Running fast database ingest
+
+Schema context complete for postgres-warehouse
+  Changes: 42 new tables
+
+Database ready
+  postgres-warehouse - PostgreSQL - schema context complete
 ```
 
-For Snowflake and BigQuery, the wizard offers **Historic SQL** configuration for query history views. For PostgreSQL, enable Historic SQL with `--enable-historic-sql` when `pg_stat_statements` is configured.
+For PostgreSQL, Snowflake, and BigQuery, the wizard can enable query-history
+ingest when the warehouse history feature is available. Query history is stored
+under `connections.<id>.context.queryHistory` in `ktx.yaml`.
 
 ## Step 4: Add context sources
 
@@ -138,7 +144,8 @@ Context sources are saved to `ktx.yaml` and built during the next step.
 
 ## Step 5: Build context
 
-This is where KTX does the heavy lifting. It runs an enriched scan of your database (generating AI-powered column and table descriptions) and ingests metadata from any configured context sources.
+This is where KTX builds agent-ready context. It uses the database context
+depth saved by setup and ingests metadata from any configured context sources.
 
 ```
 ◆  Build KTX context for agents?
@@ -146,27 +153,22 @@ This is where KTX does the heavy lifting. It runs an enriched scan of your datab
 │  ○ Leave context unbuilt and exit setup
 ```
 
-The build scans each primary source with LLM enrichment, detects table relationships, and runs ingestion agents that reconcile metadata from your context sources into semantic-layer YAML files and wiki pages.
+Fast database context builds deterministic schema grounding. Deep database
+context also generates AI descriptions, embeddings, and relationship evidence
+when those capabilities are configured.
 
-For a small database (under 50 tables), this takes a few minutes. Larger warehouses can take longer. You can press <kbd>d</kbd> to detach and let it run in the background:
-
-```
-KTX context build
-Run: setup-context-local-abc123
-Project: /home/user/analytics
-
-Detach: press d to leave this running.
-Resume: ktx setup --project-dir /home/user/analytics
-Status: ktx status --project-dir /home/user/analytics
-```
+For a small database (under 50 tables), this can take a few minutes. Larger
+warehouses can take longer. Context builds run in the foreground; press
+<kbd>Ctrl+C</kbd> to stop the current run and rerun `ktx setup` or `ktx ingest`
+when you are ready to try again.
 
 When the build completes, KTX verifies that agent-ready context was produced:
 
 ```
 KTX context is ready for agents.
 
-Primary sources:
-  postgres-warehouse: enriched scan complete
+Databases:
+  postgres-warehouse: deep context complete
 
 Context sources:
   dbt-main: memory update complete
@@ -209,8 +211,8 @@ KTX writes project state as plain files so agents can inspect and edit changes i
 | `ktx.yaml` | `ktx setup` | Main project configuration: connections, LLM settings, embeddings, and context sources |
 | `.ktx/secrets/*` | `ktx setup` when file-backed secrets are selected | Local secret files referenced from `ktx.yaml`; do not commit these |
 | `semantic-layer/<connection-id>/*.yaml` | context build, ingestion, or direct file edits | Semantic source definitions agents use for SQL generation |
-| `wiki/global/*.md` | ingestion, memory capture, `ktx wiki write --scope global`, or direct file edits | Shared business context and metric definitions |
-| `wiki/user/<user-id>/*.md` | memory capture, `ktx wiki write --scope user`, or direct file edits | User-scoped notes for one agent/user context |
+| `wiki/global/*.md` | ingestion, memory capture, or direct file edits | Shared business context and metric definitions |
+| `wiki/user/<user-id>/*.md` | memory capture or direct file edits | User-scoped notes for one agent/user context |
 | `.claude/skills/ktx/SKILL.md`, `.agents/skills/ktx/SKILL.md` | CLI-mode agent integration setup | Agent instructions for calling public `ktx` commands |
 
 ## Verify it worked
@@ -226,7 +228,7 @@ KTX project: /home/user/analytics
 Project ready: yes
 LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
-Primary sources configured: yes (postgres-warehouse)
+Databases configured: yes (postgres-warehouse)
 Context sources configured: yes (dbt-main)
 KTX context built: yes
 Agent integration ready: yes (claude-code:project)
@@ -246,7 +248,7 @@ Agent integration ready: yes (claude-code:project)
 
 ## Next steps
 
-- **Build more context** — learn about [scanning](/docs/guides/building-context), relationship detection, and ingestion workflows in the Building Context guide.
+- **Build more context** — learn about [database ingest](/docs/guides/building-context), relationship detection, and source ingestion workflows in the Building Context guide.
 - **Refine your semantic layer** — the [Writing Context](/docs/guides/writing-context) guide covers source YAML, measures, joins, and wiki pages.
 - **Understand the architecture** — read [The Context Layer](/docs/concepts/the-context-layer) to learn why a context layer is more than a semantic layer.
 - **Connect more agents** — see the [Agent Clients](/docs/integrations/agent-clients) integration page for per-tool setup details.

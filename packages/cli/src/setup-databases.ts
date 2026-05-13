@@ -21,6 +21,7 @@ import {
 } from './database-tree-picker.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxScan } from './scan.js';
+import { applySetupDatabaseContextDepth } from './setup-database-context-depth.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
 import {
   createKtxSetupPromptAdapter,
@@ -47,12 +48,12 @@ export interface KtxSetupDatabasesArgs {
   databaseConnectionId?: string;
   databaseUrl?: string;
   databaseSchemas: string[];
-  enableHistoricSql?: boolean;
-  disableHistoricSql?: boolean;
-  historicSqlWindowDays?: number;
-  historicSqlMinExecutions?: number;
-  historicSqlServiceAccountPatterns?: string[];
-  historicSqlRedactionPatterns?: string[];
+  enableQueryHistory?: boolean;
+  disableQueryHistory?: boolean;
+  queryHistoryWindowDays?: number;
+  queryHistoryMinExecutions?: number;
+  queryHistoryServiceAccountPatterns?: string[];
+  queryHistoryRedactionPatterns?: string[];
   skipDatabases: boolean;
 }
 
@@ -203,7 +204,7 @@ function missingConnectionDetailsPrompt(
   label: string,
   canReturnToDriverSelection: boolean,
 ): { message: string; options: Array<{ value: string; label: string }> } {
-  const backDestination = canReturnToDriverSelection ? 'primary source selection' : 'the previous setup step';
+  const backDestination = canReturnToDriverSelection ? 'database selection' : 'the previous setup step';
   return {
     message:
       `Some ${label} connection details are missing.\n` +
@@ -234,6 +235,12 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))];
 }
 
+function assertSafeDatabaseConnectionId(connectionId: string): void {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
+    throw new Error(`Unsafe connection id: ${connectionId}`);
+  }
+}
+
 function stringConfigField(connection: KtxProjectConnectionConfig | undefined, field: string): string | undefined {
   const value = connection?.[field];
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -249,6 +256,48 @@ function historicSqlConfigRecord(connection: KtxProjectConnectionConfig | undefi
   return historicSql && typeof historicSql === 'object' && !Array.isArray(historicSql)
     ? (historicSql as Record<string, unknown>)
     : null;
+}
+
+function contextRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> {
+  const context = connection?.context;
+  return context && typeof context === 'object' && !Array.isArray(context) ? (context as Record<string, unknown>) : {};
+}
+
+function queryHistoryConfigRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> | null {
+  const queryHistory = contextRecord(connection).queryHistory;
+  return queryHistory && typeof queryHistory === 'object' && !Array.isArray(queryHistory)
+    ? (queryHistory as Record<string, unknown>)
+    : null;
+}
+
+function stripLegacyHistoricSql(connection: KtxProjectConnectionConfig): KtxProjectConnectionConfig {
+  const { historicSql: _historicSql, ...rest } = connection as KtxProjectConnectionConfig & {
+    historicSql?: unknown;
+  };
+  return rest;
+}
+
+function withQueryHistoryConfig(
+  connection: KtxProjectConnectionConfig,
+  queryHistory: Record<string, unknown>,
+): KtxProjectConnectionConfig {
+  return {
+    ...stripLegacyHistoricSql(connection),
+    context: {
+      ...contextRecord(connection),
+      queryHistory,
+    },
+  };
+}
+
+function migrateLegacyHistoricSqlConnection(connection: KtxProjectConnectionConfig): KtxProjectConnectionConfig {
+  const existingQueryHistory = queryHistoryConfigRecord(connection);
+  const legacy = historicSqlConfigRecord(connection);
+  if (existingQueryHistory || !legacy) {
+    return existingQueryHistory ? stripLegacyHistoricSql(connection) : connection;
+  }
+  const { dialect: _dialect, ...queryHistory } = legacy;
+  return withQueryHistoryConfig(connection, queryHistory);
 }
 
 function historicSqlProbeFailureLines(error: unknown): string[] {
@@ -268,7 +317,7 @@ function historicSqlProbeFailureLines(error: unknown): string[] {
   if (error instanceof Error && error.name === 'HistoricSqlVersionUnsupportedError') {
     return [`  FAIL ${error.message}`];
   }
-  return [`  FAIL Historic SQL probe failed: ${error instanceof Error ? error.message : String(error)}`];
+  return [`  FAIL Query history probe failed: ${error instanceof Error ? error.message : String(error)}`];
 }
 
 async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Promise<KtxSetupHistoricSqlProbeResult> {
@@ -492,11 +541,11 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
   options: Array<{ value: string; label: string }>;
 } {
   return {
-    message: `Primary sources already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
+    message: `Databases already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
-      { value: 'continue', label: 'Continue to knowledge sources' },
-      { value: 'edit', label: 'Edit an existing primary source' },
-      { value: 'add', label: 'Add additional primary sources' },
+      { value: 'continue', label: 'Continue to context sources' },
+      { value: 'edit', label: 'Edit an existing database' },
+      { value: 'add', label: 'Add another database' },
     ],
   };
 }
@@ -868,68 +917,61 @@ async function maybeApplyHistoricSqlConfig(input: {
 }): Promise<KtxProjectConnectionConfig | 'back'> {
   const dialect = HISTORIC_SQL_DIALECT_BY_DRIVER[input.driver];
   if (!dialect) {
-    if (input.args.enableHistoricSql === true) {
+    if (input.args.enableQueryHistory === true) {
       throw new Error(
-        `Historic SQL setup is only supported for Snowflake, BigQuery, and Postgres, not ${driverLabel(input.driver)}.`,
+        `Query history setup is only supported for Snowflake, BigQuery, and Postgres, not ${driverLabel(input.driver)}.`,
       );
     }
     return input.connection;
   }
 
-  let enabled = input.args.enableHistoricSql === true;
-  if (input.args.disableHistoricSql === true) {
+  let enabled = input.args.enableQueryHistory === true;
+  if (input.args.disableQueryHistory === true) {
     enabled = false;
-  } else if (input.args.inputMode !== 'disabled' && input.args.enableHistoricSql !== true && dialect !== 'postgres') {
+  } else if (input.args.inputMode !== 'disabled' && input.args.enableQueryHistory !== true) {
     const choice = await input.prompts.select({
-      message: `Enable Historic SQL query-history ingest for this ${driverLabel(input.driver)} connection?`,
+      message: `Enable query-history ingest for this ${driverLabel(input.driver)} connection?`,
       options: [
-        { value: 'yes', label: 'Enable Historic SQL' },
-        { value: 'no', label: 'Do not enable Historic SQL' },
+        { value: 'yes', label: 'Enable query history' },
+        { value: 'no', label: 'Do not enable query history' },
         { value: 'back', label: 'Back' },
       ],
     });
     if (choice === 'back') return 'back';
-    enabled = choice === 'yes';
+    if (choice === 'yes') {
+      enabled = true;
+    } else if (choice === 'no') {
+      enabled = false;
+    } else {
+      return input.connection;
+    }
   }
 
-  if (dialect === 'postgres' && input.args.enableHistoricSql !== true && input.args.disableHistoricSql !== true) {
-    return input.connection;
-  }
-
-  const existing =
-    typeof input.connection.historicSql === 'object' && input.connection.historicSql !== null
-      ? (input.connection.historicSql as Record<string, unknown>)
-      : {};
+  const existingRecord = queryHistoryConfigRecord(input.connection) ?? historicSqlConfigRecord(input.connection) ?? {};
+  const { dialect: _dialect, ...existing } = existingRecord;
 
   if (!enabled) {
-    return { ...input.connection, historicSql: { ...existing, enabled: false, dialect } };
+    return withQueryHistoryConfig(input.connection, { ...existing, enabled: false });
   }
 
   const common: Record<string, unknown> = {
     ...existing,
     enabled: true,
-    dialect,
-    filters: historicSqlFiltersForSetup(input.args.historicSqlServiceAccountPatterns),
+    filters: historicSqlFiltersForSetup(input.args.queryHistoryServiceAccountPatterns),
   };
 
   if (dialect === 'postgres') {
-    return {
-      ...input.connection,
-      historicSql: {
-        ...common,
-        minExecutions: input.args.historicSqlMinExecutions ?? 5,
-      },
-    };
+    return withQueryHistoryConfig(input.connection, {
+      ...common,
+      minExecutions: input.args.queryHistoryMinExecutions ?? 5,
+    });
   }
 
-  return {
-    ...input.connection,
-    historicSql: {
-      ...common,
-      windowDays: input.args.historicSqlWindowDays ?? 90,
-      redactionPatterns: input.args.historicSqlRedactionPatterns ?? [],
-    },
-  };
+  return withQueryHistoryConfig(input.connection, {
+    ...common,
+    windowDays: input.args.queryHistoryWindowDays ?? 90,
+    redactionPatterns: input.args.queryHistoryRedactionPatterns ?? [],
+  });
 }
 
 function historicSqlFiltersForSetup(patterns: string[] | undefined) {
@@ -1143,20 +1185,6 @@ function summarizeScanChanges(output: string): string {
   return 'no table changes';
 }
 
-function shortenScanReportPath(path: string): string {
-  const normalized = path.trim();
-  const liveDatabaseMarker = '/live-database/';
-  const markerIndex = normalized.indexOf(liveDatabaseMarker);
-  if (markerIndex === -1) {
-    return normalized;
-  }
-  const filename = normalized.split('/').at(-1);
-  if (!filename) {
-    return normalized;
-  }
-  return `${normalized.slice(0, markerIndex + liveDatabaseMarker.length)}.../${filename}`;
-}
-
 function writeSetupSection(io: KtxCliIo, title: string, lines: string[]): void {
   io.stdout.write(`◇  ${title}\n`);
   for (const line of lines) {
@@ -1171,22 +1199,24 @@ async function writeConnectionConfig(input: {
   connection: KtxProjectConnectionConfig;
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
+  const migratedConnections = Object.fromEntries(
+    Object.entries(project.config.connections).map(([connectionId, connection]) => [
+      connectionId,
+      migrateLegacyHistoricSqlConnection(connection),
+    ]),
+  );
+  const nextConnection = migrateLegacyHistoricSqlConnection(input.connection);
   const config = {
     ...project.config,
     connections: {
-      ...project.config.connections,
-      [input.connectionId]: input.connection,
+      ...migratedConnections,
+      [input.connectionId]: nextConnection,
     },
   };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
 
-  const historicSql =
-    typeof input.connection.historicSql === 'object' &&
-    input.connection.historicSql !== null &&
-    !Array.isArray(input.connection.historicSql)
-      ? (input.connection.historicSql as Record<string, unknown>)
-      : null;
-  if (historicSql?.enabled === true) {
+  const queryHistory = queryHistoryConfigRecord(nextConnection);
+  if (queryHistory?.enabled === true) {
     await ensureHistoricSqlIngestDefaults(input.projectDir);
   }
 }
@@ -1464,41 +1494,43 @@ async function maybeConfigureDatabaseScope(input: {
 
 async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const adapters = project.config.ingest.adapters.includes('historic-sql')
-    ? project.config.ingest.adapters
-    : [...project.config.ingest.adapters, 'historic-sql'];
   const maxConcurrency = Math.max(
     project.config.ingest.workUnits.maxConcurrency,
     HISTORIC_SQL_WORK_UNIT_MAX_CONCURRENCY,
   );
-  if (
-    adapters === project.config.ingest.adapters &&
-    maxConcurrency === project.config.ingest.workUnits.maxConcurrency
-  ) {
+  if (maxConcurrency === project.config.ingest.workUnits.maxConcurrency) {
     return;
   }
   await writeFile(
     project.configPath,
-    serializeKtxProjectConfig(
-      {
-        ...project.config,
-        ingest: {
-          ...project.config.ingest,
-          adapters,
-          workUnits: {
-            ...project.config.ingest.workUnits,
-            maxConcurrency,
-          },
+    serializeKtxProjectConfig({
+      ...project.config,
+      ingest: {
+        ...project.config.ingest,
+        workUnits: {
+          ...project.config.ingest.workUnits,
+          maxConcurrency,
         },
       },
-    ),
+    }),
     'utf-8',
   );
 }
 
 async function markDatabasesComplete(projectDir: string, connectionIds: string[]): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds));
+  const config = setKtxSetupDatabaseConnectionIds(
+    {
+      ...project.config,
+      connections: Object.fromEntries(
+        Object.entries(project.config.connections).map(([connectionId, connection]) => [
+          connectionId,
+          migrateLegacyHistoricSqlConnection(connection),
+        ]),
+      ),
+    },
+    unique(connectionIds),
+  );
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'databases');
 }
@@ -1511,12 +1543,13 @@ async function maybeRunHistoricSqlSetupProbe(input: {
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
-  const historicSql = historicSqlConfigRecord(connection);
-  if (historicSql?.enabled !== true || historicSql.dialect !== 'postgres') {
+  const queryHistory = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection);
+  const driver = normalizeDriver(connection?.driver);
+  if (queryHistory?.enabled !== true || driver !== 'postgres') {
     return;
   }
 
-  input.io.stdout.write('│  Historic SQL probe...\n');
+  input.io.stdout.write('│  Query history probe...\n');
   const probe = input.deps.historicSqlProbe ?? defaultHistoricSqlProbe;
   const result = await probe({
     projectDir: input.projectDir,
@@ -1537,7 +1570,11 @@ async function applyHistoricSqlConfigToExistingConnection(input: {
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
 }): Promise<'back' | void> {
-  if (input.args.enableHistoricSql !== true && input.args.disableHistoricSql !== true) {
+  if (
+    input.args.inputMode === 'disabled' &&
+    input.args.enableQueryHistory !== true &&
+    input.args.disableQueryHistory !== true
+  ) {
     return;
   }
 
@@ -1555,10 +1592,45 @@ async function applyHistoricSqlConfigToExistingConnection(input: {
     prompts: input.prompts,
   });
   if (withHistoricSql === 'back') return 'back';
-  await writeConnectionConfig({
+  const withContextDepth = await maybeApplyContextDepthConfig({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
     connection: withHistoricSql,
+    args: input.args,
+    prompts: input.prompts,
+  });
+  if (withContextDepth === 'back') return 'back';
+  await writeConnectionConfig({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    connection: withContextDepth,
+  });
+}
+
+async function maybeApplyContextDepthConfig(input: {
+  projectDir: string;
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+}): Promise<KtxProjectConnectionConfig | 'back'> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  return await applySetupDatabaseContextDepth({
+    project: {
+      ...project,
+      config: {
+        ...project.config,
+        connections: {
+          ...project.config.connections,
+          [input.connectionId]: input.connection,
+        },
+      },
+    },
+    connection: input.connection,
+    args: {
+      inputMode: input.args.inputMode === 'disabled' || input.args.databaseUrl ? 'disabled' : input.args.inputMode,
+    },
+    prompts: input.prompts,
   });
 }
 
@@ -1600,8 +1672,8 @@ async function validateAndScanConnection(input: {
     io: input.io,
     deps: input.deps,
   });
-  writeSetupSection(input.io, `Scanning ${input.connectionId}`, [
-    'Running structural scan…',
+  writeSetupSection(input.io, `Building schema context for ${input.connectionId}`, [
+    'Running fast database ingest…',
   ]);
   let scanIo = createBufferedCommandIo();
   let scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
@@ -1610,11 +1682,11 @@ async function validateAndScanConnection(input: {
     if (nativeSqliteDetail) {
       writePrefixedLines(
         (chunk) => input.io.stderr.write(chunk),
-        [
-          `Structural scan failed for ${input.connectionId}.`,
-          'Native SQLite is built for a different Node.js ABI.',
-          `Detail: ${nativeSqliteDetail}`,
-          'Rebuilding Native SQLite with pnpm run native:rebuild…',
+          [
+            `Fast database ingest failed for ${input.connectionId}.`,
+            'Native SQLite is built for a different Node.js ABI.',
+            `Detail: ${nativeSqliteDetail}`,
+            'Rebuilding Native SQLite with pnpm run native:rebuild…',
         ].join('\n'),
       );
       const rebuildNativeSqlite = input.deps.rebuildNativeSqlite ?? defaultRebuildNativeSqlite;
@@ -1622,7 +1694,7 @@ async function validateAndScanConnection(input: {
       if (rebuildCode === 0) {
         writePrefixedLines(
           (chunk) => input.io.stderr.write(chunk),
-          'Native SQLite rebuild complete. Retrying structural scan…',
+          'Native SQLite rebuild complete. Retrying fast database ingest…',
         );
         const retryScanIo = createBufferedCommandIo();
         scanCode = await scanConnection(input.projectDir, input.connectionId, retryScanIo);
@@ -1633,10 +1705,10 @@ async function validateAndScanConnection(input: {
           (chunk) => input.io.stderr.write(chunk),
           [
             rebuildCode === 0
-              ? `Structural scan still failed for ${input.connectionId} after rebuilding Native SQLite.`
+              ? `Fast database ingest still failed for ${input.connectionId} after rebuilding Native SQLite.`
               : `Native SQLite rebuild failed for ${input.connectionId}.`,
             'Fix: pnpm run native:rebuild',
-            `Retry: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+            `Retry: ktx ingest ${input.connectionId} --project-dir ${input.projectDir} --fast`,
           ].join('\n'),
         );
       }
@@ -1645,8 +1717,8 @@ async function validateAndScanConnection(input: {
       writePrefixedLines(
         (chunk) => input.io.stderr.write(chunk),
         [
-          `Structural scan failed for ${input.connectionId}.`,
-          `Debug command: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+          `Fast database ingest failed for ${input.connectionId}.`,
+          `Debug command: ktx ingest ${input.connectionId} --project-dir ${input.projectDir} --fast --debug`,
         ].join('\n'),
       );
     }
@@ -1655,17 +1727,13 @@ async function validateAndScanConnection(input: {
     }
   }
   const scanOutput = scanIo.stdoutText();
-  const reportPath = readOutputValue(scanOutput, 'Report');
   writeSetupSection(
     input.io,
-    `Scan complete for ${input.connectionId}`,
-    [
-      `Changes: ${summarizeScanChanges(scanOutput)}`,
-      ...(reportPath ? [`Report: ${shortenScanReportPath(reportPath)}`] : []),
-    ],
+    `Schema context complete for ${input.connectionId}`,
+    [`Changes: ${summarizeScanChanges(scanOutput)}`],
   );
-  writeSetupSection(input.io, 'Primary source ready', [
-    `${input.connectionId} · ${driverDisplay} · structural scan complete`,
+  writeSetupSection(input.io, 'Database ready', [
+    `${input.connectionId} · ${driverDisplay} · schema context complete`,
   ]);
   return 'ready';
 }
@@ -1684,14 +1752,14 @@ async function chooseDrivers(
   }
   if (args.inputMode === 'disabled') {
     io.stderr.write(
-      'KTX cannot work without a primary source. Pass --database or --database-connection-id, or pass --skip-databases to leave setup incomplete.\n',
+      'KTX cannot work without a database. Pass --database or --database-connection-id, or pass --skip-databases to leave setup incomplete.\n',
     );
     return 'missing-input';
   }
   while (true) {
     const initialValues = unique(options?.initialDrivers ?? []);
     const choices = await prompts.multiselect({
-      message: withMultiselectNavigation('Which primary sources should KTX connect to?'),
+      message: withMultiselectNavigation('Which databases should KTX connect to?'),
       options: [...DRIVER_OPTIONS],
       ...(initialValues.length > 0 ? { initialValues } : {}),
       required: options?.hasPrimarySources === true,
@@ -1707,7 +1775,7 @@ async function chooseDrivers(
       return 'back';
     }
 
-    io.stdout.write('│  KTX cannot work without at least one primary source. Select a source or press Escape to go back.\n');
+    io.stdout.write('│  KTX cannot work without at least one database. Select a database or press Escape to go back.\n');
   }
 }
 
@@ -1718,10 +1786,12 @@ async function chooseConnectionIdForDriver(input: {
   prompts: KtxSetupDatabasesPromptAdapter;
 }): Promise<{ kind: 'existing' | 'new' | 'edit'; connectionId: string } | 'back' | 'missing-input'> {
   if (input.args.databaseConnectionId) {
+    assertSafeDatabaseConnectionId(input.args.databaseConnectionId);
     return { kind: 'new', connectionId: input.args.databaseConnectionId };
   }
   if (input.args.inputMode === 'disabled') {
     if (!input.args.databaseConnectionId) return 'missing-input';
+    assertSafeDatabaseConnectionId(input.args.databaseConnectionId);
     return { kind: 'new', connectionId: input.args.databaseConnectionId };
   }
 
@@ -1737,6 +1807,7 @@ async function chooseConnectionIdForDriver(input: {
     });
     if (entered === undefined) return 'back';
     const connectionId = entered.trim() || defaultId;
+    assertSafeDatabaseConnectionId(connectionId);
     return connectionId ? { kind: 'new', connectionId } : 'missing-input';
   }
 
@@ -1766,6 +1837,7 @@ async function chooseConnectionIdForDriver(input: {
     });
     if (entered === undefined) continue;
     const connectionId = entered.trim() || defaultId;
+    assertSafeDatabaseConnectionId(connectionId);
     return connectionId ? { kind: 'new', connectionId } : 'missing-input';
   }
 }
@@ -1785,7 +1857,7 @@ async function choosePrimarySourceToEdit(input: {
     .filter((option): option is { value: string; label: string } => option !== null);
   if (options.length === 0) return 'back';
   const choice = await input.prompts.select({
-    message: 'Primary source to edit',
+    message: 'Database to edit',
     options: [...options, { value: 'back', label: 'Back' }],
   });
   return choice === 'back' ? 'back' : choice;
@@ -1803,7 +1875,7 @@ async function runPrimarySourceFullEdit(input: {
   const existing = project.config.connections[input.connectionId];
   const driver = normalizeDriver(existing?.driver);
   if (!existing || !driver) {
-    input.io.stderr.write(`Connection "${input.connectionId}" is not a configured primary source.\n`);
+    input.io.stderr.write(`Connection "${input.connectionId}" is not a configured database.\n`);
     return 'failed';
   }
 
@@ -1872,7 +1944,7 @@ export async function runKtxSetupDatabasesStep(
   deps: KtxSetupDatabasesDeps = {},
 ): Promise<KtxSetupDatabasesResult> {
   if (args.skipDatabases) {
-    io.stdout.write('│  Primary source setup skipped. KTX cannot work until you add a primary source.\n');
+    io.stdout.write('│  Database setup skipped. KTX cannot work until you add a database.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
@@ -1970,7 +2042,7 @@ export async function runKtxSetupDatabasesStep(
     if (drivers === 'missing-input') return { status: 'missing-input', projectDir: args.projectDir };
     if (drivers.length === 0) {
       await markDatabasesComplete(args.projectDir, []);
-      io.stdout.write('│  KTX cannot work without a primary source.\n');
+      io.stdout.write('│  KTX cannot work without a database.\n');
       return { status: 'skipped', projectDir: args.projectDir };
     }
 
@@ -1978,12 +2050,18 @@ export async function runKtxSetupDatabasesStep(
 
     for (const driver of drivers) {
       const project = await loadKtxProject({ projectDir: args.projectDir });
-      const connectionChoice = await chooseConnectionIdForDriver({
-        driver,
-        connections: project.config.connections,
-        args,
-        prompts,
-      });
+      let connectionChoice: Awaited<ReturnType<typeof chooseConnectionIdForDriver>>;
+      try {
+        connectionChoice = await chooseConnectionIdForDriver({
+          driver,
+          connections: project.config.connections,
+          args,
+          prompts,
+        });
+      } catch (error) {
+        io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return { status: 'failed', projectDir: args.projectDir };
+      }
       if (connectionChoice === 'back') {
         if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
         returnToDriverSelection = true;
@@ -2061,10 +2139,22 @@ export async function runKtxSetupDatabasesStep(
           returnToDriverSelection = true;
           break;
         }
-        await writeConnectionConfig({
+        const withContextDepth = await maybeApplyContextDepthConfig({
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
           connection: withHistoricSql,
+          args,
+          prompts,
+        });
+        if (withContextDepth === 'back') {
+          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+          returnToDriverSelection = true;
+          break;
+        }
+        await writeConnectionConfig({
+          projectDir: args.projectDir,
+          connectionId: connectionChoice.connectionId,
+          connection: withContextDepth,
         });
       } else {
         const existing = project.config.connections[connectionChoice.connectionId];
@@ -2074,10 +2164,22 @@ export async function runKtxSetupDatabasesStep(
           returnToDriverSelection = true;
           break;
         }
-        await writeConnectionConfig({
+        const withContextDepth = await maybeApplyContextDepthConfig({
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
           connection: withHistoricSql,
+          args,
+          prompts,
+        });
+        if (withContextDepth === 'back') {
+          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+          returnToDriverSelection = true;
+          break;
+        }
+        await writeConnectionConfig({
+          projectDir: args.projectDir,
+          connectionId: connectionChoice.connectionId,
+          connection: withContextDepth,
         });
       }
 
@@ -2100,11 +2202,11 @@ export async function runKtxSetupDatabasesStep(
         }
         if (args.inputMode === 'disabled') return { status: 'failed', projectDir: args.projectDir };
         const action = await prompts.select({
-          message: `Primary source setup failed for ${connectionChoice.connectionId}`,
+          message: `Database setup failed for ${connectionChoice.connectionId}`,
           options: [
             { value: 'retry', label: 'Retry connection test' },
             { value: 're-enter', label: 'Re-enter connection details' },
-            { value: 'skip', label: 'Skip this primary source' },
+            { value: 'skip', label: 'Skip this database' },
             { value: 'back', label: 'Back' },
           ],
         });
@@ -2145,10 +2247,22 @@ export async function runKtxSetupDatabasesStep(
             returnToDriverSelection = true;
             break;
           }
-          await writeConnectionConfig({
+          const withContextDepth = await maybeApplyContextDepthConfig({
             projectDir: args.projectDir,
             connectionId: connectionChoice.connectionId,
             connection: withHistoricSql,
+            args,
+            prompts,
+          });
+          if (withContextDepth === 'back') {
+            if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+            returnToDriverSelection = true;
+            break;
+          }
+          await writeConnectionConfig({
+            projectDir: args.projectDir,
+            connectionId: connectionChoice.connectionId,
+            connection: withContextDepth,
           });
           setupStatus = await validateAndScanConnection({
             projectDir: args.projectDir,
@@ -2174,7 +2288,7 @@ export async function runKtxSetupDatabasesStep(
     }
 
     if (selectedConnectionIds.length === 0) {
-      io.stderr.write('No primary source connections completed setup.\n');
+      io.stderr.write('No database connections completed setup.\n');
       return { status: 'failed', projectDir: args.projectDir };
     }
 

@@ -90,12 +90,12 @@ export type KtxSetupArgs =
       databaseConnectionId?: string;
       databaseUrl?: string;
       databaseSchemas: string[];
-      enableHistoricSql?: boolean;
-      disableHistoricSql?: boolean;
-      historicSqlWindowDays?: number;
-      historicSqlMinExecutions?: number;
-      historicSqlServiceAccountPatterns?: string[];
-      historicSqlRedactionPatterns?: string[];
+      enableQueryHistory?: boolean;
+      disableQueryHistory?: boolean;
+      queryHistoryWindowDays?: number;
+      queryHistoryMinExecutions?: number;
+      queryHistoryServiceAccountPatterns?: string[];
+      queryHistoryRedactionPatterns?: string[];
       skipDatabases: boolean;
       source?: KtxSetupSourceType;
       sourceConnectionId?: string;
@@ -371,16 +371,13 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
     `Embeddings ready: ${formatReady(status.embeddings.ready)}${
       status.embeddings.model ? ` (${status.embeddings.model})` : ''
     }`,
-    `Primary sources configured: ${formatConnectionList(status.databases.map((database) => database.connectionId))}`,
+    `Databases configured: ${formatConnectionList(status.databases.map((database) => database.connectionId))}`,
     `Context sources configured: ${formatConnectionList(status.sources.map((source) => source.connectionId))}`,
     `KTX context built: ${formatContextBuilt(status.context)}`,
     `Agent integration ready: ${formatReady(status.agents.some((agent) => agent.ready))}${
       status.agents.length > 0 ? ` (${status.agents.map((agent) => `${agent.target}:${agent.scope}`).join(', ')})` : ''
     }`,
   ];
-  if (!status.context.ready && status.context.watchCommand && status.context.status === 'running') {
-    lines.push(`Resume: ${status.context.watchCommand}`);
-  }
   if (!status.context.ready && status.context.status === 'failed' && status.context.detail) {
     lines.push(`Retry: ${status.context.retryCommand ?? `ktx setup --project-dir ${status.project.path}`}`);
   }
@@ -412,7 +409,7 @@ function setupContextReady(status: KtxSetupStatus): boolean {
 }
 
 function setupContextActive(status: KtxSetupStatus): boolean {
-  return status.context.status === 'running' || status.context.status === 'detached';
+  return status.context.status === 'running';
 }
 
 function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
@@ -627,17 +624,17 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.databaseConnectionId ? { databaseConnectionId: args.databaseConnectionId } : {}),
             ...(args.databaseUrl ? { databaseUrl: args.databaseUrl } : {}),
             databaseSchemas: args.databaseSchemas,
-            ...(args.enableHistoricSql !== undefined ? { enableHistoricSql: args.enableHistoricSql } : {}),
-            ...(args.disableHistoricSql !== undefined ? { disableHistoricSql: args.disableHistoricSql } : {}),
-            ...(args.historicSqlWindowDays !== undefined ? { historicSqlWindowDays: args.historicSqlWindowDays } : {}),
-            ...(args.historicSqlMinExecutions !== undefined
-              ? { historicSqlMinExecutions: args.historicSqlMinExecutions }
+            ...(args.enableQueryHistory !== undefined ? { enableQueryHistory: args.enableQueryHistory } : {}),
+            ...(args.disableQueryHistory !== undefined ? { disableQueryHistory: args.disableQueryHistory } : {}),
+            ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+            ...(args.queryHistoryMinExecutions !== undefined
+              ? { queryHistoryMinExecutions: args.queryHistoryMinExecutions }
               : {}),
-            ...(args.historicSqlServiceAccountPatterns
-              ? { historicSqlServiceAccountPatterns: args.historicSqlServiceAccountPatterns }
+            ...(args.queryHistoryServiceAccountPatterns
+              ? { queryHistoryServiceAccountPatterns: args.queryHistoryServiceAccountPatterns }
               : {}),
-            ...(args.historicSqlRedactionPatterns
-              ? { historicSqlRedactionPatterns: args.historicSqlRedactionPatterns }
+            ...(args.queryHistoryRedactionPatterns
+              ? { queryHistoryRedactionPatterns: args.queryHistoryRedactionPatterns }
               : {}),
             skipDatabases: args.skipDatabases || !shouldRunDatabases,
           },
@@ -683,6 +680,8 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             inputMode: args.inputMode,
             forcePrompt: forcePromptSteps.has('context') || runOnly === 'context',
             allowEmpty: true,
+            cliVersion: args.cliVersion,
+            runtimeInstallPolicy: setupRuntimeInstallPolicy(args),
           },
           io,
         );

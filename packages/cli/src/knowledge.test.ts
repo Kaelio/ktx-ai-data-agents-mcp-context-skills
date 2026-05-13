@@ -192,7 +192,7 @@ describe('runKtxKnowledge', () => {
 
     expect(searchIo.stdout()).toBe('');
     expect(searchIo.stderr()).toContain('No local wiki pages found');
-    expect(searchIo.stderr()).toContain('ktx wiki write');
+    expect(searchIo.stderr()).toContain('ktx ingest <connectionId>');
   });
 
   it('uses configured embeddings for semantic wiki search', async () => {

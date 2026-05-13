@@ -391,7 +391,7 @@ export function buildDefaultKtxProjectConfig(projectName = 'ktx-project'): KtxPr
       models: {},
     },
     ingest: {
-      adapters: ['live-database', 'lookml', 'metabase', 'metricflow', 'notion'],
+      adapters: [],
       embeddings: {
         backend: 'deterministic',
         model: 'deterministic',
@@ -484,6 +484,9 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
     ...(isRecord(scanEnrichment.embeddings) ? { embeddings: scanEmbeddings } : {}),
   };
   const parsedScanRelationships = parseScanRelationshipConfig(scanRelationships, defaults.scan.relationships);
+  const parsedConnections = isRecord(parsed.connections)
+    ? (parsed.connections as Record<string, KtxProjectConnectionConfig>)
+    : defaults.connections;
 
   return {
     project: project.trim(),
@@ -494,9 +497,7 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
           },
         }
       : {}),
-    connections: isRecord(parsed.connections)
-      ? (parsed.connections as Record<string, KtxProjectConnectionConfig>)
-      : defaults.connections,
+    connections: parsedConnections,
     storage: {
       state: storage.state === 'sqlite' ? 'sqlite' : defaults.storage.state,
       search: storage.search === 'sqlite-fts5' ? 'sqlite-fts5' : defaults.storage.search,
@@ -529,5 +530,15 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
 }
 
 export function serializeKtxProjectConfig(config: KtxProjectConfig): string {
-  return `${YAML.stringify(config, { indent: 2, lineWidth: 0 }).trimEnd()}\n`;
+  const serializedConfig =
+    config.ingest.adapters.length === 0
+      ? {
+          ...config,
+          ingest: {
+            embeddings: config.ingest.embeddings,
+            workUnits: config.ingest.workUnits,
+          },
+        }
+      : config;
+  return `${YAML.stringify(serializedConfig, { indent: 2, lineWidth: 0 }).trimEnd()}\n`;
 }

@@ -52,11 +52,8 @@ describe('AgentRunnerService.runLoop', () => {
       telemetryTags: { source: 'test' },
     });
     const call = (generateText as any).mock.calls[0][0];
-    expect(call.messages).toEqual([
-      { role: 'system', content: 'SYS' },
-      { role: 'user', content: 'USR' },
-    ]);
-    expect(call.system).toBeUndefined();
+    expect(call.system).toEqual({ role: 'system', content: 'SYS' });
+    expect(call.messages).toEqual([{ role: 'user', content: 'USR' }]);
     expect(call.prompt).toBeUndefined();
     expect(call.tools).toEqual(tools);
     expect(call.stopWhen).toBe(17);
@@ -81,10 +78,8 @@ describe('AgentRunnerService.runLoop', () => {
     expect(llmProvider.getModel).toHaveBeenCalledWith('candidateExtraction');
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        messages: [
-          { role: 'system', content: 'system' },
-          { role: 'user', content: 'user' },
-        ],
+        system: { role: 'system', content: 'system' },
+        messages: [{ role: 'user', content: 'user' }],
       }),
     );
   });

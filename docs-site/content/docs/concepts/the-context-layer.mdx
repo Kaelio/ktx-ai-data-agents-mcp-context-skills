@@ -134,13 +134,13 @@ my-project/
 │           └── data-quality-notes.md
 ├── raw-sources/
 │   └── warehouse/
-│       └── live-database/        # Scan artifacts and reports
+│       └── database-ingest/      # Schema ingest artifacts and reports
 └── .ktx/
     ├── db.sqlite                 # Local state (git-ignored)
     └── cache/                    # Runtime cache (git-ignored)
 ```
 
-Semantic sources and wiki pages are committed to git. The SQLite database holds ephemeral state — scan results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
+Semantic sources and wiki pages are committed to git. The SQLite database holds ephemeral state — schema ingest results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
 
 This means your analytics context travels with your code. You can fork it, branch it, review it in a PR, and merge it with the same tools you use for dbt models. There's no sync problem between a remote server and your local state. There's no migration to run. The files are the source of truth.
 

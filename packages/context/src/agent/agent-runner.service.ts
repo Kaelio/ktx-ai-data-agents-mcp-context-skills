@@ -36,6 +36,14 @@ export interface AgentRunnerServiceDeps {
   logger?: KtxLogger;
 }
 
+function splitSystemPromptMessages(messages: ReturnType<KtxMessageBuilder['wrapSimple']>['messages']) {
+  const systemMessages = messages.filter((message) => message.role === 'system');
+  return {
+    system: systemMessages.length === 0 ? undefined : systemMessages.length === 1 ? systemMessages[0] : systemMessages,
+    messages: messages.filter((message) => message.role !== 'system'),
+  };
+}
+
 export class AgentRunnerService {
   private readonly logger: KtxLogger;
 
@@ -54,6 +62,7 @@ export class AgentRunnerService {
         tools: params.toolSet,
         model,
       });
+      const promptMessages = splitSystemPromptMessages(built.messages);
 
       await this.deps.debugRequestRecorder?.record(
         summarizeKtxLlmDebugRequest({
@@ -76,7 +85,8 @@ export class AgentRunnerService {
         experimental_repairToolCall: this.deps.llmProvider.repairToolCallHandler({
           source: params.telemetryTags.operationName ?? 'ktx-agent-runner',
         }),
-        messages: built.messages,
+        ...(promptMessages.system ? { system: promptMessages.system } : {}),
+        messages: promptMessages.messages,
         tools: built.tools as Record<string, Tool>,
         onStepFinish: async () => {
           stepIndex += 1;

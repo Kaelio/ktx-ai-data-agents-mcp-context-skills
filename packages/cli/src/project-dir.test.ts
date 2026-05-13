@@ -32,10 +32,9 @@ describe('project directory defaults', () => {
 
     const connection = vi.fn(async () => 0);
     const doctor = vi.fn(async () => 0);
-    const ingest = vi.fn(async () => 0);
-    const scan = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
     const setup = vi.fn(async () => 0);
-    const deps: KtxCliDeps = { connection, doctor, ingest, scan, setup };
+    const deps: KtxCliDeps = { connection, doctor, publicIngest, setup };
 
     const cases: Array<{
       argv: string[];
@@ -56,21 +55,15 @@ describe('project directory defaults', () => {
         expectedStderr: 'Project: /tmp/ktx-env-project\n',
       },
       {
-        argv: ['ingest', 'status', 'run-1'],
-        spy: ingest,
-        expected: { command: 'status', projectDir: '/tmp/ktx-env-project', runId: 'run-1', outputMode: 'plain' },
-        expectedStderr: 'Project: /tmp/ktx-env-project\n',
-      },
-      {
         argv: ['setup', '--no-input'],
         spy: setup,
         expected: { command: 'run', projectDir: '/tmp/ktx-env-project' },
         expectedStderr: '',
       },
       {
-        argv: ['scan', 'warehouse'],
-        spy: scan,
-        expected: { command: 'run', projectDir: '/tmp/ktx-env-project', connectionId: 'warehouse' },
+        argv: ['ingest', 'warehouse', '--no-input'],
+        spy: publicIngest,
+        expected: { command: 'run', projectDir: '/tmp/ktx-env-project', targetConnectionId: 'warehouse' },
         expectedStderr: 'Project: /tmp/ktx-env-project\n',
       },
     ];
@@ -86,30 +79,33 @@ describe('project directory defaults', () => {
   it('lets explicit global --project-dir override KTX_PROJECT_DIR before and after nested commands', async () => {
     process.env.KTX_PROJECT_DIR = '/tmp/ktx-env-project';
 
-    const scan = vi.fn(async () => 0);
-    const ingest = vi.fn(async () => 0);
-    const scanIo = makeIo();
-    const ingestIo = makeIo();
+    const publicIngest = vi.fn(async () => 0);
+    const beforeCommandIo = makeIo();
+    const afterCommandIo = makeIo();
 
     await expect(
-      runKtxCli(['--project-dir', '/tmp/ktx-explicit-project', 'scan', 'warehouse'], scanIo.io, { scan }),
+      runKtxCli(['--project-dir', '/tmp/ktx-explicit-project', 'ingest', 'warehouse', '--no-input'], beforeCommandIo.io, {
+        publicIngest,
+      }),
     ).resolves.toBe(0);
     await expect(
-      runKtxCli(['ingest', 'status', 'run-1', '--project-dir=/tmp/ktx-explicit-project'], ingestIo.io, {
-        ingest,
+      runKtxCli(['ingest', 'warehouse', '--project-dir=/tmp/ktx-explicit-project', '--no-input'], afterCommandIo.io, {
+        publicIngest,
       }),
     ).resolves.toBe(0);
 
-    expect(scan).toHaveBeenCalledWith(
+    expect(publicIngest).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ command: 'run', projectDir: '/tmp/ktx-explicit-project' }),
-      scanIo.io,
+      beforeCommandIo.io,
     );
-    expect(ingest).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'status', projectDir: '/tmp/ktx-explicit-project' }),
-      ingestIo.io,
+    expect(publicIngest).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ command: 'run', projectDir: '/tmp/ktx-explicit-project' }),
+      afterCommandIo.io,
     );
-    expect(scanIo.stderr()).toBe('Project: /tmp/ktx-explicit-project\n');
-    expect(ingestIo.stderr()).toBe('Project: /tmp/ktx-explicit-project\n');
+    expect(beforeCommandIo.stderr()).toBe('Project: /tmp/ktx-explicit-project\n');
+    expect(afterCommandIo.stderr()).toBe('Project: /tmp/ktx-explicit-project\n');
   });
 
   it('uses nearest ancestor containing ktx.yaml when no explicit or environment project-dir exists', async () => {
@@ -126,18 +122,18 @@ describe('project directory defaults', () => {
     await writeFile(join(projectDir, 'ktx.yaml'), 'project: warehouse\n', 'utf-8');
     const expectedProjectDir = await realpath(projectDir);
 
-    const scan = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
     const testIo = makeIo();
 
     try {
       process.chdir(nestedDir);
-      await expect(runKtxCli(['scan', 'warehouse'], testIo.io, { scan })).resolves.toBe(0);
+      await expect(runKtxCli(['ingest', 'warehouse', '--no-input'], testIo.io, { publicIngest })).resolves.toBe(0);
     } finally {
       process.chdir(originalCwd);
       await rm(root, { recursive: true, force: true });
     }
 
-    expect(scan).toHaveBeenCalledWith(
+    expect(publicIngest).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'run', projectDir: expectedProjectDir }),
       testIo.io,
     );

@@ -109,12 +109,12 @@ function shouldShowSetupEntryMenu(
     newDatabaseConnectionId?: string;
     databaseUrl?: string;
     databaseSchema?: string[];
-    enableHistoricSql?: boolean;
-    disableHistoricSql?: boolean;
-    historicSqlWindowDays?: number;
-    historicSqlMinExecutions?: number;
-    historicSqlServiceAccountPattern?: string[];
-    historicSqlRedactionPattern?: string[];
+    enableQueryHistory?: boolean;
+    disableQueryHistory?: boolean;
+    queryHistoryWindowDays?: number;
+    queryHistoryMinExecutions?: number;
+    queryHistoryServiceAccountPattern?: string[];
+    queryHistoryRedactionPattern?: string[];
     skipDatabases?: boolean;
     source?: KtxSetupSourceType;
     sourceConnectionId?: string;
@@ -147,10 +147,10 @@ function shouldShowSetupEntryMenu(
   if (options.databaseSchema && options.databaseSchema.length > 0) {
     return false;
   }
-  if (options.historicSqlServiceAccountPattern && options.historicSqlServiceAccountPattern.length > 0) {
+  if (options.queryHistoryServiceAccountPattern && options.queryHistoryServiceAccountPattern.length > 0) {
     return false;
   }
-  if (options.historicSqlRedactionPattern && options.historicSqlRedactionPattern.length > 0) {
+  if (options.queryHistoryRedactionPattern && options.queryHistoryRedactionPattern.length > 0) {
     return false;
   }
   if (options.notionRootPageId && options.notionRootPageId.length > 0) {
@@ -179,10 +179,10 @@ function shouldShowSetupEntryMenu(
     'skipEmbeddings',
     'newDatabaseConnectionId',
     'databaseUrl',
-    'enableHistoricSql',
-    'disableHistoricSql',
-    'historicSqlWindowDays',
-    'historicSqlMinExecutions',
+    'enableQueryHistory',
+    'disableQueryHistory',
+    'queryHistoryWindowDays',
+    'queryHistoryMinExecutions',
     'skipDatabases',
     'source',
     'sourceConnectionId',
@@ -282,33 +282,37 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
         .hideHelp(),
     )
     .addOption(
-      new Option('--enable-historic-sql', 'Enable Historic SQL when the selected database supports it')
+      new Option('--enable-query-history', 'Enable query history when the selected database supports it')
         .hideHelp()
         .default(false),
     )
     .addOption(
-      new Option('--disable-historic-sql', 'Disable Historic SQL for the selected database').hideHelp().default(false),
+      new Option('--disable-query-history', 'Disable query history for the selected database').hideHelp().default(false),
     )
-    .addOption(new Option('--historic-sql-window-days <number>', 'Historic SQL query-history window').argParser(positiveInteger).hideHelp())
     .addOption(
-      new Option('--historic-sql-min-executions <number>', 'Minimum Historic SQL executions for a template')
+      new Option('--query-history-window-days <number>', 'Query-history lookback window')
         .argParser(positiveInteger)
         .hideHelp(),
     )
     .addOption(
-      new Option('--historic-sql-service-account-pattern <pattern>', 'Historic SQL service-account regex; repeatable')
+      new Option('--query-history-min-executions <number>', 'Minimum executions for a query-history template')
+        .argParser(positiveInteger)
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--query-history-service-account-pattern <pattern>', 'Query-history service-account regex; repeatable')
         .argParser((value, previous: string[]) => [...previous, value])
         .default([] as string[])
         .hideHelp(),
     )
     .addOption(
-      new Option('--historic-sql-redaction-pattern <pattern>', 'Historic SQL SQL-literal redaction regex; repeatable')
+      new Option('--query-history-redaction-pattern <pattern>', 'Query-history SQL-literal redaction regex; repeatable')
         .argParser((value, previous: string[]) => [...previous, value])
         .default([] as string[])
         .hideHelp(),
     )
     .addOption(
-      new Option('--skip-databases', 'Leave database setup incomplete; KTX cannot work until a primary source is added')
+      new Option('--skip-databases', 'Leave database setup incomplete; KTX cannot work until a database is added')
         .hideHelp()
         .default(false),
     )
@@ -371,9 +375,9 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       context.setExitCode(1);
       return;
     }
-    if (options.enableHistoricSql && options.disableHistoricSql) {
+    if (options.enableQueryHistory && options.disableQueryHistory) {
       context.io.stderr.write(
-        'Choose only one Historic SQL action: --enable-historic-sql or --disable-historic-sql.\n',
+        'Choose only one query-history action: --enable-query-history or --disable-query-history.\n',
       );
       context.setExitCode(1);
       return;
@@ -418,17 +422,17 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ...(options.newDatabaseConnectionId ? { databaseConnectionId: options.newDatabaseConnectionId } : {}),
       ...(options.databaseUrl ? { databaseUrl: options.databaseUrl } : {}),
       databaseSchemas: options.databaseSchema,
-      ...(options.enableHistoricSql ? { enableHistoricSql: true } : {}),
-      ...(options.disableHistoricSql ? { disableHistoricSql: true } : {}),
-      ...(options.historicSqlWindowDays !== undefined ? { historicSqlWindowDays: options.historicSqlWindowDays } : {}),
-      ...(options.historicSqlMinExecutions !== undefined
-        ? { historicSqlMinExecutions: options.historicSqlMinExecutions }
+      ...(options.enableQueryHistory ? { enableQueryHistory: true } : {}),
+      ...(options.disableQueryHistory ? { disableQueryHistory: true } : {}),
+      ...(options.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: options.queryHistoryWindowDays } : {}),
+      ...(options.queryHistoryMinExecutions !== undefined
+        ? { queryHistoryMinExecutions: options.queryHistoryMinExecutions }
         : {}),
-      ...(options.historicSqlServiceAccountPattern.length > 0
-        ? { historicSqlServiceAccountPatterns: options.historicSqlServiceAccountPattern }
+      ...(options.queryHistoryServiceAccountPattern.length > 0
+        ? { queryHistoryServiceAccountPatterns: options.queryHistoryServiceAccountPattern }
         : {}),
-      ...(options.historicSqlRedactionPattern.length > 0
-        ? { historicSqlRedactionPatterns: options.historicSqlRedactionPattern }
+      ...(options.queryHistoryRedactionPattern.length > 0
+        ? { queryHistoryRedactionPatterns: options.queryHistoryRedactionPattern }
         : {}),
       skipDatabases: options.skipDatabases === true,
       ...(options.source ? { source: options.source } : {}),

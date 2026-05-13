@@ -3,13 +3,17 @@ title: Primary Sources
 description: Connect KTX to PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, or SQLite.
 ---
 
-KTX connects to your data warehouse or database to scan schemas, discover relationships, and execute semantic layer queries. Each connection is defined in `ktx.yaml` under the `connections` key.
+KTX connects to your data warehouse or database to build schema context,
+discover relationships, and execute semantic layer queries. Each connection is
+defined in `ktx.yaml` under the `connections` key.
 
 All connectors share these conventions:
 
-- Sensitive values support `env:VAR_NAME` (read from environment) and `file:/path/to/secret` (read from file) references
-- Connections are read-only — KTX never writes to your database
-- Schema scanning discovers tables, columns, types, and constraints automatically
+- Sensitive values support `env:VAR_NAME` (read from environment) and
+  `file:/path/to/secret` (read from file) references
+- Connections are read-only; KTX never writes to your database
+- Database ingest discovers tables, columns, types, and constraints
+  automatically
 
 ## Connection field reference
 
@@ -21,7 +25,7 @@ Agents should prefer environment or file references over literal secrets.
 | `url` | One of the connection methods | URL-style connectors | Database URL, `env:NAME`, or `file:/path/to/secret` |
 | `host`, `port`, `database`, `username`, `password` | One of the connection methods | PostgreSQL, MySQL, ClickHouse, SQL Server | Field-by-field connection values |
 | `schema` or `schemas` | No | schema-aware warehouses | Single schema or list of schemas to scan |
-| `historicSql` | No | supported warehouses | Enables query-history ingestion when the warehouse supports it |
+| `context.queryHistory` | No | PostgreSQL, Snowflake, BigQuery | Enables query-history ingestion when the warehouse supports it |
 | `path` | Yes for path-style SQLite | SQLite | Local SQLite database path or `env:NAME` reference |
 | `max_bytes_billed` | No | BigQuery | Maximum bytes billed per query job |
 | `job_timeout_ms` | No | BigQuery | BigQuery query job timeout in milliseconds |
@@ -29,7 +33,7 @@ Agents should prefer environment or file references over literal secrets.
 
 ## PostgreSQL
 
-The most full-featured connector. Supports schema introspection, foreign key detection, column statistics, and historic SQL via `pg_stat_statements`.
+The most full-featured connector. Supports schema introspection, foreign key detection, column statistics, and query history via `pg_stat_statements`.
 
 ### Connection config
 
@@ -75,12 +79,13 @@ connections:
 | Foreign keys | Yes | Full constraint detection |
 | Row count estimates | Yes | Via `pg_class.reltuples` |
 | Column statistics | Yes | Requires `pg_read_all_stats` role |
-| Historic SQL | Yes | Via `pg_stat_statements` extension |
+| Query history | Yes | Via `pg_stat_statements` extension |
 | Table sampling | Yes | `TABLESAMPLE SYSTEM` |
 
-### Historic SQL
+### Query history
 
-PostgreSQL Historic SQL mines real query patterns from `pg_stat_statements`. This is the most mature local Historic SQL path and helps KTX understand how your team actually queries the data.
+PostgreSQL query history mines real query patterns from `pg_stat_statements`.
+This helps KTX understand how your team actually queries the data.
 
 **Requirements:**
 - `pg_stat_statements` extension enabled
@@ -89,12 +94,12 @@ PostgreSQL Historic SQL mines real query patterns from `pg_stat_statements`. Thi
 **Config options:**
 
 ```yaml
-historicSql:
-  enabled: true
-  dialect: postgres
-  minExecutions: 5
-  filters:
-    dropTrivialProbes: true
+    context:
+      queryHistory:
+        enabled: true
+        minExecutions: 5
+        filters:
+          dropTrivialProbes: true
 ```
 
 ### Dialect notes
@@ -108,7 +113,7 @@ historicSql:
 
 ## Snowflake
 
-Connects via the Snowflake SDK. Supports multi-schema scanning, RSA key authentication, and Historic SQL configuration for Snowflake query history.
+Connects via the Snowflake SDK. Supports multi-schema scanning, RSA key authentication, and query-history configuration for Snowflake query history.
 
 ### Connection config
 
@@ -150,27 +155,27 @@ For multiple schemas:
 | Foreign keys | No | Not available in Snowflake |
 | Row count estimates | Yes | From `INFORMATION_SCHEMA.TABLES.ROW_COUNT` |
 | Column statistics | No | — |
-| Historic SQL | Yes | Via `SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY` when enabled |
+| Query history | Yes | Via `SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY` when enabled |
 | Table sampling | Yes | — |
 
-### Historic SQL
+### Query history
 
-Snowflake Historic SQL reads aggregated query-history templates from
+Snowflake query history reads aggregated query-history templates from
 `SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY` and feeds the same unified staged
 artifact shape as Postgres and BigQuery.
 
 ```yaml
-historicSql:
-  enabled: true
-  dialect: snowflake
-  windowDays: 90
-  minExecutions: 5
-  filters:
-    dropTrivialProbes: true
-    serviceAccounts:
-      patterns: ['^svc_']
-      mode: exclude
-  redactionPatterns: []
+    context:
+      queryHistory:
+        enabled: true
+        windowDays: 90
+        minExecutions: 5
+        filters:
+          dropTrivialProbes: true
+          serviceAccounts:
+            patterns: ['^svc_']
+            mode: exclude
+        redactionPatterns: []
 ```
 
 ### Dialect notes
@@ -184,7 +189,7 @@ historicSql:
 
 ## BigQuery
 
-Authenticates via GCP service account credentials. Supports multi-dataset scanning and Historic SQL configuration for `INFORMATION_SCHEMA.JOBS_BY_PROJECT`.
+Authenticates via GCP service account credentials. Supports multi-dataset scanning and query-history configuration for `INFORMATION_SCHEMA.JOBS_BY_PROJECT`.
 
 ### Connection config
 
@@ -227,27 +232,27 @@ mapping metadata. The BigQuery connector still authenticates with the
 | Foreign keys | No | Not available in BigQuery |
 | Row count estimates | Yes | From table metadata |
 | Column statistics | No | — |
-| Historic SQL | Yes | Via region-scoped `INFORMATION_SCHEMA.JOBS_BY_PROJECT` when enabled |
+| Query history | Yes | Via region-scoped `INFORMATION_SCHEMA.JOBS_BY_PROJECT` when enabled |
 | Table sampling | Yes | — |
 
-### Historic SQL
+### Query history
 
-BigQuery Historic SQL reads aggregated query-history templates from
+BigQuery query history reads aggregated query-history templates from
 region-scoped `INFORMATION_SCHEMA.JOBS_BY_PROJECT` and feeds the same unified
 staged artifact shape as Postgres and Snowflake.
 
 ```yaml
-historicSql:
-  enabled: true
-  dialect: bigquery
-  windowDays: 90
-  minExecutions: 5
-  filters:
-    dropTrivialProbes: true
-    serviceAccounts:
-      patterns: ['@bot\\.']
-      mode: exclude
-  redactionPatterns: []
+    context:
+      queryHistory:
+        enabled: true
+        windowDays: 90
+        minExecutions: 5
+        filters:
+          dropTrivialProbes: true
+          serviceAccounts:
+            patterns: ['@bot\\.']
+            mode: exclude
+        redactionPatterns: []
 ```
 
 ### Dialect notes
@@ -303,7 +308,7 @@ connections:
 | Foreign keys | No | Not a ClickHouse concept |
 | Row count estimates | Yes | Via `system.parts` aggregation |
 | Column statistics | No | — |
-| Historic SQL | No | — |
+| Query history | No | — |
 | Table sampling | Yes | — |
 
 ### Dialect notes
@@ -360,7 +365,7 @@ connections:
 | Foreign keys | Yes | Via `REFERENTIAL_CONSTRAINTS` |
 | Row count estimates | Yes | From `TABLE_ROWS` (InnoDB estimate) |
 | Column statistics | No | — |
-| Historic SQL | No | — |
+| Query history | No | — |
 | Table sampling | Yes | Uses `RAND()` filter |
 
 ### Dialect notes
@@ -426,7 +431,7 @@ For multiple schemas:
 | Foreign keys | Yes | Via `REFERENTIAL_CONSTRAINTS` |
 | Row count estimates | Yes | Via `sys.dm_db_partition_stats` |
 | Column statistics | No | — |
-| Historic SQL | No | — |
+| Query history | No | — |
 | Table sampling | Yes | — |
 | Nested analysis | No | — |
 
@@ -484,7 +489,7 @@ No authentication required — SQLite is file-based. The file must be readable b
 | Foreign keys | Yes | Via `PRAGMA foreign_key_list()` (requires `PRAGMA foreign_keys = ON`) |
 | Row count estimates | Yes | Exact count via `SELECT COUNT(*)` |
 | Column statistics | No | — |
-| Historic SQL | No | — |
+| Query history | No | — |
 | Table sampling | Yes | — |
 | Nested analysis | No | — |
 
@@ -502,7 +507,7 @@ No authentication required — SQLite is file-based. The file must be readable b
 | Error or symptom | Likely cause | Recovery |
 |------------------|--------------|----------|
 | Connection URL appears in git diff | A literal credential URL was written to `ktx.yaml` | Replace it with `env:NAME` or `file:/path/to/secret` and rotate exposed credentials |
-| Scan returns no tables | Schema/database/project filter is wrong or the user lacks metadata permissions | Verify the schema list and grant metadata read permissions |
-| Historic SQL is empty | Query history extension or warehouse history view is unavailable | Enable the warehouse-specific history feature, then rerun scan or setup |
-| Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on structural scan output |
+| Database ingest returns no tables | Schema, database, or project filter is wrong, or the user lacks metadata permissions | Verify the schema list and grant metadata read permissions |
+| Query history is empty | Query history extension or warehouse history view is unavailable | Enable the warehouse-specific history feature, then rerun `ktx ingest <connectionId> --query-history` or `ktx setup` |
+| Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on fast schema context |
 | Semantic query execution fails | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the `ktx sl query` flags |

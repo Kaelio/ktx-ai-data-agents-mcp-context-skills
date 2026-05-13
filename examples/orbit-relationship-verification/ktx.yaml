@@ -10,8 +10,7 @@ storage:
     auto_commit: true
     author: "ktx <ktx@example.com>"
 ingest:
-  adapters:
-    - live-database
+  adapters: []
 scan:
   enrichment:
     backend: none

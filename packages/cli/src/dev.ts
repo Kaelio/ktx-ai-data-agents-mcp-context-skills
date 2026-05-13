@@ -8,7 +8,7 @@ profileMark('module:dev');
 
 export function registerDevCommands(program: Command, context: KtxCliCommandContext): void {
   const dev = program
-    .command('dev', { hidden: true })
+    .command('dev')
     .description('Low-level project initialization and runtime management')
     .showHelpAfterError();
 

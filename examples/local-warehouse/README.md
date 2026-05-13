@@ -1,20 +1,16 @@
-# Local Warehouse Example
+# local-warehouse fixture
 
-This example is a standalone KTX project that can be copied to a temp directory
-and used with the local CLI. It uses the `fake` ingest adapter so it does not
-require a database or external app server.
+This directory is a contributor fixture for KTX CLI smoke tests. It uses the
+internal fake ingest adapter so tests can run without a live database or
+external service.
 
-Run the example from the repository root after building the CLI:
+Normal users should build context with connection-centric ingest:
 
 ```bash
-pnpm --filter @ktx/cli run build
-EXAMPLE_DIR="$(mktemp -d)/local-warehouse"
-cp -R examples/local-warehouse "$EXAMPLE_DIR"
-node packages/cli/dist/bin.js knowledge list --project-dir "$EXAMPLE_DIR"
-node packages/cli/dist/bin.js sl list --project-dir "$EXAMPLE_DIR" --connection-id warehouse
-node packages/cli/dist/bin.js ingest run --project-dir "$EXAMPLE_DIR" --connection-id warehouse --adapter fake --source-dir "$EXAMPLE_DIR/source"
+ktx ingest <connectionId>
+ktx ingest --all
 ```
 
-The copied project creates its own Git repository on first use. Keep commands
-pointed at a copy when experimenting so the checked-in example fixture stays
-unchanged.
+The public ingest workflow is documented in
+`docs-site/content/docs/cli-reference/ktx-ingest.mdx` and
+`docs-site/content/docs/guides/building-context.mdx`.

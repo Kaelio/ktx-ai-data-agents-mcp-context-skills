@@ -5,6 +5,7 @@ import type {
   KtxProjectEmbeddingConfig,
   KtxProjectLlmConfig,
 } from '@ktx/context/project';
+import type { PostgresPgssProbeResult } from '@ktx/context/ingest';
 import type { DoctorCheck } from './doctor.js';
 
 type ProjectStatusLevel = 'ok' | 'warn' | 'fail';
@@ -30,6 +31,11 @@ interface EmbeddingsStatus extends ProjectStatusLine {
 interface ConnectionStatus extends ProjectStatusLine {
   name: string;
   driver: string;
+}
+
+interface QueryHistoryStatus extends ProjectStatusLine {
+  connection: string;
+  dialect: 'postgres';
 }
 
 interface PipelineStatus {
@@ -70,6 +76,7 @@ export interface ProjectStatus {
   embeddings: EmbeddingsStatus;
   storage: StorageStatus;
   connections: ConnectionStatus[];
+  queryHistory: QueryHistoryStatus[];
   pipeline: PipelineStatus;
   warnings: WarningItem[];
   verdict: ProjectVerdict;
@@ -294,6 +301,144 @@ function buildConnectionStatus(
   }
 }
 
+interface PostgresQueryHistoryProbeInput {
+  projectDir: string;
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+  env: NodeJS.ProcessEnv;
+}
+
+type PostgresQueryHistoryProbe = (
+  input: PostgresQueryHistoryProbeInput,
+) => Promise<PostgresPgssProbeResult>;
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function queryHistoryRecord(connection: KtxProjectConnectionConfig): Record<string, unknown> | null {
+  const context = recordValue(connection.context);
+  return recordValue(context?.queryHistory);
+}
+
+function legacyHistoricSqlRecord(connection: KtxProjectConnectionConfig): Record<string, unknown> | null {
+  return recordValue(connection.historicSql);
+}
+
+function isEnabledPostgresQueryHistory(connection: KtxProjectConnectionConfig): boolean {
+  const queryHistory = queryHistoryRecord(connection);
+  if (queryHistory) {
+    return queryHistory.enabled === true;
+  }
+  const legacy = legacyHistoricSqlRecord(connection);
+  return legacy?.enabled === true && legacy.dialect === 'postgres';
+}
+
+function isPostgresDriver(connection: KtxProjectConnectionConfig): boolean {
+  const driver = String(connection.driver ?? '').toLowerCase();
+  return driver === 'postgres' || driver === 'postgresql';
+}
+
+function queryHistoryFailureFix(error: unknown, connectionId: string, projectDir: string): string {
+  if (error instanceof Error && error.name === 'HistoricSqlExtensionMissingError' && 'remediation' in error) {
+    return String(error.remediation);
+  }
+  if (error instanceof Error && error.name === 'HistoricSqlGrantsMissingError' && 'remediation' in error) {
+    return String(error.remediation);
+  }
+  if (error instanceof Error && error.name === 'HistoricSqlVersionUnsupportedError') {
+    return 'Use PostgreSQL 14 or newer, or disable query history for this connection';
+  }
+  return `Fix connections.${connectionId} Postgres settings, then rerun \`ktx status --project-dir ${projectDir}\``;
+}
+
+function failureDetail(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim().split('\n')[0] ?? error.message.trim();
+  }
+  return String(error);
+}
+
+function readinessDetail(result: PostgresPgssProbeResult): string {
+  const warningText = result.warnings.length > 0 ? ` with warnings: ${result.warnings.join('; ')}` : '';
+  const info = result.info ?? [];
+  const infoText = info.length > 0 ? `; info: ${info.join('; ')}` : '';
+  return `pg_stat_statements ready (${result.pgServerVersion})${warningText}${infoText}`;
+}
+
+async function defaultPostgresQueryHistoryProbe(
+  input: PostgresQueryHistoryProbeInput,
+): Promise<PostgresPgssProbeResult> {
+  const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
+    await Promise.all([import('@ktx/context/ingest'), import('@ktx/connector-postgres')]);
+
+  const inputDriver = input.connection.driver ?? 'unknown';
+  if (!isKtxPostgresConnectionConfig(input.connection)) {
+    throw new Error(`Native PostgreSQL connector cannot run driver "${inputDriver}"`);
+  }
+
+  const client = new KtxPostgresHistoricSqlQueryClient({
+    connectionId: input.connectionId,
+    connection: input.connection,
+    env: input.env,
+  });
+  try {
+    return await new PostgresPgssReader().probe(client);
+  } finally {
+    await client.cleanup();
+  }
+}
+
+async function buildQueryHistoryStatus(
+  project: KtxLocalProject,
+  options: BuildProjectStatusOptions,
+): Promise<QueryHistoryStatus[]> {
+  const targets = Object.entries(project.config.connections)
+    .filter(([, connection]) => isEnabledPostgresQueryHistory(connection))
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  const probe = options.postgresQueryHistoryProbe ?? defaultPostgresQueryHistoryProbe;
+  const env = options.env ?? process.env;
+  const statuses: QueryHistoryStatus[] = [];
+  for (const [connectionId, connection] of targets) {
+    if (!isPostgresDriver(connection)) {
+      statuses.push({
+        connection: connectionId,
+        dialect: 'postgres',
+        status: 'fail',
+        detail: `connections.${connectionId}.context.queryHistory is enabled but driver is ${String(connection.driver)}`,
+        fix: `Set connections.${connectionId}.driver to postgres or disable query history for this connection`,
+      });
+      continue;
+    }
+
+    try {
+      const result = await probe({ projectDir: project.projectDir, connectionId, connection, env });
+      statuses.push({
+        connection: connectionId,
+        dialect: 'postgres',
+        status: result.warnings.length > 0 ? 'warn' : 'ok',
+        detail: readinessDetail(result),
+        ...(result.warnings.length > 0
+          ? {
+              fix: `Update the Postgres parameter group or config, then rerun \`ktx status --project-dir ${project.projectDir}\``,
+            }
+          : {}),
+      });
+    } catch (error) {
+      statuses.push({
+        connection: connectionId,
+        dialect: 'postgres',
+        status: 'fail',
+        detail: failureDetail(error),
+        fix: queryHistoryFailureFix(error, connectionId, project.projectDir),
+      });
+    }
+  }
+
+  return statuses;
+}
+
 const ADAPTER_DRIVER_REQUIREMENT: Record<string, string[]> = {
   'live-database': ['postgres', 'postgresql', 'mysql', 'snowflake', 'bigquery', 'clickhouse', 'sqlite', 'sqlserver'],
   dbt: ['dbt', 'dbt-core', 'dbt-cloud'],
@@ -411,6 +556,7 @@ function buildVerdict(
   llm: LlmStatus,
   embeddings: EmbeddingsStatus,
   connections: ConnectionStatus[],
+  queryHistory: QueryHistoryStatus[],
   warnings: WarningItem[],
 ): { verdict: ProjectVerdict; reason: string; nextActions: string[] } {
   if (llm.status === 'fail') {
@@ -418,6 +564,14 @@ function buildVerdict(
       verdict: 'blocked',
       reason: 'LLM not configured — `ktx ask` will not work.',
       nextActions: ['ktx setup'],
+    };
+  }
+  const failedQueryHistory = queryHistory.filter((entry) => entry.status === 'fail').length;
+  if (failedQueryHistory > 0) {
+    return {
+      verdict: 'blocked',
+      reason: `Query history readiness failed for ${failedQueryHistory} connection${failedQueryHistory === 1 ? '' : 's'}.`,
+      nextActions: ['ktx status --verbose'],
     };
   }
 
@@ -432,6 +586,10 @@ function buildVerdict(
   }
   const missing = connections.filter((c) => c.status !== 'ok').length;
   if (missing > 0) reasons.push(`${missing} connection${missing === 1 ? '' : 's'} need configuration`);
+  const queryHistoryWarnings = queryHistory.filter((entry) => entry.status === 'warn').length;
+  if (queryHistoryWarnings > 0) {
+    reasons.push(`${queryHistoryWarnings} query history warning${queryHistoryWarnings === 1 ? '' : 's'}`);
+  }
   if (warnings.length > 0) reasons.push(`${warnings.length} config warning${warnings.length === 1 ? '' : 's'}`);
 
   if (reasons.length === 0) {
@@ -451,9 +609,10 @@ function buildVerdict(
 
 export interface BuildProjectStatusOptions {
   env?: NodeJS.ProcessEnv;
+  postgresQueryHistoryProbe?: PostgresQueryHistoryProbe;
 }
 
-export function buildProjectStatus(project: KtxLocalProject, options: BuildProjectStatusOptions = {}): ProjectStatus {
+export async function buildProjectStatus(project: KtxLocalProject, options: BuildProjectStatusOptions = {}): Promise<ProjectStatus> {
   const env = options.env ?? process.env;
   const config = project.config;
 
@@ -463,9 +622,10 @@ export function buildProjectStatus(project: KtxLocalProject, options: BuildProje
   const connections = Object.entries(config.connections).map(([name, conn]) =>
     buildConnectionStatus(name, conn, env),
   );
+  const queryHistory = await buildQueryHistoryStatus(project, options);
   const pipeline = buildPipelineStatus(config);
   const warnings = buildWarnings(config, connections, llm, embeddings);
-  const { verdict, reason, nextActions } = buildVerdict(llm, embeddings, connections, warnings);
+  const { verdict, reason, nextActions } = buildVerdict(llm, embeddings, connections, queryHistory, warnings);
 
   return {
     projectName: config.project,
@@ -474,6 +634,7 @@ export function buildProjectStatus(project: KtxLocalProject, options: BuildProje
     embeddings,
     storage,
     connections,
+    queryHistory,
     pipeline,
     warnings,
     verdict,
@@ -579,6 +740,21 @@ export function renderProjectStatus(status: ProjectStatus, options: RenderProjec
     }
   }
   lines.push('');
+
+  if (status.queryHistory.length > 0) {
+    lines.push(`  ${bold('Query history')}`);
+    const connectionWidth = Math.max(...status.queryHistory.map((entry) => entry.connection.length));
+    for (const entry of status.queryHistory) {
+      lines.push(
+        `    ${sym(entry.status)} ${entry.connection.padEnd(connectionWidth)}   ${dim(entry.dialect)}   ${entry.detail}`,
+      );
+      if (entry.fix && entry.status !== 'ok') {
+        const indent = 6 + connectionWidth + 3 + entry.dialect.length + 3;
+        lines.push(`${' '.repeat(indent)}${dim(`→ ${entry.fix}`)}`);
+      }
+    }
+    lines.push('');
+  }
 
   // Pipeline
   lines.push(`  ${bold('Pipeline')}`);

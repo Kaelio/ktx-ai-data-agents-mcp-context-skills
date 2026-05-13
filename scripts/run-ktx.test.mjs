@@ -152,7 +152,7 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
   const logs = [];
   let sourceMtimeMs = 3000;
 
-  const exitCode = await runWorkspaceKtx(['scan', 'orbit', '--mode', 'relationships'], {
+  const exitCode = await runWorkspaceKtx(['status', '--json', '--no-input'], {
     rootDir: '/workspace/ktx',
     access: async () => undefined,
     stat: async (path) => ({
@@ -174,7 +174,7 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
         sourceMtimeMs = 1000;
         return { stdout: 'build ok\n', stderr: '' };
       }
-      return { stdout: 'scan ok\n', stderr: '' };
+      return { stdout: '{"status":"ready"}\n', stderr: '' };
     },
     stdout: { write: (chunk) => logs.push(['stdout', chunk]) },
     stderr: { write: (chunk) => logs.push(['stderr', chunk]) },
@@ -185,12 +185,12 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
     calls.map((call) => [call.command, call.args]),
     [
       ['pnpm', ['run', 'build']],
-      [process.execPath, ['/workspace/ktx/packages/cli/dist/bin.js', 'scan', 'orbit', '--mode', 'relationships']],
+      [process.execPath, ['/workspace/ktx/packages/cli/dist/bin.js', 'status', '--json', '--no-input']],
     ],
   );
   assert.deepEqual(logs, [
     ['stderr', 'KTX CLI build output is stale. Rebuilding it now with `pnpm run build`...\n'],
     ['stdout', 'build ok\n'],
-    ['stdout', 'scan ok\n'],
+    ['stdout', '{"status":"ready"}\n'],
   ]);
 });

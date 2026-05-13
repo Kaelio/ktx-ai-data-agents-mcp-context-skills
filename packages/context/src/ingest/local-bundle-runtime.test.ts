@@ -56,7 +56,7 @@ describe('createLocalBundleIngestRuntime', () => {
       }),
     ).toThrow(
       [
-        'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+        'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
         `Configure an Anthropic provider, then rerun ingest:`,
         `  ktx setup --project-dir ${project.projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
       ].join('\n'),

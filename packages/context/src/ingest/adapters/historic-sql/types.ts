@@ -10,6 +10,7 @@ const filterModeSchema = z.enum(['exclude', 'include', 'mark-only']);
 
 const historicSqlCommonPullConfigSchema = z.object({
   minExecutions: z.number().int().nonnegative().default(5),
+  enabledTables: z.array(z.string().min(1)).default([]),
   filters: z.object({
     serviceAccounts: z.object({
       patterns: z.array(z.string()).default([]),

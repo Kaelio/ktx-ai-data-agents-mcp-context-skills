@@ -514,6 +514,18 @@ describe('runKtxIngest viz and replay', () => {
     expect(io.stderr()).toContain('Local ingest run or report "missing-run" was not found');
   });
 
+  it('suggests public ingest when status has no stored reports', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const io = makeIo();
+
+    await expect(runKtxIngest({ command: 'status', projectDir, outputMode: 'plain' }, io.io)).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('No local ingest reports were found. Run `ktx ingest <connectionId>` first.');
+    expect(io.stderr()).not.toContain('ktx ingest run --connection-id');
+    expect(io.stderr()).not.toContain('--adapter');
+  });
+
   it('uses the latest local ingest report when status has no run id', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);

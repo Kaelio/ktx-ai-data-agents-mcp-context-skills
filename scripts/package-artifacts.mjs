@@ -518,10 +518,19 @@ function requireSuccess(label, result) {
   assert.equal(result.stderr, '', label + ' wrote unexpected stderr');
 }
 
-function requireProjectStderr(label, result, projectDir) {
+function requireSuccessWithProjectStderr(label, result, projectDir) {
   assert.equal(
     result.code,
     0,
+    label + ' failed with code ' + result.code + '\\nstdout:\\n' + result.stdout + '\\nstderr:\\n' + result.stderr,
+  );
+  assert.equal(result.stderr, 'Project: ' + projectDir + '\\n', label + ' wrote unexpected stderr');
+}
+
+function requireExitCodeWithProjectStderr(label, result, projectDir, expectedCode) {
+  assert.equal(
+    result.code,
+    expectedCode,
     label + ' failed with code ' + result.code + '\\nstdout:\\n' + result.stdout + '\\nstderr:\\n' + result.stderr,
   );
   assert.equal(result.stderr, 'Project: ' + projectDir + '\\n', label + ' wrote unexpected stderr');
@@ -559,12 +568,6 @@ function requireIncludes(values, expected, label) {
   assert.ok(values.includes(expected), label + ' did not include ' + expected + ': ' + values.join(', '));
 }
 
-function getRunId(stdout) {
-  const match = stdout.match(/^Run: (.+)$/m);
-  assert.ok(match, 'ingest run output did not include a run id');
-  return match[1];
-}
-
 async function writeSqliteWarehouse(projectDir) {
   const database = new DatabaseSync(join(projectDir, 'warehouse.db'));
   try {
@@ -588,7 +591,6 @@ process.env.KTX_RUNTIME_ROOT = join(root, 'managed-runtime');
 let daemonStarted = false;
 try {
   const projectDir = join(root, 'project');
-  const sourceDir = join(root, 'source');
 
   const version = await run('pnpm', ['exec', 'ktx', '--version']);
   requireSuccess('ktx public package version', version);
@@ -619,7 +621,6 @@ try {
     '--skip-agents',
   ]);
   requireSuccess('ktx setup', init);
-  requireOutput('ktx setup', init, /Project: /);
 
   const emptyProjectDir = join(root, 'empty-project');
   const emptyInit = await run('pnpm', [
@@ -652,10 +653,6 @@ try {
       'scan:',
       '  enrichment:',
       '    mode: deterministic',
-      'ingest:',
-      '  adapters:',
-      '    - fake',
-      '    - live-database',
       '',
     ].join('\\n'),
     'utf-8',
@@ -818,52 +815,32 @@ try {
   requireOutput('ktx dev runtime stop', runtimeStop, /Stopped KTX Python daemon/);
   process.stdout.write('ktx dev runtime daemon lifecycle verified\\n');
 
-  const structuralScan = await run('pnpm', ['exec', 'ktx', 'scan', 'warehouse',
+  const structuralScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',
     '--project-dir',
     projectDir,
+    '--fast',
+    '--no-input',
   ]);
-  requireProjectStderr('ktx scan structural', structuralScan, projectDir);
-  requireOutput('ktx scan structural', structuralScan, /Status: done/);
-  requireOutput('ktx scan structural', structuralScan, /Mode: structural/);
-  requireOutput('ktx scan structural', structuralScan, /Needs attention\\s+None/);
-  const structuralScanRunId = getRunId(structuralScan.stdout);
+  requireSuccessWithProjectStderr('ktx ingest fast', structuralScan, projectDir);
+  requireOutput('ktx ingest fast', structuralScan, /Ingest finished/);
+  requireOutput('ktx ingest fast', structuralScan, /Database schema/);
+  requireOutput('ktx ingest fast', structuralScan, /warehouse\\s+done/);
   await access(join(projectDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'));
-  process.stdout.write('ktx scan structural verified: ' + structuralScanRunId + '\\n');
+  process.stdout.write('ktx ingest fast verified\\n');
 
-  const enrichedScan = await run('pnpm', ['exec', 'ktx', 'scan', 'warehouse',
+  const enrichedScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',
     '--project-dir',
     projectDir,
-    '--mode',
-    'enriched',
+    '--deep',
+    '--no-input',
   ]);
-  requireProjectStderr('ktx scan enriched', enrichedScan, projectDir);
-  requireOutput('ktx scan enriched', enrichedScan, /Status: done/);
-  requireOutput('ktx scan enriched', enrichedScan, /Mode: enriched/);
-  requireOutput('ktx scan enriched', enrichedScan, /Enrichment artifacts:/);
-  const enrichedScanRunId = getRunId(enrichedScan.stdout);
-  process.stdout.write('ktx scan enriched verified: ' + enrichedScanRunId + '\\n');
-
-  await mkdir(join(sourceDir, 'orders'), { recursive: true });
-  await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\\n', 'utf-8');
-
-  const ingestRun = await run('pnpm', ['exec', 'ktx', 'ingest', 'run',
-    '--project-dir',
-    projectDir,
-    '--connection-id',
-    'warehouse',
-    '--adapter',
-    'fake',
-    '--source-dir',
-    sourceDir,
-  ]);
-  assert.equal(ingestRun.code, 1, 'ktx ingest run without an LLM provider must fail');
-  assert.match(
-    ingestRun.stderr,
-    /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway, or an injected agentRunner/,
-  );
+  requireExitCodeWithProjectStderr('ktx ingest deep readiness guard', enrichedScan, projectDir, 1);
+  requireOutput('ktx ingest deep readiness guard', enrichedScan, /Ingest finished with partial failures/);
+  requireOutput('ktx ingest deep readiness guard', enrichedScan, /requires deep ingest readiness/);
+  process.stdout.write('ktx ingest deep readiness guard verified\\n');
 
   await access(join(projectDir, '.ktx', 'db.sqlite'));
-  process.stdout.write('ktx ingest provider guard verified\\n');
+  process.stdout.write('ktx ingest state verified\\n');
 } finally {
   if (daemonStarted) {
     await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'stop']);
@@ -939,7 +916,7 @@ try {
   assert.ok([0, 1].includes(doctor.code), 'ktx status setup exit code must be 0 or 1');
   requireStdout('ktx status setup', doctor, /KTX status/);
   requireStdout('ktx status setup', doctor, /No project here yet\\./);
-  requireStdout('ktx status setup', doctor, /Before you can run ktx setup/);
+  requireStdout('ktx status setup', doctor, /ktx setup/);
   requireStdout('ktx status setup', doctor, /Node 22\\+/);
   assert.equal(doctor.stderr, '', 'ktx status setup wrote unexpected stderr');
 } finally {
