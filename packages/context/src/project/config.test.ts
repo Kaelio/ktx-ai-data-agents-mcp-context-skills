@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { buildDefaultKtxProjectConfig, parseKtxProjectConfig, serializeKtxProjectConfig } from './config.js';
 
 describe('KTX project config', () => {
+  it.each(['status', 'replay', 'run', 'watch'])('rejects reserved ingest connection id "%s"', (connectionId) => {
+    expect(() =>
+      parseKtxProjectConfig(`
+project: reserved-test
+connections:
+  ${connectionId}:
+    driver: postgres
+`),
+    ).toThrow(`"${connectionId}" is reserved for ktx ingest ${connectionId}`);
+  });
+
   it('builds the default standalone project config', () => {
     expect(buildDefaultKtxProjectConfig('warehouse')).toEqual({
       project: 'warehouse',

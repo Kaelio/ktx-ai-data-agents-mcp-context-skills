@@ -254,6 +254,31 @@ describe('setup sources step', () => {
     });
   });
 
+  it('rejects reserved interactive source connection ids', async () => {
+    await addPrimarySource();
+    const io = makeIo();
+
+    const result = await runKtxSetupSourcesStep(
+      {
+        projectDir,
+        inputMode: 'auto',
+        runInitialSourceIngest: false,
+        skipSources: false,
+      },
+      io.io,
+      {
+        prompts: prompts({
+          multiselect: [['notion']],
+          text: ['status', 'env:NOTION_TOKEN'],
+          select: ['env', 'all_accessible'],
+        }),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).toContain('"status" is reserved for ktx ingest status; choose a different connection id.');
+  });
+
   it('uses selected Notion roots when root page ids are provided even if crawl mode says all accessible', async () => {
     await addPrimarySource();
     const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=1' }));

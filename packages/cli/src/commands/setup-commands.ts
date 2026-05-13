@@ -1,4 +1,5 @@
 import { type Command, InvalidArgumentError, Option } from '@commander-js/extra-typings';
+import { reservedKtxIngestConnectionIdMessage } from '@ktx/context/project';
 import type { KtxCliCommandContext } from '../cli-program.js';
 import { resolveCommandProjectDir } from '../cli-program.js';
 import type { KtxSetupDatabaseDriver } from '../setup-databases.js';
@@ -267,6 +268,10 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .option('--new-database-connection-id <id>', 'Connection id for one new database connection', (value) => {
       if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value)) {
         throw new InvalidArgumentError(`Unsafe connection id: ${value}`);
+      }
+      const reservedMessage = reservedKtxIngestConnectionIdMessage(value);
+      if (reservedMessage) {
+        throw new InvalidArgumentError(reservedMessage);
       }
       return value;
     })

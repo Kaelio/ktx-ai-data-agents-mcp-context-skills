@@ -1717,6 +1717,26 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('Missing database connection id');
   });
 
+  it('rejects reserved non-interactive database connection ids', async () => {
+    const io = makeIo();
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'replay',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).toContain('"replay" is reserved for ktx ingest replay; choose a different connection id.');
+  });
+
   it('leaves setup incomplete when primary sources are skipped', async () => {
     const io = makeIo();
 

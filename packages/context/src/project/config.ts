@@ -112,6 +112,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+const RESERVED_INGEST_CONNECTION_IDS = new Map([
+  ['status', 'ktx ingest status'],
+  ['replay', 'ktx ingest replay'],
+  ['run', 'ktx ingest run'],
+  ['watch', 'ktx ingest watch'],
+]);
+
+export function reservedKtxIngestConnectionIdMessage(connectionId: string): string | null {
+  const command = RESERVED_INGEST_CONNECTION_IDS.get(connectionId);
+  return command ? `"${connectionId}" is reserved for ${command}; choose a different connection id.` : null;
+}
+
+export function assertKtxConnectionIdIsNotReserved(connectionId: string): void {
+  const message = reservedKtxIngestConnectionIdMessage(connectionId);
+  if (message) {
+    throw new Error(message);
+  }
+}
+
 function stringArray(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) {
     return fallback;
@@ -485,6 +504,12 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
     ...(isRecord(scanEnrichment.embeddings) ? { embeddings: scanEmbeddings } : {}),
   };
   const parsedScanRelationships = parseScanRelationshipConfig(scanRelationships, defaults.scan.relationships);
+  const parsedConnections = isRecord(parsed.connections)
+    ? (parsed.connections as Record<string, KtxProjectConnectionConfig>)
+    : defaults.connections;
+  for (const connectionId of Object.keys(parsedConnections)) {
+    assertKtxConnectionIdIsNotReserved(connectionId);
+  }
 
   return {
     project: project.trim(),
@@ -495,9 +520,7 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
           },
         }
       : {}),
-    connections: isRecord(parsed.connections)
-      ? (parsed.connections as Record<string, KtxProjectConnectionConfig>)
-      : defaults.connections,
+    connections: parsedConnections,
     storage: {
       state: storage.state === 'sqlite' ? 'sqlite' : defaults.storage.state,
       search: storage.search === 'sqlite-fts5' ? 'sqlite-fts5' : defaults.storage.search,

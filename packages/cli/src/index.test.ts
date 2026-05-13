@@ -1175,6 +1175,18 @@ describe('runKtxCli', () => {
     );
   });
 
+  it('rejects reserved setup database connection ids before dispatch', async () => {
+    const testIo = makeIo();
+    const setup = vi.fn(async () => 0);
+
+    await expect(
+      runKtxCli(['setup', '--new-database-connection-id', 'status', '--no-input'], testIo.io, { setup }),
+    ).resolves.toBe(1);
+
+    expect(setup).not.toHaveBeenCalled();
+    expect(testIo.stderr()).toContain('"status" is reserved for ktx ingest status; choose a different connection id.');
+  });
+
   it('dispatches setup source flags', async () => {
     const setup = vi.fn(async () => 0);
     const testIo = makeIo();

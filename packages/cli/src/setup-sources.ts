@@ -19,6 +19,7 @@ import {
   testRepoConnection,
 } from '@ktx/context/ingest';
 import {
+  assertKtxConnectionIdIsNotReserved,
   type KtxProjectConfig,
   type KtxProjectConnectionConfig,
   loadKtxProject,
@@ -201,6 +202,7 @@ function assertSafeConnectionId(connectionId: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
     throw new Error(`Unsafe connection id: ${connectionId}`);
   }
+  assertKtxConnectionIdIsNotReserved(connectionId);
 }
 
 function credentialRef(value: string | undefined, label: string): string {

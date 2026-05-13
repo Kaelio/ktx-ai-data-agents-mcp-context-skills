@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
+  assertKtxConnectionIdIsNotReserved,
   type KtxProjectConnectionConfig,
   loadKtxProject,
   markKtxSetupStateStepComplete,
@@ -225,6 +226,13 @@ function normalizeDriver(driver: string | undefined): KtxSetupDatabaseDriver | n
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
+function assertSafeDatabaseConnectionId(connectionId: string): void {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
+    throw new Error(`Unsafe connection id: ${connectionId}`);
+  }
+  assertKtxConnectionIdIsNotReserved(connectionId);
 }
 
 function historicSqlConfigRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> | null {
@@ -1665,10 +1673,12 @@ async function chooseConnectionIdForDriver(input: {
   prompts: KtxSetupDatabasesPromptAdapter;
 }): Promise<{ kind: 'existing' | 'new'; connectionId: string } | 'back' | 'missing-input'> {
   if (input.args.databaseConnectionId) {
+    assertSafeDatabaseConnectionId(input.args.databaseConnectionId);
     return { kind: 'new', connectionId: input.args.databaseConnectionId };
   }
   if (input.args.inputMode === 'disabled') {
     if (!input.args.databaseConnectionId) return 'missing-input';
+    assertSafeDatabaseConnectionId(input.args.databaseConnectionId);
     return { kind: 'new', connectionId: input.args.databaseConnectionId };
   }
 
@@ -1684,6 +1694,7 @@ async function chooseConnectionIdForDriver(input: {
     });
     if (entered === undefined) return 'back';
     const connectionId = entered.trim() || defaultId;
+    assertSafeDatabaseConnectionId(connectionId);
     return connectionId ? { kind: 'new', connectionId } : 'missing-input';
   }
 
@@ -1708,6 +1719,7 @@ async function chooseConnectionIdForDriver(input: {
     });
     if (entered === undefined) continue;
     const connectionId = entered.trim() || defaultId;
+    assertSafeDatabaseConnectionId(connectionId);
     return connectionId ? { kind: 'new', connectionId } : 'missing-input';
   }
 }
@@ -1780,12 +1792,18 @@ export async function runKtxSetupDatabasesStep(
 
     for (const driver of drivers) {
       const project = await loadKtxProject({ projectDir: args.projectDir });
-      const connectionChoice = await chooseConnectionIdForDriver({
-        driver,
-        connections: project.config.connections,
-        args,
-        prompts,
-      });
+      let connectionChoice: Awaited<ReturnType<typeof chooseConnectionIdForDriver>>;
+      try {
+        connectionChoice = await chooseConnectionIdForDriver({
+          driver,
+          connections: project.config.connections,
+          args,
+          prompts,
+        });
+      } catch (error) {
+        io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return { status: 'failed', projectDir: args.projectDir };
+      }
       if (connectionChoice === 'back') {
         if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
         returnToDriverSelection = true;
