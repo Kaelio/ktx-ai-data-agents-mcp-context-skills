@@ -223,6 +223,21 @@ describe('buildPublicIngestPlan', () => {
     });
   });
 
+  it('adds a schema-first notice when query history is explicitly enabled', () => {
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+
+    expect(
+      buildPublicIngestPlan(project, {
+        projectDir: '/tmp/project',
+        targetConnectionId: 'warehouse',
+        all: false,
+        queryHistory: 'enabled',
+      }).notices,
+    ).toEqual(['Schema ingest runs before query history for warehouse.']);
+  });
+
   it('warns and skips query-history window override for unsupported database drivers', () => {
     const plan = buildPublicIngestPlan(
       projectWithConnections({
@@ -371,6 +386,33 @@ describe('runKtxPublicIngest', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('prints the schema-first notice for explicit query-history runs', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Schema ingest runs before query history for warehouse.');
   });
 
   it('suppresses internal scan output for public database ingest summaries', async () => {

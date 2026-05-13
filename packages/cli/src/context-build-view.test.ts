@@ -625,6 +625,54 @@ describe('runContextBuild', () => {
     expect(io.stdout()).not.toContain('historic-sql');
   });
 
+  it('passes schema-first notices from the plan into foreground output', async () => {
+    const io = makeIo();
+    const project = {
+      ...projectWithConnections({
+        warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      }),
+      config: {
+        ...projectWithConnections({ warehouse: { driver: 'postgres' } }).config,
+        connections: {
+          warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+        },
+        llm: {
+          provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } },
+          models: { default: 'gpt-test' },
+        },
+        scan: {
+          ...projectWithConnections({ warehouse: { driver: 'postgres' } }).config.scan,
+          enrichment: {
+            mode: 'llm',
+            embeddings: {
+              backend: 'openai',
+              model: 'text-embedding-3-small',
+              dimensions: 1536,
+            },
+          },
+        },
+      },
+    };
+    const executeTarget = vi.fn(async (target) => successResult(target.connectionId, target.driver, target.operation));
+
+    await expect(
+      runContextBuild(
+        project,
+        {
+          projectDir: '/tmp/project',
+          inputMode: 'disabled',
+          targetConnectionId: 'warehouse',
+          all: false,
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { executeTarget, now: () => 1000 },
+      ),
+    ).resolves.toMatchObject({ exitCode: 0 });
+
+    expect(io.stdout()).toContain('Schema ingest runs before query history for warehouse.');
+  });
+
   it('renders final view for non-TTY output', async () => {
     const io = makeIo();
     const project = projectWithConnections({

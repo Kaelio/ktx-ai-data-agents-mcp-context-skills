@@ -67,6 +67,7 @@ export interface KtxPublicIngestPlan {
   projectDir: string;
   targets: KtxPublicIngestPlanTarget[];
   warnings: string[];
+  notices?: string[];
 }
 
 export interface KtxPublicIngestTargetResult {
@@ -171,6 +172,23 @@ function finalizeWarnings(
     if (warning) warnings.push(warning);
   }
   return warnings;
+}
+
+function schemaFirstQueryHistoryNotice(
+  targets: KtxPublicIngestPlanTarget[],
+  args: { queryHistory?: KtxPublicIngestQueryHistoryFlag },
+): string | null {
+  if (args.queryHistory !== 'enabled') {
+    return null;
+  }
+  const queryHistoryTargets = targets.filter((target) => target.queryHistory?.enabled === true);
+  if (queryHistoryTargets.length === 0) {
+    return null;
+  }
+  if (queryHistoryTargets.length === 1) {
+    return `Schema ingest runs before query history for ${queryHistoryTargets[0].connectionId}.`;
+  }
+  return `Schema ingest runs before query history for ${queryHistoryTargets.length} database connections.`;
 }
 
 function storedQueryHistory(connection: KtxProjectConnectionConfig): Record<string, unknown> {
@@ -356,13 +374,16 @@ export function buildPublicIngestPlan(
   const targets = selected.map(([connectionId, connection]) =>
     targetForConnection(connectionId, connection, project.config, args, warnings),
   );
+  const orderedTargets = [
+    ...targets.filter((t) => t.operation === 'database-ingest'),
+    ...targets.filter((t) => t.operation === 'source-ingest'),
+  ];
+  const notice = schemaFirstQueryHistoryNotice(orderedTargets, args);
   return {
     projectDir: args.projectDir,
-    targets: [
-      ...targets.filter((t) => t.operation === 'database-ingest'),
-      ...targets.filter((t) => t.operation === 'source-ingest'),
-    ],
+    targets: orderedTargets,
     warnings: finalizeWarnings(warnings, args),
+    ...(notice ? { notices: [notice] } : {}),
   };
 }
 
@@ -646,7 +667,10 @@ export async function runKtxPublicIngest(
   const plan = buildPublicIngestPlan(project, args);
   const results: KtxPublicIngestTargetResult[] = [];
 
-  if (!args.json && plan.warnings.length > 0) {
+  if (!args.json) {
+    for (const notice of plan.notices ?? []) {
+      io.stdout.write(`${notice}\n`);
+    }
     for (const warning of plan.warnings) {
       io.stderr.write(`Warning: ${warning}\n`);
     }
