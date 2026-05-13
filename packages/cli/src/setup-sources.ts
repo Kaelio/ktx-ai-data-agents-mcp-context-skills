@@ -76,6 +76,7 @@ export interface KtxSetupSourcesPromptAdapter {
   multiselect(options: {
     message: string;
     options: KtxSetupPromptOption[];
+    initialValues?: string[];
     required?: boolean;
   }): Promise<string[]>;
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
@@ -504,8 +505,8 @@ function sourcePathFromFileRepoUrl(repoUrl: string, subpath?: string): string {
 }
 
 function repoAuthToken(connection: KtxProjectConnectionConfig | Record<string, unknown>): string | null {
-  const ref = stringField(connection.auth_token_ref) ?? stringField(connection.authTokenRef);
-  const literal = stringField(connection.authToken) ?? stringField(connection.auth_token);
+  const ref = stringField(connection.auth_token_ref);
+  const literal = stringField(connection.auth_token);
   return literal ?? resolveKtxConfigReference(ref, process.env) ?? null;
 }
 
@@ -523,8 +524,8 @@ async function collectYamlFilesRecursive(sourceRoot: string): Promise<Array<{ co
 }
 
 async function defaultValidateDbt(connection: KtxProjectConnectionConfig): Promise<SourceValidationResult> {
-  let sourceDir = stringField(connection.source_dir) ?? stringField(connection.sourceDir);
-  const repoUrl = stringField(connection.repo_url) ?? stringField(connection.repoUrl);
+  let sourceDir = stringField(connection.source_dir);
+  const repoUrl = stringField(connection.repo_url);
   if (!sourceDir && repoUrl?.startsWith('file:')) {
     sourceDir = sourcePathFromFileRepoUrl(repoUrl, stringField(connection.path));
   }
@@ -584,7 +585,7 @@ async function defaultValidateLooker(projectDir: string, connectionId: string): 
 }
 
 async function defaultValidateLookml(connection: KtxProjectConnectionConfig): Promise<SourceValidationResult> {
-  const repoUrl = stringField(connection.repoUrl) ?? stringField(connection.repo_url);
+  const repoUrl = stringField(connection.repoUrl);
   if (!repoUrl) {
     return { ok: false, message: 'LookML setup requires repoUrl.' };
   }
@@ -1285,6 +1286,22 @@ function existingConnectionIdsBySource(
     .sort((left, right) => left.localeCompare(right));
 }
 
+function sourceChecklistForConnections(connections: Record<string, KtxProjectConnectionConfig>): {
+  options: Array<{ value: KtxSetupSourceType; label: string; hint?: string }>;
+  initialValues: KtxSetupSourceType[];
+} {
+  const initialValues: KtxSetupSourceType[] = [];
+  const options = SOURCE_OPTIONS.map((option) => {
+    const existingIds = existingConnectionIdsBySource(connections, option.value);
+    if (existingIds.length === 0) {
+      return option;
+    }
+    initialValues.push(option.value);
+    return { ...option, hint: `configured: ${existingIds.join(', ')}` };
+  });
+  return { options, initialValues };
+}
+
 function defaultConnectionIdForSource(
   connections: Record<string, KtxProjectConnectionConfig>,
   source: KtxSetupSourceType,
@@ -1443,13 +1460,19 @@ export async function runKtxSetupSourcesStep(
     }
 
     while (true) {
+      const contextSourceChecklist = sourceChecklistForConnections(
+        (await loadKtxProject({ projectDir: args.projectDir })).config.connections,
+      );
       const selected = args.source
         ? [args.source]
         : args.inputMode === 'disabled'
           ? []
           : await prompts.multiselect({
               message: withMultiselectNavigation('Which context sources should KTX ingest?'),
-              options: [...SOURCE_OPTIONS],
+              options: contextSourceChecklist.options,
+              ...(contextSourceChecklist.initialValues.length > 0
+                ? { initialValues: contextSourceChecklist.initialValues }
+                : {}),
               required: false,
             });
       if (selected.includes('back')) {

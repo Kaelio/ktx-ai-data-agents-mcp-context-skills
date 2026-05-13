@@ -456,7 +456,7 @@ describe('verification snippets', () => {
     assert.doesNotMatch(source, /@modelcontextprotocol/);
     assert.doesNotMatch(source, /startSemanticDaemon/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'setup'/);
-    assert.match(source, /knowledge', 'global', 'revenue\.md'/);
+    assert.match(source, /wiki', 'global', 'revenue\.md'/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'wiki',\s*'search'/);
     assert.match(source, /semantic-layer', 'warehouse', 'orders\.yaml'/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'search',\s*'orders'/);
@@ -497,7 +497,7 @@ describe('verification snippets', () => {
     assert.match(source, /mode: deterministic/);
     assert.match(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
     assert.match(source, /access\(join\(projectDir, '\.ktx', 'db\.sqlite'\)\)/);
-    assert.match(source, /SQLite knowledge index/);
+    assert.match(source, /SQLite wiki index/);
     assert.match(source, /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
     assert.match(source, /ktx ingest provider guard verified/);
   });

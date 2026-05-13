@@ -57,4 +57,4 @@ Always join through `customer.id`. Do not join on `email`.
 - **Join key:** Always use `customer.id`, never `email`.
 - **Timezone:** `created_at` and `last_seen_at` are UTC. Confirm whether a question expects UTC or a local business day before filtering.
 - **Paying vs. all:** `free` customers must be excluded from paying-customer follow-ups. Use `paying_customer_count`, not `customer_count`.
-- **plan_tier values:** `free`, `pro`, `enterprise`. Note: `pro_plus` is a legacy alias for `growth` in the account/contract layer (see `orbit-plan-segment-normalization`), but `plan_tier` on this table uses `pro` not `pro_plus`.
+- **plan_tier values:** `free`, `pro`, `enterprise`. Note: use the canonical plan names from the account/contract layer (see `orbit-plan-segment-normalization`); `plan_tier` on this table uses `pro` rather than `growth`.

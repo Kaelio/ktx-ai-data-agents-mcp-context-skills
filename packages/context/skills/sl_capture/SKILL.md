@@ -100,13 +100,13 @@ measures:
 
 **Extract repeated filter bundles into named segments.** If the same predicate appears on multiple measures of the same source, lift it to a `segments[]` entry and have each measure reference it. One edit updates every measure that depends on it.
 
-**Never write a standalone file on a manifest-backed name.** If `sl_discover({ tableName })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`description:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+**Never write a standalone file on a manifest-backed name.** If `sl_discover({ tableName })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
 
 **Prefer overlay decomposition over standalone SQL sources.** Before reaching for `source_type: sql`, check whether the metric decomposes into measures on existing overlays (including cross-source derived measures). Use `source_type: sql` only when:
 - The metric requires per-user/per-entity derivation that cannot be expressed as a single `expr` (e.g., `EXISTS` over a time-windowed subset), OR
 - The metric requires multi-step CTEs whose intermediate grain is not a column in any existing source.
 
-When an `sql` source is unavoidable, note in its `description` which SL gap forced the choice so it can be retired once the primitive ships. It must target a name NOT in the manifest — pick a distinct one (e.g. `mrr_waterfall_rollup`, not `fct_orders`).
+When an `sql` source is unavoidable, note in its `descriptions` map which SL gap forced the choice so it can be retired once the primitive ships. It must target a name NOT in the manifest — pick a distinct one (e.g. `mrr_waterfall_rollup`, not `fct_orders`).
 
 ## Slim standalone sources via `inherits_columns_from`
 
@@ -116,7 +116,8 @@ Discover the manifest key with `sl_discover` — pass the bare name (`CONSIGNMEN
 
 ```yaml
 name: aav_consignments
-description: AAV consignments — filtered view of MARTS.CONSIGNMENTS for the auto-auction-vaulting channel.
+descriptions:
+  user: AAV consignments — filtered view of MARTS.CONSIGNMENTS for the auto-auction-vaulting channel.
 source_type: sql
 sql: |
   SELECT CONSIGNED_ITEM_ID, CASH_ADV_AMOUNT, ALT_VALUE_COMBINED, my_derived_flag
@@ -127,10 +128,10 @@ sql: |
 inherits_columns_from: CONSIGNMENTS
 grain: [CONSIGNED_ITEM_ID]
 columns:
-  - { name: CONSIGNED_ITEM_ID }      # type/description inherited from manifest
+  - { name: CONSIGNED_ITEM_ID }      # type/descriptions inherited from manifest
   - { name: CASH_ADV_AMOUNT }
   - { name: ALT_VALUE_COMBINED }
-  - { name: my_derived_flag, type: boolean, expr: "CASH_ADV_AMOUNT > 0", description: "Computed locally — has any cash advance." }
+  - { name: my_derived_flag, type: boolean, expr: "CASH_ADV_AMOUNT > 0", descriptions: { user: "Computed locally — has any cash advance." } }
 measures:
   - name: total_cash_advance
     expr: sum(CASH_ADV_AMOUNT)

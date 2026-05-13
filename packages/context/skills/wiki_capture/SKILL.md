@@ -1,10 +1,10 @@
 ---
-name: knowledge_capture
-description: KTX's knowledge base — wiki pages for durable, reusable business knowledge. Covers capture workflow for user preferences, metric definitions, organizational conventions, and cross-references between knowledge pages and semantic-layer sources. Loaded by the post-turn memory-agent only. The research agent reads wiki via `wiki_read`/`wiki_search` but does not write it.
+name: wiki_capture
+description: KTX's knowledge base — wiki pages for durable, reusable business knowledge. Covers capture workflow for user preferences, metric definitions, organizational conventions, and cross-references between wiki pages and semantic-layer sources. Loaded by the post-turn memory-agent only. The research agent reads wiki via `wiki_read`/`wiki_search` but does not write it.
 callers: [memory_agent]
 ---
 
-# Knowledge Capture
+# Wiki Capture
 
 ## Role
 

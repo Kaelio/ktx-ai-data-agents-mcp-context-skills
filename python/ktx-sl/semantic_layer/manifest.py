@@ -76,31 +76,17 @@ def map_column_type(db_type: str) -> str:
 _DEFAULT_PRIORITY = ["user", "ai", "dbt", "db"]
 
 
-def _description_sources(
-    descriptions: dict[str, str] | None,
-    description: str | None = None,
-    db_description: str | None = None,
-) -> dict[str, str] | None:
+def _description_sources(descriptions: dict[str, str] | None) -> dict[str, str] | None:
     """Normalize multi-source descriptions to a keyed map."""
     if descriptions:
         result = {source: text for source, text in descriptions.items() if text}
         if result:
             return result
-
-    result: dict[str, str] = {}
-    if description:
-        result["ai"] = description
-    if db_description:
-        result["db"] = db_description
-    return result or None
+    return None
 
 
-def _resolve_description(
-    descriptions: dict[str, str] | None,
-    description: str | None = None,
-    db_description: str | None = None,
-) -> str | None:
-    """Resolve a single description from a multi-source map or legacy flat fields."""
+def _resolve_description(descriptions: dict[str, str] | None) -> str | None:
+    """Resolve a single description from a multi-source map."""
     if descriptions:
         for source in _DEFAULT_PRIORITY:
             if text := descriptions.get(source):
@@ -109,11 +95,6 @@ def _resolve_description(
         for text in descriptions.values():
             if text:
                 return text
-    # Legacy flat fields
-    if description:
-        return description
-    if db_description:
-        return db_description
     return None
 
 
@@ -123,18 +104,13 @@ class ManifestColumn(BaseModel):
     pk: bool = False
     nullable: bool = True
     descriptions: dict[str, str] | None = None
-    # Legacy flat fields (backwards-compatible YAML parsing)
-    description: str | None = None
-    db_description: str | None = None
     constraints: dict | None = None
     enum_values: dict[str, list[str]] | None = None
     tests: SourceColumnTests | None = None
 
     @property
     def resolved_description(self) -> str | None:
-        return _resolve_description(
-            self.descriptions, self.description, self.db_description
-        )
+        return _resolve_description(self.descriptions)
 
 
 class ManifestJoin(BaseModel):
@@ -147,9 +123,6 @@ class ManifestJoin(BaseModel):
 class ManifestEntry(BaseModel):
     table: str
     descriptions: dict[str, str] | None = None
-    # Legacy flat fields (backwards-compatible YAML parsing)
-    description: str | None = None
-    db_description: str | None = None
     columns: list[ManifestColumn]
     joins: list[ManifestJoin] = []
     default_time_dimension: DefaultTimeDimensionDbt | None = None
@@ -158,9 +131,7 @@ class ManifestEntry(BaseModel):
 
     @property
     def resolved_description(self) -> str | None:
-        return _resolve_description(
-            self.descriptions, self.description, self.db_description
-        )
+        return _resolve_description(self.descriptions)
 
 
 class Manifest(BaseModel):
@@ -178,6 +149,8 @@ def validate_overlay(data: dict) -> list[str]:
     Returns a list of error messages (empty if valid).
     """
     errors: list[str] = []
+    if "description" in data:
+        errors.append("Overlay must use 'descriptions' for source descriptions")
     if "table" in data:
         errors.append("Overlay must not contain 'table' (owned by manifest)")
     if "sql" in data:
@@ -185,6 +158,10 @@ def validate_overlay(data: dict) -> list[str]:
             "Overlay must not contain 'sql' (that makes it a standalone source)"
         )
     for col in data.get("columns", []):
+        if "description" in col:
+            errors.append(
+                f"Overlay column '{col.get('name', '?')}' must use 'descriptions'"
+            )
         if "type" in col and "expr" not in col:
             errors.append(
                 f"Overlay column '{col.get('name', '?')}' specifies 'type' without 'expr' "

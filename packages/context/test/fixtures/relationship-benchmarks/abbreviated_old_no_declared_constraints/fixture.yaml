@@ -1,5 +1,5 @@
-id: abbreviated_legacy_no_declared_constraints
-name: Abbreviated legacy naming fixture with no declared constraints
+id: abbreviated_old_no_declared_constraints
+name: Abbreviated old naming fixture with no declared constraints
 tier: row_bearing
 origin: synthetic
 thresholdEligible: false

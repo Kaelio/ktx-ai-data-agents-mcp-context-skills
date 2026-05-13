@@ -50,7 +50,6 @@ export interface DefaultLocalIngestAdaptersOptions {
     reader?: HistoricSqlReader;
     queryClient?: unknown;
     postgresQueryClient?: KtxPostgresQueryClient;
-    postgresBaselineRootDir?: string;
     now?: () => Date;
   };
   looker?: {
@@ -129,7 +128,6 @@ export function createDefaultLocalIngestAdapters(
         sqlAnalysis: options.historicSql.sqlAnalysis,
         reader: options.historicSql.reader ?? new PostgresPgssReader(),
         queryClient,
-        legacyPostgresBaselineRootDir: options.historicSql.postgresBaselineRootDir,
         now: options.historicSql.now,
       }),
     );
@@ -163,11 +161,11 @@ function stringField(value: unknown): string | null {
 
 function localLookmlPullConfigFromConnection(connection: Record<string, unknown> | undefined, env: NodeJS.ProcessEnv) {
   const mappings = isRecord(connection?.mappings) ? connection.mappings : {};
-  const authTokenRef = stringField(connection?.auth_token_ref) ?? stringField(connection?.authTokenRef);
-  const literalAuthToken = stringField(connection?.authToken) ?? stringField(connection?.auth_token);
+  const authTokenRef = stringField(connection?.auth_token_ref);
+  const literalAuthToken = stringField(connection?.auth_token);
 
   return pullConfigFromIntegrationConfig({
-    repoUrl: stringField(connection?.repoUrl) ?? stringField(connection?.repo_url) ?? null,
+    repoUrl: stringField(connection?.repoUrl) ?? null,
     branch: stringField(connection?.branch),
     path: stringField(connection?.path),
     authToken: literalAuthToken ?? resolveKtxConfigReference(authTokenRef ?? undefined, env) ?? null,
@@ -176,27 +174,21 @@ function localLookmlPullConfigFromConnection(connection: Record<string, unknown>
 }
 
 function localDbtPullConfigFromConnection(connection: Record<string, unknown> | undefined, env: NodeJS.ProcessEnv) {
-  const sourceDir = stringField(connection?.source_dir) ?? stringField(connection?.sourceDir);
-  const repoUrl = stringField(connection?.repo_url) ?? stringField(connection?.repoUrl);
+  const sourceDir = stringField(connection?.source_dir);
+  const repoUrl = stringField(connection?.repo_url);
   if (sourceDir) {
     return {
       sourceDir,
       ...(stringField(connection?.profiles_path) ? { profilesPath: stringField(connection?.profiles_path) } : {}),
-      ...(stringField(connection?.profilesPath) ? { profilesPath: stringField(connection?.profilesPath) } : {}),
       ...(stringField(connection?.target) ? { target: stringField(connection?.target) } : {}),
       ...(stringField(connection?.project_name) ? { projectName: stringField(connection?.project_name) } : {}),
-      ...(stringField(connection?.projectName) ? { projectName: stringField(connection?.projectName) } : {}),
     };
   }
   if (!repoUrl) {
     return undefined;
   }
   const authToken =
-    stringField(connection?.authToken) ??
-    resolveKtxConfigReference(
-      stringField(connection?.auth_token_ref) ?? stringField(connection?.authTokenRef) ?? undefined,
-      env,
-    );
+    stringField(connection?.auth_token) ?? resolveKtxConfigReference(stringField(connection?.auth_token_ref) ?? undefined, env);
   return {
     repoUrl,
     ...(stringField(connection?.branch) ? { branch: stringField(connection?.branch) } : {}),
@@ -280,8 +272,8 @@ export async function localPullConfigForAdapter(
         ? (metricflow as Record<string, unknown>)
         : null;
     const authToken =
-      typeof metricflowConfig?.authToken === 'string'
-        ? metricflowConfig.authToken
+      typeof metricflowConfig?.auth_token === 'string'
+        ? metricflowConfig.auth_token
         : resolveKtxConfigReference(
             typeof metricflowConfig?.auth_token_ref === 'string' ? metricflowConfig.auth_token_ref : undefined,
             options.looker?.env ?? process.env,

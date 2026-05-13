@@ -140,7 +140,7 @@ metrics:
 ```
 
 Do NOT emit SL for this. Instead:
-- Write a wiki page at `knowledge/global/<metric_name>-intent.md` quoting the full YAML body and a one-line explanation of the intended semantics (base event → conversion event within window).
+- Write a wiki page at `wiki/global/<metric_name>-intent.md` quoting the full YAML body and a one-line explanation of the intended semantics (base event → conversion event within window).
 - Call `emit_unmapped_fallback` with `rawPath` set to the MetricFlow file path, `reason: "conversion_metric_unsupported"`, and `fallback: "flagged"`.
 
 When KTX SL gains conversion primitives, re-ingesting will find the prior wiki note (via `priorProvenance`) and replace it with an SL source.
@@ -177,7 +177,8 @@ semantic_models:
 # KTX overlay at <connId>/orders.yaml:
 # <!-- from: raw-sources/.../models/orders.yml#L1-10 -->
 name: orders
-description: Order fact table.
+descriptions:
+  user: Order fact table.
 measures:
   - {name: order_count, expr: "count(order_id)"}
   - {name: gross_amount, expr: "sum(amount)"}
@@ -221,7 +222,8 @@ metrics:
 # <!-- from: raw-sources/.../models/orders_ext.yml#L1-8 -->
 # <!-- from: raw-sources/.../metrics/orders_final.yml#L1-10 -->
 name: orders_ext
-description: Extended order fact including refund handling; `revenue` = gross - refund.
+descriptions:
+  user: Extended order fact including refund handling; `revenue` = gross - refund.
 measures:
   - {name: order_count, expr: "count(order_id)"}
   - {name: gross_amount, expr: "sum(amount)"}
@@ -288,7 +290,7 @@ measures:
   - {name: margin, expr: "sum(revenue_cents) - sum(cost_cents)"}
 ```
 
-Also write a wiki page at `knowledge/global/margin-metric.md` explaining the cross-source origin.
+Also write a wiki page at `wiki/global/margin-metric.md` explaining the cross-source origin.
 
 ## Example 4 — filtered metric creates a new measure
 

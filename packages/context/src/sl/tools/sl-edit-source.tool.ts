@@ -127,7 +127,7 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
               `    - name: <measure_name>`,
               `      expr: "<expression>"`,
               `      description: "<what it measures>"`,
-              `Overlay shape: "name:" plus any of "measures:", "segments:", "description:". Do NOT include "sql:", "table:", "grain:", "columns:", or "joins:" — those are inherited from the manifest.`,
+              `Overlay shape: "name:" plus any of "measures:", "segments:", "descriptions:". Do NOT include "sql:", "table:", "grain:", "columns:", or "joins:" — those are inherited from the manifest.`,
             ].join('\n'),
           ],
           sourceName,

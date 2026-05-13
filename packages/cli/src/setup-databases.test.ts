@@ -64,8 +64,6 @@ function textInputPrompt(message: string): string {
   return `${title}\n│\n│  ${bodyLines.join('\n│  ')}\n│  Press Escape to go back.\n│`;
 }
 
-const legacyHistoricSqlServiceAccountPatternsKey = ['serviceAccount', 'UserPatterns'].join('');
-
 describe('setup databases step', () => {
   let tempDir: string;
 
@@ -1255,6 +1253,7 @@ describe('setup databases step', () => {
       io.io,
       {
         testConnection: vi.fn(async () => 0),
+        rebuildNativeSqlite: vi.fn(async () => 1),
         scanConnection: vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
           commandIo.stderr.write(
             [
@@ -1278,6 +1277,60 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain(`Retry: ktx scan --project-dir ${tempDir} warehouse`);
     expect(io.stderr()).not.toContain('npm rebuild');
     expect(io.stderr()).not.toMatch(/^Native SQLite is built for a different Node.js ABI\./m);
+  });
+
+  it('rebuilds native SQLite once and retries setup scanning after a Node ABI mismatch', async () => {
+    const io = makeIo();
+    const scanConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
+      if (scanConnection.mock.calls.length === 1) {
+        commandIo.stderr.write(
+          [
+            "The module '/workspace/node_modules/better-sqlite3/build/Release/better_sqlite3.node'",
+            'was compiled against a different Node.js version using',
+            'NODE_MODULE_VERSION 147. This version of Node.js requires',
+            'NODE_MODULE_VERSION 137. Please try re-compiling or re-installing',
+            'the module (for instance, using `npm rebuild` or `npm install`).',
+            '',
+          ].join('\n'),
+        );
+        return 1;
+      }
+
+      commandIo.stdout.write('What changed\n');
+      commandIo.stdout.write('  Semantic layer comparison found 0 changes across 56 tables\n');
+      commandIo.stdout.write('  New tables: 0\n');
+      commandIo.stdout.write('  Changed tables: 0\n');
+      commandIo.stdout.write('  Removed tables: 0\n');
+      commandIo.stdout.write('  Unchanged tables: 56\n');
+      return 0;
+    });
+    const rebuildNativeSqlite = vi.fn(async () => 0);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection,
+        rebuildNativeSqlite,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(rebuildNativeSqlite).toHaveBeenCalledOnce();
+    expect(rebuildNativeSqlite).toHaveBeenCalledWith(expect.anything());
+    expect(scanConnection).toHaveBeenCalledTimes(2);
+    expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
+    expect(io.stderr()).toContain('Rebuilding Native SQLite with pnpm run native:rebuild…');
+    expect(io.stdout()).toContain('◇  Scan complete for warehouse');
   });
 
   it('writes Historic SQL config for supported Snowflake databases after validation succeeds', async () => {
@@ -1325,7 +1378,6 @@ describe('setup databases step', () => {
         redactionPatterns: ['(?i)secret'],
       },
     });
-    expect(config.connections.snowflake.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
   });
 
@@ -1373,10 +1425,8 @@ describe('setup databases step', () => {
         },
       },
     });
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty('minCalls');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('windowDays');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('redactionPatterns');
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
     expect(config.ingest.workUnits.maxConcurrency).toBe(6);
     expect(io.stdout()).toContain('Historic SQL probe...');
@@ -1430,7 +1480,6 @@ describe('setup databases step', () => {
         redactionPatterns: [],
       },
     });
-    expect(config.connections.analytics.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
   });
 
@@ -1480,7 +1529,6 @@ describe('setup databases step', () => {
         },
       },
     });
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
   });
 
   it('prints a non-blocking Postgres Historic SQL probe failure after connection test succeeds', async () => {

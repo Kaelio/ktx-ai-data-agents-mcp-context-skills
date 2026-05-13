@@ -77,7 +77,7 @@ function reportSnapshot(): IngestReportSnapshot {
         {
           rawPath: 'views/orders.view.lkml',
           artifactKind: 'wiki',
-          artifactKey: 'knowledge/global/orders.md',
+          artifactKey: 'wiki/global/orders.md',
           actionType: 'wiki_written',
         },
         {
@@ -115,7 +115,7 @@ function reportSnapshot(): IngestReportSnapshot {
           rawFiles: ['views/orders.view.lkml'],
           status: 'success',
           actions: [
-            { target: 'wiki', type: 'created', key: 'knowledge/global/orders.md', detail: 'order facts' },
+            { target: 'wiki', type: 'created', key: 'wiki/global/orders.md', detail: 'order facts' },
             { target: 'sl', type: 'updated', key: 'warehouse.orders', detail: 'order measures' },
           ],
           touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'warehouse.orders' }],
@@ -180,7 +180,7 @@ describe('memory-flow event mapping', () => {
       unitKey: 'orders',
       target: 'wiki',
       action: 'created',
-      key: 'knowledge/global/orders.md',
+      key: 'wiki/global/orders.md',
     });
     expect(replay.events).toContainEqual({
       type: 'work_unit_finished',
@@ -197,7 +197,7 @@ describe('memory-flow event mapping', () => {
         unitKey: 'orders',
         target: 'wiki',
         action: 'created',
-        key: 'knowledge/global/orders.md',
+        key: 'wiki/global/orders.md',
         summary: 'order facts',
         rawFiles: ['views/orders.view.lkml'],
         status: 'success',
@@ -225,7 +225,7 @@ describe('memory-flow event mapping', () => {
       {
         rawPath: 'views/orders.view.lkml',
         artifactKind: 'wiki',
-        artifactKey: 'knowledge/global/orders.md',
+        artifactKey: 'wiki/global/orders.md',
         actionType: 'wiki_written',
       },
       {

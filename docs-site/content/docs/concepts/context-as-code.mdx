@@ -7,9 +7,9 @@ description: Treat analytics context like code — version it, review it, merge 
 
 dbt proved that analytics transformations belong in version control. Before dbt, SQL lived in BI tools, scheduling systems, and spreadsheets — scattered, unreviewed, impossible to audit. "Analytics as code" changed that: put your models in git, review them in PRs, deploy them by merging.
 
-KTX applies the same principle to analytics context. Metric definitions, business rules, join relationships, knowledge pages — these are artifacts that determine whether an agent produces correct results. They change over time. They need review. They need history. They need to be treated like code.
+KTX applies the same principle to analytics context. Metric definitions, business rules, join relationships, wiki pages — these are artifacts that determine whether an agent produces correct results. They change over time. They need review. They need history. They need to be treated like code.
 
-A KTX project is a git repository. Semantic sources are YAML files. Knowledge pages are Markdown files. Changes are commits. Updates are pull requests. Deployment is a merge. The entire lifecycle of your analytics context follows the same workflow your team already uses for dbt models, application code, and infrastructure.
+A KTX project is a git repository. Semantic sources are YAML files. Wiki pages are Markdown files. Changes are commits. Updates are pull requests. Deployment is a merge. The entire lifecycle of your analytics context follows the same workflow your team already uses for dbt models, application code, and infrastructure.
 
 ## Auto-ingestion
 
@@ -19,9 +19,9 @@ An ingestion run works like this:
 
 1. **Adapters extract metadata.** Each configured source — dbt, LookML, Metabase, MetricFlow, Notion, or your live database — provides structured metadata about models, metrics, dimensions, questions, and documentation.
 
-2. **The LLM agent reconciles.** KTX doesn't blindly overwrite existing context. An LLM agent compares incoming metadata against your current semantic sources and knowledge pages. It decides what to create, what to update, and what to leave alone. If your dbt project added a new model, the agent writes a new semantic source. If a Metabase question references a metric you've already defined, the agent skips the duplicate.
+2. **The LLM agent reconciles.** KTX doesn't blindly overwrite existing context. An LLM agent compares incoming metadata against your current semantic sources and wiki pages. It decides what to create, what to update, and what to leave alone. If your dbt project added a new model, the agent writes a new semantic source. If a Metabase question references a metric you've already defined, the agent skips the duplicate.
 
-3. **Files are written.** New and updated YAML sources and Markdown knowledge pages are written to the project directory. Every decision is recorded in the session transcript.
+3. **Files are written.** New and updated YAML sources and Markdown wiki pages are written to the project directory. Every decision is recorded in the session transcript.
 
 This reconciliation step is what separates auto-ingestion from a simple sync. A naive import would overwrite your hand-tuned metric definitions every time dbt's manifest changes. KTX's agent-driven approach merges intelligently: it respects your edits, fills gaps, and flags conflicts for human review.
 
@@ -43,7 +43,7 @@ dbt / Looker / Metabase / Notion
             |
             |  + 3 new sources
             |  ~ 2 updated joins
-            |  + 1 knowledge page
+            |  + 1 wiki page
             v
         open PR
             |
@@ -57,7 +57,7 @@ dbt / Looker / Metabase / Notion
   agents see updated context
 ```
 
-A typical branch shows a semantic diff: "this ingest added 3 new sources from dbt, updated 2 join definitions based on schema changes, and created 1 knowledge page from a Notion doc." Analytics engineers review the diff, verify that the new sources look correct, and merge.
+A typical branch shows a semantic diff: "this ingest added 3 new sources from dbt, updated 2 join definitions based on schema changes, and created 1 wiki page from a Notion doc." Analytics engineers review the diff, verify that the new sources look correct, and merge.
 
 Teams usually run this on demand while setting up a source, then schedule it once the source is stable. A cron job or CI schedule can run `ktx ingest run --connection-id <id> --adapter <adapter> --no-input` overnight on an ingest branch so the latest dbt manifests, BI metadata, and documentation updates are ready for review each morning.
 
@@ -69,9 +69,9 @@ This workflow gives you the same review guarantees you have for dbt models. No s
 
 Context improves over time through two feedback channels.
 
-**Analyst corrections.** When an analytics engineer spots something wrong — a measure formula that doesn't match the business definition, a join that should be `many_to_one` instead of `one_to_many`, a knowledge page that's out of date — they edit the YAML or Markdown directly and commit. These corrections become part of the project's git history, and the next ingestion run respects them. If you manually fix a measure definition, KTX won't overwrite it on the next ingest.
+**Analyst corrections.** When an analytics engineer spots something wrong — a measure formula that doesn't match the business definition, a join that should be `many_to_one` instead of `one_to_many`, a wiki page that's out of date — they edit the YAML or Markdown directly and commit. These corrections become part of the project's git history, and the next ingestion run respects them. If you manually fix a measure definition, KTX won't overwrite it on the next ingest.
 
-**Agent feedback.** When an agent queries the semantic layer and gets unexpected results — a query that returns no rows because of a bad filter, a join path that produces duplicated results — it can flag the issue. These signals feed back into the context: knowledge pages can note known data quality issues, and source definitions can be tightened with better filters, join paths, or grain declarations.
+**Agent feedback.** When an agent queries the semantic layer and gets unexpected results — a query that returns no rows because of a bad filter, a join path that produces duplicated results — it can flag the issue. These signals feed back into the context: wiki pages can note known data quality issues, and source definitions can be tightened with better filters, join paths, or grain declarations.
 
 Each of these channels makes the next ingestion cycle better. Analyst corrections teach the system what your team considers authoritative. Agent feedback surfaces gaps in coverage. Context is not a static artifact — it's a living system that converges toward accuracy with every iteration.
 

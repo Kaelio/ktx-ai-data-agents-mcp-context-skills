@@ -121,7 +121,6 @@ function shouldShowSetupEntryMenu(
     disableHistoricSql?: boolean;
     historicSqlWindowDays?: number;
     historicSqlMinExecutions?: number;
-    historicSqlMinCalls?: number;
     historicSqlServiceAccountPattern?: string[];
     historicSqlRedactionPattern?: string[];
     skipDatabases?: boolean;
@@ -194,7 +193,6 @@ function shouldShowSetupEntryMenu(
     'disableHistoricSql',
     'historicSqlWindowDays',
     'historicSqlMinExecutions',
-    'historicSqlMinCalls',
     'skipDatabases',
     'source',
     'sourceConnectionId',
@@ -283,11 +281,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .option('--disable-historic-sql', 'Disable Historic SQL for the selected database', false)
     .option('--historic-sql-window-days <number>', 'Historic SQL query-history window', positiveInteger)
     .option('--historic-sql-min-executions <number>', 'Minimum Historic SQL executions for a template', positiveInteger)
-    .option(
-      '--historic-sql-min-calls <number>',
-      'Alias for --historic-sql-min-executions',
-      positiveInteger,
-    )
     .option(
       '--historic-sql-service-account-pattern <pattern>',
       'Historic SQL service-account regex; repeatable',
@@ -379,7 +372,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
 
     const mode = options.new ? 'new' : options.existing ? 'existing' : 'auto';
     const resolvedAgentScope = options.global ? 'global' : options.agentScope;
-    const historicSqlMinExecutions = options.historicSqlMinExecutions ?? options.historicSqlMinCalls;
     await runSetupArgs(context, {
       command: 'run',
       projectDir: resolveCommandProjectDir(command),
@@ -410,7 +402,9 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ...(options.enableHistoricSql ? { enableHistoricSql: true } : {}),
       ...(options.disableHistoricSql ? { disableHistoricSql: true } : {}),
       ...(options.historicSqlWindowDays !== undefined ? { historicSqlWindowDays: options.historicSqlWindowDays } : {}),
-      ...(historicSqlMinExecutions !== undefined ? { historicSqlMinExecutions } : {}),
+      ...(options.historicSqlMinExecutions !== undefined
+        ? { historicSqlMinExecutions: options.historicSqlMinExecutions }
+        : {}),
       ...(options.historicSqlServiceAccountPattern.length > 0
         ? { historicSqlServiceAccountPatterns: options.historicSqlServiceAccountPattern }
         : {}),

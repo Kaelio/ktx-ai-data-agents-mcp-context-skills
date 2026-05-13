@@ -95,7 +95,7 @@ function normalizedDriver(connection: KtxProjectConnectionConfig): string {
 }
 
 function sourceDirForConnection(connection: KtxProjectConnectionConfig): string | undefined {
-  const value = connection.source_dir ?? connection.sourceDir;
+  const value = connection.source_dir;
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 

@@ -13,7 +13,7 @@ async function tempDir(): Promise<string> {
 
 const sqlAnalysis: SqlAnalysisPort = {
   async analyzeForFingerprint() {
-    throw new Error('legacy analyzeForFingerprint must not be used');
+    throw new Error('analyzeForFingerprint must not be used');
   },
   async analyzeBatch() {
     return new Map();
@@ -66,7 +66,7 @@ describe('HistoricSqlSourceAdapter', () => {
     };
     const batchSqlAnalysis: SqlAnalysisPort = {
       async analyzeForFingerprint() {
-        throw new Error('legacy analyzeForFingerprint must not be used');
+        throw new Error('analyzeForFingerprint must not be used');
       },
       async analyzeBatch() {
         return new Map([

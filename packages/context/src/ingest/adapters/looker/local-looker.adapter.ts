@@ -26,13 +26,11 @@ export function lookerCredentialsFromLocalConnection(
   if (!connection || String(connection.driver).toLowerCase() !== 'looker') {
     throw new Error(`Connection "${connectionId}" is not a Looker connection`);
   }
-  const baseUrl = stringField(connection.base_url) ?? stringField(connection.baseUrl) ?? stringField(connection.url);
-  const clientId = stringField(connection.client_id) ?? stringField(connection.clientId);
+  const baseUrl = stringField(connection.base_url);
+  const clientId = stringField(connection.client_id);
   const clientSecret =
     stringField(connection.client_secret) ??
-    stringField(connection.clientSecret) ??
-    (stringField(connection.client_secret_ref) ? resolveEnvReference(String(connection.client_secret_ref), env) : null) ??
-    (stringField(connection.clientSecretRef) ? resolveEnvReference(String(connection.clientSecretRef), env) : null);
+    (stringField(connection.client_secret_ref) ? resolveEnvReference(String(connection.client_secret_ref), env) : null);
 
   if (!baseUrl) {
     throw new Error(`Connection "${connectionId}" is missing Looker base_url`);

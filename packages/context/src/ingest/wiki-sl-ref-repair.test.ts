@@ -40,7 +40,7 @@ describe('repairWikiSlRefs', () => {
     };
     const configService = {
       listFiles: vi.fn(async () => ({
-        files: ['global/accounts-at-risk.md', 'global/historic-sql/nested-legacy.md'],
+        files: ['global/accounts-at-risk.md', 'global/historic-sql/nested-old.md'],
       })),
     };
     const semanticLayerService = {

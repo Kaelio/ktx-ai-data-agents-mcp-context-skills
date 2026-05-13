@@ -19,7 +19,7 @@ reviewable project files that agents can use while planning, querying, and
 updating analytics work.
 
 A KTX project is a directory of plain files — YAML semantic sources, Markdown
-knowledge pages, and SQLite state — that you commit to git and review in PRs,
+wiki pages, and SQLite state — that you commit to git and review in PRs,
 just like dbt models.
 
 ## Who KTX is for
@@ -105,7 +105,7 @@ my-project/
 │       ├── orders.yaml           # Semantic source definitions
 │       ├── customers.yaml
 │       └── order_items.yaml
-├── knowledge/
+├── wiki/
 │   ├── global/
 │   │   ├── revenue.md            # Business definitions and rules
 │   │   └── segment-classification.md
@@ -118,7 +118,7 @@ my-project/
     └── db.sqlite                 # Local state (git-ignored)
 ```
 
-Semantic sources and knowledge pages are committed to git. The `.ktx/` directory
+Semantic sources and wiki pages are committed to git. The `.ktx/` directory
 holds ephemeral state and is git-ignored — delete it and KTX rebuilds on the
 next run.
 

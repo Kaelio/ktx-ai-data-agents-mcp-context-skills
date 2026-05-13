@@ -71,7 +71,7 @@
         "type": "work_unit_started",
         "unitKey": "revenue-and-contracts",
         "skills": [
-          "knowledge_capture",
+          "wiki_capture",
           "sl_capture"
         ],
         "stepBudget": 40
@@ -81,21 +81,21 @@
         "unitKey": "revenue-and-contracts",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/arr-contract-first.md"
+        "key": "wiki/global/arr-contract-first.md"
       },
       {
         "type": "candidate_action",
         "unitKey": "revenue-and-contracts",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/revenue-gross-to-net.md"
+        "key": "wiki/global/revenue-gross-to-net.md"
       },
       {
         "type": "candidate_action",
         "unitKey": "revenue-and-contracts",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/discount-expiration.md"
+        "key": "wiki/global/discount-expiration.md"
       },
       {
         "type": "candidate_action",
@@ -127,7 +127,7 @@
         "type": "work_unit_started",
         "unitKey": "retention-and-segments",
         "skills": [
-          "knowledge_capture",
+          "wiki_capture",
           "sl_capture"
         ],
         "stepBudget": 40
@@ -137,14 +137,14 @@
         "unitKey": "retention-and-segments",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/nrr-retention.md"
+        "key": "wiki/global/nrr-retention.md"
       },
       {
         "type": "candidate_action",
         "unitKey": "retention-and-segments",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/segment-classification.md"
+        "key": "wiki/global/segment-classification.md"
       },
       {
         "type": "candidate_action",
@@ -162,7 +162,7 @@
         "type": "work_unit_started",
         "unitKey": "procurement-and-activation",
         "skills": [
-          "knowledge_capture",
+          "wiki_capture",
           "sl_capture"
         ],
         "stepBudget": 40
@@ -172,14 +172,14 @@
         "unitKey": "procurement-and-activation",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/activation-policy.md"
+        "key": "wiki/global/activation-policy.md"
       },
       {
         "type": "candidate_action",
         "unitKey": "procurement-and-activation",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/procurement-workflows.md"
+        "key": "wiki/global/procurement-workflows.md"
       },
       {
         "type": "candidate_action",
@@ -197,7 +197,7 @@
         "type": "work_unit_started",
         "unitKey": "support-and-health",
         "skills": [
-          "knowledge_capture",
+          "wiki_capture",
           "sl_capture"
         ],
         "stepBudget": 40
@@ -207,14 +207,14 @@
         "unitKey": "support-and-health",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/customer-health-scoring.md"
+        "key": "wiki/global/customer-health-scoring.md"
       },
       {
         "type": "candidate_action",
         "unitKey": "support-and-health",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/support-escalation.md"
+        "key": "wiki/global/support-escalation.md"
       },
       {
         "type": "candidate_action",
@@ -232,7 +232,7 @@
         "type": "work_unit_started",
         "unitKey": "governance-and-exclusions",
         "skills": [
-          "knowledge_capture"
+          "wiki_capture"
         ],
         "stepBudget": 40
       },
@@ -241,7 +241,7 @@
         "unitKey": "governance-and-exclusions",
         "target": "wiki",
         "action": "created",
-        "key": "knowledge/global/internal-test-exclusion.md"
+        "key": "wiki/global/internal-test-exclusion.md"
       },
       {
         "type": "work_unit_finished",
@@ -321,7 +321,7 @@
           "unitKey": "revenue-and-contracts",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/arr-contract-first.md",
+          "key": "wiki/global/arr-contract-first.md",
           "summary": "ARR follows contract precedence with cancellation and discount caveats.",
           "rawFiles": [
             "contracts",
@@ -334,7 +334,7 @@
           "unitKey": "revenue-and-contracts",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/revenue-gross-to-net.md",
+          "key": "wiki/global/revenue-gross-to-net.md",
           "summary": "Invoice, refund, and revenue dashboard evidence reconcile gross to net revenue.",
           "rawFiles": [
             "invoices",
@@ -346,7 +346,7 @@
           "unitKey": "revenue-and-contracts",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/discount-expiration.md",
+          "key": "wiki/global/discount-expiration.md",
           "summary": "Discount expiration is separated from organic contraction for retention reporting.",
           "rawFiles": [
             "contracts",
@@ -394,7 +394,7 @@
           "unitKey": "retention-and-segments",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/nrr-retention.md",
+          "key": "wiki/global/nrr-retention.md",
           "summary": "NRR uses parent-account rollups and quarterly ARR movement windows.",
           "rawFiles": [
             "accounts",
@@ -407,7 +407,7 @@
           "unitKey": "retention-and-segments",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/segment-classification.md",
+          "key": "wiki/global/segment-classification.md",
           "summary": "Segment labels come from plan mapping and sales-ops policy notes.",
           "rawFiles": [
             "accounts",
@@ -432,7 +432,7 @@
           "unitKey": "procurement-and-activation",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/activation-policy.md",
+          "key": "wiki/global/activation-policy.md",
           "summary": "Activation policy changed on January 15, 2026 and is encoded for agents.",
           "rawFiles": [
             "purchase_requests",
@@ -445,7 +445,7 @@
           "unitKey": "procurement-and-activation",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/procurement-workflows.md",
+          "key": "wiki/global/procurement-workflows.md",
           "summary": "Procurement requester activity and approval events explain product usage.",
           "rawFiles": [
             "purchase_requests",
@@ -468,7 +468,7 @@
           "unitKey": "support-and-health",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/customer-health-scoring.md",
+          "key": "wiki/global/customer-health-scoring.md",
           "summary": "Customer health combines support severity, ARR exposure, and product usage.",
           "rawFiles": [
             "support_tickets",
@@ -480,7 +480,7 @@
           "unitKey": "support-and-health",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/support-escalation.md",
+          "key": "wiki/global/support-escalation.md",
           "summary": "Escalation tiers map ticket severity to SLA expectations.",
           "rawFiles": [
             "support_tickets",
@@ -503,7 +503,7 @@
           "unitKey": "governance-and-exclusions",
           "target": "wiki",
           "action": "created",
-          "key": "knowledge/global/internal-test-exclusion.md",
+          "key": "wiki/global/internal-test-exclusion.md",
           "summary": "Canonical metrics exclude internal and test accounts across source families.",
           "rawFiles": [
             "raw-sources/notion/analyst-onboarding.md"
@@ -515,97 +515,97 @@
         {
           "rawPath": "contracts",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/arr-contract-first.md",
+          "artifactKey": "wiki/global/arr-contract-first.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/arr-and-contract-reporting-notes.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/arr-contract-first.md",
+          "artifactKey": "wiki/global/arr-contract-first.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "invoices",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/revenue-gross-to-net.md",
+          "artifactKey": "wiki/global/revenue-gross-to-net.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/revenue-reporting-policy.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/revenue-gross-to-net.md",
+          "artifactKey": "wiki/global/revenue-gross-to-net.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "arr_movements",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/discount-expiration.md",
+          "artifactKey": "wiki/global/discount-expiration.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "arr_movements",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/nrr-retention.md",
+          "artifactKey": "wiki/global/nrr-retention.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/retention-and-nrr-definition-notes.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/nrr-retention.md",
+          "artifactKey": "wiki/global/nrr-retention.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/bi/account_retention.view.lkml",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/nrr-retention.md",
+          "artifactKey": "wiki/global/nrr-retention.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "plans",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/segment-classification.md",
+          "artifactKey": "wiki/global/segment-classification.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/sales-ops-segmentation-guide.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/segment-classification.md",
+          "artifactKey": "wiki/global/segment-classification.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/activation-policy-decision-record.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/activation-policy.md",
+          "artifactKey": "wiki/global/activation-policy.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "purchase_requests",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/procurement-workflows.md",
+          "artifactKey": "wiki/global/procurement-workflows.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/customer-health-playbook.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/customer-health-scoring.md",
+          "artifactKey": "wiki/global/customer-health-scoring.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "support_tickets",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/customer-health-scoring.md",
+          "artifactKey": "wiki/global/customer-health-scoring.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/support-escalation-runbook.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/support-escalation.md",
+          "artifactKey": "wiki/global/support-escalation.md",
           "actionType": "wiki_written"
         },
         {
           "rawPath": "raw-sources/notion/analyst-onboarding.md",
           "artifactKind": "wiki",
-          "artifactKey": "knowledge/global/internal-test-exclusion.md",
+          "artifactKey": "wiki/global/internal-test-exclusion.md",
           "actionType": "wiki_written"
         },
         {

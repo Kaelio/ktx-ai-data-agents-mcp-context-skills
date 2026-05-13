@@ -277,9 +277,9 @@ describe('setup context build state', () => {
   it('marks context complete without prompting when initial source ingest already made agent context', async () => {
     await writeReadyProject(tempDir);
     await mkdir(join(tempDir, 'semantic-layer', 'dbt-main'), { recursive: true });
-    await mkdir(join(tempDir, 'knowledge', 'global'), { recursive: true });
+    await mkdir(join(tempDir, 'wiki', 'global'), { recursive: true });
     await writeFile(join(tempDir, 'semantic-layer', 'dbt-main', 'mart_revenue_daily.yaml'), 'name: mart_revenue_daily\n');
-    await writeFile(join(tempDir, 'knowledge', 'global', 'metrics.md'), '# Metrics\n');
+    await writeFile(join(tempDir, 'wiki', 'global', 'metrics.md'), '# Metrics\n');
     await writeReadyEnrichedScanReport(tempDir);
     const io = makeIo();
     const runContextBuildMock = vi.fn(async () => ({ exitCode: 0, detached: false }));
@@ -352,8 +352,8 @@ describe('setup context build state', () => {
     await writeFile(join(tempDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'), 'tables: {}\n');
     const io = makeIo();
     const runContextBuildMock = vi.fn(async () => {
-      await mkdir(join(tempDir, 'knowledge', 'global'), { recursive: true });
-      await writeFile(join(tempDir, 'knowledge', 'global', 'metrics.md'), '# Metrics\n');
+      await mkdir(join(tempDir, 'wiki', 'global'), { recursive: true });
+      await writeFile(join(tempDir, 'wiki', 'global', 'metrics.md'), '# Metrics\n');
       await writeReadyEnrichedScanReport(tempDir);
       return { exitCode: 0, detached: false };
     });

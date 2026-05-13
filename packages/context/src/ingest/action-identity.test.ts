@@ -19,13 +19,13 @@ describe('memory action target identity', () => {
         {
           target: 'wiki',
           type: 'created',
-          key: 'knowledge/global/orders.md',
+          key: 'wiki/global/orders.md',
           detail: '',
           targetConnectionId: 'ignored',
         },
         'looker-run',
       ),
-    ).toBe('wiki:looker-run:knowledge/global/orders.md');
+    ).toBe('wiki:looker-run:wiki/global/orders.md');
   });
 
   it('resolves action target connection only for SL actions', () => {

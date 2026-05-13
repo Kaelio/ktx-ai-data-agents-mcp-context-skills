@@ -16,7 +16,7 @@ interface DbtSourceAdapterOptions {
 
 export class DbtSourceAdapter implements SourceAdapter {
   readonly source = 'dbt' as const;
-  /** Runner merges: ingest_triage, sl_capture, knowledge_capture (see ingest-bundle.runner.ts) */
+  /** Runner merges: ingest_triage, sl_capture, wiki_capture (see ingest-bundle.runner.ts) */
   readonly skillNames: string[] = ['dbt_ingest'];
 
   constructor(private readonly options: DbtSourceAdapterOptions = {}) {}

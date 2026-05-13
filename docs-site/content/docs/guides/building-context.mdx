@@ -53,7 +53,7 @@ Relationship scans run with `ktx scan <connection-id> --mode relationships`. Thi
 
 ## Ingestion
 
-Ingestion pulls semantic context from your existing analytics tools — dbt projects, Looker models, Metabase questions, and more — and writes it into your KTX project as semantic sources and knowledge pages.
+Ingestion pulls semantic context from your existing analytics tools — dbt projects, Looker models, Metabase questions, and more — and writes it into your KTX project as semantic sources and wiki pages.
 
 ### How it works
 
@@ -61,7 +61,7 @@ Each ingest run follows this flow:
 
 1. An **adapter** extracts metadata from your tool (dbt manifest, LookML files, Metabase API, etc.)
 2. An **LLM agent** reconciles the extracted metadata with your existing context — it merges intelligently rather than overwriting
-3. **Semantic sources** (YAML) and **knowledge pages** (Markdown) are written to your project directory
+3. **Semantic sources** (YAML) and **wiki pages** (Markdown) are written to your project directory
 
 ### Running an ingest
 
@@ -113,7 +113,7 @@ See [Context Sources](/docs/integrations/context-sources) for adapter-specific s
 
 ### What gets generated
 
-A typical dbt ingest produces semantic sources and knowledge pages in your project:
+A typical dbt ingest produces semantic sources and wiki pages in your project:
 
 **Semantic source** (`semantic-layer/my-postgres/orders.yaml`):
 
@@ -149,7 +149,7 @@ joins:
     relationship: many_to_one
 ```
 
-**Knowledge page** (`knowledge/global/order-status-definitions.md`):
+**Wiki page** (`wiki/global/order-status-definitions.md`):
 
 ```markdown
 ---

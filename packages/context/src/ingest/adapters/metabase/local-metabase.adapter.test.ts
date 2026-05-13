@@ -48,19 +48,6 @@ describe('metabaseRuntimeConfigFromLocalConnection', () => {
     });
   });
 
-  it('accepts url as the local api URL alias', () => {
-    const connection: KtxProjectConnectionConfig = {
-      driver: 'metabase',
-      url: 'https://metabase.example.com',
-      api_key: 'literal-test-key', // pragma: allowlist secret
-    };
-
-    expect(metabaseRuntimeConfigFromLocalConnection('prod-metabase', connection)).toEqual({
-      apiUrl: 'https://metabase.example.com',
-      apiKey: 'literal-test-key', // pragma: allowlist secret
-    });
-  });
-
   it('rejects proxy-bearing local Metabase connections', () => {
     const connection: KtxProjectConnectionConfig = {
       driver: 'metabase',

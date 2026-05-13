@@ -29,7 +29,7 @@ const REQUIRED_SEEDED_ASSET_PATHS = [
   DEMO_REPLAY_FILE,
   join('semantic-layer', 'dbt-main', 'mart_arr_daily.yaml'),
   join('semantic-layer', 'postgres-warehouse', 'mart_account_activity.yaml'),
-  join('knowledge', 'global', 'orbit-company-overview.md'),
+  join('wiki', 'global', 'orbit-company-overview.md'),
 ] as const;
 
 function assetDir(): string {
@@ -131,7 +131,7 @@ export async function ensureDemoProject(options: EnsureDemoProjectOptions): Prom
   }
 
   await mkdir(projectDir, { recursive: true });
-  for (const relativeDir of ['reports', 'semantic-layer', 'knowledge', 'replays', 'raw-sources', 'links']) {
+  for (const relativeDir of ['reports', 'semantic-layer', 'wiki', 'replays', 'raw-sources', 'links']) {
     await mkdir(join(projectDir, relativeDir), { recursive: true });
   }
 
@@ -157,7 +157,7 @@ async function copySeededAssetDirectories(projectDir: string): Promise<void> {
 
   await Promise.all([
     copyDirIfExists(join(src, 'semantic-layer'), join(dest, 'semantic-layer')),
-    copyDirIfExists(join(src, 'knowledge'), join(dest, 'knowledge')),
+    copyDirIfExists(join(src, 'wiki'), join(dest, 'wiki')),
     copyDirIfExists(join(src, 'raw-sources'), join(dest, 'raw-sources')),
     copyDirIfExists(join(src, 'links'), join(dest, 'links')),
     copyDirIfExists(join(src, 'reports'), join(dest, 'reports')),

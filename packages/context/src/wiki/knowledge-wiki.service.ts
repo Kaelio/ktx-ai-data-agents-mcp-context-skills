@@ -7,7 +7,7 @@ import { buildKnowledgeSearchText } from './knowledge-search-text.js';
 import type { KnowledgeGitDiffPort, KnowledgeIndexPort, UpsertPageParams } from './ports.js';
 import type { WikiFrontmatter, WikiPage, WikiPageWithScope } from './types.js';
 
-const WIKI_PREFIX = 'knowledge';
+const WIKI_PREFIX = 'wiki';
 
 export type { WikiFrontmatter };
 
@@ -89,7 +89,7 @@ export class KnowledgeWikiService {
   ) {
     const path = this.pagePath(scope, scopeId, pageKey);
     const serialized = this.serializePage(frontmatter, content);
-    const message = commitMessage ?? `Update knowledge page: ${pageKey}`;
+    const message = commitMessage ?? `Update wiki page: ${pageKey}`;
     return this.configService.writeFile(path, serialized, author, authorEmail, message, {
       skipLock: options?.skipLock,
     });
@@ -115,7 +115,7 @@ export class KnowledgeWikiService {
   ) {
     const path = this.pagePath(scope, scopeId, pageKey);
     try {
-      return await this.configService.deleteFile(path, author, authorEmail, `Remove knowledge page: ${pageKey}`);
+      return await this.configService.deleteFile(path, author, authorEmail, `Remove wiki page: ${pageKey}`);
     } catch (error) {
       // Check if the file actually exists — if not, deletion is a no-op
       try {
@@ -196,7 +196,7 @@ export class KnowledgeWikiService {
       rawContent,
       author,
       authorEmail,
-      commitMessage ?? `Update knowledge page (raw): ${pageKey}`,
+      commitMessage ?? `Update wiki page (raw): ${pageKey}`,
     );
     await this.syncSinglePage(scope, scopeId, pageKey, parsed.frontmatter, parsed.content);
     return parsed;
@@ -352,9 +352,9 @@ export class KnowledgeWikiService {
 
   /**
    * Apply the diff between two commits on the config repo to the shared
-   * `knowledge` index in a single transaction. Called by the ingest runner
+   * wiki index in a single transaction. Called by the ingest runner
    * after Stage 6 squashes the session branch into main: the pre-squash main
-   * SHA and the post-squash SHA bracket exactly the set of knowledge-file
+   * SHA and the post-squash SHA bracket exactly the set of wiki-file
    * changes this run produced.
    *
    * Any added/modified file becomes an upsert (tagged with `source_run_id`),
@@ -362,7 +362,7 @@ export class KnowledgeWikiService {
    * transaction so the shared table stays consistent.
    */
   async syncFromCommit(fromSha: string, toSha: string, runId: string): Promise<void> {
-    const diff = await this.gitService.diffNameStatus(fromSha, toSha, 'knowledge/');
+    const diff = await this.gitService.diffNameStatus(fromSha, toSha, 'wiki/');
     if (diff.length === 0) {
       return;
     }
@@ -372,7 +372,7 @@ export class KnowledgeWikiService {
     for (const entry of diff) {
       const parsedPath = parseKnowledgePath(entry.path);
       if (!parsedPath) {
-        this.logger.warn(`[knowledge.sync] skipping unparseable path: ${entry.path}`);
+        this.logger.warn(`[wiki.sync] skipping unparseable path: ${entry.path}`);
         continue;
       }
       if (entry.status === 'D') {
@@ -392,7 +392,7 @@ export class KnowledgeWikiService {
         embedding = await this.embeddingService.computeEmbedding(searchText);
       } catch (err) {
         this.logger.warn(
-          `[knowledge.sync] embedding failed for ${parsedPath.pageKey}: ${err instanceof Error ? err.message : String(err)}`,
+          `[wiki.sync] embedding failed for ${parsedPath.pageKey}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
       const contentHash = createHash('sha256').update(content).digest('hex');
@@ -410,21 +410,21 @@ export class KnowledgeWikiService {
     }
 
     await this.pagesRepository.applyDiffTransactional({ runId, upserts, deletes });
-    this.logger.log(`[knowledge.sync] run=${runId} applied ${upserts.length} upsert(s), ${deletes.length} delete(s)`);
+    this.logger.log(`[wiki.sync] run=${runId} applied ${upserts.length} upsert(s), ${deletes.length} delete(s)`);
   }
 }
 
 /**
- * Parse a `knowledge/<scope>/...` file path into its scope and page key.
- *   `knowledge/global/foo.md` → { scope: 'GLOBAL', scopeId: null, pageKey: 'foo' }
- *   `knowledge/user/<id>/bar.md` → { scope: 'USER', scopeId: '<id>', pageKey: 'bar' }
+ * Parse a `wiki/<scope>/...` file path into its scope and page key.
+ *   `wiki/global/foo.md` → { scope: 'GLOBAL', scopeId: null, pageKey: 'foo' }
+ *   `wiki/user/<id>/bar.md` → { scope: 'USER', scopeId: '<id>', pageKey: 'bar' }
  */
 function parseKnowledgePath(path: string): { scope: string; scopeId: string | null; pageKey: string } | null {
   if (!path.endsWith('.md')) {
     return null;
   }
   const segments = path.split('/');
-  if (segments[0] !== 'knowledge') {
+  if (segments[0] !== 'wiki') {
     return null;
   }
   const rest = segments.slice(1);

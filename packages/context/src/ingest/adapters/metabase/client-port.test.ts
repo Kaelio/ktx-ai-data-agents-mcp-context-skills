@@ -87,10 +87,13 @@ it('allows the concrete client result shapes used by the relocated Metabase clie
   const datasetQuery: MetabaseDatasetQuery = {
     type: 'native',
     database: 42,
-    native: {
-      query: 'SELECT * FROM orders WHERE created_at > {{ created_at }}',
-      'template-tags': { created_at: templateTag },
-    },
+    stages: [
+      {
+        'lib/type': 'mbql.stage/native',
+        native: 'SELECT * FROM orders WHERE created_at > {{ created_at }}',
+        'template-tags': { created_at: templateTag },
+      },
+    ],
   };
   const card: MetabaseCard = {
     id: 1,

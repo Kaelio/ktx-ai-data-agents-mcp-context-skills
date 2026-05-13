@@ -1,10 +1,11 @@
 name: churn_risk
-description: |
-  Per-account churn risk scoring for B2B SaaS customers. Combines signals from
-  subscriptions (cancellation history), support tickets (severity, SLA breaches),
-  product usage (adoption decline), contracts (renewal proximity), CSM activities
-  (engagement recency), and invoices (payment issues) into a weighted composite
-  risk_score (0-1) and risk_tier (High/Medium/Low). One row per customer account.
+descriptions:
+  user: |
+    Per-account churn risk scoring for B2B SaaS customers. Combines signals from
+    subscriptions (cancellation history), support tickets (severity, SLA breaches),
+    product usage (adoption decline), contracts (renewal proximity), CSM activities
+    (engagement recency), and invoices (payment issues) into a weighted composite
+    risk_score (0-1) and risk_tier (High/Medium/Low). One row per customer account.
 sql: |
   WITH sub_signals AS (
     SELECT

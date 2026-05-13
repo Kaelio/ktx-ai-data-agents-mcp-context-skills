@@ -176,7 +176,7 @@ describe('SlWriteSourceTool — session gating', () => {
     expect((session.semanticLayerService as any).writeSource).toHaveBeenCalled();
   });
 
-  it('normalizes flat source and column descriptions before writing', async () => {
+  it('writes source and column description maps', async () => {
     const { tool, semanticLayerService } = makeTool();
     const result = await tool.call(
       {
@@ -184,10 +184,10 @@ describe('SlWriteSourceTool — session gating', () => {
         sourceName: 'orders',
         source: {
           name: 'orders',
-          description: 'Finance orders used for invoice reconciliation.',
+          descriptions: { user: 'Finance orders used for invoice reconciliation.' },
           table: 'public.orders',
           grain: ['id'],
-          columns: [{ name: 'id', type: 'string', description: 'Stable order identifier.' }],
+          columns: [{ name: 'id', type: 'string', descriptions: { user: 'Stable order identifier.' } }],
           measures: [],
           joins: [],
         } as any,

@@ -1,5 +1,5 @@
 {
-  "connectionId": "abbreviated_legacy_no_declared_constraints",
+  "connectionId": "abbreviated_old_no_declared_constraints",
   "driver": "sqlite",
   "extractedAt": "2026-05-07T00:00:00.000Z",
   "scope": {},

@@ -1,9 +1,9 @@
 ---
 title: Writing Context
-description: Write and refine semantic sources and knowledge pages.
+description: Write and refine semantic sources and wiki pages.
 ---
 
-After building context through scanning and ingestion, you'll want to refine it — edit semantic sources to match your business logic, add knowledge pages that capture tribal knowledge, and query your data through the semantic layer to verify everything works.
+After building context through scanning and ingestion, you'll want to refine it — edit semantic sources to match your business logic, add wiki pages that capture tribal knowledge, and query your data through the semantic layer to verify everything works.
 
 ## Agent workflow summary
 
@@ -218,20 +218,20 @@ The query planner is grain-aware — it understands the cardinality of joins and
 
 If validation fails, fix the YAML before asking an agent to use the source. Common validation failures are missing columns, invalid join targets, and measure expressions that reference fields outside the source.
 
-## Knowledge Pages
+## Wiki Pages
 
-Knowledge pages are Markdown files that capture business context — definitions, rules, gotchas, and anything an agent needs to understand beyond what the schema tells it.
+Wiki pages are Markdown files that capture business context — definitions, rules, gotchas, and anything an agent needs to understand beyond what the schema tells it.
 
 ### What they are
 
-When an agent asks "what counts as an active user?" or "why do revenue numbers differ between the dashboard and the SQL query?", the answer isn't in the schema. It's tribal knowledge that lives in Slack threads, Notion pages, or someone's head. Knowledge pages make that context searchable and available to agents.
+When an agent asks "what counts as an active user?" or "why do revenue numbers differ between the dashboard and the SQL query?", the answer isn't in the schema. It's tribal knowledge that lives in Slack threads, Notion pages, or someone's head. Wiki pages make that context searchable and available to agents.
 
 ### Organization
 
-Knowledge pages are organized by scope:
+Wiki pages are organized by scope:
 
 ```
-knowledge/
+wiki/
 ├── global/                          # Cross-cutting definitions
 │   ├── order-status-definitions.md
 │   ├── revenue-recognition-rules.md
@@ -247,10 +247,11 @@ knowledge/
 
 ### Editing pages
 
-Create and edit knowledge pages directly as Markdown files in the `knowledge/`
-directory. Ingest and memory capture also create these pages automatically.
+Create and edit wiki pages directly as Markdown files in the `wiki/`
+directory, or with `ktx wiki write`. Ingest and memory capture also create
+these pages automatically.
 
-Knowledge page fields:
+Wiki page fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -279,7 +280,7 @@ Search uses both full-text matching and semantic similarity — it finds relevan
 ### Workflow: add searchable business context
 
 1. Search first: `ktx wiki search "order status definitions"`.
-2. If no page already covers the rule, create or edit a Markdown file under `knowledge/global/`.
+2. If no page already covers the rule, create or edit a Markdown file under `wiki/global/`.
 3. Include concise frontmatter; agents see the summary before loading full content.
 4. Add `tags` values for the business area and `sl_refs` values for related semantic sources.
 5. Search again with the user's likely wording to confirm the page is discoverable.
@@ -290,6 +291,6 @@ Search uses both full-text matching and semantic similarity — it finds relevan
 |------------------|--------------|----------|
 | `ktx sl validate` reports a missing column | YAML references a column that is absent from the scanned table | Run a fresh scan or update the YAML to match the warehouse schema |
 | Query compilation double-counts a measure | Join relationship or grain is missing or wrong | Add `grain` and explicit `relationship` values, then validate and recompile |
-| Agent cannot find a metric | Measure name or description does not match business terminology | Add a measure description and a knowledge page with common synonyms |
-| Knowledge search misses a page | Summary and tags do not include likely user wording | Rewrite the summary and add relevant tags, then search again |
+| Agent cannot find a metric | Measure name or description does not match business terminology | Add a measure description and a wiki page with common synonyms |
+| Wiki search misses a page | Summary and tags do not include likely user wording | Rewrite the summary and add relevant tags, then search again |
 | Semantic-layer changes are hard to review | The YAML edit is too large or unfocused | Split the change into smaller source-file edits, then review the git diff |

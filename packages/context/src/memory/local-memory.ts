@@ -222,8 +222,8 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   async listPagesForUser(userId: string) {
     const pages: KnowledgeIndexPageListing[] = [];
     for (const scope of [
-      { scope: 'GLOBAL', scopeId: null, dir: 'knowledge/global' },
-      { scope: 'USER', scopeId: userId, dir: `knowledge/user/${userId}` },
+      { scope: 'GLOBAL', scopeId: null, dir: 'wiki/global' },
+      { scope: 'USER', scopeId: userId, dir: `wiki/user/${userId}` },
     ]) {
       const listed = await this.project.fileStore.listFiles(scope.dir, true);
       for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
@@ -262,7 +262,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   }
 
   private pagePath(scope: string, scopeId: string | null, pageKey: string): string {
-    return scope === 'GLOBAL' ? `knowledge/global/${pageKey}.md` : `knowledge/user/${scopeId}/${pageKey}.md`;
+    return scope === 'GLOBAL' ? `wiki/global/${pageKey}.md` : `wiki/user/${scopeId}/${pageKey}.md`;
   }
 }
 

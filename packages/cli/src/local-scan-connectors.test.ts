@@ -62,10 +62,7 @@ describe('createKtxCliScanConnector', () => {
     expect(connector.driver).toBe('sqlite');
   });
 
-  it.each([
-    ['maxBytesBilled', '    maxBytesBilled: 123456789', 123456789],
-    ['max_bytes_billed', '    max_bytes_billed: "987654321"', '987654321'],
-  ])('passes BigQuery %s from standalone config', async (_label, byteCapLine, expectedMaxBytesBilled) => {
+  it('passes BigQuery max_bytes_billed from standalone config', async () => {
     await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -76,7 +73,7 @@ describe('createKtxCliScanConnector', () => {
         '    driver: bigquery',
         '    dataset_id: analytics',
         '    readonly: true',
-        byteCapLine,
+        '    max_bytes_billed: "987654321"',
         '',
       ].join('\n'),
       'utf-8',
@@ -90,7 +87,7 @@ describe('createKtxCliScanConnector', () => {
     expect(bigQueryMock.constructorInputs).toEqual([
       expect.objectContaining({
         connectionId: 'warehouse',
-        maxBytesBilled: expectedMaxBytesBilled,
+        maxBytesBilled: '987654321',
       }),
     ]);
   });

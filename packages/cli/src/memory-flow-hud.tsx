@@ -76,7 +76,7 @@ function tableName(key: string): string {
 function humanizeInsight(key: string, target: 'sl' | 'wiki', summary: string | undefined): string {
   if (summary) return summary;
   const name = target === 'sl' ? tableName(key) : topicName(key);
-  return target === 'sl' ? `Query definition: ${name}` : `Knowledge page: ${name}`;
+  return target === 'sl' ? `Query definition: ${name}` : `Wiki page: ${name}`;
 }
 
 const INTERNAL_DEMO_CONNECTION_ID = 'orbit_demo';
@@ -453,7 +453,7 @@ function CompletionSummary(props: {
               )}
               {wiki > 0 && (
                 <Text color={props.theme.complete}>
-                  {'  '}📝 {wiki} knowledge page{wiki === 1 ? '' : 's'} — so agents understand your business context
+                  {'  '}📝 {wiki} wiki page{wiki === 1 ? '' : 's'} — so agents understand your business context
                 </Text>
               )}
             </>

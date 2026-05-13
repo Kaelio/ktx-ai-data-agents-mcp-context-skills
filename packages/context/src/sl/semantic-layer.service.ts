@@ -113,7 +113,7 @@ export class SemanticLayerService {
           `standalone source '${source.name}' shadows an existing manifest entry and ` +
           `will drop the manifest's columns and joins. Rewrite as an overlay: remove ` +
           `"sql:", "table:", "grain:", "columns:", "joins:"; keep only "name:" plus ` +
-          `"measures:"/"segments:"/"description:"`;
+          `"measures:"/"segments:"/"descriptions:"`;
         warnings.push(msg);
         this.logger.warn(`[writeSource] ${msg}. Saving anyway.`);
       }
@@ -935,16 +935,12 @@ export class SemanticLayerService {
               string,
               {
                 descriptions?: Record<string, string>;
-                description?: string;
-                db_description?: string;
                 columns?: Array<{
                   name: string;
                   type: string;
                   pk?: boolean;
                   nullable?: boolean;
                   descriptions?: Record<string, string>;
-                  description?: string;
-                  db_description?: string;
                 }>;
               }
             >;
@@ -952,12 +948,12 @@ export class SemanticLayerService {
           if (shard?.tables) {
             for (const [tableName, entry] of Object.entries(shard.tables)) {
               tables.set(tableName, {
-                descriptions: migrateDescriptions(entry.descriptions, entry.description, entry.db_description) ?? {},
+                descriptions: entry.descriptions ?? {},
               });
               for (const col of entry.columns ?? []) {
                 columns.set(`${tableName}.${col.name}`, {
                   type: col.type,
-                  descriptions: migrateDescriptions(col.descriptions, col.description, col.db_description) ?? {},
+                  descriptions: col.descriptions ?? {},
                   nullable: col.nullable,
                   pk: col.pk,
                 });
@@ -1055,11 +1051,7 @@ interface ManifestColumnEntry {
   type: string;
   pk?: boolean;
   nullable?: boolean;
-  // New format: descriptions map
   descriptions?: Record<string, string>;
-  // Legacy format: flat fields (read-only backwards compat)
-  description?: string;
-  db_description?: string;
   constraints?: { dbt?: { not_null?: boolean; unique?: boolean } };
   enum_values?: { dbt?: string[] };
   tests?: {
@@ -1077,11 +1069,7 @@ interface ManifestJoinEntry {
 
 export interface ManifestTableEntry {
   table: string;
-  // New format: descriptions map
   descriptions?: Record<string, string>;
-  // Legacy format: flat fields (read-only backwards compat)
-  description?: string;
-  db_description?: string;
   columns: ManifestColumnEntry[];
   joins?: ManifestJoinEntry[];
   tags?: { dbt?: string[] };
@@ -1089,31 +1077,12 @@ export interface ManifestTableEntry {
   usage?: TableUsageOutput;
 }
 
-/** Migrate legacy flat description/db_description fields to a descriptions map. */
-function migrateDescriptions(
-  descriptions?: Record<string, string>,
-  description?: string,
-  dbDescription?: string,
-): Record<string, string> | undefined {
-  if (descriptions && Object.keys(descriptions).length > 0) {
-    return descriptions;
-  }
-  const result: Record<string, string> = {};
-  if (description) {
-    result.ai = description;
-  }
-  if (dbDescription) {
-    result.db = dbDescription;
-  }
-  return Object.keys(result).length > 0 ? result : undefined;
-}
-
 export function projectManifestEntry(name: string, entry: ManifestTableEntry): SemanticLayerSource {
   const columns = entry.columns.map((c) => ({
     name: c.name,
     type: c.type,
     role: c.type === 'time' ? 'time' : undefined,
-    descriptions: migrateDescriptions(c.descriptions, c.description, c.db_description),
+    descriptions: c.descriptions,
     constraints: c.constraints,
     enum_values: c.enum_values,
     tests: c.tests,
@@ -1126,7 +1095,7 @@ export function projectManifestEntry(name: string, entry: ManifestTableEntry): S
   return {
     name,
     table: entry.table,
-    descriptions: migrateDescriptions(entry.descriptions, entry.description, entry.db_description),
+    descriptions: entry.descriptions,
     grain,
     columns,
     joins: (entry.joins ?? []).map((j) => ({ to: j.to, on: j.on, relationship: j.relationship, source: j.source })),
@@ -1359,7 +1328,6 @@ export function findDanglingSegmentRefs(source: Record<string, unknown>): string
 
 const COMPOSE_KNOWN_KEYS = new Set([
   'name',
-  'description',
   'descriptions',
   'grain',
   'columns',

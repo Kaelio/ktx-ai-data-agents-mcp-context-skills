@@ -3,6 +3,19 @@ import { z } from 'zod';
 const projectDirSchema = z.string().min(1);
 const stringArraySchema = z.array(z.string());
 
+export const wikiWriteCommandSchema = z.object({
+  command: z.literal('write'),
+  projectDir: projectDirSchema,
+  key: z.string().min(1),
+  scope: z.enum(['GLOBAL', 'USER']),
+  userId: z.string().min(1),
+  summary: z.string().min(1),
+  content: z.string().min(1),
+  tags: stringArraySchema,
+  refs: stringArraySchema,
+  slRefs: stringArraySchema,
+});
+
 const orderBySchema = z.union([
   z.string().min(1),
   z.object({

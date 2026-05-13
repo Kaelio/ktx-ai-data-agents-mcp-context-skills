@@ -4,12 +4,31 @@ import {
   type KtxEmbeddingPort,
 } from '@ktx/context';
 import { loadKtxProject } from '@ktx/context/project';
-import { listLocalKnowledgePages, searchLocalKnowledgePages } from '@ktx/context/wiki';
+import {
+  type LocalKnowledgeScope,
+  listLocalKnowledgePages,
+  readLocalKnowledgePage,
+  searchLocalKnowledgePages,
+  writeLocalKnowledgePage,
+} from '@ktx/context/wiki';
 import { writeJsonResult } from './io/print-list.js';
 
 export type KtxKnowledgeArgs =
   | { command: 'list'; projectDir: string; userId: string; json?: boolean }
-  | { command: 'search'; projectDir: string; query: string; userId: string; json?: boolean; limit?: number };
+  | { command: 'read'; projectDir: string; key: string; userId: string; json?: boolean }
+  | { command: 'search'; projectDir: string; query: string; userId: string; json?: boolean; limit?: number }
+  | {
+      command: 'write';
+      projectDir: string;
+      key: string;
+      scope: LocalKnowledgeScope;
+      userId: string;
+      summary: string;
+      content: string;
+      tags: string[];
+      refs: string[];
+      slRefs: string[];
+    };
 
 interface KtxKnowledgeIo {
   stdout: { write(chunk: string): void };
@@ -56,6 +75,25 @@ export async function runKtxKnowledge(
       }
       return 0;
     }
+    if (args.command === 'read') {
+      const page = await readLocalKnowledgePage(project, { key: args.key, userId: args.userId });
+      if (!page) {
+        throw new Error(`Wiki page "${args.key}" was not found`);
+      }
+      if (args.json) {
+        writeJsonResult(io, {
+          kind: 'wiki.page',
+          data: page,
+          meta: { command: 'wiki read' },
+        });
+        return 0;
+      }
+      io.stdout.write(`# ${page.key}\n\n`);
+      io.stdout.write(`Scope: ${page.scope}\n`);
+      io.stdout.write(`Summary: ${page.summary}\n\n`);
+      io.stdout.write(`${page.content}\n`);
+      return 0;
+    }
     if (args.command === 'search') {
       const results = await searchLocalKnowledgePages(project, {
         query: args.query,
@@ -75,7 +113,7 @@ export async function runKtxKnowledge(
         const pages = await listLocalKnowledgePages(project, { userId: args.userId });
         if (pages.length === 0) {
           io.stderr.write(
-            `No local wiki pages found in ${project.projectDir}. Run ingest to capture wiki context, then retry the search.\n`,
+            `No local wiki pages found in ${project.projectDir}. Create one with \`ktx wiki write <key> --summary <summary> --content <content>\` or run ingest.\n`,
           );
         } else {
           io.stderr.write(
@@ -89,8 +127,19 @@ export async function runKtxKnowledge(
       }
       return 0;
     }
-    const _exhaustive: never = args;
-    throw new Error(`Unsupported wiki command: ${JSON.stringify(_exhaustive)}`);
+
+    const write = await writeLocalKnowledgePage(project, {
+      key: args.key,
+      scope: args.scope,
+      userId: args.userId,
+      summary: args.summary,
+      content: args.content,
+      tags: args.tags,
+      refs: args.refs,
+      slRefs: args.slRefs,
+    });
+    io.stdout.write(`Wrote ${write.path}\n`);
+    return 0;
   } catch (error) {
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
