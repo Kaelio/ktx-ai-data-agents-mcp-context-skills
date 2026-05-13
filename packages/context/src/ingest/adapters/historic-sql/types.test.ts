@@ -12,11 +12,15 @@ describe('historic-sql unified contracts', () => {
     expect(historicSqlUnifiedPullConfigSchema.parse({ dialect: 'postgres', minExecutions: 9 })).toMatchObject({
       dialect: 'postgres',
       minExecutions: 9,
-      windowDays: 90,
-      concurrency: 12,
       redactionPatterns: [],
       staleArchiveAfterDays: 90,
     });
+    expect(historicSqlUnifiedPullConfigSchema.parse({ dialect: 'postgres', minExecutions: 9 })).not.toHaveProperty(
+      'windowDays',
+    );
+    expect(historicSqlUnifiedPullConfigSchema.parse({ dialect: 'postgres', minExecutions: 9 })).not.toHaveProperty(
+      'concurrency',
+    );
 
     const parsed = historicSqlUnifiedPullConfigSchema.parse({
       dialect: 'postgres',

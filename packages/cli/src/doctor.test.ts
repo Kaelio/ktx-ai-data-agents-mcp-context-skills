@@ -418,6 +418,70 @@ describe('runKtxDoctor', () => {
     expect(testIo.stdout()).toContain('ktx setup');
   });
 
+  it('warns about stale and unsupported per-driver connection fields', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
+    process.env.WAREHOUSE_DATABASE_URL = 'postgresql://reader@example.test/warehouse';
+    process.env.NOTION_TOKEN = 'notion-secret';
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    readonly: true',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      windowDays: 30',
+        '      concurrency: 4',
+        '  local:',
+        '    driver: sqlite',
+        '    file_path: ./warehouse.db',
+        '  docs:',
+        '    driver: notion',
+        '    auth_token_ref: env:NOTION_TOKEN',
+        '    crawl_mode: all_accessible',
+        '    last_successful_cursor: \'{"phase":"all_accessible_pages","cursor":"cursor-1"}\'',
+        'ingest:',
+        '  adapters:',
+        '    - live-database',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {
+          postgresQueryHistoryProbe: async () => ({
+            pgServerVersion: 'PostgreSQL 16.4',
+            warnings: [],
+            info: [],
+          }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const out = testIo.stdout();
+    expect(out).toContain('Warnings');
+    expect(out).toContain('connections.warehouse.readonly is no longer used.');
+    expect(out).toContain('connections.warehouse.historicSql.concurrency is no longer used.');
+    expect(out).toContain('connections.warehouse.historicSql.windowDays does not constrain pg_stat_statements.');
+    expect(out).toContain('connections.local.file_path was removed.');
+    expect(out).toContain('connections.docs.last_successful_cursor is local sync state.');
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.WAREHOUSE_DATABASE_URL;
+    delete process.env.NOTION_TOKEN;
+  });
+
   it('warns when semantic-search embeddings are not configured', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     await writeFile(

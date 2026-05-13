@@ -501,7 +501,6 @@ function buildNotionConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionC
     max_pages_per_run: 1000,
     max_knowledge_creates_per_run: DEFAULT_NOTION_MAX_KNOWLEDGE_CREATES_PER_RUN,
     max_knowledge_updates_per_run: 20,
-    last_successful_cursor: null,
   };
 }
 

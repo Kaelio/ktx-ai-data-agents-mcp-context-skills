@@ -90,6 +90,13 @@ describe('KtxSqliteScanConnector', () => {
           connection: { driver: 'sqlite', path: 'warehouse.db' },
         }),
       ).toBe(dbPath);
+      expect(() =>
+        sqliteDatabasePathFromConfig({
+          connectionId: 'warehouse',
+          projectDir: tempDir,
+          connection: { driver: 'sqlite', file_path: 'warehouse.db' },
+        }),
+      ).toThrow('Native SQLite connector requires connections.warehouse.path or url');
     } finally {
       if (originalDatabaseUrl === undefined) {
         delete process.env.KTX_SQLITE_TEST_URL;

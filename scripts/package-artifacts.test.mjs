@@ -510,7 +510,7 @@ describe('verification snippets', () => {
       assert.match(source, /pnpm', \['exec', 'ktx', 'setup', '--help'\]/);
       assert.match(source, /Usage: ktx setup/);
       assert.doesNotMatch(source, new RegExp(["'demo'", "'--mode'", "'deterministic'"].join(', ')));
-      assert.match(source, /'status', '--no-input'/);
+      assert.match(source, /'status', '--verbose', '--no-input'/);
       assert.match(source, /KTX status/);
       assert.match(source, /No project here yet/);
       assert.doesNotMatch(source, /function requireProjectStderr/);

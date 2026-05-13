@@ -24,7 +24,6 @@ export interface KtxNotionConnectionConfig extends KtxProjectConnectionConfig {
   max_pages_per_run: number;
   max_knowledge_creates_per_run: number;
   max_knowledge_updates_per_run: number;
-  last_successful_cursor: string | null;
 }
 
 export interface RedactedKtxNotionConnectionConfig {
@@ -115,7 +114,6 @@ export function parseNotionConnectionConfig(raw: unknown): KtxNotionConnectionCo
   }
 
   return {
-    ...input,
     driver: 'notion',
     auth_token: authToken,
     auth_token_ref: authTokenRef,
@@ -138,7 +136,6 @@ export function parseNotionConnectionConfig(raw: unknown): KtxNotionConnectionCo
       0,
       100,
     ),
-    last_successful_cursor: optionalString(input.last_successful_cursor),
   };
 }
 
@@ -206,6 +203,6 @@ export async function notionConnectionToPullConfig(
     maxPagesPerRun: config.max_pages_per_run,
     maxKnowledgeCreatesPerRun: config.max_knowledge_creates_per_run,
     maxKnowledgeUpdatesPerRun: config.max_knowledge_updates_per_run,
-    lastSuccessfulCursor: config.last_successful_cursor,
+    lastSuccessfulCursor: null,
   });
 }

@@ -30,6 +30,8 @@ export interface KtxBigQueryConnectionConfig {
   dataset_ids?: string[];
   credentials_json?: string;
   location?: string;
+  max_bytes_billed?: number | string;
+  job_timeout_ms?: number;
   [key: string]: unknown;
 }
 
@@ -158,6 +160,28 @@ function datasetIds(connection: KtxBigQueryConnectionConfig, env: NodeJS.Process
   return datasetId ? [datasetId] : [];
 }
 
+function bigQueryMaxBytesBilledFromConnection(
+  connection: KtxBigQueryConnectionConfig | undefined,
+): number | string | undefined {
+  const value = connection?.max_bytes_billed;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : undefined;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  return undefined;
+}
+
+function bigQueryJobTimeoutMsFromConnection(connection: KtxBigQueryConnectionConfig | undefined): number | undefined {
+  const value = connection?.job_timeout_ms;
+  if (typeof value !== 'number') {
+    return undefined;
+  }
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function tableKind(metadataType: string | undefined): KtxSchemaTable['kind'] {
   const type = String(metadataType ?? '').toUpperCase();
   if (type === 'VIEW' || type === 'MATERIALIZED_VIEW') {
@@ -258,8 +282,8 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     });
     this.clientFactory = options.clientFactory ?? new DefaultBigQueryClientFactory();
     this.now = options.now ?? (() => new Date());
-    this.maxBytesBilled = options.maxBytesBilled;
-    this.queryTimeoutMs = options.queryTimeoutMs;
+    this.maxBytesBilled = options.maxBytesBilled ?? bigQueryMaxBytesBilledFromConnection(options.connection);
+    this.queryTimeoutMs = options.queryTimeoutMs ?? bigQueryJobTimeoutMsFromConnection(options.connection);
     this.id = `bigquery:${options.connectionId}`;
   }
 

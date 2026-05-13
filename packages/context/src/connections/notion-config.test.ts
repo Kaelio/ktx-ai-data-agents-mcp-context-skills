@@ -39,8 +39,8 @@ describe('standalone Notion connection config', () => {
       max_pages_per_run: 1000,
       max_knowledge_creates_per_run: 25,
       max_knowledge_updates_per_run: 20,
-      last_successful_cursor: null,
     });
+    expect(parsed).not.toHaveProperty('last_successful_cursor');
   });
 
   it('parses inline Notion auth tokens without requiring auth_token_ref', () => {
@@ -132,7 +132,7 @@ describe('standalone Notion connection config', () => {
       maxPagesPerRun: 12,
       maxKnowledgeCreatesPerRun: 2,
       maxKnowledgeUpdatesPerRun: 7,
-      lastSuccessfulCursor: '{"phase":"all_accessible_pages","cursor":"cursor-1"}',
+      lastSuccessfulCursor: null,
     });
   });
 

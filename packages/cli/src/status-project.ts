@@ -61,6 +61,14 @@ interface WarningItem {
   fix?: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOwnField(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 export interface ProjectStatus {
   projectName: string;
   projectDir: string;
@@ -470,6 +478,51 @@ function buildWarnings(
   embeddings: EmbeddingsStatus,
 ): WarningItem[] {
   const warnings: WarningItem[] = [];
+
+  for (const [connectionId, connection] of Object.entries(config.connections)) {
+    const driver = String(connection.driver ?? '').toLowerCase();
+    if (hasOwnField(connection, 'readonly')) {
+      warnings.push({
+        message: `connections.${connectionId}.readonly is no longer used.`,
+        fix: `Remove connections.${connectionId}.readonly from ktx.yaml.`,
+      });
+    }
+
+    if ((driver === 'sqlite' || driver === 'sqlite3') && hasOwnField(connection, 'file_path')) {
+      warnings.push({
+        message: `connections.${connectionId}.file_path was removed.`,
+        fix: `Rename connections.${connectionId}.file_path to path.`,
+      });
+    }
+
+    if (driver === 'notion' && hasOwnField(connection, 'last_successful_cursor')) {
+      warnings.push({
+        message: `connections.${connectionId}.last_successful_cursor is local sync state.`,
+        fix: 'Remove it from ktx.yaml. KTX stores the Notion cursor in .ktx/db.sqlite.',
+      });
+    }
+
+    const historicSql = isRecord(connection.historicSql) ? connection.historicSql : null;
+    if (!historicSql) {
+      continue;
+    }
+    if (hasOwnField(historicSql, 'concurrency')) {
+      warnings.push({
+        message: `connections.${connectionId}.historicSql.concurrency is no longer used.`,
+        fix: `Remove connections.${connectionId}.historicSql.concurrency from ktx.yaml.`,
+      });
+    }
+    const historicDialect = String(historicSql.dialect ?? driver).toLowerCase();
+    if (
+      (historicDialect === 'postgres' || historicDialect === 'postgresql') &&
+      hasOwnField(historicSql, 'windowDays')
+    ) {
+      warnings.push({
+        message: `connections.${connectionId}.historicSql.windowDays does not constrain pg_stat_statements.`,
+        fix: `Remove connections.${connectionId}.historicSql.windowDays from ktx.yaml.`,
+      });
+    }
+  }
 
   for (const adapter of config.ingest.adapters) {
     const requiredDrivers = ADAPTER_DRIVER_REQUIREMENT[adapter];

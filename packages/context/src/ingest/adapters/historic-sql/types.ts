@@ -8,11 +8,8 @@ export type HistoricSqlDialect = z.infer<typeof historicSqlDialectSchema>;
 
 const filterModeSchema = z.enum(['exclude', 'include', 'mark-only']);
 
-export const historicSqlUnifiedPullConfigSchema = z.object({
-  dialect: historicSqlDialectSchema,
-  windowDays: z.number().int().positive().default(90),
+const historicSqlCommonPullConfigSchema = z.object({
   minExecutions: z.number().int().nonnegative().default(5),
-  concurrency: z.number().int().positive().default(12),
   enabledTables: z.array(z.string().min(1)).default([]),
   filters: z.object({
     serviceAccounts: z.object({
@@ -31,6 +28,20 @@ export const historicSqlUnifiedPullConfigSchema = z.object({
   redactionPatterns: z.array(z.string()).default([]),
   staleArchiveAfterDays: z.number().int().positive().default(90),
 });
+
+const historicSqlWindowedPullConfigSchema = historicSqlCommonPullConfigSchema.extend({
+  dialect: z.enum(['snowflake', 'bigquery']),
+  windowDays: z.number().int().positive().default(90),
+});
+
+const historicSqlPostgresPullConfigSchema = historicSqlCommonPullConfigSchema.extend({
+  dialect: z.literal('postgres'),
+});
+
+export const historicSqlUnifiedPullConfigSchema = z.discriminatedUnion('dialect', [
+  historicSqlWindowedPullConfigSchema,
+  historicSqlPostgresPullConfigSchema,
+]);
 
 export type HistoricSqlUnifiedPullConfig = z.infer<typeof historicSqlUnifiedPullConfigSchema>;
 

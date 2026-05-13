@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,7 @@ import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project
 import type { SqlAnalysisPort } from '../sql-analysis/index.js';
 import type { HistoricSqlReader } from './adapters/historic-sql/types.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
+import { LocalNotionRuntimeStore } from './adapters/notion/local-state-store.js';
 import { createDefaultLocalIngestAdapters, localPullConfigForAdapter } from './local-adapters.js';
 
 describe('local ingest adapters', () => {
@@ -192,9 +193,7 @@ describe('local ingest adapters', () => {
 
     await expect(localPullConfigForAdapter(postgresProject, historicSql!, 'warehouse')).resolves.toEqual({
       dialect: 'postgres',
-      windowDays: 90,
       minExecutions: 7,
-      concurrency: 12,
       enabledTables: [],
       filters: {
         serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
@@ -223,7 +222,6 @@ describe('local ingest adapters', () => {
 
     await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
       dialect: 'postgres',
-      windowDays: 45,
       minExecutions: 7,
       filters: { dropTrivialProbes: true },
     });
@@ -241,7 +239,7 @@ describe('local ingest adapters', () => {
 
     await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
       dialect: 'postgres',
-      windowDays: 30,
+      minExecutions: 5,
     });
   });
 
@@ -564,6 +562,79 @@ describe('local ingest adapters', () => {
     const notion = adapters.find((adapter) => adapter.source === 'notion');
 
     await expect(notion?.listTargetConnectionIds?.('/tmp/staged-notion')).resolves.toEqual(['warehouse']);
+  });
+
+  it('reads Notion cursors from local state instead of ktx.yaml', async () => {
+    const cursor = '{"phase":"all_accessible_pages","cursor":"cursor-1"}';
+    const notionProject = projectWithConnections({
+      notion: {
+        driver: 'notion',
+        auth_token: 'secret',
+        crawl_mode: 'all_accessible',
+        last_successful_cursor: '{"phase":"all_accessible_pages","cursor":"stale-yaml"}',
+      },
+    } as never);
+    await new LocalNotionRuntimeStore({ dbPath: join(notionProject.projectDir, '.ktx', 'db.sqlite') }).setCursor(
+      'notion',
+      cursor,
+    );
+
+    const notion = createDefaultLocalIngestAdapters(notionProject).find((adapter) => adapter.source === 'notion');
+
+    await expect(localPullConfigForAdapter(notionProject, notion!, 'notion')).resolves.toMatchObject({
+      lastSuccessfulCursor: cursor,
+    });
+  });
+
+  it('persists Notion next cursors to local state after successful pulls', async () => {
+    const cursor = '{"phase":"all_accessible_data_sources","cursor":"cursor-2"}';
+    const notionProject = projectWithConnections({
+      notion: {
+        driver: 'notion',
+        auth_token: 'secret',
+        crawl_mode: 'all_accessible',
+      },
+    } as never);
+    const stagedDir = await mkdtemp(join(tempDir, 'notion-staged-'));
+    await writeFile(
+      join(stagedDir, 'manifest.json'),
+      JSON.stringify({
+        source: 'notion',
+        apiVersion: '2026-03-11',
+        crawlMode: 'all_accessible',
+        rootPageIds: [],
+        rootDatabaseIds: [],
+        rootDataSourceIds: [],
+        fetchedAt: '2026-05-13T10:00:00.000Z',
+        pageCount: 1,
+        databaseCount: 0,
+        dataSourceCount: 0,
+        capped: true,
+        continuedFromCursor: false,
+        partialSnapshot: true,
+        maxPagesPerRun: 1,
+        maxKnowledgeCreatesPerRun: 25,
+        maxKnowledgeUpdatesPerRun: 20,
+        nextSuccessfulCursor: cursor,
+        skipped: [],
+        warnings: [],
+      }),
+      'utf-8',
+    );
+
+    const notion = createDefaultLocalIngestAdapters(notionProject).find((adapter) => adapter.source === 'notion');
+    await notion?.onPullSucceeded?.({
+      connectionId: 'notion',
+      sourceKey: 'notion',
+      syncId: 'sync-1',
+      trigger: 'scheduled_pull',
+      completedAt: new Date('2026-05-13T10:00:00.000Z'),
+      stagedDir,
+    });
+
+    await expect(
+      new LocalNotionRuntimeStore({ dbPath: join(notionProject.projectDir, '.ktx', 'db.sqlite') }).readCursor('notion'),
+    ).resolves.toBe(cursor);
   });
 
   it('passes primary warehouse connection ids to local LookML and MetricFlow adapters', async () => {

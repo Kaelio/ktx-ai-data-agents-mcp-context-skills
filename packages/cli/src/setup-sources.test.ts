@@ -252,6 +252,7 @@ describe('setup sources step', () => {
       max_knowledge_creates_per_run: 25,
       max_knowledge_updates_per_run: 20,
     });
+    expect((await readConfig()).connections['notion-main']?.last_successful_cursor).toBeUndefined();
   });
 
   it('accepts former ingest subcommand names as interactive source connection ids', async () => {
