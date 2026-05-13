@@ -842,7 +842,7 @@ async function maybeApplyHistoricSqlConfig(input: {
   let enabled = input.args.enableQueryHistory === true;
   if (input.args.disableQueryHistory === true) {
     enabled = false;
-  } else if (input.args.inputMode !== 'disabled' && input.args.enableQueryHistory !== true && dialect !== 'postgres') {
+  } else if (input.args.inputMode !== 'disabled' && input.args.enableQueryHistory !== true) {
     const choice = await input.prompts.select({
       message: `Enable query-history ingest for this ${driverLabel(input.driver)} connection?`,
       options: [
@@ -853,10 +853,6 @@ async function maybeApplyHistoricSqlConfig(input: {
     });
     if (choice === 'back') return 'back';
     enabled = choice === 'yes';
-  }
-
-  if (dialect === 'postgres' && input.args.enableQueryHistory !== true && input.args.disableQueryHistory !== true) {
-    return input.connection;
   }
 
   const existingRecord = queryHistoryConfigRecord(input.connection) ?? historicSqlConfigRecord(input.connection) ?? {};
@@ -1474,7 +1470,11 @@ async function applyHistoricSqlConfigToExistingConnection(input: {
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
 }): Promise<'back' | void> {
-  if (input.args.enableQueryHistory !== true && input.args.disableQueryHistory !== true) {
+  if (
+    input.args.inputMode === 'disabled' &&
+    input.args.enableQueryHistory !== true &&
+    input.args.disableQueryHistory !== true
+  ) {
     return;
   }
 

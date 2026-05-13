@@ -1454,6 +1454,67 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('pg_stat_statements ready');
   });
 
+  it('asks interactive Postgres setup whether to enable query history', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    readonly: true',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['yes'] });
+    const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseConnectionIds: ['warehouse'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlProbe,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.select).toHaveBeenCalledWith({
+      message: 'Enable query-history ingest for this PostgreSQL connection?',
+      options: [
+        { value: 'yes', label: 'Enable query history' },
+        { value: 'no', label: 'Do not enable query history' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect(historicSqlProbe).toHaveBeenCalledWith({
+      projectDir: tempDir,
+      connectionId: 'warehouse',
+      dialect: 'postgres',
+    });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      context: {
+        queryHistory: {
+          enabled: true,
+          minExecutions: 5,
+          filters: { dropTrivialProbes: true },
+        },
+      },
+    });
+  });
+
   it('writes query history config for supported existing database connections', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
