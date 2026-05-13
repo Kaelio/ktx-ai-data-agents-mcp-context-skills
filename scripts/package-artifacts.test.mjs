@@ -459,7 +459,7 @@ describe('verification snippets', () => {
     assert.match(source, /wiki', 'global', 'revenue\.md'/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'wiki',\s*'search'/);
     assert.match(source, /semantic-layer', 'warehouse', 'orders\.yaml'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'list'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'search',\s*'orders'/);
     assert.match(source, /orders\.order_count/);
     assert.match(source, /node:sqlite/);
     assert.match(source, /driver: sqlite/);

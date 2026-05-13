@@ -79,12 +79,6 @@ describe('standalone local warehouse example', () => {
       parseJsonOutput<{ data: { items: Array<{ key: string; summary: string }> } }>(knowledgeList.stdout).data.items,
     ).toContainEqual(expect.objectContaining({ key: 'revenue', summary: 'Paid order value after refunds' }));
 
-    const knowledgeRead = await runBuiltCli(['wiki', 'read', 'revenue', '--json', '--project-dir', projectDir]);
-    expect(knowledgeRead).toMatchObject({ code: 0, stderr: '' });
-    expect(parseJsonOutput<{ data: { content: string } }>(knowledgeRead.stdout).data.content).toContain(
-      'Revenue is paid order amount after refund adjustments.',
-    );
-
     const slList = await runBuiltCli(['sl', 'list', '--json', '--project-dir', projectDir, '--connection-id', 'warehouse']);
     expect(slList).toMatchObject({ code: 0, stderr: '' });
     expect(
@@ -93,9 +87,9 @@ describe('standalone local warehouse example', () => {
       ).data.items,
     ).toContainEqual(expect.objectContaining({ connectionId: 'warehouse', name: 'orders', columnCount: 3 }));
 
-    const slRead = await runBuiltCli([
+    const slSearch = await runBuiltCli([
       'sl',
-      'read',
+      'search',
       'orders',
       '--json',
       '--connection-id',
@@ -103,8 +97,10 @@ describe('standalone local warehouse example', () => {
       '--project-dir',
       projectDir,
     ]);
-    expect(slRead).toMatchObject({ code: 0, stderr: '' });
-    expect(parseJsonOutput<{ data: { yaml: string } }>(slRead.stdout).data.yaml).toContain('name: orders');
+    expect(slSearch).toMatchObject({ code: 0, stderr: '' });
+    expect(
+      parseJsonOutput<{ data: { items: Array<{ connectionId: string; name: string }> } }>(slSearch.stdout).data.items,
+    ).toContainEqual(expect.objectContaining({ connectionId: 'warehouse', name: 'orders' }));
 
     const ingest = await runBuiltCli([
       'ingest',

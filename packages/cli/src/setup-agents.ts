@@ -138,8 +138,7 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
     '',
     `- \`${ktxCommandLine(input.launcher, ['status', ...projectDirArgs])}\``,
     `- \`${ktxCommandLine(input.launcher, ['sl', 'list', ...projectDirArgs])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['sl', 'list', ...projectDirArgs, '--query', '<text>'])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['sl', 'read', '<sourceName>', ...projectDirArgs, '--connection-id', '<id>'])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['sl', 'search', '<text>', ...projectDirArgs, '--connection-id', '<id>'])}\``,
     `- \`${ktxCommandLine(input.launcher, [
       'sl',
       'query',
@@ -153,7 +152,6 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
       '100',
     ])}\``,
     `- \`${ktxCommandLine(input.launcher, ['wiki', 'search', '<query>', ...projectDirArgs, '--limit', '10'])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['wiki', 'read', '<pageId>', ...projectDirArgs])}\``,
     '',
     'Use semantic-layer queries before direct database access. Do not print secrets or credential references.',
     '',
