@@ -337,16 +337,23 @@ describe('renderContextBuildView', () => {
     expect(output).toContain('Context sources:');
   });
 
-  it('preserves detach hint while targets are active', () => {
+  it('renders foreground-only progress hints without detach or resume commands', () => {
     const state = initViewState([
-      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
+      {
+        connectionId: 'warehouse',
+        driver: 'postgres',
+        operation: 'database-ingest',
+        debugCommand: 'ktx ingest warehouse --debug',
+        steps: ['database-schema'],
+      },
     ]);
     state.primarySources[0].status = 'running';
 
-    const output = renderContextBuildView(state, { styled: false, showHint: true, projectDir: '/tmp/project' });
-    expect(output).toContain('d to detach');
-    expect(output).toContain('ktx setup --project-dir /tmp/project');
-    expect(output).toContain('to resume');
+    const rendered = renderContextBuildView(state, { styled: false, showHint: true, projectDir: '/tmp/project' });
+
+    expect(rendered).toContain('Ctrl+C to stop');
+    expect(rendered).not.toContain('d to detach');
+    expect(rendered).not.toContain('resume');
   });
 
   it('omits detach hint when all targets are done', () => {
@@ -357,7 +364,7 @@ describe('renderContextBuildView', () => {
     state.totalElapsedMs = 5000;
 
     const output = renderContextBuildView(state, { styled: false, showHint: true });
-    expect(output).not.toContain('d to detach');
+    expect(output).not.toContain('Ctrl+C to stop');
   });
 });
 
@@ -417,7 +424,7 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 0, detached: false });
+    expect(result).toEqual({ exitCode: 0 });
     expect(callOrder).toEqual(['warehouse', 'dbt_main']);
   });
 
@@ -435,7 +442,7 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 1, detached: false });
+    expect(result).toEqual({ exitCode: 1 });
   });
 
   it('renders a friendly network failure when target output contains a network error code', async () => {
@@ -455,7 +462,7 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 1, detached: false });
+    expect(result).toEqual({ exitCode: 1 });
     expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
     expect(io.stdout()).toContain('network address unavailable (EADDRNOTAVAIL)');
     expect(io.stdout()).toContain('Retry: ktx setup --project-dir /tmp/project');
@@ -479,7 +486,7 @@ describe('runContextBuild', () => {
       { executeTarget, now: () => 1000 },
     );
 
-    expect(result).toEqual({ exitCode: 1, detached: false });
+    expect(result).toEqual({ exitCode: 1 });
     expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
     expect(io.stdout()).toContain('connection reset (ECONNRESET)');
   });
@@ -529,44 +536,6 @@ describe('runContextBuild', () => {
         ingestProgress: expect.any(Function),
       }),
     );
-  });
-
-  it('exits immediately with paused message when d is pressed', async () => {
-    const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit');
-    });
-    const io = makeIo();
-    const project = projectWithConnections({
-      warehouse: { driver: 'postgres' },
-      dbt_main: { driver: 'dbt' },
-    });
-    let triggerDetach: (() => void) | null = null;
-    const executeTarget = vi.fn(async (target) => {
-      if (target.connectionId === 'warehouse') triggerDetach?.();
-      return successResult(target.connectionId, target.driver, target.operation);
-    });
-
-    await expect(
-      runContextBuild(
-        project,
-        { projectDir: '/tmp/project', inputMode: 'disabled' },
-        io.io,
-        {
-          executeTarget,
-          now: () => 1000,
-          setupKeystroke: (onDetach) => {
-            triggerDetach = onDetach;
-            return () => {};
-          },
-        },
-      ),
-    ).rejects.toThrow('process.exit');
-
-    expect(mockExit).toHaveBeenCalledWith(0);
-    expect(io.stdout()).toContain('Context build continuing in the background.');
-    expect(io.stdout()).toContain('Resume: ktx setup --project-dir /tmp/project');
-    expect(io.stdout()).toContain('Status: ktx status --project-dir /tmp/project');
-    mockExit.mockRestore();
   });
 
   it('calls onSourceProgress when sources start and finish', async () => {
@@ -673,7 +642,6 @@ describe('runContextBuild', () => {
 
     expect(result).toMatchObject({
       exitCode: 0,
-      detached: false,
       reportIds: ['report-dbt-1'],
       artifactPaths: [
         'raw-sources/warehouse/live-database/sync-1/scan-report.json',
@@ -707,7 +675,6 @@ describe('runContextBuild', () => {
 
     expect(result).toMatchObject({
       exitCode: 1,
-      detached: false,
       reportIds: ['report-dbt-failed'],
     });
   });

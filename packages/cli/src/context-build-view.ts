@@ -1,6 +1,4 @@
-import { spawn } from 'node:child_process';
-import { mkdirSync, openSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { KtxProgressPort, KtxProgressUpdateOptions } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestProgressUpdate } from './ingest.js';
@@ -48,7 +46,6 @@ export interface ContextBuildArgs {
 
 export interface ContextBuildResult {
   exitCode: number;
-  detached: boolean;
   reportIds?: string[];
   artifactPaths?: string[];
 }
@@ -68,8 +65,6 @@ export interface ContextBuildSourceProgressUpdate {
 export interface ContextBuildDeps {
   executeTarget?: typeof executePublicIngestTarget;
   now?: () => number;
-  setupKeystroke?: (onDetach: () => void, onCtrlC: () => void) => (() => void) | null;
-  onDetach?: () => void;
   onSourceProgress?: (sources: ContextBuildSourceProgressUpdate[]) => void;
   sourceProgressThrottleMs?: number;
 }
@@ -243,7 +238,7 @@ export function renderContextBuildView(
   }
 
   if (options.showHint && hasActive) {
-    const hintContent = options.hintText ?? `d to detach · ${resumeCommand(options.projectDir)} to resume`;
+    const hintContent = options.hintText ?? 'Ctrl+C to stop';
     const hint = `  ${hintContent}`;
     lines.push(styled ? dim(hint) : hint);
     lines.push('');
@@ -444,57 +439,6 @@ export function createRepainter(io: KtxCliIo) {
   };
 }
 
-// --- Background build ---
-
-function resolveKtxEntryScript(): string | null {
-  const argv1 = process.argv[1];
-  if (argv1 && (argv1.endsWith('.js') || argv1.endsWith('.ts') || argv1.endsWith('.mjs'))) {
-    return argv1;
-  }
-  return null;
-}
-
-function spawnBackgroundBuild(projectDir: string): { logPath: string } | null {
-  const entryScript = resolveKtxEntryScript();
-  if (!entryScript) return null;
-
-  const resolvedDir = resolve(projectDir);
-  const logDir = join(resolvedDir, '.ktx', 'setup');
-  mkdirSync(logDir, { recursive: true });
-  const logPath = join(logDir, 'context-build.log');
-  const logFd = openSync(logPath, 'w');
-
-  const child = spawn(
-    process.execPath,
-    [entryScript, 'setup', '--project-dir', resolvedDir, '--no-input'],
-    { detached: true, stdio: ['ignore', logFd, logFd] },
-  );
-  child.unref();
-  return { logPath };
-}
-
-// --- Keystroke handling ---
-
-export function defaultSetupKeystroke(onDetach: () => void, onCtrlC: () => void): (() => void) | null {
-  const stdin = process.stdin;
-  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
-    return null;
-  }
-  stdin.setRawMode(true);
-  stdin.resume();
-  const onData = (data: Buffer) => {
-    const char = data.toString();
-    if (char === 'd' || char === 'D') onDetach();
-    else if (char === '\x03') onCtrlC();
-  };
-  stdin.on('data', onData);
-  return () => {
-    stdin.off('data', onData);
-    if (typeof stdin.setRawMode === 'function') stdin.setRawMode(false);
-    stdin.pause();
-  };
-}
-
 // --- Orchestration ---
 
 function makeTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTargetState {
@@ -668,37 +612,6 @@ export async function runContextBuild(
     return true;
   };
 
-  let detached = false;
-  let exiting = false;
-  let cleanupKeystroke: (() => void) | null = null;
-
-  if (isTTY || deps.setupKeystroke) {
-    const cleanup = () => {
-      if (spinnerInterval) clearInterval(spinnerInterval);
-      cleanupKeystroke?.();
-    };
-    cleanupKeystroke = (deps.setupKeystroke ?? defaultSetupKeystroke)(
-      () => {
-        detached = true;
-        cleanup();
-        deps.onDetach?.();
-        const bg = spawnBackgroundBuild(args.projectDir);
-        io.stdout.write('\n\nContext build continuing in the background.\n');
-        if (bg) io.stdout.write(`Log: ${bg.logPath}\n`);
-        io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
-        io.stdout.write(`Status: ktx status --project-dir ${resolve(args.projectDir)}\n`);
-        exiting = true;
-        process.exit(0);
-      },
-      () => {
-        cleanup();
-        io.stdout.write('\n\nContext build stopped. Nothing is running in the background.\n');
-        io.stdout.write(`Resume: ${resumeCommand(args.projectDir)}\n`);
-        exiting = true;
-        process.exit(130);
-      },
-    );
-  }
   const runArgs: Extract<KtxPublicIngestArgs, { command: 'run' }> = {
     command: 'run',
     projectDir: args.projectDir,
@@ -713,8 +626,6 @@ export async function runContextBuild(
 
   try {
     for (const targetState of orderedTargets) {
-      if (detached) break;
-
       targetState.status = 'running';
       targetState.startedAt = nowFn();
       paint(true);
@@ -747,9 +658,6 @@ export async function runContextBuild(
       try {
         result = await execTarget(targetState.target, runArgs, capture.io, progressDeps);
       } catch (error) {
-        if (exiting) {
-          throw error;
-        }
         thrownError = error;
       }
 
@@ -786,15 +694,10 @@ export async function runContextBuild(
     }
   } finally {
     if (spinnerInterval) clearInterval(spinnerInterval);
-    cleanupKeystroke?.();
   }
 
   if (state.startedAt !== null) {
     state.totalElapsedMs = nowFn() - state.startedAt;
-  }
-
-  if (detached) {
-    return { exitCode: 0, detached: true };
   }
 
   if (!repainter) {
@@ -805,7 +708,6 @@ export async function runContextBuild(
 
   return {
     exitCode: hasFailure ? 1 : 0,
-    detached: false,
     ...(reportIds.size > 0 ? { reportIds: [...reportIds] } : {}),
     ...(artifactPaths.size > 0 ? { artifactPaths: [...artifactPaths] } : {}),
   };
