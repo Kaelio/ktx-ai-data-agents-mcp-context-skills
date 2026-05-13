@@ -568,6 +568,48 @@ describe('setup context build state', () => {
     );
   });
 
+  it('shows newly configured context sources while watching an active primary scan prefetch', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-prefetch-watch',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-prefetch-watch'),
+      sourceProgress: [
+        { connectionId: 'warehouse', operation: 'scan' as const, status: 'running' as const, startedAtMs: Date.now() },
+      ],
+    });
+    const io = makeIo();
+    let triggerDetach: (() => void) | null = null;
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
+        io.io,
+        {
+          sleep: async () => { triggerDetach?.(); },
+          watchIntervalMs: 1,
+          setupKeystroke: (onDetach) => {
+            triggerDetach = onDetach;
+            return () => {};
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'detached' });
+
+    const output = io.stdout();
+    expect(output).toContain('Primary sources:');
+    expect(output).toContain('warehouse');
+    expect(output).toContain('Context sources:');
+    expect(output).toContain('docs');
+  });
+
   it('renders the progress view when watching a build with sourceProgress', async () => {
     await writeReadyProject(tempDir);
     await writeKtxSetupContextState(tempDir, {

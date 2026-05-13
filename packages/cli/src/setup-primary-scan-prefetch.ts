@@ -7,7 +7,9 @@ import type { KtxCliIo } from './cli-runtime.js';
 import {
   contextBuildCommands,
   readKtxSetupContextState,
+  readKtxSetupContextStateSync,
   writeKtxSetupContextState,
+  writeKtxSetupContextStateSync,
   type KtxSetupContextState,
 } from './setup-context.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
@@ -158,6 +160,33 @@ function queuedProgress(connectionIds: string[]): ContextBuildSourceProgressUpda
   return connectionIds.map((connectionId) => ({ connectionId, operation: 'scan', status: 'queued' }));
 }
 
+function sourceProgressKey(source: Pick<ContextBuildSourceProgressUpdate, 'connectionId' | 'operation'>): string {
+  return `${source.operation}:${source.connectionId}`;
+}
+
+function mergeSourceProgress(
+  latest: ContextBuildSourceProgressUpdate[],
+  current: ContextBuildSourceProgressUpdate[] | undefined,
+): ContextBuildSourceProgressUpdate[] {
+  const latestKeys = new Set(latest.map(sourceProgressKey));
+  return [...latest, ...(current ?? []).filter((source) => !latestKeys.has(sourceProgressKey(source)))];
+}
+
+function currentStateWithProgress(projectDir: string, fallback: KtxSetupContextState, latest: ContextBuildSourceProgressUpdate[]) {
+  try {
+    const current = readKtxSetupContextStateSync(projectDir);
+    return {
+      contextSourceConnectionIds: current.contextSourceConnectionIds,
+      sourceProgress: mergeSourceProgress(latest, current.sourceProgress),
+    };
+  } catch {
+    return {
+      contextSourceConnectionIds: fallback.contextSourceConnectionIds,
+      sourceProgress: latest,
+    };
+  }
+}
+
 function stateForPrefetch(input: {
   projectDir: string;
   runId: string;
@@ -260,7 +289,6 @@ export async function startPrimaryScanPrefetch(
   }
   await writeKtxSetupContextState(args.projectDir, initialState);
   io.stdout.write(`│  Primary source context scan started in the background (${connectionIds.join(', ')}).\n`);
-  io.stdout.write(`│  Resume: ${contextBuildCommands(args.projectDir, runId).watch}\n`);
   return {
     status: 'started',
     projectDir: args.projectDir,
@@ -313,12 +341,18 @@ export async function runPrimaryScanPrefetchWorker(
       io,
       {
         onSourceProgress: (sources) => {
-          lastSourceProgress = sources;
-          void writeKtxSetupContextState(args.projectDir, {
-            ...runningState,
-            updatedAt: now().toISOString(),
-            sourceProgress: sources,
-          });
+          const current = currentStateWithProgress(args.projectDir, runningState, sources);
+          lastSourceProgress = current.sourceProgress;
+          try {
+            writeKtxSetupContextStateSync(args.projectDir, {
+              ...runningState,
+              contextSourceConnectionIds: current.contextSourceConnectionIds,
+              updatedAt: now().toISOString(),
+              sourceProgress: current.sourceProgress,
+            });
+          } catch {
+            // Progress reporting is supplementary; the worker should keep scanning.
+          }
         },
       },
     );
@@ -335,15 +369,17 @@ export async function runPrimaryScanPrefetchWorker(
   }
 
   const completedAt = now().toISOString();
+  const current = currentStateWithProgress(args.projectDir, runningState, lastSourceProgress ?? []);
   await writeKtxSetupContextState(args.projectDir, {
     ...runningState,
+    contextSourceConnectionIds: current.contextSourceConnectionIds,
     status: result.exitCode === 0 ? 'paused' : 'failed',
     updatedAt: completedAt,
     reportIds: result.reportIds ?? [],
     artifactPaths: result.artifactPaths ?? [],
     retryableFailedTargets: result.exitCode === 0 ? [] : connectionIds,
     ...(result.exitCode === 0 ? {} : { failureReason: 'Primary source context scan failed.' }),
-    ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
+    ...(current.sourceProgress.length > 0 ? { sourceProgress: current.sourceProgress } : {}),
   });
   return result.exitCode;
 }

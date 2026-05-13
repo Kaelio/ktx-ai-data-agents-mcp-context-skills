@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { cancel, isCancel, select } from '@clack/prompts';
@@ -272,6 +272,25 @@ export async function writeKtxSetupContextState(projectDir: string, state: KtxSe
   await writeFile(statePath(resolvedProjectDir), `${JSON.stringify(normalized, null, 2)}\n`, 'utf-8');
 }
 
+export function readKtxSetupContextStateSync(projectDir: string): KtxSetupContextState {
+  const resolvedProjectDir = resolve(projectDir);
+  const filePath = statePath(resolvedProjectDir);
+  if (!existsSync(filePath)) {
+    return notStartedState(resolvedProjectDir);
+  }
+  return normalizeState(resolvedProjectDir, JSON.parse(readFileSync(filePath, 'utf-8')) as unknown);
+}
+
+export function writeKtxSetupContextStateSync(projectDir: string, state: KtxSetupContextState): void {
+  const resolvedProjectDir = resolve(projectDir);
+  mkdirSync(join(resolvedProjectDir, '.ktx', 'setup'), { recursive: true });
+  const normalized = normalizeState(resolvedProjectDir, {
+    ...state,
+    commands: contextBuildCommands(resolvedProjectDir, state.runId),
+  });
+  writeFileSync(statePath(resolvedProjectDir), `${JSON.stringify(normalized, null, 2)}\n`);
+}
+
 export function setupContextStatusFromState(
   state: KtxSetupContextState,
   options: { completedStep: boolean } = { completedStep: false },
@@ -305,6 +324,53 @@ function listContextTargets(project: KtxLocalProject): KtxSetupContextTargets {
       .filter((target) => target.operation === 'source-ingest')
       .map((target) => target.connectionId),
   };
+}
+
+function sourceProgressKey(source: Pick<ContextBuildSourceProgressUpdate, 'connectionId' | 'operation'>): string {
+  return `${source.operation}:${source.connectionId}`;
+}
+
+function sourceProgressWithTargets(
+  sourceProgress: ContextBuildSourceProgressUpdate[] | undefined,
+  targets: KtxSetupContextTargets,
+): ContextBuildSourceProgressUpdate[] | undefined {
+  if (!sourceProgress || sourceProgress.length === 0) {
+    return undefined;
+  }
+  const merged = [...sourceProgress];
+  const seen = new Set(merged.map(sourceProgressKey));
+  for (const connectionId of targets.primarySourceConnectionIds) {
+    const key = sourceProgressKey({ connectionId, operation: 'scan' });
+    if (!seen.has(key)) {
+      merged.push({ connectionId, operation: 'scan', status: 'queued' });
+    }
+  }
+  for (const connectionId of targets.contextSourceConnectionIds) {
+    const key = sourceProgressKey({ connectionId, operation: 'source-ingest' });
+    if (!seen.has(key)) {
+      merged.push({ connectionId, operation: 'source-ingest', status: 'queued' });
+    }
+  }
+  return merged;
+}
+
+async function activeStateWithCurrentTargets(
+  projectDir: string,
+  state: KtxSetupContextState,
+  targets: KtxSetupContextTargets,
+): Promise<KtxSetupContextState> {
+  const sourceProgress = sourceProgressWithTargets(state.sourceProgress, targets);
+  if (!sourceProgress) {
+    return state;
+  }
+  const nextState = {
+    ...state,
+    primarySourceConnectionIds: targets.primarySourceConnectionIds,
+    contextSourceConnectionIds: targets.contextSourceConnectionIds,
+    sourceProgress,
+  };
+  await writeKtxSetupContextState(projectDir, nextState);
+  return nextState;
 }
 
 function missingCapabilities(project: KtxLocalProject): string[] {
@@ -721,6 +787,7 @@ export async function runKtxSetupContextStep(
   try {
     const project = await loadKtxProject({ projectDir: args.projectDir });
     let existingState = await readKtxSetupContextState(args.projectDir);
+    const targets = listContextTargets(project);
     const completedSteps = ktxSetupCompletedSteps(project.config, await readKtxSetupState(args.projectDir));
     if (completedSteps.includes('context') && existingState.status === 'completed') {
       return { status: 'ready', projectDir: args.projectDir, runId: existingState.runId ?? 'setup-context-completed' };
@@ -730,6 +797,7 @@ export async function runKtxSetupContextStep(
       (existingState.status === 'running' || existingState.status === 'detached') &&
       args.inputMode !== 'disabled'
     ) {
+      existingState = await activeStateWithCurrentTargets(args.projectDir, existingState, targets);
       if (args.autoWatch) {
         const watched = await watchContextStatus(
           {
@@ -790,7 +858,6 @@ export async function runKtxSetupContextStep(
       }
     }
 
-    const targets = listContextTargets(project);
     if (targets.primarySourceConnectionIds.length === 0 && targets.contextSourceConnectionIds.length === 0) {
       if (args.allowEmpty === true) {
         return { status: 'skipped', projectDir: args.projectDir };

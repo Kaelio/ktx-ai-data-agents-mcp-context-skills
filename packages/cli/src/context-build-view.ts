@@ -220,7 +220,7 @@ export function renderContextBuildView(
   }
 
   if (options.showHint && hasActive) {
-    const hintContent = options.hintText ?? `d to detach · ${resumeCommand(options.projectDir)} to resume`;
+    const hintContent = options.hintText ?? 'd to detach';
     const hint = `  ${hintContent}`;
     lines.push(styled ? dim(hint) : hint);
     lines.push('');

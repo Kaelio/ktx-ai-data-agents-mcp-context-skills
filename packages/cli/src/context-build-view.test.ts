@@ -292,8 +292,8 @@ describe('renderContextBuildView', () => {
 
     const output = renderContextBuildView(state, { styled: false, showHint: true, projectDir: '/tmp/project' });
     expect(output).toContain('d to detach');
-    expect(output).toContain('ktx setup --project-dir /tmp/project');
-    expect(output).toContain('to resume');
+    expect(output).not.toContain('ktx setup --project-dir /tmp/project');
+    expect(output).not.toContain('to resume');
   });
 
   it('omits detach hint when all targets are done', () => {
