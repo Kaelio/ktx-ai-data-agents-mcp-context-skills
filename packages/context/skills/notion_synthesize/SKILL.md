@@ -20,7 +20,7 @@ Each WorkUnit is either a single Notion page/span or a topical cluster of relate
 4. Use `context_evidence_search`, `context_evidence_read`, and `context_evidence_neighbors` to pull supporting chunks when indexed evidence is relevant. Pass `chunkId` and `documentId` values verbatim as returned by the evidence tools.
 5. Write durable business knowledge with `wiki_write`. Aim for a small number of high-quality pages per WorkUnit or cluster. Include `rawPaths` with the exact Notion raw files that support each page.
 6. When the Notion content defines a reusable dataset, metric, segment, join rule, source-of-truth mapping, or table with explicit columns, load `sl_capture`, discover existing sources first with `sl_discover` or `sl_read_source`, then use `sl_write_source` or `sl_edit_source` only for a confirmed mapped non-Notion target source. Include `rawPaths` with the exact Notion raw files that support the SL action. If no mapped target exists, call `emit_unmapped_fallback` and keep the content wiki-only.
-7. For every deleted raw path in the Eviction Set, call `eviction_list`, decide retention, then `context_eviction_decision_write`. Do this even when no wiki write is needed.
+7. For every deleted raw path in the Eviction Set, call `eviction_list`, decide retention, then `emit_eviction_decision`. Do this even when no wiki write is needed.
 
 ## What To Capture
 
@@ -99,6 +99,6 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 
 ## Tools
 
-Allowed: `read_raw_file`, `read_raw_span`, `wiki_search`, `wiki_read`, `wiki_write`, `discover_data`, `entity_details`, `sql_execution`, `sl_discover`, `sl_read_source`, `sl_write_source`, `sl_edit_source`, `sl_validate`, `context_evidence_search`, `context_evidence_read`, `context_evidence_neighbors`, `emit_unmapped_fallback`, `eviction_list`, `context_eviction_decision_write`.
+Allowed: `read_raw_file`, `read_raw_span`, `wiki_search`, `wiki_read`, `wiki_write`, `discover_data`, `entity_details`, `sql_execution`, `sl_discover`, `sl_read_source`, `sl_write_source`, `sl_edit_source`, `sl_validate`, `context_evidence_search`, `context_evidence_read`, `context_evidence_neighbors`, `emit_unmapped_fallback`, `eviction_list`, `emit_eviction_decision`.
 
 Not allowed: `context_candidate_write`, `context_candidate_mark`.

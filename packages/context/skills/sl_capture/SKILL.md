@@ -63,7 +63,7 @@ Preferred:
 - name: total_revenue
   expr: sum(amount)
 ```
-Callers filter `region = 'US'` at `semantic_query` time.
+Callers filter `region = 'US'` at query time.
 
 **Bake constants in only when the filter has named business meaning that won't change** (`enterprise_arr` for a contractually defined tier), cannot be expressed via the source's dimensions, or comes from a regulated/fixed list.
 
@@ -100,7 +100,7 @@ measures:
 
 **Extract repeated filter bundles into named segments.** If the same predicate appears on multiple measures of the same source, lift it to a `segments[]` entry and have each measure reference it. One edit updates every measure that depends on it.
 
-**Never write a standalone file on a manifest-backed name.** If `sl_discover({ tableName })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+**Never write a standalone file on a manifest-backed name.** If `sl_discover({ query: "<table-or-source-name>" })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
 
 **Prefer overlay decomposition over standalone SQL sources.** Before reaching for `source_type: sql`, check whether the metric decomposes into measures on existing overlays (including cross-source derived measures). Use `source_type: sql` only when:
 - The metric requires per-user/per-entity derivation that cannot be expressed as a single `expr` (e.g., `EXISTS` over a time-windowed subset), OR
@@ -209,10 +209,10 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 ## Tool sequence
 
 1. `sl_discover` — see what source files exist.
-2. `sl_discover({ tableName })` — **REQUIRED before the first write on any name**. Shows columns/joins/grain from the manifest. If the call returns a schema, you MUST write an overlay, not a standalone. Skipping this is the #1 cause of accidentally shadowing the manifest.
-3. `sl_read_source({ sourceName })` — read the raw YAML before editing.
-4. For modifications: `sl_edit_source({ sourceName, old_string, new_string })` with exact-string replacements. `old_string` must match exactly and be unique in the file.
-5. For new sources or full rewrites: `sl_write_source({ sourceName, content })` with the full YAML content.
+2. `sl_discover({ query: "<table-or-source-name>" })` — **REQUIRED before the first write on any name**. Shows columns/joins/grain from the manifest. If the call returns a schema, you MUST write an overlay, not a standalone. Skipping this is the #1 cause of accidentally shadowing the manifest.
+3. `sl_read_source({ connectionId, sourceName })` — read the raw YAML before editing.
+4. For modifications: `sl_edit_source({ connectionId, sourceName, yaml_edits: [{ oldText, newText, reason }] })` with exact-string replacements. `oldText` must match exactly and be unique in the file.
+5. For new sources or full rewrites: `sl_write_source({ connectionId, sourceName, source })` with the full structured source definition.
 6. For join discovery: use `sql_execution({connectionName: "warehouse", sql: "SELECT count(*) FROM public.orders o JOIN public.customers c ON c.id = o.customer_id LIMIT 20"})` with the target warehouse connection name and dialect-correct table names to verify the join key exists in both tables and assess cardinality before declaring the join.
 7. Cross-reference knowledge: author the edge once on the **wiki** side via `sl_refs: [source_name]` in the page's front-matter. The reverse edge (wiki pages that cite an SL source) is derived automatically by the reconciler — do not add a `knowledge_refs:` field to SL YAMLs.
 8. `sl_validate` — run after writing or editing to surface schema issues, duplicate measure names, and cross-source validation errors. Read-only; the writes are already committed (the squash-at-end flow will collapse them into one commit).
@@ -235,13 +235,21 @@ Existing index: `orders [measures=0, joins=0] — candidate for enrichment`.
 ```
 sl_discover()
   → orders.yaml does not exist yet
-sl_discover({ tableName: "orders" })
+sl_discover({ query: "orders" })
   → see grain, columns, no current overlay
 sl_write_source({
+  connectionId: "warehouse",
   sourceName: "orders",
-  content: "name: orders\nmeasures:\n  - name: avg_order_value\n    expr: avg(amount)\n    description: Mean order transaction amount — filter by product_category at query time\n"
+  source: {
+    name: "orders",
+    measures: [{
+      name: "avg_order_value",
+      expr: "avg(amount)",
+      description: "Mean order transaction amount - filter by product_category at query time"
+    }]
+  }
 })
-sl_validate()
+sl_validate({ connectionId: "warehouse" })
   → clean
 ```
 
@@ -258,16 +266,17 @@ Current user: "Wait, by 'active' I mean users who have placed an order in the la
 The existing `users.active_count` measure is wrong by the new definition.
 
 ```
-sl_read_source({ sourceName: "users" })
+sl_read_source({ connectionId: "warehouse", sourceName: "users" })
   → see the wrong measure
 sl_edit_source({
+  connectionId: "warehouse",
   sourceName: "users",
   yaml_edits: [{
     oldText: "  - name: active_count\n    expr: \"count(*)\"\n    filter: \"last_login_at > now() - interval '30 days'\"\n    description: Users who logged in within the last 30 days",
     newText: "  - name: active_count\n    expr: \"count(distinct case when last_order_at > now() - interval '30 days' then user_id end)\"\n    description: Users with at least one order in the last 30 days"
   }]
 })
-sl_validate()
+sl_validate({ connectionId: "warehouse" })
 ```
 
 If you only added a new measure, the old incorrect `active_count` would stay and future queries would keep answering the wrong question.
@@ -277,7 +286,7 @@ If you only added a new measure, the old incorrect `active_count` would stay and
 Prior turn: user asked to correlate LTV with protocol count; assistant joined `fct_orders` with `fct_mau_multiprotocol` on `admin_user_id` in raw SQL.
 
 ```
-sl_read_source({ sourceName: "fct_orders" })
+sl_read_source({ connectionId: "warehouse", sourceName: "fct_orders" })
   → no joins section yet
 sql_execution({
   connectionName: "warehouse",
@@ -285,13 +294,14 @@ sql_execution({
 })
   → confirms cardinality (many orders per MAU row = many_to_one)
 sl_edit_source({
+  connectionId: "warehouse",
   sourceName: "fct_orders",
   yaml_edits: [{
     oldText: "measures:",
     newText: "joins:\n  - to: fct_mau_multiprotocol\n    on: admin_user_id = fct_mau_multiprotocol.admin_user_id\n    relationship: many_to_one\nmeasures:"
   }]
 })
-sl_validate()
+sl_validate({ connectionId: "warehouse" })
 ```
 
 Always verify joins with `sql_execution` before adding them.

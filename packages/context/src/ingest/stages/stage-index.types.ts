@@ -37,7 +37,9 @@ export type UnmappedFallbackReason =
   | 'multiple_table_references'
   | 'unsupported_dialect'
   | 'parse_error'
-  | 'missing_target_table';
+  | 'missing_target_table'
+  | 'cumulative_metric_unsupported'
+  | 'conversion_metric_unsupported';
 
 export interface UnmappedFallbackRecord {
   rawPath: string;

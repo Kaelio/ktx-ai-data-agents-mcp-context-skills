@@ -201,6 +201,9 @@ describe('standalone built ktx CLI smoke', () => {
     const result = await runBuiltCli(['status', '--verbose', '--no-input']);
 
     expect(result.stdout).toMatch(/KTX status/);
+    if (result.stdout.includes('No project here yet.')) {
+      expect(result.stdout).toContain('Before you can run ktx setup');
+    }
     expect(result.stdout).toContain('Node 22+');
     expect(result.stdout).toContain('Workspace-local CLI');
     expect(result.stderr === '' || result.stderr.startsWith('Project: ')).toBe(true);

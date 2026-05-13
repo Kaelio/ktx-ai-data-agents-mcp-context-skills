@@ -7,7 +7,7 @@ callers: [memory_agent]
 # Ingest Triage — conflict classification and resolution
 
 This skill is loaded in two contexts:
-- By a Stage 3 WorkUnit agent when `sl_discover` or an `sl_discover` reveals that a prior WU (or a prior sync) already wrote something that overlaps with what the current WU is about to write.
+- By a Stage 3 WorkUnit agent when `sl_discover` reveals that a prior WU (or a prior sync) already wrote something that overlaps with what the current WU is about to write.
 - By the Stage 4 reconciliation agent for cross-WU sweeps and for eviction decisions.
 
 Apply the rules below before every write that could collide with an existing artifact.
@@ -32,7 +32,7 @@ Apply the rules below before every write that could collide with an existing art
    | Definitional contradiction | Same name, substantively different formulas (different aggregation, different filters, different columns) | **Rename + capture**: disambiguate ALL variants with suffix derived from the domain (`churn_risk_engagement_based`, `churn_risk_billing_based`) and write a unified wiki page listing every variant with provenance. The contested name does NOT land in the SL. **Always flag.** |
 
 5. **Eviction (Stage 4 only)**: for each entry in `eviction_list()`:
-   - Remove the artifact (`sl_delete` for SL sources, `wiki_remove` for wiki pages).
+   - Remove the artifact (`sl_write_source` or `sl_edit_source` with `delete: true` for SL sources, `wiki_remove` for wiki pages).
    - Record the removal with `emit_eviction_decision` and `action: "removed"`.
 
 ## Why same-ingest vs re-ingest differs

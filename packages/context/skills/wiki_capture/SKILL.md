@@ -31,7 +31,7 @@ Do NOT capture:
 - Temporary instructions scoped to the current chat.
 - Ad-hoc formatting preferences.
 - Information already present in the semantic layer (column names, join paths, measure formulas — those belong in SL).
-- **Query results, snapshots, or time-bounded benchmark tables.** Numbers go stale; pasting "Oct 2025: 25%, Nov 2025: 19.9%, …" creates misinformation as soon as new data lands. Reference the SL source by name (`sl_refs`) and let future queries pull live data — the wiki captures the *rule* (definition, exclusion, segmentation), the SL source captures the *measure*, and `semantic_query` captures the *current values*.
+- **Query results, snapshots, or time-bounded benchmark tables.** Numbers go stale; pasting "Oct 2025: 25%, Nov 2025: 19.9%, …" creates misinformation as soon as new data lands. Reference the SL source by name (`sl_refs`) and let future query tools pull live data — the wiki captures the *rule* (definition, exclusion, segmentation), the SL source captures the *measure*, and query execution captures the *current values*.
 - **Interpretive narrative tied to a specific snapshot** ("M1 retention degraded sharply from Dec 2025"). The observation is anchored to data that will move; the actionable convention (e.g., "always exclude in-progress cohorts") may be worth capturing on its own, but the snapshot-specific commentary is not.
 
 If nothing is worth capturing, respond without calling any tool.
@@ -136,7 +136,7 @@ wiki_search({ query: "refund revenue paid orders" })
   → returns `revenue-definition` (related — defines paid-orders filter)
 sl_discover({ query: "refund rate" })
   → returns fct_orders (score 0.08), fct_gaap_revenue (0.06)
-sl_read_source({ sourceName: "fct_orders" })
+sl_read_source({ connectionId: "warehouse", sourceName: "fct_orders" })
   → confirms amount_refunded_dollars and transaction_amount_dollars exist
 wiki_write({
   key: "refund-rate-definition",

@@ -938,6 +938,8 @@ try {
   const doctor = await run('pnpm', ['exec', 'ktx', 'status', '--verbose', '--no-input']);
   assert.ok([0, 1].includes(doctor.code), 'ktx status setup exit code must be 0 or 1');
   requireStdout('ktx status setup', doctor, /KTX status/);
+  requireStdout('ktx status setup', doctor, /No project here yet\\./);
+  requireStdout('ktx status setup', doctor, /Before you can run ktx setup/);
   requireStdout('ktx status setup', doctor, /Node 22\\+/);
   assert.equal(doctor.stderr, '', 'ktx status setup wrote unexpected stderr');
 } finally {

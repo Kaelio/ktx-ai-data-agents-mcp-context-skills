@@ -84,7 +84,7 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 
 **Required flow before writing any overlay or standalone**:
 
-1. Call `sl_discover(<tableName>)` for each base table you're about to touch. That returns the real columns.
+1. Call `sl_discover({ query: "<tableName>" })` for each base table you're about to touch. That returns the real columns.
 2. If the table isn't in the manifest, use the warehouse `connectionName`
    returned by `discover_data` or the target connection chosen from
    `sl_discover`, then call a dialect-appropriate SQL probe with that
