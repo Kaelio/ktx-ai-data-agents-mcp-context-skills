@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises';
-import { cancel, isCancel, multiselect, password, select, text } from '@clack/prompts';
+import { cancel, confirm, isCancel, multiselect, password, select, text } from '@clack/prompts';
 import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
   type KtxProjectConnectionConfig,
@@ -203,12 +203,23 @@ function missingConnectionDetailsPrompt(
 function createPromptAdapter(): KtxSetupDatabasesPromptAdapter {
   return {
     async multiselect(options) {
-      const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return ['back'];
+      while (true) {
+        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
+        if (isCancel(value)) {
+          cancel('Setup cancelled.');
+          return ['back'];
+        }
+        const selected = [...value] as string[];
+        if (selected.length === 0 && !options.required) {
+          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
+          if (isCancel(skipConfirmed)) {
+            cancel('Setup cancelled.');
+            return ['back'];
+          }
+          if (!skipConfirmed) continue;
+        }
+        return selected;
       }
-      return [...value] as string[];
     },
     async select(options) {
       const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
