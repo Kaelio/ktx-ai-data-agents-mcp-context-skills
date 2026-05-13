@@ -1,10 +1,11 @@
 import { resolve } from 'node:path';
 import { type Command, Option } from '@commander-js/extra-typings';
-import { type KtxCliCommandContext, type OutputModeOptions, resolveCommandProjectDir } from '../cli-program.js';
+import { collectOption, type KtxCliCommandContext, type OutputModeOptions, resolveCommandProjectDir } from '../cli-program.js';
 import type { KtxCliDeps, KtxCliIo } from '../index.js';
 import type { KtxIngestArgs, KtxIngestOutputMode } from '../ingest.js';
 import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 import { profileMark } from '../startup-profile.js';
+import type { KtxTextIngestArgs } from '../text-ingest.js';
 
 profileMark('module:commands/ingest-commands');
 
@@ -15,6 +16,7 @@ interface IngestCommandOptions {
     deps: KtxCliDeps,
     defaultRunIngest: (args: KtxIngestArgs, io: KtxCliIo) => Promise<number>,
   ) => Promise<number>;
+  runTextIngest: (args: KtxTextIngestArgs, io: KtxCliIo, deps: KtxCliDeps) => Promise<number>;
 }
 
 function outputMode(options: OutputModeOptions): KtxIngestOutputMode {
@@ -98,6 +100,33 @@ export function registerIngestCommands(
           ...inputMode(options),
         },
         commandOptions,
+      );
+    });
+
+  ingest
+    .command('text')
+    .description('Ingest free-form text artifacts into KTX memory')
+    .argument('[files...]', 'Files to ingest; use - to read one item from stdin')
+    .option('--text <content>', 'Text content to ingest; repeat for a batch', collectOption, [])
+    .option('--connection-id <connectionId>', 'Optional KTX connection id for semantic-layer capture')
+    .option('--user-id <id>', 'Memory user id for capture attribution', 'local-cli')
+    .option('--json', 'Print JSON output')
+    .option('--fail-fast', 'Stop after the first failed text item', false)
+    .action(async (files: string[], options, command) => {
+      context.setExitCode(
+        await commandOptions.runTextIngest(
+          {
+            projectDir: resolveCommandProjectDir(command),
+            texts: options.text,
+            files,
+            ...(options.connectionId ? { connectionId: options.connectionId } : {}),
+            userId: options.userId,
+            json: options.json === true,
+            failFast: options.failFast === true,
+          },
+          context.io,
+          context.deps,
+        ),
       );
     });
 

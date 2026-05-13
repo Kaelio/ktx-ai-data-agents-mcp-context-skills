@@ -158,6 +158,30 @@ describe('renderContextBuildView', () => {
     expect(output).toContain('dbt-main');
   });
 
+  it('supports text ingest labels while preserving the shared compact progress view', () => {
+    const state = initViewState([
+      { connectionId: 'text-1', driver: 'text', operation: 'source-ingest', debugCommand: '', steps: ['memory-update'] },
+      { connectionId: 'schema.md', driver: 'text', operation: 'source-ingest', debugCommand: '', steps: ['memory-update'] },
+    ]);
+    state.contextSources[0].status = 'running';
+    state.contextSources[0].detailLine = 'capturing...';
+
+    const output = renderContextBuildView(state, {
+      styled: false,
+      title: 'Ingesting text memory',
+      contextGroupLabel: 'Texts',
+      sourceIngestRunningText: 'capturing...',
+      completedItemName: { singular: 'text', plural: 'texts' },
+    });
+
+    expect(output).toContain('Ingesting text memory');
+    expect(output).toContain('Texts:');
+    expect(output).toContain('text-1');
+    expect(output).toContain('schema.md');
+    expect(output).toContain('capturing...');
+    expect(output).not.toContain('Context sources:');
+  });
+
   it('renders header with total elapsed time when set', () => {
     const state = initViewState([
       { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
