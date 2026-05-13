@@ -133,6 +133,12 @@ describe('setup embeddings step', () => {
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
     const prompts = makePromptAdapter({ selectValues: ['sentence-transformers'] });
     const ensureLocalEmbeddings = vi.fn(async () => managedDaemon());
+    const spinnerEvents: string[] = [];
+    const spinner = vi.fn(() => ({
+      start: (msg: string) => spinnerEvents.push(`start:${msg}`),
+      stop: (msg: string) => spinnerEvents.push(`stop:${msg}`),
+      error: (msg: string) => spinnerEvents.push(`error:${msg}`),
+    }));
 
     const result = await runKtxSetupEmbeddingsStep(
       {
@@ -143,7 +149,7 @@ describe('setup embeddings step', () => {
         skipEmbeddings: false,
       },
       io.io,
-      { prompts, env: {}, healthCheck, ensureLocalEmbeddings },
+      { prompts, env: {}, healthCheck, ensureLocalEmbeddings, spinner },
     );
 
     expect(result.status).toBe('ready');
@@ -168,8 +174,8 @@ describe('setup embeddings step', () => {
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
     expect(config.setup?.completed_steps).toEqual(undefined);
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');
-    expect(io.stdout()).toContain(
-      'Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
+    expect(spinnerEvents).toContainEqual(
+      'start:Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
     );
     expect(io.stdout()).toContain('Embeddings ready: yes');
   });
@@ -184,6 +190,12 @@ describe('setup embeddings step', () => {
           resolveHealthCheck = resolve;
         }),
     );
+    const spinnerEvents: string[] = [];
+    const spinner = vi.fn(() => ({
+      start: (msg: string) => spinnerEvents.push(`start:${msg}`),
+      stop: (msg: string) => spinnerEvents.push(`stop:${msg}`),
+      error: (msg: string) => spinnerEvents.push(`error:${msg}`),
+    }));
 
     const result = runKtxSetupEmbeddingsStep(
       {
@@ -194,12 +206,12 @@ describe('setup embeddings step', () => {
         skipEmbeddings: false,
       },
       io.io,
-      { prompts, env: {}, healthCheck, ensureLocalEmbeddings: vi.fn(async () => managedDaemon()) },
+      { prompts, env: {}, healthCheck, ensureLocalEmbeddings: vi.fn(async () => managedDaemon()), spinner },
     );
 
     await vi.waitFor(() => {
-      expect(io.stdout()).toContain(
-        '\r│  - Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
+      expect(spinnerEvents).toContainEqual(
+        'start:Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
       );
     });
 

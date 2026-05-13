@@ -13,6 +13,7 @@ import {
 } from '@ktx/context/project';
 import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
+import { createClackSpinner, type KtxCliSpinner } from './clack.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
@@ -61,6 +62,7 @@ export interface KtxSetupEmbeddingsDeps {
     installPolicy: KtxManagedPythonInstallPolicy;
     io: KtxCliIo;
   }) => Promise<ManagedLocalEmbeddingsDaemon>;
+  spinner?: () => KtxCliSpinner;
 }
 
 type BackendChoice = KtxSetupEmbeddingBackend | 'back';
@@ -83,14 +85,6 @@ const EMBEDDING_OPTION_PROMPT_CONTEXT =
   'KTX uses embeddings for semantic search over semantic-layer sources, wiki context, schema metadata, ' +
   'and relationship evidence.';
 const LOCAL_EMBEDDING_HEALTH_TIMEOUT_MS = 120_000;
-const HEALTH_CHECK_SPINNER_FRAMES = ['-', '\\', '|', '/'] as const;
-const HEALTH_CHECK_SPINNER_INTERVAL_MS = 120;
-const CLEAR_CURRENT_LINE = '\x1b[2K\r';
-
-interface HealthCheckProgress {
-  succeed(message: string): void;
-  fail(message: string): void;
-}
 
 function createPromptAdapter(): KtxSetupEmbeddingsPromptAdapter {
   return {
@@ -350,42 +344,17 @@ function healthCheckStartText(backend: KtxSetupEmbeddingBackend, model: string, 
   return `Checking ${backend} embeddings (${model}, ${dimensions} dimensions).`;
 }
 
-function startHealthCheckProgress(io: KtxCliIo, message: string): HealthCheckProgress {
-  if (io.stdout.isTTY !== true) {
-    io.stdout.write(`│  ${message}\n`);
-    const noop = () => undefined;
-    return {
-      succeed: noop,
-      fail: noop,
-    };
-  }
-
-  let frameIndex = 0;
-  let stopped = false;
-  const writeFrame = () => {
-    io.stdout.write(`${CLEAR_CURRENT_LINE}│  ${HEALTH_CHECK_SPINNER_FRAMES[frameIndex]} ${message}`);
-  };
-  writeFrame();
-  const interval = setInterval(() => {
-    frameIndex = (frameIndex + 1) % HEALTH_CHECK_SPINNER_FRAMES.length;
-    writeFrame();
-  }, HEALTH_CHECK_SPINNER_INTERVAL_MS);
-
-  const stop = (finalMessage: string) => {
-    if (stopped) {
-      return;
-    }
-    stopped = true;
-    clearInterval(interval);
-    io.stdout.write(`${CLEAR_CURRENT_LINE}│  ${finalMessage}\n`);
-  };
-
+function startHealthCheckProgress(
+  spinner: KtxCliSpinner,
+  message: string,
+): { succeed(msg: string): void; fail(msg: string): void } {
+  spinner.start(message);
   return {
-    succeed(message) {
-      stop(message);
+    succeed(msg: string) {
+      spinner.stop(msg);
     },
-    fail(message) {
-      stop(message);
+    fail(msg: string) {
+      spinner.error(msg);
     },
   };
 }
@@ -474,7 +443,8 @@ export async function runKtxSetupEmbeddingsStep(
             dimensions,
             credentialValue,
           });
-    const progress = startHealthCheckProgress(io, healthCheckStartText(selectedBackend, model, dimensions));
+    const healthSpinner = (deps.spinner ?? createClackSpinner)();
+    const progress = startHealthCheckProgress(healthSpinner, healthCheckStartText(selectedBackend, model, dimensions));
     let health: KtxEmbeddingHealthCheckResult;
     try {
       health = await healthCheck(healthConfig);
