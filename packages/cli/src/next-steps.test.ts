@@ -25,12 +25,8 @@ describe('KTX demo next steps', () => {
   it('uses supported final public commands', () => {
     expect(KTX_NEXT_STEP_COMMANDS).toEqual([
       {
-        command: 'ktx agent context --json',
-        description: 'Verify the project context your agent can read',
-      },
-      {
-        command: 'ktx agent tools --json',
-        description: 'List direct CLI tools available to agents',
+        command: 'ktx status --json',
+        description: 'Verify project setup and context readiness',
       },
       {
         command: 'ktx sl list',
@@ -46,8 +42,8 @@ describe('KTX demo next steps', () => {
   it('uses only the direct CLI route for agent verification', () => {
     const commands = KTX_NEXT_STEP_COMMANDS.map((step) => step.command);
 
-    expect(commands).toContain('ktx agent context --json');
-    expect(commands).toContain('ktx agent tools --json');
+    expect(commands).not.toContain('ktx agent context --json');
+    expect(commands).toContain('ktx status --json');
     expect(commands).not.toContain('ktx serve --mcp stdio --user-id local');
   });
 
@@ -64,8 +60,8 @@ describe('KTX demo next steps', () => {
   it('does not advertise removed Commander migration commands', () => {
     const rendered = formatNextStepLines().join('\n');
 
-    expect(rendered).toContain('ktx agent tools --json');
-    expect(rendered).toContain('ktx agent context --json');
+    expect(rendered).toContain('ktx status --json');
+    expect(rendered).not.toContain('ktx agent');
     expect(rendered).toContain('ktx sl list');
     expect(rendered).toContain('ktx wiki list');
 
@@ -109,7 +105,8 @@ describe('KTX demo next steps', () => {
     }).join('\n');
 
     expect(rendered).toContain('KTX context is ready for agents.');
-    expect(rendered).toContain('ktx agent context --json');
+    expect(rendered).toContain('ktx status --json');
+    expect(rendered).not.toContain('ktx agent');
     expect(rendered).not.toContain('ktx serve --mcp stdio --user-id local');
     expect(rendered).not.toContain('Build KTX context next.');
   });

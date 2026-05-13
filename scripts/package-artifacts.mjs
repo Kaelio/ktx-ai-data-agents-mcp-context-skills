@@ -548,12 +548,6 @@ function parseJsonResult(label, result) {
   return JSON.parse(result.stdout);
 }
 
-function parseJsonFailure(label, result) {
-  assert.equal(result.code, 1, label + ' should fail with exit code 1');
-  assert.equal(result.stdout, '', label + ' should not write stdout when failing');
-  return JSON.parse(result.stderr);
-}
-
 function requireIncludes(values, expected, label) {
   assert.ok(Array.isArray(values), label + ' must be an array');
   assert.ok(values.includes(expected), label + ' did not include ' + expected + ': ' + values.join(', '));
@@ -602,30 +596,6 @@ try {
   assert.equal(runtimeStatusBefore.layout.runtimeRoot, process.env.KTX_RUNTIME_ROOT);
   process.stdout.write('ktx managed runtime starts missing in isolated root\\n');
 
-  const missingProjectDir = join(root, 'missing-project');
-  await mkdir(missingProjectDir, { recursive: true });
-  const missingProjectSearch = await run('pnpm', [
-    'exec',
-    'ktx',
-    'agent',
-    'sl',
-    'list',
-    '--json',
-    '--query',
-    'revenue',
-    '--project-dir',
-    missingProjectDir,
-  ]);
-  const missingProjectError = parseJsonFailure('ktx agent sl list missing project', missingProjectSearch);
-  assert.equal(missingProjectError.error.code, 'agent_sl_search_missing_project');
-  assert.deepEqual(missingProjectError.error.nextSteps, [
-    'ktx setup --project-dir ' + missingProjectDir,
-    'ktx status --project-dir ' + missingProjectDir,
-    'ktx ingest <connection>',
-    'ktx agent sl list --json --query "revenue" --project-dir ' + missingProjectDir,
-  ]);
-  process.stdout.write('ktx agent sl list missing project guidance verified\\n');
-
   const init = await run('pnpm', [
     'exec',
     'ktx',
@@ -661,28 +631,6 @@ try {
     '--skip-agents',
   ]);
   requireProjectStderr('ktx setup empty project', emptyInit, emptyProjectDir);
-  const emptySearch = await run('pnpm', [
-    'exec',
-    'ktx',
-    'agent',
-    'sl',
-    'list',
-    '--json',
-    '--query',
-    'revenue',
-    '--project-dir',
-    emptyProjectDir,
-  ]);
-  const emptySearchError = parseJsonFailure('ktx agent sl list no connections', emptySearch);
-  assert.equal(emptySearchError.error.code, 'agent_sl_search_no_connections');
-  assert.deepEqual(emptySearchError.error.nextSteps, [
-    'ktx setup --project-dir ' + emptyProjectDir,
-    'ktx status --project-dir ' + emptyProjectDir,
-    'ktx ingest <connection>',
-    'ktx agent sl list --json --query "revenue" --project-dir ' + emptyProjectDir,
-  ]);
-  process.stdout.write('ktx agent sl list no connections guidance verified\\n');
-
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
@@ -727,10 +675,9 @@ try {
     'utf-8',
   );
 
-  const agentWikiSearch = await run('pnpm', [
+  const wikiSearch = await run('pnpm', [
     'exec',
     'ktx',
-    'agent',
     'wiki',
     'search',
     'revenue',
@@ -740,39 +687,16 @@ try {
     '--project-dir',
     projectDir,
   ]);
-  const agentWikiSearchJson = parseJsonResult('ktx agent wiki search', agentWikiSearch);
-  assert.equal(agentWikiSearchJson.totalFound, 1);
-  assert.equal(agentWikiSearchJson.results[0].key, 'revenue');
-  assert.equal(agentWikiSearchJson.results[0].path, 'knowledge/global/revenue.md');
-  assert.equal(typeof agentWikiSearchJson.results[0].score, 'number');
-  requireIncludes(agentWikiSearchJson.results[0].matchReasons, 'lexical', 'agent wiki search match reasons');
-  process.stdout.write('ktx agent wiki search hybrid metadata verified\\n');
+  const wikiSearchJson = parseJsonResult('ktx wiki search', wikiSearch);
+  assert.equal(wikiSearchJson.kind, 'list');
+  assert.equal(wikiSearchJson.data.items.length, 1);
+  assert.equal(wikiSearchJson.data.items[0].key, 'revenue');
+  assert.equal(wikiSearchJson.data.items[0].path, 'knowledge/global/revenue.md');
+  assert.equal(typeof wikiSearchJson.data.items[0].score, 'number');
+  requireIncludes(wikiSearchJson.data.items[0].matchReasons, 'lexical', 'wiki search match reasons');
+  process.stdout.write('ktx wiki search hybrid metadata verified\\n');
   await access(join(projectDir, '.ktx', 'db.sqlite'));
   process.stdout.write('SQLite knowledge index: ' + join(projectDir, '.ktx', 'db.sqlite') + '\\n');
-
-  const noSourceSearch = await run('pnpm', [
-    'exec',
-    'ktx',
-    'agent',
-    'sl',
-    'list',
-    '--json',
-    '--connection-id',
-    'warehouse',
-    '--query',
-    'revenue',
-    '--project-dir',
-    projectDir,
-  ]);
-  const noSourceSearchError = parseJsonFailure('ktx agent sl list no indexed sources', noSourceSearch);
-  assert.equal(noSourceSearchError.error.code, 'agent_sl_search_no_indexed_sources');
-  assert.deepEqual(noSourceSearchError.error.nextSteps, [
-    'ktx setup --project-dir ' + projectDir,
-    'ktx status --project-dir ' + projectDir,
-    'ktx ingest <connection>',
-    'ktx agent sl list --json --query "revenue" --project-dir ' + projectDir,
-  ]);
-  process.stdout.write('ktx agent sl list no indexed sources guidance verified\\n');
 
   const slYaml = [
     'name: orders',
@@ -794,10 +718,9 @@ try {
   await mkdir(join(projectDir, 'semantic-layer', 'warehouse'), { recursive: true });
   await writeFile(join(projectDir, 'semantic-layer', 'warehouse', 'orders.yaml'), slYaml, 'utf-8');
 
-  const agentSlSearch = await run('pnpm', [
+  const slSearch = await run('pnpm', [
     'exec',
     'ktx',
-    'agent',
     'sl',
     'list',
     '--json',
@@ -808,13 +731,14 @@ try {
     '--project-dir',
     projectDir,
   ]);
-  const agentSlSearchJson = parseJsonResult('ktx agent sl list', agentSlSearch);
-  assert.equal(agentSlSearchJson.totalSources, 1);
-  assert.equal(agentSlSearchJson.sources[0].connectionId, 'warehouse');
-  assert.equal(agentSlSearchJson.sources[0].name, 'orders');
-  assert.equal(typeof agentSlSearchJson.sources[0].score, 'number');
-  requireIncludes(agentSlSearchJson.sources[0].matchReasons, 'lexical', 'agent sl search match reasons');
-  process.stdout.write('ktx agent sl list hybrid metadata verified\\n');
+  const slSearchJson = parseJsonResult('ktx sl list', slSearch);
+  assert.equal(slSearchJson.kind, 'list');
+  assert.equal(slSearchJson.data.items.length, 1);
+  assert.equal(slSearchJson.data.items[0].connectionId, 'warehouse');
+  assert.equal(slSearchJson.data.items[0].name, 'orders');
+  assert.equal(typeof slSearchJson.data.items[0].score, 'number');
+  requireIncludes(slSearchJson.data.items[0].matchReasons, 'lexical', 'sl search match reasons');
+  process.stdout.write('ktx sl list hybrid metadata verified\\n');
 
   const slQuery = await run('pnpm', ['exec', 'ktx', 'sl', 'query',
     '--connection-id',

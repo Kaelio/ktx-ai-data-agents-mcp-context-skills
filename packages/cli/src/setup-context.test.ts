@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -203,7 +204,7 @@ describe('setup context build state', () => {
       expect.objectContaining({ onDetach: expect.any(Function) }),
     );
     expect(verifyContextReady).toHaveBeenCalledWith(tempDir);
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('    - context');
+    expect(await readKtxSetupState(tempDir)).toEqual({ completed_steps: ['context'] });
     await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
       runId: 'setup-context-local-abc123',
       status: 'completed',
@@ -284,7 +285,7 @@ describe('setup context build state', () => {
     ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-existing' });
 
     expect(runContextBuildMock).not.toHaveBeenCalled();
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('    - context');
+    expect(await readKtxSetupState(tempDir)).toEqual({ completed_steps: ['context'] });
     await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
       runId: 'setup-context-local-existing',
       status: 'completed',

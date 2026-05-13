@@ -51,6 +51,7 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
   sl.command('list')
     .description('List semantic-layer sources')
     .option('--connection-id <id>', 'KTX connection id')
+    .option('--query <text>', 'Search source names and descriptions')
     .addOption(
       new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
         'pretty',
@@ -59,26 +60,34 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
       ]),
     )
     .option('--json', 'Shortcut for --output=json (overrides --output)', false)
-    .action(async (options: { connectionId?: string; output?: 'pretty' | 'plain' | 'json'; json?: boolean }, command) => {
+    .action(
+      async (
+        options: { connectionId?: string; query?: string; output?: 'pretty' | 'plain' | 'json'; json?: boolean },
+        command,
+      ) => {
       await runSlArgs(context, {
         command: 'list',
         projectDir: resolveCommandProjectDir(command),
         connectionId: options.connectionId,
+        query: options.query,
         output: options.output,
         json: options.json,
       });
-    });
+      },
+    );
 
   sl.command('read')
     .description('Read a semantic-layer source')
     .argument('<sourceName>', 'Semantic-layer source name')
     .requiredOption('--connection-id <id>', 'KTX connection id')
-    .action(async (sourceName: string, options: { connectionId: string }, command) => {
+    .option('--json', 'Print JSON output', false)
+    .action(async (sourceName: string, options: { connectionId: string; json?: boolean }, command) => {
       await runSlArgs(context, {
         command: 'read',
         projectDir: resolveCommandProjectDir(command),
         connectionId: options.connectionId,
         sourceName,
+        json: options.json,
       });
     });
 
@@ -113,6 +122,7 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
   sl.command('query')
     .description('Compile or execute a semantic-layer query')
     .option('--connection-id <id>', 'KTX connection id')
+    .option('--query-file <path>', 'JSON semantic-layer query file')
     .option('--measure <measure>', 'Measure to query; repeatable', collectOption, [])
     .option('--dimension <dimension>', 'Dimension to include; repeatable', collectOption, [])
     .option('--filter <filter>', 'Filter expression; repeatable', collectOption, [])
@@ -126,22 +136,26 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
     .option('--no-input', 'Disable interactive managed runtime installation')
     .option('--max-rows <n>', 'Maximum rows to return when executing', parsePositiveIntegerOption)
     .action(async (options, command) => {
-      if (options.measure.length === 0) {
+      if (options.measure.length === 0 && !options.queryFile) {
         throw new Error('sl query requires at least one --measure');
       }
       const args = slQueryCommandSchema.parse({
         command: 'query',
         projectDir: resolveCommandProjectDir(command),
         connectionId: options.connectionId,
-        query: {
-          measures: options.measure,
-          dimensions: options.dimension,
-          ...(options.filter.length > 0 ? { filters: options.filter } : {}),
-          ...(options.segment.length > 0 ? { segments: options.segment } : {}),
-          ...(options.orderBy.length > 0 ? { order_by: options.orderBy } : {}),
-          ...(options.limit !== undefined ? { limit: options.limit } : {}),
-          ...(options.includeEmpty === true ? { include_empty: true } : {}),
-        },
+        ...(options.queryFile
+          ? { queryFile: options.queryFile }
+          : {
+              query: {
+                measures: options.measure,
+                dimensions: options.dimension,
+                ...(options.filter.length > 0 ? { filters: options.filter } : {}),
+                ...(options.segment.length > 0 ? { segments: options.segment } : {}),
+                ...(options.orderBy.length > 0 ? { order_by: options.orderBy } : {}),
+                ...(options.limit !== undefined ? { limit: options.limit } : {}),
+                ...(options.includeEmpty === true ? { include_empty: true } : {}),
+              },
+            }),
         format: options.format,
         execute: options.execute === true,
         cliVersion: context.packageInfo.version,

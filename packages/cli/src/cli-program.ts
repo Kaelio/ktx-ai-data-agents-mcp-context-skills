@@ -1,6 +1,5 @@
 import { Command, InvalidArgumentError } from '@commander-js/extra-typings';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
-import { registerAgentCommands } from './commands/agent-commands.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerWikiCommands } from './commands/knowledge-commands.js';
 import { registerPublicIngestCommands } from './commands/public-ingest-commands.js';
@@ -319,7 +318,6 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   registerWikiCommands(program, context);
   registerSlCommands(program, context);
   registerStatusCommands(program, context);
-  registerAgentCommands(program, context);
   registerDevCommands(program, context);
 
   return program;
