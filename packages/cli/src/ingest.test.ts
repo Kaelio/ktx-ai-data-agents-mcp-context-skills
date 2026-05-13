@@ -3,11 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   LocalLookerRuntimeStore,
-  LocalMetabaseSourceStateReader,
-  getLocalIngestStatus,
+  LocalMetabaseDiscoveryCache,
   type LocalIngestResult,
   type LocalMetabaseFanoutProgress,
-  type MemoryFlowReplayInput,
   type RunLocalIngestOptions,
   type SourceAdapter,
 } from '@ktx/context/ingest';
@@ -20,7 +18,6 @@ import {
   CliMetabaseAgentRunner,
   CliMetabaseSourceAdapter,
   completedLocalBundleRun,
-  emitLiveLocalMemoryFlow,
   failedLocalBundleRun,
   localFakeBundleReport,
   makeCliLookerParser,
@@ -28,7 +25,6 @@ import {
   makeIo,
   persistLocalBundleReport,
   runPublicMetabaseSyncModeCase,
-  writeBundleReportFile,
   writeMetabaseConfig,
   writeWarehouseConfig,
 } from './ingest.test-utils.js';
@@ -107,7 +103,7 @@ describe('runKtxIngest', () => {
     expect(statusIo.stderr()).toBe('');
   });
 
-  it('prints provider setup guidance when a skip-llm setup project runs dev ingest', async () => {
+  it('prints provider setup guidance when a skip-llm setup project runs ingest', async () => {
     const projectDir = join(tempDir, 'project');
     const setupIo = makeIo();
     await expect(
@@ -168,7 +164,7 @@ describe('runKtxIngest', () => {
 
     expect(runIo.stdout()).toBe('');
     expect(runIo.stderr()).toContain(
-      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
     );
     expect(runIo.stderr()).toContain(
       `ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
@@ -437,6 +433,16 @@ describe('runKtxIngest', () => {
         '    driver: metabase',
         '    api_url: https://metabase.example.test',
         '    api_key: literal-test-key',
+        '    mappings:',
+        '      databaseMappings:',
+        '        "1": warehouse_a',
+        '        "2": warehouse_b',
+        '      syncEnabled:',
+        '        "1": true',
+        '        "2": true',
+        '      syncMode: ALL',
+        '      defaultTagNames:',
+        '        - ktx',
         '  warehouse_a:',
         '    driver: postgres',
         '    url: postgresql://readonly@db.example.test/warehouse_a',
@@ -453,33 +459,12 @@ describe('runKtxIngest', () => {
       'utf-8',
     );
     const project = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
-    await store.replaceSourceState({
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+    await discoveryCache.refreshDiscoveredDatabases({
       connectionId: 'prod-metabase',
-      syncMode: 'ALL',
-      defaultTagNames: ['ktx'],
-      selections: [],
-      mappings: [
-        {
-          metabaseDatabaseId: 1,
-          metabaseDatabaseName: 'Warehouse A',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'db.example.test',
-          metabaseDbName: 'warehouse_a',
-          targetConnectionId: 'warehouse_a',
-          syncEnabled: true,
-          source: 'refresh',
-        },
-        {
-          metabaseDatabaseId: 2,
-          metabaseDatabaseName: 'Warehouse B',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'db.example.test',
-          metabaseDbName: 'warehouse_b',
-          targetConnectionId: 'warehouse_b',
-          syncEnabled: true,
-          source: 'refresh',
-        },
+      discovered: [
+        { id: 1, name: 'Warehouse A', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_a' },
+        { id: 2, name: 'Warehouse B', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_b' },
       ],
     });
     const adapter = new CliMetabaseSourceAdapter();
@@ -663,7 +648,7 @@ describe('runKtxIngest', () => {
     ).resolves.toBe(1);
 
     expect(io.stderr()).toContain('source-dir uploads are not supported for the Metabase fan-out adapter');
-    expect(io.stderr()).not.toContain('ktx dev ingest run requires llm.provider.backend');
+    expect(io.stderr()).not.toContain('ktx ingest run requires llm.provider.backend');
     expect(io.stdout()).toBe('');
   });
 
@@ -812,6 +797,44 @@ describe('runKtxIngest', () => {
 
     expect(exitCode).toBe(0);
     expect(runLocalIngest).toHaveBeenCalledWith(expect.objectContaining({ llmDebugRequestFile: debugFile }));
+  });
+
+  it('supplies a scan-connector query executor to local ingest runs', async () => {
+    const io = makeIo();
+    const projectDir = join(tempDir, 'query-executor-project');
+    await writeWarehouseConfig(projectDir);
+    const queryExecutor = {
+      execute: vi.fn(async () => ({
+        headers: [],
+        rows: [],
+        totalRows: 0,
+        command: 'SELECT',
+        rowCount: 0,
+      })),
+    };
+    const runLocalIngest = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> =>
+      completedLocalBundleRun(input, 'query-executor-run'),
+    );
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          runLocalIngest,
+          createAdapters: () => [],
+          createQueryExecutor: () => queryExecutor,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runLocalIngest).toHaveBeenCalledWith(expect.objectContaining({ queryExecutor }));
   });
 
   it('passes daemon database introspection URL to default local ingest adapters', async () => {

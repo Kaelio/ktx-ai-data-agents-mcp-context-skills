@@ -36,6 +36,7 @@ import { BaseTool, type GitAuthorResolverPort, type ToolContext } from '../tools
 import {
   type KnowledgeEventPort,
   type KnowledgeIndexPort,
+  type KnowledgeIndexPageListing,
   KnowledgeWikiService,
   searchLocalKnowledgePages,
   WikiListTagsTool,
@@ -219,7 +220,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   }
 
   async listPagesForUser(userId: string) {
-    const pages: Array<{ id?: string; page_key: string; summary: string; scope: string; scope_id: string | null }> = [];
+    const pages: KnowledgeIndexPageListing[] = [];
     for (const scope of [
       { scope: 'GLOBAL', scopeId: null, dir: 'knowledge/global' },
       { scope: 'USER', scopeId: userId, dir: `knowledge/user/${userId}` },
@@ -234,6 +235,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
           summary: parsed.summary,
           scope: scope.scope,
           scope_id: scope.scopeId,
+          tags: parseWikiTags(raw.content),
         });
       }
     }
@@ -433,7 +435,7 @@ class LocalMemoryToolsetFactory implements MemoryToolsetFactoryPort {
           };
         },
       }),
-      new WikiListTagsTool(deps.wikiService, deps.knowledgeIndex),
+      new WikiListTagsTool(deps.knowledgeIndex),
       new WikiWriteTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
       new WikiRemoveTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
     ];
@@ -466,6 +468,17 @@ function parseWiki(raw: string): { summary: string; content: string } {
     summary: typeof frontmatter.summary === 'string' ? frontmatter.summary : '',
     content: match[2].trim(),
   };
+}
+
+function parseWikiTags(raw: string): string[] {
+  const match = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) {
+    return [];
+  }
+  const frontmatter = (YAML.parse(match[1]) ?? {}) as Record<string, unknown>;
+  return Array.isArray(frontmatter.tags)
+    ? frontmatter.tags.filter((tag): tag is string => typeof tag === 'string')
+    : [];
 }
 
 function scoreText(text: string, query: string): number {

@@ -9,17 +9,6 @@ export {
   type KtxCliIo,
   type KtxCliPackageInfo,
 } from './cli-runtime.js';
-export { runKtxAgent, type KtxAgentArgs } from './agent.js';
-export {
-  KTX_AGENT_MAX_ROWS_CAP,
-  createKtxAgentRuntime,
-  parseAgentMaxRows,
-  readAgentJsonFile,
-  writeAgentJson,
-  writeAgentJsonError,
-  type KtxAgentRuntime,
-  type KtxAgentRuntimeDeps,
-} from './agent-runtime.js';
 export { runKtxSetup, type KtxSetupArgs, type KtxSetupStatus } from './setup.js';
 export type {
   KtxSetupDatabaseDriver,

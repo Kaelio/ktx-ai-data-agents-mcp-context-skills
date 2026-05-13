@@ -10,7 +10,6 @@ import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -139,7 +138,7 @@ type VertexConfigChoice =
 type VertexAuthChoice = { status: 'ready' } | { status: 'back' | 'missing-input' };
 
 export type GcloudAuthResult = { ok: true } | { ok: false; message: string };
-export interface GcloudProjectChoice {
+interface GcloudProjectChoice {
   projectId: string;
   name?: string;
 }
@@ -858,19 +857,17 @@ async function persistLlmConfig(
   model: string,
 ): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = stripKtxSetupCompletedSteps(
-    {
-      ...project.config,
-      llm: buildProjectLlmConfig(project.config.llm, provider, model),
-      scan: {
-        ...project.config.scan,
-        enrichment: {
-          ...project.config.scan.enrichment,
-          mode: 'llm',
-        },
+  const config = {
+    ...project.config,
+    llm: buildProjectLlmConfig(project.config.llm, provider, model),
+    scan: {
+      ...project.config.scan,
+      enrichment: {
+        ...project.config.scan.enrichment,
+        mode: 'llm' as const,
       },
     },
-  );
+  };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'llm');
 }

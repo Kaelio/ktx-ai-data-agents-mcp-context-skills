@@ -4,12 +4,10 @@ import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   type KtxProjectConfig,
   type KtxProjectEmbeddingConfig,
-  ktxSetupCompletedSteps,
   loadKtxProject,
   markKtxSetupStateStepComplete,
   readKtxSetupState,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -110,7 +108,7 @@ function createPromptAdapter(): KtxSetupEmbeddingsPromptAdapter {
 
 async function hasCompletedEmbeddings(projectDir: string, config: KtxProjectConfig): Promise<boolean> {
   return (
-    ktxSetupCompletedSteps(config, await readKtxSetupState(projectDir)).includes('embeddings') &&
+    (await readKtxSetupState(projectDir)).completed_steps.includes('embeddings') &&
     config.ingest.embeddings.backend !== 'none' &&
     config.ingest.embeddings.backend !== 'deterministic' &&
     typeof config.ingest.embeddings.model === 'string' &&
@@ -184,22 +182,20 @@ function embeddingBackendDisplayName(backend: KtxSetupEmbeddingBackend): string 
 
 async function persistEmbeddingConfig(projectDir: string, embeddings: KtxProjectEmbeddingConfig): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = stripKtxSetupCompletedSteps(
-    {
-      ...project.config,
-      ingest: {
-        ...project.config.ingest,
+  const config = {
+    ...project.config,
+    ingest: {
+      ...project.config.ingest,
+      embeddings,
+    },
+    scan: {
+      ...project.config.scan,
+      enrichment: {
+        ...project.config.scan.enrichment,
         embeddings,
       },
-      scan: {
-        ...project.config.scan,
-        enrichment: {
-          ...project.config.scan.enrichment,
-          embeddings,
-        },
-      },
     },
-  );
+  };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'embeddings');
 }

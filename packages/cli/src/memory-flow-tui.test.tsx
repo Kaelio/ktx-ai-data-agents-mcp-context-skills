@@ -11,7 +11,6 @@ import {
   startLiveMemoryFlowTui,
   type KtxMemoryFlowTuiIo,
   type MemoryFlowInkInstance,
-  type MemoryFlowInkRenderOptions,
 } from './memory-flow-tui.js';
 
 function replayInput(): MemoryFlowReplayInput {

@@ -480,7 +480,7 @@ describe('local ingest adapters', () => {
       }),
       config: {
         ...project.config,
-        setup: { database_connection_ids: ['warehouse'], completed_steps: [] },
+        setup: { database_connection_ids: ['warehouse'] },
         connections: {
           warehouse: {
             driver: 'postgres',
@@ -496,6 +496,60 @@ describe('local ingest adapters', () => {
     const adapter = createDefaultLocalIngestAdapters(dbtProject).find((candidate) => candidate.source === 'dbt');
 
     await expect(adapter?.listTargetConnectionIds?.('/tmp/staged-dbt')).resolves.toEqual(['warehouse']);
+  });
+
+  it('passes primary warehouse connection ids to the local Notion adapter', async () => {
+    const adapters = createDefaultLocalIngestAdapters(
+      projectWithConnections({
+        notion: {
+          driver: 'notion',
+          auth_token: 'secret',
+          crawl_mode: 'selected_roots',
+          root_page_ids: ['page-1'],
+        },
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgresql://readonly@db.example.test/analytics',
+        },
+        docs: {
+          driver: 'dbt',
+          source_dir: './dbt',
+        },
+      } as never),
+    );
+
+    const notion = adapters.find((adapter) => adapter.source === 'notion');
+
+    await expect(notion?.listTargetConnectionIds?.('/tmp/staged-notion')).resolves.toEqual(['warehouse']);
+  });
+
+  it('passes primary warehouse connection ids to local LookML and MetricFlow adapters', async () => {
+    const adapters = createDefaultLocalIngestAdapters(
+      projectWithConnections({
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgresql://readonly@db.example.test/analytics',
+        },
+        lookml_docs: {
+          driver: 'lookml',
+          lookml: {
+            repoUrl: 'https://github.com/acme/lookml.git',
+          },
+        },
+        metrics_repo: {
+          driver: 'metricflow',
+          metricflow: {
+            repoUrl: 'https://github.com/acme/metrics.git',
+          },
+        },
+      } as never),
+    );
+
+    const lookml = adapters.find((adapter) => adapter.source === 'lookml');
+    const metricflow = adapters.find((adapter) => adapter.source === 'metricflow');
+
+    await expect(lookml?.listTargetConnectionIds?.('/tmp/staged-lookml')).resolves.toEqual(['warehouse']);
+    await expect(metricflow?.listTargetConnectionIds?.('/tmp/staged-metricflow')).resolves.toEqual(['warehouse']);
   });
 
   it('resolves MetricFlow auth_token_ref without writing literal tokens to config', async () => {

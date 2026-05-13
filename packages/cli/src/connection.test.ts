@@ -310,8 +310,8 @@ describe('runKtxConnection', () => {
     expect(io.stdout()).toContain('Mappings:');
     expect(io.stdout()).toContain('1 -> [unmapped]');
     expect(io.stdout()).toContain('Next:');
-    expect(io.stdout()).toContain('ktx ingest prod-metabase');
-    expect(io.stdout()).toContain('ktx dev mapping');
+    expect(io.stdout()).toContain('ktx ingest run --connection-id prod-metabase --adapter <adapter>');
+    expect(io.stdout()).toContain('ktx connection mapping');
     expect(io.stderr()).toBe('');
   });
 

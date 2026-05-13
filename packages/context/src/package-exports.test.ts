@@ -199,7 +199,9 @@ describe('@ktx/context package exports', () => {
     expect(ingest.stagedSyncConfigSchema).toBeDefined();
     expect(ingest.stagedLookerScopeFileSchema).toBeDefined();
     expect(ingest.stagedLookerFetchReportSchema).toBeDefined();
-    expect(ingest.LocalMetabaseSourceStateReader).toBeTypeOf('function');
+    expect('LocalMetabaseSourceStateReader' in ingest).toBe(false);
+    expect(ingest.KtxYamlMetabaseSourceStateReader).toBeTypeOf('function');
+    expect(ingest.LocalMetabaseDiscoveryCache).toBeTypeOf('function');
     expect(ingest.createLocalMetabaseSourceAdapter).toBeTypeOf('function');
     expect(ingest.metabaseRuntimeConfigFromLocalConnection).toBeTypeOf('function');
     expect(ingest.IngestMetabaseClientFactory).toBeTypeOf('function');

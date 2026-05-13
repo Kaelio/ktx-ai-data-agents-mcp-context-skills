@@ -102,7 +102,6 @@ describe('installed live-database artifact smoke helpers', () => {
     assert.deepEqual(buildLiveDatabaseIngestArgs('/tmp/project', 'http://127.0.0.1:8765'), [
       'exec',
       'ktx',
-      'dev',
       'ingest',
       'run',
       '--project-dir',

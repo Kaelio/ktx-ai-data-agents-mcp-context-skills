@@ -11,12 +11,8 @@ export const KTX_CONTEXT_BUILD_COMMANDS = [
 
 export const KTX_NEXT_STEP_DIRECT_COMMANDS = [
   {
-    command: 'ktx agent context --json',
-    description: 'Verify the project context your agent can read',
-  },
-  {
-    command: 'ktx agent tools --json',
-    description: 'List direct CLI tools available to agents',
+    command: 'ktx status --json',
+    description: 'Verify project setup and context readiness',
   },
   {
     command: 'ktx sl list',

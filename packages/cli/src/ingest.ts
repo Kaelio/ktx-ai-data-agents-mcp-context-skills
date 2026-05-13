@@ -16,7 +16,9 @@ import {
   runLocalMetabaseIngest,
   savedMemoryCountsForReport,
 } from '@ktx/context/ingest';
-import { loadKtxProject } from '@ktx/context/project';
+import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
+import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
 import { createCliOperationalLogger } from './io/logger.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
@@ -69,6 +71,7 @@ interface KtxIngestDeps {
   jobIdFactory?: () => string;
   now?: () => Date;
   createAdapters?: typeof createKtxCliLocalIngestAdapters;
+  createQueryExecutor?: (project: KtxLocalProject) => KtxSqlQueryExecutorPort;
   runLocalIngest?: typeof runLocalIngest;
   runLocalMetabaseIngest?: typeof runLocalMetabaseIngest;
   readReportFile?: typeof readIngestReportSnapshotFile;
@@ -518,7 +521,9 @@ export async function runKtxIngest(
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
-      const createAdapters = deps.createAdapters ?? createKtxCliLocalIngestAdapters;
+      const createAdapters =
+        deps.createAdapters ??
+        (deps.runLocalIngest || deps.runLocalMetabaseIngest ? () => [] : createKtxCliLocalIngestAdapters);
       const executeLocalIngest = deps.runLocalIngest ?? runLocalIngest;
       const localIngestOptions = deps.localIngestOptions ?? {};
       const managedDaemon = managedDaemonOptionsForIngestRun(args, io);
@@ -530,6 +535,9 @@ export async function runKtxIngest(
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
         logger: operationalLogger,
       };
+      const queryExecutor =
+        localIngestOptions.queryExecutor ??
+        (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(project);
       if (args.adapter === 'metabase' && args.sourceDir) {
         throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
       }
@@ -542,6 +550,7 @@ export async function runKtxIngest(
           adapters: createAdapters(project, adapterOptions),
           metabaseConnectionId: args.connectionId,
           ...localIngestOptions,
+          queryExecutor,
           trigger: 'manual_resync',
           jobIdFactory: deps.jobIdFactory,
           ...(progress ? { progress } : {}),
@@ -602,6 +611,7 @@ export async function runKtxIngest(
           trigger: 'manual_resync',
           jobId,
           ...localIngestOptions,
+          queryExecutor,
           pullConfigOptions: adapterOptions,
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),
           ...(memoryFlow ? { memoryFlow } : {}),
@@ -645,7 +655,7 @@ export async function runKtxIngest(
       throw new Error(
         args.runId
           ? `Local ingest run or report "${args.runId}" was not found`
-          : 'No local ingest reports were found. Run `ktx ingest --all` first.',
+          : 'No local ingest reports were found. Run `ktx ingest run --connection-id <id> --adapter <adapter>` first.',
       );
     }
     await writeReportRecord(report, args.outputMode, io, {

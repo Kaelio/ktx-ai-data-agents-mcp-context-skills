@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
@@ -133,9 +134,6 @@ describe('setup status', () => {
         '  database_connection_ids:',
         '    - warehouse',
         '    - analytics',
-        '  completed_steps:',
-        '    - project',
-        '    - databases',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -150,6 +148,7 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'databases'] });
 
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
       databases: [
@@ -167,8 +166,6 @@ describe('setup status', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - project',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -178,6 +175,7 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project'] });
 
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
       databases: [{ connectionId: 'warehouse', ready: false }],
@@ -190,9 +188,6 @@ describe('setup status', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - project',
-        '    - databases',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -202,6 +197,7 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'databases'] });
 
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
       databases: [{ connectionId: 'warehouse', ready: true }],
@@ -215,9 +211,6 @@ describe('setup status', () => {
         'project: revenue',
         'setup:',
         '  database_connection_ids: []',
-        '  completed_steps:',
-        '    - project',
-        '    - sources',
         'connections:',
         '  docs:',
         '    driver: notion',
@@ -230,6 +223,7 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'sources'] });
 
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
       sources: [{ connectionId: 'docs', type: 'notion', ready: true }],
@@ -268,12 +262,6 @@ describe('setup status', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - project',
-        '    - llm',
-        '    - embeddings',
-        '    - databases',
-        '    - sources',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -292,6 +280,9 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, {
+      completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources'],
+    });
     await writeKtxSetupContextState(tempDir, {
       runId: 'setup-context-local-abc123',
       status: 'running',
@@ -324,10 +315,6 @@ describe('setup status', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - project',
-        '    - databases',
-        '    - sources',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -354,6 +341,7 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'databases', 'sources'] });
     await persistLocalBundleReport(
       tempDir,
       localFakeBundleReport('metabase-job-1', {
@@ -1325,9 +1313,6 @@ describe('setup status', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - project',
-        '    - databases',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1340,6 +1325,7 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'databases'] });
 
     await expect(
       runKtxSetup(
@@ -1826,13 +1812,6 @@ describe('setup status', () => {
       [
         'project: revenue',
         'setup:',
-        '  completed_steps:',
-        '    - project',
-        '    - llm',
-        '    - embeddings',
-        '    - sources',
-        '    - context',
-        '    - agents',
         '  database_connection_ids: []',
         'connections: {}',
         'llm:',
@@ -1849,6 +1828,9 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, {
+      completed_steps: ['project', 'llm', 'embeddings', 'sources', 'context', 'agents'],
+    });
     await writeFile(
       join(tempDir, '.ktx/agents/install-manifest.json'),
       JSON.stringify(
@@ -1937,12 +1919,6 @@ describe('setup status', () => {
       [
         'project: revenue',
         'setup:',
-        '  completed_steps:',
-        '    - project',
-        '    - llm',
-        '    - embeddings',
-        '    - sources',
-        '    - context',
         '  database_connection_ids: []',
         'connections: {}',
         'llm:',
@@ -1959,6 +1935,9 @@ describe('setup status', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, {
+      completed_steps: ['project', 'llm', 'embeddings', 'sources', 'context'],
+    });
     await writeKtxSetupContextState(tempDir, {
       runId: 'setup-context-local-ready',
       status: 'completed',

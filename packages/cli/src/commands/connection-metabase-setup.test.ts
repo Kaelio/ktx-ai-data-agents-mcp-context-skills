@@ -1,13 +1,19 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LocalMetabaseSourceStateReader } from '@ktx/context/ingest';
+import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from '@ktx/context/ingest';
 import { initKtxProject, ktxLocalStateDbPath, loadKtxProject, serializeKtxProjectConfig } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runKtxConnectionMetabaseSetup } from './connection-metabase-setup.js';
 
 const CANCEL_PROMPT = Symbol('cancel');
+
+async function metabaseMappingRows(projectDir: string, connectionId = 'metabase') {
+  const project = await loadKtxProject({ projectDir });
+  const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+  return new KtxYamlMetabaseSourceStateReader(project, { discoveryCache }).listDatabaseMappings(connectionId);
+}
 
 function createTestMetabaseSetupPromptAdapter(options: {
   selects?: Array<string | typeof CANCEL_PROMPT>;
@@ -230,7 +236,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
 
     expect(io.stdout()).toContain('Connection: metabase');
     expect(io.stdout()).toContain('Discovered 1 database');
-    expect(io.stdout()).toContain(`ktx ingest metabase --project-dir ${projectDir}`);
+    expect(io.stdout()).toContain(`ktx ingest run --connection-id metabase --adapter metabase --project-dir ${projectDir}`);
     expect(io.stdout()).not.toContain('mb_example');
     expect(io.stderr()).not.toContain('mb_example');
 
@@ -238,10 +244,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
     expect(config).toContain('driver: metabase');
     expect(config).toContain('api_url: http://metabase.example.test:3000');
     expect(config).toContain('api_key: mb_example');
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toMatchObject([
+    await expect(metabaseMappingRows(projectDir)).resolves.toMatchObject([
       {
         metabaseDatabaseId: 2,
         metabaseDatabaseName: 'Analytics',
@@ -294,10 +297,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
         { createMetabaseClient: async () => metabaseClient as never },
       ),
     ).resolves.toBe(0);
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toMatchObject([
+    await expect(metabaseMappingRows(projectDir)).resolves.toMatchObject([
       { metabaseDatabaseId: 2, targetConnectionId: 'orbit', syncEnabled: true },
     ]);
   });
@@ -369,10 +369,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
         { createMetabaseClient: async () => metabaseClient as never },
       ),
     ).resolves.toBe(0);
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toMatchObject([
+    await expect(metabaseMappingRows(projectDir)).resolves.toMatchObject([
       { metabaseDatabaseId: 2, targetConnectionId: 'orbit', syncEnabled: true },
     ]);
   });
@@ -659,10 +656,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
         { createMetabaseClient: async () => metabaseClient as never },
       ),
     ).resolves.toBe(0);
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toMatchObject([
+    await expect(metabaseMappingRows(projectDir)).resolves.toMatchObject([
       { metabaseDatabaseId: 1, targetConnectionId: 'orbit', syncEnabled: true },
       { metabaseDatabaseId: 2, targetConnectionId: null, syncEnabled: false },
     ]);
@@ -784,11 +778,8 @@ describe('runKtxConnectionMetabaseSetup', () => {
 
     const config = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(config).toContain('driver: metabase');
-    expect(io.stderr()).toContain(`ktx ingest metabase --project-dir ${projectDir}`);
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toMatchObject([
+    expect(io.stderr()).toContain(`ktx ingest run --connection-id metabase --adapter metabase --project-dir ${projectDir}`);
+    await expect(metabaseMappingRows(projectDir)).resolves.toMatchObject([
       { metabaseDatabaseId: 2, targetConnectionId: 'orbit' },
     ]);
   });
@@ -886,10 +877,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
     expect(config).toContain('driver: metabase');
     expect(config).toContain('api_url: http://metabase.example.test:3000');
     expect(config).toContain(`api_key: ${interactiveMetabaseCredential}`);
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toMatchObject([
+    await expect(metabaseMappingRows(projectDir)).resolves.toMatchObject([
       {
         metabaseDatabaseId: 2,
         targetConnectionId: 'orbit',
@@ -957,10 +945,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
         },
       ),
     ).resolves.toBe(0);
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toMatchObject([
+    await expect(metabaseMappingRows(projectDir)).resolves.toMatchObject([
       { metabaseDatabaseId: 2, targetConnectionId: 'orbit', syncEnabled: true },
       { metabaseDatabaseId: 3, targetConnectionId: 'warehouse2', syncEnabled: false },
     ]);
@@ -1128,9 +1113,6 @@ describe('runKtxConnectionMetabaseSetup', () => {
 
     const afterConfig = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(afterConfig).toBe(beforeConfig);
-
-    const updatedProject = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-    await expect(store.listDatabaseMappings('metabase')).resolves.toEqual([]);
+    await expect(metabaseMappingRows(projectDir)).resolves.toEqual([]);
   });
 });

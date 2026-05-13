@@ -93,6 +93,65 @@ describe('runKtxKnowledge', () => {
     expect(searchIo.stdout()).toContain('metrics-revenue');
   });
 
+  it('prints wiki list, search, and read as public JSON envelopes', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+
+    await expect(
+      runKtxKnowledge(
+        {
+          command: 'write',
+          projectDir,
+          key: 'metrics-revenue',
+          scope: 'GLOBAL',
+          userId: 'local',
+          summary: 'Revenue',
+          content: 'Revenue is paid order value.',
+          tags: ['finance'],
+          refs: [],
+          slRefs: ['orders'],
+        },
+        makeIo().io,
+      ),
+    ).resolves.toBe(0);
+
+    const listIo = makeIo();
+    await expect(runKtxKnowledge({ command: 'list', projectDir, userId: 'local', json: true }, listIo.io)).resolves.toBe(
+      0,
+    );
+    expect(JSON.parse(listIo.stdout())).toMatchObject({
+      kind: 'list',
+      data: { items: [expect.objectContaining({ key: 'metrics-revenue', summary: 'Revenue' })] },
+      meta: { command: 'wiki list' },
+    });
+
+    const searchIo = makeIo();
+    await expect(
+      runKtxKnowledge(
+        { command: 'search', projectDir, query: 'paid order', userId: 'local', json: true, limit: 5 },
+        searchIo.io,
+      ),
+    ).resolves.toBe(0);
+    expect(JSON.parse(searchIo.stdout())).toMatchObject({
+      kind: 'list',
+      data: { items: [expect.objectContaining({ key: 'metrics-revenue', summary: 'Revenue' })] },
+      meta: { command: 'wiki search' },
+    });
+
+    const readIo = makeIo();
+    await expect(
+      runKtxKnowledge({ command: 'read', projectDir, key: 'metrics-revenue', userId: 'local', json: true }, readIo.io),
+    ).resolves.toBe(0);
+    expect(JSON.parse(readIo.stdout())).toMatchObject({
+      kind: 'wiki.page',
+      data: {
+        key: 'metrics-revenue',
+        summary: 'Revenue',
+        content: 'Revenue is paid order value.',
+      },
+    });
+  });
+
   it('rejects slash-delimited write keys with a flat-key suggestion', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });

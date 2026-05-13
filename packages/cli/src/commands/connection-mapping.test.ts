@@ -1,8 +1,8 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LocalMetabaseSourceStateReader } from '@ktx/context/ingest';
-import { initKtxProject, loadKtxProject, serializeKtxProjectConfig } from '@ktx/context/project';
+import { LocalMetabaseDiscoveryCache } from '@ktx/context/ingest';
+import { initKtxProject, loadKtxProject, parseKtxProjectConfig, serializeKtxProjectConfig } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxConnectionMapping } from './connection-mapping.js';
 
@@ -79,19 +79,24 @@ describe('runKtxConnectionMapping', () => {
 
   it('sets, lists, disables, and clears local Metabase mappings', async () => {
     const io = makeIo();
-    await expect(
-      runKtxConnectionMapping(
-        {
-          command: 'set',
-          projectDir,
-          connectionId: 'prod-metabase',
-          field: 'databaseMappings',
-          key: '1',
-          value: 'prod-warehouse',
-        },
-        io.io,
-      ),
-    ).resolves.toBe(0);
+    const setCode = await runKtxConnectionMapping(
+      {
+        command: 'set',
+        projectDir,
+        connectionId: 'prod-metabase',
+        field: 'databaseMappings',
+        key: '1',
+        value: 'prod-warehouse',
+      },
+      io.io,
+    );
+    expect(setCode, io.stderr()).toBe(0);
+
+    let config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections['prod-metabase']?.mappings).toMatchObject({
+      databaseMappings: { '1': 'prod-warehouse' },
+      syncEnabled: { '1': true },
+    });
 
     const listIo = makeIo();
     await expect(
@@ -113,6 +118,12 @@ describe('runKtxConnectionMapping', () => {
       ),
     ).resolves.toBe(0);
 
+    config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections['prod-metabase']?.mappings).toMatchObject({
+      databaseMappings: { '1': 'prod-warehouse' },
+      syncEnabled: { '1': false },
+    });
+
     await expect(
       runKtxConnectionMapping(
         {
@@ -124,6 +135,9 @@ describe('runKtxConnectionMapping', () => {
         makeIo().io,
       ),
     ).resolves.toBe(0);
+
+    config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections['prod-metabase']?.mappings).toBeUndefined();
   });
 
   it('lists Metabase yaml mapping bootstrap rows before any SQLite command writes', async () => {
@@ -194,9 +208,11 @@ describe('runKtxConnectionMapping', () => {
 
     expect(io.stdout()).toContain('Discovery: 1 database');
     expect(client.cleanup).toHaveBeenCalledTimes(1);
-    const store = new LocalMetabaseSourceStateReader({ dbPath: join(projectDir, '.ktx', 'db.sqlite') });
-    await expect(store.listDatabaseMappings('prod-metabase')).resolves.toMatchObject([
-      { metabaseDatabaseId: 1, metabaseDatabaseName: 'Analytics', source: 'refresh' },
+    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections['prod-metabase']?.mappings).toBeUndefined();
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: join(projectDir, '.ktx', 'db.sqlite') });
+    await expect(discoveryCache.listDiscoveredDatabases('prod-metabase')).resolves.toMatchObject([
+      { id: 1, name: 'Analytics', engine: 'postgres' },
     ]);
   });
 

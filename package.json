@@ -18,6 +18,10 @@
     "artifacts:verify-manifest": "node scripts/package-artifacts.mjs verify-manifest",
     "build": "pnpm --filter './packages/*' run build",
     "check": "node scripts/check-boundaries.mjs && node --test scripts/*.test.mjs && pnpm --filter './packages/*' run build && pnpm --filter './packages/*' run test",
+    "dead-code": "pnpm run dead-code:biome && pnpm run dead-code:knip",
+    "dead-code:biome": "biome ci . --formatter-enabled=false --assist-enabled=false",
+    "dead-code:fix": "biome check . --formatter-enabled=false --assist-enabled=false --write && knip --fix --format",
+    "dead-code:knip": "knip --reporter compact",
     "ktx": "node scripts/run-ktx.mjs",
     "link:dev": "node scripts/link-dev-cli.mjs",
     "native:rebuild": "pnpm -r rebuild better-sqlite3",
@@ -36,9 +40,12 @@
     "type-check": "pnpm --filter './packages/*' run type-check"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
     "@types/node": "^25.7.0",
+    "better-sqlite3": "^12.10.0",
+    "knip": "^6.12.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "yaml": "^2.9.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

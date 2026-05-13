@@ -3,7 +3,9 @@ title: Agent Clients
 description: Set up KTX with Claude Code, Cursor, Codex, and OpenCode.
 ---
 
-KTX integrates with coding agents through CLI skills and command files. These files teach agents to call `ktx agent ...` commands directly from the terminal for semantic-layer context, wiki knowledge, and safe SQL execution.
+KTX integrates with coding agents through CLI skills and command files. These
+files teach agents to call public `ktx` commands directly from the terminal for
+semantic-layer context and wiki knowledge.
 
 Run `ktx setup` and select your agent targets, or configure manually using the snippets below.
 
@@ -26,17 +28,17 @@ Create `.claude/skills/ktx/SKILL.md`:
 ```markdown title=".claude/skills/ktx/SKILL.md"
 ---
 name: ktx
-description: Use local KTX semantic context, wiki knowledge, and safe SQL execution for this project.
+description: Use local KTX semantic context and wiki knowledge for this project.
 ---
 
 Available commands:
-- `ktx agent context --json --project-dir /path/to/project`
-- `ktx agent sl list --json --project-dir /path/to/project`
-- `ktx agent sl read '<sourceName>' --json --project-dir /path/to/project`
-- `ktx agent sl query --json --project-dir /path/to/project --connection-id '<id>' --query-file '<path>' --execute --max-rows 100`
-- `ktx agent wiki search '<query>' --json --project-dir /path/to/project`
-- `ktx agent wiki read '<pageId>' --json --project-dir /path/to/project`
-- `ktx agent sql execute --json --project-dir /path/to/project --connection-id '<id>' --sql-file '<path>' --max-rows 100`
+- `ktx status --json --project-dir /path/to/project`
+- `ktx sl list --json --project-dir /path/to/project`
+- `ktx sl list --json --project-dir /path/to/project --query '<text>'`
+- `ktx sl read '<sourceName>' --json --project-dir /path/to/project --connection-id '<id>'`
+- `ktx sl query --json --project-dir /path/to/project --connection-id '<id>' --query-file '<path>' --execute --max-rows 100`
+- `ktx wiki search '<query>' --json --project-dir /path/to/project --limit 10`
+- `ktx wiki read '<pageId>' --json --project-dir /path/to/project`
 ```
 
 ### Workflow tips
@@ -123,22 +125,19 @@ All supported agent clients call the same KTX CLI commands:
 
 | Command | Description |
 |---------|-------------|
-| `ktx agent context --json` | Return a compact project context summary |
-| `ktx agent tools --json` | List available agent-facing commands |
-| `ktx agent wiki search <query> --json` | Search knowledge pages |
-| `ktx agent wiki read <key> --json` | Read a knowledge page |
-| `ktx agent wiki write --json` | Write or update a knowledge page |
-| `ktx agent sl list --json` | List semantic layer sources |
-| `ktx agent sl read <source> --json` | Read a semantic source definition |
-| `ktx agent sl write --json` | Write or update a semantic source |
-| `ktx agent sl validate --json` | Validate semantic source definitions |
-| `ktx agent sl query --json` | Execute a semantic layer query when semantic compute is configured |
-| `ktx agent sql execute --json` | Execute read-only SQL with an explicit row limit |
+| `ktx status --json` | Return project setup and context readiness |
+| `ktx wiki search <query> --json` | Search knowledge pages |
+| `ktx wiki read <key> --json` | Read a knowledge page |
+| `ktx wiki write <key>` | Write or update a knowledge page |
+| `ktx sl list --json` | List semantic-layer sources |
+| `ktx sl list --query <text> --json` | Search semantic-layer sources |
+| `ktx sl read <source> --json --connection-id <id>` | Read a semantic source definition |
+| `ktx sl write <source> --connection-id <id>` | Write or update a semantic source |
+| `ktx sl validate <source> --connection-id <id>` | Validate semantic source definitions |
+| `ktx sl query --json` | Execute a semantic-layer query when semantic compute is configured |
 
 ### Security constraints
 
-- SQL execution is always read-only.
-- Agent SQL execution requires an explicit `--max-rows` limit from 1 to 1000.
 - Secrets and credentials are never exposed in command output.
 - Commands resolve the project from `--project-dir`, `KTX_PROJECT_DIR`, or the nearest `ktx.yaml`.
 

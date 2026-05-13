@@ -326,8 +326,8 @@ async function runPublicConnectionMap(
   io.stdout.write('\nMappings:\n');
   io.stdout.write(listIo.stdoutText().trim() ? listIo.stdoutText() : 'No mappings found.\n');
   io.stdout.write('\nNext:\n');
-  io.stdout.write(`  ktx ingest ${args.sourceConnectionId}\n`);
-  io.stdout.write(`  ktx dev mapping list ${args.sourceConnectionId}\n`);
+  io.stdout.write(`  ktx ingest run --connection-id ${args.sourceConnectionId} --adapter <adapter>\n`);
+  io.stdout.write(`  ktx connection mapping list ${args.sourceConnectionId}\n`);
   return 0;
 }
 

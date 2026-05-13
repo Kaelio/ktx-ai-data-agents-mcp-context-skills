@@ -6,9 +6,9 @@ import { profileMark } from './startup-profile.js';
 
 profileMark('module:public-ingest');
 
-export type KtxPublicIngestStepName = 'scan' | 'source-ingest' | 'enrich' | 'memory-update';
-export type KtxPublicIngestStepStatus = 'done' | 'skipped' | 'failed' | 'not-run';
-export type KtxPublicIngestInputMode = 'auto' | 'disabled';
+type KtxPublicIngestStepName = 'scan' | 'source-ingest' | 'enrich' | 'memory-update';
+type KtxPublicIngestStepStatus = 'done' | 'skipped' | 'failed' | 'not-run';
+type KtxPublicIngestInputMode = 'auto' | 'disabled';
 
 export type KtxPublicIngestArgs =
   | {
@@ -107,7 +107,7 @@ function targetForConnection(connectionId: string, connection: KtxProjectConnect
       operation: 'source-ingest',
       adapter,
       ...(sourceDir ? { sourceDir } : {}),
-      debugCommand: `ktx dev ingest run --connection-id ${connectionId} --adapter ${adapter} --debug`,
+      debugCommand: `ktx ingest run --connection-id ${connectionId} --adapter ${adapter} --debug`,
       steps: ['source-ingest', 'memory-update'],
     };
   }
@@ -130,7 +130,7 @@ export function buildPublicIngestPlan(
   args: { projectDir: string; targetConnectionId?: string; all: boolean },
 ): KtxPublicIngestPlan {
   if (!args.all && !args.targetConnectionId) {
-    throw new Error('ktx ingest requires <connectionId> or --all in this release');
+    throw new Error('Context build requires a connection id or all targets');
   }
 
   const entries = Object.entries(project.config.connections).sort(([a], [b]) => a.localeCompare(b));

@@ -1,9 +1,9 @@
 ---
 title: "ktx dev"
-description: "Low-level diagnostics, scans, adapter commands, and mapping tools."
+description: "Low-level project initialization and runtime management."
 ---
 
-Hidden commands for low-level project management, diagnostics, direct adapter control, and shell completion. Most users interact with these through higher-level commands like [`ktx ingest`](/docs/cli-reference/ktx-ingest) and [`ktx setup`](/docs/cli-reference/ktx-setup), but `ktx dev` provides direct access when you need fine-grained control.
+`ktx dev` contains development-only project initialization and managed runtime commands. Scan and ingest commands live at the root as [`ktx scan`](/docs/cli-reference/ktx-scan) and [`ktx ingest`](/docs/cli-reference/ktx-ingest).
 
 ## Command signature
 
@@ -16,145 +16,42 @@ ktx dev <subcommand> [options]
 | Subcommand | Description |
 |-----------|-------------|
 | `init [directory]` | Initialize a Git-backed KTX project directory |
-| `runtime` | Install, inspect, and prune the KTX-managed Python runtime |
-| `scan` | Run or inspect standalone connection scans |
-| `ingest run` | Run local ingest for one configured connection and source adapter |
-| `ingest status [runId]` | Print status for a stored local ingest run |
-| `ingest watch [runId]` | Open a stored ingest visual report |
-| `ingest replay <runId>` | Replay a stored ingest run through memory-flow output |
-| `mapping` | Manage Metabase warehouse mappings (same as `ktx connection mapping`) |
-| `completion zsh` | Generate zsh completion script |
+| `runtime` | Install, start, stop, and inspect the KTX-managed Python runtime |
 
-## Options
-
-### `dev init`
+## `dev init`
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--name <name>` | Project name written to `ktx.yaml` | — |
 | `--force` | Rewrite `ktx.yaml` and scaffold files in an existing project | `false` |
 
-### `dev runtime`
+## `dev runtime`
+
+`ktx dev runtime` supports `install`, `start`, `stop`, and `status`.
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--feature <feature>` | Runtime feature level for `install` and `start` (`core` or `local-embeddings`) | `core` |
-| `--json` | Print JSON output | `false` |
-| `--yes` | Confirm runtime install or prune actions where supported | `false` |
+| `--json` | Print JSON output for `status` | `false` |
+| `--yes` | Confirm runtime install actions where supported | `false` |
 | `--force` | Reinstall or restart where supported | `false` |
-
-### `dev scan`
-
-See [`ktx scan`](/docs/cli-reference/ktx-scan) for the full scan command reference.
-
-### `dev ingest run`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--connection-id <connectionId>` | KTX connection id (required) | — |
-| `--adapter <adapter>` | Ingest source adapter name (required) | — |
-| `--source-dir <path>` | Directory containing source files | — |
-| `--database-introspection-url <url>` | Daemon URL for live-database introspection | — |
-| `--debug-llm-request-file <path>` | Write sanitized LLM request structure to a JSONL file | — |
-| `--plain` | Print plain text output | `false` |
-| `--json` | Print JSON output | `false` |
-| `--viz` | Render memory-flow TUI output | `false` |
-| `--no-input` | Disable interactive terminal input for visualization | — |
-
-### `dev ingest status`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--report-file <path>` | Bundle ingest report JSON file to render | — |
-| `--plain` | Print plain text output | `false` |
-| `--json` | Print JSON output | `false` |
-| `--viz` | Render memory-flow TUI output | `false` |
-| `--no-input` | Disable interactive terminal input for visualization | — |
-
-### `dev ingest watch`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--report-file <path>` | Bundle ingest report JSON file to render | — |
-| `--plain` | Print plain text output | `false` |
-| `--json` | Print JSON output | `false` |
-| `--viz` | Render memory-flow TUI output (the default unless `--plain` or `--json` is set) | `true` |
-| `--no-input` | Disable interactive terminal input for visualization | — |
-
-### `dev ingest replay`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--report-file <path>` | Bundle ingest report JSON file to render | — |
-| `--plain` | Print plain text output | `false` |
-| `--json` | Print JSON output | `false` |
-| `--viz` | Render memory-flow TUI output | `false` |
-| `--no-input` | Disable interactive terminal input for visualization | — |
-
-### `dev completion zsh`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--install` | Install zsh completion into `~/.zfunc` and update `~/.zshrc` | `false` |
 
 ## Examples
 
 ```bash
-# Initialize a new KTX project
 ktx dev init
-
-# Initialize in a specific directory with a project name
 ktx dev init ./my-project --name "Analytics Context"
-
-# Re-initialize an existing project
 ktx dev init --force
 
-# Check managed Python runtime readiness
-ktx dev runtime doctor
-
-# Start the managed Python daemon
+ktx dev runtime install --yes
+ktx dev runtime status
 ktx dev runtime start
-
-# Run a low-level ingest with a specific adapter
-ktx dev ingest run --connection-id my-dbt --adapter dbt
-
-# Run ingest from a specific source directory
-ktx dev ingest run \
-  --connection-id my-dbt \
-  --adapter dbt \
-  --source-dir ./dbt-project
-
-# View ingest status with the visual TUI
-ktx dev ingest watch run-abc123
-
-# Replay a stored ingest session
-ktx dev ingest replay run-abc123
-
-# View ingest status from a report file
-ktx dev ingest status --report-file /tmp/ingest-report.json
-
-# Generate zsh completions
-ktx dev completion zsh
-
-# Install zsh completions
-ktx dev completion zsh --install
+ktx dev runtime stop
 ```
-
-## Output
-
-`ktx dev` commands are diagnostic and may print plain text, JSON, or visual reports depending on the selected flags.
-
-| Mode | How to request it | Use case |
-|------|-------------------|----------|
-| Plain text | `--plain` or default diagnostic output | Human-readable terminal inspection |
-| JSON | `--json` | Agent parsing and automation |
-| Visual report | `--viz` | Interactive memory-flow and ingest debugging |
 
 ## Common errors
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Doctor reports missing runtime pieces | Packages, Python environment, or linked CLI are not ready | Run `pnpm install`, `pnpm run setup:dev`, and `uv sync --all-groups` |
-| Ingest run cannot find adapter | `--adapter` does not match a supported source adapter | Use configured source names from `ktx.yaml` or run higher-level `ktx ingest` |
-| Replay/report file cannot be read | The report path is wrong or the run id is not stored locally | Run `ktx dev ingest status --json` to discover stored run ids and report files |
-| Visual output fails in CI | TUI rendering requires an interactive terminal | Use `--plain --no-input` or `--json --no-input` |
+| Runtime status reports missing pieces | Packages, Python environment, or linked CLI are not ready | Run `pnpm install`, `pnpm run setup:dev`, `uv sync --all-groups`, then `ktx dev runtime status` |
+| Runtime daemon does not start | The managed Python runtime is missing or stale | Run `ktx dev runtime install --yes`, then `ktx dev runtime start` |

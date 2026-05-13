@@ -3,16 +3,15 @@ import { cp, mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import type { KtxLlmProvider } from '@ktx/llm';
 import type { AgentRunnerService } from '../agent/index.js';
+import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxLogger } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/index.js';
-import type { KtxQueryResult } from '../sl/index.js';
 import { planMetabaseFanoutChildren } from './adapters/metabase/fanout-planner.js';
-import { LocalMetabaseSourceStateReader } from './adapters/metabase/local-source-state-store.js';
+import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from './adapters/metabase/local-source-state-store.js';
 import { localPullConfigForAdapter, type DefaultLocalIngestAdaptersOptions } from './local-adapters.js';
 import { createLocalBundleIngestRuntime } from './local-bundle-runtime.js';
-import { seedLocalMappingStateFromKtxYaml } from './local-mapping-reconcile.js';
 import type { MemoryFlowEventSink } from './memory-flow/types.js';
 import { buildSyncId } from './raw-sources-paths.js';
 import type { IngestReportBody, IngestReportSnapshot } from './reports.js';
@@ -34,7 +33,7 @@ export interface RunLocalIngestOptions {
   llmDebugRequestFile?: string;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
-  queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
+  queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
 }
 
@@ -172,7 +171,7 @@ async function runScheduledPullJob(options: {
   llmProvider?: KtxLlmProvider;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
-  queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
+  queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
 }): Promise<LocalIngestResult> {
   const runtime = createLocalBundleIngestRuntime(options);
@@ -364,16 +363,10 @@ export async function runLocalMetabaseIngest(
 
   const metabaseConnectionId = safeSegment('metabase connection id', options.metabaseConnectionId);
   assertConfigured(options.project, 'metabase', metabaseConnectionId);
-  await seedLocalMappingStateFromKtxYaml(options.project, metabaseConnectionId);
   const adapter = findAdapter(options.adapters, 'metabase');
-  const sourceStateReader = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(options.project) });
-
-  const unhydrated = await sourceStateReader.getUnhydratedSyncEnabledMappingIds(metabaseConnectionId);
-  if (unhydrated.length > 0) {
-    throw new Error(
-      `Metabase mappings ${unhydrated.join(', ')} are not hydrated; run \`ktx connection mapping refresh ${metabaseConnectionId}\` before local Metabase ingest.`,
-    );
-  }
+  const sourceStateReader = new KtxYamlMetabaseSourceStateReader(options.project, {
+    discoveryCache: new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(options.project) }),
+  });
 
   const state = await sourceStateReader.getSourceState(metabaseConnectionId);
   const childPlans = planMetabaseFanoutChildren({

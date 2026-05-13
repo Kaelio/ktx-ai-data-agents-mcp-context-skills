@@ -37,7 +37,7 @@ interface HistoricSqlPatternPage {
 }
 
 function safeKnowledgeSlug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9/-]+/g, '-').replace(/^-+|-+$/g, '');
+  return value.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -159,7 +159,7 @@ function isLegacyQueryPage(page: HistoricSqlPatternPage): boolean {
 
 function isArchivedPatternPage(page: HistoricSqlPatternPage): boolean {
   const tags = Array.isArray(page.frontmatter.tags) ? page.frontmatter.tags : [];
-  return page.key.startsWith('_archived/') || tags.includes('archived');
+  return tags.includes('archived');
 }
 
 function stringArray(value: unknown): string[] {
@@ -191,6 +191,9 @@ async function loadPatternPages(root: string): Promise<HistoricSqlPatternPage[]>
   const files = await walkFiles(root);
   const pages: HistoricSqlPatternPage[] = [];
   for (const file of files.filter((candidate) => candidate.endsWith('.md'))) {
+    if (file.includes('/')) {
+      continue;
+    }
     const key = file.replace(/\.md$/, '');
     const path = join(root, file);
     const page = parseMarkdownPage(key, path, await readFile(path, 'utf-8'));
@@ -199,6 +202,10 @@ async function loadPatternPages(root: string): Promise<HistoricSqlPatternPage[]>
     }
   }
   return pages;
+}
+
+function historicSqlFlatKey(slug: string): string {
+  return `historic-sql-${safeKnowledgeSlug(slug)}`;
 }
 
 async function currentStagedTables(rawDir: string): Promise<Set<string>> {
@@ -276,7 +283,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
     }
   }
 
-  const wikiRoot = join(input.workdir, 'knowledge/global/historic-sql');
+  const wikiRoot = join(input.workdir, 'knowledge/global');
   await mkdir(wikiRoot, { recursive: true });
   const allPages = await loadPatternPages(wikiRoot);
   const activePages = allPages.filter((page) => !isArchivedPatternPage(page));
@@ -286,7 +293,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
   for (const pattern of patternEvidence) {
     const incomingSignals = [...pattern.pattern.tablesInvolved, ...pattern.pattern.constituentTemplateIds];
     const reusable = patternPages.find((page) => overlapRatio(incomingSignals, existingPageSignals(page)) >= 0.6);
-    const key = reusable?.key ?? safeKnowledgeSlug(pattern.pattern.slug);
+    const key = reusable?.key ?? historicSqlFlatKey(pattern.pattern.slug);
     const pagePath = join(wikiRoot, `${key}.md`);
     const frontmatter = {
       summary: pattern.pattern.title,
@@ -308,11 +315,12 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
   for (const page of patternPages) {
     if (writtenKeys.has(page.key)) continue;
     if (shouldArchive(page.frontmatter.stale_since, manifest.fetchedAt, manifest.staleArchiveAfterDays)) {
-      const archivePath = join(wikiRoot, '_archived', `${page.key}.md`);
       const tags = [...new Set([...stringArray(page.frontmatter.tags), 'archived'])];
-      await mkdir(dirname(archivePath), { recursive: true });
-      await writeFile(archivePath, renderMarkdownPage({ ...page.frontmatter, tags }, page.content), 'utf-8');
-      await rm(page.path, { force: true });
+      await writeFile(
+        page.path,
+        renderMarkdownPage({ ...page.frontmatter, tags, archived_since: manifest.fetchedAt }, page.content),
+        'utf-8',
+      );
       result.archivedPatternPages += 1;
       continue;
     }

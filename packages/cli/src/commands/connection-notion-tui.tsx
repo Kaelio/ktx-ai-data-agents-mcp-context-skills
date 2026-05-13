@@ -1,6 +1,6 @@
 /* @jsxImportSource react */
 import { Box, Text, render as renderInkRuntime, useApp, useInput } from 'ink';
-import React, { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   filterTree,
   flattenSelection,

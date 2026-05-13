@@ -13,6 +13,10 @@ This skill covers two parts:
 
 Capture (when and how to add new patterns to the SL) is a separate concern handled by the memory-agent — see the `sl_capture` skill if you are running in capture mode. The research agent **reads** and **queries** the SL via the tools described here; it does not write to it.
 
+For capture-time identifier verification, load `sl_capture`. Synthesis writer
+skills must verify warehouse identifiers with `discover_data`,
+`entity_details`, and `sql_execution` before emitting table or column names.
+
 ---
 
 ## Part 1 — Schema reference

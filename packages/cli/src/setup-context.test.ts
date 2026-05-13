@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -39,12 +40,6 @@ async function writeReadyProject(projectDir: string) {
       'setup:',
       '  database_connection_ids:',
       '    - warehouse',
-      '  completed_steps:',
-      '    - project',
-      '    - llm',
-      '    - embeddings',
-      '    - databases',
-      '    - sources',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -70,6 +65,9 @@ async function writeReadyProject(projectDir: string) {
     ].join('\n'),
     'utf-8',
   );
+  await writeKtxSetupState(projectDir, {
+    completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources'],
+  });
 }
 
 async function writeScanReport(
@@ -203,7 +201,8 @@ describe('setup context build state', () => {
       expect.objectContaining({ onDetach: expect.any(Function) }),
     );
     expect(verifyContextReady).toHaveBeenCalledWith(tempDir);
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('    - context');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('context');
     await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
       runId: 'setup-context-local-abc123',
       status: 'completed',
@@ -284,7 +283,8 @@ describe('setup context build state', () => {
     ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-existing' });
 
     expect(runContextBuildMock).not.toHaveBeenCalled();
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('    - context');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('context');
     await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
       runId: 'setup-context-local-existing',
       status: 'completed',

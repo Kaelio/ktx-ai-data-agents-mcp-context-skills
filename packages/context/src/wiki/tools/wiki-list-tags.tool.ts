@@ -1,7 +1,5 @@
 import { z } from 'zod';
 import type { KnowledgeIndexPort } from '../ports.js';
-type BlockScope = 'GLOBAL' | 'USER';
-import { KnowledgeWikiService } from '../index.js';
 import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
 
 const wikiListTagsInputSchema = z.object({});
@@ -11,10 +9,7 @@ type WikiListTagsInput = z.infer<typeof wikiListTagsInputSchema>;
 export class WikiListTagsTool extends BaseTool<typeof wikiListTagsInputSchema> {
   readonly name = 'wiki_list_tags';
 
-  constructor(
-    private readonly wikiService: KnowledgeWikiService,
-    private readonly pagesRepository: KnowledgeIndexPort,
-  ) {
+  constructor(private readonly pagesRepository: KnowledgeIndexPort) {
     super();
   }
 
@@ -33,10 +28,7 @@ Call before writing a new page so you can reuse existing tags consistently inste
     const pages = await this.pagesRepository.listPagesForUser(context.userId);
     const set = new Set<string>();
     for (const p of pages) {
-      const scope = p.scope as BlockScope;
-      const scopeId = scope === 'USER' ? p.scope_id : null;
-      const page = await this.wikiService.readPage(scope, scopeId, p.page_key);
-      for (const t of page?.frontmatter.tags ?? []) {
+      for (const t of p.tags) {
         set.add(t);
       }
     }

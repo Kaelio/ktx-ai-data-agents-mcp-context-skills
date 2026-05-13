@@ -1,0 +1,102 @@
+import { z } from 'zod';
+import { assertReadOnlySql, limitSqlForExecution } from '../../../connections/index.js';
+import type { SlConnectionCatalogPort } from '../../../sl/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../tools/index.js';
+
+const sqlExecutionInputSchema = z.object({
+  connectionName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
+  sql: z.string().min(1),
+  rowLimit: z.number().int().positive().max(1000).optional().default(100),
+});
+
+type SqlExecutionInput = z.input<typeof sqlExecutionInputSchema>;
+
+export interface SqlExecutionStructured {
+  headers: string[];
+  rows: unknown[][];
+  rowCount: number;
+  truncated: boolean;
+  sql: string;
+  wrappedSql: string;
+  error?: string;
+}
+
+function markdownTable(headers: string[], rows: unknown[][], totalRows: number): string {
+  if (headers.length === 0) {
+    return rows.length === 0 ? 'Query returned no rows.' : JSON.stringify(rows.slice(0, 20));
+  }
+  const visible = rows.slice(0, 20);
+  const lines = [
+    `| ${headers.join(' | ')} |`,
+    `| ${headers.map(() => '---').join(' | ')} |`,
+    ...visible.map((row) => `| ${row.map((value) => String(value ?? '')).join(' | ')} |`),
+  ];
+  if (totalRows > visible.length) {
+    lines.push(`... +${totalRows - visible.length} more rows`);
+  }
+  return lines.join('\n');
+}
+
+export class SqlExecutionTool extends BaseTool<typeof sqlExecutionInputSchema> {
+  readonly name = 'sql_execution';
+
+  constructor(private readonly connections: SlConnectionCatalogPort) {
+    super();
+  }
+
+  get description(): string {
+    return 'Run a single read-only SELECT or WITH probe against an allowed warehouse connection and return a capped markdown table or the warehouse error.';
+  }
+
+  get inputSchema() {
+    return sqlExecutionInputSchema;
+  }
+
+  async call(input: SqlExecutionInput, context: ToolContext): Promise<ToolOutput<SqlExecutionStructured>> {
+    const allowed = context.session?.allowedConnectionNames;
+    if (allowed && !allowed.has(input.connectionName)) {
+      return {
+        markdown: `Connection "${input.connectionName}" is not available to this ingest stage.`,
+        structured: {
+          headers: [],
+          rows: [],
+          rowCount: 0,
+          truncated: false,
+          sql: input.sql,
+          wrappedSql: '',
+          error: 'connection_not_allowed',
+        },
+      };
+    }
+
+    let sql: string;
+    let wrappedSql: string;
+    try {
+      sql = assertReadOnlySql(input.sql);
+      wrappedSql = limitSqlForExecution(sql, input.rowLimit);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        markdown: message,
+        structured: { headers: [], rows: [], rowCount: 0, truncated: false, sql: input.sql, wrappedSql: '', error: message },
+      };
+    }
+
+    try {
+      const result = await this.connections.executeQuery(input.connectionName, wrappedSql);
+      const headers = result.headers ?? [];
+      const rows = result.rows ?? [];
+      const rowCount = result.totalRows ?? rows.length;
+      return {
+        markdown: markdownTable(headers, rows, rowCount),
+        structured: { headers, rows, rowCount, truncated: rowCount > rows.length, sql, wrappedSql },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        markdown: `SQL execution failed: ${message}`,
+        structured: { headers: [], rows: [], rowCount: 0, truncated: false, sql, wrappedSql, error: message },
+      };
+    }
+  }
+}

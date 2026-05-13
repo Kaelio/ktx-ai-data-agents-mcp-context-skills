@@ -277,7 +277,7 @@ describe('historic-SQL local ingest retrieval acceptance', () => {
 
     await expect(readFile(join(project.projectDir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8')).resolves
       .toContain('Analysts repeatedly inspect paid order lifecycle by customer segment.');
-    await expect(readFile(join(project.projectDir, 'knowledge/global/historic-sql/paid-order-lifecycle.md'), 'utf-8'))
+    await expect(readFile(join(project.projectDir, 'knowledge/global/historic-sql-paid-order-lifecycle.md'), 'utf-8'))
       .resolves.toContain('Paid Order Lifecycle');
 
     const reloaded = await loadKtxProject({ projectDir: project.projectDir });
@@ -295,7 +295,7 @@ describe('historic-SQL local ingest retrieval acceptance', () => {
       searchLocalKnowledgePages(reloaded, { query: 'paid order lifecycle', userId: 'local', limit: 5 }),
     ).resolves.toEqual([
       expect.objectContaining({
-        key: 'historic-sql/paid-order-lifecycle',
+        key: 'historic-sql-paid-order-lifecycle',
         summary: 'Paid Order Lifecycle',
         matchReasons: expect.arrayContaining(['lexical']),
       }),

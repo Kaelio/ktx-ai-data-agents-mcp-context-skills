@@ -18,7 +18,7 @@ async function runRuntimeArgs(context: KtxCliCommandContext, args: KtxRuntimeArg
 export function registerRuntimeCommands(program: Command, context: KtxCliCommandContext): void {
   const runtime = program
     .command('runtime')
-    .description('Install, inspect, and prune the KTX-managed Python runtime')
+    .description('Install, start, stop, and inspect the KTX-managed Python runtime')
     .showHelpAfterError();
 
   runtime
@@ -64,39 +64,13 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
 
   runtime
     .command('status')
-    .description('Show managed Python runtime status')
+    .description('Show managed Python runtime status and readiness checks')
     .option('--json', 'Print JSON output', false)
     .action(async (options: { json?: boolean }) => {
       await runRuntimeArgs(context, {
         command: 'status',
         cliVersion: context.packageInfo.version,
         json: options.json === true,
-      });
-    });
-
-  runtime
-    .command('doctor')
-    .description('Check managed Python runtime prerequisites and installation')
-    .option('--json', 'Print JSON output', false)
-    .action(async (options: { json?: boolean }) => {
-      await runRuntimeArgs(context, {
-        command: 'doctor',
-        cliVersion: context.packageInfo.version,
-        json: options.json === true,
-      });
-    });
-
-  runtime
-    .command('prune')
-    .description('Remove stale managed Python runtimes for older CLI versions')
-    .option('--dry-run', 'List stale runtimes without deleting them', false)
-    .option('--yes', 'Confirm deletion of stale runtime directories', false)
-    .action(async (options: { dryRun?: boolean; yes?: boolean }) => {
-      await runRuntimeArgs(context, {
-        command: 'prune',
-        cliVersion: context.packageInfo.version,
-        dryRun: options.dryRun === true,
-        yes: options.yes === true,
       });
     });
 }

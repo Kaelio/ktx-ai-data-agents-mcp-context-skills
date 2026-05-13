@@ -53,35 +53,21 @@ export const slQueryCommandSchema = z.object({
   command: z.literal('query'),
   projectDir: projectDirSchema,
   connectionId: z.string().min(1).optional(),
-  query: z.object({
-    measures: z.array(z.string().min(1)).min(1),
-    dimensions: stringArraySchema,
-    filters: stringArraySchema.optional(),
-    segments: stringArraySchema.optional(),
-    order_by: z.array(orderBySchema).optional(),
-    limit: z.number().int().positive().optional(),
-    include_empty: z.literal(true).optional(),
-  }),
+  query: z
+    .object({
+      measures: z.array(z.string().min(1)).min(1),
+      dimensions: stringArraySchema,
+      filters: stringArraySchema.optional(),
+      segments: stringArraySchema.optional(),
+      order_by: z.array(orderBySchema).optional(),
+      limit: z.number().int().positive().optional(),
+      include_empty: z.literal(true).optional(),
+    })
+    .optional(),
+  queryFile: z.string().min(1).optional(),
   format: z.enum(['json', 'sql']),
   execute: z.boolean(),
   cliVersion: z.string().min(1),
   runtimeInstallPolicy: z.enum(['prompt', 'auto', 'never']),
   maxRows: z.number().int().positive().optional(),
-});
-
-export const publicIngestRunCommandSchema = z.object({
-  command: z.literal('run'),
-  projectDir: projectDirSchema,
-  targetConnectionId: safeConnectionIdSchema.optional(),
-  all: z.boolean(),
-  json: z.boolean(),
-  inputMode: z.enum(['auto', 'disabled']),
-});
-
-export const publicIngestReadCommandSchema = z.object({
-  command: z.enum(['status', 'watch']),
-  projectDir: projectDirSchema,
-  runId: z.string().min(1).optional(),
-  json: z.boolean(),
-  inputMode: z.enum(['auto', 'disabled']),
 });
