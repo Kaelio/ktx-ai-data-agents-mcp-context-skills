@@ -1,7 +1,8 @@
 import { type KtxLocalProject, type KtxProjectConnectionConfig, loadKtxProject } from '@ktx/context/project';
+import type { KtxProgressPort } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
-import type { KtxIngestArgs } from './ingest.js';
-import type { KtxScanArgs } from './scan.js';
+import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
+import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
 
 profileMark('module:public-ingest');
@@ -59,8 +60,10 @@ export type KtxPublicIngestProject = Pick<KtxLocalProject, 'projectDir' | 'confi
 
 export interface KtxPublicIngestDeps {
   loadProject?: (options: Parameters<typeof loadKtxProject>[0]) => Promise<KtxPublicIngestProject>;
-  runScan?: (args: KtxScanArgs, io: KtxCliIo) => Promise<number>;
-  runIngest?: (args: KtxIngestArgs, io: KtxCliIo) => Promise<number>;
+  runScan?: (args: KtxScanArgs, io: KtxCliIo, deps?: KtxScanDeps) => Promise<number>;
+  runIngest?: (args: KtxIngestArgs, io: KtxCliIo, deps?: KtxIngestDeps) => Promise<number>;
+  scanProgress?: KtxProgressPort;
+  ingestProgress?: (update: KtxIngestProgressUpdate) => void;
 }
 
 const sourceAdapterByDriver = new Map<string, string>([
@@ -247,33 +250,35 @@ export async function executePublicIngestTarget(
 ): Promise<KtxPublicIngestTargetResult> {
   if (target.operation === 'scan') {
     const { runKtxScan } = await import('./scan.js');
-    const exitCode = await (deps.runScan ?? runKtxScan)(
-      {
-        command: 'run',
-        projectDir: args.projectDir,
-        connectionId: target.connectionId,
-        mode: args.scanMode ?? 'structural',
-        detectRelationships: args.detectRelationships ?? false,
-        dryRun: false,
-      },
-      io,
-    );
+    const scanArgs: KtxScanArgs = {
+      command: 'run',
+      projectDir: args.projectDir,
+      connectionId: target.connectionId,
+      mode: args.scanMode ?? 'structural',
+      detectRelationships: args.detectRelationships ?? false,
+      dryRun: false,
+    };
+    const runScan = deps.runScan ?? runKtxScan;
+    const exitCode = deps.scanProgress
+      ? await runScan(scanArgs, io, { progress: deps.scanProgress })
+      : await runScan(scanArgs, io);
     return markTargetResult(target, exitCode === 0 ? 'done' : 'failed');
   }
 
   const { runKtxIngest } = await import('./ingest.js');
-  const exitCode = await (deps.runIngest ?? runKtxIngest)(
-    {
-      command: 'run',
-      projectDir: args.projectDir,
-      connectionId: target.connectionId,
-      adapter: target.adapter ?? target.driver,
-      ...(target.sourceDir ? { sourceDir: target.sourceDir } : {}),
-      outputMode: sourceIngestOutputMode(args, io),
-      inputMode: args.inputMode,
-    },
-    io,
-  );
+  const ingestArgs: KtxIngestArgs = {
+    command: 'run',
+    projectDir: args.projectDir,
+    connectionId: target.connectionId,
+    adapter: target.adapter ?? target.driver,
+    ...(target.sourceDir ? { sourceDir: target.sourceDir } : {}),
+    outputMode: sourceIngestOutputMode(args, io),
+    inputMode: args.inputMode,
+  };
+  const runIngest = deps.runIngest ?? runKtxIngest;
+  const exitCode = deps.ingestProgress
+    ? await runIngest(ingestArgs, io, { progress: deps.ingestProgress })
+    : await runIngest(ingestArgs, io);
   return markTargetResult(target, exitCode === 0 ? 'done' : 'failed');
 }
 

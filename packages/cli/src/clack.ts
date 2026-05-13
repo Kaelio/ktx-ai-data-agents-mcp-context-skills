@@ -2,6 +2,7 @@ import { cancel, confirm, isCancel, log, spinner } from '@clack/prompts';
 
 export interface KtxCliSpinner {
   start(message: string): void;
+  message(message: string): void;
   stop(message: string): void;
   error(message: string): void;
 }

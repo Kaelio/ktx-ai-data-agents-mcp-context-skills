@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { cancel, isCancel, select } from '@clack/prompts';
 import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
 import {
   ktxLocalStateDbPath,
@@ -10,7 +9,7 @@ import {
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { formatSetupNextStepLines } from './next-steps.js';
-import { isKtxSetupExitError, withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { isKtxSetupExitError } from './setup-interrupt.js';
 import {
   type KtxAgentScope,
   type KtxAgentTarget,
@@ -38,7 +37,12 @@ import {
   runKtxSetupReadyChangeMenu,
 } from './setup-ready-menu.js';
 import { type KtxSetupSourcesDeps, type KtxSetupSourceType, runKtxSetupSourcesStep } from './setup-sources.js';
-import { withMenuOptionsSpacing } from './prompt-navigation.js';
+import {
+  createKtxSetupPromptAdapter,
+  createKtxSetupUiAdapter,
+  type KtxSetupPromptOption,
+  type KtxSetupUiAdapter,
+} from './setup-prompts.js';
 import {
   readKtxSetupContextState,
   type KtxSetupContextDeps,
@@ -148,6 +152,7 @@ export interface KtxSetupDeps {
   contextDeps?: KtxSetupContextDeps;
   readyMenuDeps?: KtxSetupReadyMenuDeps;
   entryMenuDeps?: KtxSetupEntryMenuDeps;
+  setupUi?: KtxSetupUiAdapter;
 }
 
 const SOURCE_DRIVERS = new Set(['dbt', 'metricflow', 'metabase', 'looker', 'lookml', 'notion']);
@@ -165,7 +170,7 @@ type KtxSetupFlowStatus =
   | 'interrupted';
 
 export interface KtxSetupEntryMenuPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   cancel(message: string): void;
 }
 
@@ -174,18 +179,10 @@ export interface KtxSetupEntryMenuDeps {
 }
 
 function createEntryMenuPromptAdapter(): KtxSetupEntryMenuPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        return 'exit';
-      }
-      return String(value);
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({
+    selectCancelValue: 'exit',
+    cancelOnSelectCancel: false,
+  });
 }
 
 async function runKtxSetupEntryMenu(
@@ -449,7 +446,8 @@ export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSet
 }
 
 async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
-  io.stdout.write('KTX setup\n');
+  const setupUi = deps.setupUi ?? createKtxSetupUiAdapter();
+  setupUi.intro('KTX setup', io);
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
   const canShowEntryMenu =
@@ -747,14 +745,15 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
 
   const status = await readKtxSetupStatus(projectResult.projectDir);
   io.stdout.write(formatKtxSetupStatus(status));
-  io.stdout.write('\nWhat you can do next:\n');
-  io.stdout.write(
-    `${formatSetupNextStepLines({
+  setupUi.note(
+    formatSetupNextStepLines({
       setupReady: setupStatusReady(status),
       hasContextTargets: setupHasContextTargets(status),
       contextReady: setupContextReady(status),
       agentIntegrationReady: status.agents.some((agent) => agent.ready),
-    }).join('\n')}\n`,
+    }).join('\n'),
+    'What you can do next',
+    io,
   );
   return 0;
 }

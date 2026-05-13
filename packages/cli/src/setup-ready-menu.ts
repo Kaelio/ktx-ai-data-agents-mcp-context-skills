@@ -1,12 +1,13 @@
-import { cancel, isCancel, select } from '@clack/prompts';
-import { withMenuOptionsSpacing } from './prompt-navigation.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 import type { KtxSetupStatus } from './setup.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 
 export type KtxSetupReadyAction = 'models' | 'embeddings' | 'databases' | 'sources' | 'context' | 'agents' | 'exit';
 
 export interface KtxSetupReadyMenuPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   cancel(message: string): void;
 }
 
@@ -30,19 +31,7 @@ export function isKtxSetupReady(status: KtxSetupStatus): boolean {
 }
 
 function createPromptAdapter(): KtxSetupReadyMenuPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'exit';
-      }
-      return String(value);
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({ selectCancelValue: 'exit' });
 }
 
 export async function runKtxSetupReadyChangeMenu(

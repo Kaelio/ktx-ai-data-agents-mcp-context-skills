@@ -1,5 +1,4 @@
 import { writeFile } from 'node:fs/promises';
-import { cancel, confirm, isCancel, multiselect, password, select, text } from '@clack/prompts';
 import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
   type KtxProjectConnectionConfig,
@@ -11,10 +10,13 @@ import {
 import type { KtxTableListEntry } from '@ktx/context/scan';
 import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnection } from './connection.js';
-import { withMenuOptionsSpacing, withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
+import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxScan } from './scan.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 const HISTORIC_SQL_WORK_UNIT_MAX_CONCURRENCY = 6;
 
@@ -55,11 +57,11 @@ export type KtxSetupDatabasesResult =
 export interface KtxSetupDatabasesPromptAdapter {
   multiselect(options: {
     message: string;
-    options: Array<{ value: string; label: string }>;
+    options: KtxSetupPromptOption[];
     required?: boolean;
     initialValues?: string[];
   }): Promise<string[]>;
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string; initialValue?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -202,50 +204,11 @@ function missingConnectionDetailsPrompt(
 }
 
 function createPromptAdapter(): KtxSetupDatabasesPromptAdapter {
-  return {
-    async multiselect(options) {
-      while (true) {
-        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-        if (isCancel(value)) {
-          cancel('Setup cancelled.');
-          return ['back'];
-        }
-        const selected = [...value] as string[];
-        if (selected.length === 0 && !options.required) {
-          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
-          if (isCancel(skipConfirmed)) {
-            cancel('Setup cancelled.');
-            return ['back'];
-          }
-          if (!skipConfirmed) continue;
-        }
-        return selected;
-      }
-    },
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
-      }
-      return String(value);
-    },
-    async text(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        text({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : String(value);
-    },
-    async password(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        password({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : String(value);
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({
+    selectCancelValue: 'back',
+    multiselectCancelValue: 'back',
+    confirmEmptyOptionalMultiselect: true,
+  });
 }
 
 function normalizeDriver(driver: string | undefined): KtxSetupDatabaseDriver | null {

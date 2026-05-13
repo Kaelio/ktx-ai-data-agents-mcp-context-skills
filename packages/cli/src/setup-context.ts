@@ -1,7 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { cancel, isCancel, select } from '@clack/prompts';
 import {
   type KtxLocalProject,
   loadKtxProject,
@@ -19,8 +18,10 @@ import {
   runContextBuild,
   viewStateFromSourceProgress,
 } from './context-build-view.js';
-import { withMenuOptionsSpacing } from './prompt-navigation.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 export type KtxSetupContextBuildStatus =
   | 'not_started'
@@ -99,7 +100,7 @@ interface KtxSetupContextWatchArgs {
 }
 
 export interface KtxSetupContextPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   cancel(message: string): void;
 }
 
@@ -125,19 +126,7 @@ const SCAN_REPORT_FILE = 'scan-report.json';
 const DEFAULT_WATCH_INTERVAL_MS = 2_000;
 
 function createPromptAdapter(): KtxSetupContextPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
-      }
-      return String(value);
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({ selectCancelValue: 'back' });
 }
 
 function statePath(projectDir: string): string {
@@ -228,6 +217,9 @@ function normalizeSourceProgress(value: unknown): ContextBuildSourceProgressUpda
       status: rec.status as 'queued' | 'running' | 'done' | 'failed',
       ...(typeof rec.startedAtMs === 'number' ? { startedAtMs: rec.startedAtMs } : {}),
       ...(typeof rec.elapsedMs === 'number' ? { elapsedMs: rec.elapsedMs } : {}),
+      ...(typeof rec.percent === 'number' ? { percent: rec.percent } : {}),
+      ...(typeof rec.message === 'string' ? { message: rec.message } : {}),
+      ...(typeof rec.updatedAtMs === 'number' ? { updatedAtMs: rec.updatedAtMs } : {}),
       ...(typeof rec.summaryText === 'string' ? { summaryText: rec.summaryText } : {}),
     });
   }
@@ -920,7 +912,16 @@ async function watchContextStatusWithProgressView(
   try {
     while (true) {
       if (!repainter) {
-        const currentKey = JSON.stringify(state.sourceProgress?.map((s) => s.status));
+        const currentKey = JSON.stringify(
+          state.sourceProgress?.map((s) => ({
+            id: s.connectionId,
+            status: s.status,
+            percent: s.percent,
+            message: s.message,
+            summaryText: s.summaryText,
+            updatedAtMs: s.updatedAtMs,
+          })),
+        );
         if (currentKey !== lastProgressKey || !isActiveStatus(state.status)) {
           io.stdout.write(renderContextBuildView(viewState, viewOpts));
           lastProgressKey = currentKey;
