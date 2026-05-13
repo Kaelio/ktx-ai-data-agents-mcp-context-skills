@@ -621,7 +621,7 @@ describe('setup context build state', () => {
       ),
     ).resolves.toEqual({ status: 'failed', projectDir: tempDir });
 
-    expect(io.stderr()).toContain('No primary or context sources are configured for a KTX context build.');
+    expect(io.stderr()).toContain('No databases or context sources are configured for a KTX context build.');
   });
 
   it('normalizes legacy detached and paused setup context states to stale', async () => {

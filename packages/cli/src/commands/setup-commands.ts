@@ -298,7 +298,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       (value, previous: string[]) => [...previous, value],
       [],
     )
-    .option('--skip-databases', 'Leave database setup incomplete; KTX cannot work until a primary source is added', false)
+    .option('--skip-databases', 'Leave database setup incomplete; KTX cannot work until a database is added', false)
     .addOption(new Option('--source <type>', 'Source connector type').argParser(sourceType))
     .option('--source-connection-id <id>', 'Connection id for source setup')
     .option('--source-path <path>', 'Local source path for dbt, MetricFlow, or LookML')

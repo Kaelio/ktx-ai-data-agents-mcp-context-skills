@@ -1417,7 +1417,7 @@ export async function runKtxSetupSourcesStep(
     const prompts = deps.prompts ?? createPromptAdapter();
     const project = await loadKtxProject({ projectDir: args.projectDir });
     if (!hasPrimarySource(project.config)) {
-      const message = 'Connect a primary source before adding context sources.';
+      const message = 'Connect a database before adding context sources.';
       if (args.source) {
         io.stderr.write(`${message}\n`);
         return { status: 'failed', projectDir: args.projectDir };

@@ -1190,7 +1190,7 @@ describe('setup sources step', () => {
     }
   });
 
-  it('does not offer context sources until a primary source exists', async () => {
+  it('does not offer context sources until a database exists', async () => {
     const io = makeIo();
     const testPrompts = prompts({ multiselect: [['notion']] });
 
@@ -1203,7 +1203,7 @@ describe('setup sources step', () => {
     ).resolves.toEqual({ status: 'skipped', projectDir });
 
     expect(testPrompts.multiselect).not.toHaveBeenCalled();
-    expect(io.stdout()).toContain('Connect a primary source before adding context sources.');
+    expect(io.stdout()).toContain('Connect a database before adding context sources.');
     expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 

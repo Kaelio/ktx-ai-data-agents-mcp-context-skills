@@ -788,7 +788,7 @@ export async function runKtxSetupContextStep(
       if (args.allowEmpty === true) {
         return { status: 'skipped', projectDir: args.projectDir };
       }
-      io.stderr.write('No primary or context sources are configured for a KTX context build.\n');
+      io.stderr.write('No databases or context sources are configured for a KTX context build.\n');
       return { status: 'failed', projectDir: args.projectDir };
     }
 
