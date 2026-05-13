@@ -198,6 +198,12 @@ function renderTargetGroup(
   return ['', `  ${label}:`, ...targets.map((t) => renderTargetLine(t, frame, styled, width))];
 }
 
+function renderMessageGroup(label: string, messages: string[], styled: boolean): string[] {
+  if (messages.length === 0) return [];
+  const renderedMessages = messages.map((message) => `    - ${message}`);
+  return ['', `  ${label}:`, ...renderedMessages.map((line) => (styled ? dim(line) : line))];
+}
+
 function retryCommand(input: {
   projectDir?: string;
   entrypoint?: 'setup' | 'ingest';
@@ -214,7 +220,14 @@ function retryCommand(input: {
 
 export function renderContextBuildView(
   state: ContextBuildViewState,
-  options: { styled?: boolean; showHint?: boolean; hintText?: string; projectDir?: string } = {},
+  options: {
+    styled?: boolean;
+    showHint?: boolean;
+    hintText?: string;
+    projectDir?: string;
+    notices?: string[];
+    warnings?: string[];
+  } = {},
 ): string {
   const styled = options.styled ?? true;
   const width = columnWidth(state);
@@ -242,6 +255,8 @@ export function renderContextBuildView(
     ...(options.projectDir ? [`  Project: ${options.projectDir}`] : []),
     ...renderTargetGroup('Databases', state.primarySources, state.frame, styled, width),
     ...renderTargetGroup('Context sources', state.contextSources, state.frame, styled, width),
+    ...renderMessageGroup('Notices', options.notices ?? [], styled),
+    ...renderMessageGroup('Warnings', options.warnings ?? [], styled),
     '',
   ];
 
@@ -629,7 +644,12 @@ export async function runContextBuild(
   state.startedAt = nowFn();
 
   const repainter = isTTY ? createRepainter(io) : null;
-  const viewOpts = { styled: true, projectDir: args.projectDir };
+  const viewOpts = {
+    styled: true,
+    projectDir: args.projectDir,
+    notices: plan.notices ?? [],
+    warnings: plan.warnings,
+  };
   const paint = (hint: boolean) => repainter?.paint(renderContextBuildView(state, { ...viewOpts, showHint: hint }));
   paint(true);
 

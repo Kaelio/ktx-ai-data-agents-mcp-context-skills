@@ -189,6 +189,52 @@ describe('renderContextBuildView', () => {
     expect(output).toContain('Project: /tmp/project');
   });
 
+  it('renders public warnings in the foreground view', () => {
+    const state = initViewState([
+      {
+        connectionId: 'docs',
+        driver: 'notion',
+        operation: 'source-ingest',
+        adapter: 'notion',
+        debugCommand: 'ktx ingest docs --debug',
+        steps: ['source-ingest', 'memory-update'],
+      },
+    ]);
+
+    const rendered = renderContextBuildView(state, {
+      styled: false,
+      warnings: ['--deep affects database ingest only; ignoring it for docs.'],
+    });
+
+    expect(rendered).toContain('Warnings:');
+    expect(rendered).toContain('--deep affects database ingest only; ignoring it for docs.');
+  });
+
+  it('renders public notices in the foreground view before warnings', () => {
+    const state = initViewState([
+      {
+        connectionId: 'warehouse',
+        driver: 'postgres',
+        operation: 'database-ingest',
+        debugCommand: 'ktx ingest warehouse --debug',
+        steps: ['database-schema', 'query-history'],
+        databaseDepth: 'deep',
+        detectRelationships: true,
+        queryHistory: { enabled: true, dialect: 'postgres' },
+      },
+    ]);
+
+    const rendered = renderContextBuildView(state, {
+      styled: false,
+      notices: ['Schema ingest runs before query history for warehouse.'],
+      warnings: ['--query-history requires deep ingest; running warehouse with --deep.'],
+    });
+
+    expect(rendered.indexOf('Notices:')).toBeLessThan(rendered.indexOf('Warnings:'));
+    expect(rendered).toContain('Schema ingest runs before query history for warehouse.');
+    expect(rendered).toContain('--query-history requires deep ingest; running warehouse with --deep.');
+  });
+
   it('renders dynamic separator matching header width', () => {
     const state = initViewState([
       { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
