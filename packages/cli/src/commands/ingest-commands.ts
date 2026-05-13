@@ -4,6 +4,7 @@ import {
   parsePositiveIntegerOption,
   resolveCommandProjectDir,
 } from '../cli-program.js';
+import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 import type { KtxPublicIngestArgs } from '../public-ingest.js';
 import { profileMark } from '../startup-profile.js';
 
@@ -41,6 +42,8 @@ export function registerIngestCommands(program: Command, context: KtxCliCommandC
       ...(options.deep === true ? { depth: 'deep' as const } : {}),
       queryHistory,
       ...(options.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: options.queryHistoryWindowDays } : {}),
+      cliVersion: context.packageInfo.version,
+      runtimeInstallPolicy: runtimeInstallPolicyFromFlags(options),
     };
     context.setExitCode(await (context.deps.publicIngest ?? runKtxPublicIngest)(args, context.io));
   });

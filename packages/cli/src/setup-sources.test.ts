@@ -254,9 +254,10 @@ describe('setup sources step', () => {
     });
   });
 
-  it('rejects reserved interactive source connection ids', async () => {
+  it('accepts former ingest subcommand names as interactive source connection ids', async () => {
     await addPrimarySource();
     const io = makeIo();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'workspace=ok' }));
 
     const result = await runKtxSetupSourcesStep(
       {
@@ -272,13 +273,16 @@ describe('setup sources step', () => {
           text: ['status', 'env:NOTION_TOKEN'],
           select: ['env', 'all_accessible'],
         }),
+        validateNotion,
       },
     );
 
-    expect(result.status).toBe('failed');
-    expect(io.stderr()).toContain(
-      '"status" is reserved for the KTX ingest command namespace; choose a different connection id.',
-    );
+    expect(result.status).toBe('ready');
+    const config = await readConfig();
+    expect(config.connections.status).toMatchObject({
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+    });
   });
 
   it('uses selected Notion roots when root page ids are provided even if crawl mode says all accessible', async () => {

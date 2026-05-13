@@ -7,10 +7,8 @@ export type {
   KtxStorageState,
 } from './config.js';
 export {
-  assertKtxConnectionIdIsNotReserved,
   buildDefaultKtxProjectConfig,
   parseKtxProjectConfig,
-  reservedKtxIngestConnectionIdMessage,
   serializeKtxProjectConfig,
 } from './config.js';
 export type { LocalGitFileStoreDeps } from './local-git-file-store.js';

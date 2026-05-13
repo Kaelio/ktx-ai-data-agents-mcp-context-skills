@@ -368,4 +368,71 @@ describe('runKtxRuntime', () => {
     expect(io.stdout()).toContain('PASS Managed Python runtime: Runtime ready at /runtime/0.2.0');
     expect(io.stderr()).toBe('');
   });
+
+  it('returns success when the installed runtime is ready but source assets are missing', async () => {
+    const io = makeIo();
+    const deps: KtxRuntimeDeps = {
+      readStatus: vi.fn(async (): Promise<ManagedPythonRuntimeStatus> => ({
+        kind: 'ready',
+        detail: 'Runtime ready at /runtime/0.2.0',
+        layout: {
+          cliVersion: '0.2.0',
+          runtimeRoot: '/runtime',
+          versionDir: '/runtime/0.2.0',
+          venvDir: '/runtime/0.2.0/.venv',
+          manifestPath: '/runtime/0.2.0/manifest.json',
+          installLogPath: '/runtime/0.2.0/install.log',
+          assetDir: '/assets/python',
+          assetManifestPath: '/assets/python/manifest.json',
+          pythonPath: '/runtime/0.2.0/.venv/bin/python',
+          daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          daemonStatePath: '/runtime/0.2.0/daemon.json',
+          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
+          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
+        },
+        manifest: {
+          schemaVersion: 1,
+          cliVersion: '0.2.0',
+          installedAt: '2026-05-11T00:00:00.000Z',
+          asset: {
+            schemaVersion: 1,
+            distributionName: 'kaelio-ktx',
+            normalizedName: 'kaelio_ktx',
+            version: '0.1.0',
+            wheel: {
+              file: 'kaelio_ktx-0.1.0-py3-none-any.whl',
+              sha256: 'a'.repeat(64),
+              bytes: 10,
+            },
+          },
+          features: ['core'],
+          python: {
+            executable: '/runtime/0.2.0/.venv/bin/python',
+            daemonExecutable: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          },
+          installLog: '/runtime/0.2.0/install.log',
+        },
+      })),
+      doctorRuntime: vi.fn(async (): Promise<ManagedPythonRuntimeDoctorCheck[]> => [
+        { id: 'uv', label: 'uv', status: 'pass', detail: 'uv 0.9.5' },
+        {
+          id: 'asset',
+          label: 'Bundled Python wheel',
+          status: 'fail',
+          detail: 'Missing bundled Python runtime manifest: /assets/python/manifest.json',
+          fix: 'Run: pnpm run artifacts:check',
+        },
+        { id: 'runtime', label: 'Managed Python runtime', status: 'pass', detail: 'Runtime ready at /runtime/0.2.0' },
+      ]),
+    };
+
+    await expect(runKtxRuntime({ command: 'status', cliVersion: '0.2.0', json: false }, io.io, deps)).resolves.toBe(
+      0,
+    );
+
+    expect(io.stdout()).toContain('status: ready');
+    expect(io.stdout()).toContain('FAIL Bundled Python wheel: Missing bundled Python runtime manifest');
+    expect(io.stdout()).toContain('PASS Managed Python runtime: Runtime ready at /runtime/0.2.0');
+    expect(io.stderr()).toBe('');
+  });
 });

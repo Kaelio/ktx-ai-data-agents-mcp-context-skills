@@ -436,6 +436,8 @@ describe('runKtxPublicIngest', () => {
           all: false,
           json: false,
           inputMode: 'disabled',
+          cliVersion: '0.0.0-test',
+          runtimeInstallPolicy: 'never',
           queryHistory: 'enabled',
           queryHistoryWindowDays: 30,
         },
@@ -454,6 +456,8 @@ describe('runKtxPublicIngest', () => {
         connectionId: 'warehouse',
         adapter: 'historic-sql',
         allowImplicitAdapter: true,
+        cliVersion: '0.0.0-test',
+        runtimeInstallPolicy: 'never',
         historicSqlPullConfigOverride: expect.objectContaining({ dialect: 'postgres', windowDays: 30 }),
       }),
       expect.anything(),
@@ -465,6 +469,7 @@ describe('runKtxPublicIngest', () => {
     const project = deepReadyProject({
       warehouse: {
         driver: 'postgres',
+        enabled_tables: ['orbit_analytics.int_active_contract_arr'],
         context: {
           queryHistory: {
             enabled: true,
@@ -524,6 +529,7 @@ describe('runKtxPublicIngest', () => {
           dropFailedBelow: { errorRate: 0.5, executions: 3 },
         },
         redactionPatterns: ['(?i)secret'],
+        enabledTables: ['orbit_analytics.int_active_contract_arr'],
       },
     });
     expect(ingestArgs?.historicSqlPullConfigOverride).not.toHaveProperty('enabled');

@@ -9,6 +9,7 @@ import {
   isDatabaseDriver,
   normalizeConnectionDriver,
 } from './ingest-depth.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { publicIngestOutputLine } from './public-ingest-copy.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
@@ -35,6 +36,8 @@ export type KtxPublicIngestArgs =
     queryHistoryWindowDays?: number;
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
     detectRelationships?: boolean;
+    cliVersion?: string;
+    runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
   };
 
 export interface KtxPublicIngestPlanTarget {
@@ -101,6 +104,8 @@ interface KtxPublicContextBuildArgs {
   queryHistoryWindowDays?: number;
   scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
   detectRelationships?: boolean;
+  cliVersion?: string;
+  runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
 }
 
 const sourceAdapterByDriver = new Map<string, string>([
@@ -258,15 +263,26 @@ function positiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
+function enabledTablesForConnection(connection: KtxProjectConnectionConfig): string[] | undefined {
+  const raw = connection.enabled_tables;
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const tables = raw.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  return tables.length > 0 ? tables : undefined;
+}
+
 function queryHistoryPullConfig(input: {
   stored: Record<string, unknown>;
   dialect: HistoricSqlDialect;
   windowDays?: number;
+  enabledTables?: string[];
 }): Record<string, unknown> {
   const { enabled: _enabled, dialect: _dialect, ...storedConfig } = input.stored;
   return {
     ...storedConfig,
     dialect: input.dialect,
+    ...(input.enabledTables ? { enabledTables: input.enabledTables } : {}),
     ...(input.windowDays !== undefined ? { windowDays: input.windowDays } : {}),
   };
 }
@@ -342,6 +358,7 @@ function resolveDatabaseTargetOptions(input: {
           stored: storedQh,
           dialect,
           windowDays: queryHistory.windowDays,
+          enabledTables: enabledTablesForConnection(input.connection),
         }),
       },
       steps: ['database-schema', 'query-history'],
@@ -684,6 +701,8 @@ export async function executePublicIngestTarget(
       mode: target.databaseDepth === 'deep' ? 'enriched' : 'structural',
       detectRelationships: target.detectRelationships === true,
       dryRun: false,
+      ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+      ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
     };
     const runScan = deps.runScan ?? runKtxScan;
     const capturedScanIo = deps.scanProgress ? null : createCapturedPublicIngestIo();
@@ -711,6 +730,8 @@ export async function executePublicIngestTarget(
         adapter: 'historic-sql',
         outputMode: sourceIngestOutputMode(args, io),
         inputMode: args.inputMode,
+        ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+        ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
         allowImplicitAdapter: true,
         historicSqlPullConfigOverride:
           target.queryHistory.pullConfig ?? {
@@ -746,6 +767,8 @@ export async function executePublicIngestTarget(
     ...(target.sourceDir ? { sourceDir: target.sourceDir } : {}),
     outputMode: sourceIngestOutputMode(args, io),
     inputMode: args.inputMode,
+    ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+    ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
     allowImplicitAdapter: true,
   };
   const runIngest = deps.runIngest ?? runKtxIngest;
@@ -786,6 +809,8 @@ export async function runKtxPublicIngest(
         ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
         ...(args.scanMode ? { scanMode: args.scanMode } : {}),
         ...(args.detectRelationships !== undefined ? { detectRelationships: args.detectRelationships } : {}),
+        ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+        ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
       },
       io,
     );

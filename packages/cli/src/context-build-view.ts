@@ -1,6 +1,7 @@
 import type { KtxProgressPort, KtxProgressUpdateOptions } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestProgressUpdate } from './ingest.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { publicDatabaseIngestMessage, publicQueryHistoryMessage } from './public-ingest-copy.js';
 import type {
   KtxPublicIngestArgs,
@@ -48,6 +49,8 @@ export interface ContextBuildArgs {
   queryHistoryWindowDays?: number;
   scanMode?: Extract<KtxPublicIngestArgs, { command: 'run' }>['scanMode'];
   detectRelationships?: boolean;
+  cliVersion?: string;
+  runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
 }
 
 export interface ContextBuildResult {
@@ -210,11 +213,18 @@ function retryCommand(input: {
   entrypoint?: 'setup' | 'ingest';
   connectionId?: string;
   depth?: 'fast' | 'deep';
+  queryHistory?: boolean;
+  queryHistoryWindowDays?: number;
 }): string {
   const projectPart = input.projectDir ? ` --project-dir ${input.projectDir}` : '';
   if (input.entrypoint === 'ingest' && input.connectionId) {
     const depthPart = input.depth ? ` --${input.depth}` : '';
-    return `ktx ingest ${input.connectionId}${projectPart}${depthPart}`;
+    const queryHistoryPart = input.queryHistory ? ' --query-history' : '';
+    const windowPart =
+      input.queryHistory && input.queryHistoryWindowDays !== undefined
+        ? ` --query-history-window-days ${input.queryHistoryWindowDays}`
+        : '';
+    return `ktx ingest ${input.connectionId}${projectPart}${depthPart}${queryHistoryPart}${windowPart}`;
   }
   return input.projectDir ? `ktx setup --project-dir ${input.projectDir}` : 'ktx setup';
 }
@@ -518,6 +528,11 @@ function networkErrorCode(error: unknown, capturedOutput = ''): string | null {
   return networkErrorCodeFromText(`${unknownErrorMessage(error)}\n${capturedOutput}`);
 }
 
+function isLocalSqlAnalysisConnectionRefused(input: { capturedOutput?: string; fallback?: string | null }): boolean {
+  const text = `${input.capturedOutput ?? ''}\n${input.fallback ?? ''}`;
+  return /\bECONNREFUSED\b/.test(text) && /\b(?:127\.0\.0\.1|localhost):8765\b/.test(text);
+}
+
 function friendlyDriverName(driver: string): string {
   const normalized = driver.toLowerCase();
   if (normalized === 'postgres' || normalized === 'postgresql') return 'PostgreSQL';
@@ -534,6 +549,45 @@ function failedStepDetail(result: KtxPublicIngestTargetResult): string | null {
   return result.steps.find((step) => step.status === 'failed')?.detail ?? null;
 }
 
+const INTERNAL_FAILURE_LINE_RE =
+  /^(Report|Run|Job|Status|Adapter|Connection|Sync|Mode|Dry run|Diff|Work units|Saved memory|Provenance rows):\s*/;
+const ACTIONABLE_FAILURE_LINE_RE =
+  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
+
+function firstCapturedFailureLine(output: string | undefined): string | null {
+  const lines = (output ?? '')
+    .split(/\r?\n/)
+    .map((candidate) => candidate.trim())
+    .filter((candidate) => candidate.length > 0)
+    .filter((candidate) => !candidate.startsWith('KTX scan completed'))
+    .filter((candidate) => !INTERNAL_FAILURE_LINE_RE.test(candidate));
+  return lines.find((candidate) => ACTIONABLE_FAILURE_LINE_RE.test(candidate)) ?? lines.at(-1) ?? null;
+}
+
+function isGenericFailedAtDetail(target: KtxPublicIngestPlanTarget, detail: string | null | undefined): boolean {
+  return new RegExp(`^${target.connectionId} failed at [a-z-]+\\.?(?: Retry: .*)?$`).test(detail ?? '');
+}
+
+function appendRetryIfNeeded(input: {
+  message: string;
+  target: KtxPublicIngestPlanTarget;
+  projectDir: string;
+  entrypoint?: 'setup' | 'ingest';
+}): string {
+  const base = input.message.trim().replace(/\.+$/, '');
+  if (/\bRetry:\s/.test(base)) {
+    return base;
+  }
+  return `${base}. Retry: ${retryCommand({
+    projectDir: input.projectDir,
+    entrypoint: input.entrypoint,
+    connectionId: input.target.connectionId,
+    depth: input.target.databaseDepth,
+    queryHistory: input.target.queryHistory?.enabled === true,
+    queryHistoryWindowDays: input.target.queryHistory?.windowDays,
+  })}`;
+}
+
 function failureTextForTarget(input: {
   target: KtxPublicIngestPlanTarget;
   projectDir: string;
@@ -543,6 +597,20 @@ function failureTextForTarget(input: {
   fallback?: string | null;
 }): string {
   const code = networkErrorCode(input.error, input.capturedOutput);
+  if (code && isLocalSqlAnalysisConnectionRefused({ capturedOutput: input.capturedOutput, fallback: input.fallback })) {
+    return [
+      `KTX could not reach the local SQL analysis runtime while processing query history for ${input.target.connectionId}.`,
+      `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
+      `Retry: ${retryCommand({
+        projectDir: input.projectDir,
+        entrypoint: input.entrypoint,
+        connectionId: input.target.connectionId,
+        depth: input.target.databaseDepth,
+        queryHistory: input.target.queryHistory?.enabled === true,
+        queryHistoryWindowDays: input.target.queryHistory?.windowDays,
+      })}`,
+    ].join(' ');
+  }
   if (code) {
     const operation = input.target.operation === 'database-ingest' ? 'reading schema for' : 'ingesting';
     return [
@@ -553,17 +621,23 @@ function failureTextForTarget(input: {
         entrypoint: input.entrypoint,
         connectionId: input.target.connectionId,
         depth: input.target.databaseDepth,
+        queryHistory: input.target.queryHistory?.enabled === true,
+        queryHistoryWindowDays: input.target.queryHistory?.windowDays,
       })}`,
     ].join(' ');
   }
-  const fallback = input.fallback ?? `${input.target.connectionId} failed.`;
+  const capturedFailure = firstCapturedFailureLine(input.capturedOutput);
+  const fallback =
+    capturedFailure && isGenericFailedAtDetail(input.target, input.fallback)
+      ? capturedFailure
+      : (input.fallback ?? capturedFailure ?? `${input.target.connectionId} failed.`);
   if (input.entrypoint === 'ingest') {
-    return `${fallback} Retry: ${retryCommand({
+    return appendRetryIfNeeded({
+      message: fallback,
+      target: input.target,
       projectDir: input.projectDir,
       entrypoint: input.entrypoint,
-      connectionId: input.target.connectionId,
-      depth: input.target.databaseDepth,
-    })}`;
+    });
   }
   return fallback;
 }
@@ -697,6 +771,8 @@ export async function runContextBuild(
     ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
     ...(args.scanMode ? { scanMode: args.scanMode } : {}),
     ...(args.detectRelationships !== undefined ? { detectRelationships: args.detectRelationships } : {}),
+    ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+    ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
   };
 
   let hasFailure = false;

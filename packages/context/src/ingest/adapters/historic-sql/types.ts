@@ -13,6 +13,7 @@ export const historicSqlUnifiedPullConfigSchema = z.object({
   windowDays: z.number().int().positive().default(90),
   minExecutions: z.number().int().nonnegative().default(5),
   concurrency: z.number().int().positive().default(12),
+  enabledTables: z.array(z.string().min(1)).default([]),
   filters: z.object({
     serviceAccounts: z.object({
       patterns: z.array(z.string()).default([]),

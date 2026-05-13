@@ -13,12 +13,9 @@ import { buildPublicIngestPlan } from './public-ingest.js';
 import {
   type KtxDatabaseContextDepth,
   databaseContextDepth,
-  deepReadinessGaps,
-  isDatabaseDriver,
-  normalizeConnectionDriver,
-  recommendedDatabaseContextDepth,
-  withDatabaseContextDepth,
 } from './ingest-depth.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
+import { ensureSetupDatabaseContextDepths } from './setup-database-context-depth.js';
 import {
   type ContextBuildSourceProgressUpdate,
   runContextBuild,
@@ -88,6 +85,8 @@ export interface KtxSetupContextStepArgs {
   allowEmpty?: boolean;
   prompt?: boolean;
   autoWatch?: boolean;
+  cliVersion?: string;
+  runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
 }
 
 export interface KtxSetupContextPromptAdapter {
@@ -293,77 +292,6 @@ function listContextTargets(project: KtxLocalProject): KtxSetupContextTargets {
       .filter((target) => target.operation === 'source-ingest')
       .map((target) => target.connectionId),
   };
-}
-
-function databaseConnectionsNeedingDepth(project: KtxLocalProject): string[] {
-  return Object.entries(project.config.connections)
-    .filter(([, connection]) => isDatabaseDriver(normalizeConnectionDriver(connection)))
-    .filter(([, connection]) => databaseContextDepth(connection) === undefined)
-    .map(([connectionId]) => connectionId)
-    .sort((left, right) => left.localeCompare(right));
-}
-
-async function writeDatabaseContextDepths(
-  project: KtxLocalProject,
-  connectionIds: string[],
-  depth: KtxDatabaseContextDepth,
-): Promise<KtxLocalProject> {
-  if (connectionIds.length === 0) {
-    return project;
-  }
-  const nextConnections = { ...project.config.connections };
-  for (const connectionId of connectionIds) {
-    const connection = nextConnections[connectionId];
-    if (connection) {
-      nextConnections[connectionId] = withDatabaseContextDepth(connection, depth);
-    }
-  }
-  const nextConfig = { ...project.config, connections: nextConnections };
-  await writeFile(project.configPath, serializeKtxProjectConfig(nextConfig), 'utf-8');
-  return await loadKtxProject({ projectDir: project.projectDir });
-}
-
-async function ensureSetupDatabaseContextDepths(input: {
-  project: KtxLocalProject;
-  args: KtxSetupContextStepArgs;
-  prompts: KtxSetupContextPromptAdapter;
-}): Promise<KtxLocalProject | 'back'> {
-  const missingDepthConnectionIds = databaseConnectionsNeedingDepth(input.project);
-  if (missingDepthConnectionIds.length === 0) {
-    return input.project;
-  }
-
-  const recommended = recommendedDatabaseContextDepth(input.project.config);
-  if (input.args.inputMode === 'disabled') {
-    return await writeDatabaseContextDepths(input.project, missingDepthConnectionIds, recommended);
-  }
-
-  const deepReady = deepReadinessGaps(input.project.config).length === 0;
-  const options =
-    recommended === 'deep'
-      ? [
-          { value: 'deep', label: 'Deep: AI descriptions, embeddings, relationships, slower' },
-          { value: 'fast', label: 'Fast: schema only, no AI, quickest' },
-          { value: 'back', label: 'Back' },
-        ]
-      : [
-          { value: 'fast', label: 'Fast: schema only, no AI, quickest' },
-          { value: 'deep', label: 'Deep: AI descriptions, embeddings, relationships, slower' },
-          { value: 'back', label: 'Back' },
-        ];
-
-  const choice = await input.prompts.select({
-    message:
-      'How much database context should KTX build?\n\n' +
-      (deepReady
-        ? 'Deep is available because model, embedding, and scan enrichment are configured.'
-        : 'Fast is recommended because model, embedding, or scan enrichment is not configured.'),
-    options,
-  });
-  if (choice === 'back') {
-    return 'back';
-  }
-  return await writeDatabaseContextDepths(input.project, missingDepthConnectionIds, choice as KtxDatabaseContextDepth);
 }
 
 async function hasFileWithExtension(
@@ -645,6 +573,8 @@ async function runBuild(
     {
       projectDir: args.projectDir,
       inputMode: args.inputMode,
+      ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+      ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
     },
     io,
     {

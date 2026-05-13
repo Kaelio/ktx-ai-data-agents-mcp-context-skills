@@ -44,7 +44,15 @@ function makePromptAdapter(options: {
   const passwordValues = [...(options.passwordValues ?? [])];
   return {
     multiselect: vi.fn(async () => multiselectValues.shift() ?? ['postgres']),
-    select: vi.fn(async () => selectValues.shift() ?? 'finish'),
+    select: vi.fn(async ({ message }) => {
+      if (message.includes('How much database context should KTX build?')) {
+        const nextValue = selectValues[0];
+        return nextValue === 'fast' || nextValue === 'deep' || nextValue === 'back'
+          ? (selectValues.shift() ?? 'fast')
+          : 'fast';
+      }
+      return selectValues.shift() ?? 'finish';
+    }),
     text: vi.fn(async () => (textValues.length > 0 ? textValues.shift() : '')),
     password: vi.fn(async () => (passwordValues.length > 0 ? passwordValues.shift() : '')),
     cancel: vi.fn(),
@@ -283,6 +291,7 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       readonly: true,
+      context: { depth: 'fast' },
     });
   });
 
@@ -714,7 +723,7 @@ describe('setup databases step', () => {
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
     expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
-    expect(prompts.select).toHaveBeenNthCalledWith(2, {
+    expect(prompts.select).toHaveBeenNthCalledWith(3, {
       message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
@@ -786,9 +795,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(prompts.select).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(prompts.select).mock.calls[0]?.[0].message).toBe('How do you want to connect to PostgreSQL?');
-    expect(vi.mocked(prompts.select).mock.calls[1]?.[0].message).toBe('How do you want to connect to PostgreSQL?');
+    const selectMessages = vi.mocked(prompts.select).mock.calls.map(([options]) => options.message);
+    expect(selectMessages.filter((message) => message === 'How do you want to connect to PostgreSQL?')).toHaveLength(2);
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', expect.anything());
   });
 
@@ -1149,7 +1157,7 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       schemas: ['public'],
-      context: { queryHistory: { enabled: false } },
+      context: { queryHistory: { enabled: false }, depth: 'fast' },
       readonly: true,
     });
     expect(config.setup).toEqual({
@@ -1190,6 +1198,7 @@ describe('setup databases step', () => {
       driver: 'sqlite',
       path: './warehouse.sqlite',
       readonly: true,
+      context: { depth: 'fast' },
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
@@ -1502,12 +1511,24 @@ describe('setup databases step', () => {
         '    driver: postgres',
         '    url: env:DATABASE_URL',
         '    readonly: true',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        'scan:',
+        '  enrichment:',
+        '    mode: llm',
+        '    embeddings:',
+        '      backend: openai',
+        '      model: text-embedding-3-small',
+        '      dimensions: 1536',
         '',
       ].join('\n'),
       'utf-8',
     );
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['yes'] });
+    const prompts = makePromptAdapter({ selectValues: ['yes', 'deep'] });
     const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
 
     const result = await runKtxSetupDatabasesStep(
@@ -1536,6 +1557,12 @@ describe('setup databases step', () => {
         { value: 'back', label: 'Back' },
       ],
     });
+    expect(prompts.select).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        message: expect.stringContaining('How much database context should KTX build?'),
+      }),
+    );
     expect(historicSqlProbe).toHaveBeenCalledWith({
       projectDir: tempDir,
       connectionId: 'warehouse',
@@ -1549,6 +1576,7 @@ describe('setup databases step', () => {
           minExecutions: 5,
           filters: { dropTrivialProbes: true },
         },
+        depth: 'deep',
       },
     });
   });
@@ -1822,7 +1850,7 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('Missing database connection id');
   });
 
-  it('rejects reserved non-interactive database connection ids', async () => {
+  it('accepts former ingest subcommand names as non-interactive database connection ids', async () => {
     const io = makeIo();
 
     const result = await runKtxSetupDatabasesStep(
@@ -1836,12 +1864,18 @@ describe('setup databases step', () => {
         skipDatabases: false,
       },
       io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+      },
     );
 
-    expect(result.status).toBe('failed');
-    expect(io.stderr()).toContain(
-      '"replay" is reserved for the KTX ingest command namespace; choose a different connection id.',
-    );
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.replay).toMatchObject({
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    });
   });
 
   it('leaves setup incomplete when databases are skipped', async () => {

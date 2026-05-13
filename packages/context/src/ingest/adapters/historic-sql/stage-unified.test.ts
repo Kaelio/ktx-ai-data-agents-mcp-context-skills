@@ -237,6 +237,80 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     expect(patternsJson).toContain('[REDACTED]');
   });
 
+  it('limits staged table artifacts to configured enabled tables', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({
+          templateId: 'selected-qualified',
+          canonicalSql: 'select count(*) from orbit_analytics.int_active_contract_arr',
+        });
+        yield aggregate({
+          templateId: 'selected-unqualified',
+          canonicalSql: 'select count(*) from int_customer_health_signals',
+        });
+        yield aggregate({
+          templateId: 'unselected',
+          canonicalSql: 'select count(*) from orbit_raw.accounts',
+        });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map([
+        [
+          'selected-qualified',
+          {
+            tablesTouched: ['orbit_analytics.int_active_contract_arr'],
+            columnsByClause: { select: [], where: [], join: [], groupBy: [] },
+          },
+        ],
+        [
+          'selected-unqualified',
+          {
+            tablesTouched: ['int_customer_health_signals'],
+            columnsByClause: { select: [], where: [], join: [], groupBy: [] },
+          },
+        ],
+        [
+          'unselected',
+          {
+            tablesTouched: ['orbit_raw.accounts'],
+            columnsByClause: { select: [], where: [], join: [], groupBy: [] },
+          },
+        ],
+      ])),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: {
+        dialect: 'postgres',
+        enabledTables: [
+          'orbit_analytics.int_active_contract_arr',
+          'orbit_analytics.int_customer_health_signals',
+        ],
+      },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual([
+      'int_customer_health_signals.json',
+      'orbit_analytics.int_active_contract_arr.json',
+    ]);
+    const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
+    expect(manifest.touchedTableCount).toBe(2);
+    const patterns = await readJson<Record<string, any>>(stagedDir, 'patterns-input.json');
+    expect(patterns.templates.map((entry: any) => entry.id)).toEqual(['selected-qualified', 'selected-unqualified']);
+  });
+
   it('preserves full patterns audit input and writes bounded cross-table pattern shards', async () => {
     const stagedDir = await tempDir();
     const largeSql = `select * from public.orders o join public.customers c on c.id = o.customer_id where payload = '${'x'.repeat(8000)}'`;

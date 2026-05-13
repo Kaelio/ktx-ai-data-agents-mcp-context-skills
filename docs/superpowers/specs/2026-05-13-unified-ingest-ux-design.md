@@ -87,32 +87,27 @@ The command dispatches by connection driver:
 - `--all` runs database ingest targets first, then source ingest targets.
 
 The old `ktx ingest run --connection-id <id> --adapter <adapter>` command is
-not the primary public interface. The implementation plan can either remove it
-or move it under an advanced/debug namespace. Normal users configure and ingest
+removed from the public interface. Normal users configure and ingest
 connections, not adapters.
 
 `ktx scan` is no longer a documented public command. Database schema scanning
 continues as an internal phase of database ingest.
 
-Stored report inspection is separate from live context-build control.
-`ktx ingest status [runId]`, `ktx ingest replay <runId>`, and `--report-file`
-remain valid report-viewing surfaces unless the implementation plan replaces
-them with an equivalent status command. `ktx ingest watch` is no longer a normal
-public verb because `watch` conflicts with the foreground-only model. If a
-stored-report visual replay remains useful, expose it as `replay` or hide it
-under an advanced/debug namespace.
+Stored report inspection is separate from live context-build control. The
+public `ktx ingest` namespace has no subcommands, so `run`, `status`, `watch`,
+and `replay` are ordinary connection IDs:
 
-Any surviving `ktx ingest` subcommand reserves its command name as a connection
-id. In v1, `status` and `replay` are reserved when those report-viewing
-subcommands remain. `run` is also reserved while the old adapter-backed command
-exists anywhere under `ktx ingest`, even if it is hidden or advanced. `watch`
-is reserved until the live-watch command is removed or moved out of
-`ktx ingest`. Setup and config validation must reject a connection id that
-matches a reserved ingest subcommand with a clear message, such as:
-
-```text
-"status" is reserved for ktx ingest status; choose a different connection id.
+```bash
+ktx ingest run
+ktx ingest status
+ktx ingest watch
+ktx ingest replay
 ```
+
+No setup or config validation rejects those names. Old adapter-backed command
+shapes such as `ktx ingest run --connection-id warehouse --adapter
+live-database` fail through normal option parsing because `--connection-id` and
+`--adapter` are not public `ktx ingest` options.
 
 ## Database ingest depth
 
@@ -593,8 +588,6 @@ The implementation plan must decide these lower-level details:
 
 - Whether old `ktx scan` exits with an error, is hidden, or remains as a
   temporary undocumented debug command.
-- Whether old `ktx ingest run --connection-id ... --adapter ...` is removed,
-  hidden, or moved to `ktx dev ingest run`.
 - Whether internal artifact paths keep `raw-sources/<connection>/live-database`
   for the first implementation.
 - Whether setup needs a headless `--context-depth fast|deep` flag for CI.

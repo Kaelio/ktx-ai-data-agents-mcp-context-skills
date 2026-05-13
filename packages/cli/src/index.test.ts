@@ -628,6 +628,8 @@ describe('runKtxCli', () => {
         inputMode: 'disabled',
         depth: 'fast',
         queryHistory: 'default',
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'never',
       },
       testIo.io,
     );
@@ -653,6 +655,8 @@ describe('runKtxCli', () => {
         inputMode: 'auto',
         depth: 'deep',
         queryHistory: 'default',
+        cliVersion: '0.0.0-private',
+        runtimeInstallPolicy: 'prompt',
       },
       testIo.io,
     );
@@ -673,25 +677,34 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toMatch(/option '--(deep|fast)' cannot be used with option '--(fast|deep)'/);
   });
 
-  it.each([
-    { argv: ['ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'] },
-    { argv: ['ingest', 'run', '--help'] },
-    { argv: ['ingest', 'status'] },
-    { argv: ['ingest', 'status', 'run-1', '--json', '--no-input'] },
-    { argv: ['ingest', 'watch'] },
-    { argv: ['ingest', 'watch', '--help'] },
-    { argv: ['ingest', 'replay', 'run-1'] },
-    { argv: ['ingest', 'replay', '--help'] },
-    { argv: ['--project-dir', '/tmp/project', 'ingest', 'status', 'run-1'] },
-  ])('rejects removed ingest subcommand $argv', async ({ argv }) => {
-    const testIo = makeIo();
-    const publicIngest = vi.fn(async () => 0);
+  it.each(['run', 'status', 'watch', 'replay'])(
+    'routes former ingest subcommand name "%s" as a connection id',
+    async (connectionId) => {
+      const testIo = makeIo();
+      const publicIngest = vi.fn(async () => 0);
 
-    await expect(runKtxCli(argv, testIo.io, { publicIngest })).resolves.toBe(1);
+      await expect(
+        runKtxCli(['--project-dir', '/tmp/project', 'ingest', connectionId, '--no-input'], testIo.io, {
+          publicIngest,
+        }),
+      ).resolves.toBe(0);
 
-    expect(testIo.stderr()).toMatch(/unknown command|error:/);
-    expect(publicIngest).not.toHaveBeenCalled();
-  });
+      expect(publicIngest).toHaveBeenCalledWith(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: connectionId,
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'default',
+          cliVersion: '0.0.0-private',
+          runtimeInstallPolicy: 'never',
+        },
+        testIo.io,
+      );
+    },
+  );
 
   it('rejects standalone demo commands', async () => {
     const testIo = makeIo();
@@ -746,7 +759,7 @@ describe('runKtxCli', () => {
     expect(publicIngest).not.toHaveBeenCalled();
   });
 
-  it('rejects removed ingest run at the top level and under dev', async () => {
+  it('rejects old adapter-backed ingest flags at the top level and under dev', async () => {
     const rootRunIo = makeIo();
     const devRunIo = makeIo();
     const publicIngest = vi.fn(async () => 0);
@@ -762,7 +775,7 @@ describe('runKtxCli', () => {
       }),
     ).resolves.toBe(1);
     expect(publicIngest).not.toHaveBeenCalled();
-    expect(rootRunIo.stderr()).toMatch(/unknown command|error:/);
+    expect(rootRunIo.stderr()).toMatch(/unknown option '--connection-id'|error:/);
     expect(devRunIo.stderr()).toMatch(/unknown command|error:/);
   });
 
@@ -770,7 +783,6 @@ describe('runKtxCli', () => {
     const doctor = vi.fn(async () => 0);
     const doctorIo = makeIo();
     const ingestRunIo = makeIo();
-    const ingestReplayHelpIo = makeIo();
 
     await expect(runKtxCli(['dev', 'doctor', 'setup', '--json', '--no-input'], doctorIo.io, { doctor })).resolves.toBe(1);
     await expect(
@@ -795,12 +807,10 @@ describe('runKtxCli', () => {
         {},
       ),
     ).resolves.toBe(1);
-    await expect(runKtxCli(['ingest', 'replay', '--help'], ingestReplayHelpIo.io)).resolves.toBe(1);
 
     expect(doctor).not.toHaveBeenCalled();
     expect(doctorIo.stderr()).toMatch(/unknown command|error:/);
-    expect(ingestRunIo.stderr()).toMatch(/unknown command|error:/);
-    expect(ingestReplayHelpIo.stderr()).toMatch(/unknown command|error:/);
+    expect(ingestRunIo.stderr()).toMatch(/unknown option '--connection-id'|error:/);
   });
 
   it('dispatches public connection through the existing connection implementation', async () => {
@@ -1055,17 +1065,20 @@ describe('runKtxCli', () => {
     );
   });
 
-  it('rejects reserved setup database connection ids before dispatch', async () => {
+  it('dispatches setup database connection ids that match former ingest subcommand names', async () => {
     const testIo = makeIo();
     const setup = vi.fn(async () => 0);
 
     await expect(
       runKtxCli(['setup', '--new-database-connection-id', 'status', '--no-input'], testIo.io, { setup }),
-    ).resolves.toBe(1);
+    ).resolves.toBe(0);
 
-    expect(setup).not.toHaveBeenCalled();
-    expect(testIo.stderr()).toContain(
-      '"status" is reserved for the KTX ingest command namespace; choose a different connection id.',
+    expect(setup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        databaseConnectionId: 'status',
+      }),
+      testIo.io,
     );
   });
 

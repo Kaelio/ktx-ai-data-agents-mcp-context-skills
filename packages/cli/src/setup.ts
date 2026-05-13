@@ -680,6 +680,8 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             inputMode: args.inputMode,
             forcePrompt: forcePromptSteps.has('context') || runOnly === 'context',
             allowEmpty: true,
+            cliVersion: args.cliVersion,
+            runtimeInstallPolicy: setupRuntimeInstallPolicy(args),
           },
           io,
         );

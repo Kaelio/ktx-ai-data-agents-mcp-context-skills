@@ -150,8 +150,8 @@ function writeRuntimeChecks(io: KtxCliIo, checks: ManagedPythonRuntimeDoctorChec
   }
 }
 
-function hasRuntimeCheckFailures(checks: ManagedPythonRuntimeDoctorCheck[]): boolean {
-  return checks.some((check) => check.status === 'fail');
+function hasRuntimeStatusFailure(status: ManagedPythonRuntimeStatus): boolean {
+  return status.kind !== 'ready';
 }
 
 export async function runKtxRuntime(
@@ -203,7 +203,7 @@ export async function runKtxRuntime(
         writeStatus(io, status);
         writeRuntimeChecks(io, checks);
       }
-      return hasRuntimeCheckFailures(checks) ? 1 : 0;
+      return hasRuntimeStatusFailure(status) ? 1 : 0;
     }
     const _exhaustive: never = args;
     return _exhaustive;

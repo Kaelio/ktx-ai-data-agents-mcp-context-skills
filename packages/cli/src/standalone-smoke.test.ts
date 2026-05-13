@@ -135,7 +135,7 @@ describe('standalone built ktx CLI smoke', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('rejects removed low-level ingest run through the built binary', async () => {
+  it('rejects old low-level ingest flags through the built binary', async () => {
     const projectDir = join(tempDir, 'project');
 
     const init = await runSetupNewProject(projectDir);
@@ -151,7 +151,7 @@ describe('standalone built ktx CLI smoke', () => {
       'fake',
     ]);
     expect(run).toMatchObject({ code: 1, stdout: '' });
-    expect(run.stderr).toContain("unknown command 'run'");
+    expect(run.stderr).toContain("unknown option '--connection-id'");
   });
 
   it('rejects the removed agent command through the built binary', async () => {

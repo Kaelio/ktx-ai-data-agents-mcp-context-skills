@@ -146,7 +146,7 @@ describe('dev Commander tree', () => {
     expect(doctor).not.toHaveBeenCalled();
   });
 
-  it('rejects removed adapter-backed ingest run and keeps it out of ingest help', async () => {
+  it('rejects old adapter-backed ingest flags through public option parsing and keeps run out of ingest help', async () => {
     const helpIo = makeIo();
     const runIo = makeIo();
     const publicIngest = vi.fn(async () => 0);
@@ -161,7 +161,7 @@ describe('dev Commander tree', () => {
     ).resolves.toBe(1);
 
     expect(helpIo.stdout()).not.toMatch(/^  run\s/m);
-    expect(runIo.stderr()).toMatch(/unknown command|error:/);
+    expect(runIo.stderr()).toMatch(/unknown option '--connection-id'|error:/);
     expect(publicIngest).not.toHaveBeenCalled();
   });
 
@@ -181,7 +181,7 @@ describe('dev Commander tree', () => {
     expect(io.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('rejects top-level ingest run through the removed low-level ingest registration', async () => {
+  it('rejects old adapter-backed top-level ingest flags without low-level ingest registration', async () => {
     const io = makeIo();
     const publicIngest = vi.fn(async () => 0);
 
@@ -204,6 +204,6 @@ describe('dev Commander tree', () => {
     ).resolves.toBe(1);
 
     expect(publicIngest).not.toHaveBeenCalled();
-    expect(io.stderr()).toMatch(/unknown command|error:/);
+    expect(io.stderr()).toMatch(/unknown option '--connection-id'|error:/);
   });
 });

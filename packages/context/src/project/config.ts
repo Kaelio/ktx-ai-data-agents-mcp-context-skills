@@ -112,25 +112,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const RESERVED_INGEST_CONNECTION_IDS = new Map([
-  ['status', 'the KTX ingest command namespace'],
-  ['replay', 'the KTX ingest command namespace'],
-  ['run', 'the KTX ingest command namespace'],
-  ['watch', 'the KTX ingest command namespace'],
-]);
-
-export function reservedKtxIngestConnectionIdMessage(connectionId: string): string | null {
-  const command = RESERVED_INGEST_CONNECTION_IDS.get(connectionId);
-  return command ? `"${connectionId}" is reserved for ${command}; choose a different connection id.` : null;
-}
-
-export function assertKtxConnectionIdIsNotReserved(connectionId: string): void {
-  const message = reservedKtxIngestConnectionIdMessage(connectionId);
-  if (message) {
-    throw new Error(message);
-  }
-}
-
 function stringArray(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) {
     return fallback;
@@ -507,9 +488,6 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
   const parsedConnections = isRecord(parsed.connections)
     ? (parsed.connections as Record<string, KtxProjectConnectionConfig>)
     : defaults.connections;
-  for (const connectionId of Object.keys(parsedConnections)) {
-    assertKtxConnectionIdIsNotReserved(connectionId);
-  }
 
   return {
     project: project.trim(),

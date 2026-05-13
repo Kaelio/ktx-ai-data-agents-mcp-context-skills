@@ -552,6 +552,84 @@ describe('runContextBuild', () => {
     expect(io.stdout()).not.toContain('BoundPool');
   });
 
+  it('renders localhost SQL analysis refusal as a runtime failure during query history', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { depth: 'deep', queryHistory: { enabled: true } } },
+    });
+    const executeTarget = vi.fn(async (target, _args, targetIo) => {
+      targetIo.stderr.write('connect ECONNREFUSED 127.0.0.1:8765\n');
+      return {
+        connectionId: target.connectionId,
+        driver: target.driver,
+        steps: [
+          { operation: 'database-schema', status: 'done' },
+          { operation: 'query-history', status: 'failed', detail: 'warehouse failed at query-history.' },
+          { operation: 'source-ingest', status: 'skipped' },
+          { operation: 'memory-update', status: 'skipped' },
+        ],
+      } satisfies KtxPublicIngestTargetResult;
+    });
+
+    const result = await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toEqual({ exitCode: 1 });
+    expect(io.stdout()).toContain(
+      'KTX could not reach the local SQL analysis runtime while processing query history for warehouse.',
+    );
+    expect(io.stdout()).toContain('connection refused (ECONNREFUSED)');
+    expect(io.stdout()).toContain('Retry: ktx setup --project-dir /tmp/project');
+    expect(io.stdout()).not.toContain('KTX lost its connection to PostgreSQL');
+  });
+
+  it('uses captured query-history stderr instead of generic failed-at detail', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { depth: 'deep', queryHistory: { enabled: true } } },
+    });
+    const executeTarget = vi.fn(async (target, _args, targetIo) => {
+      targetIo.stdout.write('KTX scan completed\n');
+      targetIo.stdout.write('Mode: enriched\n');
+      targetIo.stderr.write('Missing bundled Python runtime manifest: /tmp/assets/python/manifest.json\n');
+      targetIo.stderr.write('In a source checkout, build the local runtime assets with: pnpm run artifacts:build\n');
+      targetIo.stderr.write('Then retry the runtime-backed KTX command.\n');
+      return {
+        connectionId: target.connectionId,
+        driver: target.driver,
+        steps: [
+          { operation: 'database-schema', status: 'done' },
+          {
+            operation: 'query-history',
+            status: 'failed',
+            detail:
+              'warehouse failed at query-history. Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history',
+          },
+          { operation: 'source-ingest', status: 'skipped' },
+          { operation: 'memory-update', status: 'skipped' },
+        ],
+      } satisfies KtxPublicIngestTargetResult;
+    });
+
+    const result = await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled', entrypoint: 'ingest' },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(result).toEqual({ exitCode: 1 });
+    expect(io.stdout()).toContain('Missing bundled Python runtime manifest: /tmp/assets/python/manifest.json.');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
+    expect(io.stdout()).not.toContain('warehouse failed at query-history');
+    expect(io.stdout().match(/Retry: /g)).toHaveLength(1);
+  });
+
   it('renders a friendly network failure when target execution throws', async () => {
     const io = makeIo();
     const project = projectWithConnections({

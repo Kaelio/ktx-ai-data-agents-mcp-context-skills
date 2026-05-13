@@ -55,10 +55,6 @@ type CommandPathNode = CommandWithGlobalOptions & {
 const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status']);
 const REMOVED_COMMAND_PATHS = new Set([
   'scan',
-  'ingest run',
-  'ingest status',
-  'ingest watch',
-  'ingest replay',
   'wiki read',
   'wiki write',
 ]);

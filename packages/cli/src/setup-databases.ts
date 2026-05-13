@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
-  assertKtxConnectionIdIsNotReserved,
   type KtxProjectConnectionConfig,
   loadKtxProject,
   markKtxSetupStateStepComplete,
@@ -17,6 +16,7 @@ import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnection } from './connection.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxScan } from './scan.js';
+import { applySetupDatabaseContextDepth } from './setup-database-context-depth.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
 import {
   createKtxSetupPromptAdapter,
@@ -232,7 +232,6 @@ function assertSafeDatabaseConnectionId(connectionId: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
     throw new Error(`Unsafe connection id: ${connectionId}`);
   }
-  assertKtxConnectionIdIsNotReserved(connectionId);
 }
 
 function historicSqlConfigRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> | null {
@@ -1498,10 +1497,45 @@ async function applyHistoricSqlConfigToExistingConnection(input: {
     prompts: input.prompts,
   });
   if (withHistoricSql === 'back') return 'back';
-  await writeConnectionConfig({
+  const withContextDepth = await maybeApplyContextDepthConfig({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
     connection: withHistoricSql,
+    args: input.args,
+    prompts: input.prompts,
+  });
+  if (withContextDepth === 'back') return 'back';
+  await writeConnectionConfig({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    connection: withContextDepth,
+  });
+}
+
+async function maybeApplyContextDepthConfig(input: {
+  projectDir: string;
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+}): Promise<KtxProjectConnectionConfig | 'back'> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  return await applySetupDatabaseContextDepth({
+    project: {
+      ...project,
+      config: {
+        ...project.config,
+        connections: {
+          ...project.config.connections,
+          [input.connectionId]: input.connection,
+        },
+      },
+    },
+    connection: input.connection,
+    args: {
+      inputMode: input.args.inputMode === 'disabled' || input.args.databaseUrl ? 'disabled' : input.args.inputMode,
+    },
+    prompts: input.prompts,
   });
 }
 
@@ -1850,10 +1884,22 @@ export async function runKtxSetupDatabasesStep(
           returnToDriverSelection = true;
           break;
         }
-        await writeConnectionConfig({
+        const withContextDepth = await maybeApplyContextDepthConfig({
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
           connection: withHistoricSql,
+          args,
+          prompts,
+        });
+        if (withContextDepth === 'back') {
+          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+          returnToDriverSelection = true;
+          break;
+        }
+        await writeConnectionConfig({
+          projectDir: args.projectDir,
+          connectionId: connectionChoice.connectionId,
+          connection: withContextDepth,
         });
       } else {
         const existing = project.config.connections[connectionChoice.connectionId];
@@ -1863,10 +1909,22 @@ export async function runKtxSetupDatabasesStep(
           returnToDriverSelection = true;
           break;
         }
-        await writeConnectionConfig({
+        const withContextDepth = await maybeApplyContextDepthConfig({
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
           connection: withHistoricSql,
+          args,
+          prompts,
+        });
+        if (withContextDepth === 'back') {
+          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+          returnToDriverSelection = true;
+          break;
+        }
+        await writeConnectionConfig({
+          projectDir: args.projectDir,
+          connectionId: connectionChoice.connectionId,
+          connection: withContextDepth,
         });
       }
 
@@ -1919,10 +1977,22 @@ export async function runKtxSetupDatabasesStep(
             returnToDriverSelection = true;
             break;
           }
-          await writeConnectionConfig({
+          const withContextDepth = await maybeApplyContextDepthConfig({
             projectDir: args.projectDir,
             connectionId: connectionChoice.connectionId,
             connection: withHistoricSql,
+            args,
+            prompts,
+          });
+          if (withContextDepth === 'back') {
+            if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+            returnToDriverSelection = true;
+            break;
+          }
+          await writeConnectionConfig({
+            projectDir: args.projectDir,
+            connectionId: connectionChoice.connectionId,
+            connection: withContextDepth,
           });
         }
       }

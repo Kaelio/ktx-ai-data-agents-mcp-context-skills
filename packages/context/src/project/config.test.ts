@@ -2,15 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { buildDefaultKtxProjectConfig, parseKtxProjectConfig, serializeKtxProjectConfig } from './config.js';
 
 describe('KTX project config', () => {
-  it.each(['status', 'replay', 'run', 'watch'])('rejects reserved ingest connection id "%s"', (connectionId) => {
-    expect(() =>
+  it.each(['status', 'replay', 'run', 'watch'])('accepts former ingest subcommand name "%s" as a connection id', (connectionId) => {
+    expect(
       parseKtxProjectConfig(`
 project: reserved-test
 connections:
   ${connectionId}:
     driver: postgres
 `),
-    ).toThrow(`"${connectionId}" is reserved for the KTX ingest command namespace`);
+    ).toMatchObject({
+      connections: {
+        [connectionId]: { driver: 'postgres' },
+      },
+    });
   });
 
   it('builds the default standalone project config', () => {
