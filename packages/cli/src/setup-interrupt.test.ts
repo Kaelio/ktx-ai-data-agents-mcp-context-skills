@@ -17,9 +17,11 @@ function makeTracker(ctrlCValues: boolean[]): SetupInterruptTracker {
 
 describe('setup interrupt confirmation', () => {
   const originalIsTTY = process.stdin.isTTY;
+  const originalRef = process.stdin.ref;
 
   afterEach(() => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: originalIsTTY });
+    Object.defineProperty(process.stdin, 'ref', { configurable: true, value: originalRef });
   });
 
   it('fails before opening a prompt when interactive setup has no tty', async () => {
@@ -31,6 +33,26 @@ describe('setup interrupt confirmation', () => {
     );
 
     expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it('refs stdin before opening a real interactive prompt', async () => {
+    const calls: string[] = [];
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
+    Object.defineProperty(process.stdin, 'ref', {
+      configurable: true,
+      value: vi.fn(() => {
+        calls.push('ref');
+        return process.stdin;
+      }),
+    });
+    const prompt = vi.fn(async () => {
+      calls.push('prompt');
+      return 'continued';
+    });
+
+    await expect(withSetupInterruptConfirmation(prompt)).resolves.toBe('continued');
+
+    expect(calls).toEqual(['ref', 'prompt']);
   });
 
   it('asks before exiting on Ctrl+C and reruns the active prompt when declined', async () => {

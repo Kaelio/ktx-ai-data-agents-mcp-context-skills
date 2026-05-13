@@ -311,6 +311,14 @@ describe('setup sources step', () => {
     ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
 
     expect(pickNotionRootPages).toHaveBeenCalledOnce();
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: 'Which Notion pages should KTX ingest?',
+      options: [
+        { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
+        { value: 'all_accessible', label: 'All pages the integration can access' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
     expect((await readConfig()).connections['notion-main']).toMatchObject({
       driver: 'notion',
       auth_token_ref: 'env:NOTION_TOKEN',

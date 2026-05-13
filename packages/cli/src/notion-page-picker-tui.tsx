@@ -331,7 +331,7 @@ export async function renderNotionPickerTui(
     return result;
   } catch (error) {
     io.stderr.write(
-      `Notion picker requires a TTY. Use --no-input --root-page-id <UUID> for scripted mode. ${sanitizeNotionPickerTuiError(error)}\n`,
+      `Notion picker requires a TTY. Use --no-input --notion-root-page-id <UUID> for scripted mode. ${sanitizeNotionPickerTuiError(error)}\n`,
     );
     return { kind: 'quit' };
   }

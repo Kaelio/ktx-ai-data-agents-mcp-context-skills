@@ -1270,7 +1270,7 @@ async function promptForInteractiveSource(
       const crawlMode = await prompts.select({
         message: 'Which Notion pages should KTX ingest?',
         options: [
-          { value: 'selected_roots', label: 'Specific pages and their subpages (you\'ll paste page IDs)' },
+          { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
           { value: 'all_accessible', label: 'All pages the integration can access' },
           { value: 'back', label: 'Back' },
         ],

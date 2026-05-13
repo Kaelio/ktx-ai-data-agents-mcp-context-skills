@@ -378,7 +378,7 @@ describe('renderNotionPickerTui', () => {
         },
       ),
     ).resolves.toEqual({ kind: 'quit' });
-    expect(stderr).toContain('Use --no-input --root-page-id <UUID> for scripted mode');
+    expect(stderr).toContain('Use --no-input --notion-root-page-id <UUID> for scripted mode');
     expect(stderr).not.toContain('secret');
   });
 });
