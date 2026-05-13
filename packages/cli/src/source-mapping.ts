@@ -3,8 +3,9 @@ import {
   DEFAULT_METABASE_CLIENT_CONFIG,
   DefaultLookerConnectionClientFactory,
   DefaultMetabaseConnectionClientFactory,
+  KtxYamlMetabaseSourceStateReader,
   LocalLookerRuntimeStore,
-  LocalMetabaseSourceStateReader,
+  LocalMetabaseDiscoveryCache,
   computeLookerMappingDrift,
   computeMetabaseMappingDrift,
   discoverLookerConnections,
@@ -15,6 +16,7 @@ import {
   validateLookerMappings,
   validateMappingPhysicalMatch,
   type LookerMappingClient,
+  type LocalMetabaseMappingListRow,
   type MetabaseRuntimeClient,
 } from '@ktx/context/ingest';
 import { type KtxLocalProject, ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
@@ -92,9 +94,7 @@ function targetPhysicalInfo(project: KtxLocalProject, connectionId: string) {
   };
 }
 
-function renderMapping(
-  row: Awaited<ReturnType<LocalMetabaseSourceStateReader['listDatabaseMappings']>>[number],
-): string {
+function renderMapping(row: LocalMetabaseMappingListRow): string {
   const name = row.metabaseDatabaseName ?? 'unhydrated';
   const target = row.targetConnectionId ?? '[unmapped]';
   return `${row.metabaseDatabaseId} -> ${target} (${name}, sync: ${row.syncEnabled ? 'on' : 'off'}, source: ${
@@ -165,7 +165,8 @@ export async function runKtxSourceMapping(
     }
 
     assertMetabaseConnection(project, args.connectionId);
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+    const store = new KtxYamlMetabaseSourceStateReader(project, { discoveryCache });
 
     if (args.command === 'list') {
       const rows = await store.listDatabaseMappings(args.connectionId);
@@ -185,7 +186,7 @@ export async function runKtxSourceMapping(
         );
         const drift = computeMetabaseMappingDrift({ currentMappings: existing, discovered });
         if (args.autoAccept) {
-          await store.refreshDiscoveredDatabases({ connectionId: args.connectionId, discovered });
+          await discoveryCache.refreshDiscoveredDatabases({ connectionId: args.connectionId, discovered });
         }
         io.stdout.write(`Discovery: ${discovered.length} ${discovered.length === 1 ? 'database' : 'databases'}\n`);
         io.stdout.write(`Unmapped discovered: ${drift.unmappedDiscovered.length}\n`);

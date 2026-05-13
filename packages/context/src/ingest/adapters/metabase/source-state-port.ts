@@ -9,6 +9,8 @@ export interface MetabaseSourceStateMapping {
   metabaseDatabaseId: number;
   metabaseDatabaseName: string | null;
   metabaseEngine: string | null;
+  metabaseHost?: string | null;
+  metabaseDbName?: string | null;
   targetConnectionId: string | null;
   syncEnabled: boolean;
 }

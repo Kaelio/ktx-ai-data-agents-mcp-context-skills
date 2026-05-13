@@ -14,7 +14,7 @@ export interface WarehouseCatalogServiceDeps {
   fileStore: KtxFileStorePort;
 }
 
-export interface WarehouseColumnDetail extends KtxSchemaColumn {
+interface WarehouseColumnDetail extends KtxSchemaColumn {
   descriptions: Record<string, string>;
   rowCount: number | null;
   nullCount: number | null;

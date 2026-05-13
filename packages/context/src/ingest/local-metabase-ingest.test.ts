@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { AgentRunnerService } from '../agent/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initKtxProject, type KtxLocalProject } from '../project/index.js';
-import { LocalMetabaseSourceStateReader } from './adapters/metabase/local-source-state-store.js';
+import { LocalMetabaseDiscoveryCache } from './adapters/metabase/local-source-state-store.js';
 import { getLocalIngestStatus, runLocalMetabaseIngest } from './local-ingest.js';
 import type { ChunkResult, FetchContext, SourceAdapter } from './types.js';
 
@@ -94,33 +94,19 @@ describe('runLocalMetabaseIngest', () => {
   });
 
   async function seedMetabaseState(): Promise<void> {
-    const store = new LocalMetabaseSourceStateReader({ dbPath: join(tempDir, '.ktx', 'db.sqlite') });
-    await store.replaceSourceState({
-      connectionId: 'prod-metabase',
+    project.config.connections['prod-metabase'].mappings = {
+      databaseMappings: { '1': 'warehouse_a', '2': 'warehouse_b' },
+      syncEnabled: { '1': true, '2': true },
       syncMode: 'ALL',
       defaultTagNames: ['ktx'],
-      selections: [],
-      mappings: [
-        {
-          metabaseDatabaseId: 1,
-          metabaseDatabaseName: 'Warehouse A',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'localhost',
-          metabaseDbName: 'a',
-          targetConnectionId: 'warehouse_a',
-          syncEnabled: true,
-          source: 'refresh',
-        },
-        {
-          metabaseDatabaseId: 2,
-          metabaseDatabaseName: 'Warehouse B',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'localhost',
-          metabaseDbName: 'b',
-          targetConnectionId: 'warehouse_b',
-          syncEnabled: true,
-          source: 'refresh',
-        },
+      selections: { collections: [], items: [] },
+    };
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: join(tempDir, '.ktx', 'db.sqlite') });
+    await discoveryCache.refreshDiscoveredDatabases({
+      connectionId: 'prod-metabase',
+      discovered: [
+        { id: 1, name: 'Warehouse A', engine: 'postgres', host: 'localhost', dbName: 'a' },
+        { id: 2, name: 'Warehouse B', engine: 'postgres', host: 'localhost', dbName: 'b' },
       ],
     });
   }
@@ -151,22 +137,10 @@ describe('runLocalMetabaseIngest', () => {
   });
 
   it('throws before runner work when there are no sync-enabled mapped rows', async () => {
-    const store = new LocalMetabaseSourceStateReader({ dbPath: join(tempDir, '.ktx', 'db.sqlite') });
-    await store.replaceSourceState({
-      connectionId: 'prod-metabase',
-      mappings: [
-        {
-          metabaseDatabaseId: 1,
-          metabaseDatabaseName: 'Warehouse A',
-          metabaseEngine: 'postgres',
-          metabaseHost: null,
-          metabaseDbName: null,
-          targetConnectionId: null,
-          syncEnabled: true,
-          source: 'refresh',
-        },
-      ],
-    });
+    project.config.connections['prod-metabase'].mappings = {
+      databaseMappings: { '1': null },
+      syncEnabled: { '1': true },
+    };
 
     await expect(
       runLocalMetabaseIngest({
@@ -178,59 +152,28 @@ describe('runLocalMetabaseIngest', () => {
     ).rejects.toThrow('no sync-enabled mappings with a target connection');
   });
 
-  it('throws with refresh guidance for unhydrated sync-enabled rows', async () => {
-    const store = new LocalMetabaseSourceStateReader({ dbPath: join(tempDir, '.ktx', 'db.sqlite') });
-    await store.replaceSourceState({
-      connectionId: 'prod-metabase',
-      mappings: [
-        {
-          metabaseDatabaseId: 7,
-          metabaseDatabaseName: null,
-          metabaseEngine: null,
-          metabaseHost: null,
-          metabaseDbName: null,
-          targetConnectionId: 'warehouse_a',
-          syncEnabled: true,
-          source: 'ktx.yaml',
-        },
-      ],
+  it('seeds yaml-only Metabase mappings before the unhydrated fan-out preflight', async () => {
+    project.config.connections['prod-metabase'].mappings = {
+      databaseMappings: { '1': 'warehouse_a' },
+      syncEnabled: { '1': true },
+    };
+
+    const result = await runLocalMetabaseIngest({
+      project,
+      adapters: [new FakeMetabaseSourceAdapter()],
+      metabaseConnectionId: 'prod-metabase',
+      agentRunner: new TestAgentRunner(),
+      jobIdFactory: () => 'metabase-child-1',
     });
 
-    await expect(
-      runLocalMetabaseIngest({
-        project,
-        adapters: [new FakeMetabaseSourceAdapter()],
+    expect(result.status).toBe('all_succeeded');
+    expect(result.children).toMatchObject([
+      {
         metabaseConnectionId: 'prod-metabase',
-        agentRunner: new TestAgentRunner(),
-      }),
-    ).rejects.toThrow('run `ktx setup` and reconfigure prod-metabase');
-  });
-
-  it('seeds yaml-only Metabase mappings before the unhydrated fan-out preflight', async () => {
-    const project = {
-      projectDir: tempDir,
-      config: {
-        ingest: { adapters: ['metabase'] },
-        connections: {
-          'prod-metabase': {
-            driver: 'metabase',
-            mappings: {
-              databaseMappings: { '1': 'prod-warehouse' },
-              syncEnabled: { '1': true },
-            },
-          },
-          'prod-warehouse': { driver: 'postgres', url: 'postgresql://readonly@db.test/analytics' },
-        },
+        metabaseDatabaseId: 1,
+        targetConnectionId: 'warehouse_a',
       },
-    } as never;
-
-    await expect(
-      runLocalMetabaseIngest({
-        project,
-        adapters: [new FakeMetabaseSourceAdapter()],
-        metabaseConnectionId: 'prod-metabase',
-      }),
-    ).rejects.toThrow('run `ktx setup` and reconfigure prod-metabase');
+    ]);
   });
 
   it('rejects source-dir uploads through the Metabase fan-out runner', async () => {
@@ -266,15 +209,15 @@ describe('runLocalMetabaseIngest', () => {
   it('captures fetch-time child failures and continues later mappings', async () => {
     await seedMetabaseState();
     project.config.connections.warehouse_c = { driver: 'postgres', url: 'postgres://localhost/c' };
-    const store = new LocalMetabaseSourceStateReader({ dbPath: join(tempDir, '.ktx', 'db.sqlite') });
-    await store.upsertDatabaseMapping({
-      connectionId: 'prod-metabase',
-      metabaseDatabaseId: 3,
-      targetConnectionId: 'warehouse_c',
-      syncEnabled: true,
-      source: 'cli',
-    });
-    await store.refreshDiscoveredDatabases({
+    project.config.connections['prod-metabase'].mappings = {
+      databaseMappings: { '1': 'warehouse_a', '2': 'warehouse_b', '3': 'warehouse_c' },
+      syncEnabled: { '1': true, '2': true, '3': true },
+      syncMode: 'ALL',
+      defaultTagNames: ['ktx'],
+      selections: { collections: [], items: [] },
+    };
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: join(tempDir, '.ktx', 'db.sqlite') });
+    await discoveryCache.refreshDiscoveredDatabases({
       connectionId: 'prod-metabase',
       discovered: [
         { id: 1, name: 'Warehouse A', engine: 'postgres', host: 'localhost', dbName: 'a' },

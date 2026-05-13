@@ -240,17 +240,15 @@ export {
   createLocalMetabaseSourceAdapter,
   metabaseRuntimeConfigFromLocalConnection,
 } from './adapters/metabase/local-metabase.adapter.js';
-export { LocalMetabaseSourceStateReader } from './adapters/metabase/local-source-state-store.js';
+export {
+  KtxYamlMetabaseSourceStateReader,
+  LocalMetabaseDiscoveryCache,
+} from './adapters/metabase/local-source-state-store.js';
 export type {
-  ClearLocalMetabaseMappingsInput,
+  LocalMetabaseDiscoveredDatabaseRow,
   LocalMetabaseMappingListRow,
   LocalMetabaseMappingSource,
-  LocalMetabaseSourceStateMappingInput,
-  ReplaceLocalMetabaseSourceStateInput,
   RefreshLocalMetabaseDiscoveredDatabasesInput,
-  SetLocalMetabaseMappingSyncEnabledInput,
-  SetLocalMetabaseSyncStateInput,
-  UpsertLocalMetabaseDatabaseMappingInput,
 } from './adapters/metabase/local-source-state-store.js';
 export { metabaseLocalConnectionIdSchema, metabasePullConfigSchema, parseMetabasePullConfig } from './adapters/metabase/types.js';
 export type { MetabasePullConfig, MetabaseSyncMode } from './adapters/metabase/types.js';

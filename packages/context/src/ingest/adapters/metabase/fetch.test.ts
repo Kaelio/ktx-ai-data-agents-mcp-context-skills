@@ -36,6 +36,12 @@ function makeMockClient() {
     ),
     getCollectionTree: vi.fn().mockResolvedValue([{ id: 5, name: 'Orders Team', parent_id: null, children: [] }]),
     getCollectionItems: vi.fn().mockResolvedValue([]),
+    getDatabase: vi.fn().mockResolvedValue({
+      id: 42,
+      name: 'Analytics',
+      engine: 'postgres',
+      details: { host: 'db.example.test', dbname: 'analytics' },
+    }),
     cleanup: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -253,7 +259,7 @@ describe('fetchMetabaseBundle', () => {
     ).rejects.toThrow(/mapping.*does not point to connection/);
   });
 
-  it('throws when the matching mapping has a null metabaseDatabaseName (unhydrated)', async () => {
+  it('hydrates missing mapping metadata from Metabase instead of requiring a prior refresh', async () => {
     sourceStateReader.getSourceState.mockResolvedValue({
       syncMode: 'ALL',
       selections: [],
@@ -268,15 +274,22 @@ describe('fetchMetabaseBundle', () => {
       ],
       defaultTagNames: [],
     });
-    await expect(
-      fetchMetabaseBundle({
-        pullConfig: { metabaseConnectionId, metabaseDatabaseId: 42 },
-        stagedDir,
-        ctx: makeFetchContext(),
-        clientFactory,
-        sourceStateReader,
-      }),
-    ).rejects.toThrow(/unhydrated.*ktx setup/);
+    await fetchMetabaseBundle({
+      pullConfig: { metabaseConnectionId, metabaseDatabaseId: 42 },
+      stagedDir,
+      ctx: makeFetchContext(),
+      clientFactory,
+      sourceStateReader,
+    });
+
+    expect(clientFactory.__client.getDatabase).toHaveBeenCalledWith(42);
+    const databaseFile = JSON.parse(await readFile(join(stagedDir, 'databases/42.json'), 'utf-8'));
+    expect(databaseFile).toMatchObject({
+      metabaseDatabaseId: 42,
+      metabaseDatabaseName: 'Analytics',
+      metabaseEngine: 'postgres',
+      targetConnectionId,
+    });
   });
 
   it('skips cards whose getResolvedSql returns null and records them in unresolved-cards.json', async () => {

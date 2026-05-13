@@ -6,12 +6,6 @@ import { EntityDetailsTool } from './entity-details.tool.js';
 import { SqlExecutionTool } from './sql-execution.tool.js';
 import { WarehouseCatalogService } from './warehouse-catalog.service.js';
 
-export { DiscoverDataTool } from './discover-data.tool.js';
-export { EntityDetailsTool } from './entity-details.tool.js';
-export { SqlExecutionTool } from './sql-execution.tool.js';
-export { WarehouseCatalogService } from './warehouse-catalog.service.js';
-export type { RawSchemaHit, TableDetail, WarehouseColumnDetail } from './warehouse-catalog.service.js';
-
 export function createWarehouseVerificationTools(deps: {
   connections: SlConnectionCatalogPort;
   fallbackFileStore: KtxFileStorePort;
