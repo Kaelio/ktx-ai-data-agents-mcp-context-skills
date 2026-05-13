@@ -43,12 +43,12 @@ export interface KtxSetupDatabasesArgs {
   databaseConnectionId?: string;
   databaseUrl?: string;
   databaseSchemas: string[];
-  enableHistoricSql?: boolean;
-  disableHistoricSql?: boolean;
-  historicSqlWindowDays?: number;
-  historicSqlMinExecutions?: number;
-  historicSqlServiceAccountPatterns?: string[];
-  historicSqlRedactionPatterns?: string[];
+  enableQueryHistory?: boolean;
+  disableQueryHistory?: boolean;
+  queryHistoryWindowDays?: number;
+  queryHistoryMinExecutions?: number;
+  queryHistoryServiceAccountPatterns?: string[];
+  queryHistoryRedactionPatterns?: string[];
   skipDatabases: boolean;
 }
 
@@ -301,7 +301,7 @@ function historicSqlProbeFailureLines(error: unknown): string[] {
   if (error instanceof Error && error.name === 'HistoricSqlVersionUnsupportedError') {
     return [`  FAIL ${error.message}`];
   }
-  return [`  FAIL Historic SQL probe failed: ${error instanceof Error ? error.message : String(error)}`];
+  return [`  FAIL Query history probe failed: ${error instanceof Error ? error.message : String(error)}`];
 }
 
 async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Promise<KtxSetupHistoricSqlProbeResult> {
@@ -831,23 +831,23 @@ async function maybeApplyHistoricSqlConfig(input: {
 }): Promise<KtxProjectConnectionConfig | 'back'> {
   const dialect = HISTORIC_SQL_DIALECT_BY_DRIVER[input.driver];
   if (!dialect) {
-    if (input.args.enableHistoricSql === true) {
+    if (input.args.enableQueryHistory === true) {
       throw new Error(
-        `Historic SQL setup is only supported for Snowflake, BigQuery, and Postgres, not ${driverLabel(input.driver)}.`,
+        `Query history setup is only supported for Snowflake, BigQuery, and Postgres, not ${driverLabel(input.driver)}.`,
       );
     }
     return input.connection;
   }
 
-  let enabled = input.args.enableHistoricSql === true;
-  if (input.args.disableHistoricSql === true) {
+  let enabled = input.args.enableQueryHistory === true;
+  if (input.args.disableQueryHistory === true) {
     enabled = false;
-  } else if (input.args.inputMode !== 'disabled' && input.args.enableHistoricSql !== true && dialect !== 'postgres') {
+  } else if (input.args.inputMode !== 'disabled' && input.args.enableQueryHistory !== true && dialect !== 'postgres') {
     const choice = await input.prompts.select({
-      message: `Enable Historic SQL query-history ingest for this ${driverLabel(input.driver)} connection?`,
+      message: `Enable query-history ingest for this ${driverLabel(input.driver)} connection?`,
       options: [
-        { value: 'yes', label: 'Enable Historic SQL' },
-        { value: 'no', label: 'Do not enable Historic SQL' },
+        { value: 'yes', label: 'Enable query history' },
+        { value: 'no', label: 'Do not enable query history' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -855,7 +855,7 @@ async function maybeApplyHistoricSqlConfig(input: {
     enabled = choice === 'yes';
   }
 
-  if (dialect === 'postgres' && input.args.enableHistoricSql !== true && input.args.disableHistoricSql !== true) {
+  if (dialect === 'postgres' && input.args.enableQueryHistory !== true && input.args.disableQueryHistory !== true) {
     return input.connection;
   }
 
@@ -869,20 +869,20 @@ async function maybeApplyHistoricSqlConfig(input: {
   const common: Record<string, unknown> = {
     ...existing,
     enabled: true,
-    filters: historicSqlFiltersForSetup(input.args.historicSqlServiceAccountPatterns),
+    filters: historicSqlFiltersForSetup(input.args.queryHistoryServiceAccountPatterns),
   };
 
   if (dialect === 'postgres') {
     return withQueryHistoryConfig(input.connection, {
       ...common,
-      minExecutions: input.args.historicSqlMinExecutions ?? 5,
+      minExecutions: input.args.queryHistoryMinExecutions ?? 5,
     });
   }
 
   return withQueryHistoryConfig(input.connection, {
     ...common,
-    windowDays: input.args.historicSqlWindowDays ?? 90,
-    redactionPatterns: input.args.historicSqlRedactionPatterns ?? [],
+    windowDays: input.args.queryHistoryWindowDays ?? 90,
+    redactionPatterns: input.args.queryHistoryRedactionPatterns ?? [],
   });
 }
 
@@ -1095,20 +1095,6 @@ function summarizeScanChanges(output: string): string {
   }
 
   return 'no table changes';
-}
-
-function shortenScanReportPath(path: string): string {
-  const normalized = path.trim();
-  const liveDatabaseMarker = '/live-database/';
-  const markerIndex = normalized.indexOf(liveDatabaseMarker);
-  if (markerIndex === -1) {
-    return normalized;
-  }
-  const filename = normalized.split('/').at(-1);
-  if (!filename) {
-    return normalized;
-  }
-  return `${normalized.slice(0, markerIndex + liveDatabaseMarker.length)}.../${filename}`;
 }
 
 function writeSetupSection(io: KtxCliIo, title: string, lines: string[]): void {
@@ -1467,7 +1453,7 @@ async function maybeRunHistoricSqlSetupProbe(input: {
     return;
   }
 
-  input.io.stdout.write('│  Historic SQL probe...\n');
+  input.io.stdout.write('│  Query history probe...\n');
   const probe = input.deps.historicSqlProbe ?? defaultHistoricSqlProbe;
   const result = await probe({
     projectDir: input.projectDir,
@@ -1488,7 +1474,7 @@ async function applyHistoricSqlConfigToExistingConnection(input: {
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
 }): Promise<'back' | void> {
-  if (input.args.enableHistoricSql !== true && input.args.disableHistoricSql !== true) {
+  if (input.args.enableQueryHistory !== true && input.args.disableQueryHistory !== true) {
     return;
   }
 
@@ -1557,8 +1543,8 @@ async function validateAndScanConnection(input: {
     io: input.io,
     deps: input.deps,
   });
-  writeSetupSection(input.io, `Scanning ${input.connectionId}`, [
-    'Running structural scan…',
+  writeSetupSection(input.io, `Building schema context for ${input.connectionId}`, [
+    'Running fast database ingest…',
   ]);
   let scanIo = createBufferedCommandIo();
   let scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
@@ -1567,11 +1553,11 @@ async function validateAndScanConnection(input: {
     if (nativeSqliteDetail) {
       writePrefixedLines(
         (chunk) => input.io.stderr.write(chunk),
-        [
-          `Structural scan failed for ${input.connectionId}.`,
-          'Native SQLite is built for a different Node.js ABI.',
-          `Detail: ${nativeSqliteDetail}`,
-          'Rebuilding Native SQLite with pnpm run native:rebuild…',
+          [
+            `Fast database ingest failed for ${input.connectionId}.`,
+            'Native SQLite is built for a different Node.js ABI.',
+            `Detail: ${nativeSqliteDetail}`,
+            'Rebuilding Native SQLite with pnpm run native:rebuild…',
         ].join('\n'),
       );
       const rebuildNativeSqlite = input.deps.rebuildNativeSqlite ?? defaultRebuildNativeSqlite;
@@ -1579,7 +1565,7 @@ async function validateAndScanConnection(input: {
       if (rebuildCode === 0) {
         writePrefixedLines(
           (chunk) => input.io.stderr.write(chunk),
-          'Native SQLite rebuild complete. Retrying structural scan…',
+          'Native SQLite rebuild complete. Retrying fast database ingest…',
         );
         const retryScanIo = createBufferedCommandIo();
         scanCode = await scanConnection(input.projectDir, input.connectionId, retryScanIo);
@@ -1590,10 +1576,10 @@ async function validateAndScanConnection(input: {
           (chunk) => input.io.stderr.write(chunk),
           [
             rebuildCode === 0
-              ? `Structural scan still failed for ${input.connectionId} after rebuilding Native SQLite.`
+              ? `Fast database ingest still failed for ${input.connectionId} after rebuilding Native SQLite.`
               : `Native SQLite rebuild failed for ${input.connectionId}.`,
             'Fix: pnpm run native:rebuild',
-            `Retry: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+            `Retry: ktx ingest ${input.connectionId} --project-dir ${input.projectDir} --fast`,
           ].join('\n'),
         );
       }
@@ -1602,8 +1588,8 @@ async function validateAndScanConnection(input: {
       writePrefixedLines(
         (chunk) => input.io.stderr.write(chunk),
         [
-          `Structural scan failed for ${input.connectionId}.`,
-          `Debug command: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+          `Fast database ingest failed for ${input.connectionId}.`,
+          `Debug command: ktx ingest ${input.connectionId} --project-dir ${input.projectDir} --fast --debug`,
         ].join('\n'),
       );
     }
@@ -1612,17 +1598,13 @@ async function validateAndScanConnection(input: {
     }
   }
   const scanOutput = scanIo.stdoutText();
-  const reportPath = readOutputValue(scanOutput, 'Report');
   writeSetupSection(
     input.io,
-    `Scan complete for ${input.connectionId}`,
-    [
-      `Changes: ${summarizeScanChanges(scanOutput)}`,
-      ...(reportPath ? [`Report: ${shortenScanReportPath(reportPath)}`] : []),
-    ],
+    `Schema context complete for ${input.connectionId}`,
+    [`Changes: ${summarizeScanChanges(scanOutput)}`],
   );
   writeSetupSection(input.io, 'Primary source ready', [
-    `${input.connectionId} · ${driverDisplay} · structural scan complete`,
+    `${input.connectionId} · ${driverDisplay} · schema context complete`,
   ]);
   return true;
 }

@@ -954,23 +954,17 @@ describe('setup databases step', () => {
       ].join('\n'),
     );
     expect(io.stdout()).not.toContain('Tables: 2');
-    expect(io.stdout()).toContain(
-      [
-        '◇  Scanning postgres-warehouse',
-        '│  Running structural scan…',
-        '│',
-      ].join('\n'),
-    );
-    expect(io.stdout()).toContain(
-      [
-        '◇  Scan complete for postgres-warehouse',
-        '│  Changes: 2 new tables',
-        '│  Report: raw-sources/postgres-warehouse/live-database/.../scan-report.json',
-        '│',
-        '◇  Primary source ready',
-        '│  postgres-warehouse · PostgreSQL · structural scan complete',
-      ].join('\n'),
-    );
+    expect(io.stdout()).toContain('◇  Building schema context for postgres-warehouse');
+    expect(io.stdout()).toContain('│  Running fast database ingest…');
+    expect(io.stdout()).toContain('◇  Schema context complete for postgres-warehouse');
+    expect(io.stdout()).toContain('│  Changes: 2 new tables');
+    expect(io.stdout()).toContain('◇  Primary source ready');
+    expect(io.stdout()).toContain('│  postgres-warehouse · PostgreSQL · schema context complete');
+    expect(io.stdout()).not.toContain('Scanning postgres-warehouse');
+    expect(io.stdout()).not.toContain('Scan complete for postgres-warehouse');
+    expect(io.stdout()).not.toContain('structural scan complete');
+    expect(io.stdout()).not.toContain('Report: raw-sources');
+    expect(io.stdout()).not.toContain('live-database');
     expect(io.stdout()).not.toContain('[5%] Preparing scan');
     expect(io.stdout()).not.toContain('What changed');
     expect(io.stdout()).not.toContain('Next:');
@@ -1278,7 +1272,8 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('│  Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('Fix: pnpm run native:rebuild');
-    expect(io.stderr()).toContain(`Retry: ktx scan --project-dir ${tempDir} warehouse`);
+    expect(io.stderr()).toContain(`Retry: ktx ingest warehouse --project-dir ${tempDir} --fast`);
+    expect(io.stderr()).not.toContain('ktx scan');
     expect(io.stderr()).not.toContain('npm rebuild');
     expect(io.stderr()).not.toMatch(/^Native SQLite is built for a different Node.js ABI\./m);
   });
@@ -1337,7 +1332,7 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('◇  Scan complete for warehouse');
   });
 
-  it('writes Historic SQL config for supported Snowflake databases after validation succeeds', async () => {
+  it('writes query history config for supported Snowflake databases after validation succeeds', async () => {
     const io = makeIo();
     const result = await runKtxSetupDatabasesStep(
       {
@@ -1346,10 +1341,10 @@ describe('setup databases step', () => {
         databaseDrivers: ['snowflake'],
         databaseConnectionId: 'snowflake',
         databaseSchemas: [],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 30,
-        historicSqlServiceAccountPatterns: ['^svc_'],
-        historicSqlRedactionPatterns: ['(?i)secret'],
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 30,
+        queryHistoryServiceAccountPatterns: ['^svc_'],
+        queryHistoryRedactionPatterns: ['(?i)secret'],
         skipDatabases: false,
       },
       io.io,
@@ -1391,7 +1386,7 @@ describe('setup databases step', () => {
     expect(config.ingest.adapters).toEqual([]);
   });
 
-  it('writes Postgres Historic SQL config with minExecutions and ignores window/redaction output', async () => {
+  it('writes Postgres query history config with minExecutions and ignores window/redaction output', async () => {
     const io = makeIo();
     const result = await runKtxSetupDatabasesStep(
       {
@@ -1401,11 +1396,11 @@ describe('setup databases step', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: ['public'],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 30,
-        historicSqlMinExecutions: 12,
-        historicSqlServiceAccountPatterns: ['^svc_'],
-        historicSqlRedactionPatterns: ['(?i)secret'],
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 30,
+        queryHistoryMinExecutions: 12,
+        queryHistoryServiceAccountPatterns: ['^svc_'],
+        queryHistoryRedactionPatterns: ['(?i)secret'],
         skipDatabases: false,
       },
       io.io,
@@ -1451,11 +1446,12 @@ describe('setup databases step', () => {
     expect(configText).not.toMatch(/^\s+adapters:/m);
     expect(config.ingest.adapters).toEqual([]);
     expect(config.ingest.workUnits.maxConcurrency).toBe(6);
-    expect(io.stdout()).toContain('Historic SQL probe...');
+    expect(io.stdout()).toContain('Query history probe...');
+    expect(io.stdout()).not.toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements ready');
   });
 
-  it('writes Historic SQL config for supported existing database connections', async () => {
+  it('writes query history config for supported existing database connections', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -1478,8 +1474,8 @@ describe('setup databases step', () => {
         inputMode: 'disabled',
         databaseConnectionIds: ['analytics'],
         databaseSchemas: [],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 45,
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 45,
         skipDatabases: false,
       },
       io.io,
@@ -1511,7 +1507,7 @@ describe('setup databases step', () => {
     expect(config.ingest.adapters).toEqual([]);
   });
 
-  it('enables Historic SQL on an existing Postgres connection', async () => {
+  it('enables query history on an existing Postgres connection', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -1533,8 +1529,8 @@ describe('setup databases step', () => {
         inputMode: 'disabled',
         databaseConnectionIds: ['warehouse'],
         databaseSchemas: [],
-        enableHistoricSql: true,
-        historicSqlMinExecutions: 8,
+        enableQueryHistory: true,
+        queryHistoryMinExecutions: 8,
         skipDatabases: false,
       },
       io.io,
@@ -1635,7 +1631,7 @@ describe('setup databases step', () => {
     });
   });
 
-  it('prints a non-blocking Postgres Historic SQL probe failure after connection test succeeds', async () => {
+  it('prints a non-blocking Postgres query history probe failure after connection test succeeds', async () => {
     const io = makeIo();
     const historicSqlProbe = vi.fn(async () => ({
       ok: false,
@@ -1654,7 +1650,7 @@ describe('setup databases step', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: [],
-        enableHistoricSql: true,
+        enableQueryHistory: true,
         skipDatabases: false,
       },
       io.io,
@@ -1673,12 +1669,13 @@ describe('setup databases step', () => {
         dialect: 'postgres',
       }),
     );
-    expect(io.stdout()).toContain('Historic SQL probe...');
+    expect(io.stdout()).toContain('Query history probe...');
+    expect(io.stdout()).not.toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements extension is not installed');
     expect(io.stdout()).toContain('Setup written; first ingest run will fail until fixed.');
   });
 
-  it('does not run the Historic SQL probe when the regular connection test fails', async () => {
+  it('does not run the query history probe when the regular connection test fails', async () => {
     const io = makeIo();
     const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
 
@@ -1690,7 +1687,7 @@ describe('setup databases step', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: [],
-        enableHistoricSql: true,
+        enableQueryHistory: true,
         skipDatabases: false,
       },
       io.io,

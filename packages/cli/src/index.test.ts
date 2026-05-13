@@ -443,6 +443,18 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).not.toContain('--embedding-model');
     expect(testIo.stdout()).not.toContain('--embedding-dimensions');
     expect(testIo.stdout()).not.toContain('--embedding-base-url');
+    for (const expected of [
+      '--enable-query-history',
+      '--disable-query-history',
+      '--query-history-window-days',
+      '--query-history-min-executions',
+      '--query-history-service-account-pattern',
+      '--query-history-redaction-pattern',
+    ]) {
+      expect(testIo.stdout()).toContain(expected);
+    }
+    expect(testIo.stdout()).not.toContain('--enable-historic-sql');
+    expect(testIo.stdout()).not.toContain('--historic-sql-window-days');
     expect(testIo.stderr()).toBe('');
   });
 
@@ -1142,10 +1154,10 @@ describe('runKtxCli', () => {
           'env:DATABASE_URL',
           '--database-schema',
           'public',
-          '--enable-historic-sql',
-          '--historic-sql-window-days',
+          '--enable-query-history',
+          '--query-history-window-days',
           '30',
-          '--historic-sql-min-executions',
+          '--query-history-min-executions',
           '12',
         ],
         setupIo.io,
@@ -1166,9 +1178,9 @@ describe('runKtxCli', () => {
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: ['public'],
-        enableHistoricSql: true,
-        historicSqlWindowDays: 30,
-        historicSqlMinExecutions: 12,
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 30,
+        queryHistoryMinExecutions: 12,
         skipDatabases: false,
       }),
       setupIo.io,
@@ -1346,18 +1358,20 @@ describe('runKtxCli', () => {
     expect(setupIo.stderr()).toContain('Choose only one embedding credential source');
   });
 
-  it('rejects conflicting Historic SQL setup flags', async () => {
+  it('rejects conflicting query-history setup flags', async () => {
     const setup = vi.fn(async () => 0);
     const setupIo = makeIo();
 
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'setup', '--enable-historic-sql', '--disable-historic-sql'], setupIo.io, {
+      runKtxCli(['--project-dir', tempDir, 'setup', '--enable-query-history', '--disable-query-history'], setupIo.io, {
         setup,
       }),
     ).resolves.toBe(1);
 
     expect(setup).not.toHaveBeenCalled();
-    expect(setupIo.stderr()).toContain('Choose only one Historic SQL action');
+    expect(setupIo.stderr()).toContain(
+      'Choose only one query-history action: --enable-query-history or --disable-query-history.',
+    );
   });
 
   it('rejects the removed hidden agent command', async () => {
