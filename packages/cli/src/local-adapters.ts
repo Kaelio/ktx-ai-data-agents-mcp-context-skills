@@ -210,7 +210,7 @@ function createEphemeralPostgresHistoricSqlClient(project: KtxLocalProject, conn
   const connection = project.config.connections[connectionId] as KtxPostgresConnectionConfig | undefined;
   if (!isKtxPostgresConnectionConfig(connection)) {
     throw new Error(
-      `Historic SQL local ingest requires a Postgres connection, got ${String(connection?.driver ?? 'unknown')}`,
+      `Query history ingest requires a Postgres connection, got ${String(connection?.driver ?? 'unknown')}`,
     );
   }
   return {
@@ -232,7 +232,7 @@ function createEphemeralBigQueryHistoricSqlClient(project: KtxLocalProject, conn
   const connection = project.config.connections[connectionId] as KtxBigQueryConnectionConfig | undefined;
   if (!isKtxBigQueryConnectionConfig(connection)) {
     throw new Error(
-      `Historic SQL local ingest requires a BigQuery connection, got ${String(connection?.driver ?? 'unknown')}`,
+      `Query history ingest requires a BigQuery connection, got ${String(connection?.driver ?? 'unknown')}`,
     );
   }
   return {
@@ -263,7 +263,7 @@ async function createEphemeralSnowflakeHistoricSqlClient(
   const connection = project.config.connections[connectionId];
   if (!connectorModule.isKtxSnowflakeConnectionConfig(connection)) {
     throw new Error(
-      `Historic SQL local ingest requires a Snowflake connection, got ${String(connection?.driver ?? 'unknown')}`,
+      `Query history ingest requires a Snowflake connection, got ${String(connection?.driver ?? 'unknown')}`,
     );
   }
   return {
@@ -291,7 +291,7 @@ function bigQueryProjectId(connection: KtxBigQueryConnectionConfig, env: NodeJS.
   const resolved = raw.startsWith('env:') ? env[raw.slice('env:'.length)] ?? '' : raw;
   const parsed = JSON.parse(resolved) as { project_id?: unknown };
   if (typeof parsed.project_id !== 'string' || parsed.project_id.trim().length === 0) {
-    throw new Error('Historic SQL BigQuery connection requires credentials_json.project_id');
+    throw new Error('Query history BigQuery connection requires credentials_json.project_id');
   }
   return parsed.project_id;
 }
@@ -328,7 +328,7 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
   if (dialect === 'bigquery') {
     if (!isKtxBigQueryConnectionConfig(connection)) {
       throw new Error(
-        `Historic SQL local ingest requires a BigQuery connection, got ${String(connection?.driver ?? 'unknown')}`,
+        `Query history ingest requires a BigQuery connection, got ${String(connection?.driver ?? 'unknown')}`,
       );
     }
     return {

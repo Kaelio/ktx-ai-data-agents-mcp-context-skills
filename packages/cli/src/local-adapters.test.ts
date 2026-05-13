@@ -170,4 +170,34 @@ describe('CLI local ingest adapters', () => {
       'historic_sql_patterns',
     ]);
   });
+
+  it('uses query-history wording for public BigQuery capability errors', async () => {
+    await writeProject(
+      tempDir,
+      [
+        'project: warehouse',
+        'connections:',
+        '  bq:',
+        '    driver: bigquery',
+        '    readonly: true',
+        '    dataset_id: analytics',
+        '    credentials_json: "{}"',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+
+    expect(() =>
+      createKtxCliLocalIngestAdapters(project, {
+        historicSqlConnectionId: 'bq',
+        sqlAnalysis: sqlAnalysisStub(),
+      }),
+    ).toThrow('Query history BigQuery connection requires credentials_json.project_id');
+  });
 });

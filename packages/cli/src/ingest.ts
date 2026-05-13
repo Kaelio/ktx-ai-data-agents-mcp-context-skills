@@ -738,7 +738,7 @@ export async function runKtxIngest(
       throw new Error(
         args.runId
           ? `Local ingest run or report "${args.runId}" was not found`
-          : 'No local ingest reports were found. Run `ktx ingest run --connection-id <id> --adapter <adapter>` first.',
+          : 'No local ingest reports were found. Run `ktx ingest <connectionId>` first.',
       );
     }
     await writeReportRecord(report, args.outputMode, io, {
