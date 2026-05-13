@@ -48,16 +48,18 @@ describe('buildPublicIngestPlan', () => {
         {
           connectionId: 'warehouse',
           driver: 'postgres',
-          operation: 'scan',
-          debugCommand: 'ktx scan warehouse --debug',
-          steps: ['scan'],
+          operation: 'database-ingest',
+          debugCommand: 'ktx ingest warehouse --debug',
+          steps: ['database-schema'],
+          databaseDepth: 'fast',
+          queryHistory: { enabled: false },
         },
         {
           connectionId: 'docs',
           driver: 'notion',
           operation: 'source-ingest',
           adapter: 'notion',
-          debugCommand: 'ktx ingest run --connection-id docs --adapter notion --debug',
+          debugCommand: 'ktx ingest docs --debug',
           steps: ['source-ingest', 'memory-update'],
         },
         {
@@ -65,10 +67,11 @@ describe('buildPublicIngestPlan', () => {
           driver: 'metabase',
           operation: 'source-ingest',
           adapter: 'metabase',
-          debugCommand: 'ktx ingest run --connection-id prod_metabase --adapter metabase --debug',
+          debugCommand: 'ktx ingest prod_metabase --debug',
           steps: ['source-ingest', 'memory-update'],
         },
       ],
+      warnings: [],
     });
   });
 
@@ -80,6 +83,81 @@ describe('buildPublicIngestPlan', () => {
     );
   });
 
+  it('resolves database depth from flags, stored context, and defaults', () => {
+    const project = projectWithConnections({
+      fast_default: { driver: 'postgres' },
+      deep_default: { driver: 'postgres', context: { depth: 'deep' } },
+      docs: { driver: 'notion' },
+    });
+
+    expect(
+      buildPublicIngestPlan(project, {
+        projectDir: '/tmp/project',
+        targetConnectionId: 'fast_default',
+        all: false,
+        queryHistory: 'default',
+      }).targets[0],
+    ).toMatchObject({ connectionId: 'fast_default', databaseDepth: 'fast', queryHistory: { enabled: false } });
+
+    expect(
+      buildPublicIngestPlan(project, {
+        projectDir: '/tmp/project',
+        targetConnectionId: 'deep_default',
+        all: false,
+        queryHistory: 'default',
+      }).targets[0],
+    ).toMatchObject({ connectionId: 'deep_default', databaseDepth: 'deep' });
+
+    expect(
+      buildPublicIngestPlan(project, {
+        projectDir: '/tmp/project',
+        targetConnectionId: 'docs',
+        all: false,
+        depth: 'deep',
+        queryHistory: 'default',
+      }).warnings,
+    ).toEqual(['--deep affects database ingest only; ignoring it for docs.']);
+  });
+
+  it('upgrades effective depth when query history is explicitly enabled', () => {
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: false } } },
+    });
+
+    const plan = buildPublicIngestPlan(project, {
+      projectDir: '/tmp/project',
+      targetConnectionId: 'warehouse',
+      all: false,
+      depth: 'fast',
+      queryHistory: 'enabled',
+      queryHistoryWindowDays: 30,
+    });
+
+    expect(plan.targets[0]).toMatchObject({
+      connectionId: 'warehouse',
+      databaseDepth: 'deep',
+      queryHistory: { enabled: true, windowDays: 30, dialect: 'postgres' },
+    });
+    expect(plan.warnings).toEqual(['--query-history requires deep ingest; running warehouse with --deep.']);
+  });
+
+  it('warns and skips query history for unsupported database drivers', () => {
+    const project = projectWithConnections({ local: { driver: 'sqlite' } });
+
+    const plan = buildPublicIngestPlan(project, {
+      projectDir: '/tmp/project',
+      targetConnectionId: 'local',
+      all: false,
+      queryHistory: 'enabled',
+    });
+
+    expect(plan.targets[0]).toMatchObject({
+      connectionId: 'local',
+      databaseDepth: 'fast',
+      queryHistory: { enabled: false, unsupported: true },
+    });
+    expect(plan.warnings).toEqual(['--query-history is not supported for sqlite; running schema ingest for local.']);
+  });
 });
 
 describe('runKtxPublicIngest', () => {
