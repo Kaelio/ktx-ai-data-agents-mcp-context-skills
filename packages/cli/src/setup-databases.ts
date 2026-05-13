@@ -40,7 +40,6 @@ export interface KtxSetupDatabasesArgs {
   disableHistoricSql?: boolean;
   historicSqlWindowDays?: number;
   historicSqlMinExecutions?: number;
-  historicSqlMinCalls?: number;
   historicSqlServiceAccountPatterns?: string[];
   historicSqlRedactionPatterns?: string[];
   skipDatabases: boolean;
@@ -857,14 +856,13 @@ async function maybeApplyHistoricSqlConfig(input: {
     dialect,
     filters: historicSqlFiltersForSetup(input.args.historicSqlServiceAccountPatterns),
   };
-  delete common[['serviceAccount', 'UserPatterns'].join('')];
 
   if (dialect === 'postgres') {
     return {
       ...input.connection,
       historicSql: {
         ...common,
-        minExecutions: input.args.historicSqlMinExecutions ?? input.args.historicSqlMinCalls ?? 5,
+        minExecutions: input.args.historicSqlMinExecutions ?? 5,
       },
     };
   }

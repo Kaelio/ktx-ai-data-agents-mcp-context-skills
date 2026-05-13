@@ -23,7 +23,7 @@ interface EvictionDecisionRecord {
   rawPath: string;
   artifactKind: 'wiki' | 'sl';
   artifactKey: string;
-  action: 'removed' | 'retained_deprecated' | 'retained_supported';
+  action: 'removed';
   reason: string;
 }
 

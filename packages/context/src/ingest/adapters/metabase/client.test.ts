@@ -32,10 +32,7 @@ function nativeCard(query: string, templateTags: Record<string, MetabaseTemplate
     dataset_query: {
       type: 'native',
       database: 6,
-      native: {
-        query,
-        'template-tags': templateTags,
-      },
+      stages: [{ 'lib/type': 'mbql.stage/native', native: query, 'template-tags': templateTags }],
     },
   };
 }
@@ -318,7 +315,7 @@ describe('MetabaseClient.getResolvedSql', () => {
       dataset_query: {
         type: 'native',
         database: 6,
-        native: { query: 'SELECT a, b FROM base' },
+        stages: [{ 'lib/type': 'mbql.stage/native', native: 'SELECT a, b FROM base' }],
       },
     });
     const client = makeClient((client) => {

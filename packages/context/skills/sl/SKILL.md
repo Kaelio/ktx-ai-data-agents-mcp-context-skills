@@ -29,7 +29,8 @@ Enrich a manifest-backed table with measures, computed columns, joins, and segme
 
 ```yaml
 name: fct_orders           # must match an existing manifest table
-description: "Overlay adding business measures to the orders fact table."
+descriptions:
+  user: "Overlay adding business measures to the orders fact table."
 measures:
   - name: total_revenue
     expr: sum(amount)

@@ -46,15 +46,15 @@ const llmBoundaryPatterns = [
     pattern: /\bembedMany\b/,
   },
   {
-    label: 'legacy context LLM provider port',
+    label: 'context-owned LLM provider port',
     pattern: /\bLlmProviderPort\b/,
   },
   {
-    label: 'legacy scan LLM provider port',
+    label: 'scan-owned LLM provider port',
     pattern: /\bKtxScanLlmPort\b/,
   },
   {
-    label: 'legacy gateway LLM provider helper',
+    label: 'context-owned gateway LLM provider helper',
     pattern: /\bcreateGatewayLlmProvider\b/,
   },
 ];

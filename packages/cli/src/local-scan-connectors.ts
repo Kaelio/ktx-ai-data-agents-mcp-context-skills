@@ -6,7 +6,7 @@ const SUPPORTED_DRIVERS = 'sqlite, postgres, mysql, clickhouse, sqlserver, bigqu
 function bigQueryMaxBytesBilled(
   connection: KtxLocalProject['config']['connections'][string],
 ): number | string | undefined {
-  const raw = connection.maxBytesBilled ?? connection.max_bytes_billed;
+  const raw = connection.max_bytes_billed;
   if (typeof raw === 'number') {
     return Number.isFinite(raw) && raw > 0 ? raw : undefined;
   }

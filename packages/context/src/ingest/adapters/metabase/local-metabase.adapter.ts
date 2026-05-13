@@ -37,9 +37,9 @@ export function metabaseRuntimeConfigFromLocalConnection(
     );
   }
 
-  const apiUrl = stringField(connection.api_url) ?? stringField(connection.apiUrl) ?? stringField(connection.url);
-  const literalApiKey = stringField(connection.api_key) ?? stringField(connection.apiKey);
-  const apiKeyRef = stringField(connection.api_key_ref) ?? stringField(connection.apiKeyRef);
+  const apiUrl = stringField(connection.api_url);
+  const literalApiKey = stringField(connection.api_key);
+  const apiKeyRef = stringField(connection.api_key_ref);
   const apiKey = literalApiKey ?? (apiKeyRef ? resolveKtxConfigReference(apiKeyRef, env) : null);
 
   if (!apiUrl) {

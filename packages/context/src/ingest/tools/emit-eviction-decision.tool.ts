@@ -22,7 +22,7 @@ export function createEmitEvictionDecisionTool(deps: EmitEvictionDecisionDeps) {
       rawPath: z.string().min(1),
       artifactKind: z.enum(['sl', 'wiki']),
       artifactKey: z.string().min(1),
-      action: z.enum(['removed', 'retained_deprecated']),
+      action: z.literal('removed'),
       reason: z.string().min(1),
     }),
     execute: async (input): Promise<string> => {

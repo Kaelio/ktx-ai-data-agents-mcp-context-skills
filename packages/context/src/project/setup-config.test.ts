@@ -62,7 +62,7 @@ describe('KTX setup config helpers', () => {
     });
   });
 
-  it('combines legacy config setup steps with local state for reads', () => {
+  it('combines config setup steps with local state for reads', () => {
     const config = {
       ...buildDefaultKtxProjectConfig('warehouse'),
       setup: {

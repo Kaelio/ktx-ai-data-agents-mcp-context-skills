@@ -716,7 +716,6 @@ describe('runKtxIngest', () => {
                 patternPagesWritten: 30,
                 stalePatternPagesMarked: 2,
                 archivedPatternPages: 3,
-                legacyPagesDeleted: 4,
               },
               errors: [],
               warnings: [],
@@ -750,7 +749,7 @@ describe('runKtxIngest', () => {
 
     expect(io.stderr()).toBe('');
     expect(io.stdout()).toContain('Adapter: historic-sql\n');
-    expect(io.stdout()).toContain('Saved memory: 39 wiki, 57 SL\n');
+    expect(io.stdout()).toContain('Saved memory: 35 wiki, 57 SL\n');
   });
 
   it('returns a non-zero code when local ingest reports failed work units', async () => {

@@ -1,6 +1,7 @@
 name: orders
 table: public.orders
-description: Orders placed through the storefront.
+descriptions:
+  user: Orders placed through the storefront.
 grain:
   - id
 columns:

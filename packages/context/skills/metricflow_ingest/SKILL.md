@@ -177,7 +177,8 @@ semantic_models:
 # KTX overlay at <connId>/orders.yaml:
 # <!-- from: raw-sources/.../models/orders.yml#L1-10 -->
 name: orders
-description: Order fact table.
+descriptions:
+  user: Order fact table.
 measures:
   - {name: order_count, expr: "count(order_id)"}
   - {name: gross_amount, expr: "sum(amount)"}
@@ -221,7 +222,8 @@ metrics:
 # <!-- from: raw-sources/.../models/orders_ext.yml#L1-8 -->
 # <!-- from: raw-sources/.../metrics/orders_final.yml#L1-10 -->
 name: orders_ext
-description: Extended order fact including refund handling; `revenue` = gross - refund.
+descriptions:
+  user: Extended order fact including refund handling; `revenue` = gross - refund.
 measures:
   - {name: order_count, expr: "count(order_id)"}
   - {name: gross_amount, expr: "sum(amount)"}

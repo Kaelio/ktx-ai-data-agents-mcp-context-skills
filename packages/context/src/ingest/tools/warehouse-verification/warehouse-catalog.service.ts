@@ -14,7 +14,7 @@ export interface WarehouseCatalogServiceDeps {
   fileStore: KtxFileStorePort;
 }
 
-export interface WarehouseColumnDetail extends KtxSchemaColumn {
+interface WarehouseColumnDetail extends KtxSchemaColumn {
   descriptions: Record<string, string>;
   rowCount: number | null;
   nullCount: number | null;
@@ -88,9 +88,8 @@ interface ConnectionCatalog {
 }
 
 type TableWithDescriptions = KtxSchemaTable & {
-  description?: string | null;
   descriptions?: Record<string, string>;
-  columns: Array<KtxSchemaColumn & { description?: string | null; descriptions?: Record<string, string> }>;
+  columns: Array<KtxSchemaColumn & { descriptions?: Record<string, string> }>;
 };
 
 function normalize(value: string | null | undefined): string {
@@ -220,14 +219,14 @@ function matchedOnTable(table: TableWithDescriptions, query: string): RawSchemaH
   if (normalize(table.comment).includes(q)) {
     return 'comment';
   }
-  if (normalize(firstDescription(table.descriptions) ?? table.description).includes(q)) {
+  if (normalize(firstDescription(table.descriptions)).includes(q)) {
     return 'description';
   }
   return null;
 }
 
 function matchedOnColumn(
-  column: KtxSchemaColumn & { description?: string | null; descriptions?: Record<string, string> },
+  column: KtxSchemaColumn & { descriptions?: Record<string, string> },
   query: string,
 ): 'name' | 'comment' | 'description' | null {
   const q = normalize(query);
@@ -240,7 +239,7 @@ function matchedOnColumn(
   if (normalize(column.comment).includes(q)) {
     return 'comment';
   }
-  if (normalize(firstDescription(column.descriptions) ?? column.description).includes(q)) {
+  if (normalize(firstDescription(column.descriptions)).includes(q)) {
     return 'description';
   }
   return null;
@@ -285,13 +284,10 @@ export class WarehouseCatalogService {
       display: formatDisplay(catalog.driver, table),
       kind: table.kind,
       comment: table.comment,
-      description: table.description ?? firstDescription(table.descriptions),
+      description: firstDescription(table.descriptions),
       rowCount: profileTable?.rowCount ?? table.estimatedRows ?? null,
       columns: table.columns.map((rawColumn) => {
-        const column = rawColumn as KtxSchemaColumn & {
-          description?: string | null;
-          descriptions?: Record<string, string>;
-        };
+        const column = rawColumn as KtxSchemaColumn & { descriptions?: Record<string, string> };
         const profileColumn =
           profileColumns[columnKey(table, column.name)] ??
           Object.entries(profileColumns).find(

@@ -132,11 +132,11 @@ function uniqueSorted(values: number[]): number[] {
 }
 
 function resolveMetabaseUrl(connection: KtxProjectConnectionConfig | undefined): string | undefined {
-  return stringField(connection?.api_url) ?? stringField(connection?.apiUrl) ?? stringField(connection?.url);
+  return stringField(connection?.api_url);
 }
 
 function resolveLiteralMetabaseApiKey(connection: KtxProjectConnectionConfig | undefined): string | undefined {
-  return stringField(connection?.api_key) ?? stringField(connection?.apiKey);
+  return stringField(connection?.api_key);
 }
 
 function listMetabaseConnectionIds(project: KtxLocalProject): string[] {

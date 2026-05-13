@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import YAML from 'yaml';
 import { rawSourcesDirForSync } from '../../raw-sources-paths.js';
@@ -20,7 +20,6 @@ export interface HistoricSqlProjectionResult {
   patternPagesWritten: number;
   stalePatternPagesMarked: number;
   archivedPatternPages: number;
-  legacyPagesDeleted: number;
   touchedSources: Array<{ connectionId: string; sourceName: string }>;
   warnings: string[];
 }
@@ -152,11 +151,6 @@ function isHistoricPatternPage(page: HistoricSqlPatternPage): boolean {
   );
 }
 
-function isLegacyQueryPage(page: HistoricSqlPatternPage): boolean {
-  const tags = Array.isArray(page.frontmatter.tags) ? page.frontmatter.tags : [];
-  return page.frontmatter.source === 'historic-sql' && tags.includes('query-pattern') && !tags.includes('pattern');
-}
-
 function isArchivedPatternPage(page: HistoricSqlPatternPage): boolean {
   const tags = Array.isArray(page.frontmatter.tags) ? page.frontmatter.tags : [];
   return tags.includes('archived');
@@ -228,7 +222,6 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
     patternPagesWritten: 0,
     stalePatternPagesMarked: 0,
     archivedPatternPages: 0,
-    legacyPagesDeleted: 0,
     touchedSources: [],
     warnings: [],
   };
@@ -331,11 +324,6 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
       'utf-8',
     );
     result.stalePatternPagesMarked += 1;
-  }
-
-  for (const page of allPages.filter(isLegacyQueryPage)) {
-    await rm(page.path, { force: true });
-    result.legacyPagesDeleted += 1;
   }
 
   return result;

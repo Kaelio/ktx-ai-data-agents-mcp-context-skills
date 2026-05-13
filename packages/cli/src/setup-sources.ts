@@ -544,8 +544,8 @@ function sourcePathFromFileRepoUrl(repoUrl: string, subpath?: string): string {
 }
 
 function repoAuthToken(connection: KtxProjectConnectionConfig | Record<string, unknown>): string | null {
-  const ref = stringField(connection.auth_token_ref) ?? stringField(connection.authTokenRef);
-  const literal = stringField(connection.authToken) ?? stringField(connection.auth_token);
+  const ref = stringField(connection.auth_token_ref);
+  const literal = stringField(connection.auth_token);
   return literal ?? resolveKtxConfigReference(ref, process.env) ?? null;
 }
 
@@ -563,8 +563,8 @@ async function collectYamlFilesRecursive(sourceRoot: string): Promise<Array<{ co
 }
 
 async function defaultValidateDbt(connection: KtxProjectConnectionConfig): Promise<SourceValidationResult> {
-  let sourceDir = stringField(connection.source_dir) ?? stringField(connection.sourceDir);
-  const repoUrl = stringField(connection.repo_url) ?? stringField(connection.repoUrl);
+  let sourceDir = stringField(connection.source_dir);
+  const repoUrl = stringField(connection.repo_url);
   if (!sourceDir && repoUrl?.startsWith('file:')) {
     sourceDir = sourcePathFromFileRepoUrl(repoUrl, stringField(connection.path));
   }
@@ -624,7 +624,7 @@ async function defaultValidateLooker(projectDir: string, connectionId: string): 
 }
 
 async function defaultValidateLookml(connection: KtxProjectConnectionConfig): Promise<SourceValidationResult> {
-  const repoUrl = stringField(connection.repoUrl) ?? stringField(connection.repo_url);
+  const repoUrl = stringField(connection.repoUrl);
   if (!repoUrl) {
     return { ok: false, message: 'LookML setup requires repoUrl.' };
   }

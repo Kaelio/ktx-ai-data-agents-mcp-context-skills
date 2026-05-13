@@ -14,7 +14,6 @@ import {
   getMetricflowAvailableColumnNames,
   mapCrossModelMetricToSource,
   resolveMetricflowSemanticModelSourceName,
-  toKebabCaseMetricflowName,
   type MetricflowHostTable,
   type MetricflowSemanticModelImportContext,
 } from './semantic-models.js';
@@ -129,16 +128,6 @@ export async function importMetricflowSemanticModels(
         { skipValidation: true },
       );
 
-      const legacyWarning = await legacyKebabSourceWarning(
-        semanticLayerService,
-        input.connectionId,
-        context.model.modelRef,
-        context.sourceName,
-      );
-      if (legacyWarning) {
-        warnings.push(legacyWarning);
-      }
-
       if (existing) {
         sourcesUpdated++;
       } else {
@@ -232,26 +221,6 @@ async function resolveManifestSource(
     return semanticLayerService.getManifestEntry(connectionId, matchedTableName);
   }
   return null;
-}
-
-async function legacyKebabSourceWarning(
-  semanticLayerService: MetricflowSemanticLayerWriter,
-  connectionId: string,
-  modelRef: string,
-  sourceName: string,
-): Promise<string | null> {
-  const kebabName = toKebabCaseMetricflowName(modelRef);
-  if (kebabName === sourceName) {
-    return null;
-  }
-  const legacy = await semanticLayerService.loadSource(connectionId, kebabName);
-  if (!legacy) {
-    return null;
-  }
-  return (
-    `MetricFlow sync: legacy kebab-case source '${kebabName}' still exists alongside the new source ` +
-    `'${sourceName}' (modelRef '${modelRef}'). Migrate persisted references before deleting the old file.`
-  );
 }
 
 async function repairSourcesAfterPartialImportFailures(input: {

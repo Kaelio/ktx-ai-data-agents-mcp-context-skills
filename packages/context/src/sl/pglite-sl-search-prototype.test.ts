@@ -10,7 +10,8 @@ import { searchLocalSlSourcesWithPglitePrototype } from './pglite-sl-search-prot
 
 const ORDERS_YAML = [
   'name: orders',
-  'description: Orders with paid revenue and refund status.',
+  'descriptions:',
+  '  user: Orders with paid revenue and refund status.',
   'table: public.orders',
   'grain:',
   '  - order_id',
@@ -29,7 +30,8 @@ const ORDERS_YAML = [
 
 const FINANCE_ORDERS_YAML = [
   'name: orders',
-  'description: Finance orders used for invoice reconciliation.',
+  'descriptions:',
+  '  user: Finance orders used for invoice reconciliation.',
   'table: finance.orders',
   'grain:',
   '  - order_id',
@@ -43,7 +45,8 @@ const FINANCE_ORDERS_YAML = [
 
 const CUSTOMERS_YAML = [
   'name: customers',
-  'description: Customer lifecycle accounts by region.',
+  'descriptions:',
+  '  user: Customer lifecycle accounts by region.',
   'table: public.customers',
   'grain:',
   '  - customer_id',

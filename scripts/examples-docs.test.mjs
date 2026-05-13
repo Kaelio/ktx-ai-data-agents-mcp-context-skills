@@ -128,7 +128,6 @@ describe('standalone example docs', () => {
           .join('|'),
       ),
     );
-    assert.doesNotMatch(readme, /--historic-sql-min-calls/);
   });
 
   it('lists every workspace package in the contributor docs', async () => {
