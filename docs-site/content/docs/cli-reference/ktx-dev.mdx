@@ -16,7 +16,7 @@ ktx dev <subcommand> [options]
 | Subcommand | Description |
 |-----------|-------------|
 | `init [directory]` | Initialize a Git-backed KTX project directory |
-| `runtime` | Install, start, stop, inspect, and prune the KTX-managed Python runtime |
+| `runtime` | Install, start, stop, and inspect the KTX-managed Python runtime |
 
 ## `dev init`
 
@@ -27,15 +27,14 @@ ktx dev <subcommand> [options]
 
 ## `dev runtime`
 
-`ktx dev runtime` supports `install`, `start`, `stop`, `status`, and `prune`.
+`ktx dev runtime` supports `install`, `start`, `stop`, and `status`.
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--feature <feature>` | Runtime feature level for `install`, `start`, and `status` (`core` or `local-embeddings`) | `core` |
+| `--feature <feature>` | Runtime feature level for `install` and `start` (`core` or `local-embeddings`) | `core` |
 | `--json` | Print JSON output for `status` | `false` |
-| `--yes` | Confirm runtime install or prune actions where supported | `false` |
+| `--yes` | Confirm runtime install actions where supported | `false` |
 | `--force` | Reinstall or restart where supported | `false` |
-| `--dry-run` | Preview runtime pruning without removing files | `false` |
 
 ## Examples
 
@@ -48,8 +47,6 @@ ktx dev runtime install --yes
 ktx dev runtime status
 ktx dev runtime start
 ktx dev runtime stop
-ktx dev runtime prune --dry-run
-ktx dev runtime prune --yes
 ```
 
 ## Common errors

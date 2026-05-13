@@ -192,8 +192,7 @@ describe('standalone example docs', () => {
     assert.match(packageArtifacts, /requires `uv` on `PATH`/);
     assert.match(packageArtifacts, /ktx dev runtime status/);
     assert.match(packageArtifacts, /ktx dev runtime status/);
-    assert.match(packageArtifacts, /ktx dev runtime prune --dry-run/);
-    assert.match(packageArtifacts, /ktx dev runtime prune --yes/);
+    assert.doesNotMatch(packageArtifacts, /ktx dev runtime prune/);
     assert.match(
       packageArtifacts,
       new RegExp(
@@ -226,8 +225,7 @@ describe('standalone example docs', () => {
     assert.match(readme, /requires `uv` on `PATH`/);
     assert.match(readme, /ktx dev runtime status/);
     assert.match(readme, /ktx dev runtime status/);
-    assert.match(readme, /ktx dev runtime prune --dry-run/);
-    assert.match(readme, /ktx dev runtime prune --yes/);
+    assert.doesNotMatch(readme, /ktx dev runtime prune/);
     assert.doesNotMatch(readme, /@ktx\/context/);
     assert.doesNotMatch(readme, /@ktx\/cli/);
     assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);

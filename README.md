@@ -152,8 +152,6 @@ ktx dev runtime install --yes
 ktx dev runtime status
 ktx dev runtime start
 ktx dev runtime stop
-ktx dev runtime prune --dry-run
-ktx dev runtime prune --yes
 ```
 
 The release artifact manifest contains the public npm tarball and the bundled `kaelio-ktx`

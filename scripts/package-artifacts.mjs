@@ -548,6 +548,15 @@ function parseJsonResult(label, result) {
   return JSON.parse(result.stdout);
 }
 
+function parseJsonResultWithExitCode(label, result, expectedCode) {
+  assert.equal(
+    result.code,
+    expectedCode,
+    label + ' failed with code ' + result.code + '\\nstdout:\\n' + result.stdout + '\\nstderr:\\n' + result.stderr,
+  );
+  return JSON.parse(result.stdout);
+}
+
 function parseJsonFailure(label, result) {
   assert.equal(result.code, 1, label + ' should fail with exit code 1');
   assert.equal(result.stdout, '', label + ' should not write stdout when failing');
@@ -594,9 +603,10 @@ try {
   requireSuccess('ktx public package version', version);
   requireOutput('ktx public package version', version, /@kaelio\\/ktx 0\\.1\\.0/);
 
-  const runtimeStatusBefore = parseJsonResult(
+  const runtimeStatusBefore = parseJsonResultWithExitCode(
     'ktx dev runtime status missing',
     await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'status', '--json']),
+    1,
   );
   assert.equal(runtimeStatusBefore.kind, 'missing');
   assert.equal(runtimeStatusBefore.layout.runtimeRoot, process.env.KTX_RUNTIME_ROOT);
@@ -888,27 +898,6 @@ try {
   daemonStarted = false;
   requireOutput('ktx dev runtime stop', runtimeStop, /Stopped KTX Python daemon/);
   process.stdout.write('ktx dev runtime daemon lifecycle verified\\n');
-
-  const staleRuntimeDir = join(process.env.KTX_RUNTIME_ROOT, '0.0.0');
-  await mkdir(staleRuntimeDir, { recursive: true });
-
-  const runtimePruneDryRun = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'prune', '--dry-run']);
-  requireSuccess('ktx dev runtime prune dry run', runtimePruneDryRun);
-  requireOutput('ktx dev runtime prune dry run', runtimePruneDryRun, /Stale KTX Python runtimes/);
-  requireOutput('ktx dev runtime prune dry run', runtimePruneDryRun, /0\\.0\\.0/);
-  await access(staleRuntimeDir);
-
-  const runtimePruneNeedsConfirmation = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'prune']);
-  assert.equal(runtimePruneNeedsConfirmation.code, 1, 'ktx dev runtime prune needs confirmation');
-  assert.equal(runtimePruneNeedsConfirmation.stdout, '', 'ktx dev runtime prune needs confirmation wrote stdout');
-  assert.match(runtimePruneNeedsConfirmation.stderr, /Refusing to prune without --yes/);
-
-  const runtimePruneConfirmed = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'prune', '--yes']);
-  requireSuccess('ktx dev runtime prune confirmed', runtimePruneConfirmed);
-  requireOutput('ktx dev runtime prune confirmed', runtimePruneConfirmed, /Removed stale KTX Python runtimes/);
-  requireOutput('ktx dev runtime prune confirmed', runtimePruneConfirmed, /0\\.0\\.0/);
-  await assert.rejects(() => access(staleRuntimeDir));
-  process.stdout.write('ktx dev runtime prune verified\\n');
 
   const structuralScan = await run('pnpm', ['exec', 'ktx', 'scan', 'warehouse',
     '--project-dir',
