@@ -622,7 +622,8 @@ async function runBuild(
   const now = deps.now ?? (() => new Date());
   const runId = deps.runIdFactory?.() ?? runIdFactory();
   const startedAt = now().toISOString();
-  const completedSourceProgress = existingState?.sourceProgress?.filter((source) => source.status === 'done') ?? [];
+  const existingSourceProgress = sourceProgressWithTargets(existingState?.sourceProgress, targets) ?? [];
+  const completedSourceProgress = existingSourceProgress.filter((source) => source.status === 'done');
   const runningState: KtxSetupContextState = {
     runId,
     status: 'running',
@@ -634,12 +635,12 @@ async function runBuild(
     artifactPaths: [],
     retryableFailedTargets: [],
     commands: contextBuildCommands(args.projectDir, runId),
-    ...(completedSourceProgress.length > 0 ? { sourceProgress: completedSourceProgress } : {}),
+    ...(existingSourceProgress.length > 0 ? { sourceProgress: existingSourceProgress } : {}),
   };
   await writeKtxSetupContextState(args.projectDir, runningState);
 
   let lastSourceProgress: ContextBuildSourceProgressUpdate[] | undefined =
-    completedSourceProgress.length > 0 ? completedSourceProgress : undefined;
+    existingSourceProgress.length > 0 ? existingSourceProgress : undefined;
   const contextBuild = deps.runContextBuild ?? runContextBuild;
   const buildResult = await contextBuild(
     project,
@@ -1025,6 +1026,9 @@ async function watchContextStatusWithProgressView(
       }
 
       if (!isActiveStatus(state.status)) {
+        if (state.status === 'paused') {
+          repainter?.clear();
+        }
         return { exitCode: watchExitCode(state.status), state };
       }
       if (detached) break;

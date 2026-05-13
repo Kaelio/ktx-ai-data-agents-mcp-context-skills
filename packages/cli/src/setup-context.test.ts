@@ -11,12 +11,13 @@ import {
   writeKtxSetupContextState,
 } from './setup-context.js';
 
-function makeIo() {
+function makeIo(options: { isTTY?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
   return {
     io: {
       stdout: {
+        isTTY: options.isTTY,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -522,12 +523,21 @@ describe('setup context build state', () => {
         ],
       });
     };
-    const runContextBuildMock = vi.fn(async () => ({
-      exitCode: 0,
-      detached: false,
-      reportIds: ['docs-report'],
-      artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
-    }));
+    const runContextBuildMock = vi.fn(async () => {
+      await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
+        status: 'running',
+        sourceProgress: [
+          { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 120000 },
+          { connectionId: 'docs', operation: 'source-ingest', status: 'queued' },
+        ],
+      });
+      return {
+        exitCode: 0,
+        detached: false,
+        reportIds: ['docs-report'],
+        artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
+      };
+    });
     const verifyContextReady = vi.fn(async () => ({
       ready: true,
       agentContextReady: true,
@@ -566,6 +576,74 @@ describe('setup context build state', () => {
       io.io,
       expect.anything(),
     );
+  });
+
+  it('clears the auto-watch progress view before continuing the full context build', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-prefetch-clear',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-prefetch-clear'),
+      sourceProgress: [
+        { connectionId: 'warehouse', operation: 'scan' as const, status: 'running' as const, startedAtMs: Date.now() },
+      ],
+    });
+    const io = makeIo({ isTTY: true });
+    const completePrefetch = async () => {
+      await writeKtxSetupContextState(tempDir, {
+        runId: 'setup-context-local-prefetch-clear',
+        status: 'paused',
+        startedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: '2026-05-09T10:02:00.000Z',
+        primarySourceConnectionIds: ['warehouse'],
+        contextSourceConnectionIds: [],
+        reportIds: ['warehouse-report'],
+        artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
+        retryableFailedTargets: [],
+        commands: contextBuildCommands(tempDir, 'setup-context-local-prefetch-clear'),
+        sourceProgress: [
+          { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 120000 },
+        ],
+      });
+    };
+    const runContextBuildMock = vi.fn(async () => {
+      io.io.stdout.write('foreground-build-started\n');
+      return {
+        exitCode: 0,
+        detached: false,
+        reportIds: ['docs-report'],
+        artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
+      };
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
+        io.io,
+        {
+          sleep: completePrefetch,
+          watchIntervalMs: 1,
+          runIdFactory: () => 'setup-context-local-final-clear',
+          now: () => new Date('2026-05-09T10:03:00.000Z'),
+          runContextBuild: runContextBuildMock,
+          verifyContextReady: vi.fn(async () => ({
+            ready: true,
+            agentContextReady: true,
+            semanticSearchReady: true,
+            details: ['ready'],
+          })),
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-final-clear' });
+
+    expect(io.stdout()).toMatch(/\x1b\[\d+A\r\x1b\[2K\x1b\[Jforeground-build-started/);
   });
 
   it('shows newly configured context sources while watching an active primary scan prefetch', async () => {

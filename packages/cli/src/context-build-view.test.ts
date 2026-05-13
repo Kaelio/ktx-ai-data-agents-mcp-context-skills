@@ -309,6 +309,41 @@ describe('renderContextBuildView', () => {
 });
 
 describe('createRepainter', () => {
+  it('does not leave a stale header when terminal rows wrap differently than reported', () => {
+    const io = makeIo({ isTTY: true });
+    const repainter = createRepainter(io.io);
+    const state = initViewState([
+      {
+        connectionId: 'postgres-warehouse',
+        driver: 'postgres',
+        operation: 'scan',
+        debugCommand: '',
+        steps: ['scan'],
+      },
+      {
+        connectionId: 'dbt-main',
+        driver: 'dbt',
+        operation: 'source-ingest',
+        adapter: 'dbt',
+        debugCommand: '',
+        steps: ['source-ingest', 'memory-update'],
+      },
+    ]);
+    state.primarySources[0].status = 'done';
+    state.primarySources[0].summaryText = '7 tables';
+    state.primarySources[0].elapsedMs = 18000;
+    state.contextSources[0].status = 'running';
+    state.contextSources[0].elapsedMs = 1000;
+    state.totalElapsedMs = 1000;
+
+    repainter.paint(renderContextBuildView(state, { styled: false, showHint: true }));
+    state.contextSources[0].elapsedMs = 5000;
+    state.totalElapsedMs = 5000;
+    repainter.paint(renderContextBuildView(state, { styled: false, showHint: true }));
+
+    expect(io.stdout()).toContain('\x1b[14A\r');
+  });
+
   it('moves up visual rows, not just newline count, when content wraps', () => {
     const io = makeIo({ isTTY: true, columns: 5 });
     const repainter = createRepainter(io.io);
@@ -341,6 +376,17 @@ describe('createRepainter', () => {
 
     const cursorMoves = [...io.stdout().matchAll(/\[(\d+)A/g)].map((m) => Number(m[1]));
     expect(cursorMoves).toEqual([2]);
+  });
+
+  it('clears the current frame', () => {
+    const io = makeIo({ isTTY: true, columns: 80 });
+    const repainter = createRepainter(io.io);
+
+    repainter.paint('hello\nworld\n');
+    repainter.clear();
+    io.io.stdout.write('after\n');
+
+    expect(io.stdout()).toContain('\x1b[2A\r\x1b[2K\x1b[Jafter');
   });
 });
 

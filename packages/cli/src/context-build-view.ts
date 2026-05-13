@@ -232,6 +232,7 @@ export function renderContextBuildView(
 
 const ESC_K_RE = new RegExp(`${ESC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\[K`, 'g');
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const DEFAULT_REPAINT_COLUMNS = 40;
 
 export function extractProgressMessage(chunk: string): string | null {
   const cleaned = chunk.replace(/^\r/, '').replace(ESC_K_RE, '').replace(/\n$/, '').trim();
@@ -354,9 +355,11 @@ export function createRepainter(io: KtxCliIo) {
 
   const terminalColumns = () => {
     for (const columns of [io.stdout.columns, process.stdout.columns]) {
-      if (typeof columns === 'number' && Number.isFinite(columns) && columns > 0) return columns;
+      if (typeof columns === 'number' && Number.isFinite(columns) && columns > 0) {
+        return columns;
+      }
     }
-    return 80;
+    return DEFAULT_REPAINT_COLUMNS;
   };
 
   const visualRows = (line: string, columns: number) => {
@@ -389,6 +392,15 @@ export function createRepainter(io: KtxCliIo) {
       io.stdout.write(`${ESC}[J`);
       hasPainted = true;
       lastCursorUpRows = cursorUpRowsAfterWrite(content);
+    },
+    clear() {
+      if (!hasPainted) return;
+      if (lastCursorUpRows > 0) {
+        io.stdout.write(`${ESC}[${lastCursorUpRows}A`);
+      }
+      io.stdout.write(`\r${ESC}[2K${ESC}[J`);
+      hasPainted = false;
+      lastCursorUpRows = 0;
     },
   };
 }
