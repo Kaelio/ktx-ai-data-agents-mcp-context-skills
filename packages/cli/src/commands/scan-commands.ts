@@ -39,7 +39,7 @@ function parseConnectionId(value: string): string {
 
 export function registerScanCommands(program: Command, context: KtxCliCommandContext): void {
   program
-    .command('scan')
+    .command('scan', { hidden: true })
     .description('Run a standalone connection scan')
     .argument('<connectionId>', 'KTX connection id to scan', parseConnectionId)
     .option(
