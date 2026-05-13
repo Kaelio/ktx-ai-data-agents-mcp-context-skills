@@ -2,19 +2,15 @@
 
 ## local-warehouse
 
-`local-warehouse/` is a runnable standalone KTX project for local CLI smoke
-testing. It uses the fake ingest adapter and does not require a database or
-external app server.
+`local-warehouse/` is a contributor fixture for local CLI smoke tests. It uses
+the internal fake ingest adapter so tests can exercise memory-flow behavior
+without a live database or external service.
 
-Copy it before running commands:
+For normal context building, use the public connection-centric commands:
 
 ```bash
-pnpm --filter @ktx/cli run build
-EXAMPLE_DIR="$(mktemp -d)/local-warehouse"
-cp -R examples/local-warehouse "$EXAMPLE_DIR"
-node packages/cli/dist/bin.js knowledge list --project-dir "$EXAMPLE_DIR"
-node packages/cli/dist/bin.js sl list --project-dir "$EXAMPLE_DIR" --connection-id warehouse
-node packages/cli/dist/bin.js ingest run --project-dir "$EXAMPLE_DIR" --connection-id warehouse --adapter fake --source-dir "$EXAMPLE_DIR/source"
+ktx ingest <connectionId>
+ktx ingest --all
 ```
 
 The copied project initializes its own Git repository on first use.
