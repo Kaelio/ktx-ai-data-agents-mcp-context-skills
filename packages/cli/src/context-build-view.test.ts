@@ -528,6 +528,57 @@ describe('runContextBuild', () => {
     expect(io.stdout()).toContain('connection reset (ECONNRESET)');
   });
 
+  it('uses direct ingest retry guidance for public ingest failures', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+    const executeTarget = vi.fn(async (target) => failedResult(target.connectionId, target.driver, target.operation));
+
+    await runContextBuild(
+      project,
+      {
+        projectDir: '/tmp/project',
+        inputMode: 'disabled',
+        targetConnectionId: 'warehouse',
+        all: false,
+        entrypoint: 'ingest',
+      },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project');
+    expect(io.stdout()).not.toContain('Retry: ktx setup');
+  });
+
+  it('renders query-history progress without the historic-sql adapter key', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true } } },
+    });
+    const executeTarget = vi.fn(async (target, _args, _targetIo, deps) => {
+      deps.ingestProgress?.({ percent: 5, message: 'Fetching source files for warehouse/historic-sql' });
+      return successResult(target.connectionId, target.driver, target.operation);
+    });
+
+    await runContextBuild(
+      project,
+      {
+        projectDir: '/tmp/project',
+        inputMode: 'disabled',
+        targetConnectionId: 'warehouse',
+        all: false,
+        entrypoint: 'ingest',
+      },
+      io.io,
+      { executeTarget, now: () => 1000, sourceProgressThrottleMs: 0 },
+    );
+
+    expect(io.stdout()).toContain('Fetching query history for warehouse');
+    expect(io.stdout()).not.toContain('historic-sql');
+  });
+
   it('renders final view for non-TTY output', async () => {
     const io = makeIo();
     const project = projectWithConnections({

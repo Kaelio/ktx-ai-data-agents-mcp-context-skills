@@ -630,6 +630,7 @@ export async function runKtxPublicIngest(
         projectDir: args.projectDir,
         ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
         all: args.all,
+        entrypoint: 'ingest',
         inputMode: args.inputMode,
         ...(args.depth ? { depth: args.depth } : {}),
         ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),

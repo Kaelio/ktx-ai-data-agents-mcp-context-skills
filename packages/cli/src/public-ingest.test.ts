@@ -436,6 +436,7 @@ describe('runKtxPublicIngest', () => {
         projectDir: '/tmp/project',
         targetConnectionId: 'warehouse',
         all: false,
+        entrypoint: 'ingest',
         depth: 'fast',
         queryHistory: 'default',
       }),

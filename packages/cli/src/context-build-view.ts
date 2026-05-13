@@ -41,6 +41,7 @@ export interface ContextBuildArgs {
   inputMode: 'auto' | 'disabled';
   targetConnectionId?: string;
   all?: boolean;
+  entrypoint?: 'setup' | 'ingest';
   depth?: Extract<KtxPublicIngestArgs, { command: 'run' }>['depth'];
   queryHistory?: Extract<KtxPublicIngestArgs, { command: 'run' }>['queryHistory'];
   queryHistoryWindowDays?: number;
@@ -197,8 +198,18 @@ function renderTargetGroup(
   return ['', `  ${label}:`, ...targets.map((t) => renderTargetLine(t, frame, styled, width))];
 }
 
-function resumeCommand(projectDir?: string): string {
-  return projectDir ? `ktx setup --project-dir ${projectDir}` : 'ktx setup';
+function retryCommand(input: {
+  projectDir?: string;
+  entrypoint?: 'setup' | 'ingest';
+  connectionId?: string;
+  depth?: 'fast' | 'deep';
+}): string {
+  const projectPart = input.projectDir ? ` --project-dir ${input.projectDir}` : '';
+  if (input.entrypoint === 'ingest' && input.connectionId) {
+    const depthPart = input.depth ? ` --${input.depth}` : '';
+    return `ktx ingest ${input.connectionId}${projectPart}${depthPart}`;
+  }
+  return input.projectDir ? `ktx setup --project-dir ${input.projectDir}` : 'ktx setup';
 }
 
 export function renderContextBuildView(
@@ -510,6 +521,7 @@ function failedStepDetail(result: KtxPublicIngestTargetResult): string | null {
 function failureTextForTarget(input: {
   target: KtxPublicIngestPlanTarget;
   projectDir: string;
+  entrypoint?: 'setup' | 'ingest';
   capturedOutput?: string;
   error?: unknown;
   fallback?: string | null;
@@ -520,10 +532,24 @@ function failureTextForTarget(input: {
     return [
       `KTX lost its connection to ${friendlyDriverName(input.target.driver)} while ${operation} ${input.target.connectionId}.`,
       `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
-      `Retry: ${resumeCommand(input.projectDir)}`,
+      `Retry: ${retryCommand({
+        projectDir: input.projectDir,
+        entrypoint: input.entrypoint,
+        connectionId: input.target.connectionId,
+        depth: input.target.databaseDepth,
+      })}`,
     ].join(' ');
   }
-  return input.fallback ?? `${input.target.connectionId} failed.`;
+  const fallback = input.fallback ?? `${input.target.connectionId} failed.`;
+  if (input.entrypoint === 'ingest') {
+    return `${fallback} Retry: ${retryCommand({
+      projectDir: input.projectDir,
+      entrypoint: input.entrypoint,
+      connectionId: input.target.connectionId,
+      depth: input.target.databaseDepth,
+    })}`;
+  }
+  return fallback;
 }
 
 export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuildViewState {
@@ -536,9 +562,26 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
   };
 }
 
-function formatProgressDetail(update: Pick<KtxIngestProgressUpdate, 'percent' | 'message'>): string {
+function publicProgressMessage(message: string, target: KtxPublicIngestPlanTarget): string {
+  if (!target.steps.includes('query-history')) {
+    return message;
+  }
+  return message
+    .replace(
+      new RegExp(`Fetching source files for ${target.connectionId}/historic-sql`, 'i'),
+      `Fetching query history for ${target.connectionId}`,
+    )
+    .replace(`${target.connectionId}/historic-sql`, `${target.connectionId} query history`)
+    .replace(/\bhistoric-sql\b/g, 'query history')
+    .replace(/\bhistoric SQL\b/gi, 'query history');
+}
+
+function formatProgressDetail(
+  update: Pick<KtxIngestProgressUpdate, 'percent' | 'message'>,
+  target: KtxPublicIngestPlanTarget,
+): string {
   const percent = Math.max(0, Math.min(100, Math.round(update.percent)));
-  return `[${percent}%] ${update.message}`;
+  return `[${percent}%] ${publicProgressMessage(update.message, target)}`;
 }
 
 function createContextBuildProgressPort(
@@ -649,16 +692,22 @@ export async function runContextBuild(
       let hasPendingProgressPublish = false;
 
       const updateTargetProgress = (update: KtxIngestProgressUpdate) => {
-        targetState.detailLine = formatProgressDetail(update);
+        targetState.detailLine = formatProgressDetail(update, targetState.target);
         targetState.progressUpdatedAtMs = nowFn();
+        if (!repainter) {
+          io.stdout.write(`${targetState.detailLine}\n`);
+        }
         paint(true);
         hasPendingProgressPublish = !publishSourceProgress(false);
       };
 
       const capture = createCaptureIo(
         (message) => {
-          targetState.detailLine = message;
+          targetState.detailLine = publicProgressMessage(message, targetState.target);
           targetState.progressUpdatedAtMs = nowFn();
+          if (!repainter) {
+            io.stdout.write(`${targetState.detailLine}\n`);
+          }
           paint(true);
           hasPendingProgressPublish = !publishSourceProgress(false);
         },
@@ -698,6 +747,7 @@ export async function runContextBuild(
         targetState.failureText = failureTextForTarget({
           target: targetState.target,
           projectDir: args.projectDir,
+          entrypoint: args.entrypoint,
           capturedOutput,
           error: thrownError,
           fallback: result ? failedStepDetail(result) : null,
