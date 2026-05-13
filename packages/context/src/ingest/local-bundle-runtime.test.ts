@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AgentRunnerService } from '../agent/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
 import { createLocalBundleIngestRuntime } from './local-bundle-runtime.js';
 
@@ -12,6 +12,7 @@ type RuntimeWithConnectionDeps = {
     connections: {
       listEnabledConnections(ids: string[]): Promise<Array<{ id: string; name: string; connectionType: string }>>;
       getConnectionById(connectionId: string): Promise<{ id: string; name: string; connectionType: string } | null>;
+      executeQuery(connectionId: string, sql: string): Promise<unknown>;
     };
   };
 };
@@ -111,6 +112,37 @@ describe('createLocalBundleIngestRuntime', () => {
       { id: 'warehouse', name: 'warehouse', connectionType: 'POSTGRESQL' },
       { id: 'bq', name: 'bq', connectionType: 'BIGQUERY' },
     ]);
+  });
+
+  it('passes project connection config to local ingest query executors', async () => {
+    const agentRunner = new AgentRunnerService({ llmProvider: { getModel: () => ({}) as never } as any });
+    const queryExecutor = {
+      execute: vi.fn(async () => ({
+        headers: ['answer'],
+        rows: [[1]],
+        totalRows: 1,
+        command: 'SELECT',
+        rowCount: 1,
+      })),
+    };
+
+    const runtime = createLocalBundleIngestRuntime({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      agentRunner,
+      queryExecutor,
+    });
+    const connections = (runtime.runner as unknown as RuntimeWithConnectionDeps).deps.connections;
+
+    await expect(connections.executeQuery('warehouse', 'select 1')).resolves.toMatchObject({
+      headers: ['answer'],
+    });
+    expect(queryExecutor.execute).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      projectDir: project.projectDir,
+      connection: project.config.connections.warehouse,
+      sql: 'select 1',
+    });
   });
 
   it('accepts a debug LLM request file when constructing the default agent runner', async () => {

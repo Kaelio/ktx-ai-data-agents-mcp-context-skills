@@ -409,6 +409,38 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
+  it('threads target warehouse connection names into WorkUnit and reconcile tool sessions', async () => {
+    const deps = makeDeps();
+    const sessions: any[] = [];
+    deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['warehouse']);
+    deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
+      sessions.push(toolSession);
+      return {
+        toAiSdkTools: vi.fn().mockReturnValue({}),
+        getAllTools: vi.fn().mockReturnValue([]),
+        getToolNames: vi.fn().mockReturnValue([]),
+      };
+    });
+    deps.agentRunner.runLoop.mockResolvedValue({ stopReason: 'natural' });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/notion/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'notion',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect([...sessions[0].allowedConnectionNames].sort()).toEqual(['notion', 'warehouse']);
+  });
+
   it('reuses document evidence indexing and page triage for document WorkUnits', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'notion';
@@ -643,6 +675,14 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         });
       }
       if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Reconciliation emits no warehouse identifiers before fallback recording.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.emit_conflict_resolution.execute(
           {
             kind: 'near_duplicate',
@@ -811,6 +851,14 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           { path: 'a.yml', startLine: 1, endLine: 2 },
           { toolCallId: 'read-1', messages: [] },
         );
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Wiki write contains no warehouse identifiers.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.wiki_write.execute(
           { key: 'knowledge/a.md', content: 'safe summary' },
           { toolCallId: 'wiki-1', messages: [] },
@@ -850,9 +898,9 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
             {
               unitKey: 'u1',
               path: '/tmp/ktx-test/run/wu-transcripts/j1/u1.jsonl',
-              toolCallCount: 2,
+              toolCallCount: 3,
               errorCount: 0,
-              toolNames: ['read_raw_span', 'wiki_write'],
+              toolNames: ['read_raw_span', 'record_verification_ledger', 'wiki_write'],
             },
           ],
         }),
@@ -864,6 +912,14 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     const deps = makeDeps();
     deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
       if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Unmapped fallback records an unsupported conversion metric without verified warehouse identifiers.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.emit_unmapped_fallback.execute(
           {
             rawPath: 'a.yml',
@@ -920,6 +976,14 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     });
     deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
       if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Reconciliation records conflict, eviction, and fallback decisions without warehouse identifiers.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.emit_conflict_resolution.execute(
           {
             kind: 'near_duplicate',

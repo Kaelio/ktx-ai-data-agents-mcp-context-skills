@@ -80,24 +80,10 @@ function knowledgePath(scope: LocalKnowledgeScope, userId: string | undefined, k
   return `knowledge/user/${assertSafePathToken('user id', userId ?? 'local')}/${safeKey}.md`;
 }
 
-function isHistoricSqlPathSegment(segment: string): boolean {
-  return /^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(segment);
-}
-
 function keyFromKnowledgePath(path: string, scope: LocalKnowledgeScope, userId: string): string | null {
   const prefix = scope === 'GLOBAL' ? 'knowledge/global/' : `knowledge/user/${assertSafePathToken('user id', userId)}/`;
   const key = path.slice(prefix.length).replace(/\.md$/, '');
   if (isFlatWikiKey(key)) {
-    return key;
-  }
-  if (
-    scope === 'GLOBAL' &&
-    key.startsWith('historic-sql/') &&
-    key
-      .slice('historic-sql/'.length)
-      .split('/')
-      .every(isHistoricSqlPathSegment)
-  ) {
     return key;
   }
   return null;

@@ -3,11 +3,11 @@ import { cp, mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import type { KtxLlmProvider } from '@ktx/llm';
 import type { AgentRunnerService } from '../agent/index.js';
+import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxLogger } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/index.js';
-import type { KtxQueryResult } from '../sl/index.js';
 import { planMetabaseFanoutChildren } from './adapters/metabase/fanout-planner.js';
 import { LocalMetabaseSourceStateReader } from './adapters/metabase/local-source-state-store.js';
 import { localPullConfigForAdapter, type DefaultLocalIngestAdaptersOptions } from './local-adapters.js';
@@ -34,7 +34,7 @@ export interface RunLocalIngestOptions {
   llmDebugRequestFile?: string;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
-  queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
+  queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
 }
 
@@ -172,7 +172,7 @@ async function runScheduledPullJob(options: {
   llmProvider?: KtxLlmProvider;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
-  queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
+  queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
 }): Promise<LocalIngestResult> {
   const runtime = createLocalBundleIngestRuntime(options);

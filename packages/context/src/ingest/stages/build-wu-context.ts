@@ -4,6 +4,11 @@ import { createLookerQueryToSlTool } from '../adapters/looker/tools/looker-query
 import type { IngestProvenanceRow } from '../ports.js';
 import { createReadRawFileTool } from '../tools/read-raw-file.tool.js';
 import { createReadRawSpanTool } from '../tools/read-raw-span.tool.js';
+import {
+  createVerificationLedgerState,
+  VERIFICATION_LEDGER_PROMPT,
+  withVerificationLedger,
+} from '../tools/verification-ledger.tool.js';
 import type { WorkUnit } from '../types.js';
 
 const PEER_FILE_INDEX_PROMPT_LIMIT = 100;
@@ -24,6 +29,7 @@ export function buildWuSystemPrompt(params: {
 }): string {
   const parts = [
     params.baseFraming.trimEnd(),
+    VERIFICATION_LEDGER_PROMPT,
     params.skillsPrompt.trimEnd(),
     buildCanonicalPinsPromptBlock(params.canonicalPins ?? []),
     `\n<context>\nsyncId: ${params.syncId}\nsource: ${params.sourceKey}\n</context>`,
@@ -100,15 +106,19 @@ function withoutWriteSlTools(toolset: ToolSet, wu: WorkUnit): ToolSet {
 export function buildWuToolSet(input: BuildWuToolSetInput): ToolSet {
   const allowedPaths = new Set<string>([...input.wu.rawFiles, ...input.wu.dependencyPaths]);
   const lookerTools: ToolSet = input.sourceKey === 'looker' ? { looker_query_to_sl: createLookerQueryToSlTool() } : {};
-  return withoutWriteSlTools(
-    {
-      ...input.toolsetTools,
-      ...lookerTools,
-      ...input.loadSkillTool,
-      ...input.emitUnmappedFallbackTool,
-      read_raw_file: createReadRawFileTool({ stagedDir: input.stagedDir, allowedPaths }),
-      read_raw_span: createReadRawSpanTool({ stagedDir: input.stagedDir, allowedPaths }),
-    },
-    input.wu,
+  const state = createVerificationLedgerState();
+  return withVerificationLedger(
+    withoutWriteSlTools(
+      {
+        ...input.toolsetTools,
+        ...lookerTools,
+        ...input.loadSkillTool,
+        ...input.emitUnmappedFallbackTool,
+        read_raw_file: createReadRawFileTool({ stagedDir: input.stagedDir, allowedPaths }),
+        read_raw_span: createReadRawSpanTool({ stagedDir: input.stagedDir, allowedPaths }),
+      },
+      input.wu,
+    ),
+    state,
   );
 }

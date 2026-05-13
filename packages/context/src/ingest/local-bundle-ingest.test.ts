@@ -27,6 +27,18 @@ class LookerSlWritingAgentRunner extends AgentRunnerService {
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'looker-explore-ecommerce-orders'
     ) {
+      const ledger = params.toolSet.record_verification_ledger;
+      if (!ledger?.execute) {
+        throw new Error('record_verification_ledger tool was not available to the Looker WorkUnit');
+      }
+      await ledger.execute(
+        {
+          summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
+          verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
+          unverifiedIdentifiers: [],
+        },
+        { toolCallId: 'looker-verification-ledger', messages: [] },
+      );
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
         throw new Error('sl_write_source tool was not available to the Looker WorkUnit');
@@ -63,6 +75,18 @@ class LookerSlWritingAgentRunner extends AgentRunnerService {
 class WikiWritingAgentRunner extends AgentRunnerService {
   override runLoop = vi.fn(async (params: any) => {
     if (params.telemetryTags?.operationName === 'ingest-bundle-wu') {
+      const ledger = params.toolSet.record_verification_ledger;
+      if (!ledger?.execute) {
+        throw new Error('record_verification_ledger tool was not available to the WorkUnit');
+      }
+      await ledger.execute(
+        {
+          summary: 'Test fixture writes wiki-only context with no warehouse identifiers.',
+          verifiedIdentifiers: [],
+          unverifiedIdentifiers: [],
+        },
+        { toolCallId: 'wiki-verification-ledger', messages: [] },
+      );
       const wikiWrite = params.toolSet.wiki_write;
       if (!wikiWrite?.execute) {
         throw new Error('wiki_write tool was not available to the WorkUnit');
@@ -91,6 +115,18 @@ class WikiWritingAgentRunner extends AgentRunnerService {
 class WikiWritingWithRawPathAgentRunner extends AgentRunnerService {
   override runLoop = vi.fn(async (params: any) => {
     if (params.telemetryTags?.operationName === 'ingest-bundle-wu') {
+      const ledger = params.toolSet.record_verification_ledger;
+      if (!ledger?.execute) {
+        throw new Error('record_verification_ledger tool was not available to the WorkUnit');
+      }
+      await ledger.execute(
+        {
+          summary: 'Test fixture writes wiki-only context with explicit raw provenance and no warehouse identifiers.',
+          verifiedIdentifiers: [],
+          unverifiedIdentifiers: [],
+        },
+        { toolCallId: 'wiki-raw-path-verification-ledger', messages: [] },
+      );
       const wikiWrite = params.toolSet.wiki_write;
       if (!wikiWrite?.execute) {
         throw new Error('wiki_write tool was not available to the WorkUnit');

@@ -47,6 +47,7 @@ export interface ToolSession {
   touchedSlSources: TouchedSlSourceSet;
   actions: MemoryAction[];
   allowedRawPaths?: ReadonlySet<string>;
+  allowedConnectionNames?: ReadonlySet<string>;
   semanticLayerService: SemanticLayerService;
   wikiService: KnowledgeWikiService;
   configService: KtxFileStorePort;

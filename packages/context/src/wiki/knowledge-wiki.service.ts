@@ -11,10 +11,6 @@ const WIKI_PREFIX = 'knowledge';
 
 export type { WikiFrontmatter };
 
-function isHistoricSqlPathSegment(segment: string): boolean {
-  return /^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(segment);
-}
-
 export class KnowledgeWikiService {
   private isWorktreeScoped = false;
 
@@ -422,7 +418,6 @@ export class KnowledgeWikiService {
  * Parse a `knowledge/<scope>/...` file path into its scope and page key.
  *   `knowledge/global/foo.md` → { scope: 'GLOBAL', scopeId: null, pageKey: 'foo' }
  *   `knowledge/user/<id>/bar.md` → { scope: 'USER', scopeId: '<id>', pageKey: 'bar' }
- *   `knowledge/global/historic-sql/foo.md` → { scope: 'GLOBAL', scopeId: null, pageKey: 'historic-sql/foo' }
  */
 function parseKnowledgePath(path: string): { scope: string; scopeId: string | null; pageKey: string } | null {
   if (!path.endsWith('.md')) {
@@ -436,13 +431,6 @@ function parseKnowledgePath(path: string): { scope: string; scopeId: string | nu
   if (rest.length === 2 && rest[0] === 'global') {
     const pageKey = rest[1].replace(/\.md$/, '');
     return isFlatWikiKey(pageKey) ? { scope: 'GLOBAL', scopeId: null, pageKey } : null;
-  }
-  if (rest.length >= 3 && rest[0] === 'global' && rest[1] === 'historic-sql') {
-    const historicPath = rest.slice(2).join('/').replace(/\.md$/, '');
-    if (historicPath.split('/').every(isHistoricSqlPathSegment)) {
-      return { scope: 'GLOBAL', scopeId: null, pageKey: `historic-sql/${historicPath}` };
-    }
-    return null;
   }
   if (rest.length === 3 && rest[0] === 'user') {
     const pageKey = rest[2].replace(/\.md$/, '');

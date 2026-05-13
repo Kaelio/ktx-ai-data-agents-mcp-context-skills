@@ -8,7 +8,7 @@ const MAX_NOTION_WORK_UNIT_CHARS = 40_000;
 export const NOTION_ORG_KNOWLEDGE_WARNING =
   'Anything accessible to this Notion integration can become organization knowledge.';
 const NOTION_SL_WRITE_GUIDANCE =
-  'Write wiki entries with wiki_write. Wiki keys must be flat slugs like orbit-company-overview, not orbit/company-overview. Search existing wiki pages for the same tables or sl_refs before creating a new page. Only write or edit SL sources after sl_discover/sl_read_source confirms a mapped non-Notion target source; if no mapped target exists, emit_unmapped_fallback and keep the fact wiki-only. Notion dataSourceCount counts Notion databases/data sources only, not warehouse/dbt mappings. If a warehouse/dbt connection exists but the named table or source is absent, use reason no_physical_table rather than no_connection_mapping. Do not create SL sources under the Notion connection just because a page mentions a warehouse table.';
+  'Write wiki entries with wiki_write. Wiki keys must be flat slugs like orbit-company-overview, not orbit/company-overview. Search existing wiki pages, SL sources, and raw warehouse schema for the same tables or sl_refs with discover_data before creating a new page. Only write or edit SL sources after discover_data plus sl_discover/sl_read_source or entity_details confirms a mapped non-Notion target source; if no mapped target exists, emit_unmapped_fallback and keep the fact wiki-only. Notion dataSourceCount counts Notion databases/data sources only, not warehouse/dbt mappings. If a warehouse/dbt connection exists but the named table or source is absent, use reason no_physical_table rather than no_connection_mapping. Do not create SL sources under the Notion connection just because a page mentions a warehouse table.';
 
 async function walk(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true, recursive: true });
@@ -117,7 +117,7 @@ export async function chunkNotionStagedDir(stagedDir: string, diffSet?: DiffSet)
     reconcileNotes: [
       `Notion maxKnowledgeCreatesPerRun=${manifest.maxKnowledgeCreatesPerRun}`,
       `Notion maxKnowledgeUpdatesPerRun=${manifest.maxKnowledgeUpdatesPerRun}`,
-      'Notion dataSourceCount is Notion-only; use sl_discover for warehouse/dbt mapping decisions.',
+      'Notion dataSourceCount is Notion-only; use discover_data/entity_details for warehouse/dbt mapping decisions.',
       'Reconcile Notion wiki pages sharing tables/sl_refs before creating distinct artifacts.',
     ],
     contextReport: {

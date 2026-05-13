@@ -8,22 +8,11 @@ describe('WikiListTagsTool', () => {
   it("returns distinct sorted tags across the user's visible pages", async () => {
     const pagesRepository = {
       listPagesForUser: vi.fn().mockResolvedValue([
-        { scope: 'GLOBAL', scope_id: null, page_key: 'k1' },
-        { scope: 'USER', scope_id: 'u', page_key: 'k2' },
+        { scope: 'GLOBAL', scope_id: null, page_key: 'k1', tags: ['metrics', 'finance'] },
+        { scope: 'USER', scope_id: 'u', page_key: 'k2', tags: ['metrics'] },
       ]),
     };
-    const wikiService = {
-      readPage: vi.fn().mockImplementation((_scope, _scopeId, key) => {
-        if (key === 'k1') {
-          return Promise.resolve({ frontmatter: { tags: ['metrics', 'finance'] }, content: '' });
-        }
-        if (key === 'k2') {
-          return Promise.resolve({ frontmatter: { tags: ['metrics'] }, content: '' });
-        }
-        return Promise.resolve(null);
-      }),
-    };
-    const tool = new WikiListTagsTool(wikiService as any, pagesRepository as any);
+    const tool = new WikiListTagsTool(pagesRepository as any);
 
     const result = await tool.call({}, baseContext);
     expect(result.markdown).toContain('finance');
@@ -31,10 +20,23 @@ describe('WikiListTagsTool', () => {
     expect(result.structured.tags).toEqual(['finance', 'metrics']);
   });
 
+  it('lists tags from historic-SQL indexed pages with flat wiki keys', async () => {
+    const pagesRepository = {
+      listPagesForUser: vi.fn().mockResolvedValue([
+        { scope: 'GLOBAL', scope_id: null, page_key: 'company-overview', tags: ['notion'] },
+        { scope: 'GLOBAL', scope_id: null, page_key: 'historic-sql-revenue-pattern', tags: ['historic-sql', 'pattern'] },
+      ]),
+    };
+    const tool = new WikiListTagsTool(pagesRepository as any);
+
+    const result = await tool.call({}, baseContext);
+
+    expect(result.structured.tags).toEqual(['historic-sql', 'notion', 'pattern']);
+  });
+
   it('returns a friendly message when no pages have tags', async () => {
     const pagesRepository = { listPagesForUser: vi.fn().mockResolvedValue([]) };
-    const wikiService = { readPage: vi.fn() };
-    const tool = new WikiListTagsTool(wikiService as any, pagesRepository as any);
+    const tool = new WikiListTagsTool(pagesRepository as any);
 
     const result = await tool.call({}, baseContext);
     expect(result.markdown).toMatch(/no tags/i);
