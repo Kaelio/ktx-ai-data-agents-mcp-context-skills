@@ -108,6 +108,54 @@ const queryHistoryDialectByDriver = new Map<string, HistoricSqlDialect>([
   ['snowflake', 'snowflake'],
 ]);
 
+interface KtxPublicIngestWarningAccumulator {
+  warnings: string[];
+  ignoredDepthForSources: string[];
+  ignoredQueryHistoryForSources: string[];
+}
+
+function createWarningAccumulator(): KtxPublicIngestWarningAccumulator {
+  return {
+    warnings: [],
+    ignoredDepthForSources: [],
+    ignoredQueryHistoryForSources: [],
+  };
+}
+
+function sourceIgnoredWarning(option: string, connectionIds: string[], all: boolean): string | null {
+  if (connectionIds.length === 0) {
+    return null;
+  }
+  if (all) {
+    const sourceLabel =
+      connectionIds.length === 1 ? '1 non-database source' : `${connectionIds.length} non-database sources`;
+    return `${option} ignored for ${sourceLabel}.`;
+  }
+  return `${option} affects database ingest only; ignoring it for ${connectionIds[0]}.`;
+}
+
+function finalizeWarnings(
+  accumulator: KtxPublicIngestWarningAccumulator,
+  args: {
+    all: boolean;
+    depth?: KtxPublicIngestDepth;
+    queryHistory?: KtxPublicIngestQueryHistoryFlag;
+    queryHistoryWindowDays?: number;
+  },
+): string[] {
+  const warnings = [...accumulator.warnings];
+  const depthOption = args.depth ? `--${args.depth}` : null;
+  if (depthOption) {
+    const warning = sourceIgnoredWarning(depthOption, accumulator.ignoredDepthForSources, args.all);
+    if (warning) warnings.push(warning);
+  }
+  if (args.queryHistory === 'enabled' || args.queryHistoryWindowDays !== undefined) {
+    const warning = sourceIgnoredWarning('--query-history', accumulator.ignoredQueryHistoryForSources, args.all);
+    if (warning) warnings.push(warning);
+  }
+  return warnings;
+}
+
 function storedQueryHistory(connection: KtxProjectConnectionConfig): Record<string, unknown> {
   const context = connection.context;
   const contextRecord =
@@ -147,7 +195,10 @@ function resolveDatabaseTargetOptions(input: {
   const dialect = queryHistoryDialectByDriver.get(input.driver);
   const explicitQueryHistory = input.args.queryHistory ?? 'default';
   const storedEnabled = storedQh.enabled === true;
-  const requestedQh = explicitQueryHistory === 'enabled' || (explicitQueryHistory === 'default' && storedEnabled);
+  const windowOverrideRequested = input.args.queryHistoryWindowDays !== undefined;
+  const requestedQh =
+    explicitQueryHistory === 'enabled' ||
+    (explicitQueryHistory !== 'disabled' && (windowOverrideRequested || storedEnabled));
   let depth =
     input.args.depth ?? depthFromLegacyScanMode(input.args.scanMode) ?? databaseContextDepth(input.connection) ?? 'fast';
   const queryHistory = {
@@ -212,17 +263,17 @@ function targetForConnection(
     queryHistoryWindowDays?: number;
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
   },
-  warnings: string[],
+  warnings: KtxPublicIngestWarningAccumulator,
 ): KtxPublicIngestPlanTarget {
   const driver = normalizeConnectionDriver(connection);
   const adapter = sourceAdapterByDriver.get(driver);
   const sourceDir = sourceDirForConnection(connection);
   if (adapter) {
     if (args.depth) {
-      warnings.push(`--${args.depth} affects database ingest only; ignoring it for ${connectionId}.`);
+      warnings.ignoredDepthForSources.push(connectionId);
     }
     if (args.queryHistory === 'enabled' || args.queryHistoryWindowDays !== undefined) {
-      warnings.push(`--query-history affects database ingest only; ignoring it for ${connectionId}.`);
+      warnings.ignoredQueryHistoryForSources.push(connectionId);
     }
     return {
       connectionId,
@@ -236,7 +287,7 @@ function targetForConnection(
   }
 
   if (isDatabaseDriver(driver)) {
-    const options = resolveDatabaseTargetOptions({ connectionId, driver, connection, args, warnings });
+    const options = resolveDatabaseTargetOptions({ connectionId, driver, connection, args, warnings: warnings.warnings });
     const gaps = options.databaseDepth === 'deep' ? deepReadinessGaps(projectConfig) : [];
     return {
       connectionId,
@@ -284,7 +335,7 @@ export function buildPublicIngestPlan(
     throw new Error('No configured connections are eligible for ingest');
   }
 
-  const warnings: string[] = [];
+  const warnings = createWarningAccumulator();
   const targets = selected.map(([connectionId, connection]) =>
     targetForConnection(connectionId, connection, project.config, args, warnings),
   );
@@ -294,7 +345,7 @@ export function buildPublicIngestPlan(
       ...targets.filter((t) => t.operation === 'database-ingest'),
       ...targets.filter((t) => t.operation === 'source-ingest'),
     ],
-    warnings,
+    warnings: finalizeWarnings(warnings, args),
   };
 }
 

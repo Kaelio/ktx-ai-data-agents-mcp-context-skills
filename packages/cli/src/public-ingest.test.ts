@@ -194,6 +194,68 @@ describe('buildPublicIngestPlan', () => {
     expect(plan.warnings).toEqual(['--query-history is not supported for sqlite; running schema ingest for local.']);
   });
 
+  it('treats query-history window override as current-run query-history enablement', () => {
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: false, windowDays: 90 } } },
+    });
+
+    const plan = buildPublicIngestPlan(project, {
+      projectDir: '/tmp/project',
+      targetConnectionId: 'warehouse',
+      all: false,
+      queryHistory: 'default',
+      queryHistoryWindowDays: 30,
+    });
+
+    expect(plan.targets[0]).toMatchObject({
+      connectionId: 'warehouse',
+      databaseDepth: 'deep',
+      queryHistory: { enabled: true, dialect: 'postgres', windowDays: 30 },
+      steps: ['database-schema', 'query-history'],
+    });
+  });
+
+  it('warns and skips query-history window override for unsupported database drivers', () => {
+    const plan = buildPublicIngestPlan(
+      projectWithConnections({
+        local: { driver: 'sqlite' },
+      }),
+      {
+        projectDir: '/tmp/project',
+        targetConnectionId: 'local',
+        all: false,
+        queryHistory: 'default',
+        queryHistoryWindowDays: 30,
+      },
+    );
+
+    expect(plan.targets[0]).toMatchObject({
+      connectionId: 'local',
+      databaseDepth: 'fast',
+      queryHistory: { enabled: false, windowDays: 30, unsupported: true },
+      steps: ['database-schema'],
+    });
+    expect(plan.warnings).toEqual(['--query-history is not supported for sqlite; running schema ingest for local.']);
+  });
+
+  it('aggregates ignored database-depth warnings for all source targets', () => {
+    const plan = buildPublicIngestPlan(
+      projectWithConnections({
+        warehouse: { driver: 'postgres' },
+        docs: { driver: 'notion' },
+        dbt: { driver: 'dbt' },
+      }),
+      {
+        projectDir: '/tmp/project',
+        all: true,
+        depth: 'deep',
+        queryHistory: 'default',
+      },
+    );
+
+    expect(plan.warnings).toEqual(['--deep ignored for 2 non-database sources.']);
+  });
+
   it('records a preflight failure for deep database ingest when readiness config is missing', () => {
     const project = projectWithConnections({
       warehouse: { driver: 'postgres', context: { depth: 'deep' } },
