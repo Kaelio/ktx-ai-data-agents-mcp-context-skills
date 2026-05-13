@@ -118,6 +118,104 @@ function check(status: DoctorStatus, id: string, label: string, detail: string, 
   return fix ? { id, label, status, detail, fix } : { id, label, status, detail };
 }
 
+interface ConnectionConfigWarning {
+  id: string;
+  connectionId: string;
+  detail: string;
+  fix: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOwnField(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function connectionConfigWarning(
+  connectionId: string,
+  key: string,
+  detail: string,
+  fix: string,
+): ConnectionConfigWarning {
+  return {
+    id: `connection-config-${connectionId}-${key}`.replace(/[^a-zA-Z0-9_-]/g, '-'),
+    connectionId,
+    detail,
+    fix,
+  };
+}
+
+function connectionConfigWarnings(project: KtxLocalProject): ConnectionConfigWarning[] {
+  const warnings: ConnectionConfigWarning[] = [];
+  for (const [connectionId, connection] of Object.entries(project.config.connections)) {
+    const driver = String(connection.driver ?? '').toLowerCase();
+    if (hasOwnField(connection, 'readonly')) {
+      warnings.push(
+        connectionConfigWarning(
+          connectionId,
+          'readonly',
+          `connections.${connectionId}.readonly is no longer used.`,
+          `Remove connections.${connectionId}.readonly from ktx.yaml.`,
+        ),
+      );
+    }
+
+    if ((driver === 'sqlite' || driver === 'sqlite3') && hasOwnField(connection, 'file_path')) {
+      warnings.push(
+        connectionConfigWarning(
+          connectionId,
+          'file-path',
+          `connections.${connectionId}.file_path was removed.`,
+          `Rename connections.${connectionId}.file_path to path.`,
+        ),
+      );
+    }
+
+    if (driver === 'notion' && hasOwnField(connection, 'last_successful_cursor')) {
+      warnings.push(
+        connectionConfigWarning(
+          connectionId,
+          'last-successful-cursor',
+          `connections.${connectionId}.last_successful_cursor is local sync state.`,
+          'Remove it from ktx.yaml. KTX stores the Notion cursor in .ktx/db.sqlite.',
+        ),
+      );
+    }
+
+    const historicSql = isRecord(connection.historicSql) ? connection.historicSql : null;
+    if (!historicSql) {
+      continue;
+    }
+    if (hasOwnField(historicSql, 'concurrency')) {
+      warnings.push(
+        connectionConfigWarning(
+          connectionId,
+          'historic-sql-concurrency',
+          `connections.${connectionId}.historicSql.concurrency is no longer used.`,
+          `Remove connections.${connectionId}.historicSql.concurrency from ktx.yaml.`,
+        ),
+      );
+    }
+    const historicDialect = String(historicSql.dialect ?? driver).toLowerCase();
+    if (
+      (historicDialect === 'postgres' || historicDialect === 'postgresql') &&
+      hasOwnField(historicSql, 'windowDays')
+    ) {
+      warnings.push(
+        connectionConfigWarning(
+          connectionId,
+          'historic-sql-window-days',
+          `connections.${connectionId}.historicSql.windowDays does not constrain pg_stat_statements.`,
+          `Remove connections.${connectionId}.historicSql.windowDays from ktx.yaml.`,
+        ),
+      );
+    }
+  }
+  return warnings;
+}
+
 const SEMANTIC_SEARCH_HEALTH_TEXT = 'KTX semantic search doctor probe';
 const SEMANTIC_SEARCH_HEALTH_TIMEOUT_MS = 5_000;
 const SEMANTIC_SEARCH_LOCAL_HEALTH_TIMEOUT_MS = 120_000;
@@ -325,6 +423,17 @@ async function runProjectChecks(projectDir: string, deps: KtxDoctorDeps = {}): P
             'Add a connection to ktx.yaml or run `ktx setup`',
           ),
     );
+    for (const warning of connectionConfigWarnings(project)) {
+      checks.push(
+        check(
+          'warn',
+          warning.id,
+          `Connection config (${warning.connectionId})`,
+          warning.detail,
+          warning.fix,
+        ),
+      );
+    }
     checks.push(check('pass', 'storage', 'Storage', `${project.config.storage.state}/${project.config.storage.search}`));
     checks.push(check('pass', 'llm-provider', 'LLM provider', project.config.llm.provider.backend));
     checks.push(await runSemanticSearchEmbeddingCheck(project.config.ingest.embeddings, projectDir, deps));

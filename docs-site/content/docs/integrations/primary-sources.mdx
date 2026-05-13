@@ -23,6 +23,9 @@ Agents should prefer environment or file references over literal secrets.
 | `schema` or `schemas` | No | schema-aware warehouses | Single schema or list of schemas to scan |
 | `historicSql` | No | supported warehouses | Enables query-history ingestion when the warehouse supports it |
 | `path` | Yes for path-style SQLite | SQLite | Local SQLite database path or `env:NAME` reference |
+| `max_bytes_billed` | No | BigQuery | Maximum bytes billed per query job |
+| `job_timeout_ms` | No | BigQuery | BigQuery query job timeout in milliseconds |
+| `project_id` | No | BigQuery | Optional local descriptor and mapping metadata; not used for BigQuery authentication |
 
 ## PostgreSQL
 
@@ -211,6 +214,9 @@ For multiple datasets:
 | Environment variable | `credentials_json: env:BIGQUERY_CREDENTIALS_JSON` |
 
 The project ID is extracted automatically from the service account JSON file.
+If you set `project_id` in `ktx.yaml`, KTX treats it as local descriptor and
+mapping metadata. The BigQuery connector still authenticates with the
+`project_id` inside `credentials_json`.
 
 ### Features
 
@@ -249,7 +255,7 @@ historicSql:
 - Parameter binding uses named `@param` syntax
 - Arrays flattened to comma-separated strings in results
 - Location specified at query execution time
-- Supports `maxBytesBilled` and `jobTimeoutMs` limits
+- Supports `max_bytes_billed` and `job_timeout_ms` limits from `ktx.yaml`
 
 ---
 

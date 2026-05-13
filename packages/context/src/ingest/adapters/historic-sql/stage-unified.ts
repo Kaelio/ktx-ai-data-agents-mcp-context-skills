@@ -103,6 +103,10 @@ function shouldDropTemplate(template: AggregatedTemplate, config: HistoricSqlUni
   return false;
 }
 
+function historicSqlWindowDays(config: HistoricSqlUnifiedPullConfig): number {
+  return 'windowDays' in config ? config.windowDays : 90;
+}
+
 function redactTemplateSql(
   template: AggregatedTemplate,
   redactors: readonly HistoricSqlRedactionPattern[],
@@ -233,7 +237,7 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
   const config = historicSqlUnifiedPullConfigSchema.parse(input.pullConfig);
   const redactors = compileHistoricSqlRedactionPatterns(config.redactionPatterns);
   const now = input.now ?? new Date();
-  const windowStart = new Date(now.getTime() - config.windowDays * 24 * 60 * 60 * 1000);
+  const windowStart = new Date(now.getTime() - historicSqlWindowDays(config) * 24 * 60 * 60 * 1000);
   const probe = await input.reader.probe(input.queryClient);
   const snapshot: AggregatedTemplate[] = [];
   let snapshotRowCount = 0;

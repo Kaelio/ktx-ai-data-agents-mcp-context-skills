@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { localConnectionToWarehouseDescriptor, notionConnectionToPullConfig, parseNotionConnectionConfig } from '../connections/index.js';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
-import type { KtxLocalProject } from '../project/index.js';
+import { ktxLocalStateDbPath, type KtxLocalProject } from '../project/index.js';
 import type { SqlAnalysisPort } from '../sql-analysis/index.js';
 import { DbtSourceAdapter } from './adapters/dbt/dbt.adapter.js';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
@@ -37,6 +37,7 @@ import type { MetabaseClientLogger } from './adapters/metabase/client.js';
 import type { MetabaseFetchLogger } from './adapters/metabase/fetch.js';
 import { MetricflowSourceAdapter } from './adapters/metricflow/metricflow.adapter.js';
 import { pullConfigFromMetricflowIntegration } from './adapters/metricflow/pull-config.js';
+import { LocalNotionRuntimeStore } from './adapters/notion/local-state-store.js';
 import { NotionSourceAdapter } from './adapters/notion/notion.adapter.js';
 import type { NotionFetchLogger } from './adapters/notion/fetch.js';
 import { seedLocalMappingStateFromKtxYaml } from './local-mapping-reconcile.js';
@@ -114,6 +115,9 @@ export function createDefaultLocalIngestAdapters(
     }),
     new NotionSourceAdapter({
       targetConnectionIds: primaryWarehouseConnectionIds(project),
+      onPullSucceeded: async ({ connectionId, nextSuccessfulCursor }) => {
+        await localNotionRuntimeStore(project).setCursor(connectionId, nextSuccessfulCursor);
+      },
       ...(options.logger ? { logger: options.logger } : {}),
     }),
   ];
@@ -149,6 +153,10 @@ function primaryWarehouseConnectionIds(project: KtxLocalProject): string[] {
     .filter(([connectionId, connection]) => Boolean(localConnectionToWarehouseDescriptor(connectionId, connection)))
     .map(([connectionId]) => connectionId)
     .sort((left, right) => left.localeCompare(right));
+}
+
+function localNotionRuntimeStore(project: KtxLocalProject): LocalNotionRuntimeStore {
+  return new LocalNotionRuntimeStore({ dbPath: ktxLocalStateDbPath(project) });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -263,7 +271,11 @@ export async function localPullConfigForAdapter(
     return localDbtPullConfigFromConnection(connection, options.looker?.env ?? process.env);
   }
   if (adapter.source === 'notion') {
-    return notionConnectionToPullConfig(parseNotionConnectionConfig(connection));
+    const pullConfig = await notionConnectionToPullConfig(parseNotionConnectionConfig(connection));
+    return {
+      ...pullConfig,
+      lastSuccessfulCursor: await localNotionRuntimeStore(project).readCursor(connectionId),
+    };
   }
   if (adapter.source === 'metricflow') {
     const metricflow = connection.metricflow;

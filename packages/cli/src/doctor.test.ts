@@ -316,6 +316,64 @@ describe('runKtxDoctor', () => {
     expect(testIo.stdout()).not.toContain('Fix: Update the Postgres parameter group or config');
   });
 
+  it('warns about stale and unsupported per-driver connection fields', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    readonly: true',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      windowDays: 30',
+        '      concurrency: 4',
+        '  local:',
+        '    driver: sqlite',
+        '    file_path: ./warehouse.db',
+        '  docs:',
+        '    driver: notion',
+        '    auth_token_ref: env:NOTION_TOKEN',
+        '    crawl_mode: all_accessible',
+        '    last_successful_cursor: \'{"phase":"all_accessible_pages","cursor":"cursor-1"}\'',
+        'ingest:',
+        '  adapters:',
+        '    - live-database',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {
+          runSetupChecks: async () => [
+            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
+          ],
+          runHistoricSqlDoctorChecks: async () => [],
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(testIo.stdout()).toContain('WARN Connection config (warehouse): connections.warehouse.readonly is no longer used.');
+    expect(testIo.stdout()).toContain(
+      'WARN Connection config (warehouse): connections.warehouse.historicSql.concurrency is no longer used.',
+    );
+    expect(testIo.stdout()).toContain(
+      'WARN Connection config (warehouse): connections.warehouse.historicSql.windowDays does not constrain pg_stat_statements.',
+    );
+    expect(testIo.stdout()).toContain('WARN Connection config (local): connections.local.file_path was removed.');
+    expect(testIo.stdout()).toContain(
+      'WARN Connection config (docs): connections.docs.last_successful_cursor is local sync state.',
+    );
+  });
+
   it('warns when semantic-search embeddings are not configured', async () => {
     await writeProjectConfig(tempDir, ['backend: deterministic', 'model: deterministic', 'dimensions: 8']);
     const testIo = makeIo();

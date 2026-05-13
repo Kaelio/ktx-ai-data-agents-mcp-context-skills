@@ -3,20 +3,6 @@ import type { KtxScanConnector } from '@ktx/context/scan';
 
 const SUPPORTED_DRIVERS = 'sqlite, postgres, mysql, clickhouse, sqlserver, bigquery, snowflake';
 
-function bigQueryMaxBytesBilled(
-  connection: KtxLocalProject['config']['connections'][string],
-): number | string | undefined {
-  const raw = connection.max_bytes_billed;
-  if (typeof raw === 'number') {
-    return Number.isFinite(raw) && raw > 0 ? raw : undefined;
-  }
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-  return undefined;
-}
-
 export async function createKtxCliScanConnector(
   project: KtxLocalProject,
   connectionId: string,
@@ -64,12 +50,7 @@ export async function createKtxCliScanConnector(
   if (driver === 'bigquery') {
     const { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig } = await import('@ktx/connector-bigquery');
     if (isKtxBigQueryConnectionConfig(connection)) {
-      const maxBytesBilled = bigQueryMaxBytesBilled(connection);
-      return new KtxBigQueryScanConnector({
-        connectionId,
-        connection,
-        ...(maxBytesBilled !== undefined ? { maxBytesBilled } : {}),
-      });
+      return new KtxBigQueryScanConnector({ connectionId, connection });
     }
   }
   if (driver === 'snowflake') {

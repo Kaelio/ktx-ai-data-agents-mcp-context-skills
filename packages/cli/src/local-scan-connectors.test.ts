@@ -9,7 +9,6 @@ const bigQueryMock = vi.hoisted(() => ({
   constructorInputs: [] as Array<{
     connectionId: string;
     connection: unknown;
-    maxBytesBilled?: number | string;
   }>,
 }));
 
@@ -20,7 +19,7 @@ vi.mock('@ktx/connector-bigquery', () => ({
     readonly id: string;
     readonly driver = 'bigquery';
 
-    constructor(options: { connectionId: string; connection: unknown; maxBytesBilled?: number | string }) {
+    constructor(options: { connectionId: string; connection: unknown }) {
       bigQueryMock.constructorInputs.push(options);
       this.id = `bigquery:${options.connectionId}`;
     }
@@ -61,7 +60,7 @@ describe('createKtxCliScanConnector', () => {
     expect(connector.driver).toBe('sqlite');
   });
 
-  it('passes BigQuery max_bytes_billed from standalone config', async () => {
+  it('passes canonical BigQuery YAML scan limits through to the connector', async () => {
     await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -72,6 +71,7 @@ describe('createKtxCliScanConnector', () => {
         '    driver: bigquery',
         '    dataset_id: analytics',
         '    max_bytes_billed: "987654321"',
+        '    job_timeout_ms: 30000',
         '',
       ].join('\n'),
       'utf-8',
@@ -85,9 +85,13 @@ describe('createKtxCliScanConnector', () => {
     expect(bigQueryMock.constructorInputs).toEqual([
       expect.objectContaining({
         connectionId: 'warehouse',
-        maxBytesBilled: '987654321',
+        connection: expect.objectContaining({
+          max_bytes_billed: '987654321',
+          job_timeout_ms: 30000,
+        }),
       }),
     ]);
+    expect(bigQueryMock.constructorInputs[0]).not.toHaveProperty('maxBytesBilled');
   });
 
   it('throws for structural daemon-only fallback configs', async () => {

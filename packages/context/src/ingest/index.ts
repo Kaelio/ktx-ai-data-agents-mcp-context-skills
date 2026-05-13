@@ -314,6 +314,7 @@ export type {
 } from './adapters/metricflow/pull-config.js';
 export { NOTION_ORG_KNOWLEDGE_WARNING } from './adapters/notion/chunk.js';
 export { NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN } from './adapters/notion/types.js';
+export { LocalNotionRuntimeStore } from './adapters/notion/local-state-store.js';
 export { NotionSourceAdapter, type NotionSourceAdapterDeps } from './adapters/notion/notion.adapter.js';
 export { NotionClient, type NotionApi, type NotionBotInfo } from './adapters/notion/notion-client.js';
 export { bucketDistinctUsers, bucketErrorRate, bucketExecutions, bucketP95Runtime, bucketRecency } from './adapters/historic-sql/buckets.js';

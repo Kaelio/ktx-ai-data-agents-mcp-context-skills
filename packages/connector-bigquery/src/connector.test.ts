@@ -267,6 +267,30 @@ describe('KtxBigQueryScanConnector', () => {
     );
   });
 
+  it('applies canonical BigQuery YAML scan limits to query jobs', async () => {
+    const clientFactory = fakeClientFactory();
+    const connector = new KtxBigQueryScanConnector({
+      connectionId: 'warehouse',
+      connection: { ...connection, max_bytes_billed: '987654321', job_timeout_ms: 30_000 },
+      clientFactory,
+    });
+
+    await expect(
+      connector.executeReadOnly(
+        { connectionId: 'warehouse', sql: 'select id, status from `project-1`.`analytics`.`orders`', maxRows: 1 },
+        { runId: 'scan-run-1' },
+      ),
+    ).resolves.toMatchObject({ rows: [[1, 'paid']], rowCount: 1 });
+
+    const client = vi.mocked(clientFactory.createClient).mock.results[0]?.value as KtxBigQueryClient;
+    expect(client.createQueryJob).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        maximumBytesBilled: '987654321',
+        jobTimeoutMs: 30_000,
+      }),
+    );
+  });
+
   it('adapts native snapshots to live-database introspection snapshots', async () => {
     const introspection = createBigQueryLiveDatabaseIntrospection({
       connections: { warehouse: connection },

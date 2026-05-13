@@ -18,13 +18,19 @@ Agents should configure and ingest context sources in this order:
 5. Review generated `semantic-layer/` YAML and `wiki/` Markdown files in git.
 6. Validate changed semantic sources with `ktx sl validate`.
 
-## Shared source fields
+## Common source fields
+
+Git repository fields are source-specific. dbt uses top-level `repo_url`,
+LookML uses top-level `repoUrl`, and MetricFlow uses nested
+`metricflow.repoUrl`.
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `driver` | Yes | Source adapter: `dbt`, `metricflow`, `lookml`, `metabase`, `looker`, or `notion` |
 | `source_dir` | For local file sources | Absolute or project-relative source directory |
-| `repo_url` | For Git-hosted sources | Git repository URL |
+| `repo_url` | For Git-hosted dbt sources | Git repository URL |
+| `repoUrl` | For Git-hosted LookML sources | Git repository URL |
+| `metricflow.repoUrl` | For Git-hosted MetricFlow sources | Git repository URL |
 | `branch` | No | Git branch to read |
 | `path` | No | Subdirectory inside a monorepo |
 | `auth_token_ref` | For private APIs/repos | `env:NAME` or `file:/path/to/secret` token reference |
@@ -350,7 +356,7 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 | `root_page_ids` | Page IDs to crawl from (for `selected_roots`) | `[]` |
 | `root_database_ids` | Database IDs to include | `[]` |
 | `max_pages_per_run` | Pages processed per sync | `1000` |
-| `max_knowledge_creates_per_run` | New pages created per sync | `5` |
+| `max_knowledge_creates_per_run` | New pages created per sync | `25` |
 | `max_knowledge_updates_per_run` | Pages updated per sync | `20` |
 
 ### What gets ingested
@@ -364,13 +370,14 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 
 - Notion is knowledge-only — it does not produce semantic layer sources
 - Rate limits apply; large workspaces may require multiple ingestion runs
-- `last_successful_cursor` is auto-managed for incremental sync
+- Incremental sync cursors are stored in `.ktx/db.sqlite`; don't add
+  `last_successful_cursor` to `ktx.yaml`
 
 ## Common errors
 
 | Error or symptom | Likely cause | Recovery |
 |------------------|--------------|----------|
-| Adapter cannot read source files | `source_dir`, `repo_url`, `branch`, or `path` is wrong | Verify the path locally or clone the repo manually with the same credentials |
+| Adapter cannot read source files | `source_dir`, `repo_url`, `repoUrl`, `metricflow.repoUrl`, `branch`, or `path` is wrong | Verify the path locally or clone the repo manually with the same credentials |
 | Private repo/API authentication fails | Token env var or secret file is missing | Export the env var or update `auth_token_ref` to a readable file |
 | Ingest creates duplicate context | Existing source names or wiki pages do not match imported terminology | Review the diff, rename duplicates, and add wiki pages with canonical names |
 | Notion ingest skips pages | Integration lacks access or root ids are missing | Share pages with the Notion integration and set `root_page_ids` or use `all_accessible` carefully |

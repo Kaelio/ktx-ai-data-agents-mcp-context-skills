@@ -28,7 +28,6 @@ export interface KtxSqliteConnectionConfig {
   driver?: string;
   path?: string;
   url?: string;
-  file_path?: string;
   [key: string]: unknown;
 }
 
@@ -146,12 +145,9 @@ export function sqliteDatabasePathFromConfig(input: SqliteDatabasePathInput): st
   if (!isKtxSqliteConnectionConfig(input.connection)) {
     throw new Error(`Native SQLite connector cannot run driver "${inputDriver}"`);
   }
-  const configuredPath =
-    stringConfigValue(input.connection, 'path') ??
-    stringConfigValue(input.connection, 'file_path') ??
-    sqlitePathFromUrl(stringConfigValue(input.connection, 'url') ?? '');
+  const configuredPath = stringConfigValue(input.connection, 'path') ?? sqlitePathFromUrl(stringConfigValue(input.connection, 'url') ?? '');
   if (!configuredPath) {
-    throw new Error(`Native SQLite connector requires connections.${input.connectionId}.path, file_path, or url`);
+    throw new Error(`Native SQLite connector requires connections.${input.connectionId}.path or url`);
   }
   return isAbsolute(configuredPath) ? configuredPath : resolve(input.projectDir ?? process.cwd(), configuredPath);
 }
