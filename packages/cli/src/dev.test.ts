@@ -106,6 +106,7 @@ describe('dev Commander tree', () => {
     for (const argv of [
       ['dev', 'doctor', 'setup'],
       ['dev', 'runtime', 'doctor'],
+      ['dev', 'runtime', 'prune', '--dry-run'],
       ['dev', 'scan', 'warehouse'],
       ['dev', 'ingest', 'run'],
       ['dev', 'mapping', 'list'],
@@ -126,7 +127,7 @@ describe('dev Commander tree', () => {
   it.each([
     {
       argv: ['dev', 'runtime', '--help'],
-      expected: ['Usage: ktx dev runtime', 'install', 'start', 'stop', 'status', 'prune'],
+      expected: ['Usage: ktx dev runtime', 'install', 'start', 'stop', 'status'],
     },
     {
       argv: ['scan', '--help'],
@@ -146,6 +147,10 @@ describe('dev Commander tree', () => {
 
     for (const text of expected) {
       expect(io.stdout()).toContain(text);
+    }
+    if (argv.join(' ') === 'dev runtime --help') {
+      expect(io.stdout()).not.toContain('prune');
+      expect(io.stdout()).not.toContain('doctor');
     }
     expect(io.stderr()).toBe('');
     expect(doctor).not.toHaveBeenCalled();

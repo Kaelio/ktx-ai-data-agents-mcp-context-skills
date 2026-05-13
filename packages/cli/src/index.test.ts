@@ -159,7 +159,7 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['dev', 'runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['dev', 'runtime', 'stop', '--all'], stopAllIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['dev', 'runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['dev', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(1);
 
     expect(runtime).toHaveBeenNthCalledWith(
       1,
@@ -208,19 +208,11 @@ describe('runKtxCli', () => {
       },
       statusIo.io,
     );
-    expect(runtime).toHaveBeenNthCalledWith(
-      6,
-      {
-        command: 'prune',
-        cliVersion: '0.0.0-private',
-        dryRun: true,
-        yes: false,
-      },
-      pruneIo.io,
-    );
-    for (const io of [installIo, startIo, stopIo, stopAllIo, statusIo, pruneIo]) {
+    expect(runtime).toHaveBeenCalledTimes(5);
+    for (const io of [installIo, startIo, stopIo, stopAllIo, statusIo]) {
       expect(io.stderr()).toBe('');
     }
+    expect(pruneIo.stderr()).toMatch(/unknown command|error:/);
   });
 
   it('prints the resolved project directory for ordinary project commands', async () => {
