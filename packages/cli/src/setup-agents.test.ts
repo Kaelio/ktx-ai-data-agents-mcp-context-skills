@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   formatInstallSummary,
@@ -89,7 +90,7 @@ describe('setup agents', () => {
       projectDir: tempDir,
       installs: [{ target: 'universal', scope: 'project', mode: 'cli' }],
     });
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('agents');
+    expect(await readKtxSetupState(tempDir)).toEqual({ completed_steps: ['agents'] });
     expect(io.stderr()).toBe('');
   });
 
@@ -143,7 +144,7 @@ describe('setup agents', () => {
     await expect(readKtxAgentInstallManifest(tempDir)).resolves.toEqual(null);
   });
 
-  it('uses prompts in interactive mode and supports Back', async () => {
+  it('treats cancel as skip in interactive mode', async () => {
     const io = makeIo();
     const prompts = {
       select: vi.fn(async () => 'back'),
@@ -165,7 +166,7 @@ describe('setup agents', () => {
         io.io,
         { prompts },
       ),
-    ).resolves.toEqual({ status: 'back', projectDir: tempDir });
+    ).resolves.toEqual({ status: 'skipped', projectDir: tempDir });
   });
 
   it('explains how to select multiple agent targets in interactive mode', async () => {

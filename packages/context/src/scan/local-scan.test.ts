@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import YAML from 'yaml';
 import type { SourceAdapter } from '../ingest/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
-import { getLocalScanReport, getLocalScanStatus, runLocalScan } from './local-scan.js';
-import type { KtxQueryResult, KtxReadOnlyQueryInput } from './types.js';
+import { filterSnapshotTables, getLocalScanReport, getLocalScanStatus, resolveEnabledTables, runLocalScan } from './local-scan.js';
+import type { KtxQueryResult, KtxReadOnlyQueryInput, KtxSchemaSnapshot, KtxSchemaTable } from './types.js';
 
 function relationshipSqlResult(
   input: KtxReadOnlyQueryInput,
@@ -1490,5 +1490,81 @@ describe('local scan', () => {
     expect(result.report.artifactPaths.reportPath).toBe(
       'raw-sources/warehouse/live-database/2026-04-29-160000-scan-run-sqlserver/scan-report.json',
     );
+  });
+});
+
+describe('resolveEnabledTables', () => {
+  it('returns null when no enabled_tables field', () => {
+    expect(resolveEnabledTables({ driver: 'postgres' })).toBeNull();
+  });
+
+  it('returns null for empty array', () => {
+    expect(resolveEnabledTables({ driver: 'postgres', enabled_tables: [] })).toBeNull();
+  });
+
+  it('returns Set of enabled table names', () => {
+    const result = resolveEnabledTables({
+      driver: 'postgres',
+      enabled_tables: ['public.users', 'public.orders'],
+    });
+    expect(result).toBeInstanceOf(Set);
+    expect(result!.size).toBe(2);
+    expect(result!.has('public.users')).toBe(true);
+    expect(result!.has('public.orders')).toBe(true);
+  });
+
+  it('returns null for undefined connection', () => {
+    expect(resolveEnabledTables(undefined)).toBeNull();
+  });
+});
+
+describe('filterSnapshotTables', () => {
+  function makeSnapshot(tables: Array<{ db: string; name: string }>): KtxSchemaSnapshot {
+    return {
+      connectionId: 'test',
+      driver: 'postgres',
+      extractedAt: '2026-01-01T00:00:00Z',
+      scope: {},
+      metadata: {},
+      tables: tables.map(
+        (t): KtxSchemaTable => ({
+          catalog: null,
+          db: t.db,
+          name: t.name,
+          kind: 'table',
+          comment: null,
+          estimatedRows: null,
+          columns: [],
+          foreignKeys: [],
+        }),
+      ),
+    };
+  }
+
+  it('keeps only enabled tables', () => {
+    const snapshot = makeSnapshot([
+      { db: 'public', name: 'users' },
+      { db: 'public', name: 'orders' },
+      { db: 'public', name: 'logs' },
+    ]);
+    const enabled = new Set(['public.users', 'public.orders']);
+    const filtered = filterSnapshotTables(snapshot, enabled);
+    expect(filtered.tables).toHaveLength(2);
+    expect(filtered.tables.map((t) => t.name)).toEqual(['users', 'orders']);
+  });
+
+  it('returns empty tables when none match', () => {
+    const snapshot = makeSnapshot([{ db: 'public', name: 'users' }]);
+    const enabled = new Set(['public.orders']);
+    const filtered = filterSnapshotTables(snapshot, enabled);
+    expect(filtered.tables).toHaveLength(0);
+  });
+
+  it('preserves other snapshot fields', () => {
+    const snapshot = makeSnapshot([{ db: 'public', name: 'users' }]);
+    const enabled = new Set(['public.users']);
+    const filtered = filterSnapshotTables(snapshot, enabled);
+    expect(filtered.connectionId).toBe('test');
+    expect(filtered.driver).toBe('postgres');
   });
 });
