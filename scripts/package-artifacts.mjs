@@ -459,9 +459,6 @@ export function npmSmokePackageJson(layout) {
     dependencies: {
       '@kaelio/ktx': `file:${layout.cliTarball}`,
     },
-    devDependencies: {
-      'better-sqlite3': '^12.6.2',
-    },
   };
 }
 
@@ -485,11 +482,11 @@ if (typeof cli.runKtxCli !== 'function') {
 export function npmRuntimeSmokeSource() {
   return `
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -569,7 +566,7 @@ function getRunId(stdout) {
 }
 
 async function writeSqliteWarehouse(projectDir) {
-  const database = new Database(join(projectDir, 'warehouse.db'));
+  const database = new DatabaseSync(join(projectDir, 'warehouse.db'));
   try {
     database.exec(\`
 DROP TABLE IF EXISTS orders;

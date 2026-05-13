@@ -418,9 +418,7 @@ describe('verification snippets', () => {
     assert.deepEqual(packageJson.dependencies, {
       '@kaelio/ktx': `file:${layout.cliTarball}`,
     });
-    assert.deepEqual(packageJson.devDependencies, {
-      'better-sqlite3': '^12.6.2',
-    });
+    assert.equal(packageJson.devDependencies, undefined);
     assert.equal(
       npmSmokePnpmWorkspaceYaml(),
       ['packages:', '  - "."', 'allowBuilds:', '  better-sqlite3: true', ''].join('\n'),
@@ -463,7 +461,7 @@ describe('verification snippets', () => {
     assert.match(source, /semantic-layer', 'warehouse', 'orders\.yaml'/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'list'/);
     assert.match(source, /orders\.order_count/);
-    assert.match(source, /sqlite3/);
+    assert.match(source, /node:sqlite/);
     assert.match(source, /driver: sqlite/);
     assert.match(source, /path: warehouse\.db/);
     assert.match(source, /live-database/);
@@ -471,7 +469,7 @@ describe('verification snippets', () => {
     assert.match(source, /"mode": "compile_only"/);
     assert.match(source, /"mode": "executed"/);
     assert.match(source, /ktx sl query sqlite execute/);
-    assert.match(source, /import Database from 'better-sqlite3'/);
+    assert.match(source, /import \{ DatabaseSync \} from 'node:sqlite'/);
     assert.doesNotMatch(source, /run\('python'/);
     assert.match(source, /KTX_RUNTIME_ROOT/);
     assert.match(source, /managed-runtime/);

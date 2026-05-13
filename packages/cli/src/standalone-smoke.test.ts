@@ -182,7 +182,7 @@ describe('standalone built ktx CLI smoke', () => {
     ]);
     expect(run).toMatchObject({ code: 1, stdout: '' });
     expect(run.stderr).toContain(
-      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
+      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
     );
   });
 

@@ -120,7 +120,7 @@ describe('standalone local warehouse example', () => {
     ]);
     expect(ingest).toMatchObject({ code: 1, stdout: '' });
     expect(ingest.stderr).toContain(
-      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
+      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
     );
   }, 30_000);
 
