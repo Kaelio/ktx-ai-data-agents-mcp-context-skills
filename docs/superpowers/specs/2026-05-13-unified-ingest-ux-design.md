@@ -110,7 +110,7 @@ extra work KTX may perform.
 Depth is the public abstraction over the current scan engine:
 
 - `fast` maps to `KtxScanMode: structural` with `detectRelationships: false`.
-- `deep` maps to `KtxScanMode: enriched` with `detectRelationships: true`.
+- `deep` maps to `KtxScanMode: enriched` and requests relationship detection.
 - The internal `relationships` scan mode remains an advanced implementation
   detail. It is not a separate public depth in this v1.
 
@@ -118,7 +118,8 @@ Deep mode includes relationship discovery when the project's
 `scan.relationships.enabled` setting is true. Relationship validation thresholds
 and budgets remain governed by the existing internal `scan.relationships`
 configuration; users do not get a separate public relationship flag in this
-surface.
+surface. If `scan.relationships.enabled` is false, `--deep` still runs enriched
+database ingest but relationship discovery remains disabled.
 
 ### Fast
 
@@ -154,9 +155,11 @@ Deep mode is the best agent-readiness mode, but it can take longer and can
 require model, embedding, and database permissions.
 
 KTX must not silently downgrade an explicit or stored `deep` request to `fast`.
-If the project is missing the model, embedding, or scan-enrichment configuration
-required for deep ingest, KTX errors before starting the run and tells the user
-to run `ktx setup` or rerun with `--fast`.
+For a single database target, if the project is missing the model, embedding, or
+scan-enrichment configuration required for deep ingest, KTX errors before
+starting the run and tells the user to run `ktx setup` or rerun with `--fast`.
+For `--all`, deep-readiness failures follow the per-target rule in
+**Error handling and warnings**.
 
 ### Flag rules
 
@@ -210,6 +213,23 @@ KTX prints a warning when a user combines `--fast` with `--query-history`:
 ```text
 --query-history requires deep ingest; running warehouse with --deep.
 ```
+
+Stored `connections.<id>.context.queryHistory.enabled: true` has the same
+depth requirement. When no explicit depth flag is passed, stored query-history
+enablement upgrades the effective database depth to `deep` for that run. When a
+user explicitly passes `--fast` and does not pass `--query-history`, KTX honors
+the explicit fast request, skips stored query-history processing for that run,
+does not modify `ktx.yaml`, and prints a warning:
+
+```text
+warehouse has query history enabled in ktx.yaml, but --fast skips query-history processing.
+```
+
+`--query-history-window-days <n>` overrides
+`connections.<id>.context.queryHistory.windowDays` only for the current run. It
+must not rewrite `ktx.yaml`. The effective value flows into the same
+`historicSqlUnifiedPullConfigSchema.windowDays` field used by the current
+historic-SQL pull path.
 
 ## Configuration model
 
@@ -296,8 +316,16 @@ Deep: AI descriptions, embeddings, relationships, slower
 
 The recommended selection depends on readiness:
 
-- Recommend Fast when model or embedding configuration is missing.
-- Recommend Deep when model and embedding configuration are ready.
+- Recommend Fast when model, embedding, or scan-enrichment configuration is
+  missing.
+- Recommend Deep when model, embedding, and scan-enrichment configuration are
+  ready.
+
+The recommendation is based on the final configuration produced by the current
+setup run, not on an earlier intermediate state. Setup must either ask the depth
+question after the model, embedding, and scan-enrichment setup paths complete,
+or defer or repeat the depth prompt before the foreground context build starts
+when those capabilities are configured later in the same setup run.
 
 Setup stores the chosen default in `connections.<id>.context.depth`. The
 foreground context build uses that stored default. Setup can still expose a
@@ -412,10 +440,10 @@ Warnings are non-fatal when KTX can still perform the requested ingest.
   schema ingest can run.
 - Both `--fast` and `--deep`: error before any work starts.
 - Explicit or stored `deep` without required model, embedding, or
-  scan-enrichment readiness: error before any work starts.
+  scan-enrichment readiness: error before any work starts for that target.
 - `--query-history` without required model, embedding, or scan-enrichment
-  readiness: error before any work starts because query history upgrades the
-  run to `deep`.
+  readiness: error before any work starts for that target because query history
+  upgrades the run to `deep`.
 - Query-history requested without required grants: fail that query-history
   facet and keep schema results when schema ingest succeeded.
 - Database schema ingest failure: fail that database target.
@@ -426,6 +454,14 @@ therefore run against previously completed database context if the current
 database refresh failed. The final exit code is non-zero when any target or
 required facet fails, and the summary identifies partial failures by
 connection.
+
+For `--all`, readiness is evaluated per target after resolving each target's
+effective depth and query-history settings. A database target whose effective
+run requires deep readiness but lacks model, embedding, or scan-enrichment
+configuration fails before work starts for that target; eligible database and
+source targets still run. Command-level errors that make target planning
+impossible, such as mutually exclusive flags, an unreadable project config, or
+no eligible targets, still abort before any target work starts.
 
 Failure messages focus on the connection and user action:
 
@@ -444,13 +480,18 @@ The implementation is complete when these conditions hold:
 - `ktx ingest --all` runs database targets before source targets.
 - `--fast` and `--deep` control database depth and are mutually exclusive.
 - `--fast` maps to structural database ingest without relationship detection.
-- `--deep` maps to enriched database ingest with relationship detection enabled.
+- `--deep` maps to enriched database ingest with relationship detection when
+  `scan.relationships.enabled` is true.
 - `--deep` and `--query-history` fail before work starts when required model,
   embedding, or scan-enrichment configuration is missing.
 - `ktx ingest --all` continues independent targets after partial failures and
   exits non-zero when any target or required facet fails.
+- `ktx ingest --all` treats deep-readiness failures as per-target failures
+  after target planning, rather than aborting eligible independent targets.
 - `ktx setup` stores a database context depth without exposing top-level
   `--fast` or `--deep`.
+- `ktx setup` bases the recommended/default database context depth on the final
+  model, embedding, and scan-enrichment readiness reached by the setup run.
 - `ktx setup` treats fast database context as ready after completed structural
   schema ingest and does not require AI descriptions or embeddings for fast.
 - Generated `ktx.yaml` does not include `live-database` for normal projects.
@@ -461,6 +502,11 @@ The implementation is complete when these conditions hold:
 - Normal CLI help and output do not present `ktx ingest watch` as live context
   build control.
 - Query history is optional, connection-local, and overridable per ingest run.
+- Stored query-history enablement upgrades default database ingest to deep, but
+  explicit `--fast` skips stored query history for that run with a warning.
+- `--query-history-window-days` overrides the effective historic-SQL
+  `windowDays` pull config for the current run only and does not rewrite
+  `ktx.yaml`.
 - Context build has no detach, attach, watch, resume, stop, or background
   execution path.
 - Existing setup context progress UX is consolidated with `ktx ingest` rather
