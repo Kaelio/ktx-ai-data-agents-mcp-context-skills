@@ -81,6 +81,8 @@ export interface KtxPublicIngestTargetResult {
 
 export type KtxPublicIngestProject = Pick<KtxLocalProject, 'projectDir' | 'config'>;
 
+type KtxPublicIngestPhaseKey = 'database-schema' | 'query-history' | 'source-ingest';
+
 export interface KtxPublicIngestDeps {
   loadProject?: (options: Parameters<typeof loadKtxProject>[0]) => Promise<KtxPublicIngestProject>;
   runScan?: (args: KtxScanArgs, io: KtxCliIo, deps?: KtxScanDeps) => Promise<number>;
@@ -92,6 +94,8 @@ export interface KtxPublicIngestDeps {
   ) => Promise<{ exitCode: number }>;
   scanProgress?: KtxProgressPort;
   ingestProgress?: (update: KtxIngestProgressUpdate) => void;
+  onPhaseStart?: (phaseKey: KtxPublicIngestPhaseKey) => void;
+  onPhaseEnd?: (phaseKey: KtxPublicIngestPhaseKey, status: 'done' | 'failed' | 'skipped', summary?: string) => void;
 }
 
 interface KtxPublicContextBuildArgs {
@@ -657,7 +661,7 @@ function createCapturedPublicIngestIo(): CapturedPublicIngestIo {
 }
 
 const INTERNAL_STATUS_LINE_RE =
-  /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Work units|Saved memory|Provenance rows):\s*/;
+  /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
 
 function firstCapturedFailureLine(output: string): string | undefined {
   return output
@@ -677,6 +681,14 @@ export async function executePublicIngestTarget(
   deps: KtxPublicIngestDeps,
 ): Promise<KtxPublicIngestTargetResult> {
   if (target.preflightFailure) {
+    if (target.operation === 'database-ingest') {
+      deps.onPhaseEnd?.('database-schema', 'failed', target.preflightFailure);
+      if (target.queryHistory?.enabled === true) {
+        deps.onPhaseEnd?.('query-history', 'skipped');
+      }
+    } else {
+      deps.onPhaseEnd?.('source-ingest', 'failed', target.preflightFailure);
+    }
     return {
       connectionId: target.connectionId,
       driver: target.driver,
@@ -707,10 +719,15 @@ export async function executePublicIngestTarget(
     const runScan = deps.runScan ?? runKtxScan;
     const capturedScanIo = deps.scanProgress ? null : createCapturedPublicIngestIo();
     const scanIo = capturedScanIo ?? io;
+    deps.onPhaseStart?.('database-schema');
     const scanExitCode = deps.scanProgress
       ? await runScan(scanArgs, scanIo, { progress: deps.scanProgress })
       : await runScan(scanArgs, scanIo);
     if (scanExitCode !== 0) {
+      deps.onPhaseEnd?.('database-schema', 'failed');
+      if (target.queryHistory?.enabled === true) {
+        deps.onPhaseEnd?.('query-history', 'skipped');
+      }
       return markTargetResult(
         target,
         args,
@@ -719,6 +736,7 @@ export async function executePublicIngestTarget(
         capturedScanIo ? firstCapturedFailureLine(capturedScanIo.capturedOutput()) : undefined,
       );
     }
+    deps.onPhaseEnd?.('database-schema', 'done');
 
     if (target.queryHistory?.enabled === true) {
       const { runKtxIngest } = await import('./ingest.js');
@@ -741,10 +759,12 @@ export async function executePublicIngestTarget(
       };
       const capturedIngestIo = deps.ingestProgress ? null : createCapturedPublicIngestIo();
       const ingestIo = capturedIngestIo ?? io;
+      deps.onPhaseStart?.('query-history');
       const qhExitCode = deps.ingestProgress
         ? await runIngest(ingestArgs, ingestIo, { progress: deps.ingestProgress })
         : await runIngest(ingestArgs, ingestIo);
       if (qhExitCode !== 0) {
+        deps.onPhaseEnd?.('query-history', 'failed');
         return markTargetResult(
           target,
           args,
@@ -753,6 +773,7 @@ export async function executePublicIngestTarget(
           capturedIngestIo ? firstCapturedFailureLine(capturedIngestIo.capturedOutput()) : undefined,
         );
       }
+      deps.onPhaseEnd?.('query-history', 'done');
     }
 
     return markTargetResult(target, args, 'done');
@@ -774,9 +795,11 @@ export async function executePublicIngestTarget(
   const runIngest = deps.runIngest ?? runKtxIngest;
   const capturedIngestIo = deps.ingestProgress ? null : createCapturedPublicIngestIo();
   const ingestIo = capturedIngestIo ?? io;
+  deps.onPhaseStart?.('source-ingest');
   const exitCode = deps.ingestProgress
     ? await runIngest(ingestArgs, ingestIo, { progress: deps.ingestProgress })
     : await runIngest(ingestArgs, ingestIo);
+  deps.onPhaseEnd?.('source-ingest', exitCode === 0 ? 'done' : 'failed');
   return markTargetResult(
     target,
     args,

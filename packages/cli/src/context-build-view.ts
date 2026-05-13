@@ -19,6 +19,21 @@ profileMark('module:context-build-view');
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const ESC = String.fromCharCode(0x1b);
 
+type PhaseKey = 'database-schema' | 'query-history' | 'source-ingest';
+type PhaseStatus = 'queued' | 'running' | 'done' | 'failed' | 'skipped';
+
+interface PhaseState {
+  key: PhaseKey;
+  name: string;
+  status: PhaseStatus;
+  percent: number;
+  detail: string | null;
+  summary: string | null;
+  startedAt: number | null;
+  elapsedMs: number;
+  progressUpdatedAtMs: number | null;
+}
+
 export interface ContextBuildTargetState {
   target: KtxPublicIngestPlanTarget;
   status: 'queued' | 'running' | 'done' | 'failed';
@@ -28,6 +43,35 @@ export interface ContextBuildTargetState {
   startedAt: number | null;
   elapsedMs: number;
   progressUpdatedAtMs: number | null;
+  phases: PhaseState[];
+}
+
+const PHASE_LABELS: Record<PhaseKey, string> = {
+  'database-schema': 'Schema',
+  'query-history': 'Query history',
+  'source-ingest': 'Source ingest',
+};
+
+function makePhasesForTarget(target: KtxPublicIngestPlanTarget): PhaseState[] {
+  const make = (key: PhaseKey): PhaseState => ({
+    key,
+    name: PHASE_LABELS[key],
+    status: 'queued',
+    percent: 0,
+    detail: null,
+    summary: null,
+    startedAt: null,
+    elapsedMs: 0,
+    progressUpdatedAtMs: null,
+  });
+  if (target.operation === 'database-ingest') {
+    const phases: PhaseState[] = [make('database-schema')];
+    if (target.queryHistory?.enabled === true) {
+      phases.push(make('query-history'));
+    }
+    return phases;
+  }
+  return [make('source-ingest')];
 }
 
 export interface ContextBuildViewState {
@@ -121,6 +165,34 @@ function statusIcon(status: ContextBuildTargetState['status'], frame: number, st
   }
 }
 
+function phaseStatusIcon(status: PhaseStatus, frame: number, styled: boolean): string {
+  const raw = (() => {
+    switch (status) {
+      case 'done':
+        return '✓';
+      case 'failed':
+        return '✗';
+      case 'running':
+        return SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? '⠋';
+      case 'skipped':
+        return '·';
+      default:
+        return '○';
+    }
+  })();
+  if (!styled) return raw;
+  switch (status) {
+    case 'done':
+      return green(raw);
+    case 'failed':
+      return red(raw);
+    case 'running':
+      return cyan(raw);
+    default:
+      return dim(raw);
+  }
+}
+
 function extractPercent(detailLine: string | null): number | null {
   if (!detailLine) return null;
   const match = detailLine.match(/^\[(\d+)%\]/);
@@ -182,13 +254,70 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean): string 
   return styled ? dim('queued') : 'queued';
 }
 
+const PHASE_NAME_WIDTH = 14;
+
+function renderRunningTargetHeaderDetail(target: ContextBuildTargetState, styled: boolean): string {
+  const elapsed = target.elapsedMs > 0 ? `(${formatDuration(target.elapsedMs)})` : '';
+  if (!elapsed) return '';
+  return styled ? dim(elapsed) : elapsed;
+}
+
+function renderPhaseRow(phase: PhaseState, frame: number, styled: boolean): string {
+  const icon = phaseStatusIcon(phase.status, frame, styled);
+  const name = phase.name.padEnd(PHASE_NAME_WIDTH);
+  const segments: string[] = [];
+  if (phase.status === 'queued' || phase.status === 'skipped') {
+    const emptyBar = BAR_EMPTY.repeat(BAR_WIDTH);
+    segments.push(styled ? dim(emptyBar) : emptyBar);
+    segments.push(styled ? dim('  —') : '  —');
+  } else {
+    const pct = Math.max(0, Math.min(100, Math.round(phase.percent)));
+    segments.push(renderProgressBar(pct, styled));
+    segments.push(`${String(pct).padStart(3)}%`);
+  }
+  let trailing = '';
+  if (phase.status === 'done') {
+    const parts: string[] = [];
+    if (phase.summary) parts.push(phase.summary);
+    if (phase.elapsedMs > 0) {
+      const elapsed = `(${formatDuration(phase.elapsedMs)})`;
+      parts.push(styled ? dim(elapsed) : elapsed);
+    }
+    trailing = parts.join('  ');
+  } else if (phase.status === 'running') {
+    const parts: string[] = [];
+    if (phase.detail) parts.push(phase.detail);
+    if (phase.elapsedMs > 0) {
+      const elapsed = `(${formatDuration(phase.elapsedMs)})`;
+      parts.push(styled ? dim(elapsed) : elapsed);
+    }
+    trailing = parts.join('  ');
+  } else if (phase.status === 'queued') {
+    trailing = styled ? dim('queued') : 'queued';
+  } else if (phase.status === 'skipped') {
+    trailing = styled ? dim('skipped') : 'skipped';
+  } else if (phase.status === 'failed') {
+    trailing = styled ? red('failed') : 'failed';
+  }
+  const bar = `${segments.join(' ')}  ${trailing}`.trimEnd();
+  return `        ${icon} ${name} ${bar}`;
+}
+
 function columnWidth(state: ContextBuildViewState): number {
   const all = [...state.primarySources, ...state.contextSources];
   return Math.max(12, ...all.map((t) => t.target.connectionId.length)) + 2;
 }
 
-function renderTargetLine(target: ContextBuildTargetState, frame: number, styled: boolean, width: number): string {
-  return `    ${statusIcon(target.status, frame, styled)} ${target.target.connectionId.padEnd(width)} ${targetDetail(target, styled)}`;
+function renderTargetRows(target: ContextBuildTargetState, frame: number, styled: boolean, width: number): string[] {
+  const icon = statusIcon(target.status, frame, styled);
+  const name = target.target.connectionId.padEnd(width);
+  const anyPhaseStarted = target.phases.some((p) => p.status !== 'queued');
+  if (target.status === 'running' && target.phases.length > 0 && anyPhaseStarted) {
+    const headerDetail = renderRunningTargetHeaderDetail(target, styled);
+    const headerLine = `    ${icon} ${name} ${headerDetail}`.trimEnd();
+    return [headerLine, ...target.phases.map((phase) => renderPhaseRow(phase, frame, styled))];
+  }
+  return [`    ${icon} ${name} ${targetDetail(target, styled)}`];
 }
 
 function renderTargetGroup(
@@ -199,7 +328,7 @@ function renderTargetGroup(
   width: number,
 ): string[] {
   if (targets.length === 0) return [];
-  return ['', `  ${label}:`, ...targets.map((t) => renderTargetLine(t, frame, styled, width))];
+  return ['', `  ${label}:`, ...targets.flatMap((t) => renderTargetRows(t, frame, styled, width))];
 }
 
 function renderMessageGroup(label: string, messages: string[], styled: boolean): string[] {
@@ -306,8 +435,8 @@ export function parseScanSummary(output: string): string | null {
 export function parseIngestSummary(output: string): string | null {
   const savedMemory = output.match(/Saved memory: (.+)/);
   if (savedMemory) return savedMemory[1];
-  const workUnits = output.match(/Work units: (\d+)/);
-  if (workUnits) return `${workUnits[1]} work units`;
+  const tasks = output.match(/(?:Tasks|Work units): (\d+)/);
+  if (tasks) return `${tasks[1]} tasks`;
   return null;
 }
 
@@ -422,6 +551,7 @@ export function viewStateFromSourceProgress(
     startedAt: s.startedAtMs ?? null,
     elapsedMs: s.status === 'running' && s.startedAtMs ? now - s.startedAtMs : (s.elapsedMs ?? 0),
     progressUpdatedAtMs: s.updatedAtMs ?? null,
+    phases: [],
   });
 
   return {
@@ -492,6 +622,7 @@ function makeTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTargetS
     startedAt: null,
     elapsedMs: 0,
     progressUpdatedAtMs: null,
+    phases: makePhasesForTarget(target),
   };
 }
 
@@ -550,7 +681,7 @@ function failedStepDetail(result: KtxPublicIngestTargetResult): string | null {
 }
 
 const INTERNAL_FAILURE_LINE_RE =
-  /^(Report|Run|Job|Status|Adapter|Connection|Sync|Mode|Dry run|Diff|Work units|Saved memory|Provenance rows):\s*/;
+  /^(Report|Run|Job|Status|Adapter|Connection|Sync|Mode|Dry run|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
 const ACTIONABLE_FAILURE_LINE_RE =
   /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
 
@@ -736,6 +867,11 @@ export async function runContextBuild(
         if (t.status === 'running' && t.startedAt !== null) {
           t.elapsedMs = nowFn() - t.startedAt;
         }
+        for (const phase of t.phases) {
+          if (phase.status === 'running' && phase.startedAt !== null) {
+            phase.elapsedMs = nowFn() - phase.startedAt;
+          }
+        }
       }
       paint(true);
     }, 140);
@@ -784,8 +920,21 @@ export async function runContextBuild(
       paint(true);
       publishSourceProgress(true);
       let hasPendingProgressPublish = false;
+      const ingestPhaseKeyForTarget: PhaseKey =
+        targetState.target.operation === 'database-ingest' ? 'query-history' : 'source-ingest';
 
-      const updateTargetProgress = (update: KtxIngestProgressUpdate) => {
+      const updateNamedPhase = (key: PhaseKey, update: KtxIngestProgressUpdate): void => {
+        const phase = targetState.phases.find((p) => p.key === key);
+        if (phase) {
+          if (phase.status === 'queued') {
+            phase.status = 'running';
+            phase.startedAt = nowFn();
+          }
+          const sanitizedMessage = update.message.replace(/^\[\d+%\]\s*/, '');
+          phase.detail = publicProgressMessage(sanitizedMessage, targetState.target);
+          phase.percent = Math.max(phase.percent, Math.max(0, Math.min(100, Math.round(update.percent))));
+          phase.progressUpdatedAtMs = nowFn();
+        }
         targetState.detailLine = formatProgressDetail(update, targetState.target);
         targetState.progressUpdatedAtMs = nowFn();
         if (!repainter) {
@@ -794,6 +943,9 @@ export async function runContextBuild(
         paint(true);
         hasPendingProgressPublish = !publishSourceProgress(false);
       };
+
+      const updateSchemaPhase = (update: KtxIngestProgressUpdate): void => updateNamedPhase('database-schema', update);
+      const updateIngestPhase = (update: KtxIngestProgressUpdate): void => updateNamedPhase(ingestPhaseKeyForTarget, update);
 
       const capture = createCaptureIo(
         (message) => {
@@ -807,9 +959,48 @@ export async function runContextBuild(
         },
         false,
       );
+
+      const onPhaseStart = (key: PhaseKey): void => {
+        const phase = targetState.phases.find((p) => p.key === key);
+        if (!phase) return;
+        phase.status = 'running';
+        if (phase.startedAt === null) phase.startedAt = nowFn();
+        phase.progressUpdatedAtMs = nowFn();
+        paint(true);
+        hasPendingProgressPublish = !publishSourceProgress(false);
+      };
+
+      const onPhaseEnd = (key: PhaseKey, status: 'done' | 'failed' | 'skipped', summary?: string): void => {
+        const phase = targetState.phases.find((p) => p.key === key);
+        if (!phase) return;
+        phase.status = status;
+        if (phase.startedAt !== null) {
+          phase.elapsedMs = nowFn() - phase.startedAt;
+        }
+        if (status === 'done') {
+          phase.percent = 100;
+        }
+        let resolvedSummary = summary;
+        if (status === 'done' && !resolvedSummary) {
+          const captured = capture.captured();
+          if (key === 'database-schema') {
+            resolvedSummary = parseScanSummary(captured) ?? undefined;
+          } else if (key === 'query-history' || key === 'source-ingest') {
+            resolvedSummary = parseIngestSummary(captured) ?? undefined;
+          }
+        }
+        if (resolvedSummary) {
+          phase.summary = resolvedSummary;
+        }
+        paint(true);
+        hasPendingProgressPublish = !publishSourceProgress(false);
+      };
+
       const progressDeps: KtxPublicIngestDeps = {
-        scanProgress: createContextBuildProgressPort(updateTargetProgress),
-        ingestProgress: updateTargetProgress,
+        scanProgress: createContextBuildProgressPort(updateSchemaPhase),
+        ingestProgress: updateIngestPhase,
+        onPhaseStart,
+        onPhaseEnd,
       };
 
       let result: KtxPublicIngestTargetResult | null = null;

@@ -31,8 +31,8 @@ describe('public ingest copy sanitizers', () => {
     expect(publicQueryHistoryMessage('Fetching source files for warehouse/historic-sql', 'warehouse')).toBe(
       'Fetching query history for warehouse',
     );
-    expect(publicQueryHistoryMessage('Curating warehouse/historic-sql work units', 'warehouse')).toBe(
-      'Curating warehouse query history work units',
+    expect(publicQueryHistoryMessage('Curating warehouse/historic-sql tasks', 'warehouse')).toBe(
+      'Curating warehouse query history tasks',
     );
     expect(publicQueryHistoryMessage('historic SQL local ingest failed', 'warehouse')).toBe(
       'query history local ingest failed',

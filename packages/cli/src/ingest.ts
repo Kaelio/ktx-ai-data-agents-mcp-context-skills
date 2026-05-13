@@ -138,7 +138,7 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
   io.stdout.write(
     `Diff: +${report.body.diffSummary.added}/~${report.body.diffSummary.modified}/-${report.body.diffSummary.deleted}/=${report.body.diffSummary.unchanged}\n`,
   );
-  io.stdout.write(`Work units: ${report.body.workUnits.length}\n`);
+  io.stdout.write(`Tasks: ${report.body.workUnits.length}\n`);
   io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   io.stdout.write(`Provenance rows: ${report.body.provenanceRows.length}\n`);
 }
@@ -158,8 +158,8 @@ function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIng
   io.stdout.write(`Source: ${result.metabaseConnectionId}\n`);
   io.stdout.write(`Children: ${result.children.length}\n`);
   if (result.totals) {
-    io.stdout.write(`Work units: ${result.totals.workUnits}\n`);
-    io.stdout.write(`Failed work units: ${result.totals.failedWorkUnits}\n`);
+    io.stdout.write(`Tasks: ${result.totals.workUnits}\n`);
+    io.stdout.write(`Failed tasks: ${result.totals.failedWorkUnits}\n`);
   }
   io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   for (const child of result.children) {
@@ -280,19 +280,19 @@ function plainIngestEventProgress(
       if (event.workUnitCount === 0) {
         return {
           percent: 80,
-          message: 'No work units to process; finalizing ingest',
+          message: 'No tasks to process; finalizing ingest',
         };
       }
       return {
         percent: 45,
-        message: `Planned ${pluralize(event.workUnitCount, 'work unit')}`,
+        message: `Planned ${pluralize(event.workUnitCount, 'task')}`,
       };
     case 'stage_skipped':
       return { percent: 45, message: `Skipped ${event.stage}: ${event.reason}` };
     case 'work_unit_started': {
       const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
       const ordinal = workUnitOrdinalThrough(snapshot, eventIndex, event.unitKey);
-      const progress = total > 0 ? `${ordinal}/${total} work units: ` : '';
+      const progress = total > 0 ? `${ordinal}/${total} tasks: ` : '';
       return { percent: 55, message: `Processing ${progress}${event.unitKey}` };
     }
     case 'work_unit_step': {
@@ -304,7 +304,7 @@ function plainIngestEventProgress(
       const latest = `${event.unitKey} step ${event.stepIndex}/${event.stepBudget}`;
       return {
         percent,
-        message: `Processing work units: ${completed}/${total} complete, ${active} active; latest ${latest}`,
+        message: `Processing tasks: ${completed}/${total} complete, ${active} active; latest ${latest}`,
         transient: true,
       };
     }
@@ -314,7 +314,7 @@ function plainIngestEventProgress(
       const percent = total > 0 ? 55 + Math.round((completed / total) * 25) : 80;
       return {
         percent,
-        message: `Processed ${completed}/${total} work units`,
+        message: `Processed ${completed}/${total} tasks`,
       };
     }
     case 'reconciliation_finished':

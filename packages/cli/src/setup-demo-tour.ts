@@ -56,6 +56,7 @@ function createTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTarge
     startedAt: null,
     elapsedMs: 0,
     progressUpdatedAtMs: null,
+    phases: [],
   };
 }
 

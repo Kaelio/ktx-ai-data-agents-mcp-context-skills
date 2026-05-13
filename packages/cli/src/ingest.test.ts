@@ -202,9 +202,9 @@ describe('runKtxIngest', () => {
       expect.arrayContaining([
         { percent: 5, message: 'Fetching source files for warehouse/fake' },
         { percent: 15, message: 'Fetched 2 source files from fake' },
-        { percent: 45, message: 'Planned 2 work units' },
+        { percent: 45, message: 'Planned 2 tasks' },
         expect.objectContaining({
-          message: 'Processing work units: 0/2 complete, 1 active; latest orders step 2/4',
+          message: 'Processing tasks: 0/2 complete, 1 active; latest orders step 2/4',
           transient: true,
         }),
       ]),
@@ -243,10 +243,10 @@ describe('runKtxIngest', () => {
 
     expect(progressEvents).toEqual(
       expect.arrayContaining([
-        { percent: 80, message: 'No work units to process; finalizing ingest' },
+        { percent: 80, message: 'No tasks to process; finalizing ingest' },
       ]),
     );
-    expect(progressEvents).not.toContainEqual({ percent: 45, message: 'Planned 0 work units' });
+    expect(progressEvents).not.toContainEqual({ percent: 45, message: 'Planned 0 tasks' });
   });
 
   it('prints provider setup guidance when a skip-llm setup project runs ingest', async () => {
@@ -440,7 +440,7 @@ describe('runKtxIngest', () => {
     ).resolves.toBe(1);
 
     expect(io.stdout()).toContain('Metabase fan-out: partial_failure');
-    expect(io.stdout()).toContain('Failed work units: 1');
+    expect(io.stdout()).toContain('Failed tasks: 1');
     expect(io.stdout()).toContain('status=error');
     expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
@@ -1307,8 +1307,8 @@ describe('runKtxIngest', () => {
     const stderr = io.stderr();
     expect(stderr).toContain('[5%] Fetching source files for warehouse/historic-sql');
     expect(stderr).toContain('[15%] Fetched 3 source files from historic-sql');
-    expect(stderr).toContain('[45%] Planned 1 work unit');
-    expect(stderr).toContain('[80%] Processed 1/1 work units');
+    expect(stderr).toContain('[45%] Planned 1 task');
+    expect(stderr).toContain('[80%] Processed 1/1 tasks');
     expect(stderr).toContain('[100%] Ingest completed');
     expect(stdout).toContain('Report: report-live-1');
     expect(stdout).not.toContain('[5%]');
@@ -1431,12 +1431,12 @@ describe('runKtxIngest', () => {
     ).resolves.toBe(0);
 
     const stderr = io.stderr();
-    expect(stderr).toContain('[45%] Planned 2 work units');
-    expect(stderr).toContain('[55%] Processing 1/2 work units: historic-sql-table-public-orders');
+    expect(stderr).toContain('[45%] Planned 2 tasks');
+    expect(stderr).toContain('[55%] Processing 1/2 tasks: historic-sql-table-public-orders');
     expect(stderr).toContain(
-      '\r[58%] Processing work units: 0/2 complete, 1 active; latest historic-sql-table-public-orders step 7/40\u001b[K',
+      '\r[58%] Processing tasks: 0/2 complete, 1 active; latest historic-sql-table-public-orders step 7/40\u001b[K',
     );
-    expect(stderr).toContain('[68%] Processed 1/2 work units');
+    expect(stderr).toContain('[68%] Processed 1/2 tasks');
   });
 
   it('renders concurrent WorkUnit step progress as transient aggregate status', async () => {
@@ -1524,10 +1524,10 @@ describe('runKtxIngest', () => {
 
     const stderr = io.stderr();
     expect(stderr).toContain(
-      '\r[56%] Processing work units: 0/6 complete, 6 active; latest historic-sql-table-public-suppliers step 1/40\u001b[K',
+      '\r[56%] Processing tasks: 0/6 complete, 6 active; latest historic-sql-table-public-suppliers step 1/40\u001b[K',
     );
     expect(stderr).not.toContain(
-      '\n[56%] Processing 6/6 work units: historic-sql-table-public-suppliers step 1/40\n',
+      '\n[56%] Processing 6/6 tasks: historic-sql-table-public-suppliers step 1/40\n',
     );
     expect(stderr).toContain('\n[100%] Ingest completed\n');
   });

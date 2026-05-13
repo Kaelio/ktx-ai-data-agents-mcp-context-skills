@@ -2,6 +2,7 @@ import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '@ktx/contex
 import { describe, expect, it, vi } from 'vitest';
 import type { KtxPublicIngestProject, KtxPublicIngestTargetResult } from './public-ingest.js';
 import {
+  type ContextBuildTargetState,
   extractProgressMessage,
   createRepainter,
   initViewState,
@@ -112,15 +113,19 @@ describe('parseScanSummary', () => {
 });
 
 describe('parseIngestSummary', () => {
-  it('extracts work units and saved memory', () => {
-    expect(parseIngestSummary('Work units: 5\nSaved memory: 3 wiki, 2 SL')).toBe('3 wiki, 2 SL');
+  it('extracts task count and saved memory', () => {
+    expect(parseIngestSummary('Tasks: 5\nSaved memory: 3 wiki, 2 SL')).toBe('3 wiki, 2 SL');
   });
 
-  it('extracts work units alone when no saved memory', () => {
-    expect(parseIngestSummary('Work units: 5\nStatus: done')).toBe('5 work units');
+  it('extracts task count alone when no saved memory', () => {
+    expect(parseIngestSummary('Tasks: 5\nStatus: done')).toBe('5 tasks');
   });
 
-  it('extracts saved memory alone when no work units', () => {
+  it('still parses the legacy "Work units:" wording for backward compat', () => {
+    expect(parseIngestSummary('Work units: 7\nStatus: done')).toBe('7 tasks');
+  });
+
+  it('extracts saved memory alone when no task count', () => {
     expect(parseIngestSummary('Saved memory: 3 wiki, 2 SL')).toBe('3 wiki, 2 SL');
   });
 
@@ -297,11 +302,11 @@ describe('renderContextBuildView', () => {
     state.contextSources[0].startedAt = 1_000;
     state.contextSources[0].elapsedMs = 113_000;
     state.contextSources[0].progressUpdatedAtMs = 46_000;
-    state.contextSources[0].detailLine = '[45%] No work units to process; finalizing ingest';
+    state.contextSources[0].detailLine = '[45%] No tasks to process; finalizing ingest';
 
     const output = renderContextBuildView(state, { styled: false });
 
-    expect(output).toContain('No work units to process; finalizing ingest');
+    expect(output).toContain('No tasks to process; finalizing ingest');
     expect(output).toContain('last update 1m08s ago');
     expect(output).toContain('(1m53s)');
   });
@@ -314,7 +319,7 @@ describe('renderContextBuildView', () => {
     state.contextSources[0].startedAt = 1_000;
     state.contextSources[0].elapsedMs = 40_000;
     state.contextSources[0].progressUpdatedAtMs = 25_000;
-    state.contextSources[0].detailLine = '[45%] Planning work units';
+    state.contextSources[0].detailLine = '[45%] Planning tasks';
 
     const output = renderContextBuildView(state, { styled: false });
 
@@ -411,6 +416,142 @@ describe('renderContextBuildView', () => {
 
     const output = renderContextBuildView(state, { styled: false, showHint: true });
     expect(output).not.toContain('Ctrl+C to stop');
+  });
+});
+
+describe('renderContextBuildView phase rows', () => {
+  function dbTarget(connectionId: string, queryHistoryEnabled = false) {
+    return {
+      connectionId,
+      driver: 'postgres',
+      operation: 'database-ingest' as const,
+      debugCommand: '',
+      steps: queryHistoryEnabled
+        ? (['database-schema', 'query-history'] as ('database-schema' | 'query-history')[])
+        : (['database-schema'] as ('database-schema' | 'query-history')[]),
+      ...(queryHistoryEnabled ? { queryHistory: { enabled: true, dialect: 'postgres' as const } } : {}),
+    };
+  }
+
+  function sourceTarget(connectionId: string) {
+    return {
+      connectionId,
+      driver: 'dbt',
+      operation: 'source-ingest' as const,
+      adapter: 'dbt',
+      debugCommand: '',
+      steps: ['source-ingest', 'memory-update'] as ('source-ingest' | 'memory-update')[],
+    };
+  }
+
+  function setPhase(
+    state: ReturnType<typeof initViewState>,
+    connectionId: string,
+    phaseKey: 'database-schema' | 'query-history' | 'source-ingest',
+    patch: Partial<ContextBuildTargetState['phases'][number]>,
+  ): void {
+    const target = [...state.primarySources, ...state.contextSources].find((t) => t.target.connectionId === connectionId);
+    const phase = target?.phases.find((p) => p.key === phaseKey);
+    if (!phase) throw new Error(`No phase ${phaseKey} on ${connectionId}`);
+    Object.assign(phase, patch);
+  }
+
+  it('renders two phase rows for a database-ingest target with query history', () => {
+    const state = initViewState([dbTarget('warehouse', true)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', {
+      status: 'done',
+      percent: 100,
+      summary: '172 tables',
+      elapsedMs: 52_000,
+    });
+    setPhase(state, 'warehouse', 'query-history', {
+      status: 'running',
+      percent: 7,
+      detail: '12/172 · arr-movements',
+      elapsedMs: 36_000,
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Schema');
+    expect(output).toContain('100%');
+    expect(output).toContain('172 tables');
+    expect(output).toContain('(52s)');
+    expect(output).toContain('Query history');
+    expect(output).toContain('7%');
+    expect(output).toContain('12/172 · arr-movements');
+    expect(output).toContain('(36s)');
+  });
+
+  it('renders a single Schema phase row when query history is disabled', () => {
+    const state = initViewState([dbTarget('warehouse', false)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', {
+      status: 'running',
+      percent: 42,
+      detail: 'Profiling 73/172 tables',
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Schema');
+    expect(output).toContain('42%');
+    expect(output).toContain('Profiling 73/172 tables');
+    expect(output).not.toContain('Query history');
+  });
+
+  it('renders Source ingest phase row for a source-ingest target', () => {
+    const state = initViewState([sourceTarget('dbt-main')]);
+    state.contextSources[0].status = 'running';
+    setPhase(state, 'dbt-main', 'source-ingest', {
+      status: 'running',
+      percent: 25,
+      detail: 'Reading models',
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Source ingest');
+    expect(output).toContain('25%');
+    expect(output).toContain('Reading models');
+    expect(output).not.toContain('Schema  ');
+  });
+
+  it('renders skipped Query history when schema phase fails', () => {
+    const state = initViewState([dbTarget('warehouse', true)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', { status: 'failed', percent: 30 });
+    setPhase(state, 'warehouse', 'query-history', { status: 'skipped' });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Schema');
+    expect(output).toContain('failed');
+    expect(output).toContain('Query history');
+    expect(output).toContain('skipped');
+  });
+
+  it('renders queued Query history with an em-dash and empty bar', () => {
+    const state = initViewState([dbTarget('warehouse', true)]);
+    state.primarySources[0].status = 'running';
+    setPhase(state, 'warehouse', 'database-schema', {
+      status: 'running',
+      percent: 12,
+      detail: 'Introspecting',
+    });
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Query history');
+    expect(output).toContain('queued');
+    expect(output).toContain('—');
+  });
+
+  it('falls back to single-line legacy detail when no phase has started yet', () => {
+    const state = initViewState([dbTarget('warehouse', false)]);
+    state.primarySources[0].status = 'running';
+    state.primarySources[0].detailLine = '[5%] Preparing database ingest';
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('Preparing database ingest');
+    expect(output).toContain('5%');
+    expect(output).not.toContain('○ Schema');
   });
 });
 
@@ -953,7 +1094,7 @@ describe('runContextBuild', () => {
       }
 
       targetIo.stdout.write('Report: report-dbt-failed\n');
-      targetIo.stdout.write('Work units: 3\n');
+      targetIo.stdout.write('Tasks: 3\n');
       return failedResult(target.connectionId, target.driver, target.operation);
     });
 
