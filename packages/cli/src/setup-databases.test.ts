@@ -513,11 +513,19 @@ describe('setup databases step', () => {
     });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => []);
+    const listTables = vi.fn(async () => []);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
-      { prompts, testConnection, scanConnection },
+      { prompts, testConnection, scanConnection, listSchemas, listTables },
     );
 
     expect(result.status).toBe('back');
