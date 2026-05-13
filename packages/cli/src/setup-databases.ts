@@ -9,6 +9,7 @@ import {
   setKtxSetupDatabaseConnectionIds,
   stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
+import type { KtxTableListEntry } from '@ktx/context/scan';
 import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnection } from './connection.js';
 import { withMenuOptionsSpacing, withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
@@ -83,6 +84,7 @@ export interface KtxSetupDatabasesDeps {
   testConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
   scanConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
   listSchemas?: (projectDir: string, connectionId: string) => Promise<string[]>;
+  listTables?: (projectDir: string, connectionId: string) => Promise<KtxTableListEntry[]>;
   historicSqlProbe?: KtxSetupHistoricSqlProbe;
 }
 
@@ -356,6 +358,80 @@ async function defaultListSchemas(projectDir: string, connectionId: string): Pro
     const connector = new KtxSnowflakeScanConnector({ connectionId, connection });
     try {
       return await connector.listSchemas();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  return [];
+}
+
+async function defaultListTables(projectDir: string, connectionId: string): Promise<KtxTableListEntry[]> {
+  const project = await loadKtxProject({ projectDir });
+  const connection = project.config.connections[connectionId];
+  const driver = normalizeDriver(connection?.driver);
+
+  if (driver === 'postgres') {
+    const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('@ktx/connector-postgres');
+    if (!isKtxPostgresConnectionConfig(connection)) return [];
+    const connector = new KtxPostgresScanConnector({ connectionId, connection });
+    try {
+      return await connector.listTables();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'mysql') {
+    const { KtxMysqlScanConnector, isKtxMysqlConnectionConfig } = await import('@ktx/connector-mysql');
+    if (!isKtxMysqlConnectionConfig(connection)) return [];
+    const connector = new KtxMysqlScanConnector({ connectionId, connection });
+    try {
+      return await connector.listTables();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'sqlserver') {
+    const { KtxSqlServerScanConnector, isKtxSqlServerConnectionConfig } = await import('@ktx/connector-sqlserver');
+    if (!isKtxSqlServerConnectionConfig(connection)) return [];
+    const connector = new KtxSqlServerScanConnector({ connectionId, connection });
+    try {
+      return await connector.listTables();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'bigquery') {
+    const { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig } = await import('@ktx/connector-bigquery');
+    if (!isKtxBigQueryConnectionConfig(connection)) return [];
+    const connector = new KtxBigQueryScanConnector({ connectionId, connection });
+    try {
+      return await connector.listTables();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'snowflake') {
+    const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('@ktx/connector-snowflake');
+    if (!isKtxSnowflakeConnectionConfig(connection)) return [];
+    const connector = new KtxSnowflakeScanConnector({ connectionId, connection });
+    try {
+      return await connector.listTables();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'clickhouse') {
+    const { KtxClickHouseScanConnector, isKtxClickHouseConnectionConfig } = await import('@ktx/connector-clickhouse');
+    if (!isKtxClickHouseConnectionConfig(connection)) return [];
+    const connector = new KtxClickHouseScanConnector({ connectionId, connection });
+    try {
+      return await connector.listTables();
     } finally {
       await connector.cleanup();
     }
@@ -1061,6 +1137,124 @@ async function maybeConfigureSchemaScope(input: {
   return true;
 }
 
+async function maybeConfigureTableScope(input: {
+  projectDir: string;
+  connectionId: string;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+  io: KtxCliIo;
+  deps: KtxSetupDatabasesDeps;
+}): Promise<boolean> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const connection = project.config.connections[input.connectionId];
+  const driver = normalizeDriver(connection?.driver);
+  if (!driver || driver === 'sqlite') return true;
+
+  const existingTables = connection?.enabled_tables;
+  if (Array.isArray(existingTables) && existingTables.length > 0) {
+    return true;
+  }
+
+  if (input.args.inputMode === 'disabled') {
+    return true;
+  }
+
+  writeSetupSection(input.io, 'Discovering tables', [
+    `Connecting to ${input.connectionId}…`,
+  ]);
+
+  let discovered: KtxTableListEntry[];
+  try {
+    discovered = await (input.deps.listTables ?? defaultListTables)(
+      input.projectDir,
+      input.connectionId,
+    );
+  } catch (error) {
+    input.io.stderr.write(
+      `Could not discover tables for ${input.connectionId}; continuing without table filter. ` +
+        `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    return true;
+  }
+
+  if (discovered.length === 0) {
+    return true;
+  }
+
+  const allQualified = discovered.map((t) => `${t.schema}.${t.name}`);
+
+  if (discovered.length === 1) {
+    await writeConnectionConfig({
+      projectDir: input.projectDir,
+      connectionId: input.connectionId,
+      connection: { ...connection!, enabled_tables: allQualified },
+    });
+    writeSetupSection(input.io, `Tables enabled for ${input.connectionId}`, [
+      `✓ ${allQualified[0]}`,
+    ]);
+    return true;
+  }
+
+  const bySchema = new Map<string, KtxTableListEntry[]>();
+  for (const entry of discovered) {
+    const existing = bySchema.get(entry.schema) ?? [];
+    existing.push(entry);
+    bySchema.set(entry.schema, existing);
+  }
+  const schemaList = [...bySchema.keys()].sort();
+  const schemaSummary = schemaList.map((s) => `${s} (${bySchema.get(s)!.length})`).join(', ');
+
+  const action = await input.prompts.select({
+    message: `Tables found in selected schemas\n` +
+      `${discovered.length} tables across ${schemaList.length} ${schemaList.length === 1 ? 'schema' : 'schemas'}: ${schemaSummary}`,
+    options: [
+      { value: 'all', label: 'Enable all tables' },
+      { value: 'customize', label: 'Customize which tables to enable' },
+    ],
+  });
+
+  if (action === 'back') {
+    return false;
+  }
+
+  let selected: string[];
+
+  if (action === 'all') {
+    selected = allQualified;
+  } else {
+    const choices = await input.prompts.multiselect({
+      message: withMultiselectNavigation(
+        `Tables to enable for ${input.connectionId}\n` +
+          `Deselect any tables agents should not use.`,
+      ),
+      options: discovered.map((t) => {
+        const qualified = `${t.schema}.${t.name}`;
+        const suffix = t.kind === 'view' ? ' (view)' : '';
+        return { value: qualified, label: `${qualified}${suffix}` };
+      }),
+      initialValues: allQualified,
+      required: true,
+    });
+
+    if (choices.includes('back')) {
+      return false;
+    }
+
+    selected = choices.length > 0 ? choices : allQualified;
+  }
+
+  await writeConnectionConfig({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    connection: { ...connection!, enabled_tables: selected },
+  });
+
+  writeSetupSection(input.io, `Tables enabled for ${input.connectionId}`, [
+    `✓ ${selected.length}/${discovered.length} tables enabled`,
+  ]);
+  return true;
+}
+
 async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
   const adapters = project.config.ingest.adapters.includes('historic-sql')
@@ -1190,6 +1384,10 @@ async function validateAndScanConnection(input: {
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
 
   if (!(await maybeConfigureSchemaScope(input))) {
+    return false;
+  }
+
+  if (!(await maybeConfigureTableScope(input))) {
     return false;
   }
 
