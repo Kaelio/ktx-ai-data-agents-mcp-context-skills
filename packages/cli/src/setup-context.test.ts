@@ -1,7 +1,14 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
+import {
+  buildDefaultKtxProjectConfig,
+  parseKtxProjectConfig,
+  readKtxSetupState,
+  serializeKtxProjectConfig,
+  type KtxProjectConfig,
+  writeKtxSetupState,
+} from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -32,39 +39,70 @@ function makeIo() {
   };
 }
 
-async function writeReadyProject(projectDir: string) {
-  await writeFile(
-    join(projectDir, 'ktx.yaml'),
-    [
-      'project: revenue',
-      'setup:',
-      '  database_connection_ids:',
-      '    - warehouse',
-      'connections:',
-      '  warehouse:',
-      '    driver: postgres',
-      '    url: env:DATABASE_URL',
-      '  docs:',
-      '    driver: notion',
-      '    auth_token_ref: env:NOTION_TOKEN',
-      '    crawl_mode: all_accessible',
-      'llm:',
-      '  provider:',
-      '    backend: anthropic',
-      '  models:',
-      '    default: claude-sonnet-4-6',
-      'ingest:',
-      '  embeddings:',
-      '    backend: openai',
-      '    model: text-embedding-3-small',
-      '    dimensions: 1536',
-      'scan:',
-      '  enrichment:',
-      '    mode: llm',
-      '',
-    ].join('\n'),
-    'utf-8',
-  );
+async function writeReadyProject(projectDir: string, overrides: Partial<KtxProjectConfig> = {}) {
+  const defaults = buildDefaultKtxProjectConfig('revenue');
+  const readyConfig: KtxProjectConfig = {
+    ...defaults,
+    setup: { database_connection_ids: ['warehouse'] },
+    connections: {
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
+      docs: { driver: 'notion', auth_token_ref: 'env:NOTION_TOKEN', crawl_mode: 'all_accessible' },
+    },
+    llm: {
+      provider: { backend: 'anthropic' },
+      models: { default: 'claude-sonnet-4-6' },
+    },
+    ingest: {
+      ...defaults.ingest,
+      embeddings: {
+        backend: 'openai',
+        model: 'text-embedding-3-small',
+        dimensions: 1536,
+      },
+    },
+    scan: {
+      ...defaults.scan,
+      enrichment: {
+        mode: 'llm',
+        embeddings: {
+          backend: 'openai',
+          model: 'text-embedding-3-small',
+          dimensions: 1536,
+        },
+      },
+    },
+  };
+  const nextConfig: KtxProjectConfig = {
+    ...readyConfig,
+    ...overrides,
+    setup: overrides.setup ?? readyConfig.setup,
+    connections: overrides.connections ?? readyConfig.connections,
+    llm: {
+      ...readyConfig.llm,
+      ...overrides.llm,
+      provider: overrides.llm?.provider ?? readyConfig.llm.provider,
+      models: overrides.llm?.models ?? readyConfig.llm.models,
+    },
+    ingest: {
+      ...readyConfig.ingest,
+      ...overrides.ingest,
+      embeddings: overrides.ingest?.embeddings ?? readyConfig.ingest.embeddings,
+      workUnits: overrides.ingest?.workUnits ?? readyConfig.ingest.workUnits,
+    },
+    scan: {
+      ...readyConfig.scan,
+      ...overrides.scan,
+      enrichment: {
+        ...readyConfig.scan.enrichment,
+        ...(overrides.scan?.enrichment ?? {}),
+      },
+      relationships: {
+        ...readyConfig.scan.relationships,
+        ...(overrides.scan?.relationships ?? {}),
+      },
+    },
+  };
+  await writeFile(join(projectDir, 'ktx.yaml'), serializeKtxProjectConfig(nextConfig), 'utf-8');
   await writeKtxSetupState(projectDir, {
     completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources'],
   });
@@ -73,7 +111,13 @@ async function writeReadyProject(projectDir: string) {
 async function writeScanReport(
   projectDir: string,
   syncId: string,
-  report: { mode: string; tableDescriptions: string; columnDescriptions: string; embeddings: string },
+  report: {
+    mode: string;
+    tableDescriptions: string;
+    columnDescriptions: string;
+    embeddings: string;
+    manifestShards?: string[];
+  },
 ) {
   const reportDir = join(projectDir, 'raw-sources', 'warehouse', 'live-database', syncId);
   await mkdir(reportDir, { recursive: true });
@@ -85,7 +129,7 @@ async function writeScanReport(
         mode: report.mode,
         dryRun: false,
         artifactPaths: {
-          manifestShards: ['semantic-layer/warehouse/_schema/public.yaml'],
+          manifestShards: report.manifestShards ?? ['semantic-layer/warehouse/_schema/public.yaml'],
           enrichmentArtifacts:
             report.mode === 'enriched'
               ? [`raw-sources/warehouse/live-database/${syncId}/enrichment/descriptions.json`]
@@ -214,8 +258,6 @@ describe('setup context build state', () => {
       expect.objectContaining({
         projectDir: tempDir,
         inputMode: 'disabled',
-        scanMode: 'enriched',
-        detectRelationships: true,
       }),
       io.io,
       expect.objectContaining({ onDetach: expect.any(Function) }),
@@ -346,32 +388,120 @@ describe('setup context build state', () => {
     expect(io.stdout()).not.toContain('Existing context artifacts were found from setup ingest.');
   });
 
-  it('does not treat schema-only scan shards as completed setup context', async () => {
-    await writeReadyProject(tempDir);
+  it('treats fast database context as ready from schema manifest shards without AI artifacts', async () => {
+    await writeReadyProject(tempDir, {
+      connections: {
+        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'fast' } },
+      },
+      llm: { provider: { backend: 'none' }, models: {} },
+      scan: { enrichment: { mode: 'none' } },
+    });
     await mkdir(join(tempDir, 'semantic-layer', 'warehouse', '_schema'), { recursive: true });
     await writeFile(join(tempDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'), 'tables: {}\n');
-    const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => {
-      await mkdir(join(tempDir, 'wiki', 'global'), { recursive: true });
-      await writeFile(join(tempDir, 'wiki', 'global', 'metrics.md'), '# Metrics\n');
-      await writeReadyEnrichedScanReport(tempDir);
-      return { exitCode: 0, detached: false };
+    await writeScanReport(tempDir, '2026-05-09T10:00:00.000Z', {
+      mode: 'structural',
+      tableDescriptions: 'skipped',
+      columnDescriptions: 'skipped',
+      embeddings: 'skipped',
+      manifestShards: ['semantic-layer/warehouse/_schema/public.yaml'],
     });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
 
     await expect(
       runKtxSetupContextStep(
         { projectDir: tempDir, inputMode: 'disabled' },
         io.io,
         {
-          runIdFactory: () => 'setup-context-local-schema-only',
-          now: () => new Date('2026-05-09T10:00:00.000Z'),
           runContextBuild: runContextBuildMock,
         },
       ),
-    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-schema-only' });
+    ).resolves.toMatchObject({ status: 'ready' });
 
-    expect(runContextBuildMock).toHaveBeenCalledOnce();
-    expect(io.stdout()).not.toContain('Existing context artifacts were found from setup ingest.');
+    expect(runContextBuildMock).not.toHaveBeenCalled();
+    expect(io.stdout()).toContain('Existing context artifacts were found from setup ingest.');
+  });
+
+  it('stores fast context depth non-interactively when deep readiness is missing', async () => {
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'postgres', readonly: true } },
+      llm: { provider: { backend: 'none' }, models: {} },
+      scan: { enrichment: { mode: 'none' } },
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['ready'],
+    }));
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        { runContextBuild: runContextBuildMock, verifyContextReady },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse.context).toMatchObject({ depth: 'fast' });
+    expect(runContextBuildMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ projectDir: tempDir, inputMode: 'disabled' }),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(runContextBuildMock.mock.calls[0]?.[1]).not.toMatchObject({
+      scanMode: 'enriched',
+      detectRelationships: true,
+    });
+  });
+
+  it('prompts for database context depth after final readiness is known', async () => {
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'postgres', readonly: true } },
+      llm: {
+        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } },
+        models: { default: 'gpt-test' },
+      },
+      scan: {
+        enrichment: {
+          mode: 'llm',
+          embeddings: { backend: 'openai', model: 'text-embedding-3-small', dimensions: 1536 },
+        },
+      },
+    });
+    const io = makeIo();
+    const select = vi.fn(async () => 'deep');
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['ready'],
+    }));
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto' },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          runContextBuild: runContextBuildMock,
+          verifyContextReady,
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('How much database context should KTX build?'),
+      }),
+    );
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse.context).toMatchObject({ depth: 'deep' });
   });
 
   it('refuses empty setup context builds', async () => {

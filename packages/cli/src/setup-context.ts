@@ -11,6 +11,15 @@ import {
 import type { KtxCliIo } from './cli-runtime.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
 import {
+  type KtxDatabaseContextDepth,
+  databaseContextDepth,
+  deepReadinessGaps,
+  isDatabaseDriver,
+  normalizeConnectionDriver,
+  recommendedDatabaseContextDepth,
+  withDatabaseContextDepth,
+} from './ingest-depth.js';
+import {
   type ContextBuildSourceProgressUpdate,
   createRepainter,
   defaultSetupKeystroke,
@@ -297,25 +306,75 @@ function listContextTargets(project: KtxLocalProject): KtxSetupContextTargets {
   };
 }
 
-function missingCapabilities(project: KtxLocalProject): string[] {
-  const missing: string[] = [];
-  const llm = project.config.llm;
-  if (llm.provider.backend === 'none' || !llm.models.default) {
-    missing.push('Models are not ready.');
+function databaseConnectionsNeedingDepth(project: KtxLocalProject): string[] {
+  return Object.entries(project.config.connections)
+    .filter(([, connection]) => isDatabaseDriver(normalizeConnectionDriver(connection)))
+    .filter(([, connection]) => databaseContextDepth(connection) === undefined)
+    .map(([connectionId]) => connectionId)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+async function writeDatabaseContextDepths(
+  project: KtxLocalProject,
+  connectionIds: string[],
+  depth: KtxDatabaseContextDepth,
+): Promise<KtxLocalProject> {
+  if (connectionIds.length === 0) {
+    return project;
   }
-  const embeddings = project.config.ingest.embeddings;
-  if (
-    embeddings.backend === 'none' ||
-    embeddings.backend === 'deterministic' ||
-    !embeddings.model ||
-    embeddings.dimensions <= 0
-  ) {
-    missing.push('Embeddings are not ready.');
+  const nextConnections = { ...project.config.connections };
+  for (const connectionId of connectionIds) {
+    const connection = nextConnections[connectionId];
+    if (connection) {
+      nextConnections[connectionId] = withDatabaseContextDepth(connection, depth);
+    }
   }
-  if (project.config.scan.enrichment.mode === 'none') {
-    missing.push('Scan enrichment is not configured.');
+  const nextConfig = { ...project.config, connections: nextConnections };
+  await writeFile(project.configPath, serializeKtxProjectConfig(nextConfig), 'utf-8');
+  return await loadKtxProject({ projectDir: project.projectDir });
+}
+
+async function ensureSetupDatabaseContextDepths(input: {
+  project: KtxLocalProject;
+  args: KtxSetupContextStepArgs;
+  prompts: KtxSetupContextPromptAdapter;
+}): Promise<KtxLocalProject | 'back'> {
+  const missingDepthConnectionIds = databaseConnectionsNeedingDepth(input.project);
+  if (missingDepthConnectionIds.length === 0) {
+    return input.project;
   }
-  return missing;
+
+  const recommended = recommendedDatabaseContextDepth(input.project.config);
+  if (input.args.inputMode === 'disabled') {
+    return await writeDatabaseContextDepths(input.project, missingDepthConnectionIds, recommended);
+  }
+
+  const deepReady = deepReadinessGaps(input.project.config).length === 0;
+  const options =
+    recommended === 'deep'
+      ? [
+          { value: 'deep', label: 'Deep: AI descriptions, embeddings, relationships, slower' },
+          { value: 'fast', label: 'Fast: schema only, no AI, quickest' },
+          { value: 'back', label: 'Back' },
+        ]
+      : [
+          { value: 'fast', label: 'Fast: schema only, no AI, quickest' },
+          { value: 'deep', label: 'Deep: AI descriptions, embeddings, relationships, slower' },
+          { value: 'back', label: 'Back' },
+        ];
+
+  const choice = await input.prompts.select({
+    message:
+      'How much database context should KTX build?\n\n' +
+      (deepReady
+        ? 'Deep is available because model, embedding, and scan enrichment are configured.'
+        : 'Fast is recommended because model, embedding, or scan enrichment is not configured.'),
+    options,
+  });
+  if (choice === 'back') {
+    return 'back';
+  }
+  return await writeDatabaseContextDepths(input.project, missingDepthConnectionIds, choice as KtxDatabaseContextDepth);
 }
 
 async function hasFileWithExtension(
@@ -408,14 +467,34 @@ function scanReportHasCompletedDescriptionEnrichment(report: unknown, connection
   );
 }
 
+function scanReportHasCompletedSchemaManifest(report: unknown, connectionId: string): boolean {
+  if (!isRecord(report)) {
+    return false;
+  }
+  if (report.connectionId !== connectionId || report.dryRun === true) {
+    return false;
+  }
+  if (!isRecord(report.artifactPaths)) {
+    return false;
+  }
+  return stringArrayValue(report.artifactPaths.manifestShards).length > 0;
+}
+
 async function verifyPrimarySourceScans(
+  project: KtxLocalProject,
   projectDir: string,
   connectionIds: string[],
 ): Promise<{ ready: boolean; details: string[] }> {
   const details: string[] = [];
   for (const connectionId of connectionIds) {
+    const connection = project.config.connections[connectionId];
+    const depth = connection ? (databaseContextDepth(connection) ?? 'fast') : 'fast';
     const report = await readLatestScanReport(projectDir, connectionId);
-    if (!scanReportHasCompletedDescriptionEnrichment(report, connectionId)) {
+    const ready =
+      depth === 'fast'
+        ? scanReportHasCompletedSchemaManifest(report, connectionId)
+        : scanReportHasCompletedDescriptionEnrichment(report, connectionId);
+    if (!ready) {
       details.push(`${connectionId}: enriched database scan with AI descriptions has not completed.`);
     }
   }
@@ -425,7 +504,7 @@ async function verifyPrimarySourceScans(
 async function defaultVerifyContextReady(projectDir: string): Promise<KtxSetupContextReadiness> {
   const project = await loadKtxProject({ projectDir });
   const targets = listContextTargets(project);
-  const primarySourceScans = await verifyPrimarySourceScans(projectDir, targets.primarySourceConnectionIds);
+  const primarySourceScans = await verifyPrimarySourceScans(project, projectDir, targets.primarySourceConnectionIds);
   const semanticLayerContextReady = await hasFileWithExtension(
     join(projectDir, 'semantic-layer'),
     new Set(['.yaml', '.yml']),
@@ -556,8 +635,6 @@ async function runBuild(
     {
       projectDir: args.projectDir,
       inputMode: args.inputMode,
-      scanMode: 'enriched',
-      detectRelationships: true,
     },
     io,
     {
@@ -692,7 +769,17 @@ export async function runKtxSetupContextStep(
   deps: KtxSetupContextDeps = {},
 ): Promise<KtxSetupContextResult> {
   try {
-    const project = await loadKtxProject({ projectDir: args.projectDir });
+    let project = await loadKtxProject({ projectDir: args.projectDir });
+    const prompts = deps.prompts ?? createPromptAdapter();
+    const depthProject = await ensureSetupDatabaseContextDepths({
+      project,
+      args,
+      prompts,
+    });
+    if (depthProject === 'back') {
+      return { status: 'back', projectDir: args.projectDir };
+    }
+    project = depthProject;
     const existingState = await readKtxSetupContextState(args.projectDir);
     const completedSteps = (await readKtxSetupState(args.projectDir)).completed_steps;
     if (completedSteps.includes('context') && existingState.status === 'completed') {
@@ -716,7 +803,6 @@ export async function runKtxSetupContextStep(
         );
         return setupResultFromWatchedState(args.projectDir, watched.state);
       }
-      const prompts = deps.prompts ?? createPromptAdapter();
       const choice = await prompts.select({
         message:
           'A context build is running in the background.\n\n' +
@@ -761,12 +847,15 @@ export async function runKtxSetupContextStep(
       return { status: 'failed', projectDir: args.projectDir };
     }
 
-    const missing = missingCapabilities(project);
-    if (missing.length > 0) {
+    const preflightPlan = buildPublicIngestPlan(project, { projectDir: project.projectDir, all: true });
+    const preflightFailures = preflightPlan.targets.flatMap((target) =>
+      target.preflightFailure ? [`${target.connectionId}: ${target.preflightFailure}`] : [],
+    );
+    if (preflightFailures.length > 0) {
       if (args.allowEmpty === true) {
         return { status: 'skipped', projectDir: args.projectDir };
       }
-      writeMissingCapabilities(missing, io);
+      writeMissingCapabilities(preflightFailures, io);
       return { status: 'missing-input', projectDir: args.projectDir };
     }
 
@@ -778,7 +867,7 @@ export async function runKtxSetupContextStep(
     }
 
     if (args.inputMode !== 'disabled' && args.prompt !== false) {
-      const choice = await promptForBuild(deps.prompts ?? createPromptAdapter());
+      const choice = await promptForBuild(prompts);
       if (choice === 'back') {
         return { status: 'back', projectDir: args.projectDir };
       }
