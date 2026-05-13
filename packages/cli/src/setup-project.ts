@@ -12,6 +12,7 @@ import {
   serializeKtxProjectConfig,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
+import { gray } from './io/symbols.js';
 import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 
@@ -321,6 +322,10 @@ export async function runKtxSetupProjectStep(
 
   const prompts = deps.prompts ?? createClackSetupProjectPromptAdapter();
   const defaultProjectDir = join(projectDir, DEFAULT_NEW_PROJECT_FOLDER_NAME);
+  const defaultProjectDirLabel = [
+    gray(defaultProjectDir.slice(0, -DEFAULT_NEW_PROJECT_FOLDER_NAME.length)),
+    DEFAULT_NEW_PROJECT_FOLDER_NAME,
+  ].join('');
   io.stdout.write(
     '│  Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
   );
@@ -328,8 +333,8 @@ export async function runKtxSetupProjectStep(
     const choice = await prompts.select({
       message: 'Where should KTX create the project?',
       options: [
-        { value: 'current', label: 'Current directory' },
-        { value: 'new-default', label: 'New subfolder (./ktx-project)' },
+        { value: 'current', label: `Current directory (${projectDir})` },
+        { value: 'new-default', label: `New subfolder (${defaultProjectDirLabel})` },
         { value: 'new-custom', label: 'Custom path' },
         ...(args.allowBack ? [{ value: 'back', label: 'Back' }] : []),
         ...(args.allowBack ? [] : [{ value: 'exit', label: 'Exit' }]),

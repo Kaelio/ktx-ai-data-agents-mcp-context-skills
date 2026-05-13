@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { gray } from './io/symbols.js';
 import { type KtxSetupProjectPromptAdapter, runKtxSetupProjectStep } from './setup-project.js';
 
 function makeIo(options: { stdoutIsTty?: boolean } = {}) {
@@ -35,6 +36,12 @@ function makePromptAdapter(options: { choice?: string; choices?: string[]; textV
     text: vi.fn(async () => textValues.shift() ?? ''),
     cancel: vi.fn(),
   } satisfies KtxSetupProjectPromptAdapter;
+}
+
+function defaultSubfolderLabel(parentDir: string): string {
+  const childName = 'ktx-project';
+  const childDir = join(parentDir, childName);
+  return `New subfolder (${gray(childDir.slice(0, -childName.length))}${childName})`;
 }
 
 describe('setup project step', () => {
@@ -143,8 +150,11 @@ describe('setup project step', () => {
       expect.objectContaining({
         message: 'Where should KTX create the project?',
         options: [
-          expect.objectContaining({ value: 'current', label: 'Current directory' }),
-          expect.objectContaining({ value: 'new-default', label: 'New subfolder (./ktx-project)' }),
+          expect.objectContaining({ value: 'current', label: `Current directory (${projectDir})` }),
+          expect.objectContaining({
+            value: 'new-default',
+            label: defaultSubfolderLabel(projectDir),
+          }),
           expect.objectContaining({ value: 'new-custom', label: 'Custom path' }),
           expect.objectContaining({ value: 'exit', label: 'Exit' }),
         ],
@@ -174,7 +184,10 @@ describe('setup project step', () => {
       expect.objectContaining({
         message: 'Where should KTX create the project?',
         options: expect.arrayContaining([
-          expect.objectContaining({ value: 'new-default', label: 'New subfolder (./ktx-project)' }),
+          expect.objectContaining({
+            value: 'new-default',
+            label: defaultSubfolderLabel(startDir),
+          }),
         ]),
       }),
     );
