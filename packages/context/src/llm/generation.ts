@@ -4,6 +4,10 @@ import { generateText, Output, type FlexibleSchema, type ToolSet } from 'ai';
 type GenerateTextInput = Parameters<typeof generateText>[0];
 type GenerateTextFn = (input: GenerateTextInput) => Promise<{ text?: string; output?: unknown }>;
 
+function hasTools(tools: ToolSet): boolean {
+  return Object.keys(tools).length > 0;
+}
+
 interface GenerateKtxTextInput {
   llmProvider: KtxLlmProvider;
   role: KtxModelRole;
@@ -30,6 +34,13 @@ export async function generateKtxText(input: GenerateKtxTextInput): Promise<stri
     temperature: input.temperature ?? 0,
     messages: built.messages,
     tools: built.tools as ToolSet,
+    ...(hasTools(built.tools as ToolSet)
+      ? {
+          experimental_repairToolCall: input.llmProvider.repairToolCallHandler({
+            source: `ktx-${input.role}`,
+          }),
+        }
+      : {}),
   });
   if (typeof result.text !== 'string') {
     throw new Error('KTX LLM text generation returned no text');
@@ -52,6 +63,13 @@ export async function generateKtxObject<TOutput, TSchema>(
     temperature: input.temperature ?? 0,
     messages: built.messages,
     tools: built.tools as ToolSet,
+    ...(hasTools(built.tools as ToolSet)
+      ? {
+          experimental_repairToolCall: input.llmProvider.repairToolCallHandler({
+            source: `ktx-${input.role}`,
+          }),
+        }
+      : {}),
     output: Output.object({
       schema: input.schema as FlexibleSchema<TOutput>,
     }),

@@ -51,6 +51,6 @@ describe('eviction_list tool', () => {
       deletedRawPaths: [],
     });
 
-    expect(tool.description).toContain('context_eviction_decision_write');
+    expect(tool.description).toContain('emit_eviction_decision');
   });
 });

@@ -53,7 +53,7 @@ export class SlDiscoverTool extends BaseSemanticLayerTool<typeof slDiscoverInput
     return `<purpose>
 Discover available semantic layer sources, columns, measures, and joins.
 When called without a connectionId, discovers sources across ALL data sources — grouped by data source name and ID.
-Use this to understand what data is available before writing a semantic_query.
+Use this to understand what data is available before querying through the semantic layer.
 </purpose>
 
 <when_to_use>

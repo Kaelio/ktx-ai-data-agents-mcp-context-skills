@@ -40,6 +40,8 @@ describe('AgentRunnerService.runLoop', () => {
 
   it('passes systemPrompt, userPrompt, tools, and step budget through to generateText', async () => {
     (generateText as any).mockResolvedValue({ text: 'ok', toolCalls: [], steps: [] });
+    const repairHandler = vi.fn();
+    llmProvider.repairToolCallHandler.mockReturnValueOnce(repairHandler);
     const tools = { noop: { description: 'noop', inputSchema: {}, execute: vi.fn() } };
     await runner.runLoop({
       modelRole: 'candidateExtraction',
@@ -59,7 +61,9 @@ describe('AgentRunnerService.runLoop', () => {
     expect(call.tools).toEqual(tools);
     expect(call.stopWhen).toBe(17);
     expect(call.temperature).toBe(0);
+    expect(call.experimental_repairToolCall).toBe(repairHandler);
     expect(llmProvider.getModel).toHaveBeenCalledWith('candidateExtraction');
+    expect(llmProvider.repairToolCallHandler).toHaveBeenCalledWith({ source: 'ktx-agent-runner' });
   });
 
   it('returns stopReason=natural when the loop completes without error', async () => {
