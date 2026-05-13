@@ -1047,6 +1047,47 @@ describe('runKtxCli', () => {
     );
   });
 
+  it('dispatches Vertex AI setup flags to the setup runner', async () => {
+    const setup = vi.fn(async () => 0);
+    const setupIo = makeIo();
+
+    await expect(
+      runKtxCli(
+        [
+          '--project-dir',
+          tempDir,
+          'setup',
+          '--no-input',
+          '--llm-backend',
+          'vertex',
+          '--vertex-project',
+          'local-gcp-project',
+          '--vertex-location',
+          'us-east5',
+          '--anthropic-model',
+          'claude-sonnet-4-6',
+        ],
+        setupIo.io,
+        { setup },
+      ),
+    ).resolves.toBe(0);
+
+    expect(setup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        cliVersion: '0.0.0-private',
+        llmBackend: 'vertex',
+        vertexProject: 'local-gcp-project',
+        vertexLocation: 'us-east5',
+        anthropicModel: 'claude-sonnet-4-6',
+        skipLlm: false,
+      }),
+      setupIo.io,
+    );
+  });
+
   it('rejects conflicting Anthropic credential setup flags', async () => {
     const setup = vi.fn(async () => 0);
     const setupIo = makeIo();
