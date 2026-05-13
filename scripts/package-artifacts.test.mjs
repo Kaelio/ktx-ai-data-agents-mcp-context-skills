@@ -19,6 +19,7 @@ import {
   npmCliSmokeSource,
   npmRuntimeSmokeSource,
   npmSmokePackageJson,
+  npmSmokePnpmWorkspaceYaml,
   npmVerifySource,
   packageArtifactLayout,
   packageReleaseMetadata,
@@ -422,6 +423,10 @@ describe('verification snippets', () => {
     assert.deepEqual(packageJson.devDependencies, {
       'better-sqlite3': '^12.6.2',
     });
+    assert.equal(
+      npmSmokePnpmWorkspaceYaml(),
+      ['packages:', '  - "."', 'allowBuilds:', '  better-sqlite3: true', ''].join('\n'),
+    );
   });
 
   it('exposes manifest verification as a package artifact command', async () => {

@@ -27,13 +27,13 @@
   },
   "dependencies": {
     "@ktx/context": "workspace:*",
-    "pg": "^8.19.0"
+    "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "@types/pg": "^8.16.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "@types/node": "^25.7.0",
+    "@types/pg": "^8.20.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   },
   "license": "Apache-2.0",
   "repository": {

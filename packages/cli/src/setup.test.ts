@@ -715,7 +715,7 @@ describe('setup status', () => {
 
     expect(projectPrompts.text).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Project folder path\nPress Escape to go back.\n',
+        message: 'Project folder path\n│  Press Escape to go back.\n│',
         placeholder: './analytics-ktx, ~/analytics-ktx, or /Users/you/projects/analytics-ktx',
       }),
     );
@@ -839,7 +839,10 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     await expect(stat(join(tempDir, 'ktx.yaml'))).resolves.toBeDefined();
-    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).toContain('completed_steps:');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
+    await expect(readFile(join(tempDir, '.ktx', 'setup', 'state.json'), 'utf-8')).resolves.toBe(
+      `${JSON.stringify({ completed_steps: ['project', 'sources'] }, null, 2)}\n`,
+    );
     expect(testIo.stdout()).toContain('KTX setup');
     expect(testIo.stdout()).toContain(`Project: ${tempDir}`);
     expect(testIo.stdout()).toContain('Project ready: yes');

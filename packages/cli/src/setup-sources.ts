@@ -23,8 +23,9 @@ import {
   type KtxProjectConfig,
   type KtxProjectConnectionConfig,
   loadKtxProject,
-  markKtxSetupStepComplete,
+  markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnectionMapping } from './commands/connection-mapping.js';
@@ -333,7 +334,7 @@ function fileRepoUrl(sourceDir: string): string {
 
 async function writeProjectConfig(projectDir: string, config: KtxProjectConfig): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
 }
 
 async function writeSourceConnection(
@@ -360,7 +361,7 @@ async function writeSourceConnection(
         : [...project.config.ingest.adapters, adapter],
     },
   };
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
   return async () => {
     const latest = await loadKtxProject({ projectDir });
     const connections = { ...latest.config.connections };
@@ -399,11 +400,8 @@ async function ensureSourceAdapterEnabled(projectDir: string, source: KtxSetupSo
 
 async function markSourcesComplete(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  await writeFile(
-    project.configPath,
-    serializeKtxProjectConfig(markKtxSetupStepComplete(project.config, 'sources')),
-    'utf-8',
-  );
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(project.config)), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'sources');
 }
 
 function hasPrimarySource(config: KtxProjectConfig): boolean {
@@ -701,7 +699,7 @@ async function runInitialSourceIngestWithRecovery(input: {
   deps: KtxSetupSourcesDeps;
 }): Promise<'ready' | 'continue' | 'back' | 'failed'> {
   while (true) {
-    input.io.stdout.write(`Building context from ${input.connectionId}. Large sources can take a while.\n`);
+    input.io.stdout.write(`│  Building context from ${input.connectionId}. Large sources can take a while.\n`);
     const ingestCode = await (input.deps.runInitialIngest ?? defaultRunInitialIngest)(
       input.args.projectDir,
       input.connectionId,
@@ -729,8 +727,8 @@ async function runInitialSourceIngestWithRecovery(input: {
       continue;
     }
     if (action === 'continue') {
-      input.io.stdout.write(`Context source saved without a completed context build for ${input.connectionId}.\n`);
-      input.io.stdout.write(`Run later: ktx ingest ${input.connectionId}\n`);
+      input.io.stdout.write(`│  Context source saved without a completed context build for ${input.connectionId}.\n`);
+      input.io.stdout.write(`│  Run later: ktx ingest ${input.connectionId}\n`);
       return 'continue';
     }
     return 'back';
@@ -1357,7 +1355,7 @@ export async function runKtxSetupSourcesStep(
   try {
     if (args.skipSources) {
       await markSourcesComplete(args.projectDir);
-      io.stdout.write('Context source setup skipped.\n');
+      io.stdout.write('│  Context source setup skipped.\n');
       return { status: 'skipped', projectDir: args.projectDir };
     }
 
@@ -1370,7 +1368,7 @@ export async function runKtxSetupSourcesStep(
         return { status: 'failed', projectDir: args.projectDir };
       }
       if (args.inputMode !== 'disabled') {
-        io.stdout.write(`${message}\n`);
+        io.stdout.write(`│  ${message}\n`);
         return { status: 'skipped', projectDir: args.projectDir };
       }
     }
@@ -1394,7 +1392,7 @@ export async function runKtxSetupSourcesStep(
           return { status: 'missing-input', projectDir: args.projectDir };
         }
         await markSourcesComplete(args.projectDir);
-        io.stdout.write('No context sources selected.\n');
+        io.stdout.write('│  No context sources selected.\n');
         return { status: 'skipped', projectDir: args.projectDir };
       }
 
@@ -1467,7 +1465,7 @@ export async function runKtxSetupSourcesStep(
             break;
           }
         } else {
-          io.stdout.write(`Context source ${connectionId} saved. It will be built during the context build step.\n`);
+          io.stdout.write(`│  Context source ${connectionId} saved. It will be built during the context build step.\n`);
         }
         readyConnectionIds.push(connectionId);
       }

@@ -6,8 +6,9 @@ import {
   type KtxProjectConfig,
   type KtxProjectLlmConfig,
   loadKtxProject,
-  markKtxSetupStepComplete,
+  markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -254,7 +255,7 @@ async function chooseCredentialRef(
   const prompts = deps.prompts ?? createPromptAdapter();
   if (args.showPromptInstructions !== false) {
     io.stdout.write(
-      'Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
+      '│  Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
     );
   }
   while (true) {
@@ -271,7 +272,7 @@ async function chooseCredentialRef(
     }
     if (choice === 'paste') {
       io.stdout.write(
-        'KTX will save the key in .ktx/secrets/anthropic-api-key with local file permissions, then write a file: reference in ktx.yaml.\n',
+        '│  KTX will save the key in .ktx/secrets/anthropic-api-key with local file permissions, then write a file: reference in ktx.yaml.\n',
       );
       const value = await prompts.password({ message: withTextInputNavigation('Anthropic API key') });
       if (value === undefined) {
@@ -361,7 +362,7 @@ async function chooseModel(
 
 async function persistLlmConfig(projectDir: string, credentialRef: string, model: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = markKtxSetupStepComplete(
+  const config = stripKtxSetupCompletedSteps(
     {
       ...project.config,
       llm: buildProjectLlmConfig(project.config.llm, credentialRef, model),
@@ -373,9 +374,9 @@ async function persistLlmConfig(projectDir: string, credentialRef: string, model
         },
       },
     },
-    'llm',
   );
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'llm');
 }
 
 function buildInteractiveRetryArgs(args: KtxSetupModelArgs): KtxSetupModelArgs {
@@ -393,7 +394,7 @@ export async function runKtxSetupAnthropicModelStep(
   deps: KtxSetupModelDeps = {},
 ): Promise<KtxSetupModelResult> {
   if (args.skipLlm) {
-    io.stdout.write('LLM setup skipped.\n');
+    io.stdout.write('│  LLM setup skipped.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
@@ -405,7 +406,7 @@ export async function runKtxSetupAnthropicModelStep(
     !args.anthropicApiKeyFile &&
     !args.anthropicModel
   ) {
-    io.stdout.write(`LLM ready: yes (${project.config.llm.models.default})\n`);
+    io.stdout.write(`│  LLM ready: yes (${project.config.llm.models.default})\n`);
     return { status: 'ready', projectDir: args.projectDir };
   }
 
@@ -438,7 +439,7 @@ export async function runKtxSetupAnthropicModelStep(
     const health = await healthCheck(buildHealthConfig(credential.value, model.model));
     if (health.ok) {
       await persistLlmConfig(args.projectDir, credential.ref, model.model);
-      io.stdout.write(`LLM ready: yes (${model.model})\n`);
+      io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
 

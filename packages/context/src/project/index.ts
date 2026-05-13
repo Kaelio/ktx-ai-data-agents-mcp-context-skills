@@ -27,7 +27,12 @@ export { initKtxProject, loadKtxProject } from './project.js';
 export type { KtxSetupStep } from './setup-config.js';
 export {
   KTX_SETUP_STEPS,
-  markKtxSetupStepComplete,
+  ktxSetupCompletedSteps,
+  ktxSetupStatePath,
+  markKtxSetupStateStepComplete,
   mergeKtxSetupGitignoreEntries,
+  readKtxSetupState,
   setKtxSetupDatabaseConnectionIds,
+  stripKtxSetupCompletedSteps,
+  writeKtxSetupState,
 } from './setup-config.js';

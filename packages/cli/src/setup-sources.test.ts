@@ -5,6 +5,7 @@ import {
   initKtxProject,
   type KtxProjectConnectionConfig,
   parseKtxProjectConfig,
+  readKtxSetupState,
   serializeKtxProjectConfig,
 } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -65,10 +66,10 @@ function connectionNamePrompt(label: string): string {
 function textInputPrompt(message: string): string {
   const normalized = message.replace(/\n+$/, '');
   if (!normalized.includes('\n')) {
-    return `${normalized}\nPress Escape to go back.\n`;
+    return `${normalized}\n│  Press Escape to go back.\n│`;
   }
   const [title, ...bodyLines] = normalized.split('\n');
-  return `${title}\n\n${bodyLines.join('\n')}\nPress Escape to go back.\n`;
+  return `${title}\n│\n│  ${bodyLines.join('\n│  ')}\n│  Press Escape to go back.\n│`;
 }
 
 describe('setup sources step', () => {
@@ -136,7 +137,8 @@ describe('setup sources step', () => {
       projectDir,
     });
 
-    expect((await readConfig()).setup?.completed_steps).toContain('sources');
+    expect((await readConfig()).setup?.completed_steps).toEqual(undefined);
+    expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(io.stdout()).toContain('Context source setup skipped.');
   });
 
@@ -169,7 +171,8 @@ describe('setup sources step', () => {
       source_dir: '/repo/dbt',
       project_name: 'analytics',
     });
-    expect(config.setup?.completed_steps).toContain('sources');
+    expect(config.setup?.completed_steps).toEqual([]);
+    expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(runInitialIngest).toHaveBeenCalledWith(projectDir, 'analytics_dbt', io.io, { inputMode: 'disabled' });
   });
 

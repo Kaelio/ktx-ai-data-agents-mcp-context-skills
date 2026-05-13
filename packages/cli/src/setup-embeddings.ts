@@ -4,9 +4,12 @@ import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   type KtxProjectConfig,
   type KtxProjectEmbeddingConfig,
+  ktxSetupCompletedSteps,
   loadKtxProject,
-  markKtxSetupStepComplete,
+  markKtxSetupStateStepComplete,
+  readKtxSetupState,
   serializeKtxProjectConfig,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -111,9 +114,9 @@ function createPromptAdapter(): KtxSetupEmbeddingsPromptAdapter {
   };
 }
 
-function hasCompletedEmbeddings(config: KtxProjectConfig): boolean {
+async function hasCompletedEmbeddings(projectDir: string, config: KtxProjectConfig): Promise<boolean> {
   return (
-    config.setup?.completed_steps.includes('embeddings') === true &&
+    ktxSetupCompletedSteps(config, await readKtxSetupState(projectDir)).includes('embeddings') &&
     config.ingest.embeddings.backend !== 'none' &&
     config.ingest.embeddings.backend !== 'deterministic' &&
     typeof config.ingest.embeddings.model === 'string' &&
@@ -187,7 +190,7 @@ function embeddingBackendDisplayName(backend: KtxSetupEmbeddingBackend): string 
 
 async function persistEmbeddingConfig(projectDir: string, embeddings: KtxProjectEmbeddingConfig): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = markKtxSetupStepComplete(
+  const config = stripKtxSetupCompletedSteps(
     {
       ...project.config,
       ingest: {
@@ -202,9 +205,9 @@ async function persistEmbeddingConfig(projectDir: string, embeddings: KtxProject
         },
       },
     },
-    'embeddings',
   );
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'embeddings');
 }
 
 async function chooseCredentialRef(
@@ -257,7 +260,7 @@ async function chooseCredentialRef(
   }
   if (choice === 'paste') {
     io.stdout.write(
-      `${[
+      `│  ${[
         `KTX will save the key in .ktx/secrets/${backend}-api-key with local file permissions,`,
         'then write a file: reference in ktx.yaml.',
       ].join(' ')}\n`,
@@ -349,7 +352,7 @@ function healthCheckStartText(backend: KtxSetupEmbeddingBackend, model: string, 
 
 function startHealthCheckProgress(io: KtxCliIo, message: string): HealthCheckProgress {
   if (io.stdout.isTTY !== true) {
-    io.stdout.write(`${message}\n`);
+    io.stdout.write(`│  ${message}\n`);
     const noop = () => undefined;
     return {
       succeed: noop,
@@ -360,7 +363,7 @@ function startHealthCheckProgress(io: KtxCliIo, message: string): HealthCheckPro
   let frameIndex = 0;
   let stopped = false;
   const writeFrame = () => {
-    io.stdout.write(`${CLEAR_CURRENT_LINE}${HEALTH_CHECK_SPINNER_FRAMES[frameIndex]} ${message}`);
+    io.stdout.write(`${CLEAR_CURRENT_LINE}│  ${HEALTH_CHECK_SPINNER_FRAMES[frameIndex]} ${message}`);
   };
   writeFrame();
   const interval = setInterval(() => {
@@ -374,7 +377,7 @@ function startHealthCheckProgress(io: KtxCliIo, message: string): HealthCheckPro
     }
     stopped = true;
     clearInterval(interval);
-    io.stdout.write(`${CLEAR_CURRENT_LINE}${finalMessage}\n`);
+    io.stdout.write(`${CLEAR_CURRENT_LINE}│  ${finalMessage}\n`);
   };
 
   return {
@@ -393,19 +396,19 @@ export async function runKtxSetupEmbeddingsStep(
   deps: KtxSetupEmbeddingsDeps = {},
 ): Promise<KtxSetupEmbeddingsResult> {
   if (args.skipEmbeddings) {
-    io.stdout.write('Embeddings setup skipped.\n');
+    io.stdout.write('│  Embeddings setup skipped.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
   const project = await loadKtxProject({ projectDir: args.projectDir });
   if (
     args.forcePrompt !== true &&
-    hasCompletedEmbeddings(project.config) &&
+    (await hasCompletedEmbeddings(args.projectDir, project.config)) &&
     !args.embeddingBackend &&
     !args.embeddingApiKeyEnv &&
     !args.embeddingApiKeyFile
   ) {
-    io.stdout.write(`Embeddings ready: yes (${project.config.ingest.embeddings.model})\n`);
+    io.stdout.write(`│  Embeddings ready: yes (${project.config.ingest.embeddings.model})\n`);
     return { status: 'ready', projectDir: args.projectDir };
   }
 
@@ -492,7 +495,7 @@ export async function runKtxSetupEmbeddingsStep(
               credentialRef,
             }),
       );
-      io.stdout.write(`Embeddings ready: yes (${model}, ${dimensions} dimensions)\n`);
+      io.stdout.write(`│  Embeddings ready: yes (${model}, ${dimensions} dimensions)\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
 

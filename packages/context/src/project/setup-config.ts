@@ -1,8 +1,14 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { KtxProjectConfig } from './config.js';
 
 export const KTX_SETUP_STEPS = ['project', 'llm', 'embeddings', 'databases', 'sources', 'context', 'agents'] as const;
 
 export type KtxSetupStep = (typeof KTX_SETUP_STEPS)[number];
+
+export interface KtxSetupState {
+  completed_steps: KtxSetupStep[];
+}
 
 const SETUP_GITIGNORE_ENTRIES = [
   'cache/',
@@ -14,14 +20,67 @@ const SETUP_GITIGNORE_ENTRIES = [
   'agents/',
 ] as const;
 
-export function markKtxSetupStepComplete(config: KtxProjectConfig, step: KtxSetupStep): KtxProjectConfig {
-  const databaseConnectionIds = config.setup?.database_connection_ids ?? [];
-  const completedSteps = config.setup?.completed_steps ?? [];
+function isKtxSetupStep(value: unknown): value is KtxSetupStep {
+  return typeof value === 'string' && (KTX_SETUP_STEPS as readonly string[]).includes(value);
+}
+
+function uniqueSetupSteps(steps: unknown): KtxSetupStep[] {
+  if (!Array.isArray(steps)) {
+    return [];
+  }
+  return [...new Set(steps.filter(isKtxSetupStep))];
+}
+
+export function ktxSetupStatePath(projectDir: string): string {
+  return join(projectDir, '.ktx', 'setup', 'state.json');
+}
+
+export async function readKtxSetupState(projectDir: string): Promise<KtxSetupState> {
+  try {
+    const parsed = JSON.parse(await readFile(ktxSetupStatePath(projectDir), 'utf-8')) as Record<string, unknown>;
+    return { completed_steps: uniqueSetupSteps(parsed.completed_steps) };
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return { completed_steps: [] };
+    }
+    throw error;
+  }
+}
+
+export async function writeKtxSetupState(projectDir: string, state: KtxSetupState): Promise<void> {
+  await mkdir(join(projectDir, '.ktx', 'setup'), { recursive: true });
+  await writeFile(
+    ktxSetupStatePath(projectDir),
+    `${JSON.stringify({ completed_steps: uniqueSetupSteps(state.completed_steps) }, null, 2)}\n`,
+    'utf-8',
+  );
+}
+
+export async function markKtxSetupStateStepComplete(projectDir: string, step: KtxSetupStep): Promise<KtxSetupState> {
+  const state = await readKtxSetupState(projectDir);
+  const completedSteps = state.completed_steps.includes(step) ? state.completed_steps : [...state.completed_steps, step];
+  const nextState = { completed_steps: completedSteps };
+  await writeKtxSetupState(projectDir, nextState);
+  return nextState;
+}
+
+export function ktxSetupCompletedSteps(config: KtxProjectConfig, state: KtxSetupState): KtxSetupStep[] {
+  return uniqueSetupSteps([...(config.setup?.completed_steps ?? []), ...state.completed_steps]);
+}
+
+export function stripKtxSetupCompletedSteps(config: KtxProjectConfig): KtxProjectConfig {
+  if (!config.setup) {
+    return config;
+  }
+  const databaseConnectionIds = config.setup.database_connection_ids ?? [];
+  if (databaseConnectionIds.length === 0) {
+    const { setup: _setup, ...withoutSetup } = config;
+    return withoutSetup;
+  }
   return {
     ...config,
     setup: {
       database_connection_ids: [...databaseConnectionIds],
-      completed_steps: completedSteps.includes(step) ? [...completedSteps] : [...completedSteps, step],
     },
   };
 }
@@ -29,20 +88,14 @@ export function markKtxSetupStepComplete(config: KtxProjectConfig, step: KtxSetu
 export function setKtxSetupDatabaseConnectionIds(
   config: KtxProjectConfig,
   connectionIds: string[],
-  options: { complete?: boolean } = {},
 ): KtxProjectConfig {
   const uniqueConnectionIds = [...new Set(connectionIds.filter((connectionId) => connectionId.trim().length > 0))];
-  const completedSteps = config.setup?.completed_steps ?? [];
-  const nextCompletedSteps =
-    options.complete === true && !completedSteps.includes('databases')
-      ? [...completedSteps, 'databases']
-      : [...completedSteps];
 
   return {
     ...config,
     setup: {
       database_connection_ids: uniqueConnectionIds,
-      completed_steps: nextCompletedSteps,
+      ...(config.setup?.completed_steps ? { completed_steps: [...config.setup.completed_steps] } : {}),
     },
   };
 }

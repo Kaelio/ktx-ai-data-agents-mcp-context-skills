@@ -5,11 +5,15 @@ import { basename, join, resolve } from 'node:path';
 import { cancel, isCancel, select, text } from '@clack/prompts';
 import {
   initKtxProject,
+  ktxSetupCompletedSteps,
   type KtxLocalProject,
   loadKtxProject,
-  markKtxSetupStepComplete,
+  markKtxSetupStateStepComplete,
   mergeKtxSetupGitignoreEntries,
+  readKtxSetupState,
   serializeKtxProjectConfig,
+  stripKtxSetupCompletedSteps,
+  writeKtxSetupState,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
@@ -143,7 +147,7 @@ async function confirmProjectDir(
     return { status: 'confirmed', confirmedCreation: true };
   }
 
-  io.stdout.write(`KTX will create:\n  ${selectedDir}\n`);
+  io.stdout.write(`│  KTX will create:\n│    ${selectedDir}\n`);
   const action = await prompts.select({
     message: `Create KTX project at ${selectedDir}?`,
     options: [
@@ -166,8 +170,11 @@ async function normalizeSetupGitignore(projectDir: string): Promise<void> {
 }
 
 async function persistProjectStep(project: KtxLocalProject): Promise<KtxLocalProject> {
-  const config = markKtxSetupStepComplete(project.config, 'project');
+  const completedSteps = ktxSetupCompletedSteps(project.config, await readKtxSetupState(project.projectDir));
+  const config = stripKtxSetupCompletedSteps(project.config);
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await writeKtxSetupState(project.projectDir, { completed_steps: completedSteps });
+  await markKtxSetupStateStepComplete(project.projectDir, 'project');
   await normalizeSetupGitignore(project.projectDir);
   return await loadKtxProject({ projectDir: project.projectDir });
 }
@@ -185,7 +192,7 @@ async function loadExistingProject(projectDir: string, deps: KtxSetupProjectDeps
 }
 
 function printProjectSummary(io: KtxCliIo, projectDir: string): void {
-  io.stdout.write(`Project: ${projectDir}\n`);
+  io.stdout.write(`│  Project: ${projectDir}\n`);
 }
 
 async function promptForNewProjectDir(
@@ -197,8 +204,8 @@ async function promptForNewProjectDir(
   const defaultProjectDir = join(projectDir, DEFAULT_NEW_PROJECT_FOLDER_NAME);
 
   while (true) {
-    io.stdout.write(`Relative paths are resolved from:\n  ${projectDir}\n`);
-    io.stdout.write(`Home paths are resolved from:\n  ${homeDir}\n`);
+    io.stdout.write(`│  Relative paths are resolved from:\n│    ${projectDir}\n`);
+    io.stdout.write(`│  Home paths are resolved from:\n│    ${homeDir}\n`);
     const destinationChoice = await prompts.select({
       message: 'Where should KTX create the project?',
       options: [
@@ -324,7 +331,7 @@ export async function runKtxSetupProjectStep(
   const prompts = deps.prompts ?? createClackSetupProjectPromptAdapter();
   const defaultProjectDir = join(projectDir, DEFAULT_NEW_PROJECT_FOLDER_NAME);
   io.stdout.write(
-    'Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
+    '│  Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
   );
   while (true) {
     const choice = await prompts.select({
@@ -369,8 +376,8 @@ export async function runKtxSetupProjectStep(
     }
 
     if (choice === 'new-custom') {
-      io.stdout.write(`Relative paths are resolved from:\n  ${projectDir}\n`);
-      io.stdout.write(`Home paths are resolved from:\n  ${homeDir}\n`);
+      io.stdout.write(`│  Relative paths are resolved from:\n│    ${projectDir}\n`);
+      io.stdout.write(`│  Home paths are resolved from:\n│    ${homeDir}\n`);
       const rawPath = await prompts.text({
         message: withTextInputNavigation('Project folder path'),
         placeholder: './analytics-ktx, ~/analytics-ktx, or /Users/you/projects/analytics-ktx',

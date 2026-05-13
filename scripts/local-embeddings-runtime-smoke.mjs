@@ -9,6 +9,7 @@ import {
   PUBLIC_NPM_PACKAGE_NAME,
   PUBLIC_NPM_PACKAGE_VERSION,
 } from './build-public-npm-package.mjs';
+import { npmSmokePnpmWorkspaceYaml } from './package-artifacts.mjs';
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -249,6 +250,7 @@ async function writeSmokePackage(projectDir, tarballPath) {
       2,
     )}\n`,
   );
+  await writeFile(join(projectDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());
 }
 
 export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {

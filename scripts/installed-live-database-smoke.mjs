@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   npmSmokePackageJson,
+  npmSmokePnpmWorkspaceYaml,
   packageArtifactLayout,
 } from './package-artifacts.mjs';
 
@@ -280,6 +281,7 @@ async function prepareCleanInstall(layout, cleanInstallDir) {
   await assertPathExists(layout.cliTarball, '@ktx/cli tarball');
   await mkdir(cleanInstallDir, { recursive: true });
   await writeFile(join(cleanInstallDir, 'package.json'), `${JSON.stringify(npmSmokePackageJson(layout), null, 2)}\n`);
+  await writeFile(join(cleanInstallDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());
   await run('pnpm', ['install'], { cwd: cleanInstallDir, timeout: 120_000 }).then((result) =>
     requireSuccess('pnpm install clean artifact project', result),
   );

@@ -4,8 +4,10 @@ import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
   type KtxProjectConnectionConfig,
   loadKtxProject,
+  markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
   setKtxSetupDatabaseConnectionIds,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnection } from './connection.js';
@@ -923,7 +925,7 @@ async function writeConnectionConfig(input: {
       [input.connectionId]: input.connection,
     },
   };
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
 
   const historicSql =
     typeof input.connection.historicSql === 'object' &&
@@ -1076,25 +1078,28 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
   }
   await writeFile(
     project.configPath,
-    serializeKtxProjectConfig({
-      ...project.config,
-      ingest: {
-        ...project.config.ingest,
-        adapters,
-        workUnits: {
-          ...project.config.ingest.workUnits,
-          maxConcurrency,
+    serializeKtxProjectConfig(
+      stripKtxSetupCompletedSteps({
+        ...project.config,
+        ingest: {
+          ...project.config.ingest,
+          adapters,
+          workUnits: {
+            ...project.config.ingest.workUnits,
+            maxConcurrency,
+          },
         },
-      },
-    }),
+      }),
+    ),
     'utf-8',
   );
 }
 
 async function markDatabasesComplete(projectDir: string, connectionIds: string[]): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds), { complete: true });
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds));
+  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'databases');
 }
 
 async function maybeRunHistoricSqlSetupProbe(input: {
@@ -1110,7 +1115,7 @@ async function maybeRunHistoricSqlSetupProbe(input: {
     return;
   }
 
-  input.io.stdout.write('Historic SQL probe...\n');
+  input.io.stdout.write('│  Historic SQL probe...\n');
   const probe = input.deps.historicSqlProbe ?? defaultHistoricSqlProbe;
   const result = await probe({
     projectDir: input.projectDir,
@@ -1118,10 +1123,10 @@ async function maybeRunHistoricSqlSetupProbe(input: {
     dialect: 'postgres',
   });
   for (const line of result.lines) {
-    input.io.stdout.write(`${line}\n`);
+    input.io.stdout.write(`│${line}\n`);
   }
   if (!result.ok) {
-    input.io.stdout.write('Setup written; first ingest run will fail until fixed.\n');
+    input.io.stdout.write('│  Setup written; first ingest run will fail until fixed.\n');
   }
 }
 
@@ -1256,7 +1261,7 @@ async function chooseDrivers(
       return 'back';
     }
 
-    io.stdout.write('KTX cannot work without at least one primary source. Select a source or press Escape to go back.\n');
+    io.stdout.write('│  KTX cannot work without at least one primary source. Select a source or press Escape to go back.\n');
   }
 }
 
@@ -1320,7 +1325,7 @@ export async function runKtxSetupDatabasesStep(
   deps: KtxSetupDatabasesDeps = {},
 ): Promise<KtxSetupDatabasesResult> {
   if (args.skipDatabases) {
-    io.stdout.write('Primary source setup skipped. KTX cannot work until you add a primary source.\n');
+    io.stdout.write('│  Primary source setup skipped. KTX cannot work until you add a primary source.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
@@ -1377,7 +1382,7 @@ export async function runKtxSetupDatabasesStep(
     if (drivers === 'missing-input') return { status: 'missing-input', projectDir: args.projectDir };
     if (drivers.length === 0) {
       await markDatabasesComplete(args.projectDir, []);
-      io.stdout.write('KTX cannot work without a primary source.\n');
+      io.stdout.write('│  KTX cannot work without a primary source.\n');
       return { status: 'skipped', projectDir: args.projectDir };
     }
 

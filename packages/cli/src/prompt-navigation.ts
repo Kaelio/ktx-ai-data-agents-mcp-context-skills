@@ -6,6 +6,26 @@ function removeTrailingBlankLines(message: string): string {
   return message.replace(/\n+$/, '');
 }
 
+function prefixContinuationLines(message: string): string {
+  const lines = message.split('\n');
+  if (lines.length <= 1) return message;
+  const [title, ...body] = lines;
+  let trailingEmptyCount = 0;
+  while (trailingEmptyCount < body.length && body[body.length - 1 - trailingEmptyCount] === '') {
+    trailingEmptyCount++;
+  }
+  const contentBody = trailingEmptyCount > 0 ? body.slice(0, -trailingEmptyCount) : body;
+  const trailingBody = trailingEmptyCount > 0 ? body.slice(-trailingEmptyCount) : [];
+  return [
+    title,
+    ...contentBody.map((line) => {
+      const stripped = line.replace(/^│\s*/, '');
+      return stripped === '' ? '│' : `│  ${stripped}`;
+    }),
+    ...trailingBody,
+  ].join('\n');
+}
+
 function withTextInputBodySpacing(message: string): string {
   const normalized = removeTrailingBlankLines(message);
   if (!normalized.includes('\n')) {
@@ -39,7 +59,9 @@ export function withMultiselectNavigation(message: string): string {
 export function withTextInputNavigation(message: string): string {
   const messageWithoutHint = removeTrailingBlankLines(message)
     .split('\n')
-    .filter((line) => line !== TEXT_INPUT_NAVIGATION_HINT)
+    .filter((line) => !line.includes(TEXT_INPUT_NAVIGATION_HINT))
+    .map((line) => line.replace(/^│\s*/, ''))
     .join('\n');
-  return `${withTextInputBodySpacing(messageWithoutHint)}\n${TEXT_INPUT_NAVIGATION_HINT}\n`;
+  const full = `${withTextInputBodySpacing(messageWithoutHint)}\n${TEXT_INPUT_NAVIGATION_HINT}`;
+  return `${prefixContinuationLines(full)}\n│`;
 }

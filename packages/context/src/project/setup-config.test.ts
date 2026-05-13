@@ -1,43 +1,40 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildDefaultKtxProjectConfig } from './config.js';
 import {
-  markKtxSetupStepComplete,
+  ktxSetupCompletedSteps,
+  markKtxSetupStateStepComplete,
   mergeKtxSetupGitignoreEntries,
+  readKtxSetupState,
   setKtxSetupDatabaseConnectionIds,
+  stripKtxSetupCompletedSteps,
 } from './setup-config.js';
 
 describe('KTX setup config helpers', () => {
-  it('marks setup steps complete without duplicating existing state', () => {
-    const config = buildDefaultKtxProjectConfig('warehouse');
+  let tempDir: string;
 
-    const withProject = markKtxSetupStepComplete(config, 'project');
-    const withProjectAgain = markKtxSetupStepComplete(withProject, 'project');
-    const withLlm = markKtxSetupStepComplete(withProjectAgain, 'llm');
-    const withContext = markKtxSetupStepComplete(withLlm, 'context');
-
-    expect(withProject.setup).toEqual({
-      database_connection_ids: [],
-      completed_steps: ['project'],
-    });
-    expect(withProjectAgain.setup?.completed_steps).toEqual(['project']);
-    expect(withLlm.setup?.completed_steps).toEqual(['project', 'llm']);
-    expect(withContext.setup?.completed_steps).toEqual(['project', 'llm', 'context']);
-    expect(config.setup).toBeUndefined();
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-state-'));
   });
 
-  it('preserves database connection ids while marking a step complete', () => {
-    const config = {
-      ...buildDefaultKtxProjectConfig('warehouse'),
-      setup: {
-        database_connection_ids: ['warehouse'],
-        completed_steps: ['databases'],
-      },
-    };
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
 
-    expect(markKtxSetupStepComplete(config, 'project').setup).toEqual({
-      database_connection_ids: ['warehouse'],
-      completed_steps: ['databases', 'project'],
+  it('marks setup steps complete in local state without duplicating existing state', async () => {
+    await markKtxSetupStateStepComplete(tempDir, 'project');
+    await markKtxSetupStateStepComplete(tempDir, 'project');
+    await markKtxSetupStateStepComplete(tempDir, 'llm');
+    await markKtxSetupStateStepComplete(tempDir, 'context');
+
+    expect(await readKtxSetupState(tempDir)).toEqual({
+      completed_steps: ['project', 'llm', 'context'],
     });
+    await expect(readFile(join(tempDir, '.ktx', 'setup', 'state.json'), 'utf-8')).resolves.toBe(
+      `${JSON.stringify({ completed_steps: ['project', 'llm', 'context'] }, null, 2)}\n`,
+    );
   });
 
   it('sets setup database connection ids without duplicates', () => {
@@ -47,22 +44,38 @@ describe('KTX setup config helpers', () => {
 
     expect(withDatabases.setup).toEqual({
       database_connection_ids: ['warehouse', 'analytics'],
-      completed_steps: [],
     });
     expect(config.setup).toBeUndefined();
   });
 
-  it('marks databases complete only when requested', () => {
-    const config = markKtxSetupStepComplete(buildDefaultKtxProjectConfig('warehouse'), 'project');
+  it('strips setup completed steps while preserving database connection ids', () => {
+    const config = {
+      ...buildDefaultKtxProjectConfig('warehouse'),
+      setup: {
+        database_connection_ids: ['warehouse'],
+        completed_steps: ['project', 'databases'],
+      },
+    };
 
-    const withDatabases = setKtxSetupDatabaseConnectionIds(config, ['warehouse'], { complete: true });
-    const withDatabasesAgain = setKtxSetupDatabaseConnectionIds(withDatabases, ['warehouse'], { complete: true });
-
-    expect(withDatabases.setup).toEqual({
+    expect(stripKtxSetupCompletedSteps(config).setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: ['project', 'databases'],
     });
-    expect(withDatabasesAgain.setup).toEqual(withDatabases.setup);
+  });
+
+  it('combines legacy config setup steps with local state for reads', () => {
+    const config = {
+      ...buildDefaultKtxProjectConfig('warehouse'),
+      setup: {
+        database_connection_ids: ['warehouse'],
+        completed_steps: ['project', 'databases'],
+      },
+    };
+
+    expect(ktxSetupCompletedSteps(config, { completed_steps: ['databases', 'sources'] })).toEqual([
+      'project',
+      'databases',
+      'sources',
+    ]);
   });
 
   it('merges setup-local gitignore entries without removing existing lines', () => {
