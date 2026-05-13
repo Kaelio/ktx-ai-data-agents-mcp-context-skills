@@ -64,27 +64,6 @@ export async function markKtxSetupStateStepComplete(projectDir: string, step: Kt
   return nextState;
 }
 
-export function ktxSetupCompletedSteps(config: KtxProjectConfig, state: KtxSetupState): KtxSetupStep[] {
-  return uniqueSetupSteps([...(config.setup?.completed_steps ?? []), ...state.completed_steps]);
-}
-
-export function stripKtxSetupCompletedSteps(config: KtxProjectConfig): KtxProjectConfig {
-  if (!config.setup) {
-    return config;
-  }
-  const databaseConnectionIds = config.setup.database_connection_ids ?? [];
-  if (databaseConnectionIds.length === 0) {
-    const { setup: _setup, ...withoutSetup } = config;
-    return withoutSetup;
-  }
-  return {
-    ...config,
-    setup: {
-      database_connection_ids: [...databaseConnectionIds],
-    },
-  };
-}
-
 export function setKtxSetupDatabaseConnectionIds(
   config: KtxProjectConfig,
   connectionIds: string[],
@@ -95,7 +74,6 @@ export function setKtxSetupDatabaseConnectionIds(
     ...config,
     setup: {
       database_connection_ids: uniqueConnectionIds,
-      ...(config.setup?.completed_steps ? { completed_steps: [...config.setup.completed_steps] } : {}),
     },
   };
 }

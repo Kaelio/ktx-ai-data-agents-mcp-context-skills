@@ -16,7 +16,9 @@ import {
   runLocalMetabaseIngest,
   savedMemoryCountsForReport,
 } from '@ktx/context/ingest';
-import { loadKtxProject } from '@ktx/context/project';
+import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
+import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
 import { createCliOperationalLogger } from './io/logger.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
@@ -65,10 +67,17 @@ interface KtxIngestIo {
   stderr: { write(chunk: string): void };
 }
 
-interface KtxIngestDeps {
+export interface KtxIngestProgressUpdate {
+  percent: number;
+  message: string;
+  transient?: boolean;
+}
+
+export interface KtxIngestDeps {
   jobIdFactory?: () => string;
   now?: () => Date;
   createAdapters?: typeof createKtxCliLocalIngestAdapters;
+  createQueryExecutor?: (project: KtxLocalProject) => KtxSqlQueryExecutorPort;
   runLocalIngest?: typeof runLocalIngest;
   runLocalMetabaseIngest?: typeof runLocalMetabaseIngest;
   readReportFile?: typeof readIngestReportSnapshotFile;
@@ -85,6 +94,7 @@ interface KtxIngestDeps {
     | 'logger'
     | 'pullConfigOptions'
   >;
+  progress?: (update: KtxIngestProgressUpdate) => void;
 }
 
 function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
@@ -142,12 +152,18 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
 function createMetabaseFanoutProgress(
   connectionId: string,
   io: KtxIngestIo,
+  onProgress?: (update: KtxIngestProgressUpdate) => void,
 ): LocalMetabaseFanoutProgress {
   io.stderr.write(`Metabase ingest: ${connectionId}\n`);
   io.stderr.write('Checking mappings and scheduled-pull targets...\n');
+  onProgress?.({ percent: 5, message: `Checking Metabase mappings for ${connectionId}` });
   return {
     onMetabaseFanoutPlanned(event) {
       io.stderr.write(`Targets: ${pluralize(event.children.length, 'mapped database')}\n`);
+      onProgress?.({
+        percent: 10,
+        message: `Metabase ${event.metabaseConnectionId}: ${pluralize(event.children.length, 'mapped database')}`,
+      });
       for (const child of event.children) {
         io.stderr.write(`- database=${child.metabaseDatabaseId} target=${child.targetConnectionId} status=queued\n`);
       }
@@ -156,11 +172,19 @@ function createMetabaseFanoutProgress(
       io.stderr.write(
         `- database=${event.metabaseDatabaseId} target=${event.targetConnectionId} status=running job=${event.jobId}\n`,
       );
+      onProgress?.({
+        percent: 25,
+        message: `Metabase database ${event.metabaseDatabaseId} -> ${event.targetConnectionId} running`,
+      });
     },
     onMetabaseChildCompleted(event) {
       io.stderr.write(
         `- database=${event.metabaseDatabaseId} target=${event.targetConnectionId} status=${event.status} job=${event.jobId}\n`,
       );
+      onProgress?.({
+        percent: 90,
+        message: `Metabase database ${event.metabaseDatabaseId} -> ${event.targetConnectionId} ${event.status}`,
+      });
     },
   };
 }
@@ -228,6 +252,12 @@ function plainIngestEventProgress(
     case 'diff_computed':
       return { percent: 35, message: `Computed source diff ${formatDiffProgress(event)}` };
     case 'chunks_planned':
+      if (event.workUnitCount === 0) {
+        return {
+          percent: 80,
+          message: 'No work units to process; finalizing ingest',
+        };
+      }
       return {
         percent: 45,
         message: `Planned ${pluralize(event.workUnitCount, 'work unit')}`,
@@ -293,34 +323,22 @@ function shouldWritePlainIngestProgress(
   return outputMode === 'plain' && io.stdout.isTTY === true && env.CI !== 'true';
 }
 
-function createPlainIngestProgressRenderer(
+function createPlainIngestProgressObserver(
   args: Extract<KtxIngestArgs, { command: 'run' }>,
-  io: KtxIngestIo,
-): { start(): void; update(snapshot: MemoryFlowReplayInput): void; flush(): void } {
+  onProgress: (update: KtxIngestProgressUpdate) => void,
+): { start(): void; update(snapshot: MemoryFlowReplayInput): void } {
   let printedEvents = 0;
   let lastPercent = 0;
   let printedCompletion = false;
-  let hasPendingTransient = false;
-
-  const flush = () => {
-    if (!hasPendingTransient) {
-      return;
-    }
-    io.stderr.write('\n');
-    hasPendingTransient = false;
-  };
 
   const write = (percent: number, message: string, options?: { transient?: boolean }) => {
     const nextPercent = Math.max(lastPercent, Math.max(0, Math.min(100, percent)));
     lastPercent = nextPercent;
-    const line = `[${nextPercent}%] ${message}`;
-    if (options?.transient === true) {
-      io.stderr.write(`\r${line}\u001b[K`);
-      hasPendingTransient = true;
-      return;
-    }
-    flush();
-    io.stderr.write(`${line}\n`);
+    onProgress({
+      percent: nextPercent,
+      message,
+      ...(options?.transient !== undefined ? { transient: options.transient } : {}),
+    });
   };
 
   return {
@@ -343,6 +361,41 @@ function createPlainIngestProgressRenderer(
         printedCompletion = true;
         write(100, snapshot.status === 'done' ? 'Ingest completed' : 'Ingest failed');
       }
+    },
+  };
+}
+
+function createPlainIngestProgressRenderer(
+  args: Extract<KtxIngestArgs, { command: 'run' }>,
+  io: KtxIngestIo,
+): { start(): void; update(snapshot: MemoryFlowReplayInput): void; flush(): void } {
+  let hasPendingTransient = false;
+
+  const flush = () => {
+    if (!hasPendingTransient) {
+      return;
+    }
+    io.stderr.write('\n');
+    hasPendingTransient = false;
+  };
+
+  const observer = createPlainIngestProgressObserver(args, (update) => {
+    const line = `[${update.percent}%] ${update.message}`;
+    if (update.transient === true) {
+      io.stderr.write(`\r${line}\u001b[K`);
+      hasPendingTransient = true;
+      return;
+    }
+    flush();
+    io.stderr.write(`${line}\n`);
+  });
+
+  return {
+    start() {
+      observer.start();
+    },
+    update(snapshot) {
+      observer.update(snapshot);
     },
     flush,
   };
@@ -518,7 +571,9 @@ export async function runKtxIngest(
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
-      const createAdapters = deps.createAdapters ?? createKtxCliLocalIngestAdapters;
+      const createAdapters =
+        deps.createAdapters ??
+        (deps.runLocalIngest || deps.runLocalMetabaseIngest ? () => [] : createKtxCliLocalIngestAdapters);
       const executeLocalIngest = deps.runLocalIngest ?? runLocalIngest;
       const localIngestOptions = deps.localIngestOptions ?? {};
       const managedDaemon = managedDaemonOptionsForIngestRun(args, io);
@@ -530,18 +585,30 @@ export async function runKtxIngest(
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
         logger: operationalLogger,
       };
+      const queryExecutor =
+        localIngestOptions.queryExecutor ??
+        (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(project);
       if (args.adapter === 'metabase' && args.sourceDir) {
         throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
       }
       if (args.adapter === 'metabase') {
         const executeMetabaseFanout = deps.runLocalMetabaseIngest ?? runLocalMetabaseIngest;
         const progress =
-          args.outputMode === 'json' ? undefined : createMetabaseFanoutProgress(args.connectionId, io);
+          args.outputMode === 'json' && !deps.progress
+            ? undefined
+            : createMetabaseFanoutProgress(
+                args.connectionId,
+                args.outputMode === 'json'
+                  ? { ...io, stderr: { write: () => undefined } }
+                  : io,
+                deps.progress,
+              );
         const result = await executeMetabaseFanout({
           project,
           adapters: createAdapters(project, adapterOptions),
           metabaseConnectionId: args.connectionId,
           ...localIngestOptions,
+          queryExecutor,
           trigger: 'manual_resync',
           jobIdFactory: deps.jobIdFactory,
           ...(progress ? { progress } : {}),
@@ -564,8 +631,13 @@ export async function runKtxIngest(
       const plainProgress = shouldWritePlainIngestProgress(runOutputMode, io, env)
         ? createPlainIngestProgressRenderer(args, io)
         : null;
+      const structuredProgress = deps.progress
+        ? createPlainIngestProgressObserver(args, deps.progress)
+        : null;
       const initialMemoryFlow =
-        shouldUseLiveViz || plainProgress ? initialRunMemoryFlowInput(args, jobId ?? 'pending') : undefined;
+        shouldUseLiveViz || plainProgress || structuredProgress
+          ? initialRunMemoryFlowInput(args, jobId ?? 'pending')
+          : undefined;
       let latestMemoryFlowSnapshot: MemoryFlowReplayInput | null = initialMemoryFlow ?? null;
 
       if (shouldUseLiveViz && initialMemoryFlow && isTuiCapableIo(io)) {
@@ -586,11 +658,13 @@ export async function runKtxIngest(
                 return;
               }
               plainProgress?.update(snapshot);
+              structuredProgress?.update(snapshot);
             },
           })
         : undefined;
 
       plainProgress?.start();
+      structuredProgress?.start();
 
       try {
         const result = await executeLocalIngest({
@@ -602,6 +676,7 @@ export async function runKtxIngest(
           trigger: 'manual_resync',
           jobId,
           ...localIngestOptions,
+          queryExecutor,
           pullConfigOptions: adapterOptions,
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),
           ...(memoryFlow ? { memoryFlow } : {}),
@@ -645,7 +720,7 @@ export async function runKtxIngest(
       throw new Error(
         args.runId
           ? `Local ingest run or report "${args.runId}" was not found`
-          : 'No local ingest reports were found. Run `ktx ingest --all` first.',
+          : 'No local ingest reports were found. Run `ktx ingest run --connection-id <id> --adapter <adapter>` first.',
       );
     }
     await writeReportRecord(report, args.outputMode, io, {

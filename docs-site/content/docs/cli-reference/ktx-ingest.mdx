@@ -1,14 +1,13 @@
 ---
 title: "ktx ingest"
-description: "Build and refresh context from configured sources."
+description: "Run and inspect local ingest memory-flow output."
 ---
 
-Ingest context from your configured sources — dbt, Looker, Metabase, MetricFlow, LookML, or Notion. The ingest process extracts metadata from your tools, then uses an LLM agent to reconcile it with existing context, writing semantic sources and knowledge pages to your project.
+`ktx ingest` runs adapter-level local ingest and renders stored ingest reports.
 
 ## Command signature
 
 ```bash
-ktx ingest [connectionId] [options]
 ktx ingest <subcommand> [options]
 ```
 
@@ -16,80 +15,59 @@ ktx ingest <subcommand> [options]
 
 | Subcommand | Description |
 |-----------|-------------|
-| `status [runId]` | Print status for the latest or selected public ingest run |
-| `watch [runId]` | Open the latest or selected public ingest visual report |
+| `run` | Run local ingest for one configured connection and source adapter |
+| `status [runId]` | Print status for the latest or selected stored local ingest run or report file |
+| `watch [runId]` | Open the latest or selected stored ingest visual report |
+| `replay <runId>` | Replay a stored ingest run or bundle report through memory-flow output |
 
-## Options
-
-### `ingest` (run)
+## `ingest run`
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--all` | Ingest every eligible configured source | `false` |
+| `--connection-id <connectionId>` | KTX connection id | Required |
+| `--adapter <adapter>` | Ingest source adapter name | Required |
+| `--source-dir <path>` | Directory containing source files | — |
+| `--database-introspection-url <url>` | Daemon URL for live-database introspection | — |
+| `--debug-llm-request-file <path>` | Write sanitized LLM request structure to a JSONL file | — |
+| `--plain` | Print plain text output | `true` |
 | `--json` | Print JSON output | `false` |
-| `--no-input` | Disable interactive terminal input | — |
+| `--viz` | Render memory-flow TUI output | `false` |
+| `--yes` | Install the managed Python runtime without prompting when required | `false` |
+| `--no-input` | Disable interactive terminal input for visualization and runtime installation | — |
 
-### `ingest status`
+## `ingest status`, `watch`, and `replay`
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--report-file <path>` | Bundle ingest report JSON file to render | — |
+| `--plain` | Print plain text output | `true` for `status` and `replay` |
 | `--json` | Print JSON output | `false` |
-| `--no-input` | Disable interactive terminal input | — |
-
-### `ingest watch`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--json` | Print JSON output instead of the visual report | `false` |
-| `--no-input` | Disable interactive terminal input | — |
+| `--viz` | Render memory-flow TUI output | `true` for `watch` |
+| `--no-input` | Disable interactive terminal input for visualization | — |
 
 ## Examples
 
 ```bash
-# Ingest from a specific connection
-ktx ingest my-dbt-source
+ktx ingest run --connection-id my-dbt-source --adapter dbt
+ktx ingest run --connection-id prod-metabase --adapter metabase --yes
 
-# Ingest from all eligible sources
-ktx ingest --all
-
-# Check the status of the latest ingest
 ktx ingest status
-
-# Check the status of a specific ingest run
 ktx ingest status run-abc123
-
-# Watch the latest ingest report
-ktx ingest watch
-
-# Get ingest status as JSON
 ktx ingest status --json
-```
 
-## Low-level ingest commands
+ktx ingest watch
+ktx ingest watch run-abc123
 
-For adapter-level control, use `ktx dev ingest`. See [`ktx dev`](/docs/cli-reference/ktx-dev) for the full low-level ingest surface including `run`, `status`, `watch`, and `replay` with output mode options (`--plain`, `--json`, `--viz`).
-
-## Output
-
-Ingest run commands print progress and create a stored ingest report. `ktx ingest status --json` returns the run state, adapter, connection, and summary information.
-
-```json
-{
-  "runId": "ingest-local-abc123",
-  "status": "completed",
-  "connectionId": "dbt-main",
-  "summary": {
-    "semanticSourcesChanged": 4,
-    "knowledgePagesChanged": 2
-  }
-}
+ktx ingest replay run-abc123
+ktx ingest replay run-abc123 --viz
+ktx ingest replay run-abc123 --report-file /tmp/ingest-report.json
 ```
 
 ## Common errors
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| No eligible sources | `ktx.yaml` has no configured context source for ingest | Add a source with `ktx setup` or `ktx connection add`, then rerun ingest |
 | Ingest needs credentials | The source adapter requires API or git access | Configure the referenced environment variable or secret file |
-| Latest run not found | No ingest run has been started in this project | Run `ktx ingest <connectionId>` or `ktx ingest --all` first |
+| Ingest run cannot find adapter | `--adapter` does not match a supported source adapter | Use a configured adapter such as `dbt`, `metabase`, `looker`, `lookml`, `notion`, or `live-database` |
+| Latest run not found | No ingest run has been started in this project | Run `ktx ingest run --connection-id <id> --adapter <adapter>` first |
 | Report watch fails in a non-interactive shell | Visual report needs a terminal | Use `ktx ingest status --json` for agent and CI workflows |

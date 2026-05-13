@@ -12,7 +12,7 @@ import {
   type MetabaseClientRuntimeConfig,
 } from './client-port.js';
 import type { MetabaseFetchLogger } from './fetch.js';
-import { LocalMetabaseSourceStateReader } from './local-source-state-store.js';
+import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from './local-source-state-store.js';
 import { MetabaseSourceAdapter } from './metabase.adapter.js';
 
 function stringField(value: unknown): string | null {
@@ -37,9 +37,9 @@ export function metabaseRuntimeConfigFromLocalConnection(
     );
   }
 
-  const apiUrl = stringField(connection.api_url) ?? stringField(connection.apiUrl) ?? stringField(connection.url);
-  const literalApiKey = stringField(connection.api_key) ?? stringField(connection.apiKey);
-  const apiKeyRef = stringField(connection.api_key_ref) ?? stringField(connection.apiKeyRef);
+  const apiUrl = stringField(connection.api_url);
+  const literalApiKey = stringField(connection.api_key);
+  const apiKeyRef = stringField(connection.api_key_ref);
   const apiKey = literalApiKey ?? (apiKeyRef ? resolveKtxConfigReference(apiKeyRef, env) : null);
 
   if (!apiUrl) {
@@ -62,7 +62,8 @@ export function createLocalMetabaseSourceAdapter(
   project: KtxLocalProject,
   options: CreateLocalMetabaseSourceAdapterOptions = {},
 ): MetabaseSourceAdapter {
-  const sourceStateReader = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
+  const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+  const sourceStateReader = new KtxYamlMetabaseSourceStateReader(project, { discoveryCache });
   const connectionFactory = new DefaultMetabaseConnectionClientFactory(
     (metabaseConnectionId) =>
       metabaseRuntimeConfigFromLocalConnection(

@@ -42,6 +42,15 @@ describe('MetricflowSourceAdapter', () => {
     expect(adapter.skillNames).toEqual(['metricflow_ingest']);
   });
 
+  it('returns configured target warehouse connection ids', async () => {
+    const metricflow = new MetricflowSourceAdapter({
+      homeDir: join(tmpRoot, 'cache-home'),
+      targetConnectionIds: ['warehouse', 'analytics', 'warehouse'],
+    });
+
+    await expect(metricflow.listTargetConnectionIds?.(stagedDir)).resolves.toEqual(['analytics', 'warehouse']);
+  });
+
   it('detects a staged dir with a semantic_models YAML', async () => {
     await mkdir(join(stagedDir, 'models'), { recursive: true });
     await writeFile(

@@ -150,7 +150,7 @@ function injectNativeSql(datasetQuery: MetabaseDatasetQuery, sql: string): Metab
     stages[0] = { ...stages[0], native: sql };
     return { ...datasetQuery, stages };
   }
-  if (datasetQuery?.native) {
+  if (datasetQuery?.native?.query !== undefined) {
     return { ...datasetQuery, native: { ...datasetQuery.native, query: sql } };
   }
   return datasetQuery;
@@ -370,36 +370,12 @@ export class MetabaseClient implements MetabaseRuntimeClient {
     });
   }
 
-  /**
-   * Extract native SQL from card, handling both pMBQL (v57+) and legacy formats.
-   * - pMBQL format: dataset_query.stages[0].native
-   * - Legacy format: dataset_query.native.query
-   */
   getNativeSql(card: MetabaseCard): string | null {
-    // pMBQL format (v57+): stages[0].native
-    const pMbqlSql = card.dataset_query?.stages?.[0]?.native;
-    if (pMbqlSql) {
-      return pMbqlSql;
-    }
-
-    // Legacy format: native.query
-    return card.dataset_query?.native?.query ?? null;
+    return card.dataset_query?.stages?.[0]?.native ?? card.dataset_query?.native?.query ?? null;
   }
 
-  /**
-   * Extract template tags from card, handling both pMBQL and legacy formats.
-   * - pMBQL format: dataset_query.stages[0]['template-tags']
-   * - Legacy format: dataset_query.native['template-tags']
-   */
   getTemplateTags(card: MetabaseCard): Record<string, MetabaseTemplateTag> {
-    // pMBQL format: stages[0]['template-tags']
-    const pMbqlTags = card.dataset_query?.stages?.[0]?.['template-tags'];
-    if (pMbqlTags) {
-      return pMbqlTags;
-    }
-
-    // Legacy format: native['template-tags']
-    return card.dataset_query?.native?.['template-tags'] ?? {};
+    return card.dataset_query?.stages?.[0]?.['template-tags'] ?? card.dataset_query?.native?.['template-tags'] ?? {};
   }
 
   async getCardSql(card: MetabaseCard): Promise<string | null> {

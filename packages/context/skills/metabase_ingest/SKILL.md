@@ -44,6 +44,37 @@ Use `resultMetadata` to:
 - `lastRunAt`: ISO timestamp of the card's last execution. If null or very old, the card may be dead; prefer skipping over creating a source.
 - `dashboardCount`: number of dashboards referencing the card. Cards with `dashboardCount: 0` and a stale `lastRunAt` are strong skip signals.
 
+Before writing a wiki page derived from a Metabase question SQL, verify each
+schema.table.column mentioned with entity_details.
+
+## Identifier Verification Protocol
+
+Before writing a wiki page or SL source on any topic:
+
+1. `discover_data({query: "<topic>"})` - see what wikis, SL sources, and raw
+   tables already exist. Prefer updating existing pages over creating new ones.
+
+Before emitting any `schema.table` or `schema.table.column` into a wiki body,
+SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
+
+2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
+   confirm the identifier resolves; inspect native types, FK/PK, and
+   sampleValues.
+3. For literal values from the source, such as status codes or plan tiers,
+   check whether they appear in `entity_details` sampleValues for the relevant
+   column. If sampleValues is short or the sample may have missed real values,
+   run a `sql_execution` probe with the same warehouse connection name:
+   `sql_execution({connectionName, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
+4. If the candidate identifier still does not resolve, do one of:
+   - Use `sql_execution({connectionName, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
+     If it errors, the identifier is fictional.
+   - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
+     citing the exact raw path that mentioned it.
+   - When recording `emit_unmapped_fallback` with `no_physical_table`, include
+     the failing probe error in `clarification`.
+5. Never copy `<schema>.<table>` placeholder strings from these instructions
+   into output.
+
 ## Decision tree
 
 For each card:
@@ -67,7 +98,7 @@ measures:
     expr: "<expression>"
 ```
 
-Overlay shape: `name:` plus any of `measures:`, `segments:`, `description:`, `joins:`, `disable_joins:`. Never include `sql:`, `table:`, `grain:`, or `columns:` on a manifest-backed name — those would shadow the manifest's schema and drop its joins. Overlay `joins:` are merged additively with the manifest's joins (deduped by `to` + `on`); use `disable_joins: ["<on-clause>"]` to suppress a specific manifest join. After the overlay exists, use `sl_edit_source` for further tweaks. See `sl_capture` skill for the canonical overlay rule.
+Overlay shape: `name:` plus any of `measures:`, `segments:`, `descriptions:`, `joins:`, `disable_joins:`. Never include `sql:`, `table:`, `grain:`, or `columns:` on a manifest-backed name — those would shadow the manifest's schema and drop its joins. Overlay `joins:` are merged additively with the manifest's joins (deduped by `to` + `on`); use `disable_joins: ["<on-clause>"]` to suppress a specific manifest join. After the overlay exists, use `sl_edit_source` for further tweaks. See `sl_capture` skill for the canonical overlay rule.
 
 **Join discovery:** When your card's SQL references warehouse tables (e.g. in `FROM` or `JOIN` clauses), call `sl_discover({ query: '<table>' })` before writing. The matching manifest entry's `name` is the value you use in `joins: [- to: <name>]` only when the card output exposes a local key that matches the target source grain (for example `account_id = mart_account_segments.account_id`). Do not declare a KTX join just because the card SQL joins that table internally. If the output only exposes display fields such as `account_name`, keep the SQL source self-contained or project the key before adding the join. Use `many_to_one` for FK-to-dimension joins, `one_to_many` for the reverse.
 

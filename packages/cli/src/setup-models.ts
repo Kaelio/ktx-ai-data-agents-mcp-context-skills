@@ -1,5 +1,6 @@
+import { execFile, spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
-import { cancel, isCancel, password, select, text } from '@clack/prompts';
+import { promisify } from 'node:util';
 import { resolveLocalKtxLlmConfig } from '@ktx/context';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
@@ -8,20 +9,25 @@ import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
-import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { withTextInputNavigation } from './prompt-navigation.js';
 import { envCredentialReference, writeProjectLocalSecretReference } from './setup-secrets.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 export interface KtxSetupModelArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
+  llmBackend?: KtxSetupLlmBackend;
   anthropicApiKeyEnv?: string;
   anthropicApiKeyFile?: string;
   anthropicModel?: string;
+  vertexProject?: string;
+  vertexLocation?: string;
   forcePrompt?: boolean;
   showPromptInstructions?: boolean;
   skipLlm: boolean;
@@ -40,8 +46,10 @@ export interface AnthropicModelChoice {
   recommended: boolean;
 }
 
+export type KtxSetupLlmBackend = 'anthropic' | 'vertex';
+
 export interface KtxSetupModelPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -53,6 +61,9 @@ export interface KtxSetupModelDeps {
   prompts?: KtxSetupModelPromptAdapter;
   listModels?: (apiKey: string) => Promise<AnthropicModelChoice[]>;
   healthCheck?: (config: KtxLlmConfig) => Promise<KtxLlmHealthCheckResult>;
+  runGcloudAuth?: (io: KtxCliIo) => Promise<GcloudAuthResult>;
+  readGcloudProject?: () => Promise<string | undefined>;
+  listGcloudProjects?: () => Promise<GcloudProjectChoice[]>;
 }
 
 export const BUNDLED_ANTHROPIC_MODEL_REGISTRY_VERSION = '2026-05-07';
@@ -79,6 +90,16 @@ const ANTHROPIC_MODEL_PROMPT_CONTEXT =
   'KTX uses this as the default model for ingest agents that turn schemas, SQL, BI metadata, and docs ' +
   'into semantic-layer sources and wiki context.';
 
+const VERTEX_AUTH_PROMPT_CONTEXT =
+  'KTX can use Google Cloud Application Default Credentials for local Vertex AI access. This opens the normal ' +
+  'gcloud browser login flow and does not store Google credentials in ktx.yaml.';
+const VERTEX_PROJECT_PROMPT_CONTEXT =
+  'KTX stores the selected Google Cloud project ID in ktx.yaml and uses Application Default Credentials for ' +
+  'access. Project visibility depends on the signed-in Google account and organization permissions.';
+const DEFAULT_VERTEX_LOCATION = 'us-east5';
+
+const execFileAsync = promisify(execFile);
+
 type AnthropicModelDiscoveryErrorReason = 'authentication' | 'http' | 'empty-response';
 
 export class AnthropicModelDiscoveryError extends Error {
@@ -104,32 +125,145 @@ type ChooseModelResult =
   | { status: 'ready'; model: string }
   | { status: 'back' | 'missing-input' | 'invalid-credential' };
 
+type ChooseBackendResult =
+  | { status: 'ready'; backend: KtxSetupLlmBackend; prompted: boolean }
+  | { status: 'back' };
+
+type VertexConfigChoice =
+  | {
+      status: 'ready';
+      refs: { project?: string; location: string };
+      values: { project?: string; location: string };
+    }
+  | { status: 'back' | 'missing-input' };
+
+type VertexAuthChoice = { status: 'ready' } | { status: 'back' | 'missing-input' };
+
+export type GcloudAuthResult = { ok: true } | { ok: false; message: string };
+interface GcloudProjectChoice {
+  projectId: string;
+  name?: string;
+}
+type GcloudCommandRunner = (args: string[], io: KtxCliIo) => Promise<GcloudAuthResult>;
+
 function createPromptAdapter(): KtxSetupModelPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
+  return createKtxSetupPromptAdapter({ selectCancelValue: 'back' });
+}
+
+function createIndentedCommandIo(io: KtxCliIo): KtxCliIo {
+  const indentedWriter = (write: (chunk: string) => void) => {
+    let atLineStart = true;
+    return (chunk: string) => {
+      for (const char of chunk) {
+        if (atLineStart) {
+          write('│  ');
+          atLineStart = false;
+        }
+        write(char);
+        if (char === '\n') {
+          atLineStart = true;
+        }
       }
-      return value;
+    };
+  };
+
+  return {
+    stdout: {
+      isTTY: io.stdout.isTTY,
+      columns: io.stdout.columns,
+      write: indentedWriter((chunk) => io.stdout.write(chunk)),
     },
-    async text(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        text({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : value;
-    },
-    async password(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        password({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : value;
-    },
-    cancel(message) {
-      cancel(message);
+    stderr: {
+      write: indentedWriter((chunk) => io.stderr.write(chunk)),
     },
   };
+}
+
+function runInteractiveGcloud(args: string[], io: KtxCliIo): Promise<GcloudAuthResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const child = spawn('gcloud', args, { stdio: ['inherit', 'pipe', 'pipe'] });
+    child.stdout?.on('data', (chunk: Buffer) => {
+      io.stdout.write(chunk.toString('utf8'));
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      io.stderr.write(chunk.toString('utf8'));
+    });
+    child.on('error', (error: NodeJS.ErrnoException) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (error.code === 'ENOENT') {
+        resolve({ ok: false, message: 'gcloud CLI was not found on PATH.' });
+        return;
+      }
+      resolve({ ok: false, message: error.message });
+    });
+    child.on('close', (code, signal) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (code === 0) {
+        resolve({ ok: true });
+        return;
+      }
+      resolve({
+        ok: false,
+        message: signal ? `gcloud exited after signal ${signal}.` : `gcloud exited with code ${code ?? 'unknown'}.`,
+      });
+    });
+  });
+}
+
+export async function runKtxSetupGcloudApplicationDefaultAuth(
+  io: KtxCliIo,
+  runGcloud: GcloudCommandRunner = runInteractiveGcloud,
+): Promise<GcloudAuthResult> {
+  io.stdout.write('│  Running gcloud auth application-default login...\n');
+  return await runGcloud(['auth', 'application-default', 'login'], createIndentedCommandIo(io));
+}
+
+async function defaultReadGcloudProject(): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync('gcloud', ['config', 'get-value', 'project'], { encoding: 'utf8' });
+    const value = stdout.trim();
+    return value && value !== '(unset)' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function defaultListGcloudProjects(): Promise<GcloudProjectChoice[]> {
+  try {
+    const { stdout } = await execFileAsync('gcloud', ['projects', 'list', '--format=json(projectId,name)'], {
+      encoding: 'utf8',
+    });
+    const parsed = JSON.parse(stdout.trim() || '[]') as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item): GcloudProjectChoice | undefined => {
+        if (!item || typeof item !== 'object') {
+          return undefined;
+        }
+        const record = item as { projectId?: unknown; name?: unknown };
+        if (typeof record.projectId !== 'string' || !record.projectId.trim()) {
+          return undefined;
+        }
+        const name = typeof record.name === 'string' && record.name.trim() ? record.name.trim() : undefined;
+        return {
+          projectId: record.projectId.trim(),
+          ...(name ? { name } : {}),
+        };
+      })
+      .filter((project): project is GcloudProjectChoice => Boolean(project));
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchAnthropicModels(
@@ -196,26 +330,61 @@ function hasUsableConfiguredLlm(config: KtxProjectConfig): boolean {
 
 function buildProjectLlmConfig(
   existing: KtxProjectLlmConfig,
-  credentialRef: string,
+  provider:
+    | { backend: 'anthropic'; credentialRef: string }
+    | { backend: 'vertex'; vertex: { project?: string; location: string } },
   model: string,
 ): KtxProjectLlmConfig {
+  if (provider.backend === 'vertex') {
+    return {
+      provider: {
+        backend: 'vertex',
+        vertex: provider.vertex,
+      },
+      models: { ...existing.models, default: model },
+      promptCaching: { ...(existing.promptCaching ?? {}), enabled: true, vertexFallbackTo5m: true },
+    };
+  }
+
   return {
     provider: {
       backend: 'anthropic',
-      anthropic: { api_key: credentialRef },
+      anthropic: { api_key: provider.credentialRef },
     },
     models: { ...existing.models, default: model },
     promptCaching: { ...(existing.promptCaching ?? {}), enabled: true },
   };
 }
 
-function buildHealthConfig(credentialValue: string, model: string): KtxLlmConfig {
+function buildAnthropicHealthConfig(credentialValue: string, model: string): KtxLlmConfig {
   return {
     backend: 'anthropic',
     anthropic: { apiKey: credentialValue },
     modelSlots: { default: model },
     promptCaching: { enabled: true },
   };
+}
+
+function buildVertexHealthConfig(vertex: { project?: string; location: string }, model: string): KtxLlmConfig {
+  return {
+    backend: 'vertex',
+    vertex,
+    modelSlots: { default: model },
+    promptCaching: { enabled: true, vertexFallbackTo5m: true },
+  };
+}
+
+function formatVertexHealthFailure(message: string, vertex: { project?: string; location: string }): string {
+  const trimmed = message.trim() || 'unknown error';
+  if (!/(forbidden|permission|permission_denied|403)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return (
+    `${trimmed}. Check that Vertex AI API is enabled for project ${vertex.project ?? '(unknown)'}, ` +
+    `Anthropic Claude model access is enabled for location ${vertex.location}, and that your Application Default ` +
+    'Credentials principal has Vertex AI User (roles/aiplatform.user) or equivalent permissions.'
+  );
 }
 
 async function chooseCredentialRef(
@@ -299,6 +468,266 @@ async function chooseCredentialRef(
   }
 }
 
+function requestedBackend(args: KtxSetupModelArgs): KtxSetupLlmBackend | undefined {
+  if (args.llmBackend) {
+    return args.llmBackend;
+  }
+  if (args.vertexProject || args.vertexLocation) {
+    return 'vertex';
+  }
+  if (args.anthropicApiKeyEnv || args.anthropicApiKeyFile || args.anthropicModel) {
+    return 'anthropic';
+  }
+  return undefined;
+}
+
+async function chooseBackend(
+  args: KtxSetupModelArgs,
+  io: KtxCliIo,
+  deps: KtxSetupModelDeps,
+): Promise<ChooseBackendResult> {
+  const explicit = requestedBackend(args);
+  if (explicit) {
+    return { status: 'ready', backend: explicit, prompted: false };
+  }
+  if (args.inputMode === 'disabled') {
+    return { status: 'ready', backend: 'anthropic', prompted: false };
+  }
+
+  const prompts = deps.prompts ?? createPromptAdapter();
+  if (args.showPromptInstructions !== false) {
+    io.stdout.write(
+      '│  Use Up/Down to move, Enter to confirm the current selection, choose Back to return to the previous step, Ctrl+C to exit.\n',
+    );
+  }
+  const choice = await prompts.select({
+    message: 'Which LLM provider should KTX use?',
+    options: [
+      { value: 'anthropic', label: 'Anthropic API' },
+      { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (choice === 'back') {
+    return { status: 'back' };
+  }
+  return { status: 'ready', backend: choice === 'vertex' ? 'vertex' : 'anthropic', prompted: true };
+}
+
+async function chooseVertexAuth(
+  args: KtxSetupModelArgs,
+  io: KtxCliIo,
+  deps: KtxSetupModelDeps,
+): Promise<VertexAuthChoice> {
+  if (args.inputMode === 'disabled' || args.vertexProject || args.vertexLocation) {
+    return { status: 'ready' };
+  }
+
+  const prompts = deps.prompts ?? createPromptAdapter();
+  const choice = await prompts.select({
+    message: `How should KTX authenticate with Google Vertex AI?\n\n${VERTEX_AUTH_PROMPT_CONTEXT}`,
+    options: [
+      { value: 'gcloud', label: 'Run gcloud Application Default Credentials login' },
+      { value: 'existing', label: 'Use existing gcloud/Application Default Credentials' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (choice === 'back') {
+    return { status: 'back' };
+  }
+  if (choice !== 'gcloud') {
+    return { status: 'ready' };
+  }
+
+  const result = await (deps.runGcloudAuth ?? runKtxSetupGcloudApplicationDefaultAuth)(io);
+  if (!result.ok) {
+    io.stderr.write(`gcloud authentication failed: ${result.message}\n`);
+    return { status: 'missing-input' };
+  }
+  return { status: 'ready' };
+}
+
+function resolveProvidedVertexRef(
+  label: 'project' | 'location',
+  ref: string,
+  env: NodeJS.ProcessEnv,
+  io: KtxCliIo,
+): { status: 'ready'; ref: string; value: string } | { status: 'missing-input' } {
+  let value: string | undefined;
+  try {
+    value = resolveKtxConfigReference(ref, env);
+  } catch {
+    value = undefined;
+  }
+  if (!value) {
+    io.stderr.write(`Missing Vertex AI ${label}: ${ref} could not be resolved.\n`);
+    return { status: 'missing-input' };
+  }
+  return { status: 'ready', ref, value };
+}
+
+function normalizeGcloudProjectId(projectId: string | undefined): string | undefined {
+  const trimmed = projectId?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function orderGcloudProjects(projects: GcloudProjectChoice[], currentProject: string | undefined): GcloudProjectChoice[] {
+  const ordered: GcloudProjectChoice[] = [];
+  const seen = new Set<string>();
+  const addProject = (project: GcloudProjectChoice) => {
+    const projectId = normalizeGcloudProjectId(project.projectId);
+    if (!projectId || seen.has(projectId)) {
+      return;
+    }
+    seen.add(projectId);
+    const name = normalizeGcloudProjectId(project.name);
+    ordered.push({
+      projectId,
+      ...(name ? { name } : {}),
+    });
+  };
+
+  if (currentProject) {
+    addProject(projects.find((project) => project.projectId.trim() === currentProject) ?? { projectId: currentProject });
+  }
+  for (const project of projects) {
+    addProject(project);
+  }
+  return ordered;
+}
+
+function formatGcloudProjectLabel(project: GcloudProjectChoice, currentProject: string | undefined): string {
+  const name = project.name && project.name !== project.projectId ? ` - ${project.name}` : '';
+  const current = project.projectId === currentProject ? ' (current gcloud project)' : '';
+  return `${project.projectId}${name}${current}`;
+}
+
+async function chooseInteractiveVertexProject(
+  currentProject: string | undefined,
+  io: KtxCliIo,
+  deps: KtxSetupModelDeps,
+): Promise<{ status: 'ready'; ref: string; value: string } | { status: 'back' | 'missing-input' }> {
+  const prompts = deps.prompts ?? createPromptAdapter();
+  let projects: GcloudProjectChoice[] = [];
+  try {
+    projects = await (deps.listGcloudProjects ?? defaultListGcloudProjects)();
+  } catch {
+    io.stderr.write('Could not list Google Cloud projects with gcloud. Enter a project ID manually or choose Back.\n');
+  }
+
+  const orderedProjects = orderGcloudProjects(projects, currentProject);
+  if (orderedProjects.length === 0) {
+    io.stdout.write('│  gcloud did not return any visible Google Cloud projects. Enter a project ID manually or choose Back.\n');
+  }
+
+  const choice = await prompts.select({
+    message: `Which Google Cloud project should KTX use for Vertex AI?\n\n${VERTEX_PROJECT_PROMPT_CONTEXT}`,
+    options: [
+      ...orderedProjects.map((project) => ({
+        value: project.projectId,
+        label: formatGcloudProjectLabel(project, currentProject),
+      })),
+      { value: 'manual', label: 'Enter a project ID manually' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (choice === 'back') {
+    return { status: 'back' };
+  }
+  if (choice === 'manual') {
+    const manual = await prompts.text({
+      message: withTextInputNavigation('Google Cloud project ID'),
+      placeholder: currentProject ?? orderedProjects[0]?.projectId,
+    });
+    if (manual === undefined) {
+      return { status: 'back' };
+    }
+    const project = normalizeGcloudProjectId(manual);
+    return project ? { status: 'ready', ref: project, value: project } : { status: 'missing-input' };
+  }
+
+  return { status: 'ready', ref: choice, value: choice };
+}
+
+async function chooseVertexConfig(
+  args: KtxSetupModelArgs,
+  io: KtxCliIo,
+  deps: KtxSetupModelDeps,
+): Promise<VertexConfigChoice> {
+  const env = deps.env ?? process.env;
+  let projectRef: string | undefined;
+  let projectValue: string | undefined;
+  let gcloudProject: string | undefined;
+
+  if (args.vertexProject) {
+    const project = resolveProvidedVertexRef('project', args.vertexProject, env, io);
+    if (project.status !== 'ready') {
+      return { status: project.status };
+    }
+    projectRef = project.ref;
+    projectValue = project.value;
+  } else if (env.GOOGLE_VERTEX_PROJECT?.trim()) {
+    projectRef = envCredentialReference('GOOGLE_VERTEX_PROJECT');
+    projectValue = env.GOOGLE_VERTEX_PROJECT.trim();
+  } else {
+    gcloudProject = normalizeGcloudProjectId(await (deps.readGcloudProject ?? defaultReadGcloudProject)());
+    if (args.inputMode === 'disabled') {
+      if (gcloudProject) {
+        projectRef = gcloudProject;
+        projectValue = gcloudProject;
+      }
+    } else {
+      const project = await chooseInteractiveVertexProject(gcloudProject, io, deps);
+      if (project.status !== 'ready') {
+        return { status: project.status };
+      }
+      projectRef = project.ref;
+      projectValue = project.value;
+    }
+  }
+
+  let locationRef: string | undefined;
+  let locationValue: string | undefined;
+  if (args.vertexLocation) {
+    const location = resolveProvidedVertexRef('location', args.vertexLocation, env, io);
+    if (location.status !== 'ready') {
+      return { status: location.status };
+    }
+    locationRef = location.ref;
+    locationValue = location.value;
+  } else if (env.GOOGLE_VERTEX_LOCATION?.trim()) {
+    locationRef = envCredentialReference('GOOGLE_VERTEX_LOCATION');
+    locationValue = env.GOOGLE_VERTEX_LOCATION.trim();
+  } else {
+    locationRef = DEFAULT_VERTEX_LOCATION;
+    locationValue = DEFAULT_VERTEX_LOCATION;
+  }
+
+  if (!projectRef || !projectValue) {
+    io.stderr.write(
+      'Missing Vertex AI project: run `gcloud config set project PROJECT_ID`, pass --vertex-project, or set GOOGLE_VERTEX_PROJECT.\n',
+    );
+    return { status: 'missing-input' };
+  }
+
+  if (!locationRef || !locationValue) {
+    io.stderr.write('Missing Vertex AI location: pass --vertex-location.\n');
+    return { status: 'missing-input' };
+  }
+
+  return {
+    status: 'ready',
+    refs: {
+      ...(projectRef ? { project: projectRef } : {}),
+      location: locationRef,
+    },
+    values: {
+      ...(projectValue ? { project: projectValue } : {}),
+      location: locationValue,
+    },
+  };
+}
+
 async function chooseModel(
   args: KtxSetupModelArgs,
   credentialValue: string,
@@ -335,7 +764,8 @@ async function chooseModel(
   const modelOptions = [
     ...selectableModels.map((model) => ({
       value: model.id,
-      label: `${model.label || model.id}${model.recommended ? ' (recommended)' : ''}`,
+      label: model.label || model.id,
+      ...(model.recommended ? { hint: 'recommended' } : {}),
     })),
     { value: 'manual', label: 'Enter a model ID manually' },
     { value: 'back', label: 'Back' },
@@ -360,30 +790,74 @@ async function chooseModel(
   return { status: 'ready', model: choice };
 }
 
-async function persistLlmConfig(projectDir: string, credentialRef: string, model: string): Promise<void> {
+async function chooseVertexModel(args: KtxSetupModelArgs, io: KtxCliIo, deps: KtxSetupModelDeps): Promise<ChooseModelResult> {
+  if (args.anthropicModel) {
+    return { status: 'ready', model: args.anthropicModel };
+  }
+  if (args.inputMode === 'disabled') {
+    io.stderr.write('Missing Anthropic model: pass --anthropic-model.\n');
+    return { status: 'missing-input' };
+  }
+
+  const selectableModels = BUNDLED_ANTHROPIC_MODELS.filter(isSelectableAnthropicModel);
+  const prompts = deps.prompts ?? createPromptAdapter();
+  const choice = await prompts.select({
+    message: `Which Anthropic model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
+    options: [
+      ...selectableModels.map((model) => ({
+        value: model.id,
+        label: model.label || model.id,
+        ...(model.recommended ? { hint: 'recommended' } : {}),
+      })),
+      { value: 'manual', label: 'Enter a model ID manually' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (choice === 'back') {
+    return { status: 'back' };
+  }
+  if (choice === 'manual') {
+    const manual = await prompts.text({
+      message: withTextInputNavigation('Anthropic model ID'),
+      placeholder: selectableModels.find((model) => model.recommended)?.id ?? selectableModels[0]?.id,
+    });
+    if (manual === undefined) {
+      return { status: 'back' };
+    }
+    return manual.trim() ? { status: 'ready', model: manual.trim() } : { status: 'missing-input' };
+  }
+  return { status: 'ready', model: choice };
+}
+
+async function persistLlmConfig(
+  projectDir: string,
+  provider:
+    | { backend: 'anthropic'; credentialRef: string }
+    | { backend: 'vertex'; vertex: { project?: string; location: string } },
+  model: string,
+): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = stripKtxSetupCompletedSteps(
-    {
-      ...project.config,
-      llm: buildProjectLlmConfig(project.config.llm, credentialRef, model),
-      scan: {
-        ...project.config.scan,
-        enrichment: {
-          ...project.config.scan.enrichment,
-          mode: 'llm',
-        },
+  const config = {
+    ...project.config,
+    llm: buildProjectLlmConfig(project.config.llm, provider, model),
+    scan: {
+      ...project.config.scan,
+      enrichment: {
+        ...project.config.scan.enrichment,
+        mode: 'llm' as const,
       },
     },
-  );
+  };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'llm');
 }
 
-function buildInteractiveRetryArgs(args: KtxSetupModelArgs): KtxSetupModelArgs {
+function buildInteractiveRetryArgs(args: KtxSetupModelArgs, backend?: KtxSetupLlmBackend): KtxSetupModelArgs {
   return {
     projectDir: args.projectDir,
     inputMode: args.inputMode,
-    ...(args.showPromptInstructions !== undefined ? { showPromptInstructions: args.showPromptInstructions } : {}),
+    ...(backend ?? args.llmBackend ? { llmBackend: backend ?? args.llmBackend } : {}),
+    showPromptInstructions: false,
     skipLlm: args.skipLlm,
   };
 }
@@ -402,9 +876,12 @@ export async function runKtxSetupAnthropicModelStep(
   if (
     args.forcePrompt !== true &&
     hasUsableConfiguredLlm(project.config) &&
+    !args.llmBackend &&
     !args.anthropicApiKeyEnv &&
     !args.anthropicApiKeyFile &&
-    !args.anthropicModel
+    !args.anthropicModel &&
+    !args.vertexProject &&
+    !args.vertexLocation
   ) {
     io.stdout.write(`│  LLM ready: yes (${project.config.llm.models.default})\n`);
     return { status: 'ready', projectDir: args.projectDir };
@@ -414,31 +891,91 @@ export async function runKtxSetupAnthropicModelStep(
   let attemptArgs = args;
 
   while (true) {
-    const credential = await chooseCredentialRef(attemptArgs, io, deps);
+    const backendChoice = await chooseBackend(attemptArgs, io, deps);
+    if (backendChoice.status !== 'ready') {
+      return { status: backendChoice.status, projectDir: args.projectDir };
+    }
+
+    const backendArgs = backendChoice.prompted
+      ? ({ ...attemptArgs, llmBackend: backendChoice.backend, showPromptInstructions: false } satisfies KtxSetupModelArgs)
+      : attemptArgs;
+
+    if (backendChoice.backend === 'vertex') {
+      const auth = await chooseVertexAuth(backendArgs, io, deps);
+      if (auth.status === 'back' && backendChoice.prompted) {
+        attemptArgs = buildInteractiveRetryArgs(args);
+        continue;
+      }
+      if (auth.status !== 'ready') {
+        return { status: auth.status, projectDir: args.projectDir };
+      }
+
+      const vertex = await chooseVertexConfig(backendArgs, io, deps);
+      if (vertex.status === 'back' && backendChoice.prompted) {
+        attemptArgs = buildInteractiveRetryArgs(args);
+        continue;
+      }
+      if (vertex.status !== 'ready') {
+        return { status: vertex.status, projectDir: args.projectDir };
+      }
+
+      const model = await chooseVertexModel(backendArgs, io, deps);
+      if (model.status === 'back' && !backendArgs.vertexLocation) {
+        attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
+        continue;
+      }
+      if (model.status === 'invalid-credential') {
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      if (model.status !== 'ready') {
+        return { status: model.status, projectDir: args.projectDir };
+      }
+
+      const health = await healthCheck(buildVertexHealthConfig(vertex.values, model.model));
+      if (health.ok) {
+        await persistLlmConfig(args.projectDir, { backend: 'vertex', vertex: vertex.refs }, model.model);
+        io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
+        return { status: 'ready', projectDir: args.projectDir };
+      }
+
+      io.stderr.write(`Vertex AI Anthropic model health check failed: ${formatVertexHealthFailure(health.message, vertex.values)}\n`);
+      if (args.inputMode === 'disabled') {
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      io.stderr.write('Choose a different Vertex AI project, location, or model, or Back.\n');
+      attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
+      continue;
+    }
+
+    const credential = await chooseCredentialRef(backendArgs, io, deps);
+    if (credential.status === 'back' && backendChoice.prompted) {
+      attemptArgs = buildInteractiveRetryArgs(args);
+      continue;
+    }
     if (credential.status !== 'ready') {
       return { status: credential.status, projectDir: args.projectDir };
     }
 
-    const model = await chooseModel(attemptArgs, credential.value, io, deps);
+    const model = await chooseModel(backendArgs, credential.value, io, deps);
     if (model.status === 'invalid-credential') {
       if (args.inputMode === 'disabled') {
         return { status: 'failed', projectDir: args.projectDir };
       }
       io.stderr.write('Choose a different credential source or Back.\n');
-      attemptArgs = buildInteractiveRetryArgs(args);
+      attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
       continue;
     }
-    if (model.status === 'back' && !attemptArgs.anthropicApiKeyEnv && !attemptArgs.anthropicApiKeyFile) {
-      attemptArgs = buildInteractiveRetryArgs(args);
+    if (model.status === 'back' && !backendArgs.anthropicApiKeyEnv && !backendArgs.anthropicApiKeyFile) {
+      attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
       continue;
     }
     if (model.status !== 'ready') {
       return { status: model.status, projectDir: args.projectDir };
     }
 
-    const health = await healthCheck(buildHealthConfig(credential.value, model.model));
+    const health = await healthCheck(buildAnthropicHealthConfig(credential.value, model.model));
     if (health.ok) {
-      await persistLlmConfig(args.projectDir, credential.ref, model.model);
+      await persistLlmConfig(args.projectDir, { backend: 'anthropic', credentialRef: credential.ref }, model.model);
       io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
@@ -448,6 +985,6 @@ export async function runKtxSetupAnthropicModelStep(
       return { status: 'failed', projectDir: args.projectDir };
     }
     io.stderr.write('Choose a different credential source or model, or Back.\n');
-    attemptArgs = buildInteractiveRetryArgs(args);
+    attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
   }
 }

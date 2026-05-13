@@ -2,6 +2,7 @@ import { type Command, InvalidArgumentError, Option } from '@commander-js/extra-
 import type { KtxCliCommandContext } from '../cli-program.js';
 import { resolveCommandProjectDir } from '../cli-program.js';
 import type { KtxSetupDatabaseDriver } from '../setup-databases.js';
+import type { KtxSetupLlmBackend } from '../setup-models.js';
 import type { KtxSetupSourceType } from '../setup-sources.js';
 
 async function runSetupArgs(
@@ -22,6 +23,13 @@ function positiveInteger(value: string): number {
 
 function embeddingBackend(value: string): 'openai' | 'sentence-transformers' {
   if (value === 'openai' || value === 'sentence-transformers') {
+    return value;
+  }
+  throw new InvalidArgumentError(`invalid choice '${value}'`);
+}
+
+function llmBackend(value: string): KtxSetupLlmBackend {
+  if (value === 'anthropic' || value === 'vertex') {
     return value;
   }
   throw new InvalidArgumentError(`invalid choice '${value}'`);
@@ -93,9 +101,12 @@ function shouldShowSetupEntryMenu(
     skipAgents?: boolean;
     yes?: boolean;
     input?: boolean;
+    llmBackend?: KtxSetupLlmBackend;
     anthropicApiKeyEnv?: string;
     anthropicApiKeyFile?: string;
     anthropicModel?: string;
+    vertexProject?: string;
+    vertexLocation?: string;
     skipLlm?: boolean;
     embeddingBackend?: string;
     embeddingApiKeyEnv?: string;
@@ -110,7 +121,6 @@ function shouldShowSetupEntryMenu(
     disableHistoricSql?: boolean;
     historicSqlWindowDays?: number;
     historicSqlMinExecutions?: number;
-    historicSqlMinCalls?: number;
     historicSqlServiceAccountPattern?: string[];
     historicSqlRedactionPattern?: string[];
     skipDatabases?: boolean;
@@ -166,9 +176,12 @@ function shouldShowSetupEntryMenu(
     'skipAgents',
     'yes',
     'input',
+    'llmBackend',
     'anthropicApiKeyEnv',
     'anthropicApiKeyFile',
     'anthropicModel',
+    'vertexProject',
+    'vertexLocation',
     'skipLlm',
     'embeddingBackend',
     'embeddingApiKeyEnv',
@@ -180,7 +193,6 @@ function shouldShowSetupEntryMenu(
     'disableHistoricSql',
     'historicSqlWindowDays',
     'historicSqlMinExecutions',
-    'historicSqlMinCalls',
     'skipDatabases',
     'source',
     'sourceConnectionId',
@@ -227,9 +239,12 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .option('--skip-agents', 'Leave agent integration incomplete for now', false)
     .option('--yes', 'Accept safe defaults in non-interactive setup', false)
     .option('--no-input', 'Disable interactive terminal input')
+    .addOption(new Option('--llm-backend <backend>', 'LLM backend').argParser(llmBackend))
     .option('--anthropic-api-key-env <name>', 'Environment variable containing the Anthropic API key')
     .option('--anthropic-api-key-file <path>', 'File containing the Anthropic API key')
     .option('--anthropic-model <model>', 'Anthropic model ID to validate and save')
+    .option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path')
+    .option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path')
     .addOption(new Option('--skip-llm', 'Leave LLM setup incomplete for now').hideHelp().default(false))
     .addOption(new Option('--embedding-backend <backend>', 'Embedding backend').argParser(embeddingBackend))
     .option('--embedding-api-key-env <name>', 'Environment variable containing the embedding provider API key')
@@ -266,11 +281,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .option('--disable-historic-sql', 'Disable Historic SQL for the selected database', false)
     .option('--historic-sql-window-days <number>', 'Historic SQL query-history window', positiveInteger)
     .option('--historic-sql-min-executions <number>', 'Minimum Historic SQL executions for a template', positiveInteger)
-    .option(
-      '--historic-sql-min-calls <number>',
-      'Alias for --historic-sql-min-executions',
-      positiveInteger,
-    )
     .option(
       '--historic-sql-service-account-pattern <pattern>',
       'Historic SQL service-account regex; repeatable',
@@ -344,6 +354,16 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       context.setExitCode(1);
       return;
     }
+    if (options.llmBackend === 'vertex' && (options.anthropicApiKeyEnv || options.anthropicApiKeyFile)) {
+      context.io.stderr.write('Anthropic API key flags are only valid with --llm-backend anthropic.\n');
+      context.setExitCode(1);
+      return;
+    }
+    if (options.llmBackend === 'anthropic' && (options.vertexProject || options.vertexLocation)) {
+      context.io.stderr.write('Vertex AI flags are only valid with --llm-backend vertex.\n');
+      context.setExitCode(1);
+      return;
+    }
     if (options.embeddingApiKeyEnv && options.embeddingApiKeyFile) {
       context.io.stderr.write(
         'Choose only one embedding credential source: --embedding-api-key-env or --embedding-api-key-file.\n',
@@ -371,7 +391,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
 
     const mode = options.new ? 'new' : options.existing ? 'existing' : 'auto';
     const resolvedAgentScope = options.global ? 'global' : options.agentScope;
-    const historicSqlMinExecutions = options.historicSqlMinExecutions ?? options.historicSqlMinCalls;
     await runSetupArgs(context, {
       command: 'run',
       projectDir: resolveCommandProjectDir(command),
@@ -383,9 +402,12 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       inputMode: options.input === false ? 'disabled' : 'auto',
       yes: options.yes === true,
       cliVersion: context.packageInfo.version,
+      ...(options.llmBackend ? { llmBackend: options.llmBackend } : {}),
       ...(options.anthropicApiKeyEnv ? { anthropicApiKeyEnv: options.anthropicApiKeyEnv } : {}),
       ...(options.anthropicApiKeyFile ? { anthropicApiKeyFile: options.anthropicApiKeyFile } : {}),
       ...(options.anthropicModel ? { anthropicModel: options.anthropicModel } : {}),
+      ...(options.vertexProject ? { vertexProject: options.vertexProject } : {}),
+      ...(options.vertexLocation ? { vertexLocation: options.vertexLocation } : {}),
       skipLlm: options.skipLlm === true,
       ...(options.embeddingBackend ? { embeddingBackend: options.embeddingBackend } : {}),
       ...(options.embeddingApiKeyEnv ? { embeddingApiKeyEnv: options.embeddingApiKeyEnv } : {}),
@@ -399,7 +421,9 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ...(options.enableHistoricSql ? { enableHistoricSql: true } : {}),
       ...(options.disableHistoricSql ? { disableHistoricSql: true } : {}),
       ...(options.historicSqlWindowDays !== undefined ? { historicSqlWindowDays: options.historicSqlWindowDays } : {}),
-      ...(historicSqlMinExecutions !== undefined ? { historicSqlMinExecutions } : {}),
+      ...(options.historicSqlMinExecutions !== undefined
+        ? { historicSqlMinExecutions: options.historicSqlMinExecutions }
+        : {}),
       ...(options.historicSqlServiceAccountPattern.length > 0
         ? { historicSqlServiceAccountPatterns: options.historicSqlServiceAccountPattern }
         : {}),

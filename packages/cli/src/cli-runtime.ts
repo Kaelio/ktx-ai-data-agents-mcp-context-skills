@@ -1,13 +1,9 @@
 import { createRequire } from 'node:module';
 
-import type { KtxConnectionMetabaseSetupArgs } from './commands/connection-metabase-setup.js';
-import type { KtxConnectionNotionArgs } from './commands/connection-notion.js';
-import type { KtxAgentArgs } from './agent.js';
 import type { KtxConnectionArgs } from './connection.js';
 import type { KtxDoctorArgs } from './doctor.js';
 import type { KtxIngestArgs } from './ingest.js';
 import type { KtxKnowledgeArgs } from './knowledge.js';
-import type { KtxPublicIngestArgs } from './public-ingest.js';
 import type { KtxRuntimeArgs } from './runtime.js';
 import type { KtxScanArgs } from './scan.js';
 import type { KtxSetupArgs } from './setup.js';
@@ -31,13 +27,9 @@ export interface KtxCliIo {
 
 export interface KtxCliDeps {
   setup?: (args: KtxSetupArgs, io: KtxCliIo) => Promise<number>;
-  agent?: (args: KtxAgentArgs, io: KtxCliIo) => Promise<number>;
   connection?: (args: KtxConnectionArgs, io: KtxCliIo) => Promise<number>;
-  connectionNotion?: (args: KtxConnectionNotionArgs, io: KtxCliIo) => Promise<number>;
-  connectionMetabaseSetup?: (args: KtxConnectionMetabaseSetupArgs, io: KtxCliIo) => Promise<number>;
   doctor?: (args: KtxDoctorArgs, io: KtxCliIo) => Promise<number>;
   ingest?: (args: KtxIngestArgs, io: KtxCliIo) => Promise<number>;
-  publicIngest?: (args: KtxPublicIngestArgs, io: KtxCliIo) => Promise<number>;
   runtime?: (args: KtxRuntimeArgs, io: KtxCliIo) => Promise<number>;
   scan?: (args: KtxScanArgs, io: KtxCliIo) => Promise<number>;
   knowledge?: (args: KtxKnowledgeArgs, io: KtxCliIo) => Promise<number>;

@@ -68,10 +68,43 @@ describe('buildWuToolSet', () => {
         'load_skill',
         'read_raw_file',
         'read_raw_span',
+        'record_verification_ledger',
         'sl_write_source',
         'wiki_search',
       ].sort(),
     );
+  });
+
+  it('requires the verification ledger before write-capable tools run', async () => {
+    const wikiWrite = vi.fn().mockResolvedValue({ markdown: 'written', structured: { success: true } });
+    const toolSet = buildWuToolSet({
+      stagedDir: '/tmp/staged',
+      wu: { unitKey: 'u1', rawFiles: ['a.yml'], peerFileIndex: [], dependencyPaths: [] },
+      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
+      emitUnmappedFallbackTool: {
+        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
+      } as any,
+      toolsetTools: { wiki_write: { description: 'write', inputSchema: {} as any, execute: wikiWrite } as any },
+    });
+
+    const correction = await toolSet.wiki_write.execute?.({ key: 'customer-rules' }, { toolCallId: 't1' } as any);
+
+    expect(wikiWrite).not.toHaveBeenCalled();
+    expect(correction).toMatchObject({ structured: { success: false, reason: 'verification_ledger_required' } });
+    expect(String((correction as any).markdown)).toContain('record_verification_ledger');
+
+    await toolSet.record_verification_ledger.execute?.(
+      {
+        summary: 'No warehouse identifiers will be emitted in this wiki write.',
+        verifiedIdentifiers: [],
+        unverifiedIdentifiers: [],
+      },
+      { toolCallId: 't2' } as any,
+    );
+    const written = await toolSet.wiki_write.execute?.({ key: 'customer-rules' }, { toolCallId: 't3' } as any);
+
+    expect(wikiWrite).toHaveBeenCalledTimes(1);
+    expect(written).toMatchObject({ structured: { success: true } });
   });
 
   it('includes looker_query_to_sl only for Looker WorkUnits', () => {
@@ -93,6 +126,7 @@ describe('buildWuToolSet', () => {
         'looker_query_to_sl',
         'read_raw_file',
         'read_raw_span',
+        'record_verification_ledger',
         'sl_write_source',
         'wiki_search',
       ].sort(),

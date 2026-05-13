@@ -9,6 +9,7 @@ import type {
   StageIndex,
   UnmappedFallbackRecord,
 } from './stages/stage-index.types.js';
+import type { WikiSlRefRepair } from './wiki-sl-ref-repair.js';
 import type { IngestDiffSummary, SourceFetchReport, UnresolvedCardInfo } from './types.js';
 
 export interface IngestReportWorkUnit {
@@ -70,6 +71,8 @@ export interface IngestReportBody {
   provenanceRows: IngestReportProvenanceDetail[];
   toolTranscripts: IngestReportToolTranscriptSummary[];
   postProcessor?: IngestReportPostProcessorOutcome;
+  wikiSlRefRepairs?: WikiSlRefRepair[];
+  wikiSlRefRepairWarnings?: string[];
   memoryFlow?: MemoryFlowReplayInput;
 }
 
@@ -108,8 +111,7 @@ export function postProcessorSavedMemoryCounts(
     wikiCount:
       numericResultField(record, 'patternPagesWritten') +
       numericResultField(record, 'stalePatternPagesMarked') +
-      numericResultField(record, 'archivedPatternPages') +
-      numericResultField(record, 'legacyPagesDeleted'),
+      numericResultField(record, 'archivedPatternPages'),
     slCount: numericResultField(record, 'tableUsageMerged') + numericResultField(record, 'staleTablesMarked'),
   };
 }

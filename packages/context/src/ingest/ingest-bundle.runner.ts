@@ -53,6 +53,7 @@ import type {
   UnresolvedCardInfo,
   WorkUnit,
 } from './types.js';
+import { repairWikiSlRefs, type WikiSlRefRepairResult } from './wiki-sl-ref-repair.js';
 
 function workUnitToMemoryFlowPlannedWorkUnit(workUnit: WorkUnit): MemoryFlowPlannedWorkUnit {
   return {
@@ -292,7 +293,7 @@ export class IngestBundleRunner {
       return '(empty)';
     }
 
-    return `## Knowledge Pages\n${pages.map((page) => `- ${page.page_key}: ${page.summary}`).join('\n')}`;
+    return `## Wiki Pages\n${pages.map((page) => `- ${page.page_key}: ${page.summary}`).join('\n')}`;
   }
 
   private async buildSlIndex(connectionIds: string[]): Promise<string> {
@@ -528,6 +529,7 @@ export class IngestBundleRunner {
       let sourceContextReport: { capped?: boolean; warnings?: string[] } | undefined;
       let parseArtifacts: unknown;
       let postProcessorOutcome: IngestReportPostProcessorOutcome | undefined;
+      let wikiSlRefRepairResult: WikiSlRefRepairResult | null = null;
       let reconcileNotes: string[] = [];
       let triageResult: PageTriageRunResult | null = null;
       if (overrideReport) {
@@ -594,7 +596,7 @@ export class IngestBundleRunner {
 
       const baseFraming = await this.deps.promptService.loadPrompt('memory_agent_bundle_ingest_work_unit');
       const wuSkillNames = Array.from(
-        new Set<string>([...adapter.skillNames, 'ingest_triage', 'sl_capture', 'knowledge_capture']),
+        new Set<string>([...adapter.skillNames, 'ingest_triage', 'sl_capture', 'wiki_capture']),
       );
       const wuSkills = await this.deps.skillsRegistry.listSkills(wuSkillNames, 'memory_agent');
       const skillsPrompt = this.deps.skillsRegistry.buildSkillsPrompt(wuSkills, 'memory_agent');
@@ -662,6 +664,7 @@ export class IngestBundleRunner {
             touchedSlSources: session.touchedSlSources,
             actions: sessionActions,
             allowedRawPaths: new Set(wu.rawFiles),
+            allowedConnectionNames: new Set(slConnectionIds),
             semanticLayerService: scopedSemanticLayerService,
             wikiService: scopedWikiService,
             configService: sessionWorktree.config,
@@ -898,6 +901,7 @@ export class IngestBundleRunner {
         touchedSlSources: reconcileSession.touchedSlSources,
         actions: reconcileActions,
         allowedRawPaths: reconciliationAllowedRawPaths,
+        allowedConnectionNames: new Set(slConnectionIds),
         semanticLayerService: rcScopedSl,
         wikiService: rcScopedWiki,
         configService: sessionWorktree.config,
@@ -969,7 +973,7 @@ export class IngestBundleRunner {
       const reconcileBaseFraming = await this.deps.promptService.loadPrompt('memory_agent_bundle_ingest_reconcile');
       const reconcileSkills = await this.deps.skillsRegistry.listSkills(
         Array.from(
-          new Set(['ingest_triage', 'sl_capture', 'knowledge_capture', ...(adapter.reconcileSkillNames ?? [])]),
+          new Set(['ingest_triage', 'sl_capture', 'wiki_capture', ...(adapter.reconcileSkillNames ?? [])]),
         ),
         'memory_agent',
       );
@@ -1137,6 +1141,19 @@ export class IngestBundleRunner {
           throw error;
         }
       }
+
+      const repairConnectionIds = [
+        ...new Set([
+          ...slConnectionIds,
+          ...(postProcessorOutcome?.touchedSources ?? []).map((source) => source.connectionId),
+        ]),
+      ].sort();
+      wikiSlRefRepairResult = await repairWikiSlRefs({
+        wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
+        semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+        configService: sessionWorktree.config,
+        connectionIds: repairConnectionIds,
+      });
 
       // Stage 6 — squash commit
       const stage6 = ctx?.startPhase(0.04);
@@ -1354,6 +1371,8 @@ export class IngestBundleRunner {
         provenanceRows: reportProvenanceRows,
         toolTranscripts: reportToolTranscripts,
         postProcessor: postProcessorOutcome,
+        wikiSlRefRepairs: wikiSlRefRepairResult.repairs,
+        wikiSlRefRepairWarnings: wikiSlRefRepairResult.warnings,
         ...(reportMemoryFlow ? { memoryFlow: reportMemoryFlow } : {}),
         context: contextReport
           ? {

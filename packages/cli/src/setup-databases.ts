@@ -1,5 +1,8 @@
-import { writeFile } from 'node:fs/promises';
-import { cancel, confirm, isCancel, multiselect, password, select, text } from '@clack/prompts';
+import { execFile as execFileCallback } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { delimiter, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
   type KtxProjectConnectionConfig,
@@ -7,17 +10,20 @@ import {
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
   setKtxSetupDatabaseConnectionIds,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxTableListEntry } from '@ktx/context/scan';
 import type { KtxCliIo } from './cli-runtime.js';
 import { runKtxConnection } from './connection.js';
-import { withMenuOptionsSpacing, withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
+import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxScan } from './scan.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 const HISTORIC_SQL_WORK_UNIT_MAX_CONCURRENCY = 6;
+const execFileAsync = promisify(execFileCallback);
 
 export type KtxSetupDatabaseDriver =
   | 'sqlite'
@@ -40,7 +46,6 @@ export interface KtxSetupDatabasesArgs {
   disableHistoricSql?: boolean;
   historicSqlWindowDays?: number;
   historicSqlMinExecutions?: number;
-  historicSqlMinCalls?: number;
   historicSqlServiceAccountPatterns?: string[];
   historicSqlRedactionPatterns?: string[];
   skipDatabases: boolean;
@@ -56,11 +61,11 @@ export type KtxSetupDatabasesResult =
 export interface KtxSetupDatabasesPromptAdapter {
   multiselect(options: {
     message: string;
-    options: Array<{ value: string; label: string }>;
+    options: KtxSetupPromptOption[];
     required?: boolean;
     initialValues?: string[];
   }): Promise<string[]>;
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string; initialValue?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -83,6 +88,7 @@ export interface KtxSetupDatabasesDeps {
   prompts?: KtxSetupDatabasesPromptAdapter;
   testConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
   scanConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
+  rebuildNativeSqlite?: (io: KtxCliIo) => Promise<number>;
   listSchemas?: (projectDir: string, connectionId: string) => Promise<string[]>;
   listTables?: (projectDir: string, connectionId: string) => Promise<KtxTableListEntry[]>;
   historicSqlProbe?: KtxSetupHistoricSqlProbe;
@@ -203,50 +209,11 @@ function missingConnectionDetailsPrompt(
 }
 
 function createPromptAdapter(): KtxSetupDatabasesPromptAdapter {
-  return {
-    async multiselect(options) {
-      while (true) {
-        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-        if (isCancel(value)) {
-          cancel('Setup cancelled.');
-          return ['back'];
-        }
-        const selected = [...value] as string[];
-        if (selected.length === 0 && !options.required) {
-          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
-          if (isCancel(skipConfirmed)) {
-            cancel('Setup cancelled.');
-            return ['back'];
-          }
-          if (!skipConfirmed) continue;
-        }
-        return selected;
-      }
-    },
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
-      }
-      return String(value);
-    },
-    async text(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        text({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : String(value);
-    },
-    async password(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        password({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : String(value);
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({
+    selectCancelValue: 'back',
+    multiselectCancelValue: 'back',
+    confirmEmptyOptionalMultiselect: true,
+  });
 }
 
 function normalizeDriver(driver: string | undefined): KtxSetupDatabaseDriver | null {
@@ -857,14 +824,13 @@ async function maybeApplyHistoricSqlConfig(input: {
     dialect,
     filters: historicSqlFiltersForSetup(input.args.historicSqlServiceAccountPatterns),
   };
-  delete common[['serviceAccount', 'UserPatterns'].join('')];
 
   if (dialect === 'postgres') {
     return {
       ...input.connection,
       historicSql: {
         ...common,
-        minExecutions: input.args.historicSqlMinExecutions ?? input.args.historicSqlMinCalls ?? 5,
+        minExecutions: input.args.historicSqlMinExecutions ?? 5,
       },
     };
   }
@@ -952,6 +918,111 @@ function flushBufferedCommandOutput(io: KtxCliIo, bufferedIo: BufferedCommandIo)
   }
 }
 
+function writePrefixedLines(write: (chunk: string) => void, output: string): void {
+  for (const line of output.split(/\r?\n/)) {
+    if (line.length > 0) {
+      write(`│  ${line}\n`);
+    }
+  }
+}
+
+function envWithCurrentNodeFirst(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    PATH: `${dirname(process.execPath)}${delimiter}${env.PATH ?? ''}`,
+  };
+}
+
+function errorTextProperty(error: unknown, property: 'stderr' | 'stdout'): string {
+  if (typeof error !== 'object' || error === null || !(property in error)) {
+    return '';
+  }
+  const value = (error as Record<typeof property, unknown>)[property];
+  return typeof value === 'string' ? value : '';
+}
+
+function commandFailureOutput(error: unknown): string {
+  const stderr = errorTextProperty(error, 'stderr');
+  const stdout = errorTextProperty(error, 'stdout');
+  const message = error instanceof Error ? error.message : String(error);
+  return [stderr.trim(), stdout.trim(), message.trim()].filter((line) => line.length > 0).join('\n');
+}
+
+type PackageJsonScriptStatus = 'has-script' | 'exists' | 'missing';
+
+async function packageJsonScriptStatus(
+  packageJsonPath: string,
+  scriptName: string,
+): Promise<PackageJsonScriptStatus> {
+  try {
+    const parsed = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || !('scripts' in parsed)) {
+      return 'exists';
+    }
+    const scripts = (parsed as { scripts?: unknown }).scripts;
+    return typeof scripts === 'object' && scripts !== null && scriptName in scripts ? 'has-script' : 'exists';
+  } catch {
+    return 'missing';
+  }
+}
+
+async function nativeSqliteRebuildCommand(): Promise<{ cwd: string; args: string[] }> {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  let packageRoot: string | undefined;
+  while (true) {
+    const status = await packageJsonScriptStatus(join(dir, 'package.json'), 'native:rebuild');
+    if (status === 'has-script') {
+      return { cwd: dir, args: ['run', 'native:rebuild'] };
+    }
+    if (status === 'exists') {
+      packageRoot ??= dir;
+    }
+
+    const parent = dirname(dir);
+    if (parent === dir) {
+      return { cwd: packageRoot ?? process.cwd(), args: ['rebuild', 'better-sqlite3'] };
+    }
+    dir = parent;
+  }
+}
+
+async function defaultRebuildNativeSqlite(io: KtxCliIo): Promise<number> {
+  const command = await nativeSqliteRebuildCommand();
+  try {
+    await execFileAsync('pnpm', command.args, {
+      cwd: command.cwd,
+      env: envWithCurrentNodeFirst(),
+      maxBuffer: 1024 * 1024 * 16,
+    });
+    return 0;
+  } catch (error) {
+    writePrefixedLines((chunk) => io.stderr.write(chunk), commandFailureOutput(error));
+    return typeof (error as { code?: unknown })?.code === 'number' ? (error as { code: number }).code : 1;
+  }
+}
+
+function flushPrefixedBufferedCommandOutput(io: KtxCliIo, bufferedIo: BufferedCommandIo): void {
+  writePrefixedLines((chunk) => io.stdout.write(chunk), bufferedIo.stdoutText());
+  writePrefixedLines((chunk) => io.stderr.write(chunk), bufferedIo.stderrText());
+}
+
+function nativeSqliteAbiMismatchDetail(output: string): string | null {
+  const mentionsBetterSqlite = /\bbetter-sqlite3\b|better_sqlite3/i.test(output);
+  const mentionsAbiMismatch = /compiled against a different Node\.js version|NODE_MODULE_VERSION/i.test(output);
+  if (!mentionsBetterSqlite || !mentionsAbiMismatch) {
+    return null;
+  }
+
+  const versionMatch = output.match(
+    /compiled against[\s\S]*?NODE_MODULE_VERSION\s+(\d+)[\s\S]*?requires[\s\S]*?NODE_MODULE_VERSION\s+(\d+)/i,
+  );
+  if (!versionMatch) {
+    return 'better-sqlite3 native module could not load for the current Node.js runtime.';
+  }
+
+  return `better-sqlite3 was compiled for NODE_MODULE_VERSION ${versionMatch[1]}, but this Node.js requires ${versionMatch[2]}.`;
+}
+
 function readOutputValue(output: string, label: string): string | undefined {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = new RegExp(`^\\s*${escapedLabel}:\\s*(.+?)\\s*$`, 'im').exec(output);
@@ -1020,7 +1091,7 @@ async function writeConnectionConfig(input: {
       [input.connectionId]: input.connection,
     },
   };
-  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
 
   const historicSql =
     typeof input.connection.historicSql === 'object' &&
@@ -1314,7 +1385,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
   await writeFile(
     project.configPath,
     serializeKtxProjectConfig(
-      stripKtxSetupCompletedSteps({
+      {
         ...project.config,
         ingest: {
           ...project.config.ingest,
@@ -1324,7 +1395,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
             maxConcurrency,
           },
         },
-      }),
+      },
     ),
     'utf-8',
   );
@@ -1333,7 +1404,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
 async function markDatabasesComplete(projectDir: string, connectionIds: string[]): Promise<void> {
   const project = await loadKtxProject({ projectDir });
   const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds));
-  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'databases');
 }
 
@@ -1443,13 +1514,56 @@ async function validateAndScanConnection(input: {
   writeSetupSection(input.io, `Scanning ${input.connectionId}`, [
     'Running structural scan…',
   ]);
-  const scanIo = createBufferedCommandIo();
-  const scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
+  let scanIo = createBufferedCommandIo();
+  let scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
   if (scanCode !== 0) {
-    flushBufferedCommandOutput(input.io, scanIo);
-    input.io.stderr.write(`Structural scan failed for ${input.connectionId}.\n`);
-    input.io.stderr.write(`Debug command: ktx dev scan --project-dir ${input.projectDir} ${input.connectionId}\n`);
-    return false;
+    const nativeSqliteDetail = nativeSqliteAbiMismatchDetail(`${scanIo.stderrText()}\n${scanIo.stdoutText()}`);
+    if (nativeSqliteDetail) {
+      writePrefixedLines(
+        (chunk) => input.io.stderr.write(chunk),
+        [
+          `Structural scan failed for ${input.connectionId}.`,
+          'Native SQLite is built for a different Node.js ABI.',
+          `Detail: ${nativeSqliteDetail}`,
+          'Rebuilding Native SQLite with pnpm run native:rebuild…',
+        ].join('\n'),
+      );
+      const rebuildNativeSqlite = input.deps.rebuildNativeSqlite ?? defaultRebuildNativeSqlite;
+      const rebuildCode = await rebuildNativeSqlite(input.io);
+      if (rebuildCode === 0) {
+        writePrefixedLines(
+          (chunk) => input.io.stderr.write(chunk),
+          'Native SQLite rebuild complete. Retrying structural scan…',
+        );
+        const retryScanIo = createBufferedCommandIo();
+        scanCode = await scanConnection(input.projectDir, input.connectionId, retryScanIo);
+        scanIo = retryScanIo;
+      }
+      if (scanCode !== 0) {
+        writePrefixedLines(
+          (chunk) => input.io.stderr.write(chunk),
+          [
+            rebuildCode === 0
+              ? `Structural scan still failed for ${input.connectionId} after rebuilding Native SQLite.`
+              : `Native SQLite rebuild failed for ${input.connectionId}.`,
+            'Fix: pnpm run native:rebuild',
+            `Retry: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+          ].join('\n'),
+        );
+      }
+    } else {
+      flushPrefixedBufferedCommandOutput(input.io, scanIo);
+      writePrefixedLines(
+        (chunk) => input.io.stderr.write(chunk),
+        [
+          `Structural scan failed for ${input.connectionId}.`,
+          `Debug command: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+        ].join('\n'),
+      );
+    }
+    if (scanCode !== 0) {
+      return false;
+    }
   }
   const scanOutput = scanIo.stdoutText();
   const reportPath = readOutputValue(scanOutput, 'Report');

@@ -1,23 +1,20 @@
 import { EventEmitter } from 'node:events';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AgentRunnerService, type RunLoopParams } from '@ktx/context/agent';
 import {
-  LocalLookerRuntimeStore,
-  LocalMetabaseSourceStateReader,
+  KtxYamlMetabaseSourceStateReader,
+  LocalMetabaseDiscoveryCache,
   MetabaseSourceAdapter,
   getLocalIngestStatus,
   type ChunkResult,
   type FetchContext,
   type IngestReportSnapshot,
   type LocalIngestResult,
-  type LocalMetabaseFanoutProgress,
   type LookerMappingClient,
   type LookerRuntimeClient,
   type LookerTableIdentifierParser,
   type MemoryFlowEventSink,
-  type MemoryFlowReplayInput,
   type MetabaseCard,
   type MetabaseCardSummary,
   type MetabaseClientFactory,
@@ -28,7 +25,7 @@ import {
 } from '@ktx/context/ingest';
 import { ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
 import { expect, vi } from 'vitest';
-import { type KtxIngestArgs, runKtxIngest } from './ingest.js';
+import { runKtxIngest } from './ingest.js';
 
 export function makeIo(
   options: {
@@ -162,7 +159,7 @@ export function bundleReportSnapshot(): IngestReportSnapshot {
           rawFiles: ['cards/1.json', 'cards/2.json'],
           status: 'success',
           actions: [
-            { target: 'wiki', type: 'created', key: 'knowledge/global/revenue.md', detail: 'Revenue overview' },
+            { target: 'wiki', type: 'created', key: 'wiki/global/revenue.md', detail: 'Revenue overview' },
             { target: 'sl', type: 'updated', key: 'warehouse.orders', detail: 'Added order amount measure' },
           ],
           touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'warehouse.orders' }],
@@ -181,7 +178,7 @@ export function bundleReportSnapshot(): IngestReportSnapshot {
         {
           rawPath: 'cards/1.json',
           artifactKind: 'wiki',
-          artifactKey: 'knowledge/global/revenue.md',
+          artifactKey: 'wiki/global/revenue.md',
           actionType: 'wiki_written',
         },
         {
@@ -197,7 +194,7 @@ export function bundleReportSnapshot(): IngestReportSnapshot {
           path: 'tool-transcripts/cards.jsonl',
           toolCallCount: 4,
           errorCount: 0,
-          toolNames: ['ingest_triage', 'knowledge_capture', 'sl_capture'],
+          toolNames: ['ingest_triage', 'wiki_capture', 'sl_capture'],
         },
       ],
     },
@@ -265,6 +262,18 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'looker-explore-ecommerce-orders'
     ) {
+      const ledger = params.toolSet.record_verification_ledger;
+      if (!ledger?.execute) {
+        throw new Error('record_verification_ledger tool was not available to the Looker WorkUnit');
+      }
+      await ledger.execute(
+        {
+          summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
+          verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
+          unverifiedIdentifiers: [],
+        },
+        { toolCallId: 'cli-looker-verification-ledger', messages: [] },
+      );
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
         throw new Error('sl_write_source tool was not available to the Looker WorkUnit');
@@ -367,7 +376,7 @@ const SYNC_MODE_METABASE_CARDS: MetabaseCard[] = [
     collection_id: 12,
     archived: false,
     result_metadata: [],
-    dataset_query: { type: 'native', database: 1, native: { query: 'select 101 as id' } },
+    dataset_query: { type: 'native', database: 1, stages: [{ 'lib/type': 'mbql.stage/native', native: 'select 101 as id' }] },
     parameters: [],
     dashboard_count: 0,
   },
@@ -381,7 +390,7 @@ const SYNC_MODE_METABASE_CARDS: MetabaseCard[] = [
     collection_id: 12,
     archived: false,
     result_metadata: [],
-    dataset_query: { type: 'native', database: 1, native: { query: 'select 102 as id' } },
+    dataset_query: { type: 'native', database: 1, stages: [{ 'lib/type': 'mbql.stage/native', native: 'select 102 as id' }] },
     parameters: [],
     dashboard_count: 0,
   },
@@ -395,7 +404,7 @@ const SYNC_MODE_METABASE_CARDS: MetabaseCard[] = [
     collection_id: 13,
     archived: false,
     result_metadata: [],
-    dataset_query: { type: 'native', database: 1, native: { query: 'select 103 as id' } },
+    dataset_query: { type: 'native', database: 1, stages: [{ 'lib/type': 'mbql.stage/native', native: 'select 103 as id' }] },
     parameters: [],
     dashboard_count: 0,
   },
@@ -445,11 +454,11 @@ function createSyncModeMetabaseClient(): MetabaseRuntimeClient {
     },
     getAllCards: async () => SYNC_MODE_METABASE_CARDS.map(metabaseCardSummary),
     convertMbqlToNative: async () => ({ query: 'select 1' }),
-    getNativeSql: (card) => card.dataset_query?.native?.query ?? null,
+    getNativeSql: (card) => card.dataset_query?.stages?.[0]?.native ?? null,
     getTemplateTags: () => ({}),
-    getCardSql: async (card) => card.dataset_query?.native?.query ?? null,
+    getCardSql: async (card) => card.dataset_query?.stages?.[0]?.native ?? null,
     getResolvedSql: async (card) => ({
-      resolvedSql: card.dataset_query?.native?.query ?? `select ${card.id} as id`,
+      resolvedSql: card.dataset_query?.stages?.[0]?.native ?? `select ${card.id} as id`,
       templateTags: [],
       resolutionStatus: 'resolved',
     }),
@@ -485,6 +494,23 @@ export async function runPublicMetabaseSyncModeCase(tempDir: string, input: Sync
       '    driver: metabase',
       '    api_url: https://metabase.example.test',
       '    api_key: literal-test-key',
+      '    mappings:',
+      '      databaseMappings:',
+      '        "1": warehouse_a',
+      '      syncEnabled:',
+      '        "1": true',
+      `      syncMode: ${input.syncMode}`,
+      '      selections:',
+      `        collections: [${input.selections
+        .filter((selection) => selection.selectionType === 'collection')
+        .map((selection) => selection.metabaseObjectId)
+        .join(', ')}]`,
+      `        items: [${input.selections
+        .filter((selection) => selection.selectionType === 'item')
+        .map((selection) => selection.metabaseObjectId)
+        .join(', ')}]`,
+      '      defaultTagNames:',
+      '        - sync-mode-smoke',
       '  warehouse_a:',
       '    driver: postgres',
       '    url: postgresql://readonly@db.example.test/warehouse_a',
@@ -499,29 +525,15 @@ export async function runPublicMetabaseSyncModeCase(tempDir: string, input: Sync
   );
 
   const project = await loadKtxProject({ projectDir });
-  const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
-  await store.replaceSourceState({
+  const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+  await discoveryCache.refreshDiscoveredDatabases({
     connectionId: 'prod-metabase',
-    syncMode: input.syncMode,
-    defaultTagNames: ['sync-mode-smoke'],
-    selections: input.selections,
-    mappings: [
-      {
-        metabaseDatabaseId: 1,
-        metabaseDatabaseName: 'Warehouse A',
-        metabaseEngine: 'postgres',
-        metabaseHost: 'db.example.test',
-        metabaseDbName: 'warehouse_a',
-        targetConnectionId: 'warehouse_a',
-        syncEnabled: true,
-        source: 'refresh',
-      },
-    ],
+    discovered: [{ id: 1, name: 'Warehouse A', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_a' }],
   });
 
   const adapter = new MetabaseSourceAdapter({
     clientFactory: new StaticMetabaseClientFactory(createSyncModeMetabaseClient()),
-    sourceStateReader: store,
+    sourceStateReader: new KtxYamlMetabaseSourceStateReader(project, { discoveryCache }),
   });
   const jobId = `metabase-sync-mode-${input.name}-child`;
   const io = makeIo();

@@ -64,7 +64,7 @@ export function createEmitUnmappedFallbackTool(deps: EmitUnmappedFallbackDeps) {
       tableRef: z
         .string()
         .optional()
-        .describe('The fully-qualified table or source reference that triggered the fallback (e.g. "orbit_analytics.customer"). Used to generate canonical detail text.'),
+        .describe('The fully-qualified table or source reference that triggered the fallback (e.g. "<schema>.<table>"). Used to generate canonical detail text.'),
       clarification: z
         .string()
         .optional()

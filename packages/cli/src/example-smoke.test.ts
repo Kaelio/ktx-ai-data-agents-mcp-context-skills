@@ -73,28 +73,23 @@ describe('standalone local warehouse example', () => {
     const projectDir = await copyExampleProject(tempDir);
     const sourceDir = join(projectDir, 'source');
 
-    const knowledgeList = await runBuiltCli(['agent', 'wiki', 'search', 'revenue', '--json', '--project-dir', projectDir]);
+    const knowledgeList = await runBuiltCli(['wiki', 'search', 'revenue', '--json', '--project-dir', projectDir]);
     expect(knowledgeList).toMatchObject({ code: 0, stderr: '' });
-    expect(parseJsonOutput<{ results: Array<{ key: string; summary: string }> }>(knowledgeList.stdout).results).toContainEqual(
-      expect.objectContaining({ key: 'revenue', summary: 'Paid order value after refunds' }),
-    );
+    expect(
+      parseJsonOutput<{ data: { items: Array<{ key: string; summary: string }> } }>(knowledgeList.stdout).data.items,
+    ).toContainEqual(expect.objectContaining({ key: 'revenue', summary: 'Paid order value after refunds' }));
 
-    const knowledgeRead = await runBuiltCli(['agent', 'wiki', 'read', 'revenue', '--json', '--project-dir', projectDir]);
-    expect(knowledgeRead).toMatchObject({ code: 0, stderr: '' });
-    expect(parseJsonOutput<{ content: string }>(knowledgeRead.stdout).content).toContain(
-      'Revenue is paid order amount after refund adjustments.',
-    );
-
-    const slList = await runBuiltCli(['agent', 'sl', 'list', '--json', '--project-dir', projectDir, '--connection-id', 'warehouse']);
+    const slList = await runBuiltCli(['sl', 'list', '--json', '--project-dir', projectDir, '--connection-id', 'warehouse']);
     expect(slList).toMatchObject({ code: 0, stderr: '' });
-    expect(parseJsonOutput<{ sources: Array<{ connectionId: string; name: string; columnCount: number }> }>(slList.stdout).sources).toContainEqual(
-      expect.objectContaining({ connectionId: 'warehouse', name: 'orders', columnCount: 3 }),
-    );
+    expect(
+      parseJsonOutput<{ data: { items: Array<{ connectionId: string; name: string; columnCount: number }> } }>(
+        slList.stdout,
+      ).data.items,
+    ).toContainEqual(expect.objectContaining({ connectionId: 'warehouse', name: 'orders', columnCount: 3 }));
 
-    const slRead = await runBuiltCli([
-      'agent',
+    const slSearch = await runBuiltCli([
       'sl',
-      'read',
+      'search',
       'orders',
       '--json',
       '--connection-id',
@@ -102,11 +97,12 @@ describe('standalone local warehouse example', () => {
       '--project-dir',
       projectDir,
     ]);
-    expect(slRead).toMatchObject({ code: 0, stderr: '' });
-    expect(parseJsonOutput<{ yaml: string }>(slRead.stdout).yaml).toContain('name: orders');
+    expect(slSearch).toMatchObject({ code: 0, stderr: '' });
+    expect(
+      parseJsonOutput<{ data: { items: Array<{ connectionId: string; name: string }> } }>(slSearch.stdout).data.items,
+    ).toContainEqual(expect.objectContaining({ connectionId: 'warehouse', name: 'orders' }));
 
     const ingest = await runBuiltCli([
-      'dev',
       'ingest',
       'run',
       '--project-dir',
@@ -120,7 +116,7 @@ describe('standalone local warehouse example', () => {
     ]);
     expect(ingest).toMatchObject({ code: 1, stdout: '' });
     expect(ingest.stderr).toContain(
-      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
+      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
     );
   }, 30_000);
 

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -105,13 +105,6 @@ export interface ManagedPythonRuntimeDoctorCheck {
   status: 'pass' | 'fail';
   detail: string;
   fix?: string;
-}
-
-export interface ManagedPythonRuntimePruneResult {
-  runtimeRoot: string;
-  stale: string[];
-  kept: string[];
-  removed: string[];
 }
 
 export const MISSING_UV_RUNTIME_INSTALL_MESSAGE =
@@ -440,37 +433,4 @@ export async function doctorManagedPythonRuntime(
     }),
   );
   return checks;
-}
-
-export async function pruneManagedPythonRuntimes(options: {
-  cliVersion: string;
-  runtimeRoot: string;
-  dryRun?: boolean;
-}): Promise<ManagedPythonRuntimePruneResult> {
-  if (!(await pathExists(options.runtimeRoot))) {
-    return { runtimeRoot: options.runtimeRoot, stale: [], kept: [], removed: [] };
-  }
-  const entries = await readdir(options.runtimeRoot);
-  const stale: string[] = [];
-  const kept: string[] = [];
-  for (const entry of entries) {
-    const path = join(options.runtimeRoot, entry);
-    const info = await stat(path);
-    if (!info.isDirectory()) {
-      continue;
-    }
-    if (entry === options.cliVersion) {
-      kept.push(path);
-    } else {
-      stale.push(path);
-    }
-  }
-  const removed: string[] = [];
-  if (options.dryRun !== true) {
-    for (const path of stale) {
-      await rm(path, { recursive: true, force: true });
-      removed.push(path);
-    }
-  }
-  return { runtimeRoot: options.runtimeRoot, stale, kept, removed };
 }

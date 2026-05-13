@@ -1,7 +1,0 @@
-id: abbreviated_legacy_no_declared_constraints
-name: Abbreviated legacy naming fixture with no declared constraints
-tier: row_bearing
-origin: synthetic
-thresholdEligible: false
-defaultModes:
-  - declared_pks_and_declared_fks_removed

@@ -16,7 +16,7 @@ import type {
 import type { ToolContext, ToolSession, TouchedSlSourceSet } from '../tools/index.js';
 import type { KnowledgeIndexPort, KnowledgeWikiService } from '../wiki/index.js';
 
-export type MemoryAgentSourceType = 'research' | 'external_ingest' | 'backfill' | 'sql-review-migration';
+export type MemoryAgentSourceType = 'research' | 'external_ingest' | 'backfill';
 
 export interface MemoryAgentInput {
   userId: string;

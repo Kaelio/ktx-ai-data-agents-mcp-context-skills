@@ -100,13 +100,13 @@ measures:
 
 **Extract repeated filter bundles into named segments.** If the same predicate appears on multiple measures of the same source, lift it to a `segments[]` entry and have each measure reference it. One edit updates every measure that depends on it.
 
-**Never write a standalone file on a manifest-backed name.** If `sl_discover({ tableName })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`description:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+**Never write a standalone file on a manifest-backed name.** If `sl_discover({ tableName })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
 
 **Prefer overlay decomposition over standalone SQL sources.** Before reaching for `source_type: sql`, check whether the metric decomposes into measures on existing overlays (including cross-source derived measures). Use `source_type: sql` only when:
 - The metric requires per-user/per-entity derivation that cannot be expressed as a single `expr` (e.g., `EXISTS` over a time-windowed subset), OR
 - The metric requires multi-step CTEs whose intermediate grain is not a column in any existing source.
 
-When an `sql` source is unavoidable, note in its `description` which SL gap forced the choice so it can be retired once the primitive ships. It must target a name NOT in the manifest — pick a distinct one (e.g. `mrr_waterfall_rollup`, not `fct_orders`).
+When an `sql` source is unavoidable, note in its `descriptions` map which SL gap forced the choice so it can be retired once the primitive ships. It must target a name NOT in the manifest — pick a distinct one (e.g. `mrr_waterfall_rollup`, not `fct_orders`).
 
 ## Slim standalone sources via `inherits_columns_from`
 
@@ -116,7 +116,8 @@ Discover the manifest key with `sl_discover` — pass the bare name (`CONSIGNMEN
 
 ```yaml
 name: aav_consignments
-description: AAV consignments — filtered view of MARTS.CONSIGNMENTS for the auto-auction-vaulting channel.
+descriptions:
+  user: AAV consignments — filtered view of MARTS.CONSIGNMENTS for the auto-auction-vaulting channel.
 source_type: sql
 sql: |
   SELECT CONSIGNED_ITEM_ID, CASH_ADV_AMOUNT, ALT_VALUE_COMBINED, my_derived_flag
@@ -127,10 +128,10 @@ sql: |
 inherits_columns_from: CONSIGNMENTS
 grain: [CONSIGNED_ITEM_ID]
 columns:
-  - { name: CONSIGNED_ITEM_ID }      # type/description inherited from manifest
+  - { name: CONSIGNED_ITEM_ID }      # type/descriptions inherited from manifest
   - { name: CASH_ADV_AMOUNT }
   - { name: ALT_VALUE_COMBINED }
-  - { name: my_derived_flag, type: boolean, expr: "CASH_ADV_AMOUNT > 0", description: "Computed locally — has any cash advance." }
+  - { name: my_derived_flag, type: boolean, expr: "CASH_ADV_AMOUNT > 0", descriptions: { user: "Computed locally — has any cash advance." } }
 measures:
   - name: total_cash_advance
     expr: sum(CASH_ADV_AMOUNT)
@@ -174,6 +175,37 @@ Wiki-only is correct when the user is documenting *about* the measure
 (definition in business terms, owner, policy, glossary, examples of when to
 use it) without changing its SQL expression or filters.
 
+Before sl_write_source, call entity_details on the target table to confirm
+column names and types match the YAML being written.
+
+## Identifier Verification Protocol
+
+Before writing a wiki page or SL source on any topic:
+
+1. `discover_data({query: "<topic>"})` - see what wikis, SL sources, and raw
+   tables already exist. Prefer updating existing pages over creating new ones.
+
+Before emitting any `schema.table` or `schema.table.column` into a wiki body,
+SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
+
+2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
+   confirm the identifier resolves; inspect native types, FK/PK, and
+   sampleValues.
+3. For literal values from the source, such as status codes or plan tiers,
+   check whether they appear in `entity_details` sampleValues for the relevant
+   column. If sampleValues is short or the sample may have missed real values,
+   run a `sql_execution` probe with the same warehouse connection name:
+   `sql_execution({connectionName, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
+4. If the candidate identifier still does not resolve, do one of:
+   - Use `sql_execution({connectionName, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
+     If it errors, the identifier is fictional.
+   - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
+     citing the exact raw path that mentioned it.
+   - When recording `emit_unmapped_fallback` with `no_physical_table`, include
+     the failing probe error in `clarification`.
+5. Never copy `<schema>.<table>` placeholder strings from these instructions
+   into output.
+
 ## Tool sequence
 
 1. `sl_discover` — see what source files exist.
@@ -181,7 +213,7 @@ use it) without changing its SQL expression or filters.
 3. `sl_read_source({ sourceName })` — read the raw YAML before editing.
 4. For modifications: `sl_edit_source({ sourceName, old_string, new_string })` with exact-string replacements. `old_string` must match exactly and be unique in the file.
 5. For new sources or full rewrites: `sl_write_source({ sourceName, content })` with the full YAML content.
-6. For join discovery: `sql_execution({ sql })` to verify the join key exists in both tables and assess cardinality before declaring the join.
+6. For join discovery: use `sql_execution({connectionName: "warehouse", sql: "SELECT count(*) FROM public.orders o JOIN public.customers c ON c.id = o.customer_id LIMIT 20"})` with the target warehouse connection name and dialect-correct table names to verify the join key exists in both tables and assess cardinality before declaring the join.
 7. Cross-reference knowledge: author the edge once on the **wiki** side via `sl_refs: [source_name]` in the page's front-matter. The reverse edge (wiki pages that cite an SL source) is derived automatically by the reconciler — do not add a `knowledge_refs:` field to SL YAMLs.
 8. `sl_validate` — run after writing or editing to surface schema issues, duplicate measure names, and cross-source validation errors. Read-only; the writes are already committed (the squash-at-end flow will collapse them into one commit).
 
@@ -248,7 +280,8 @@ Prior turn: user asked to correlate LTV with protocol count; assistant joined `f
 sl_read_source({ sourceName: "fct_orders" })
   → no joins section yet
 sql_execution({
-  sql: "SELECT COUNT(*), COUNT(DISTINCT a.admin_user_id) FROM fct_orders a JOIN fct_mau_multiprotocol b ON a.admin_user_id = b.admin_user_id LIMIT 1"
+  connectionName: "warehouse",
+  sql: "SELECT COUNT(*), COUNT(DISTINCT a.admin_user_id) FROM public.fct_orders a JOIN public.fct_mau_multiprotocol b ON a.admin_user_id = b.admin_user_id LIMIT 1"
 })
   → confirms cardinality (many orders per MAU row = many_to_one)
 sl_edit_source({

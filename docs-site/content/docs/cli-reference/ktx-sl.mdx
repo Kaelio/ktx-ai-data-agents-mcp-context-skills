@@ -1,6 +1,6 @@
 ---
 title: "ktx sl"
-description: "List, read, validate, query, or write semantic-layer sources."
+description: "List, search, validate, or query semantic-layer sources."
 ---
 
 Interact with your project's semantic layer. Semantic sources are YAML definitions that describe your tables, columns, measures, joins, and grain — the vocabulary agents use to generate correct SQL.
@@ -16,9 +16,8 @@ ktx sl <subcommand> [options]
 | Subcommand | Description |
 |-----------|-------------|
 | `list` | List semantic-layer sources |
-| `read <sourceName>` | Read a semantic-layer source |
+| `search <query>` | Search semantic-layer sources |
 | `validate <sourceName>` | Validate a semantic-layer source against the database schema |
-| `write <sourceName>` | Write a semantic-layer source |
 | `query` | Compile or execute a semantic-layer query |
 
 ## Options
@@ -31,11 +30,14 @@ ktx sl <subcommand> [options]
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
-### `sl read`
+### `sl search`
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | KTX connection id (required) | — |
+| `--connection-id <id>` | Filter by KTX connection id | — |
+| `--limit <number>` | Maximum search results | — |
+| `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
+| `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
 ### `sl validate`
 
@@ -43,18 +45,12 @@ ktx sl <subcommand> [options]
 |------|-------------|---------|
 | `--connection-id <id>` | KTX connection id (required) | — |
 
-### `sl write`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--connection-id <id>` | KTX connection id (required) | — |
-| `--yaml <yaml>` | Semantic-layer source YAML content (required) | — |
-
 ### `sl query`
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--connection-id <id>` | KTX connection id | — |
+| `--query-file <path>` | JSON semantic-layer query file | — |
 | `--measure <measure>` | Measure to query; repeatable (at least one required) | — |
 | `--dimension <dimension>` | Dimension to include; repeatable | — |
 | `--filter <filter>` | Filter expression; repeatable | — |
@@ -78,14 +74,11 @@ ktx sl list --connection-id my-warehouse
 # List sources as JSON
 ktx sl list --json
 
-# Read a source definition
-ktx sl read orders --connection-id my-warehouse
+# Search sources as JSON
+ktx sl search "revenue" --json
 
 # Validate a source against the live schema
 ktx sl validate orders --connection-id my-warehouse
-
-# Write a new source from YAML
-ktx sl write customers --connection-id my-warehouse --yaml "$(cat sources/customers.yaml)"
 
 # Compile a query and view the generated SQL
 ktx sl query \
@@ -119,6 +112,13 @@ ktx sl query \
   --dimension orders.created_date \
   --execute \
   --max-rows 1000
+
+# Execute a query from a JSON file
+ktx sl query \
+  --connection-id my-warehouse \
+  --query-file query.json \
+  --execute \
+  --max-rows 100
 ```
 
 ## Output
@@ -143,5 +143,5 @@ Semantic-layer commands return human-readable output by default. Use `--json` or
 |-------|-------|----------|
 | Source not found | Source name or connection id is wrong | Run `ktx sl list --json` and retry with an exact source name and connection id |
 | Validation fails | YAML references missing columns, invalid joins, or invalid SQL expressions | Fix the source YAML and rerun `ktx sl validate` |
-| Query compile fails | Measure, dimension, filter, or segment name is invalid | Read the source with `ktx sl read`, then retry using declared fields |
+| Query compile fails | Measure, dimension, filter, or segment name is invalid | Search sources with `ktx sl search`, inspect the source YAML in your project files, then retry using declared fields |
 | Execution returns too many rows | `--max-rows` is missing or too high | Add `--max-rows` with a bounded value before executing |

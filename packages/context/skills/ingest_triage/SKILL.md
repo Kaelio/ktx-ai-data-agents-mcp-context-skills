@@ -32,8 +32,8 @@ Apply the rules below before every write that could collide with an existing art
    | Definitional contradiction | Same name, substantively different formulas (different aggregation, different filters, different columns) | **Rename + capture**: disambiguate ALL variants with suffix derived from the domain (`churn_risk_engagement_based`, `churn_risk_billing_based`) and write a unified wiki page listing every variant with provenance. The contested name does NOT land in the SL. **Always flag.** |
 
 5. **Eviction (Stage 4 only)**: for each entry in `eviction_list()`:
-   - `inbound_refs: []` → remove the artifact (`sl_delete` for SL sources, `wiki_remove` for wiki pages).
-   - `inbound_refs: [...]` → retain the artifact, set `deprecated: true` on SL sources (via `sl_edit_source`), write a wiki note "origin file removed in <syncId>; preserved because referenced by: …". Flag in the IngestReport so the user can plan migration.
+   - Remove the artifact (`sl_delete` for SL sources, `wiki_remove` for wiki pages).
+   - Record the removal with `emit_eviction_decision` and `action: "removed"`.
 
 ## Why same-ingest vs re-ingest differs
 

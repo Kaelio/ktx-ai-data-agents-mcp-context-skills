@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,6 @@ import {
   doctorManagedPythonRuntime,
   installManagedPythonRuntime,
   managedPythonRuntimeLayout,
-  pruneManagedPythonRuntimes,
   readManagedPythonRuntimeStatus,
   verifyRuntimeAsset,
   type ManagedPythonRuntimeExec,
@@ -469,43 +468,5 @@ describe('doctorManagedPythonRuntime', () => {
       detail: MISSING_UV_RUNTIME_INSTALL_MESSAGE,
       fix: 'Install uv, make sure it is on PATH, and run: ktx dev runtime install --yes',
     });
-  });
-});
-
-describe('pruneManagedPythonRuntimes', () => {
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'ktx-runtime-prune-'));
-  });
-
-  afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
-  });
-
-  it('removes stale version directories and keeps the current version', async () => {
-    const runtimeRoot = join(tempDir, 'runtime');
-    await mkdir(join(runtimeRoot, '0.1.0'), { recursive: true });
-    await mkdir(join(runtimeRoot, '0.2.0'), { recursive: true });
-    await writeFile(join(runtimeRoot, 'README.txt'), 'not a runtime directory\n');
-
-    const result = await pruneManagedPythonRuntimes({ cliVersion: '0.2.0', runtimeRoot });
-
-    expect(result.removed).toEqual([join(runtimeRoot, '0.1.0')]);
-    expect(result.kept).toEqual([join(runtimeRoot, '0.2.0')]);
-    await expect(stat(join(runtimeRoot, '0.1.0'))).rejects.toThrow();
-    expect(await readdir(runtimeRoot)).toEqual(['0.2.0', 'README.txt']);
-  });
-
-  it('supports dry-run without deleting stale directories', async () => {
-    const runtimeRoot = join(tempDir, 'runtime');
-    await mkdir(join(runtimeRoot, '0.1.0'), { recursive: true });
-    await mkdir(join(runtimeRoot, '0.2.0'), { recursive: true });
-
-    const result = await pruneManagedPythonRuntimes({ cliVersion: '0.2.0', runtimeRoot, dryRun: true });
-
-    expect(result.removed).toEqual([]);
-    expect(result.stale).toEqual([join(runtimeRoot, '0.1.0')]);
-    expect(await readdir(runtimeRoot)).toEqual(['0.1.0', '0.2.0']);
   });
 });

@@ -46,7 +46,8 @@ describe('PGlite hybrid search runtime boundary', () => {
     }
 
     const productionRoutingFiles = [
-      'packages/cli/src/agent.ts',
+      'packages/cli/src/sl.ts',
+      'packages/cli/src/knowledge.ts',
       'packages/context/src/mcp/local-project-ports.ts',
       'packages/context/src/wiki/local-knowledge.ts',
       'packages/context/src/ingest/context-evidence/sqlite-context-evidence-store.ts',

@@ -47,7 +47,7 @@ export function buildLlmsTxt() {
 
 > Agent-native context layer for analytics engineering and database agents.
 
-KTX provides semantic-layer files, warehouse scans, knowledge pages, provenance, and agent-facing tools that help coding agents answer analytics questions without inventing metrics or joins.
+KTX provides semantic-layer files, warehouse scans, wiki pages, provenance, and agent-facing tools that help coding agents answer analytics questions without inventing metrics or joins.
 
 ## Agent Entry Points
 
@@ -60,21 +60,21 @@ ${link("/docs/ai-resources/agent-instructions", "Agent Instructions", "Suggested
 
 ${link("/docs/getting-started/introduction", "Introduction", "What KTX is and who it is for")}
 ${link("/docs/getting-started/quickstart", "Quickstart", "Set up KTX and build your first context")}
-${link("/docs/guides/writing-context", "Writing Context", "Write semantic sources and knowledge pages")}
+${link("/docs/guides/writing-context", "Writing Context", "Write semantic sources and wiki pages")}
 
 ## Machine-Readable Documentation
 
 - [Full documentation](${absoluteUrl("/llms-full.txt")}): All docs pages in one plain-text markdown response
 - [Markdown access guide](${absoluteUrl("/docs/ai-resources/markdown-access.md")}): How to fetch llms.txt, llms-full.txt, and per-page Markdown
 - [Quickstart markdown](${absoluteUrl("/docs/getting-started/quickstart.md")}): Human setup walkthrough
-- [Agent CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-agent.md")}): Machine-readable agent commands
+- [Semantic-layer CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-sl.md")}): Semantic-layer commands and JSON output
+- [Wiki CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-wiki.md")}): Wiki page commands and JSON output
 
 ## CLI Reference
 
 ${link("/docs/cli-reference/ktx-setup", "ktx setup", "Interactive project setup")}
-${link("/docs/cli-reference/ktx-agent", "ktx agent", "Machine-readable commands for coding agents")}
 ${link("/docs/cli-reference/ktx-sl", "ktx sl", "Semantic-layer commands")}
-${link("/docs/cli-reference/ktx-wiki", "ktx wiki", "Knowledge page commands")}
+${link("/docs/cli-reference/ktx-wiki", "ktx wiki", "Wiki page commands")}
 ${link("/docs/cli-reference/ktx-connection", "ktx connection", "Connection management commands")}
 
 ## Integrations

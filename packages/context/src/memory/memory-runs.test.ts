@@ -96,7 +96,7 @@ describe('MemoryCaptureService', () => {
     const result: MemoryAgentResult = {
       signalDetected: true,
       actions: [{ target: 'wiki', type: 'created', key: 'revenue', detail: 'captured revenue definition' }],
-      skillsLoaded: ['knowledge_capture'],
+      skillsLoaded: ['wiki_capture'],
       commitHash: 'abc123',
     };
     const { capture, store, ingest, run } = buildService();
@@ -136,7 +136,7 @@ describe('MemoryCaptureService', () => {
       },
       error: null,
       commitHash: 'abc123',
-      skillsLoaded: ['knowledge_capture'],
+      skillsLoaded: ['wiki_capture'],
       signalDetected: true,
     });
     expect(store.rows.get('run-1')?.inputHash).toHaveLength(64);

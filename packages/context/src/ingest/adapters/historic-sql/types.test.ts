@@ -8,7 +8,7 @@ import {
 } from './types.js';
 
 describe('historic-sql unified contracts', () => {
-  it('parses minExecutions and accepts minCalls as a one-release alias', () => {
+  it('parses minExecutions and service-account filters', () => {
     expect(historicSqlUnifiedPullConfigSchema.parse({ dialect: 'postgres', minExecutions: 9 })).toMatchObject({
       dialect: 'postgres',
       minExecutions: 9,
@@ -18,7 +18,15 @@ describe('historic-sql unified contracts', () => {
       staleArchiveAfterDays: 90,
     });
 
-    expect(historicSqlUnifiedPullConfigSchema.parse({ dialect: 'postgres', minCalls: 7 }).minExecutions).toBe(7);
+    const parsed = historicSqlUnifiedPullConfigSchema.parse({
+      dialect: 'postgres',
+      minExecutions: 7,
+      filters: {
+        serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
+      },
+    });
+    expect(parsed.minExecutions).toBe(7);
+    expect(parsed.filters.serviceAccounts).toEqual({ patterns: ['^svc_'], mode: 'exclude' });
   });
 
   it('validates aggregate templates from warehouse readers', () => {

@@ -16,7 +16,13 @@ describe('renderKtxCommandTree', () => {
       expect(topLevel).toContain(expected);
     }
 
-    expect(output).toContain('│   ├── test <connectionId>');
+    expect(output).toContain('│   └── test <connectionId>');
+    expect(output).not.toContain('│   ├── add');
+    expect(output).not.toContain('│   ├── remove');
+    expect(output).not.toContain('│   ├── map');
+    expect(output).not.toContain('│   ├── mapping');
+    expect(output).not.toContain('│   ├── metabase');
+    expect(output).not.toContain('│   ├── notion');
   });
 
   it('ends with a single trailing newline', () => {

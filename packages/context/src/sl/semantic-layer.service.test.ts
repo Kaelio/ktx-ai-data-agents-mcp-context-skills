@@ -98,7 +98,7 @@ describe('composeOverlay', () => {
       ...baseTable,
       segments: [{ name: 'pre_existing', expr: 'is_paid = true' }],
     };
-    const overlay = { name: 'fct_labs', description: 'no segments here' };
+    const overlay = { name: 'fct_labs', descriptions: { user: 'no segments here' } };
     const composed = composeOverlay(baseWithSegments, overlay);
     expect(composed.segments).toEqual([{ name: 'pre_existing', expr: 'is_paid = true' }]);
   });
@@ -128,7 +128,7 @@ describe('composeOverlay', () => {
   it('still handles existing known keys without regression', () => {
     const overlay = {
       name: 'fct_labs',
-      description: 'patient lab orders',
+      descriptions: { user: 'patient lab orders' },
       exclude_columns: ['admin_user_id'],
       columns: [{ name: 'is_byol', type: 'boolean', expr: "lab_type = 'byol'" }],
       measures: [{ name: 'count_all', expr: 'count(*)' }],
@@ -675,19 +675,21 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
     expect(aav?.columns).toEqual([{ name: 'FOO', type: 'string' }]);
   });
 
-  it('normalizes legacy flat source and column descriptions when loading standalone files', async () => {
+  it('loads standalone source and column description maps', async () => {
     const standalonePath = 'semantic-layer/conn-1/orders.yaml';
     configService.listFiles.mockResolvedValue({ files: [standalonePath] });
     configService.readFile.mockResolvedValue({
       content: [
         'name: orders',
-        'description: Finance orders used for invoice reconciliation.',
+        'descriptions:',
+        '  user: Finance orders used for invoice reconciliation.',
         'table: public.orders',
         'grain: [id]',
         'columns:',
         '  - name: id',
         '    type: string',
-        '    description: Stable order identifier.',
+        '    descriptions:',
+        '      user: Stable order identifier.',
       ].join('\n'),
     });
 

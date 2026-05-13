@@ -45,7 +45,8 @@ const ORDERS_YAML = [
 
 const FINANCE_ORDERS_YAML = [
   'name: orders',
-  'description: Finance orders used for invoice reconciliation.',
+  'descriptions:',
+  '  user: Finance orders used for invoice reconciliation.',
   'table: finance.orders',
   'grain:',
   '  - order_id',

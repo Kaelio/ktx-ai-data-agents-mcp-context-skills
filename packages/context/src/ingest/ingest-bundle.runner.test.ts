@@ -409,6 +409,38 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
+  it('threads target warehouse connection names into WorkUnit and reconcile tool sessions', async () => {
+    const deps = makeDeps();
+    const sessions: any[] = [];
+    deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['warehouse']);
+    deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
+      sessions.push(toolSession);
+      return {
+        toAiSdkTools: vi.fn().mockReturnValue({}),
+        getAllTools: vi.fn().mockReturnValue([]),
+        getToolNames: vi.fn().mockReturnValue([]),
+      };
+    });
+    deps.agentRunner.runLoop.mockResolvedValue({ stopReason: 'natural' });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/notion/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'notion',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect([...sessions[0].allowedConnectionNames].sort()).toEqual(['notion', 'warehouse']);
+  });
+
   it('reuses document evidence indexing and page triage for document WorkUnits', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'notion';
@@ -567,7 +599,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         currentToolSession.actions.push({
           target: 'wiki',
           type: 'created',
-          key: 'knowledge/orders.md',
+          key: 'wiki/orders.md',
           detail: 'captured order context',
         });
       }
@@ -606,7 +638,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         expect.objectContaining({
           type: 'work_unit_started',
           unitKey: 'u1',
-          skills: ['ingest_triage', 'sl_capture', 'knowledge_capture'],
+          skills: ['ingest_triage', 'sl_capture', 'wiki_capture'],
           stepBudget: 40,
         }),
         expect.objectContaining({ type: 'work_unit_step', unitKey: 'u1', stepIndex: 1, stepBudget: 40 }),
@@ -615,7 +647,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           unitKey: 'u1',
           target: 'wiki',
           action: 'created',
-          key: 'knowledge/orders.md',
+          key: 'wiki/orders.md',
         }),
         expect.objectContaining({ type: 'work_unit_finished', unitKey: 'u1', status: 'success' }),
       ]),
@@ -643,6 +675,14 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         });
       }
       if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Reconciliation emits no warehouse identifiers before fallback recording.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.emit_conflict_resolution.execute(
           {
             kind: 'near_duplicate',
@@ -811,8 +851,16 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           { path: 'a.yml', startLine: 1, endLine: 2 },
           { toolCallId: 'read-1', messages: [] },
         );
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Wiki write contains no warehouse identifiers.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.wiki_write.execute(
-          { key: 'knowledge/a.md', content: 'safe summary' },
+          { key: 'wiki/a.md', content: 'safe summary' },
           { toolCallId: 'wiki-1', messages: [] },
         );
       }
@@ -850,9 +898,9 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
             {
               unitKey: 'u1',
               path: '/tmp/ktx-test/run/wu-transcripts/j1/u1.jsonl',
-              toolCallCount: 2,
+              toolCallCount: 3,
               errorCount: 0,
-              toolNames: ['read_raw_span', 'wiki_write'],
+              toolNames: ['read_raw_span', 'record_verification_ledger', 'wiki_write'],
             },
           ],
         }),
@@ -864,6 +912,14 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     const deps = makeDeps();
     deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
       if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Unmapped fallback records an unsupported conversion metric without verified warehouse identifiers.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.emit_unmapped_fallback.execute(
           {
             rawPath: 'a.yml',
@@ -920,6 +976,14 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     });
     deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
       if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        await params.toolSet.record_verification_ledger.execute(
+          {
+            summary: 'Reconciliation records conflict, eviction, and fallback decisions without warehouse identifiers.',
+            verifiedIdentifiers: [],
+            unverifiedIdentifiers: [],
+          },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         await params.toolSet.emit_conflict_resolution.execute(
           {
             kind: 'near_duplicate',
@@ -1287,7 +1351,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           {
             target: 'wiki',
             type: 'created',
-            key: 'knowledge/global/pipeline.md',
+            key: 'wiki/global/pipeline.md',
             detail: 'Pipeline article',
           },
           {
@@ -1327,7 +1391,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     });
 
     expect(deps.knowledgeSlRefs.syncFromWiki).toHaveBeenCalledWith({
-      wikiPageKey: 'knowledge/global/pipeline.md',
+      wikiPageKey: 'wiki/global/pipeline.md',
       wikiScope: 'GLOBAL',
       wikiScopeId: null,
       refs: [{ connectionId: 'warehouse-2', sourceName: 'looker__b2b__sales_pipeline' }],
@@ -1346,7 +1410,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           connectionId: 'looker-run',
           targetConnectionId: null,
           artifactKind: 'wiki',
-          artifactKey: 'knowledge/global/pipeline.md',
+          artifactKey: 'wiki/global/pipeline.md',
         }),
       ]),
     );
@@ -1454,7 +1518,6 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           patternPagesWritten: 3,
           stalePatternPagesMarked: 1,
           archivedPatternPages: 1,
-          legacyPagesDeleted: 1,
         },
         warnings: [],
         errors: [],
@@ -1487,7 +1550,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(memoryFlow.snapshot().events).toContainEqual(
       expect.objectContaining({
         type: 'saved',
-        wikiCount: 6,
+        wikiCount: 5,
         slCount: 3,
       }),
     );
@@ -1553,7 +1616,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     const workUnitCall = deps.agentRunner.runLoop.mock.calls.find(
       ([params]: any[]) => params.telemetryTags.operationName === 'ingest-bundle-wu',
     );
-    expect(workUnitCall?.[0].userPrompt).toContain('## Knowledge Pages');
+    expect(workUnitCall?.[0].userPrompt).toContain('## Wiki Pages');
     expect(workUnitCall?.[0].userPrompt).toContain(
       '- revenue-recognition: Recognize revenue net of refunds after fulfillment.',
     );

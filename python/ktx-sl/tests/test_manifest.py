@@ -95,7 +95,7 @@ class TestProjectManifestEntry:
     def orders_entry(self) -> ManifestEntry:
         return ManifestEntry(
             table="public.orders",
-            description="Customer orders",
+            descriptions={"user": "Customer orders"},
             columns=[
                 ManifestColumn(name="id", type="integer", pk=True),
                 ManifestColumn(name="customer_id", type="integer"),
@@ -202,7 +202,7 @@ class TestValidateOverlay:
     def test_validate_overlay_valid(self):
         data = {
             "name": "orders",
-            "description": "Revenue-bearing orders",
+            "descriptions": {"user": "Revenue-bearing orders"},
             "grain": ["id"],
             "measures": [{"name": "revenue", "expr": "sum(total)"}],
             "columns": [
@@ -259,7 +259,7 @@ def _manifest_tables() -> dict:
         "tables": {
             "orders": {
                 "table": "public.orders",
-                "description": "Customer orders",
+                "descriptions": {"user": "Customer orders"},
                 "columns": [
                     {"name": "id", "type": "integer", "pk": True},
                     {"name": "customer_id", "type": "integer"},
@@ -278,7 +278,7 @@ def _manifest_tables() -> dict:
             },
             "customers": {
                 "table": "public.customers",
-                "description": "Customer accounts",
+                "descriptions": {"user": "Customer accounts"},
                 "columns": [
                     {"name": "id", "type": "integer", "pk": True},
                     {"name": "name", "type": "varchar"},
@@ -329,12 +329,12 @@ class TestTwoTierLoading:
         assert sources["regions"].table == "public.regions"
         assert sources["regions"].is_table_source
 
-    def test_overlay_descriptions_do_not_promote_base_description_to_user_source(
+    def test_overlay_descriptions_do_not_promote_base_map_to_user_source(
         self, tmp_path: Path
     ):
         standalone = {
             "name": "regions",
-            "description": "Standalone description",
+            "descriptions": {"ai": "Standalone description"},
             "table": "public.regions",
             "grain": ["id"],
             "columns": [
@@ -376,7 +376,7 @@ class TestTwoTierLoading:
 
         overlay = {
             "name": "orders",
-            "description": "Revenue-bearing orders",
+            "descriptions": {"user": "Revenue-bearing orders"},
             "grain": ["id"],
             "measures": [{"name": "revenue", "expr": "sum(total)"}],
         }
@@ -394,11 +394,11 @@ class TestTwoTierLoading:
         assert len(orders.measures) == 1
         assert orders.measures[0].name == "revenue"
 
-    def test_overlay_description_override(self, tmp_path: Path):
+    def test_overlay_description_map_override(self, tmp_path: Path):
         schema_dir = tmp_path / "_schema"
         _write_yaml(schema_dir / "public.yaml", _manifest_tables())
 
-        overlay = {"name": "orders", "description": "Overridden description"}
+        overlay = {"name": "orders", "descriptions": {"user": "Overridden description"}}
         _write_yaml(tmp_path / "orders.yaml", overlay)
         _write_yaml(tmp_path / "customers.yaml", {"name": "customers"})
 
@@ -426,7 +426,7 @@ class TestTwoTierLoading:
         sources = loader.load_all()
         assert sources["orders"].description == "Customer orders"
 
-    def test_overlay_descriptions_map_overrides_lower_priority_db_description(
+    def test_overlay_descriptions_map_overrides_lower_priority_db_source(
         self, tmp_path: Path
     ):
         schema_dir = tmp_path / "_schema"

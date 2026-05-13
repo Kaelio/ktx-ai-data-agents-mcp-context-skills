@@ -48,8 +48,8 @@ function view(): MemoryFlowViewModel {
         status: 'complete',
         headline: '2 candidates',
         counters: ['1 wiki', '1 SL'],
-        chips: [{ label: 'knowledge/orders.md', status: 'complete' }],
-        details: ['wiki created: knowledge/orders.md'],
+        chips: [{ label: 'wiki/orders.md', status: 'complete' }],
+        details: ['wiki created: wiki/orders.md'],
       },
       {
         id: 'gates',

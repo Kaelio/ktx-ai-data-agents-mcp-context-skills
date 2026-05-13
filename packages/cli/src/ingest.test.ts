@@ -3,11 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   LocalLookerRuntimeStore,
-  LocalMetabaseSourceStateReader,
-  getLocalIngestStatus,
+  LocalMetabaseDiscoveryCache,
   type LocalIngestResult,
   type LocalMetabaseFanoutProgress,
-  type MemoryFlowReplayInput,
   type RunLocalIngestOptions,
   type SourceAdapter,
 } from '@ktx/context/ingest';
@@ -20,7 +18,6 @@ import {
   CliMetabaseAgentRunner,
   CliMetabaseSourceAdapter,
   completedLocalBundleRun,
-  emitLiveLocalMemoryFlow,
   failedLocalBundleRun,
   localFakeBundleReport,
   makeCliLookerParser,
@@ -28,7 +25,6 @@ import {
   makeIo,
   persistLocalBundleReport,
   runPublicMetabaseSyncModeCase,
-  writeBundleReportFile,
   writeMetabaseConfig,
   writeWarehouseConfig,
 } from './ingest.test-utils.js';
@@ -107,7 +103,89 @@ describe('runKtxIngest', () => {
     expect(statusIo.stderr()).toBe('');
   });
 
-  it('prints provider setup guidance when a skip-llm setup project runs dev ingest', async () => {
+  it('emits structured progress for non-TTY local ingest runs', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const progressEvents: Array<{ percent: number; message: string; transient?: boolean }> = [];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> => {
+      input.memoryFlow?.emit({ type: 'source_acquired', adapter: 'fake', trigger: 'manual_resync', fileCount: 2 });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 });
+      input.memoryFlow?.emit({ type: 'work_unit_started', unitKey: 'orders', skills: [], stepBudget: 4 });
+      input.memoryFlow?.emit({ type: 'work_unit_step', unitKey: 'orders', stepIndex: 2, stepBudget: 4 });
+      return completedLocalBundleRun(input, 'cli-local-progress-1');
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'cli-local-progress-1',
+          progress: (event) => progressEvents.push(event),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toEqual(
+      expect.arrayContaining([
+        { percent: 5, message: 'Fetching source files for warehouse/fake' },
+        { percent: 15, message: 'Fetched 2 source files from fake' },
+        { percent: 45, message: 'Planned 2 work units' },
+        expect.objectContaining({
+          message: 'Processing work units: 0/2 complete, 1 active; latest orders step 2/4',
+          transient: true,
+        }),
+      ]),
+    );
+    expect(io.stderr()).not.toContain('[15%] Fetched 2 source files from fake');
+  });
+
+  it('describes zero-work-unit ingest progress as finalizing instead of appearing half-planned', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const progressEvents: Array<{ percent: number; message: string; transient?: boolean }> = [];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> => {
+      input.memoryFlow?.emit({ type: 'source_acquired', adapter: 'fake', trigger: 'manual_resync', fileCount: 2 });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 0, workUnitCount: 0, evictionCount: 0 });
+      return completedLocalBundleRun(input, 'cli-local-zero-progress-1');
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'cli-local-zero-progress-1',
+          progress: (event) => progressEvents.push(event),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toEqual(
+      expect.arrayContaining([
+        { percent: 80, message: 'No work units to process; finalizing ingest' },
+      ]),
+    );
+    expect(progressEvents).not.toContainEqual({ percent: 45, message: 'Planned 0 work units' });
+  });
+
+  it('prints provider setup guidance when a skip-llm setup project runs ingest', async () => {
     const projectDir = join(tempDir, 'project');
     const setupIo = makeIo();
     await expect(
@@ -168,7 +246,7 @@ describe('runKtxIngest', () => {
 
     expect(runIo.stdout()).toBe('');
     expect(runIo.stderr()).toContain(
-      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
     );
     expect(runIo.stderr()).toContain(
       `ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
@@ -425,6 +503,65 @@ describe('runKtxIngest', () => {
     expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
   });
 
+  it('emits structured progress for Metabase fan-out without writing progress to JSON output', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo();
+    const progressEvents: Array<{ percent: number; message: string }> = [];
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          progress: (event) => progressEvents.push(event),
+          runLocalMetabaseIngest: async (input) => {
+            input.progress?.onMetabaseFanoutPlanned?.({
+              metabaseConnectionId: 'prod-metabase',
+              children: [{ metabaseDatabaseId: 1, targetConnectionId: 'warehouse_a' }],
+            });
+            input.progress?.onMetabaseChildStarted?.({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+            });
+            input.progress?.onMetabaseChildCompleted?.({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+              status: 'done',
+            });
+            return {
+              metabaseConnectionId: 'prod-metabase',
+              status: 'all_succeeded',
+              totals: { workUnits: 0, failedWorkUnits: 0 },
+              children: [],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toEqual(
+      expect.arrayContaining([
+        { percent: 5, message: 'Checking Metabase mappings for prod-metabase' },
+        { percent: 10, message: 'Metabase prod-metabase: 1 mapped database' },
+        { percent: 25, message: 'Metabase database 1 -> warehouse_a running' },
+        { percent: 90, message: 'Metabase database 1 -> warehouse_a done' },
+      ]),
+    );
+    expect(io.stdout()).toContain('"status": "all_succeeded"');
+    expect(io.stderr()).not.toContain('Metabase ingest: prod-metabase');
+  });
+
   it('runs Metabase scheduled ingest through the public CLI command path with real fan-out', async () => {
     const projectDir = join(tempDir, 'metabase-cli-project');
     await writeWarehouseConfig(projectDir);
@@ -437,6 +574,16 @@ describe('runKtxIngest', () => {
         '    driver: metabase',
         '    api_url: https://metabase.example.test',
         '    api_key: literal-test-key',
+        '    mappings:',
+        '      databaseMappings:',
+        '        "1": warehouse_a',
+        '        "2": warehouse_b',
+        '      syncEnabled:',
+        '        "1": true',
+        '        "2": true',
+        '      syncMode: ALL',
+        '      defaultTagNames:',
+        '        - ktx',
         '  warehouse_a:',
         '    driver: postgres',
         '    url: postgresql://readonly@db.example.test/warehouse_a',
@@ -453,33 +600,12 @@ describe('runKtxIngest', () => {
       'utf-8',
     );
     const project = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
-    await store.replaceSourceState({
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+    await discoveryCache.refreshDiscoveredDatabases({
       connectionId: 'prod-metabase',
-      syncMode: 'ALL',
-      defaultTagNames: ['ktx'],
-      selections: [],
-      mappings: [
-        {
-          metabaseDatabaseId: 1,
-          metabaseDatabaseName: 'Warehouse A',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'db.example.test',
-          metabaseDbName: 'warehouse_a',
-          targetConnectionId: 'warehouse_a',
-          syncEnabled: true,
-          source: 'refresh',
-        },
-        {
-          metabaseDatabaseId: 2,
-          metabaseDatabaseName: 'Warehouse B',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'db.example.test',
-          metabaseDbName: 'warehouse_b',
-          targetConnectionId: 'warehouse_b',
-          syncEnabled: true,
-          source: 'refresh',
-        },
+      discovered: [
+        { id: 1, name: 'Warehouse A', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_a' },
+        { id: 2, name: 'Warehouse B', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_b' },
       ],
     });
     const adapter = new CliMetabaseSourceAdapter();
@@ -663,7 +789,7 @@ describe('runKtxIngest', () => {
     ).resolves.toBe(1);
 
     expect(io.stderr()).toContain('source-dir uploads are not supported for the Metabase fan-out adapter');
-    expect(io.stderr()).not.toContain('ktx dev ingest run requires llm.provider.backend');
+    expect(io.stderr()).not.toContain('ktx ingest run requires llm.provider.backend');
     expect(io.stdout()).toBe('');
   });
 
@@ -720,7 +846,6 @@ describe('runKtxIngest', () => {
                 patternPagesWritten: 30,
                 stalePatternPagesMarked: 2,
                 archivedPatternPages: 3,
-                legacyPagesDeleted: 4,
               },
               errors: [],
               warnings: [],
@@ -754,7 +879,7 @@ describe('runKtxIngest', () => {
 
     expect(io.stderr()).toBe('');
     expect(io.stdout()).toContain('Adapter: historic-sql\n');
-    expect(io.stdout()).toContain('Saved memory: 39 wiki, 57 SL\n');
+    expect(io.stdout()).toContain('Saved memory: 35 wiki, 57 SL\n');
   });
 
   it('returns a non-zero code when local ingest reports failed work units', async () => {
@@ -812,6 +937,44 @@ describe('runKtxIngest', () => {
 
     expect(exitCode).toBe(0);
     expect(runLocalIngest).toHaveBeenCalledWith(expect.objectContaining({ llmDebugRequestFile: debugFile }));
+  });
+
+  it('supplies a scan-connector query executor to local ingest runs', async () => {
+    const io = makeIo();
+    const projectDir = join(tempDir, 'query-executor-project');
+    await writeWarehouseConfig(projectDir);
+    const queryExecutor = {
+      execute: vi.fn(async () => ({
+        headers: [],
+        rows: [],
+        totalRows: 0,
+        command: 'SELECT',
+        rowCount: 0,
+      })),
+    };
+    const runLocalIngest = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> =>
+      completedLocalBundleRun(input, 'query-executor-run'),
+    );
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          runLocalIngest,
+          createAdapters: () => [],
+          createQueryExecutor: () => queryExecutor,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runLocalIngest).toHaveBeenCalledWith(expect.objectContaining({ queryExecutor }));
   });
 
   it('passes daemon database introspection URL to default local ingest adapters', async () => {

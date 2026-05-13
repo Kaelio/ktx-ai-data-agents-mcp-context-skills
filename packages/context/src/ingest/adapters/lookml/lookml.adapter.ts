@@ -14,6 +14,11 @@ import { parseLookmlPullConfig } from './pull-config.js';
 
 export interface LookmlSourceAdapterDeps {
   homeDir: string;
+  targetConnectionIds?: string[];
+}
+
+function uniqueSorted(values: readonly string[] | undefined): string[] {
+  return [...new Set(values ?? [])].sort((left, right) => left.localeCompare(right));
 }
 
 export class LookmlSourceAdapter implements SourceAdapter {
@@ -41,6 +46,10 @@ export class LookmlSourceAdapter implements SourceAdapter {
 
   readFetchReport(stagedDir: string) {
     return readLookmlFetchReport(stagedDir);
+  }
+
+  async listTargetConnectionIds(_stagedDir: string): Promise<string[]> {
+    return uniqueSorted(this.deps.targetConnectionIds);
   }
 
   async chunk(stagedDir: string, diffSet?: DiffSet): Promise<ChunkResult> {

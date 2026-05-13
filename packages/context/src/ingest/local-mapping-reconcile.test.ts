@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ktxLocalStateDbPath, type KtxLocalProject } from '../project/index.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
-import { LocalMetabaseSourceStateReader } from './adapters/metabase/local-source-state-store.js';
 import { seedLocalMappingStateFromKtxYaml } from './local-mapping-reconcile.js';
 
 describe('local mapping yaml reconciliation bridge', () => {
@@ -23,7 +22,7 @@ describe('local mapping yaml reconciliation bridge', () => {
     } as KtxLocalProject;
   }
 
-  it('seeds Metabase local state from ktx.yaml mapping intent', async () => {
+  it('does not copy Metabase mapping intent into local SQLite state', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-metabase-yaml-seed-'));
     const project = projectWithConnections({
       'prod-metabase': {
@@ -39,17 +38,7 @@ describe('local mapping yaml reconciliation bridge', () => {
       'prod-warehouse': { driver: 'postgres', url: 'postgresql://readonly@db.test/analytics' },
     });
 
-    await seedLocalMappingStateFromKtxYaml(project, 'prod-metabase');
-
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
-    await expect(store.listDatabaseMappings('prod-metabase')).resolves.toMatchObject([
-      { metabaseDatabaseId: 1, targetConnectionId: 'prod-warehouse', syncEnabled: true, source: 'ktx.yaml' },
-    ]);
-    await expect(store.getSourceState('prod-metabase')).resolves.toMatchObject({
-      syncMode: 'ONLY',
-      selections: [{ selectionType: 'collection', metabaseObjectId: 12 }],
-      defaultTagNames: ['ktx'],
-    });
+    await expect(seedLocalMappingStateFromKtxYaml(project, 'prod-metabase')).resolves.toBeUndefined();
   });
 
   it('seeds Looker local mappings from ktx.yaml mapping intent', async () => {

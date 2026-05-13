@@ -37,7 +37,7 @@ describe('KTX project config', () => {
         run_research: {
           enabled: false,
           max_iterations: 20,
-          default_toolset: ['sl_query', 'knowledge_search', 'sl_read_source'],
+          default_toolset: ['sl_query', 'wiki_search', 'sl_read_source'],
         },
       },
       memory: {
@@ -81,16 +81,13 @@ describe('KTX project config', () => {
     });
   });
 
-  it('parses and serializes setup wizard metadata', () => {
+  it('parses and serializes setup warehouse metadata without setup progress', () => {
     const config = parseKtxProjectConfig(`
 project: revenue
 setup:
   database_connection_ids:
     - warehouse
     - analytics
-  completed_steps:
-    - project
-    - llm
 connections:
   warehouse:
     driver: postgres
@@ -99,13 +96,12 @@ connections:
 
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse', 'analytics'],
-      completed_steps: ['project', 'llm'],
     });
 
     const serialized = serializeKtxProjectConfig(config);
     expect(serialized).toContain('setup:');
     expect(serialized).toContain('database_connection_ids:');
-    expect(serialized).toContain('completed_steps:');
+    expect(serialized).not.toContain('completed_steps:');
   });
 
   it('parses global direct Anthropic LLM config', () => {
@@ -220,15 +216,15 @@ project: demo
 scan:
   relationships:
     enabled: false
-    llm_proposals: false
-    validation_required_for_manifest: true
-    accept_threshold: 0.91
-    review_threshold: 0.61
-    max_llm_tables_per_batch: 12
-    max_candidates_per_column: 7
-    profile_sample_rows: 500
-    validation_concurrency: 2
-    validation_budget: 0
+    llmProposals: false
+    validationRequiredForManifest: true
+    acceptThreshold: 0.91
+    reviewThreshold: 0.61
+    maxLlmTablesPerBatch: 12
+    maxCandidatesPerColumn: 7
+    profileSampleRows: 500
+    validationConcurrency: 2
+    validationBudget: 0
 `);
 
     expect(config.scan.relationships).toEqual({
@@ -260,7 +256,7 @@ scan:
 project: demo
 scan:
   relationships:
-    validation_budget: all
+    validationBudget: all
 `);
 
     expect(config.scan.relationships.validationBudget).toBe('all');
@@ -272,13 +268,13 @@ scan:
 project: demo
 scan:
   relationships:
-    accept_threshold: 2
-    review_threshold: -1
-    max_llm_tables_per_batch: 0
-    max_candidates_per_column: -4
-    profile_sample_rows: 0
-    validation_concurrency: 0
-    validation_budget: 1.5
+    acceptThreshold: 2
+    reviewThreshold: -1
+    maxLlmTablesPerBatch: 0
+    maxCandidatesPerColumn: -4
+    profileSampleRows: 0
+    validationConcurrency: 0
+    validationBudget: 1.5
 `);
 
     expect(config.scan.relationships).toMatchObject({
@@ -297,13 +293,13 @@ scan:
 project: demo
 scan:
   relationships:
-    validation_budget: infinite
+    validationBudget: infinite
 `);
 
     expect(config.scan.relationships).not.toHaveProperty('validationBudget');
   });
 
-  it('rejects legacy local LLM and embedding fields', () => {
+  it('rejects unsupported local LLM and embedding fields', () => {
     expect(() =>
       parseKtxProjectConfig(`
 project: demo

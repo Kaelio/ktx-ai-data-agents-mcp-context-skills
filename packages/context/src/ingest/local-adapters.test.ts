@@ -105,7 +105,6 @@ describe('local ingest adapters', () => {
             return { headers: [], rows: [] };
           },
         },
-        postgresBaselineRootDir: join(project.projectDir, '.ktx/cache/historic-sql'),
       },
     });
 
@@ -181,9 +180,12 @@ describe('local ingest adapters', () => {
         historicSql: {
           enabled: true,
           dialect: 'postgres',
-          minCalls: 7,
+          minExecutions: 7,
           maxTemplatesPerRun: 123,
-          serviceAccountUserPatterns: ['^svc_'],
+          filters: {
+            serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
+            dropTrivialProbes: true,
+          },
         },
       },
     });
@@ -385,7 +387,7 @@ describe('local ingest adapters', () => {
         connections: {
           'prod-lookml': {
             driver: 'lookml',
-            repo_url: 'https://github.com/acme/looker.git',
+            repoUrl: 'https://github.com/acme/looker.git',
             branch: 'main',
             path: 'models',
             auth_token_ref: 'env:GITHUB_TOKEN',
@@ -410,7 +412,7 @@ describe('local ingest adapters', () => {
     });
   });
 
-  it('rejects local LookML scheduled pulls when repo_url is missing', async () => {
+  it('rejects local LookML scheduled pulls when repoUrl is missing', async () => {
     const lookmlProject = {
       projectDir: tempDir,
       config: { connections: { 'prod-lookml': { driver: 'lookml' } } },
@@ -480,7 +482,7 @@ describe('local ingest adapters', () => {
       }),
       config: {
         ...project.config,
-        setup: { database_connection_ids: ['warehouse'], completed_steps: [] },
+        setup: { database_connection_ids: ['warehouse'] },
         connections: {
           warehouse: {
             driver: 'postgres',
@@ -496,6 +498,60 @@ describe('local ingest adapters', () => {
     const adapter = createDefaultLocalIngestAdapters(dbtProject).find((candidate) => candidate.source === 'dbt');
 
     await expect(adapter?.listTargetConnectionIds?.('/tmp/staged-dbt')).resolves.toEqual(['warehouse']);
+  });
+
+  it('passes primary warehouse connection ids to the local Notion adapter', async () => {
+    const adapters = createDefaultLocalIngestAdapters(
+      projectWithConnections({
+        notion: {
+          driver: 'notion',
+          auth_token: 'secret',
+          crawl_mode: 'selected_roots',
+          root_page_ids: ['page-1'],
+        },
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgresql://readonly@db.example.test/analytics',
+        },
+        docs: {
+          driver: 'dbt',
+          source_dir: './dbt',
+        },
+      } as never),
+    );
+
+    const notion = adapters.find((adapter) => adapter.source === 'notion');
+
+    await expect(notion?.listTargetConnectionIds?.('/tmp/staged-notion')).resolves.toEqual(['warehouse']);
+  });
+
+  it('passes primary warehouse connection ids to local LookML and MetricFlow adapters', async () => {
+    const adapters = createDefaultLocalIngestAdapters(
+      projectWithConnections({
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgresql://readonly@db.example.test/analytics',
+        },
+        lookml_docs: {
+          driver: 'lookml',
+          lookml: {
+            repoUrl: 'https://github.com/acme/lookml.git',
+          },
+        },
+        metrics_repo: {
+          driver: 'metricflow',
+          metricflow: {
+            repoUrl: 'https://github.com/acme/metrics.git',
+          },
+        },
+      } as never),
+    );
+
+    const lookml = adapters.find((adapter) => adapter.source === 'lookml');
+    const metricflow = adapters.find((adapter) => adapter.source === 'metricflow');
+
+    await expect(lookml?.listTargetConnectionIds?.('/tmp/staged-lookml')).resolves.toEqual(['warehouse']);
+    await expect(metricflow?.listTargetConnectionIds?.('/tmp/staged-metricflow')).resolves.toEqual(['warehouse']);
   });
 
   it('resolves MetricFlow auth_token_ref without writing literal tokens to config', async () => {

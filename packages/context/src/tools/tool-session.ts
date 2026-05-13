@@ -23,7 +23,7 @@ interface EvictionDecisionRecord {
   rawPath: string;
   artifactKind: 'wiki' | 'sl';
   artifactKey: string;
-  action: 'removed' | 'retained_deprecated' | 'retained_supported';
+  action: 'removed';
   reason: string;
 }
 
@@ -47,6 +47,7 @@ export interface ToolSession {
   touchedSlSources: TouchedSlSourceSet;
   actions: MemoryAction[];
   allowedRawPaths?: ReadonlySet<string>;
+  allowedConnectionNames?: ReadonlySet<string>;
   semanticLayerService: SemanticLayerService;
   wikiService: KnowledgeWikiService;
   configService: KtxFileStorePort;

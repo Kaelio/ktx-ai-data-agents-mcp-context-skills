@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir as fsMkdir, writeFile as fsWriteFile } from 'node:fs/promises';
+import { mkdir as fsMkdir, readFile as fsReadFile, writeFile as fsWriteFile } from 'node:fs/promises';
 import { execFile as childExecFile } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -9,7 +9,6 @@ import { runWorkspaceKtx } from './run-ktx.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const ktxRootDir = resolve(scriptDir, '..');
-const repoRootDir = resolve(ktxRootDir, '..');
 const defaultProjectDir = resolve(ktxRootDir, 'examples/orbit-relationship-verification');
 const defaultReportPath = resolve(
   ktxRootDir,
@@ -90,15 +89,16 @@ function parseArgs(argv) {
 }
 
 export function buildOrbitScanArgv(input) {
-  return ['dev', 'scan', input.connectionId, '--enrich', '--project-dir', input.projectDir];
-}
-
-export function buildOrbitReportArgv(input) {
-  return ['dev', 'scan', 'report', '--json', '--project-dir', input.projectDir, input.runId];
+  return ['scan', input.connectionId, '--mode', 'relationships', '--project-dir', input.projectDir];
 }
 
 export function extractRunId(stdout) {
   const match = stdout.match(/^Run:\s*(\S+)/m);
+  return match?.[1] ?? null;
+}
+
+export function extractReportPath(stdout) {
+  const match = stdout.match(/^\s*Report:\s*(\S+)/m);
   return match?.[1] ?? null;
 }
 
@@ -204,11 +204,9 @@ export function formatOrbitVerificationMarkdown(result) {
 
   if (result.status === 'success') {
     lines.push(
-      '## JSON Report Command',
+      '## Scan Report Artifact',
       '',
-      '```bash',
-      result.reportCommand,
-      '```',
+      `- ${result.reportPath}`,
       '',
       ...formatSuccess(result),
     );
@@ -250,6 +248,7 @@ export async function runOrbitVerification(options = {}) {
   const now = options.now ?? (() => new Date());
   const mkdir = options.mkdir ?? fsMkdir;
   const writeFile = options.writeFile ?? fsWriteFile;
+  const readFile = options.readFile ?? fsReadFile;
   const date = dateOnly(now());
   const env = options.env ?? orbitVerificationEnv(projectDir);
   const runWithEnv = (argv, runnerOptions) => runner(argv, { ...runnerOptions, env });
@@ -285,33 +284,32 @@ export async function runOrbitVerification(options = {}) {
         scanStderr: scan.stderr,
       };
     } else {
-      const reportArgv = buildOrbitReportArgv({ projectDir, runId });
-      const reportOutput = await runBufferedWorkspaceKtx(runWithEnv, reportArgv, rootDir, execFile);
-      if (reportOutput.exitCode !== 0) {
+      const scanReportPath = extractReportPath(scan.stdout);
+      if (!scanReportPath) {
         result = {
           status: 'blocked',
           date,
           connectionId,
           projectDir,
           scanCommand: shellCommand(scanArgv),
-          scanExitCode: reportOutput.exitCode,
-          blocker: firstNonEmptyLine(reportOutput.stderr, reportOutput.stdout),
-          scanStdout: `${scan.stdout}\n${reportOutput.stdout}`.trim(),
-          scanStderr: `${scan.stderr}\n${reportOutput.stderr}`.trim(),
+          scanExitCode: scan.exitCode,
+          blocker: 'KTX scan completed without printing a report artifact path',
+          scanStdout: scan.stdout,
+          scanStderr: scan.stderr,
         };
       } else {
+        const fullScanReportPath = resolve(projectDir, scanReportPath);
         result = {
           status: 'success',
           date,
           connectionId,
           projectDir,
           scanCommand: shellCommand(scanArgv),
-          reportCommand: shellCommand(reportArgv),
+          reportPath: fullScanReportPath,
           scanExitCode: scan.exitCode,
-          reportExitCode: reportOutput.exitCode,
           scanStdout: scan.stdout,
           scanStderr: scan.stderr,
-          report: JSON.parse(reportOutput.stdout),
+          report: JSON.parse(await readFile(fullScanReportPath, 'utf8')),
         };
       }
     }

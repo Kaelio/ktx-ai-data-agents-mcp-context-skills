@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import {
   createBigQueryLiveDatabaseIntrospection,
   isKtxBigQueryConnectionConfig,
@@ -298,7 +297,6 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
 
   const base = {
     sqlAnalysis: ktxCliHistoricSqlAnalysis(options),
-    postgresBaselineRootDir: join(project.projectDir, '.ktx/cache/historic-sql'),
   };
 
   if (dialect === 'postgres') {

@@ -341,7 +341,7 @@ describe('createLocalProjectMcpContextPorts', () => {
     });
   });
 
-  it('writes, reads, and searches global knowledge pages', async () => {
+  it('writes, reads, and searches global wiki pages', async () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     const ports = createLocalProjectMcpContextPorts(project);
 
@@ -372,7 +372,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       results: [
         expect.objectContaining({
           key: 'revenue',
-          path: 'knowledge/global/revenue.md',
+          path: 'wiki/global/revenue.md',
           scope: 'GLOBAL',
           summary: 'Revenue definition',
           score: expect.any(Number),
@@ -576,7 +576,8 @@ describe('createLocalProjectMcpContextPorts', () => {
       sourceName: 'orders',
       yaml: [
         'name: orders',
-        'description: Revenue facts',
+        'descriptions:',
+        '  user: Revenue facts',
         'table: public.orders',
         'grain:',
         '  - order_id',

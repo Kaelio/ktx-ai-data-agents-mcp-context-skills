@@ -28,16 +28,11 @@ function hasDescriptions(descriptions: DescriptionMap): boolean {
 
 function withDescriptionMap(record: Record<string, unknown>, fallback: string | null): Record<string, unknown> {
   const descriptions = cleanDescriptionMap(record.descriptions);
-  const flatDescription = cleanText(record.description);
-  if (flatDescription && !descriptions.user) {
-    descriptions.user = flatDescription;
-  }
   if (!hasDescriptions(descriptions) && fallback) {
     descriptions.ktx = fallback;
   }
 
   const next = { ...record };
-  delete next.description;
   if (hasDescriptions(descriptions)) {
     next.descriptions = descriptions;
   } else {

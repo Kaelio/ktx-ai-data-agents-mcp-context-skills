@@ -88,14 +88,14 @@ describe('reconciliation emit tools', () => {
     await executeTool(tool, {
       rawPath: 'views/old_orders.view.lkml',
       artifactKind: 'wiki',
-      artifactKey: 'orders/legacy',
-      action: 'retained_deprecated',
+      artifactKey: 'orders/old',
+      action: 'removed',
       reason: 'first pass',
     });
     await executeTool(tool, {
       rawPath: 'views/old_orders.view.lkml',
       artifactKind: 'wiki',
-      artifactKey: 'orders/legacy',
+      artifactKey: 'orders/old',
       action: 'removed',
       reason: 'second pass after checking references',
     });
@@ -104,7 +104,7 @@ describe('reconciliation emit tools', () => {
       {
         rawPath: 'views/old_orders.view.lkml',
         artifactKind: 'wiki',
-        artifactKey: 'orders/legacy',
+        artifactKey: 'orders/old',
         action: 'removed',
         reason: 'second pass after checking references',
       },

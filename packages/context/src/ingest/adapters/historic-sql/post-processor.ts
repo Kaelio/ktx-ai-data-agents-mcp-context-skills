@@ -10,7 +10,7 @@ async function commitProjectionChanges(workdir: string): Promise<void> {
   const status = await git.status();
   const paths = status.files
     .map((file) => file.path)
-    .filter((path) => path.startsWith('semantic-layer/') || path.startsWith('knowledge/global/historic-sql/'));
+    .filter((path) => path.startsWith('semantic-layer/') || path.startsWith('wiki/global/historic-sql'));
   if (paths.length === 0) {
     return;
   }

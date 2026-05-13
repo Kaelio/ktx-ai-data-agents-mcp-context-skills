@@ -30,7 +30,7 @@ A context layer is the infrastructure that gives agents the business knowledge t
 KTX organizes context into four pillars:
 
 - Semantic sources
-- Knowledge pages
+- Wiki pages
 - Scan artifacts
 - Provenance
 
@@ -67,7 +67,7 @@ measures:
     expr: count(id)
 ```
 
-**Knowledge pages** are Markdown documents that capture business definitions, rules, and operating context — the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
+**Wiki pages** are Markdown documents that capture business definitions, rules, and operating context — the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
 
 ```markdown
 ---
@@ -97,13 +97,13 @@ Together, these four pillars give agents enough context to produce analytics art
 
 ## How KTX compares
 
-KTX is a context layer with an agent-native semantic layer at its core. MetricFlow, Cube, and Malloy model metrics, dimensions, joins, and generated SQL. KTX covers that semantic-layer work, then adds the context agents need to use and maintain it: knowledge pages, schema scans, provenance, ingestion, validation, and agent-facing CLI commands.
+KTX is a context layer with an agent-native semantic layer at its core. MetricFlow, Cube, and Malloy model metrics, dimensions, joins, and generated SQL. KTX covers that semantic-layer work, then adds the context agents need to use and maintain it: wiki pages, schema scans, provenance, ingestion, validation, and agent-facing CLI commands.
 
 The workflow is the difference. Traditional semantic layers are powerful, but they are usually built and maintained through manual modeling work, product-specific runtimes, or language-specific workflows. They are not agent-native by default, which makes them harder for agents to inspect, edit, validate, and review in a tight loop. KTX is designed for agents that need to read context, change semantic files, inspect generated SQL, and leave a reviewable git diff.
 
 | | KTX semantic layer | MetricFlow | Cube | Malloy |
 |---|---|---|---|---|
-| **Model surface** | Plain YAML sources plus Markdown knowledge pages | YAML semantic models and metrics in a dbt project | YAML or JavaScript cubes, views, access policies, and pre-aggregations | `.malloy` models, query pipelines, notebooks, and annotations |
+| **Model surface** | Plain YAML sources plus Markdown wiki pages | YAML semantic models and metrics in a dbt project | YAML or JavaScript cubes, views, access policies, and pre-aggregations | `.malloy` models, query pipelines, notebooks, and annotations |
 | **What it models** | Sources, columns, measures, segments, joins, grain, filters, default time dimensions, and context references | Semantic models, entities, dimensions, measures, metrics, time grains, and metric types | Cubes, views, measures, dimensions, segments, joins, hierarchies, policies, and rollups | Sources, joins, dimensions, measures, calculations, nested results, and query pipelines |
 | **Agent edit loop** | First-class. Agents can patch small files, save imperfect drafts, run validation, query through the CLI, inspect SQL, and refine in the same workflow | Possible, but the interface is a dbt/metric workflow rather than an agent context workflow | Possible through code-first models and platform APIs, but changes are tied to runtime deployment and governance concerns | Possible, but agents must operate in Malloy's language and compiler model |
 | **Fan-out safety** | Explicit `grain` plus relationship metadata. KTX detects `one_to_many` fan-out, identifies chasm traps, pre-aggregates independent fact measures into CTEs, and rejects unsafe filters | Dataflow query planning for metric requests, multi-hop joins, metric time, and metric types | Runtime planner, modeled joins, primary keys, views, multi-fact views, and pre-aggregations | Symmetric aggregates and path-based aggregation in the language |
@@ -111,7 +111,7 @@ The workflow is the difference. Traditional semantic layers are powerful, but th
 | **Context around semantics** | Built in: wiki pages, scan artifacts, relationship inference, ingest transcripts, replay, and agent-facing CLI commands | Primarily metric and dbt project context | Descriptions and `meta.ai_context` inside the semantic model, plus platform agent features | Annotations/tags can carry metadata; surrounding context depends on the application |
 | **Best fit** | Agents maintaining analytics code, metrics, joins, SQL, docs, and semantic definitions | Teams standardizing metrics inside dbt workflows | Production semantic APIs, BI integrations, access control, caching, and concurrency | Expressive modeling and exploratory analysis above SQL |
 
-If you do not have a semantic layer, KTX can build an agent-native one from your database schema and enrich it with generated descriptions and knowledge pages. If you already use MetricFlow or LookML, KTX ingests from those tools and merges their context into KTX's files. You can keep your existing BI or metric-serving system while using KTX as the semantic and contextual surface agents work against.
+If you do not have a semantic layer, KTX can build an agent-native one from your database schema and enrich it with generated descriptions and wiki pages. If you already use MetricFlow or LookML, KTX ingests from those tools and merges their context into KTX's files. You can keep your existing BI or metric-serving system while using KTX as the semantic and contextual surface agents work against.
 
 ## The plain-files philosophy
 
@@ -125,7 +125,7 @@ my-project/
 │       ├── orders.yaml           # Semantic source definitions
 │       ├── customers.yaml
 │       └── order_items.yaml
-├── knowledge/
+├── wiki/
 │   ├── global/
 │   │   ├── revenue.md            # Business definitions and rules
 │   │   └── segment-classification.md
@@ -140,7 +140,7 @@ my-project/
     └── cache/                    # Runtime cache (git-ignored)
 ```
 
-Semantic sources and knowledge pages are committed to git. The SQLite database holds ephemeral state — scan results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
+Semantic sources and wiki pages are committed to git. The SQLite database holds ephemeral state — scan results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
 
 This means your analytics context travels with your code. You can fork it, branch it, review it in a PR, and merge it with the same tools you use for dbt models. There's no sync problem between a remote server and your local state. There's no migration to run. The files are the source of truth.
 

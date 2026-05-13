@@ -318,7 +318,7 @@ export class MemoryAgentService {
     }
 
     const signalsActedOn: string[] = [];
-    if (signals.knowledge && skillsLoaded.includes('knowledge_capture')) {
+    if (signals.knowledge && skillsLoaded.includes('wiki_capture')) {
       signalsActedOn.push('knowledge');
     }
     if (signals.sl && skillsLoaded.includes('sl')) {
@@ -580,12 +580,12 @@ export class MemoryAgentService {
   private async buildWikiIndex(userId: string, userScopedEnabled: boolean): Promise<string> {
     const pages = await this.deps.knowledgeIndex.listPagesForUser(userId);
     if (pages.length === 0) {
-      return '(empty — no knowledge pages exist yet)';
+      return '(empty — no wiki pages exist yet)';
     }
 
     const formatEntry = (p: { page_key: string; summary: string }) => `- ${p.page_key}: ${p.summary}`;
     if (!userScopedEnabled) {
-      return `## Knowledge Pages\n${pages.map(formatEntry).join('\n')}`;
+      return `## Wiki Pages\n${pages.map(formatEntry).join('\n')}`;
     }
 
     const globalEntries: string[] = [];

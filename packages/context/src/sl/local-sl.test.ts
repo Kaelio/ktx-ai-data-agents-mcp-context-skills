@@ -29,7 +29,8 @@ const ORDERS_YAML = [
 
 const SUPPORT_YAML = [
   'name: tickets',
-  'description: Support tickets grouped by priority.',
+  'descriptions:',
+  '  user: Support tickets grouped by priority.',
   'table: public.tickets',
   'grain:',
   '  - ticket_id',
@@ -278,7 +279,8 @@ describe('local semantic-layer helpers', () => {
       sourceName: 'orders',
       yaml: [
         'name: orders',
-        'description: Finance orders used for invoice reconciliation.',
+        'descriptions:',
+        '  user: Finance orders used for invoice reconciliation.',
         'table: finance.orders',
         'grain:',
         '  - order_id',

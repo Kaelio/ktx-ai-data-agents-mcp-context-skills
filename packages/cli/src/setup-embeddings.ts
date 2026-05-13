@@ -1,15 +1,12 @@
 import { writeFile } from 'node:fs/promises';
-import { cancel, isCancel, password, select } from '@clack/prompts';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   type KtxProjectConfig,
   type KtxProjectEmbeddingConfig,
-  ktxSetupCompletedSteps,
   loadKtxProject,
   markKtxSetupStateStepComplete,
   readKtxSetupState,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -21,9 +18,12 @@ import {
   type ManagedLocalEmbeddingsDaemon,
 } from './managed-local-embeddings.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
-import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { withTextInputNavigation } from './prompt-navigation.js';
 import { envCredentialReference, writeProjectLocalSecretReference } from './setup-secrets.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 export type KtxSetupEmbeddingBackend = 'openai' | 'sentence-transformers';
 
@@ -48,7 +48,7 @@ export type KtxSetupEmbeddingsResult =
   | { status: 'failed'; projectDir: string };
 
 export interface KtxSetupEmbeddingsPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
 }
@@ -87,30 +87,12 @@ const EMBEDDING_OPTION_PROMPT_CONTEXT =
 const LOCAL_EMBEDDING_HEALTH_TIMEOUT_MS = 120_000;
 
 function createPromptAdapter(): KtxSetupEmbeddingsPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
-      }
-      return value;
-    },
-    async password(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        password({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : value;
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({ selectCancelValue: 'back' });
 }
 
 async function hasCompletedEmbeddings(projectDir: string, config: KtxProjectConfig): Promise<boolean> {
   return (
-    ktxSetupCompletedSteps(config, await readKtxSetupState(projectDir)).includes('embeddings') &&
+    (await readKtxSetupState(projectDir)).completed_steps.includes('embeddings') &&
     config.ingest.embeddings.backend !== 'none' &&
     config.ingest.embeddings.backend !== 'deterministic' &&
     typeof config.ingest.embeddings.model === 'string' &&
@@ -184,22 +166,20 @@ function embeddingBackendDisplayName(backend: KtxSetupEmbeddingBackend): string 
 
 async function persistEmbeddingConfig(projectDir: string, embeddings: KtxProjectEmbeddingConfig): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = stripKtxSetupCompletedSteps(
-    {
-      ...project.config,
-      ingest: {
-        ...project.config.ingest,
+  const config = {
+    ...project.config,
+    ingest: {
+      ...project.config.ingest,
+      embeddings,
+    },
+    scan: {
+      ...project.config.scan,
+      enrichment: {
+        ...project.config.scan.enrichment,
         embeddings,
       },
-      scan: {
-        ...project.config.scan,
-        enrichment: {
-          ...project.config.scan.enrichment,
-          embeddings,
-        },
-      },
     },
-  );
+  };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'embeddings');
 }
@@ -297,7 +277,7 @@ async function chooseEmbeddingBackend(
     message: `Which embedding option should KTX use?\n\n${EMBEDDING_OPTION_PROMPT_CONTEXT}`,
     options: [
       { value: 'sentence-transformers', label: 'Local sentence-transformers embeddings' },
-      { value: 'openai', label: 'OpenAI embeddings (recommended)' },
+      { value: 'openai', label: 'OpenAI embeddings', hint: 'recommended' },
       { value: 'back', label: 'Back' },
     ],
   });

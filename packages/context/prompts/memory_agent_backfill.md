@@ -10,7 +10,7 @@ Capture only when the signal is unambiguous: a metric definition stated plainly,
 
 <workflow>
 1. Read the wiki and SL indexes to avoid creating duplicates.
-2. If the content has wiki-style signal, load the `knowledge_capture` skill and follow its workflow.
+2. If the content has wiki-style signal, load the `wiki_capture` skill and follow its workflow.
 3. If the content has SL-style signal, load the `sl` skill and follow its Part 3 workflow.
 4. Prefer updating existing entries over creating new ones — backfills often duplicate existing knowledge.
 5. When done, exit the loop.

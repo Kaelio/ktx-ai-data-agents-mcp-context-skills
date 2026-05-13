@@ -257,7 +257,7 @@ describe('runKtxRuntime', () => {
     expect(io.stderr()).toContain('process scan: ps failed');
   });
 
-  it('prints runtime status as JSON', async () => {
+  it('prints runtime status and doctor checks as JSON with doctor-style exit status', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
       readStatus: vi.fn(async (): Promise<ManagedPythonRuntimeStatus> => ({
@@ -279,60 +279,41 @@ describe('runKtxRuntime', () => {
           daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
       })),
-    };
-
-    await expect(runKtxRuntime({ command: 'status', cliVersion: '0.2.0', json: true }, io.io, deps)).resolves.toBe(0);
-
-    expect(JSON.parse(io.stdout())).toMatchObject({
-      kind: 'missing',
-      detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
-      layout: { runtimeRoot: '/runtime' },
-    });
-  });
-
-  it('returns failure for doctor when any check fails', async () => {
-    const io = makeIo();
-    const deps: KtxRuntimeDeps = {
       doctorRuntime: vi.fn(async (): Promise<ManagedPythonRuntimeDoctorCheck[]> => [
         { id: 'uv', label: 'uv', status: 'pass', detail: 'uv 0.9.5' },
+        { id: 'asset', label: 'Bundled Python wheel', status: 'pass', detail: '/assets/python/runtime.whl' },
         {
           id: 'runtime',
           label: 'Managed Python runtime',
           status: 'fail',
-          detail: 'No runtime manifest',
+          detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
           fix: 'Run: ktx dev runtime install --yes',
         },
       ]),
     };
 
-    await expect(runKtxRuntime({ command: 'doctor', cliVersion: '0.2.0', json: false }, io.io, deps)).resolves.toBe(1);
+    await expect(runKtxRuntime({ command: 'status', cliVersion: '0.2.0', json: true }, io.io, deps)).resolves.toBe(1);
 
-    expect(io.stdout()).toContain('PASS uv: uv 0.9.5');
-    expect(io.stdout()).toContain('FAIL Managed Python runtime: No runtime manifest');
-    expect(io.stdout()).toContain('Fix: Run: ktx dev runtime install --yes');
+    expect(JSON.parse(io.stdout())).toMatchObject({
+      kind: 'missing',
+      detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
+      layout: { runtimeRoot: '/runtime' },
+      checks: [
+        { id: 'uv', status: 'pass' },
+        { id: 'asset', status: 'pass' },
+        { id: 'runtime', status: 'fail' },
+      ],
+    });
+    expect(deps.readStatus).toHaveBeenCalledWith({ cliVersion: '0.2.0' });
+    expect(deps.doctorRuntime).toHaveBeenCalledWith({ cliVersion: '0.2.0' });
   });
 
-  it('requires --yes before pruning stale runtime directories', async () => {
-    const io = makeIo();
-    const deps: KtxRuntimeDeps = {
-      pruneRuntime: vi.fn(async () => {
-        throw new Error('should not prune without --yes');
-      }),
-    };
-
-    await expect(runKtxRuntime({ command: 'prune', cliVersion: '0.2.0', dryRun: false, yes: false }, io.io, deps))
-      .resolves.toBe(1);
-
-    expect(io.stderr()).toContain('Refusing to prune without --yes');
-    expect(deps.pruneRuntime).not.toHaveBeenCalled();
-  });
-
-  it('prints stale directories during prune dry-run', async () => {
+  it('prints runtime status and doctor checks in plain output', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
       readStatus: vi.fn(async (): Promise<ManagedPythonRuntimeStatus> => ({
-        kind: 'missing',
-        detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
+        kind: 'ready',
+        detail: 'Runtime ready at /runtime/0.2.0',
         layout: {
           cliVersion: '0.2.0',
           runtimeRoot: '/runtime',
@@ -348,19 +329,43 @@ describe('runKtxRuntime', () => {
           daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
           daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
+        manifest: {
+          schemaVersion: 1,
+          cliVersion: '0.2.0',
+          installedAt: '2026-05-11T00:00:00.000Z',
+          asset: {
+            schemaVersion: 1,
+            distributionName: 'kaelio-ktx',
+            normalizedName: 'kaelio_ktx',
+            version: '0.1.0',
+            wheel: {
+              file: 'kaelio_ktx-0.1.0-py3-none-any.whl',
+              sha256: 'a'.repeat(64),
+              bytes: 10,
+            },
+          },
+          features: ['core'],
+          python: {
+            executable: '/runtime/0.2.0/.venv/bin/python',
+            daemonExecutable: '/runtime/0.2.0/.venv/bin/ktx-daemon',
+          },
+          installLog: '/runtime/0.2.0/install.log',
+        },
       })),
-      pruneRuntime: vi.fn(async () => ({
-        runtimeRoot: '/runtime',
-        stale: ['/runtime/0.1.0'],
-        kept: ['/runtime/0.2.0'],
-        removed: [],
-      })),
+      doctorRuntime: vi.fn(async (): Promise<ManagedPythonRuntimeDoctorCheck[]> => [
+        { id: 'uv', label: 'uv', status: 'pass', detail: 'uv 0.9.5' },
+        { id: 'asset', label: 'Bundled Python wheel', status: 'pass', detail: '/assets/python/runtime.whl' },
+        { id: 'runtime', label: 'Managed Python runtime', status: 'pass', detail: 'Runtime ready at /runtime/0.2.0' },
+      ]),
     };
 
-    await expect(runKtxRuntime({ command: 'prune', cliVersion: '0.2.0', dryRun: true, yes: false }, io.io, deps))
-      .resolves.toBe(0);
+    await expect(runKtxRuntime({ command: 'status', cliVersion: '0.2.0', json: false }, io.io, deps)).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('Stale KTX Python runtimes');
-    expect(io.stdout()).toContain('/runtime/0.1.0');
+    expect(io.stdout()).toContain('KTX Python runtime');
+    expect(io.stdout()).toContain('status: ready');
+    expect(io.stdout()).toContain('KTX Python runtime checks');
+    expect(io.stdout()).toContain('PASS uv: uv 0.9.5');
+    expect(io.stdout()).toContain('PASS Managed Python runtime: Runtime ready at /runtime/0.2.0');
+    expect(io.stderr()).toBe('');
   });
 });

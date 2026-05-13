@@ -25,7 +25,7 @@ export interface EvictionAppliedRecord {
   rawPath: string;
   artifactKind: 'sl' | 'wiki';
   artifactKey: string;
-  action: 'removed' | 'retained_deprecated';
+  action: 'removed';
   reason: string;
 }
 

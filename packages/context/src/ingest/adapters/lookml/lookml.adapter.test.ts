@@ -15,6 +15,18 @@ describe('LookmlSourceAdapter validation sidecars', () => {
 
   afterEach(async () => rm(tmpRoot, { recursive: true, force: true }));
 
+  it('returns configured target warehouse connection ids', async () => {
+    const adapter = new LookmlSourceAdapter({
+      homeDir: join(tmpRoot, 'home'),
+      targetConnectionIds: ['warehouse', 'analytics', 'warehouse'],
+    });
+
+    await expect(adapter.listTargetConnectionIds?.(join(tmpRoot, 'staged'))).resolves.toEqual([
+      'analytics',
+      'warehouse',
+    ]);
+  });
+
   it('writes a partial fetch report and marks mismatched chunks as SL-disallowed', async () => {
     const originRoot = join(tmpRoot, 'origin-src');
     await mkdir(join(originRoot, 'views'), { recursive: true });

@@ -19,7 +19,7 @@ describe('SqliteKnowledgeIndex', () => {
 
   function page(overrides: Partial<SqliteKnowledgeIndexPage> = {}): SqliteKnowledgeIndexPage {
     return {
-      path: 'knowledge/global/revenue.md',
+      path: 'wiki/global/revenue.md',
       key: 'revenue',
       scope: 'GLOBAL',
       summary: 'Revenue definition',
@@ -36,7 +36,7 @@ describe('SqliteKnowledgeIndex', () => {
     index.sync([
       page(),
       page({
-        path: 'knowledge/global/support.md',
+        path: 'wiki/global/support.md',
         key: 'support',
         summary: 'Support queue',
         content: 'Tickets are grouped by priority.',
@@ -47,8 +47,8 @@ describe('SqliteKnowledgeIndex', () => {
     await expect(access(dbPath)).resolves.toBeUndefined();
     expect(index.searchLexicalCandidates({ queryText: 'paid order', limit: 10 })).toEqual([
       expect.objectContaining({
-        id: 'knowledge/global/revenue.md',
-        path: 'knowledge/global/revenue.md',
+        id: 'wiki/global/revenue.md',
+        path: 'wiki/global/revenue.md',
         rank: 1,
         rawScore: expect.any(Number),
       }),
@@ -57,7 +57,7 @@ describe('SqliteKnowledgeIndex', () => {
 
   it('removes stale rows when the Markdown source list changes', () => {
     const index = new SqliteKnowledgeIndex({ dbPath });
-    index.rebuild([page(), page({ path: 'knowledge/global/churn.md', key: 'churn', content: 'Churn risk.' })]);
+    index.rebuild([page(), page({ path: 'wiki/global/churn.md', key: 'churn', content: 'Churn risk.' })]);
     expect(index.search('churn', 10)).toHaveLength(1);
 
     index.rebuild([page()]);
@@ -67,12 +67,12 @@ describe('SqliteKnowledgeIndex', () => {
 
   it('exposes existing search text and embedding state for incremental refresh', () => {
     const index = new SqliteKnowledgeIndex({ dbPath });
-    index.sync([page({ path: 'knowledge/global/revenue.md', key: 'revenue', embedding: [1, 0] })]);
+    index.sync([page({ path: 'wiki/global/revenue.md', key: 'revenue', embedding: [1, 0] })]);
 
     expect(index.getExistingPages()).toEqual(
       new Map([
         [
-          'knowledge/global/revenue.md',
+          'wiki/global/revenue.md',
           expect.objectContaining({
             searchText: expect.stringContaining('Revenue definition'),
             embedding: [1, 0],
@@ -84,29 +84,29 @@ describe('SqliteKnowledgeIndex', () => {
 
   it('does not treat empty embeddings as indexed semantic vectors', () => {
     const index = new SqliteKnowledgeIndex({ dbPath });
-    index.sync([page({ path: 'knowledge/global/revenue.md', key: 'revenue', embedding: [] })]);
+    index.sync([page({ path: 'wiki/global/revenue.md', key: 'revenue', embedding: [] })]);
 
-    expect(index.getExistingPages().get('knowledge/global/revenue.md')?.embedding).toBeNull();
+    expect(index.getExistingPages().get('wiki/global/revenue.md')?.embedding).toBeNull();
     expect(index.searchSemanticCandidates({ queryEmbedding: [1, 0], limit: 10 })).toEqual([]);
   });
 
   it('returns semantic lane candidates from stored page embeddings', () => {
     const index = new SqliteKnowledgeIndex({ dbPath });
     index.sync([
-      page({ path: 'knowledge/global/revenue.md', key: 'revenue', embedding: [1, 0] }),
-      page({ path: 'knowledge/global/support.md', key: 'support', summary: 'Support queue', embedding: [0, 1] }),
+      page({ path: 'wiki/global/revenue.md', key: 'revenue', embedding: [1, 0] }),
+      page({ path: 'wiki/global/support.md', key: 'support', summary: 'Support queue', embedding: [0, 1] }),
     ]);
 
     expect(index.searchSemanticCandidates({ queryEmbedding: [1, 0], limit: 10 })).toEqual([
       expect.objectContaining({
-        id: 'knowledge/global/revenue.md',
-        path: 'knowledge/global/revenue.md',
+        id: 'wiki/global/revenue.md',
+        path: 'wiki/global/revenue.md',
         rank: 1,
         rawScore: 1,
       }),
       expect.objectContaining({
-        id: 'knowledge/global/support.md',
-        path: 'knowledge/global/support.md',
+        id: 'wiki/global/support.md',
+        path: 'wiki/global/support.md',
         rank: 2,
         rawScore: 0,
       }),

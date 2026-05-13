@@ -92,7 +92,7 @@ describe('scanFileContent', () => {
     );
   });
 
-  it('rejects context-owned LLM provider construction after @ktx/llm migration', () => {
+  it('rejects context-owned LLM provider construction outside @ktx/llm', () => {
     const violations = [
       ...scanFileContent(
         'packages/context/src/agent/local-llm-provider.ts',

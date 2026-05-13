@@ -1,17 +1,15 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { cancel, isCancel, select } from '@clack/prompts';
 import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
 import {
   ktxLocalStateDbPath,
-  ktxSetupCompletedSteps,
   loadKtxProject,
   readKtxSetupState,
   type KtxLocalProject,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { formatSetupNextStepLines } from './next-steps.js';
-import { isKtxSetupExitError, withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { isKtxSetupExitError } from './setup-interrupt.js';
 import {
   type KtxAgentScope,
   type KtxAgentTarget,
@@ -25,7 +23,12 @@ import {
   runKtxSetupDatabasesStep,
 } from './setup-databases.js';
 import { type KtxSetupEmbeddingsDeps, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
-import { type KtxSetupModelDeps, isKtxSetupLlmConfigReady, runKtxSetupAnthropicModelStep } from './setup-models.js';
+import {
+  type KtxSetupLlmBackend,
+  type KtxSetupModelDeps,
+  isKtxSetupLlmConfigReady,
+  runKtxSetupAnthropicModelStep,
+} from './setup-models.js';
 import {
   type KtxPrimaryScanPrefetchArgs,
   type KtxPrimaryScanPrefetchResult,
@@ -41,7 +44,12 @@ import {
   runKtxSetupReadyChangeMenu,
 } from './setup-ready-menu.js';
 import { type KtxSetupSourcesDeps, type KtxSetupSourceType, runKtxSetupSourcesStep } from './setup-sources.js';
-import { withMenuOptionsSpacing } from './prompt-navigation.js';
+import {
+  createKtxSetupPromptAdapter,
+  createKtxSetupUiAdapter,
+  type KtxSetupPromptOption,
+  type KtxSetupUiAdapter,
+} from './setup-prompts.js';
 import {
   readKtxSetupContextState,
   type KtxSetupContextDeps,
@@ -79,9 +87,12 @@ export type KtxSetupArgs =
       inputMode: 'auto' | 'disabled';
       yes: boolean;
       cliVersion: string;
+      llmBackend?: KtxSetupLlmBackend;
       anthropicApiKeyEnv?: string;
       anthropicApiKeyFile?: string;
       anthropicModel?: string;
+      vertexProject?: string;
+      vertexLocation?: string;
       skipLlm: boolean;
       embeddingBackend?: 'openai' | 'sentence-transformers';
       embeddingApiKeyEnv?: string;
@@ -96,7 +107,6 @@ export type KtxSetupArgs =
       disableHistoricSql?: boolean;
       historicSqlWindowDays?: number;
       historicSqlMinExecutions?: number;
-      historicSqlMinCalls?: number;
       historicSqlServiceAccountPatterns?: string[];
       historicSqlRedactionPatterns?: string[];
       skipDatabases: boolean;
@@ -156,6 +166,7 @@ export interface KtxSetupDeps {
   contextDeps?: KtxSetupContextDeps;
   readyMenuDeps?: KtxSetupReadyMenuDeps;
   entryMenuDeps?: KtxSetupEntryMenuDeps;
+  setupUi?: KtxSetupUiAdapter;
 }
 
 const SOURCE_DRIVERS = new Set(['dbt', 'metricflow', 'metabase', 'looker', 'lookml', 'notion']);
@@ -173,7 +184,7 @@ type KtxSetupFlowStatus =
   | 'interrupted';
 
 export interface KtxSetupEntryMenuPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   cancel(message: string): void;
 }
 
@@ -182,18 +193,10 @@ export interface KtxSetupEntryMenuDeps {
 }
 
 function createEntryMenuPromptAdapter(): KtxSetupEntryMenuPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        return 'exit';
-      }
-      return String(value);
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({
+    selectCancelValue: 'exit',
+    cancelOnSelectCancel: false,
+  });
 }
 
 async function runKtxSetupEntryMenu(
@@ -312,7 +315,7 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
   };
   embeddings.ready = embeddingsReady(embeddings);
 
-  const completedSteps = ktxSetupCompletedSteps(project.config, await readKtxSetupState(resolvedProjectDir));
+  const completedSteps = (await readKtxSetupState(resolvedProjectDir)).completed_steps;
   const contextState = await readKtxSetupContextState(resolvedProjectDir);
   const setupContextStatus = setupContextStatusFromState(contextState, {
     completedStep: completedSteps.includes('context'),
@@ -461,7 +464,8 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     return await runPrimaryScanPrefetchWorker(args, io, deps.primaryScanPrefetchDeps);
   }
 
-  io.stdout.write('KTX setup\n');
+  const setupUi = deps.setupUi ?? createKtxSetupUiAdapter();
+  setupUi.intro('KTX setup', io);
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
   const canShowEntryMenu =
@@ -599,9 +603,12 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
           {
             projectDir: projectResult.projectDir,
             inputMode: args.inputMode,
+            ...(args.llmBackend ? { llmBackend: args.llmBackend } : {}),
             ...(args.anthropicApiKeyEnv ? { anthropicApiKeyEnv: args.anthropicApiKeyEnv } : {}),
             ...(args.anthropicApiKeyFile ? { anthropicApiKeyFile: args.anthropicApiKeyFile } : {}),
             ...(args.anthropicModel ? { anthropicModel: args.anthropicModel } : {}),
+            ...(args.vertexProject ? { vertexProject: args.vertexProject } : {}),
+            ...(args.vertexLocation ? { vertexLocation: args.vertexLocation } : {}),
             forcePrompt: forcePromptSteps.has('models') || runOnly === 'models',
             showPromptInstructions,
             skipLlm: args.skipLlm || !shouldRunModels,
@@ -646,7 +653,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.historicSqlMinExecutions !== undefined
               ? { historicSqlMinExecutions: args.historicSqlMinExecutions }
               : {}),
-            ...(args.historicSqlMinCalls !== undefined ? { historicSqlMinCalls: args.historicSqlMinCalls } : {}),
             ...(args.historicSqlServiceAccountPatterns
               ? { historicSqlServiceAccountPatterns: args.historicSqlServiceAccountPatterns }
               : {}),
@@ -779,14 +785,15 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
 
   const status = await readKtxSetupStatus(projectResult.projectDir);
   io.stdout.write(formatKtxSetupStatus(status));
-  io.stdout.write('\nWhat you can do next:\n');
-  io.stdout.write(
-    `${formatSetupNextStepLines({
+  setupUi.note(
+    formatSetupNextStepLines({
       setupReady: setupStatusReady(status),
       hasContextTargets: setupHasContextTargets(status),
       contextReady: setupContextReady(status),
       agentIntegrationReady: status.agents.some((agent) => agent.ready),
-    }).join('\n')}\n`,
+    }).join('\n'),
+    'What you can do next',
+    io,
   );
   return 0;
 }

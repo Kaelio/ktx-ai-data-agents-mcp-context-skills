@@ -25,6 +25,7 @@ export interface WikiFrontmatter {
   usage?: HistoricSqlWikiUsageFrontmatter;
   fingerprints?: string[];
   stale_since?: string;
+  archived_since?: string;
 }
 
 export interface WikiPage {

@@ -129,10 +129,10 @@ function nonEnglishFixture() {
   };
 }
 
-function abbreviatedLegacyFixture() {
+function abbreviatedOldNamingFixture() {
   return {
-    id: 'abbreviated_legacy_no_declared_constraints',
-    name: 'Abbreviated legacy naming fixture with no declared constraints',
+    id: 'abbreviated_old_no_declared_constraints',
+    name: 'Abbreviated old naming fixture with no declared constraints',
     tier: 'row_bearing',
     sql: [
       'CREATE TABLE cust (cust_id TEXT NOT NULL, nm TEXT NOT NULL, stat_cd TEXT NOT NULL);',
@@ -480,7 +480,7 @@ function scaleFixture() {
 
 const fixtures = [
   nonEnglishFixture(),
-  abbreviatedLegacyFixture(),
+  abbreviatedOldNamingFixture(),
   analyticalWarehouseFixture(),
   mixedCaseFixture(),
   polymorphicFixture(),

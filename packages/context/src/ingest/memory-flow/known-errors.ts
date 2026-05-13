@@ -23,6 +23,6 @@ export function formatNotionAuthorizationExpiredDetail(unitKey: string): string 
 export function notionAuthorizationFixSuggestions(connectionId: string): string[] {
   return [
     `Refresh the Notion token referenced by auth_token_ref for ${connectionId}. If it uses env:NAME, export a fresh token in that variable; if it uses file:/path, replace that file.`,
-    `Run ktx connection notion pick ${connectionId} to confirm Notion access, then rerun ktx ingest ${connectionId}.`,
+    `Run ktx setup and reconfigure the Notion source to confirm page access, then rerun ktx ingest ${connectionId}.`,
   ];
 }

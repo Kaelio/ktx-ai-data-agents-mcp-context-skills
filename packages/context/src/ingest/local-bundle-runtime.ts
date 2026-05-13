@@ -6,7 +6,7 @@ import type { Tool } from 'ai';
 import YAML from 'yaml';
 import type { AgentRunnerService } from '../agent/index.js';
 import { AgentRunnerService as DefaultAgentRunnerService } from '../agent/index.js';
-import { localConnectionInfoFromConfig } from '../connections/index.js';
+import { localConnectionInfoFromConfig, type KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
 import { noopLogger, SessionWorktreeService } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
@@ -56,6 +56,7 @@ import {
   buildKnowledgeSearchText,
   type KnowledgeEventPort,
   type KnowledgeIndexPort,
+  type KnowledgeIndexPageListing,
   KnowledgeWikiService,
   searchLocalKnowledgePages,
   SqliteKnowledgeIndex,
@@ -77,6 +78,7 @@ import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './conte
 import { DiffSetService } from './diff-set.service.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import { PageTriageService } from './page-triage/index.js';
+import { createWarehouseVerificationTools } from './tools/warehouse-verification/index.js';
 import type {
   IngestBundleRunnerDeps,
   IngestCommitMessagePort,
@@ -103,7 +105,7 @@ export interface CreateLocalBundleIngestRuntimeOptions {
   llmDebugRequestFile?: string;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
-  queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
+  queryExecutor?: KtxSqlQueryExecutorPort;
   jobIdFactory?: () => string;
   logger?: KtxLogger;
 }
@@ -169,9 +171,7 @@ class LocalAuthorResolver implements GitAuthorResolverPort {
 class LocalConnectionCatalog implements SlConnectionCatalogPort {
   constructor(
     private readonly project: KtxLocalProject,
-    private readonly queryExecutor?: {
-      execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult>;
-    },
+    private readonly queryExecutor?: KtxSqlQueryExecutorPort,
   ) {}
 
   async listEnabledConnections(ids: string[]): Promise<KtxConnectionInfo[]> {
@@ -192,7 +192,12 @@ class LocalConnectionCatalog implements SlConnectionCatalogPort {
     if (!this.queryExecutor) {
       throw new Error('Local ingest has no query executor configured');
     }
-    return this.queryExecutor.execute({ connectionId, sql });
+    return this.queryExecutor.execute({
+      connectionId,
+      projectDir: this.project.projectDir,
+      connection: this.project.config.connections[connectionId],
+      sql,
+    });
   }
 }
 
@@ -309,7 +314,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
     scope: string,
     scopeId: string | null,
   ): Promise<Map<string, { searchText: string; hasEmbedding: boolean }>> {
-    const prefix = scope === 'GLOBAL' ? 'knowledge/global/' : `knowledge/user/${scopeId}/`;
+    const prefix = scope === 'GLOBAL' ? 'wiki/global/' : `wiki/user/${scopeId}/`;
     const result = new Map<string, { searchText: string; hasEmbedding: boolean }>();
     for (const [path, page] of this.sqlite.getExistingPages()) {
       if (!path.startsWith(prefix)) {
@@ -336,7 +341,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   }
 
   async findPageByKey(scope: string, scopeId: string | null, pageKey: string) {
-    const path = scope === 'GLOBAL' ? `knowledge/global/${pageKey}.md` : `knowledge/user/${scopeId}/${pageKey}.md`;
+    const path = scope === 'GLOBAL' ? `wiki/global/${pageKey}.md` : `wiki/user/${scopeId}/${pageKey}.md`;
     try {
       await this.project.fileStore.readFile(path);
       return { page_key: pageKey };
@@ -347,15 +352,19 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
 
   async listPagesForUser(
     userId: string,
-  ): Promise<Array<{ page_key: string; summary: string; scope: string; scope_id: string | null }>> {
-    const pages: Array<{ page_key: string; summary: string; scope: string; scope_id: string | null }> = [];
+  ): Promise<KnowledgeIndexPageListing[]> {
+    const pages: KnowledgeIndexPageListing[] = [];
     for (const scope of [
-      { scope: 'GLOBAL', scopeId: null, dir: 'knowledge/global' },
-      { scope: 'USER', scopeId: userId, dir: `knowledge/user/${userId}` },
+      { scope: 'GLOBAL', scopeId: null, dir: 'wiki/global' },
+      { scope: 'USER', scopeId: userId, dir: `wiki/user/${userId}` },
     ]) {
       const listed = await this.project.fileStore.listFiles(scope.dir, true);
       for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
-        const pageKey = file.replace(/\.md$/, '');
+        const parsedPath = parseKnowledgeIndexPath(file.startsWith('global/') || file.startsWith('user/') ? file : `${scope.dir.replace('wiki/', '')}/${file}`);
+        if (!parsedPath || parsedPath.scope !== scope.scope) {
+          continue;
+        }
+        const pageKey = parsedPath.pageKey;
         const raw = await this.project.fileStore.readFile(`${scope.dir}/${file}`);
         const parsed = parseWiki(raw.content);
         pages.push({
@@ -363,6 +372,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
           summary: parsed.summary,
           scope: scope.scope,
           scope_id: scope.scopeId,
+          tags: parseWikiTags(raw.content),
         });
       }
     }
@@ -394,7 +404,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   }
 
   private async syncAllPagesFromDisk(): Promise<void> {
-    const listed = await this.project.fileStore.listFiles('knowledge', true);
+    const listed = await this.project.fileStore.listFiles('wiki', true);
     const existingPages = this.sqlite.getExistingPages();
     const pages: SqliteKnowledgeIndexPage[] = [];
     for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
@@ -402,7 +412,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
       if (!parsedPath) {
         continue;
       }
-      const path = `knowledge/${file}`;
+      const path = `wiki/${file}`;
       const raw = await this.project.fileStore.readFile(path);
       const parsed = parseWiki(raw.content);
       const tags = parseWikiTags(raw.content);
@@ -431,13 +441,6 @@ function parseKnowledgeIndexPath(file: string): { scope: 'GLOBAL' | 'USER'; page
   if (segments.length === 2 && segments[0] === 'global') {
     const pageKey = segments[1].replace(/\.md$/, '');
     return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(pageKey) ? { scope: 'GLOBAL', pageKey } : null;
-  }
-  if (segments.length >= 3 && segments[0] === 'global' && segments[1] === 'historic-sql') {
-    const historicPath = segments.slice(2).join('/').replace(/\.md$/, '');
-    if (historicPath.split('/').every((segment) => /^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(segment))) {
-      return { scope: 'GLOBAL', pageKey: `historic-sql/${historicPath}` };
-    }
-    return null;
   }
   if (segments.length === 3 && segments[0] === 'user') {
     const pageKey = segments[2].replace(/\.md$/, '');
@@ -486,38 +489,47 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
       slSearchService: deps.slSearchService,
       authorResolver: deps.authorResolver,
     };
+    const wikiSearchTool = new WikiSearchTool({
+      search: async (input) => {
+        const results = await searchLocalKnowledgePages(deps.project, {
+          userId: input.userId,
+          query: input.query,
+          limit: input.limit,
+          embeddingService: deps.embedding,
+        });
+        return {
+          results: results.slice(0, input.limit).map((result) => ({
+            key: result.key,
+            path: result.path,
+            summary: result.summary,
+            score: result.score,
+            matchReasons: result.matchReasons,
+            lanes: result.lanes,
+          })),
+          totalFound: results.length,
+        };
+      },
+    });
+    const slDiscoverTool = new SlDiscoverTool(slDeps, { maxSources: 25, minRrfScore: 0, maxDetailedSources: 5 });
+    const warehouseVerificationTools = createWarehouseVerificationTools({
+      connections: deps.connections,
+      fallbackFileStore: deps.project.fileStore,
+      wikiSearchTool,
+      slDiscoverTool,
+    });
     this.baseTools = [
       new WikiReadTool(deps.wikiService, deps.knowledgeIndex),
-      new WikiSearchTool({
-        search: async (input) => {
-          const results = await searchLocalKnowledgePages(deps.project, {
-            userId: input.userId,
-            query: input.query,
-            limit: input.limit,
-            embeddingService: deps.embedding,
-          });
-          return {
-            results: results.slice(0, input.limit).map((result) => ({
-              key: result.key,
-              path: result.path,
-              summary: result.summary,
-              score: result.score,
-              matchReasons: result.matchReasons,
-              lanes: result.lanes,
-            })),
-            totalFound: results.length,
-          };
-        },
-      }),
-      new WikiListTagsTool(deps.wikiService, deps.knowledgeIndex),
+      wikiSearchTool,
+      new WikiListTagsTool(deps.knowledgeIndex),
       new WikiWriteTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
       new WikiRemoveTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
-      new SlDiscoverTool(slDeps, { maxSources: 25, minRrfScore: 0, maxDetailedSources: 5 }),
+      slDiscoverTool,
       new SlEditSourceTool(slDeps),
       new SlReadSourceTool(slDeps),
       new SlWriteSourceTool(slDeps),
       new SlValidateTool(slDeps),
       new SlRollbackTool(deps.slSourcesRepository, deps.connections, 0),
+      ...warehouseVerificationTools,
     ];
     this.contextTools = [
       new ContextEvidenceSearchTool(deps.contextStore, deps.embedding),
@@ -559,7 +571,7 @@ function nextLocalJobId(): string {
 
 function localIngestLlmProviderGuardMessage(projectDir: string): string {
   return [
-    'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+    'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
     'Configure an Anthropic provider, then rerun ingest:',
     `  ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
   ].join('\n');

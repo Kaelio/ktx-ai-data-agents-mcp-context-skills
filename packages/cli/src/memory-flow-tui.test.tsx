@@ -11,7 +11,6 @@ import {
   startLiveMemoryFlowTui,
   type KtxMemoryFlowTuiIo,
   type MemoryFlowInkInstance,
-  type MemoryFlowInkRenderOptions,
 } from './memory-flow-tui.js';
 
 function replayInput(): MemoryFlowReplayInput {
@@ -24,10 +23,10 @@ function replayInput(): MemoryFlowReplayInput {
     ],
     details: {
       actions: [
-        { unitKey: 'orders', target: 'wiki', action: 'created', key: 'knowledge/orders.md', summary: 'order lifecycle', rawFiles: ['orders'], status: 'success' },
+        { unitKey: 'orders', target: 'wiki', action: 'created', key: 'wiki/orders.md', summary: 'order lifecycle', rawFiles: ['orders'], status: 'success' },
         { unitKey: 'customers', target: 'sl', action: 'updated', key: 'orbit_demo.customers', summary: 'customer metrics', rawFiles: ['customers'], status: 'success' },
       ],
-      provenance: [{ rawPath: 'orders', artifactKind: 'wiki', artifactKey: 'knowledge/orders.md', actionType: 'wiki_written' }],
+      provenance: [{ rawPath: 'orders', artifactKind: 'wiki', artifactKey: 'wiki/orders.md', actionType: 'wiki_written' }],
       transcripts: [{ unitKey: 'orders', path: '/tmp/t.jsonl', toolCallCount: 2, errorCount: 0, toolNames: ['read_raw_span', 'wiki_write'] }],
     },
     events: [
@@ -36,8 +35,8 @@ function replayInput(): MemoryFlowReplayInput {
       { type: 'raw_snapshot_written', syncId: 'sync-1', rawFileCount: 2 },
       { type: 'diff_computed', added: 1, modified: 1, deleted: 0, unchanged: 0 },
       { type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 },
-      { type: 'work_unit_started', unitKey: 'orders', skills: ['knowledge_capture'], stepBudget: 40 },
-      { type: 'candidate_action', unitKey: 'orders', target: 'wiki', action: 'created', key: 'knowledge/orders.md' },
+      { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'], stepBudget: 40 },
+      { type: 'candidate_action', unitKey: 'orders', target: 'wiki', action: 'created', key: 'wiki/orders.md' },
       { type: 'work_unit_finished', unitKey: 'orders', status: 'success' },
       { type: 'work_unit_started', unitKey: 'customers', skills: ['sl_capture'], stepBudget: 40 },
       { type: 'candidate_action', unitKey: 'customers', target: 'sl', action: 'updated', key: 'orbit_demo.customers' },
@@ -221,7 +220,7 @@ describe('MemoryFlowTuiApp', () => {
         { type: 'source_acquired', adapter: 'live-database', trigger: 'manual_resync', fileCount: 1 },
         { type: 'diff_computed', added: 1, modified: 0, deleted: 0, unchanged: 0 },
         { type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 },
-        { type: 'work_unit_started', unitKey: 'orders', skills: ['knowledge_capture'], stepBudget: 40 },
+        { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'], stepBudget: 40 },
       ],
       plannedWorkUnits: [{ unitKey: 'orders', rawFiles: ['orders'], peerFileCount: 0, dependencyCount: 1 }],
     };
@@ -241,7 +240,7 @@ describe('MemoryFlowTuiApp', () => {
         { type: 'source_acquired', adapter: 'dbt-descriptions', trigger: 'manual_resync', fileCount: 3 },
         { type: 'diff_computed', added: 11, modified: 0, deleted: 0, unchanged: 0 },
         { type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 },
-        { type: 'work_unit_started', unitKey: 'orders', skills: ['knowledge_capture'], stepBudget: 40 },
+        { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'], stepBudget: 40 },
       ],
       plannedWorkUnits: [{ unitKey: 'orders', rawFiles: ['orders'], peerFileCount: 0, dependencyCount: 1 }],
     };

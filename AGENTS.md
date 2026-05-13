@@ -24,6 +24,9 @@ database migrations, ORPC contracts, or `python-service/` layout exist here.
 - **MUST**: Keep package/public API changes intentional. Do not add compatibility
   wrappers for old KTX names unless the user explicitly asks for a migration
   bridge.
+- **MUST**: Treat KTX as having no public users unless the user says otherwise.
+  Legacy support is not necessary by default; prefer clean breaking changes over
+  compatibility shims, migration bridges, or preserved stale behavior.
 
 ### Absolute Prohibitions
 
@@ -86,6 +89,7 @@ pnpm run build
 pnpm run type-check
 pnpm run test
 pnpm run check
+pnpm run dead-code
 pnpm --filter @ktx/cli run smoke
 pnpm --filter './packages/*' run build
 pnpm --filter './packages/*' run test
@@ -127,6 +131,7 @@ shared contracts or package exports are affected.
 - Build/export changes: `pnpm run build`
 - Workspace scripts: `node --test scripts/*.test.mjs` or the specific script
   test file
+- TypeScript dead-code tooling/config changes: `pnpm run dead-code`
 - Python semantic layer: `uv run pytest python/ktx-sl/tests -q`
 - Python daemon: `uv run pytest python/ktx-daemon/tests -q`
 - Python files: also run `uv run pre-commit run --files [FILES]` when
@@ -155,6 +160,23 @@ pnpm run test 2>&1 | tee /tmp/ktx-test-output.log
   sensible package, not be duplicated across connectors.
 - Do not manually edit generated or built output under `dist/`; edit source and
   rebuild.
+
+### Dead TypeScript Code Checks
+
+KTX uses Biome for local unused-code linting and Knip for workspace graph
+analysis. These checks are intentionally part of CI and pre-commit because the
+normal development workflow is agent-based.
+
+- Run `pnpm run dead-code` after TypeScript changes.
+- Treat Knip findings as investigation prompts, not automatic deletion orders.
+- Remove private dead code when you confirm there are no imports, dynamic
+  references, generated references, or tests that still need it.
+- Preserve public package exports unless the task explicitly includes API
+  pruning.
+- Add narrow `knip.json` ignores only for intentional dynamic or public cases.
+  Do not add broad package-level ignores to silence unrelated findings.
+- Update `knip.json` when adding dynamic entrypoints, generated files, package
+  exports, CLI bins, or framework files that Knip cannot infer.
 
 ### CLI Standards
 

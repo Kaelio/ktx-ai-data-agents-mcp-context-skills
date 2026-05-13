@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type KtxSetupDatabaseDriver,
@@ -63,8 +63,6 @@ function textInputPrompt(message: string): string {
   const [title, ...bodyLines] = normalized.split('\n');
   return `${title}\n│\n│  ${bodyLines.join('\n│  ')}\n│  Press Escape to go back.\n│`;
 }
-
-const legacyHistoricSqlServiceAccountPatternsKey = ['serviceAccount', 'UserPatterns'].join('');
 
 describe('setup databases step', () => {
   let tempDir: string;
@@ -548,12 +546,11 @@ describe('setup databases step', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - databases',
         '',
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({ multiselectValues: [['back']], selectValues: ['continue'] });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
@@ -590,12 +587,11 @@ describe('setup databases step', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - databases',
         '',
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({
       selectValues: ['add', 'url', 'continue'],
       multiselectValues: [['mysql']],
@@ -706,12 +702,11 @@ describe('setup databases step', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - databases',
         '',
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const io = makeIo();
     const prompts = makePromptAdapter({
       multiselectValues: [[]],
@@ -929,7 +924,7 @@ describe('setup databases step', () => {
       commandIo.stdout.write('  Raw sources: raw-sources/postgres-warehouse/live-database/2026-05-09-221301-local-moywh3ky\n');
       commandIo.stdout.write('  Schema shards: 1\n\n');
       commandIo.stdout.write('Next:\n');
-      commandIo.stdout.write(`  ktx dev scan status --project-dir ${tempDir} local-moywh3ky\n`);
+      commandIo.stdout.write(`  ktx status --project-dir ${tempDir} local-moywh3ky\n`);
       return 0;
     });
 
@@ -1124,7 +1119,6 @@ describe('setup databases step', () => {
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: [],
     });
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
     expect(io.stdout()).toContain('Primary source ready');
@@ -1163,7 +1157,6 @@ describe('setup databases step', () => {
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: [],
     });
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
@@ -1213,7 +1206,7 @@ describe('setup databases step', () => {
     expect(scanConnection).toHaveBeenCalledTimes(2);
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup?.database_connection_ids).toEqual(['warehouse', 'analytics']);
-    expect(config.setup?.completed_steps).toEqual([]);
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
 
@@ -1239,8 +1232,105 @@ describe('setup databases step', () => {
     expect(result.status).toBe('failed');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({ driver: 'postgres', url: 'env:DATABASE_URL' });
-    expect(config.setup?.completed_steps ?? []).not.toContain('databases');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(io.stderr()).toContain('Structural scan failed for warehouse.');
+    expect(io.stderr()).toContain('│  Structural scan failed for warehouse.');
+    expect(io.stderr()).not.toMatch(/^Structural scan failed for warehouse\./m);
+  });
+
+  it('prints the native SQLite rebuild command when scanning hits a Node ABI mismatch', async () => {
+    const io = makeIo();
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        rebuildNativeSqlite: vi.fn(async () => 1),
+        scanConnection: vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
+          commandIo.stderr.write(
+            [
+              "The module '/workspace/node_modules/better-sqlite3/build/Release/better_sqlite3.node'",
+              'was compiled against a different Node.js version using',
+              'NODE_MODULE_VERSION 147. This version of Node.js requires',
+              'NODE_MODULE_VERSION 137. Please try re-compiling or re-installing',
+              'the module (for instance, using `npm rebuild` or `npm install`).',
+              '',
+            ].join('\n'),
+          );
+          return 1;
+        }),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
+    expect(io.stderr()).toContain('│  Native SQLite is built for a different Node.js ABI.');
+    expect(io.stderr()).toContain('Fix: pnpm run native:rebuild');
+    expect(io.stderr()).toContain(`Retry: ktx scan --project-dir ${tempDir} warehouse`);
+    expect(io.stderr()).not.toContain('npm rebuild');
+    expect(io.stderr()).not.toMatch(/^Native SQLite is built for a different Node.js ABI\./m);
+  });
+
+  it('rebuilds native SQLite once and retries setup scanning after a Node ABI mismatch', async () => {
+    const io = makeIo();
+    const scanConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
+      if (scanConnection.mock.calls.length === 1) {
+        commandIo.stderr.write(
+          [
+            "The module '/workspace/node_modules/better-sqlite3/build/Release/better_sqlite3.node'",
+            'was compiled against a different Node.js version using',
+            'NODE_MODULE_VERSION 147. This version of Node.js requires',
+            'NODE_MODULE_VERSION 137. Please try re-compiling or re-installing',
+            'the module (for instance, using `npm rebuild` or `npm install`).',
+            '',
+          ].join('\n'),
+        );
+        return 1;
+      }
+
+      commandIo.stdout.write('What changed\n');
+      commandIo.stdout.write('  Semantic layer comparison found 0 changes across 56 tables\n');
+      commandIo.stdout.write('  New tables: 0\n');
+      commandIo.stdout.write('  Changed tables: 0\n');
+      commandIo.stdout.write('  Removed tables: 0\n');
+      commandIo.stdout.write('  Unchanged tables: 56\n');
+      return 0;
+    });
+    const rebuildNativeSqlite = vi.fn(async () => 0);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection,
+        rebuildNativeSqlite,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(rebuildNativeSqlite).toHaveBeenCalledOnce();
+    expect(rebuildNativeSqlite).toHaveBeenCalledWith(expect.anything());
+    expect(scanConnection).toHaveBeenCalledTimes(2);
+    expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
+    expect(io.stderr()).toContain('Rebuilding Native SQLite with pnpm run native:rebuild…');
+    expect(io.stdout()).toContain('◇  Scan complete for warehouse');
   });
 
   it('writes Historic SQL config for supported Snowflake databases after validation succeeds', async () => {
@@ -1288,7 +1378,6 @@ describe('setup databases step', () => {
         redactionPatterns: ['(?i)secret'],
       },
     });
-    expect(config.connections.snowflake.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
   });
 
@@ -1336,10 +1425,8 @@ describe('setup databases step', () => {
         },
       },
     });
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty('minCalls');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('windowDays');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('redactionPatterns');
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
     expect(config.ingest.workUnits.maxConcurrency).toBe(6);
     expect(io.stdout()).toContain('Historic SQL probe...');
@@ -1393,7 +1480,6 @@ describe('setup databases step', () => {
         redactionPatterns: [],
       },
     });
-    expect(config.connections.analytics.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
     expect(config.ingest.adapters).toContain('historic-sql');
   });
 
@@ -1443,7 +1529,6 @@ describe('setup databases step', () => {
         },
       },
     });
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty(legacyHistoricSqlServiceAccountPatternsKey);
   });
 
   it('prints a non-blocking Postgres Historic SQL probe failure after connection test succeeds', async () => {
@@ -1544,7 +1629,6 @@ describe('setup databases step', () => {
 
     expect(result.status).toBe('skipped');
     expect(io.stdout()).toContain('KTX cannot work until you add a primary source.');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps ?? []).not.toContain('databases');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 });

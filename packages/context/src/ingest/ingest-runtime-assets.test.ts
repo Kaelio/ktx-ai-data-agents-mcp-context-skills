@@ -17,13 +17,13 @@ const adapterSkillNames = [
   'historic_sql_table_digest',
   'historic_sql_patterns',
   'ingest_triage',
-  'knowledge_capture',
+  'wiki_capture',
   'sl_capture',
 ] as const;
 
 const adapterReconcileSkillNames = [
   'ingest_triage',
-  'knowledge_capture',
+  'wiki_capture',
   'sl_capture',
 ] as const;
 
@@ -90,5 +90,15 @@ describe('ingest runtime assets', () => {
     expect(body).toContain('emit_historic_sql_evidence');
     expect(body).toContain('cross-table');
     expect(body).not.toMatch(forbiddenProductPattern());
+  });
+
+  it('packages identifier verification prompt assets', async () => {
+    const shared = await readFile(join(skillsDir, '_shared', 'identifier-verification.md'), 'utf-8');
+    expect(shared).toContain('## Identifier Verification Protocol');
+    expect(shared).toContain('discover_data');
+    expect(shared).toContain('entity_details');
+    expect(shared).toContain('sql_execution');
+    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT DISTINCT');
+    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT 1 FROM');
   });
 });

@@ -95,7 +95,7 @@ describe('demo assets', () => {
 
     await expect(access(packagedDemoAssetPath('semantic-layer/dbt-main/mart_arr_daily.yaml'))).resolves.toBeUndefined();
     await expect(access(packagedDemoAssetPath('semantic-layer/postgres-warehouse/mart_account_activity.yaml'))).resolves.toBeUndefined();
-    await expect(access(packagedDemoAssetPath('knowledge/global/orbit-company-overview.md'))).resolves.toBeUndefined();
+    await expect(access(packagedDemoAssetPath('wiki/global/orbit-company-overview.md'))).resolves.toBeUndefined();
     await expect(access(packagedDemoAssetPath('links/provenance.json'))).resolves.toBeUndefined();
     await expect(access(packagedDemoAssetPath('reports/seeded-demo-report.json'))).resolves.toBeUndefined();
   });
@@ -108,7 +108,7 @@ describe('demo assets', () => {
     await expect(access(join(projectDir, 'state.sqlite'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'reports'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'semantic-layer'))).resolves.toBeUndefined();
-    await expect(access(join(projectDir, 'knowledge'))).resolves.toBeUndefined();
+    await expect(access(join(projectDir, 'wiki'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'replays', 'replay.memory-flow.v1.json'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'raw-sources'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, '_schema'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -129,7 +129,7 @@ describe('demo assets', () => {
     await ensureSeededDemoProject({ projectDir, force: false });
 
     await expect(access(join(projectDir, 'semantic-layer', 'dbt-main', 'mart_arr_daily.yaml'))).resolves.toBeUndefined();
-    await expect(access(join(projectDir, 'knowledge', 'global', 'orbit-company-overview.md'))).resolves.toBeUndefined();
+    await expect(access(join(projectDir, 'wiki', 'global', 'orbit-company-overview.md'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'links', 'provenance.json'))).resolves.toBeUndefined();
     await expect(access(join(projectDir, 'reports', 'seeded-demo-report.json'))).resolves.toBeUndefined();
   });

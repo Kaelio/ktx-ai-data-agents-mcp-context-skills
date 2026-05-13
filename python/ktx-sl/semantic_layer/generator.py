@@ -687,6 +687,12 @@ class SqlGenerator:
                 if isinstance(node, exp.AggFunc):
                     if isinstance(node, exp.Count):
                         count_arg = node.this
+                        if isinstance(count_arg, exp.Star):
+                            node.set(
+                                "this",
+                                _make_case(exp.Literal.number(1)),
+                            )
+                            return node
                         if (
                             isinstance(count_arg, exp.Distinct)
                             and count_arg.expressions

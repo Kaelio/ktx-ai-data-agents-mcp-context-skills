@@ -102,7 +102,6 @@ describe('setup sources step', () => {
         },
         setup: {
           ...config.setup,
-          completed_steps: config.setup?.completed_steps ?? [],
           database_connection_ids: ['warehouse'],
         },
       }),
@@ -137,7 +136,6 @@ describe('setup sources step', () => {
       projectDir,
     });
 
-    expect((await readConfig()).setup?.completed_steps).toEqual(undefined);
     expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(io.stdout()).toContain('Context source setup skipped.');
   });
@@ -171,7 +169,6 @@ describe('setup sources step', () => {
       source_dir: '/repo/dbt',
       project_name: 'analytics',
     });
-    expect(config.setup?.completed_steps).toEqual([]);
     expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(runInitialIngest).toHaveBeenCalledWith(projectDir, 'analytics_dbt', io.io, { inputMode: 'disabled' });
   });
@@ -179,7 +176,10 @@ describe('setup sources step', () => {
   it('writes Metabase config and validates mapping through existing mapping path', async () => {
     await addPrimarySource();
     const validateMetabase = vi.fn(async () => ({ ok: true as const, detail: 'user=admin@example.com' }));
-    const runMapping = vi.fn(async () => 0);
+    const runMapping = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
+      commandIo.stdout.write('Mapping validated — 1 mapping configured\n');
+      return 0;
+    });
     const io = makeIo();
 
     await expect(
@@ -190,7 +190,7 @@ describe('setup sources step', () => {
           source: 'metabase',
           sourceConnectionId: 'prod_metabase',
           sourceUrl: 'https://metabase.example.com',
-          sourceApiKeyRef: 'env:METABASE_API_KEY',
+          sourceApiKeyRef: 'env:METABASE_API_KEY', // pragma: allowlist secret
           sourceWarehouseConnectionId: 'warehouse',
           metabaseDatabaseId: 1,
           runInitialSourceIngest: false,
@@ -204,14 +204,23 @@ describe('setup sources step', () => {
     expect((await readConfig()).connections.prod_metabase).toMatchObject({
       driver: 'metabase',
       api_url: 'https://metabase.example.com',
-      api_key_ref: 'env:METABASE_API_KEY',
+      api_key_ref: 'env:METABASE_API_KEY', // pragma: allowlist secret
       mappings: {
         databaseMappings: { '1': 'warehouse' },
         syncEnabled: { '1': true },
         syncMode: 'ALL',
       },
     });
-    expect(runMapping).toHaveBeenCalledWith(projectDir, 'prod_metabase', io.io);
+    expect(runMapping).toHaveBeenCalledWith(
+      projectDir,
+      'prod_metabase',
+      expect.objectContaining({
+        stdout: expect.objectContaining({ write: expect.any(Function) }),
+        stderr: expect.objectContaining({ write: expect.any(Function) }),
+      }),
+    );
+    expect(io.stdout()).toContain('│  Mapping validated — 1 mapping configured');
+    expect(io.stdout()).not.toMatch(/^Mapping validated — 1 mapping configured$/m);
   });
 
   it('writes Notion config with the full default knowledge create budget', async () => {
@@ -225,7 +234,7 @@ describe('setup sources step', () => {
           inputMode: 'disabled',
           source: 'notion',
           sourceConnectionId: 'notion-main',
-          sourceApiKeyRef: 'env:NOTION_TOKEN',
+          sourceApiKeyRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
           notionCrawlMode: 'selected_roots',
           notionRootPageIds: ['page-1'],
           runInitialSourceIngest: false,
@@ -256,7 +265,7 @@ describe('setup sources step', () => {
           inputMode: 'disabled',
           source: 'notion',
           sourceConnectionId: 'notion-main',
-          sourceApiKeyRef: 'env:NOTION_TOKEN',
+          sourceApiKeyRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
           notionCrawlMode: 'all_accessible',
           notionRootPageIds: ['page-1'],
           runInitialSourceIngest: false,
@@ -271,6 +280,105 @@ describe('setup sources step', () => {
       driver: 'notion',
       root_page_ids: ['page-1'],
       crawl_mode: 'selected_roots',
+    });
+  });
+
+  it('uses the rich Notion picker for interactive selected root setup', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=1' }));
+    const pickNotionRootPages = vi.fn(async (input: Parameters<NonNullable<KtxSetupSourcesDeps['pickNotionRootPages']>>[0]) => {
+      expect(input.connectionId).toBe('notion-main');
+      expect(input.connection).toMatchObject({
+        driver: 'notion',
+        auth_token_ref: 'env:NOTION_TOKEN',
+        crawl_mode: 'selected_roots',
+        root_page_ids: [],
+      });
+      return { kind: 'selected' as const, rootPageIds: ['11111111-2222-3333-4444-555555555555'] };
+    });
+    const testPrompts = prompts({
+      multiselect: [['notion']],
+      select: ['env', 'selected_roots', 'done'],
+      text: ['notion-main'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        { prompts: testPrompts, validateNotion, pickNotionRootPages },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect(pickNotionRootPages).toHaveBeenCalledOnce();
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: 'Which Notion pages should KTX ingest?',
+      options: [
+        { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
+        { value: 'all_accessible', label: 'All pages the integration can access' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['11111111-2222-3333-4444-555555555555'],
+    });
+  });
+
+  it('backs out of the Notion picker without writing selected_roots when the picker quits', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=0' }));
+    const pickNotionRootPages = vi.fn(async () => ({ kind: 'back' as const }));
+    const testPrompts = prompts({
+      multiselect: [['notion']],
+      select: ['env', 'selected_roots', 'all_accessible', 'done'],
+      text: ['notion-main'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        { prompts: testPrompts, validateNotion, pickNotionRootPages },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect(pickNotionRootPages).toHaveBeenCalledOnce();
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      crawl_mode: 'all_accessible',
+    });
+    expect((await readConfig()).connections['notion-main']?.root_page_ids).toBeUndefined();
+  });
+
+  it('surfaces Notion picker failures and returns to the page-mode step', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=0' }));
+    const pickNotionRootPages = vi.fn(async () => ({
+      kind: 'unavailable' as const,
+      message: 'Notion picker requires a TTY',
+    }));
+    const testPrompts = prompts({
+      multiselect: [['notion']],
+      select: ['env', 'selected_roots', 'all_accessible', 'done'],
+      text: ['notion-main'],
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        { prompts: testPrompts, validateNotion, pickNotionRootPages },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect(io.stderr()).toContain('Notion picker requires a TTY');
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      crawl_mode: 'all_accessible',
     });
   });
 
@@ -456,7 +564,14 @@ describe('setup sources step', () => {
       ),
     ).resolves.toEqual({ status: 'failed', projectDir });
 
-    expect(runMapping).toHaveBeenCalledWith(projectDir, 'metabase-main', io.io);
+    expect(runMapping).toHaveBeenCalledWith(
+      projectDir,
+      'metabase-main',
+      expect.objectContaining({
+        stdout: expect.objectContaining({ write: expect.any(Function) }),
+        stderr: expect.objectContaining({ write: expect.any(Function) }),
+      }),
+    );
     expect(io.stderr()).toContain('1: Metabase database does not match KTX connection database');
     expect(io.stderr()).not.toContain('Metabase mapping validation failed');
   });
@@ -480,7 +595,7 @@ describe('setup sources step', () => {
       ),
     ).resolves.toEqual({ status: 'failed', projectDir });
 
-    expect((await readConfig()).setup?.completed_steps ?? []).not.toContain('sources');
+    expect((await readKtxSetupState(projectDir)).completed_steps).not.toContain('sources');
     expect(io.stderr()).toContain('No LookML files found');
   });
 
@@ -507,6 +622,32 @@ describe('setup sources step', () => {
     );
     const options = vi.mocked(testPrompts.multiselect).mock.calls[0]?.[0].options ?? [];
     expect(options).toContainEqual({ value: 'notion', label: 'Notion' });
+  });
+
+  it('shows already configured context sources in the interactive checklist', async () => {
+    await addPrimarySource();
+    await addConnection('notion-main', {
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      crawl_mode: 'all_accessible',
+    });
+    const io = makeIo();
+    const testPrompts = prompts({ multiselect: [['back']] });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        { prompts: testPrompts },
+      ),
+    ).resolves.toEqual({ status: 'back', projectDir });
+
+    expect(testPrompts.multiselect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialValues: ['notion'],
+        options: expect.arrayContaining([{ value: 'notion', label: 'Notion', hint: 'configured: notion-main' }]),
+      }),
+    );
   });
 
   it('uses a source-specific editable connection name for new interactive connections', async () => {
@@ -664,7 +805,7 @@ describe('setup sources step', () => {
     expect(runInitialIngest).toHaveBeenCalledTimes(1);
     expect((await readConfig()).connections['dbt-main']).toMatchObject({ driver: 'dbt', source_dir: '/repo/dbt' });
     expect(io.stdout()).toContain('Context source saved without a completed context build for dbt-main.');
-    expect(io.stdout()).toContain('Run later: ktx ingest dbt-main');
+    expect(io.stdout()).toContain('Run later: ktx ingest run --connection-id dbt-main --adapter <adapter>');
   });
 
   it('retries initial source ingest from the failure menu', async () => {
@@ -766,7 +907,7 @@ describe('setup sources step', () => {
         connection: {
           driver: 'metabase',
           api_url: 'https://metabase.example.com',
-          api_key_ref: 'env:METABASE_API_KEY',
+          api_key_ref: 'env:METABASE_API_KEY', // pragma: allowlist secret
           mappings: {
             databaseMappings: { '1': 'warehouse' },
             syncEnabled: { '1': true },
@@ -786,7 +927,7 @@ describe('setup sources step', () => {
           driver: 'looker',
           base_url: 'https://looker.example.com',
           client_id: 'client-id',
-          client_secret_ref: 'env:LOOKER_CLIENT_SECRET',
+          client_secret_ref: 'env:LOOKER_CLIENT_SECRET', // pragma: allowlist secret
           mappings: { connectionMappings: { warehouse: 'warehouse' } },
         },
         deps: {
@@ -1032,7 +1173,7 @@ describe('setup sources step', () => {
 
     expect(testPrompts.multiselect).not.toHaveBeenCalled();
     expect(io.stdout()).toContain('Connect a primary source before adding context sources.');
-    expect((await readConfig()).setup?.completed_steps ?? []).not.toContain('sources');
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 
   it('auto-detects dbt_project.yml at the root of a local path', async () => {

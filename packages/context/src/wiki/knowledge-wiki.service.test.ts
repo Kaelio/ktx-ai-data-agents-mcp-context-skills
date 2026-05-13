@@ -84,9 +84,9 @@ describe('KnowledgeWikiService.syncFromCommit', () => {
     const { service, pagesRepository, gitService } = makeService();
 
     gitService.diffNameStatus.mockResolvedValue([
-      { status: 'A', path: 'knowledge/global/new-page.md' },
-      { status: 'M', path: 'knowledge/global/changed-page.md' },
-      { status: 'D', path: 'knowledge/global/gone-page.md' },
+      { status: 'A', path: 'wiki/global/new-page.md' },
+      { status: 'M', path: 'wiki/global/changed-page.md' },
+      { status: 'D', path: 'wiki/global/gone-page.md' },
     ]);
     gitService.getFileAtCommit.mockImplementation((path: string) => {
       if (path.endsWith('new-page.md')) {
@@ -113,14 +113,14 @@ describe('KnowledgeWikiService.syncFromCommit', () => {
     expect(call.deletes).toEqual([{ scope: 'GLOBAL', scopeId: null, pageKey: 'gone-page' }]);
   });
 
-  it('indexes historic-SQL nested pages but skips other nested wiki paths from commit sync', async () => {
+  it('indexes only flat wiki pages and skips nested paths from commit sync', async () => {
     const { service, pagesRepository, gitService, logger } = makeService();
 
     gitService.diffNameStatus.mockResolvedValue([
-      { status: 'A', path: 'knowledge/global/revenue-policy.md' },
-      { status: 'A', path: 'knowledge/global/historic-sql/order-lifecycle.md' },
-      { status: 'A', path: 'knowledge/global/historic-sql/_archived/retired-pattern.md' },
-      { status: 'A', path: 'knowledge/global/orbit/company-overview.md' },
+      { status: 'A', path: 'wiki/global/revenue-policy.md' },
+      { status: 'A', path: 'wiki/global/historic-sql-order-lifecycle.md' },
+      { status: 'A', path: 'wiki/global/historic-sql/order-lifecycle.md' },
+      { status: 'A', path: 'wiki/global/orbit/company-overview.md' },
     ]);
     gitService.getFileAtCommit.mockImplementation((path: string) => {
       if (path.endsWith('revenue-policy.md')) {
@@ -137,9 +137,13 @@ describe('KnowledgeWikiService.syncFromCommit', () => {
 
     await service.syncFromCommit('sha-before', 'sha-after', 'run-uuid');
 
-    expect(gitService.getFileAtCommit).not.toHaveBeenCalledWith('knowledge/global/orbit/company-overview.md', 'sha-after');
+    expect(gitService.getFileAtCommit).not.toHaveBeenCalledWith('wiki/global/orbit/company-overview.md', 'sha-after');
+    expect(gitService.getFileAtCommit).not.toHaveBeenCalledWith('wiki/global/historic-sql/order-lifecycle.md', 'sha-after');
     expect(logger.warn).toHaveBeenCalledWith(
-      '[knowledge.sync] skipping unparseable path: knowledge/global/orbit/company-overview.md',
+      '[wiki.sync] skipping unparseable path: wiki/global/orbit/company-overview.md',
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[wiki.sync] skipping unparseable path: wiki/global/historic-sql/order-lifecycle.md',
     );
     const call = pagesRepository.applyDiffTransactional.mock.calls[0][0];
     expect(call.upserts).toEqual(
@@ -147,17 +151,12 @@ describe('KnowledgeWikiService.syncFromCommit', () => {
         expect.objectContaining({ scope: 'GLOBAL', pageKey: 'revenue-policy', summary: 'revenue' }),
         expect.objectContaining({
           scope: 'GLOBAL',
-          pageKey: 'historic-sql/order-lifecycle',
+          pageKey: 'historic-sql-order-lifecycle',
           summary: 'order lifecycle',
-        }),
-        expect.objectContaining({
-          scope: 'GLOBAL',
-          pageKey: 'historic-sql/_archived/retired-pattern',
-          summary: 'retired',
         }),
       ]),
     );
-    expect(call.upserts).toHaveLength(3);
+    expect(call.upserts).toHaveLength(2);
   });
 
   it('is a no-op when the diff between shas has no knowledge changes', async () => {
