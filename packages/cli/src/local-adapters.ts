@@ -180,12 +180,30 @@ function historicSqlRecord(connection: unknown): Record<string, unknown> | null 
 }
 
 function enabledHistoricSqlDialect(connection: unknown): 'postgres' | 'bigquery' | 'snowflake' | null {
-  const historicSql = historicSqlRecord(connection);
-  if (historicSql?.enabled !== true) {
+  const direct = historicSqlRecord(connection);
+  const context =
+    connection && typeof connection === 'object' && !Array.isArray(connection)
+      ? (connection as { context?: unknown }).context
+      : null;
+  const queryHistory =
+    context && typeof context === 'object' && !Array.isArray(context)
+      ? (context as { queryHistory?: unknown }).queryHistory
+      : null;
+  const enabled =
+    queryHistory && typeof queryHistory === 'object' && !Array.isArray(queryHistory)
+      ? (queryHistory as { enabled?: unknown }).enabled === true
+      : direct?.enabled === true;
+  if (!enabled) {
     return null;
   }
-  const dialect = String(historicSql.dialect ?? '').toLowerCase();
-  return dialect === 'postgres' || dialect === 'bigquery' || dialect === 'snowflake' ? dialect : null;
+  const driver = String((connection as { driver?: unknown })?.driver ?? '').toLowerCase();
+  if (driver === 'postgres' || driver === 'postgresql') return 'postgres';
+  if (driver === 'bigquery') return 'bigquery';
+  if (driver === 'snowflake') return 'snowflake';
+  const legacyDialect = String(direct?.dialect ?? '').toLowerCase();
+  return legacyDialect === 'postgres' || legacyDialect === 'bigquery' || legacyDialect === 'snowflake'
+    ? legacyDialect
+    : null;
 }
 
 function createEphemeralPostgresHistoricSqlClient(project: KtxLocalProject, connectionId: string) {

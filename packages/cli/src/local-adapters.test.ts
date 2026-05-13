@@ -68,6 +68,38 @@ describe('CLI local ingest adapters', () => {
     ]);
   });
 
+  it('registers Postgres historic SQL from connection context query history', async () => {
+    await writeProject(
+      tempDir,
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    readonly: true',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+
+    const adapters = createKtxCliLocalIngestAdapters(project, {
+      historicSqlConnectionId: 'warehouse',
+      sqlAnalysis: sqlAnalysisStub(),
+    });
+
+    expect(adapters.find((adapter) => adapter.source === 'historic-sql')?.skillNames).toEqual([
+      'historic_sql_table_digest',
+      'historic_sql_patterns',
+    ]);
+  });
+
   it('registers BigQuery historic SQL from the requested connection', async () => {
     await writeProject(
       tempDir,

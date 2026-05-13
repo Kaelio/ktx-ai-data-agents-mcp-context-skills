@@ -204,6 +204,46 @@ describe('local ingest adapters', () => {
     });
   });
 
+  it('maps connection context.queryHistory to historic-sql pull config', async () => {
+    const project = projectWithConnections({
+      warehouse: {
+        driver: 'postgres',
+        context: {
+          queryHistory: {
+            enabled: true,
+            windowDays: 45,
+            minExecutions: 7,
+            filters: { dropTrivialProbes: true },
+          },
+        },
+      },
+    });
+    const adapter = { source: 'historic-sql' } as never;
+
+    await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
+      dialect: 'postgres',
+      windowDays: 45,
+      minExecutions: 7,
+      filters: { dropTrivialProbes: true },
+    });
+  });
+
+  it('prefers context.queryHistory over legacy historicSql', async () => {
+    const project = projectWithConnections({
+      warehouse: {
+        driver: 'postgres',
+        historicSql: { enabled: true, dialect: 'postgres', windowDays: 90 },
+        context: { queryHistory: { enabled: true, windowDays: 30 } },
+      },
+    });
+    const adapter = { source: 'historic-sql' } as never;
+
+    await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
+      dialect: 'postgres',
+      windowDays: 30,
+    });
+  });
+
   it('rejects local historic-sql pulls when the connection has not enabled historic SQL', async () => {
     const historicSql = createDefaultLocalIngestAdapters(project, {
       historicSql: {
@@ -235,7 +275,7 @@ describe('local ingest adapters', () => {
     });
 
     await expect(localPullConfigForAdapter(postgresProject, historicSql!, 'warehouse')).rejects.toThrow(
-      'Connection "warehouse" does not have historicSql.enabled: true',
+      'Connection "warehouse" does not have context.queryHistory.enabled: true',
     );
   });
 
