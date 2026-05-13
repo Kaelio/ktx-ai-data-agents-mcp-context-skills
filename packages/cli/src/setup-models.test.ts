@@ -140,7 +140,7 @@ describe('setup Anthropic model step', () => {
       expect.objectContaining({
         message: expect.stringContaining('Which Anthropic model should KTX use?'),
         options: [
-          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (recommended)' },
+          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', hint: 'recommended' },
           { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
           { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
           { value: 'manual', label: 'Enter a model ID manually' },
@@ -763,7 +763,7 @@ describe('setup Anthropic model step', () => {
       expect.objectContaining({
         message: expect.stringContaining('Which Anthropic model should KTX use?'),
         options: expect.arrayContaining([
-          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (recommended)' },
+          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', hint: 'recommended' },
         ]),
       }),
     );

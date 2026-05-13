@@ -2,7 +2,6 @@ import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cancel, confirm, isCancel, log, multiselect, password, select, text } from '@clack/prompts';
 import { localConnectionTypeForConfig, resolveNotionAuthToken } from '@ktx/context/connections';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
@@ -29,10 +28,13 @@ import {
 import type { KtxCliIo } from './cli-runtime.js';
 import { pickNotionRootPages } from './notion-page-picker.js';
 import { runKtxSourceMapping } from './source-mapping.js';
-import { withMenuOptionsSpacing, withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
+import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxPublicIngest } from './public-ingest.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 export type KtxSetupSourceType = 'dbt' | 'metricflow' | 'metabase' | 'looker' | 'lookml' | 'notion';
 
@@ -73,11 +75,11 @@ export type KtxSetupSourcesResult =
 export interface KtxSetupSourcesPromptAdapter {
   multiselect(options: {
     message: string;
-    options: Array<{ value: string; label: string; hint?: string }>;
+    options: KtxSetupPromptOption[];
     initialValues?: string[];
     required?: boolean;
   }): Promise<string[]>;
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string; initialValue?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -135,53 +137,11 @@ const PRIMARY_SOURCE_DRIVERS = new Set([
 ]);
 
 function createPromptAdapter(): KtxSetupSourcesPromptAdapter {
-  return {
-    async multiselect(options) {
-      while (true) {
-        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-        if (isCancel(value)) {
-          cancel('Setup cancelled.');
-          return ['back'];
-        }
-        const selected = [...value] as string[];
-        if (selected.length === 0 && !options.required) {
-          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
-          if (isCancel(skipConfirmed)) {
-            cancel('Setup cancelled.');
-            return ['back'];
-          }
-          if (!skipConfirmed) continue;
-        }
-        return selected;
-      }
-    },
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
-      }
-      return String(value);
-    },
-    async text(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        text({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : String(value);
-    },
-    async password(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        password({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : String(value);
-    },
-    cancel(message) {
-      cancel(message);
-    },
-    log(message) {
-      log.info(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({
+    selectCancelValue: 'back',
+    multiselectCancelValue: 'back',
+    confirmEmptyOptionalMultiselect: true,
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

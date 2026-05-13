@@ -231,6 +231,38 @@ describe('renderContextBuildView', () => {
     expect(output).toContain('(15s)');
   });
 
+  it('shows how long a running target has gone without a progress update', () => {
+    const state = initViewState([
+      { connectionId: 'notion-main', driver: 'notion', operation: 'source-ingest', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
+    ]);
+    state.contextSources[0].status = 'running';
+    state.contextSources[0].startedAt = 1_000;
+    state.contextSources[0].elapsedMs = 113_000;
+    state.contextSources[0].progressUpdatedAtMs = 46_000;
+    state.contextSources[0].detailLine = '[45%] No work units to process; finalizing ingest';
+
+    const output = renderContextBuildView(state, { styled: false });
+
+    expect(output).toContain('No work units to process; finalizing ingest');
+    expect(output).toContain('last update 1m08s ago');
+    expect(output).toContain('(1m53s)');
+  });
+
+  it('does not show progress age while updates are recent', () => {
+    const state = initViewState([
+      { connectionId: 'notion-main', driver: 'notion', operation: 'source-ingest', debugCommand: '', steps: ['source-ingest', 'memory-update'] },
+    ]);
+    state.contextSources[0].status = 'running';
+    state.contextSources[0].startedAt = 1_000;
+    state.contextSources[0].elapsedMs = 40_000;
+    state.contextSources[0].progressUpdatedAtMs = 25_000;
+    state.contextSources[0].detailLine = '[45%] Planning work units';
+
+    const output = renderContextBuildView(state, { styled: false });
+
+    expect(output).not.toContain('last update');
+  });
+
   it('renders completion summary when all targets are done', () => {
     const state = initViewState([
       { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
@@ -480,7 +512,10 @@ describe('runContextBuild', () => {
       expect.objectContaining({ connectionId: 'warehouse', operation: 'scan' }),
       expect.objectContaining({ scanMode: 'enriched', detectRelationships: true }),
       expect.anything(),
-      {},
+      expect.objectContaining({
+        scanProgress: expect.anything(),
+        ingestProgress: expect.any(Function),
+      }),
     );
   });
 
@@ -561,6 +596,43 @@ describe('runContextBuild', () => {
       { connectionId: 'warehouse', status: 'done' },
       { connectionId: 'dbt_main', status: 'done' },
     ]);
+  });
+
+  it('publishes structured target progress without expanding the compact source rows', async () => {
+    const io = makeIo({ isTTY: true });
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+    const progressUpdates: Array<Array<{ connectionId: string; percent?: number; message?: string }>> = [];
+    const executeTarget = vi.fn(async (target, _args, _targetIo, deps) => {
+      await deps.scanProgress?.update(0.37, 'Generating descriptions 3/8 tables', { transient: true });
+      return successResult(target.connectionId, target.driver, target.operation);
+    });
+
+    await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      {
+        executeTarget,
+        now: () => 1000,
+        onSourceProgress: (sources) => {
+          progressUpdates.push(
+            sources.map((s) => ({
+              connectionId: s.connectionId,
+              ...(s.percent !== undefined ? { percent: s.percent } : {}),
+              ...(s.message !== undefined ? { message: s.message } : {}),
+            })),
+          );
+        },
+        sourceProgressThrottleMs: 0,
+      },
+    );
+
+    expect(progressUpdates).toContainEqual([
+      { connectionId: 'warehouse', percent: 37, message: 'Generating descriptions 3/8 tables' },
+    ]);
+    expect(io.stdout()).toContain('Generating descriptions 3/8 tables');
   });
 
   it('returns report IDs and artifact paths parsed from target output', async () => {
@@ -678,5 +750,28 @@ describe('viewStateFromSourceProgress', () => {
     expect(output).toContain('Context sources:');
     expect(output).toContain('dbt-main');
     expect(output).toContain('ingesting...');
+  });
+
+  it('renders persisted percent and message as compact source-row progress', () => {
+    const state = viewStateFromSourceProgress(
+      [
+        {
+          connectionId: 'warehouse',
+          operation: 'scan',
+          status: 'running',
+          startedAtMs: 900,
+          percent: 63,
+          message: 'Building embeddings 2/4 batches',
+          updatedAtMs: 950,
+        },
+      ],
+      1000,
+    );
+
+    const output = renderContextBuildView(state, { styled: false });
+    expect(output).toContain('warehouse');
+    expect(output).toContain('63%');
+    expect(output).toContain('Building embeddings 2/4 batches');
+    expect(output.match(/warehouse/g)).toHaveLength(1);
   });
 });

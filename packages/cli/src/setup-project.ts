@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
-import { cancel, isCancel, select, text } from '@clack/prompts';
 import {
   initKtxProject,
   type KtxLocalProject,
@@ -13,8 +12,11 @@ import {
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { gray } from './io/symbols.js';
-import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { withTextInputNavigation } from './prompt-navigation.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 export type KtxSetupProjectMode = 'auto' | 'new' | 'existing' | 'prompt-new';
 export type KtxSetupInputMode = 'auto' | 'disabled';
@@ -34,7 +36,7 @@ export type KtxSetupProjectResult =
   | { status: 'missing-input'; projectDir: string };
 
 export interface KtxSetupProjectPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string }): Promise<string | undefined>;
   cancel(message: string): void;
 }
@@ -55,28 +57,7 @@ type PromptProjectDirResult =
 const DEFAULT_NEW_PROJECT_FOLDER_NAME = 'ktx-project';
 
 function createClackSetupProjectPromptAdapter(): KtxSetupProjectPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'exit';
-      }
-      return value;
-    },
-    async text(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        text({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      if (isCancel(value)) {
-        return undefined;
-      }
-      return value;
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({ selectCancelValue: 'exit' });
 }
 
 function hasProjectConfig(projectDir: string): boolean {
