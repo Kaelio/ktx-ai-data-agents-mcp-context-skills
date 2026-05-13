@@ -16,6 +16,7 @@ const COLOR_THEME = {
   text: 'white',
   muted: 'gray',
   active: 'cyan',
+  selected: 'green',
   warning: 'yellow',
 } as const;
 
@@ -23,6 +24,7 @@ const NO_COLOR_THEME = {
   text: 'white',
   muted: 'white',
   active: 'white',
+  selected: 'white',
   warning: 'white',
 } as const;
 
@@ -158,13 +160,12 @@ export function notionPickerCommandForInkInput(
   if (key.downArrow) return 'cursor-down';
   if (key.leftArrow) return 'cursor-left';
   if (key.rightArrow) return 'cursor-right';
-  if (key.return) return 'expand';
+  if (key.return) return 'save-request';
   if (input === ' ') return 'toggle-check';
   if (input === '/') return 'search-start';
   if (input === 'a') return 'select-all-visible';
   if (input === 'n') return 'select-none';
-  if (input === 's') return 'save-request';
-  if (input === 'q' || key.escape) return 'quit';
+  if (key.escape) return 'quit';
   return null;
 }
 
@@ -174,18 +175,27 @@ function PickerRow(props: { state: PickerState; nodeId: string; width: number; t
   const focused = props.state.cursorId === node.id;
   const locked = isAncestorChecked(node.id, props.state.checked, props.state.byId);
   const checked = props.state.checked.has(node.id);
-  const glyph = locked ? '[~]' : checked ? '[×]' : '[ ]';
-  const children =
+  const isSelected = checked || locked;
+  const glyph = isSelected ? '◼' : '◻';
+  const glyphColor = locked ? props.theme.muted : checked ? props.theme.selected : props.theme.muted;
+  const childAffordance =
     node.childIds.length > 0 ? (props.state.expanded.has(node.id) ? ' ▾' : ` ▸ (${node.childIds.length})`) : '';
-  const prefix = `${focused ? '▸' : ' '} ${glyph} ${' '.repeat(node.depth * 2)}`;
-  const color = focused ? props.theme.active : locked || node.archived ? props.theme.muted : props.theme.text;
-  const title = truncateText(`${node.title}${children}`, Math.max(10, props.width - prefix.length));
+  const indent = ' '.repeat(node.depth * 2);
+  const titleColor = focused ? props.theme.text : props.theme.muted;
   const inverse = rowMatchesSearch(props.state, node.id);
+  const prefixWidth = indent.length + 2;
+  const title = truncateText(`${node.title}${childAffordance}`, Math.max(10, props.width - prefixWidth));
 
   return (
-    <Text color={color} strikethrough={node.archived}>
-      {prefix}
-      <Text inverse={inverse}>{title}</Text>
+    <Text>
+      <Text color={glyphColor}>
+        {indent}
+        {glyph}
+      </Text>
+      <Text color={titleColor} strikethrough={node.archived}>
+        {' '}
+        <Text inverse={inverse}>{title}</Text>
+      </Text>
     </Text>
   );
 }
@@ -198,7 +208,7 @@ export function NotionPickerApp(props: NotionPickerAppProps): ReactNode {
   const visibleIds = visibleNodeIds(state);
   const selectedIndex = Math.max(0, visibleIds.indexOf(state.cursorId));
   const reservedRows = state.pendingConfirm === 'mode-switch' ? 9 : 8;
-  const visibleRows = Math.max(5, Math.min(20, (props.terminalRows ?? 24) - reservedRows));
+  const visibleRows = Math.max(5, Math.min(12, (props.terminalRows ?? 24) - reservedRows));
   const rows = windowItems(visibleIds, selectedIndex, visibleRows);
   const hiddenAbove = rows.offset;
   const hiddenBelow = Math.max(0, visibleIds.length - rows.offset - rows.items.length);
@@ -254,34 +264,60 @@ export function NotionPickerApp(props: NotionPickerAppProps): ReactNode {
 
   return (
     <Box flexDirection="column">
-      <Text color={theme.active}>Notion pages visible to integration "{props.workspaceLabel}"</Text>
-      {props.cappedAtCount ? <Text color={theme.warning}>{props.cappedAtCount}-page cap reached - some pages not shown</Text> : null}
-      {state.preLoadWarnings.map((warning) => (
-        <Text key={warning} color={theme.warning}>
-          {staleWarningText(warning)}
-        </Text>
-      ))}
-      {showSearch ? (
+      <Text>
+        <Text color={theme.active}>◆</Text>
+        <Text bold> Select Notion pages to ingest</Text>
+      </Text>
+      <Box
+        flexDirection="column"
+        borderStyle="single"
+        borderTop={false}
+        borderRight={false}
+        borderBottom={false}
+        borderColor={theme.active}
+        paddingLeft={1}
+      >
         <Text color={theme.muted}>
-          / {state.search.query}
-          {state.search.editing ? '█' : ''} ({searchMatchCount} matches)
+          Right Arrow to expand, Up/Down to move, Space to select or unselect, Slash to filter, Enter to confirm, Escape
+          to go back, or Ctrl+C to exit.
         </Text>
-      ) : null}
-      <Box flexDirection="column">
+        <Text> </Text>
+        <Text color={theme.muted}>Workspace: {props.workspaceLabel}</Text>
+        {props.cappedAtCount ? (
+          <Text color={theme.warning}>{props.cappedAtCount}-page cap reached - some pages not shown</Text>
+        ) : null}
+        {state.preLoadWarnings.map((warning) => (
+          <Text key={warning} color={theme.warning}>
+            {staleWarningText(warning)}
+          </Text>
+        ))}
+        {showSearch ? (
+          <Text>
+            <Text color={theme.muted}>/ </Text>
+            <Text>
+              {state.search.query}
+              {state.search.editing ? '█' : ''}
+            </Text>
+            <Text color={theme.muted}>  ({searchMatchCount} matches)</Text>
+          </Text>
+        ) : null}
         {hiddenAbove > 0 ? <Text color={theme.muted}>↑ {hiddenAbove} more</Text> : null}
         {rows.items.map((nodeId) => (
           <PickerRow key={nodeId} state={state} nodeId={nodeId} width={width} theme={theme} />
         ))}
         {hiddenBelow > 0 ? <Text color={theme.muted}>↓ {hiddenBelow} more</Text> : null}
+        {state.pendingConfirm === 'mode-switch' ? (
+          <Text color={theme.warning}>
+            Switch crawl_mode from all_accessible to selected_roots? Will limit ingest to{' '}
+            {selectedPageCountText(selectedCount)}. Press Enter to confirm or Escape to go back.
+          </Text>
+        ) : null}
+        {state.pendingConfirm === 'skip-empty' ? (
+          <Text color={theme.warning}>Nothing selected. Skip this step? Press Enter to skip or Escape to go back.</Text>
+        ) : null}
+        {state.transientHint ? <Text color={theme.warning}>{state.transientHint.text}</Text> : null}
       </Box>
-      {state.pendingConfirm === 'mode-switch' ? (
-        <Text color={theme.warning}>
-          Save will switch crawl_mode all_accessible -&gt; selected_roots and limit ingest to{' '}
-          {selectedPageCountText(selectedCount)}. [y] confirm  [esc] back
-        </Text>
-      ) : null}
-      {state.transientHint ? <Text color={theme.warning}>{state.transientHint.text}</Text> : null}
-      <Text color={theme.muted}>space toggle · enter expand · / search · a all · n none · s save &amp; exit · q quit</Text>
+      <Text color={theme.active}>└</Text>
     </Box>
   );
 }
@@ -323,7 +359,7 @@ export async function renderNotionPickerTui(
         exitOnCtrlC: false,
         patchConsole: false,
         maxFps: 30,
-        alternateScreen: true,
+        alternateScreen: false,
       },
     );
     await instance.waitUntilExit();

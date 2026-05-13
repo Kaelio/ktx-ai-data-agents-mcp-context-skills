@@ -1,7 +1,7 @@
 /* @jsxImportSource react */
 import { render as renderInkTest } from 'ink-testing-library';
-import { act, type ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { type ReactNode } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 import { buildInitialState, buildPickerTree, type NotionPickerPageInput } from './notion-page-picker-tree.js';
 import {
   NotionPickerApp,
@@ -70,12 +70,8 @@ function fakeInkInstance(): NotionPickerInkInstance {
 }
 
 function normalizeFrameWrap(frame: string | undefined): string {
-  return frame?.replace(/\n/g, ' ') ?? '';
+  return frame?.replace(/\n/g, ' ').replace(/│ /g, '').replace(/ +/g, ' ') ?? '';
 }
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 describe('notionPickerCommandForInkInput', () => {
   it('maps browse, search, and confirm input to reducer commands', () => {
@@ -87,9 +83,11 @@ describe('notionPickerCommandForInkInput', () => {
     expect(notionPickerCommandForInkInput('/', {}, state().search, null)).toBe('search-start');
     expect(notionPickerCommandForInkInput('a', {}, state().search, null)).toBe('select-all-visible');
     expect(notionPickerCommandForInkInput('n', {}, state().search, null)).toBe('select-none');
-    expect(notionPickerCommandForInkInput('s', {}, state().search, null)).toBe('save-request');
-    expect(notionPickerCommandForInkInput('q', {}, state().search, null)).toBe('quit');
+    expect(notionPickerCommandForInkInput('', { return: true }, state().search, null)).toBe('save-request');
+    expect(notionPickerCommandForInkInput('', { escape: true }, state().search, null)).toBe('quit');
     expect(notionPickerCommandForInkInput('c', { ctrl: true }, state().search, null)).toBe('quit');
+    expect(notionPickerCommandForInkInput('s', {}, state().search, null)).toBeNull();
+    expect(notionPickerCommandForInkInput('q', {}, state().search, null)).toBeNull();
 
     expect(notionPickerCommandForInkInput('x', {}, { editing: true, query: '' }, null)).toEqual({
       type: 'search-input',
@@ -145,13 +143,16 @@ describe('NotionPickerApp', () => {
     );
 
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('Notion pages visible to integration "Design Workspace"');
+    expect(frame).toContain('Select Notion pages to ingest');
+    expect(frame).toContain('Workspace: Design Workspace');
     expect(frame).toContain('5000-page cap reached - some pages not shown');
     expect(frame).toContain('1 stored root_page_ids no longer visible - they will be removed if you save');
-    expect(frame).toContain('▸ [ ] Engineering Docs ▸ (1)');
-    expect(frame).toContain('  [ ] Marketing');
+    expect(frame).toContain('◻ Engineering Docs ▸ (1)');
+    expect(frame).toContain('◻ Marketing');
     expect(frame).not.toContain('Search ready: -');
-    expect(frame).toContain('space toggle · enter expand · / search · a all · n none · s save & exit · q quit');
+    expect(normalizeFrameWrap(frame)).toContain(
+      'Right Arrow to expand, Up/Down to move, Space to select or unselect, Slash to filter, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
+    );
   });
 
   it('renders partial discovery warnings without stale-root save suffix', () => {
@@ -199,8 +200,8 @@ describe('NotionPickerApp', () => {
     );
 
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('▸ [×] Engineering Docs ▾');
-    expect(frame).toContain('  [~]   Architecture');
+    expect(frame).toContain('◼ Engineering Docs ▾');
+    expect(frame).toContain('  ◼ Architecture');
   });
 
   it('supports keyboard selection, all_accessible confirmation, and save callback', async () => {
@@ -220,12 +221,12 @@ describe('NotionPickerApp', () => {
 
     stdin.write(' ');
     await waitForInkInput();
-    expect(lastFrame()).toContain('[×] Engineering Docs');
+    expect(lastFrame()).toContain('◼ Engineering Docs');
 
-    stdin.write('s');
+    stdin.write('\r');
     await waitForInkInput();
     expect(normalizeFrameWrap(lastFrame())).toContain(
-      'Save will switch crawl_mode all_accessible -> selected_roots and limit ingest to 1 selected page. [y] confirm  [esc] back',
+      'Switch crawl_mode from all_accessible to selected_roots? Will limit ingest to 1 selected page. Press Enter to confirm or Escape to go back.',
     );
 
     stdin.write('y');
@@ -233,8 +234,7 @@ describe('NotionPickerApp', () => {
     expect(onExit).toHaveBeenCalledWith({ kind: 'save', rootPageIds: [IDS.engineering] });
   });
 
-  it('removes transient hints after their expiry time', async () => {
-    vi.useFakeTimers();
+  it('prompts skip-empty confirmation on empty submit and dismisses on cancel', async () => {
     const onExit = vi.fn();
     const { stdin, lastFrame } = renderInkTest(
       <NotionPickerApp
@@ -249,17 +249,25 @@ describe('NotionPickerApp', () => {
       />,
     );
 
-    await act(async () => {
-      stdin.write('s');
-      await vi.advanceTimersByTimeAsync(10);
-    });
-    expect(lastFrame()).toContain('Select at least one page or press q to quit');
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2500);
-    });
-    expect(lastFrame()).not.toContain('Select at least one page or press q to quit');
+    stdin.write('\r');
+    await waitForInkInput();
+    expect(normalizeFrameWrap(lastFrame())).toContain(
+      'Nothing selected. Skip this step? Press Enter to skip or Escape to go back.',
+    );
     expect(onExit).not.toHaveBeenCalled();
+
+    stdin.write('n');
+    await waitForInkInput();
+    expect(lastFrame()).not.toContain('Nothing selected. Skip this step?');
+    expect(onExit).not.toHaveBeenCalled();
+
+    stdin.write('\r');
+    await waitForInkInput();
+    expect(lastFrame()).toContain('Nothing selected. Skip this step?');
+
+    stdin.write('\r');
+    await waitForInkInput();
+    expect(onExit).toHaveBeenCalledWith({ kind: 'quit' });
   });
 
   it('renders row-window overflow indicators when the visible list is clipped', async () => {
@@ -312,7 +320,7 @@ describe('NotionPickerApp', () => {
       />,
     );
 
-    stdin.write('q');
+    stdin.write('\u0003');
     await waitForInkInput();
     expect(onExit).toHaveBeenCalledWith({ kind: 'quit' });
   });

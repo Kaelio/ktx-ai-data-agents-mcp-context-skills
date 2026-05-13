@@ -22,7 +22,7 @@ export interface PickerState {
   checked: Set<string>;
   cursorId: string;
   search: { editing: boolean; query: string };
-  pendingConfirm: 'mode-switch' | null;
+  pendingConfirm: 'mode-switch' | 'skip-empty' | null;
   preLoadWarnings: string[];
   transientHint: { text: string; expiresAt: number } | null;
   currentCrawlMode: 'all_accessible' | 'selected_roots';
@@ -61,7 +61,7 @@ interface MutableNode {
   childIds: string[];
 }
 
-export const TRANSIENT_HINT_DURATION_MS = 2500;
+const TRANSIENT_HINT_DURATION_MS = 2500;
 
 const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 
@@ -444,7 +444,8 @@ export function buildInitialState(args: {
 export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()): { next: PickerState; effect: PickerEffect } {
   if (state.pendingConfirm) {
     if (cmd === 'save-confirm') {
-      return { next: cloneState(state, { pendingConfirm: null }), effect: 'save' };
+      const effect: PickerEffect = state.pendingConfirm === 'skip-empty' ? 'quit-without-save' : 'save';
+      return { next: cloneState(state, { pendingConfirm: null }), effect };
     }
     if (cmd === 'save-cancel') {
       return { next: cloneState(state, { pendingConfirm: null }), effect: null };
@@ -498,19 +499,13 @@ export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()
       };
     case 'save-request':
       if (state.checked.size === 0) {
-        return {
-          next: cloneState(state, {
-            transientHint: transientHint('Select at least one page or press q to quit', now),
-          }),
-          effect: null,
-        };
+        return { next: cloneState(state, { pendingConfirm: 'skip-empty' }), effect: null };
       }
       if (state.currentCrawlMode === 'all_accessible') {
         return { next: cloneState(state, { pendingConfirm: 'mode-switch' }), effect: null };
       }
       return { next: state, effect: 'save' };
     case 'save-confirm':
-      return { next: state, effect: 'save' };
     case 'save-cancel':
       return { next: state, effect: null };
     case 'quit':
