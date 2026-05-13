@@ -47,7 +47,7 @@ export function TerminalPreview() {
         <div className="h-2" />
         <div>
           <span className="term-prompt">$</span>{" "}
-          <span className="term-cmd">ktx agent context --json</span>
+          <span className="term-cmd">ktx status --json</span>
           <span className="term-cursor ml-1" />
         </div>
       </div>

@@ -28,6 +28,7 @@ ktx sl <subcommand> [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--connection-id <id>` | Filter by KTX connection id | — |
+| `--query <text>` | Search source names and descriptions | — |
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
@@ -36,6 +37,7 @@ ktx sl <subcommand> [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--connection-id <id>` | KTX connection id (required) | — |
+| `--json` | Print JSON output | `false` |
 
 ### `sl validate`
 
@@ -55,6 +57,7 @@ ktx sl <subcommand> [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--connection-id <id>` | KTX connection id | — |
+| `--query-file <path>` | JSON semantic-layer query file | — |
 | `--measure <measure>` | Measure to query; repeatable (at least one required) | — |
 | `--dimension <dimension>` | Dimension to include; repeatable | — |
 | `--filter <filter>` | Filter expression; repeatable | — |
@@ -78,8 +81,14 @@ ktx sl list --connection-id my-warehouse
 # List sources as JSON
 ktx sl list --json
 
+# Search sources as JSON
+ktx sl list --json --query "revenue"
+
 # Read a source definition
 ktx sl read orders --connection-id my-warehouse
+
+# Read a source definition as JSON
+ktx sl read orders --connection-id my-warehouse --json
 
 # Validate a source against the live schema
 ktx sl validate orders --connection-id my-warehouse
@@ -119,6 +128,13 @@ ktx sl query \
   --dimension orders.created_date \
   --execute \
   --max-rows 1000
+
+# Execute a query from a JSON file
+ktx sl query \
+  --connection-id my-warehouse \
+  --query-file query.json \
+  --execute \
+  --max-rows 100
 ```
 
 ## Output

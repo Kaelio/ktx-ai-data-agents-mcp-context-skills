@@ -84,7 +84,10 @@ describe('setup agents', () => {
     const skill = await readFile(join(tempDir, '.agents/skills/ktx/SKILL.md'), 'utf-8');
     expect(skill).toContain(`--project-dir ${tempDir}`);
     expect(skill).toContain('must not print secrets');
-    expect(skill).toContain('agent sql execute');
+    expect(skill).toContain('status --json');
+    expect(skill).toContain('sl list --json');
+    expect(skill).not.toContain('agent ');
+    expect(skill).not.toContain('sql execute');
     expect(await readKtxAgentInstallManifest(tempDir)).toMatchObject({
       version: 1,
       projectDir: tempDir,
@@ -115,8 +118,9 @@ describe('setup agents', () => {
 
     const skill = await readFile(join(tempDir, '.agents/skills/ktx/SKILL.md'), 'utf-8');
     expect(skill).not.toContain('`ktx agent');
-    expect(skill).toContain('agent context --json');
-    expect(skill).toContain('agent sql execute');
+    expect(skill).toContain('status --json');
+    expect(skill).toContain('sl query');
+    expect(skill).not.toContain('sql execute');
   });
 
   it('removes only manifest-listed files', async () => {

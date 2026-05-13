@@ -67,12 +67,12 @@ ${link("/docs/guides/writing-context", "Writing Context", "Write semantic source
 - [Full documentation](${absoluteUrl("/llms-full.txt")}): All docs pages in one plain-text markdown response
 - [Markdown access guide](${absoluteUrl("/docs/ai-resources/markdown-access.md")}): How to fetch llms.txt, llms-full.txt, and per-page Markdown
 - [Quickstart markdown](${absoluteUrl("/docs/getting-started/quickstart.md")}): Human setup walkthrough
-- [Agent CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-agent.md")}): Machine-readable agent commands
+- [Semantic-layer CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-sl.md")}): Semantic-layer commands and JSON output
+- [Wiki CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-wiki.md")}): Knowledge page commands and JSON output
 
 ## CLI Reference
 
 ${link("/docs/cli-reference/ktx-setup", "ktx setup", "Interactive project setup")}
-${link("/docs/cli-reference/ktx-agent", "ktx agent", "Machine-readable commands for coding agents")}
 ${link("/docs/cli-reference/ktx-sl", "ktx sl", "Semantic-layer commands")}
 ${link("/docs/cli-reference/ktx-wiki", "ktx wiki", "Knowledge page commands")}
 ${link("/docs/cli-reference/ktx-connection", "ktx connection", "Connection management commands")}

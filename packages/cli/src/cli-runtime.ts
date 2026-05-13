@@ -2,7 +2,6 @@ import { createRequire } from 'node:module';
 
 import type { KtxConnectionMetabaseSetupArgs } from './commands/connection-metabase-setup.js';
 import type { KtxConnectionNotionArgs } from './commands/connection-notion.js';
-import type { KtxAgentArgs } from './agent.js';
 import type { KtxConnectionArgs } from './connection.js';
 import type { KtxDoctorArgs } from './doctor.js';
 import type { KtxIngestArgs } from './ingest.js';
@@ -30,7 +29,6 @@ export interface KtxCliIo {
 
 export interface KtxCliDeps {
   setup?: (args: KtxSetupArgs, io: KtxCliIo) => Promise<number>;
-  agent?: (args: KtxAgentArgs, io: KtxCliIo) => Promise<number>;
   connection?: (args: KtxConnectionArgs, io: KtxCliIo) => Promise<number>;
   connectionNotion?: (args: KtxConnectionNotionArgs, io: KtxCliIo) => Promise<number>;
   connectionMetabaseSetup?: (args: KtxConnectionMetabaseSetupArgs, io: KtxCliIo) => Promise<number>;

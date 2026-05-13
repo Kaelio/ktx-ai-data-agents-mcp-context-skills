@@ -26,19 +26,23 @@ ktx wiki <subcommand> [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--json` | Print JSON output | `false` |
 | `--user-id <id>` | Local user id | `local` |
 
 ### `wiki read`
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--json` | Print JSON output | `false` |
 | `--user-id <id>` | Local user id | `local` |
 
 ### `wiki search`
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--json` | Print JSON output | `false` |
 | `--user-id <id>` | Local user id | `local` |
+| `--limit <number>` | Maximum search results | — |
 
 ### `wiki write`
 
@@ -58,11 +62,20 @@ ktx wiki <subcommand> [options]
 # List all wiki pages
 ktx wiki list
 
+# List all wiki pages as JSON
+ktx wiki list --json
+
 # Read a specific wiki page
 ktx wiki read revenue-definitions
 
+# Read a specific wiki page as JSON
+ktx wiki read revenue-definitions --json
+
 # Search wiki pages
 ktx wiki search "monthly recurring revenue"
+
+# Search wiki pages as JSON
+ktx wiki search "monthly recurring revenue" --json --limit 10
 
 # Write a global knowledge page
 ktx wiki write revenue-definitions \
@@ -97,13 +110,16 @@ Wiki commands print local knowledge pages and search results. Agents should sear
 
 ```json
 {
-  "results": [
-    {
-      "key": "revenue-definitions",
-      "summary": "Canonical revenue metric definitions",
-      "score": 0.92
-    }
-  ]
+  "kind": "list",
+  "data": {
+    "items": [
+      {
+        "key": "revenue-definitions",
+        "summary": "Canonical revenue metric definitions",
+        "score": 0.92
+      }
+    ]
+  }
 }
 ```
 

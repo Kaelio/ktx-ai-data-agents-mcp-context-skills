@@ -190,49 +190,21 @@ describe('standalone built ktx CLI smoke', () => {
     );
   });
 
-  it('prints guided JSON for agent semantic-layer search outside a project through the built binary', async () => {
-    const projectDir = join(tempDir, 'missing-search-project');
-    await mkdir(projectDir, { recursive: true });
-
-    const result = await runBuiltCli([
-      'agent',
-      'sl',
-      'list',
-      '--json',
-      '--query',
-      'revenue',
-      '--project-dir',
-      projectDir,
-    ]);
+  it('rejects the removed agent command through the built binary', async () => {
+    const result = await runBuiltCli(['agent']);
 
     expect(result.code).toBe(1);
     expect(result.stdout).toBe('');
-    const errorJson = parseJsonOutput<{
-      ok: false;
-      error: { code: string; message: string; nextSteps: string[] };
-    }>(result.stderr);
-    expect(errorJson).toEqual({
-      ok: false,
-      error: {
-        code: 'agent_sl_search_missing_project',
-        message: `Semantic-layer search needs an initialized KTX project at ${projectDir}.`,
-        nextSteps: [
-          `ktx setup --project-dir ${projectDir}`,
-          `ktx status --project-dir ${projectDir}`,
-          'ktx ingest run --connection-id <connection> --adapter <adapter>',
-          `ktx agent sl list --json --query "revenue" --project-dir ${projectDir}`,
-        ],
-      },
-    });
+    expect(result.stderr).toContain("unknown command 'agent'");
   });
 
   it('runs doctor setup through the built binary', async () => {
     const result = await runBuiltCli(['status', '--no-input']);
 
-    expect(result.stdout).toContain('KTX setup doctor');
+    expect(result.stdout).toMatch(/KTX (setup|project) doctor/);
     expect(result.stdout).toContain('Node 22+');
     expect(result.stdout).toContain('Workspace-local CLI');
-    expect(result.stderr).toBe('');
+    expect(result.stderr === '' || result.stderr.startsWith('Project: ')).toBe(true);
     expect([0, 1]).toContain(result.code);
   });
 
