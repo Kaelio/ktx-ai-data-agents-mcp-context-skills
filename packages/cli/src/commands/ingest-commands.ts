@@ -158,8 +158,8 @@ export function registerIngestCommands(
 
   ingest
     .command('status')
-    .description('Print status for the latest or selected stored local ingest run or report file')
-    .argument('[runId]', 'Local ingest run id, report id, run id, or job id')
+    .description('Print status for the latest or selected stored ingest report')
+    .argument('[runId]', 'Local ingest id, report id, run id, or job id')
     .option('--report-file <path>', 'Bundle ingest report JSON file to render')
     .addOption(new Option('--plain', 'Print plain text output').conflicts(['json', 'viz']))
     .addOption(new Option('--json', 'Print JSON output').conflicts(['plain', 'viz']))
@@ -185,7 +185,7 @@ export function registerIngestCommands(
   ingest
     .command('watch', { hidden: true })
     .description('Open the latest or selected stored ingest visual report')
-    .argument('[runId]', 'Local ingest run id, report id, run id, or job id')
+    .argument('[runId]', 'Local ingest id, report id, run id, or job id')
     .option('--report-file <path>', 'Bundle ingest report JSON file to render')
     .addOption(new Option('--plain', 'Print plain text output').conflicts(['json', 'viz']))
     .addOption(new Option('--json', 'Print JSON output').conflicts(['plain', 'viz']))
@@ -210,8 +210,8 @@ export function registerIngestCommands(
 
   ingest
     .command('replay')
-    .description('Replay a stored ingest run or bundle report through memory-flow output')
-    .argument('<runId>', 'Local ingest run id, report id, run id, or job id')
+    .description('Replay a stored ingest report through memory-flow output')
+    .argument('<runId>', 'Local ingest id, report id, run id, or job id')
     .option('--report-file <path>', 'Bundle ingest report JSON file to render')
     .addOption(new Option('--plain', 'Print plain text output').conflicts(['json', 'viz']))
     .addOption(new Option('--json', 'Print JSON output').conflicts(['plain', 'viz']))

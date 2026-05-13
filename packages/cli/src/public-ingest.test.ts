@@ -845,7 +845,7 @@ describe('runKtxPublicIngest', () => {
         adapter: 'dbt',
         sourceDir: '/repo/dbt',
       }),
-      io.io,
+      expect.objectContaining({ capturedOutput: expect.any(Function) }),
     );
   });
 
@@ -881,7 +881,7 @@ describe('runKtxPublicIngest', () => {
         adapter: 'notion',
         allowImplicitAdapter: true,
       }),
-      io.io,
+      expect.objectContaining({ capturedOutput: expect.any(Function) }),
     );
   });
 
