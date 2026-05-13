@@ -22,10 +22,6 @@ function publicPackagePattern(text) {
   return new RegExp(text.replaceAll('{package}', escapeRegExp(publicNpmPackageName())));
 }
 
-function runtimeWheelPackagePattern(text) {
-  return new RegExp(text.replaceAll('{package}', escapeRegExp(runtimeWheelPackageName())));
-}
-
 describe('standalone example docs', () => {
   it('documents the local warehouse example from the examples index', async () => {
     const examples = await readText('examples/README.md');
@@ -156,14 +152,12 @@ describe('standalone example docs', () => {
     const servingAgents = await readText('docs-site/content/docs/guides/serving-agents.mdx');
 
     for (const command of [
-      'ktx agent tools --json',
-      'ktx agent context --json',
-      'ktx agent sl list --json',
-      'ktx agent sl read orders --json',
-      'ktx agent sl query --json',
-      'ktx agent wiki search "revenue recognition" --json',
-      'ktx agent wiki read order-status-definitions --json',
-      'ktx agent sql execute --json',
+      'ktx status --json',
+      'ktx sl list --json',
+      'ktx sl read orders --json',
+      'ktx sl query --json',
+      'ktx wiki search "revenue recognition" --json',
+      'ktx wiki read order-status-definitions --json',
     ]) {
       assert.match(servingAgents, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
@@ -192,8 +186,7 @@ describe('standalone example docs', () => {
     assert.match(packageArtifacts, /requires `uv` on `PATH`/);
     assert.match(packageArtifacts, /ktx dev runtime status/);
     assert.match(packageArtifacts, /ktx dev runtime status/);
-    assert.match(packageArtifacts, /ktx dev runtime prune --dry-run/);
-    assert.match(packageArtifacts, /ktx dev runtime prune --yes/);
+    assert.doesNotMatch(packageArtifacts, /ktx dev runtime prune/);
     assert.match(
       packageArtifacts,
       new RegExp(
@@ -226,8 +219,7 @@ describe('standalone example docs', () => {
     assert.match(readme, /requires `uv` on `PATH`/);
     assert.match(readme, /ktx dev runtime status/);
     assert.match(readme, /ktx dev runtime status/);
-    assert.match(readme, /ktx dev runtime prune --dry-run/);
-    assert.match(readme, /ktx dev runtime prune --yes/);
+    assert.doesNotMatch(readme, /ktx dev runtime prune/);
     assert.doesNotMatch(readme, /@ktx\/context/);
     assert.doesNotMatch(readme, /@ktx\/cli/);
     assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);

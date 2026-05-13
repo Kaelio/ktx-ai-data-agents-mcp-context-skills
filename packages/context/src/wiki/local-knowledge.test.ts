@@ -244,4 +244,30 @@ describe('local knowledge helpers', () => {
       }),
     ).rejects.toThrow('Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".');
   });
+
+  it('ignores nested historic-SQL legacy paths when listing local knowledge pages', async () => {
+    await writeLocalKnowledgePage(project, {
+      key: 'historic-sql-paid-orders',
+      scope: 'GLOBAL',
+      summary: 'Flat historic SQL page',
+      content: 'Flat page body.',
+      tags: ['historic-sql'],
+    });
+    await project.fileStore.writeFile(
+      'knowledge/global/historic-sql/paid-orders.md',
+      '---\nsummary: Nested historic SQL page\nusage_mode: auto\n---\n\nNested body\n',
+      'Test',
+      'test@example.com',
+      'Write nested legacy page',
+    );
+
+    await expect(listLocalKnowledgePages(project, { userId: 'local' })).resolves.toEqual([
+      {
+        key: 'historic-sql-paid-orders',
+        path: 'knowledge/global/historic-sql-paid-orders.md',
+        scope: 'GLOBAL',
+        summary: 'Flat historic SQL page',
+      },
+    ]);
+  });
 });

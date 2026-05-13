@@ -250,7 +250,7 @@ describe('createPublicNpmPackageTree', () => {
         await readFile(join(layout.packRoot, 'node_modules', '@ktx', 'context', 'package.json'), 'utf8'),
       );
       assert.equal(bundledContextJson.private, true);
-      assert.deepEqual(bundledContextJson.dependencies, { yaml: '^2.8.2' });
+      assert.equal(bundledContextJson.dependencies, undefined);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

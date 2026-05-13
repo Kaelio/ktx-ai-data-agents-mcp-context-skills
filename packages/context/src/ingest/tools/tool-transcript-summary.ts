@@ -1,4 +1,5 @@
 import type { ToolCallLogEntry } from './tool-call-logger.js';
+import { isFlatWikiKey, suggestFlatWikiKey } from '../../wiki/keys.js';
 
 export interface MutableToolTranscriptSummary {
   unitKey: string;
@@ -112,7 +113,10 @@ function structuredSuccess(output: unknown): boolean | null {
 
 function wikiTargetKey(entry: ToolCallLogEntry): string | null {
   const key = stringField(recordField(entry.output, 'structured'), 'key') ?? stringField(entry.input, 'key');
-  return key ? `wiki:${key}` : null;
+  if (!key) {
+    return null;
+  }
+  return `wiki:${isFlatWikiKey(key) ? key : suggestFlatWikiKey(key)}`;
 }
 
 function slTargetKey(entry: ToolCallLogEntry): string | null {

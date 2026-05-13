@@ -1,7 +1,6 @@
 /* @jsxImportSource react */
 import {
   buildMemoryFlowViewModel,
-  buildMemoryFlowVisualModel,
   createInitialMemoryFlowInteractionState,
   findMemoryFlowSearchMatches,
   type MemoryFlowColumnId,
@@ -14,8 +13,7 @@ import {
   selectedMemoryFlowDetails,
 } from '@ktx/context/ingest';
 import { Box, Text, render as renderInkRuntime, useApp, useInput } from 'ink';
-import React, { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { buildDemoMetrics } from './demo-metrics.js';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityFeed,
   Hud,
@@ -201,14 +199,6 @@ function stageLabel(columnId: MemoryFlowColumnId): string {
   return STAGE_LABELS[columnId];
 }
 
-function statusLabel(status: string): 'OK' | 'RUN' | 'WARN' | 'FAIL' | 'WAIT' {
-  if (status === 'complete') return 'OK';
-  if (status === 'active') return 'RUN';
-  if (status === 'warning') return 'WARN';
-  if (status === 'failed') return 'FAIL';
-  return 'WAIT';
-}
-
 function filterLabel(filter: MemoryFlowInteractionState['filter']): string {
   return filter === 'failed_or_flagged' ? 'issues' : 'all';
 }
@@ -325,7 +315,6 @@ export function MemoryFlowTuiApp(props: MemoryFlowTuiAppProps): ReactNode {
   const view = useMemo(() => buildMemoryFlowViewModel(pacedInput), [pacedInput]);
   const [state, setState] = useState<MemoryFlowInteractionState>(() => createInitialMemoryFlowInteractionState(view));
   const [frame, setFrame] = useState(0);
-  const [thoughtFrame, setThoughtFrame] = useState(0);
   const [completionFrame, setCompletionFrame] = useState(0);
   const [holdComplete, setHoldComplete] = useState(false);
   const [userHasNavigated, setUserHasNavigated] = useState(false);
@@ -346,7 +335,6 @@ export function MemoryFlowTuiApp(props: MemoryFlowTuiAppProps): ReactNode {
   useEffect(() => {
     const timer = setInterval(() => {
       setFrame((current) => current + 1);
-      setThoughtFrame((current) => current + 1);
     }, props.frameMs ?? DEFAULT_TUI_TIMING.frameMs);
     return () => clearInterval(timer);
   }, [props.frameMs]);
@@ -354,7 +342,6 @@ export function MemoryFlowTuiApp(props: MemoryFlowTuiAppProps): ReactNode {
   useEffect(() => {
     if (lastEventCountRef.current !== pacedInput.events.length) {
       lastEventCountRef.current = pacedInput.events.length;
-      setThoughtFrame(0);
     }
   }, [pacedInput.events.length]);
 
@@ -409,10 +396,6 @@ export function MemoryFlowTuiApp(props: MemoryFlowTuiAppProps): ReactNode {
   });
 
   const isComplete = pacedInput.status === 'done' || pacedInput.status === 'error';
-  const completionMetrics = useMemo(
-    () => buildDemoMetrics(pacedInput, pacedNow ? { now: pacedNow } : {}),
-    [pacedInput, pacedNow],
-  );
 
   const termWidth = props.terminalWidth ?? 80;
 

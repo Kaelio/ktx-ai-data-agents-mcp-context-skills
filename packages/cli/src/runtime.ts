@@ -8,14 +8,14 @@ import {
   type ManagedPythonDaemonStopResult,
 } from './managed-python-daemon.js';
 import {
+  doctorManagedPythonRuntime,
   installManagedPythonRuntime,
-  pruneManagedPythonRuntimes,
   readManagedPythonRuntimeStatus,
   type KtxRuntimeFeature,
+  type ManagedPythonRuntimeDoctorCheck,
   type ManagedPythonRuntimeInstallOptions,
   type ManagedPythonRuntimeInstallResult,
   type ManagedPythonRuntimeLayoutOptions,
-  type ManagedPythonRuntimePruneResult,
   type ManagedPythonRuntimeStatus,
 } from './managed-python-runtime.js';
 
@@ -23,8 +23,7 @@ export type KtxRuntimeArgs =
   | { command: 'install'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
   | { command: 'start'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
   | { command: 'stop'; cliVersion: string; all: boolean }
-  | { command: 'status'; cliVersion: string; json: boolean }
-  | { command: 'prune'; cliVersion: string; dryRun: boolean; yes: boolean };
+  | { command: 'status'; cliVersion: string; json: boolean };
 
 export interface KtxRuntimeDeps {
   installRuntime?: (options: ManagedPythonRuntimeInstallOptions) => Promise<ManagedPythonRuntimeInstallResult>;
@@ -36,11 +35,7 @@ export interface KtxRuntimeDeps {
   stopDaemon?: (options: { cliVersion: string }) => Promise<ManagedPythonDaemonStopResult>;
   stopAllDaemons?: (options: { cliVersion: string }) => Promise<ManagedPythonDaemonStopAllResult>;
   readStatus?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeStatus>;
-  pruneRuntime?: (options: {
-    cliVersion: string;
-    runtimeRoot: string;
-    dryRun?: boolean;
-  }) => Promise<ManagedPythonRuntimePruneResult>;
+  doctorRuntime?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeDoctorCheck[]>;
 }
 
 function writeJson(io: KtxCliIo, value: unknown): void {
@@ -145,15 +140,18 @@ function writeStatus(io: KtxCliIo, status: ManagedPythonRuntimeStatus): void {
   }
 }
 
-function writePrune(io: KtxCliIo, result: ManagedPythonRuntimePruneResult, dryRun: boolean): void {
-  if (result.stale.length === 0) {
-    io.stdout.write(`No stale KTX Python runtimes found under ${result.runtimeRoot}\n`);
-    return;
+function writeRuntimeChecks(io: KtxCliIo, checks: ManagedPythonRuntimeDoctorCheck[]): void {
+  io.stdout.write('KTX Python runtime checks\n');
+  for (const check of checks) {
+    io.stdout.write(`${check.status.toUpperCase()} ${check.label}: ${check.detail}\n`);
+    if (check.fix) {
+      io.stdout.write(`     Fix: ${check.fix}\n`);
+    }
   }
-  io.stdout.write(dryRun ? 'Stale KTX Python runtimes\n' : 'Removed stale KTX Python runtimes\n');
-  for (const path of dryRun ? result.stale : result.removed) {
-    io.stdout.write(`${path}\n`);
-  }
+}
+
+function hasRuntimeCheckFailures(checks: ManagedPythonRuntimeDoctorCheck[]): boolean {
+  return checks.some((check) => check.status === 'fail');
 }
 
 export async function runKtxRuntime(
@@ -196,27 +194,19 @@ export async function runKtxRuntime(
     }
     if (args.command === 'status') {
       const readStatus = deps.readStatus ?? readManagedPythonRuntimeStatus;
+      const doctorRuntime = deps.doctorRuntime ?? doctorManagedPythonRuntime;
       const status = await readStatus({ cliVersion: args.cliVersion });
+      const checks = await doctorRuntime({ cliVersion: args.cliVersion });
       if (args.json) {
-        writeJson(io, status);
+        writeJson(io, { ...status, checks });
       } else {
         writeStatus(io, status);
+        writeRuntimeChecks(io, checks);
       }
-      return 0;
+      return hasRuntimeCheckFailures(checks) ? 1 : 0;
     }
-    if (!args.dryRun && !args.yes) {
-      io.stderr.write('Refusing to prune without --yes. Preview with: ktx dev runtime prune --dry-run\n');
-      return 1;
-    }
-    const status = await (deps.readStatus ?? readManagedPythonRuntimeStatus)({ cliVersion: args.cliVersion });
-    const pruneRuntime = deps.pruneRuntime ?? pruneManagedPythonRuntimes;
-    const result = await pruneRuntime({
-      cliVersion: args.cliVersion,
-      runtimeRoot: status.layout.runtimeRoot,
-      dryRun: args.dryRun,
-    });
-    writePrune(io, result, args.dryRun);
-    return 0;
+    const _exhaustive: never = args;
+    return _exhaustive;
   } catch (error) {
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;

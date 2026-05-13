@@ -29,6 +29,18 @@ describe('ingest prompt assets', () => {
     expect(prompt).not.toMatch(forbiddenProductPattern());
   });
 
+  it('uses shipped warehouse verification tools in the WorkUnit prompt', async () => {
+    const prompt = await readFile(
+      new URL('../../prompts/memory_agent_bundle_ingest_work_unit.md', import.meta.url),
+      'utf-8',
+    );
+
+    expect(prompt).toContain('discover_data');
+    expect(prompt).toContain('entity_details');
+    expect(prompt).not.toContain('wiki_sl_search');
+    expect(prompt).not.toContain('sl_describe_table');
+  });
+
   it('does not route historic-SQL through page-triage prompt examples', async () => {
     const prompt = await readFile(new URL('../../prompts/skills/page_triage_classifier.md', import.meta.url), 'utf-8');
 

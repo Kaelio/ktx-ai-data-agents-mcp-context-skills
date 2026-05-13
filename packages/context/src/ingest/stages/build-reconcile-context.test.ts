@@ -107,11 +107,62 @@ describe('buildReconcileToolSet', () => {
         'eviction_list',
         'load_skill',
         'read_raw_span',
+        'record_verification_ledger',
         'sl_write_source',
         'stage_diff',
         'stage_list',
         'wiki_write',
       ].sort(),
     );
+  });
+
+  it('requires the verification ledger before reconciliation write tools run', async () => {
+    const slWrite = vi.fn().mockResolvedValue({ markdown: 'written', structured: { success: true } });
+    const toolSet = buildReconcileToolSet({
+      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
+      stageListTool: { stage_list: { description: 'stage list', inputSchema: {} as any, execute: vi.fn() } } as any,
+      stageDiffTool: { stage_diff: { description: 'stage diff', inputSchema: {} as any, execute: vi.fn() } } as any,
+      evictionListTool: {
+        eviction_list: { description: 'eviction list', inputSchema: {} as any, execute: vi.fn() },
+      } as any,
+      emitConflictResolutionTool: {
+        emit_conflict_resolution: { description: 'conflict', inputSchema: {} as any, execute: vi.fn() },
+      } as any,
+      emitEvictionDecisionTool: {
+        emit_eviction_decision: { description: 'eviction', inputSchema: {} as any, execute: vi.fn() },
+      } as any,
+      emitArtifactResolutionTool: {
+        emit_artifact_resolution: { description: 'resolution', inputSchema: {} as any, execute: vi.fn() },
+      } as any,
+      emitUnmappedFallbackTool: {
+        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
+      } as any,
+      readRawSpanTool: { read_raw_span: { description: 'raw span', inputSchema: {} as any, execute: vi.fn() } } as any,
+      toolsetTools: { sl_write_source: { description: 'sl write', inputSchema: {} as any, execute: slWrite } as any },
+    });
+
+    const correction = await toolSet.sl_write_source.execute?.(
+      { connectionId: 'warehouse', sourceName: 'accounts' },
+      { toolCallId: 't1' } as any,
+    );
+
+    expect(slWrite).not.toHaveBeenCalled();
+    expect(correction).toMatchObject({ structured: { success: false, reason: 'verification_ledger_required' } });
+
+    await toolSet.record_verification_ledger.execute?.(
+      {
+        summary: 'Verified warehouse.accounts with entity_details.',
+        verifiedIdentifiers: ['warehouse.accounts'],
+        unverifiedIdentifiers: [],
+      },
+      { toolCallId: 't2' } as any,
+    );
+    const written = await toolSet.sl_write_source.execute?.(
+      { connectionId: 'warehouse', sourceName: 'accounts' },
+      { toolCallId: 't3' } as any,
+    );
+
+    expect(slWrite).toHaveBeenCalledTimes(1);
+    expect(written).toMatchObject({ structured: { success: true } });
   });
 });

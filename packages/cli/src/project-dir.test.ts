@@ -35,8 +35,7 @@ describe('project directory defaults', () => {
     const ingest = vi.fn(async () => 0);
     const scan = vi.fn(async () => 0);
     const setup = vi.fn(async () => 0);
-    const agent = vi.fn(async () => 0);
-    const deps: KtxCliDeps = { agent, connection, doctor, ingest, scan, setup };
+    const deps: KtxCliDeps = { connection, doctor, ingest, scan, setup };
 
     const cases: Array<{
       argv: string[];
@@ -73,12 +72,6 @@ describe('project directory defaults', () => {
         spy: scan,
         expected: { command: 'run', projectDir: '/tmp/ktx-env-project', connectionId: 'warehouse' },
         expectedStderr: 'Project: /tmp/ktx-env-project\n',
-      },
-      {
-        argv: ['agent', 'tools', '--json'],
-        spy: agent,
-        expected: { command: 'tools', projectDir: '/tmp/ktx-env-project' },
-        expectedStderr: '',
       },
     ];
 

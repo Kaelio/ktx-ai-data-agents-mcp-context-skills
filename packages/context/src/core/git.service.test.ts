@@ -379,5 +379,37 @@ describe('GitService', () => {
       await service.removeWorktree(wtDir).catch(() => undefined);
       await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
     });
+
+    it('reports untracked files that would be overwritten by the squash merge', async () => {
+      const { commitHash: baseSha } = await writeAndCommit('seed.md', 'seed');
+      const parent = await realpath(join(tempDir, '..'));
+      const wtDir = join(parent, `wt-${Date.now()}-untracked`);
+      await service.addWorktree(wtDir, 'session/untracked', baseSha);
+
+      const scoped = service.forWorktree(wtDir);
+      await writeFile(join(wtDir, 'knowledge.md'), 'session version\n', 'utf-8');
+      await scoped.commitFile('knowledge.md', 'session write', 'System User', 'system@example.com');
+      await writeFile(join(tempDir, 'knowledge.md'), 'untracked local version\n', 'utf-8');
+
+      const result = await service.squashMergeIntoMain(
+        'session/untracked',
+        'System User',
+        'system@example.com',
+        'Memory capture: 1 file [chat=untracked]',
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        throw new Error('unreachable');
+      }
+      expect(result.conflict).toBe(true);
+      expect(result.conflictPaths).toEqual(['knowledge.md']);
+
+      const status = await (service as unknown as { git: import('simple-git').SimpleGit }).git.status();
+      expect(status.not_added).toContain('knowledge.md');
+
+      await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
   });
 });

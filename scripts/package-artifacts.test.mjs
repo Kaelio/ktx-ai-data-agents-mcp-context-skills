@@ -27,8 +27,6 @@ import {
   writeArtifactManifest,
 } from './package-artifacts.mjs';
 
-const STALE_METABASE_UNSUPPORTED = ['Standalone Metabase scheduled fetch', 'is intentionally unsupported'].join(' ');
-
 async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
@@ -420,9 +418,7 @@ describe('verification snippets', () => {
     assert.deepEqual(packageJson.dependencies, {
       '@kaelio/ktx': `file:${layout.cliTarball}`,
     });
-    assert.deepEqual(packageJson.devDependencies, {
-      'better-sqlite3': '^12.6.2',
-    });
+    assert.equal(packageJson.devDependencies, undefined);
     assert.equal(
       npmSmokePnpmWorkspaceYaml(),
       ['packages:', '  - "."', 'allowBuilds:', '  better-sqlite3: true', ''].join('\n'),
@@ -461,11 +457,11 @@ describe('verification snippets', () => {
     assert.doesNotMatch(source, /startSemanticDaemon/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'setup'/);
     assert.match(source, /knowledge', 'global', 'revenue\.md'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'agent',\s*'wiki',\s*'search'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'wiki',\s*'search'/);
     assert.match(source, /semantic-layer', 'warehouse', 'orders\.yaml'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'agent',\s*'sl',\s*'list'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'list'/);
     assert.match(source, /orders\.order_count/);
-    assert.match(source, /sqlite3/);
+    assert.match(source, /node:sqlite/);
     assert.match(source, /driver: sqlite/);
     assert.match(source, /path: warehouse\.db/);
     assert.match(source, /live-database/);
@@ -473,7 +469,7 @@ describe('verification snippets', () => {
     assert.match(source, /"mode": "compile_only"/);
     assert.match(source, /"mode": "executed"/);
     assert.match(source, /ktx sl query sqlite execute/);
-    assert.match(source, /import Database from 'better-sqlite3'/);
+    assert.match(source, /import \{ DatabaseSync \} from 'node:sqlite'/);
     assert.doesNotMatch(source, /run\('python'/);
     assert.match(source, /KTX_RUNTIME_ROOT/);
     assert.match(source, /managed-runtime/);
@@ -490,13 +486,8 @@ describe('verification snippets', () => {
     assert.match(source, /ktx dev runtime start reuse/);
     assert.match(source, /Using existing KTX Python daemon/);
     assert.match(source, /ktx dev runtime stop/);
-    assert.match(source, /ktx dev runtime prune dry run/);
-    assert.match(source, /0\.0\.0/);
-    assert.match(source, /ktx dev runtime prune needs confirmation/);
-    assert.match(source, /Refusing to prune without --yes/);
-    assert.match(source, /ktx dev runtime prune confirmed/);
-    assert.match(source, /Removed stale KTX Python runtimes/);
-    assert.match(source, /assert\.rejects\(\(\) => access\(staleRuntimeDir\)\)/);
+    assert.doesNotMatch(source, /ktx dev runtime prune/);
+    assert.doesNotMatch(source, /staleRuntimeDir/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'scan',\s*'warehouse'/);
     assert.match(source, /'--mode',\s*'enriched'/);
     assert.doesNotMatch(source, /'--enrich'/);

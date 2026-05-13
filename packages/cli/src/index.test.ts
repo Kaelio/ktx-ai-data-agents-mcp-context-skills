@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -159,7 +159,7 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['dev', 'runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['dev', 'runtime', 'stop', '--all'], stopAllIo.io, { runtime })).resolves.toBe(0);
     await expect(runKtxCli(['dev', 'runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['dev', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(1);
 
     expect(runtime).toHaveBeenNthCalledWith(
       1,
@@ -208,19 +208,11 @@ describe('runKtxCli', () => {
       },
       statusIo.io,
     );
-    expect(runtime).toHaveBeenNthCalledWith(
-      6,
-      {
-        command: 'prune',
-        cliVersion: '0.0.0-private',
-        dryRun: true,
-        yes: false,
-      },
-      pruneIo.io,
-    );
-    for (const io of [installIo, startIo, stopIo, stopAllIo, statusIo, pruneIo]) {
+    expect(runtime).toHaveBeenCalledTimes(5);
+    for (const io of [installIo, startIo, stopIo, stopAllIo, statusIo]) {
       expect(io.stderr()).toBe('');
     }
+    expect(pruneIo.stderr()).toMatch(/unknown command|error:/);
   });
 
   it('prints the resolved project directory for ordinary project commands', async () => {
@@ -1149,136 +1141,28 @@ describe('runKtxCli', () => {
     expect(setupIo.stderr()).toContain('Choose only one Historic SQL action');
   });
 
-  it('registers hidden agent help and tools discovery without showing agent in root help', async () => {
-    const helpIo = makeIo();
-    const toolsIo = makeIo();
-    const agent = vi.fn(async () => 0);
+  it('rejects the removed hidden agent command', async () => {
+    const io = makeIo();
 
-    await expect(runKtxCli(['agent', '--help'], helpIo.io, { agent })).resolves.toBe(0);
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'agent', 'tools', '--json'], toolsIo.io, { agent }),
-    ).resolves.toBe(0);
+    await expect(runKtxCli(['agent'], io.io)).resolves.toBe(1);
 
-    expect(helpIo.stdout()).toContain('Usage: ktx agent');
-    expect(toolsIo.stderr()).toBe('');
-    expect(agent).toHaveBeenCalledWith({ command: 'tools', projectDir: tempDir, json: true }, toolsIo.io);
+    expect(io.stderr()).toContain("unknown command 'agent'");
+    expect(io.stdout()).toBe('');
   });
 
-  it('dispatches full hidden agent commands without exposing agent in root help', async () => {
-    const agent = vi.fn(async () => 0);
-    const cases = [
-      {
-        argv: ['--project-dir', tempDir, 'agent', 'context', '--json'],
-        args: { command: 'context', projectDir: tempDir, json: true },
-      },
-      {
-        argv: [
-          '--project-dir',
-          tempDir,
-          'agent',
-          'sl',
-          'list',
-          '--json',
-          '--connection-id',
-          'warehouse',
-          '--query',
-          'orders',
-        ],
-        args: { command: 'sl-list', projectDir: tempDir, json: true, connectionId: 'warehouse', query: 'orders' },
-      },
-      {
-        argv: ['--project-dir', tempDir, 'agent', 'sl', 'read', 'orders', '--json', '--connection-id', 'warehouse'],
-        args: { command: 'sl-read', projectDir: tempDir, json: true, sourceName: 'orders', connectionId: 'warehouse' },
-      },
-      {
-        argv: [
-          '--project-dir',
-          tempDir,
-          'agent',
-          'sl',
-          'query',
-          '--json',
-          '--connection-id',
-          'warehouse',
-          '--query-file',
-          '/tmp/query.json',
-          '--execute',
-          '--max-rows',
-          '100',
-        ],
-        args: {
-          command: 'sl-query',
-          projectDir: tempDir,
-          json: true,
-          connectionId: 'warehouse',
-          queryFile: '/tmp/query.json',
-          execute: true,
-          maxRows: 100,
-          cliVersion: '0.0.0-private',
-          runtimeInstallPolicy: 'prompt',
-        },
-      },
-      {
-        argv: ['--project-dir', tempDir, 'agent', 'wiki', 'search', 'revenue', '--json', '--limit', '5'],
-        args: { command: 'wiki-search', projectDir: tempDir, json: true, query: 'revenue', limit: 5 },
-      },
-      {
-        argv: ['--project-dir', tempDir, 'agent', 'wiki', 'read', 'page-1', '--json'],
-        args: { command: 'wiki-read', projectDir: tempDir, json: true, pageId: 'page-1' },
-      },
-      {
-        argv: [
-          '--project-dir',
-          tempDir,
-          'agent',
-          'sql',
-          'execute',
-          '--json',
-          '--connection-id',
-          'warehouse',
-          '--sql-file',
-          '/tmp/query.sql',
-          '--max-rows',
-          '100',
-        ],
-        args: {
-          command: 'sql-execute',
-          projectDir: tempDir,
-          json: true,
-          connectionId: 'warehouse',
-          sqlFile: '/tmp/query.sql',
-          maxRows: 100,
-        },
-      },
-    ];
-
-    for (const entry of cases) {
-      const io = makeIo();
-      await expect(runKtxCli(entry.argv, io.io, { agent })).resolves.toBe(0);
-      expect(agent).toHaveBeenLastCalledWith(entry.args, io.io);
-      expect(io.stderr()).toBe('');
-    }
-
-    const helpIo = makeIo();
-    await expect(runKtxCli(['--help'], helpIo.io, { agent })).resolves.toBe(0);
-    expect(helpIo.stdout()).not.toContain('agent ');
-  });
-
-  it('routes hidden agent SL query managed runtime policies', async () => {
+  it('routes public SL query files with managed runtime policies', async () => {
     const autoIo = makeIo();
     const neverIo = makeIo();
     const conflictIo = makeIo();
-    const agent = vi.fn(async () => 0);
+    const sl = vi.fn(async () => 0);
 
     await expect(
       runKtxCli(
         [
           '--project-dir',
           tempDir,
-          'agent',
           'sl',
           'query',
-          '--json',
           '--connection-id',
           'warehouse',
           '--query-file',
@@ -1286,7 +1170,7 @@ describe('runKtxCli', () => {
           '--yes',
         ],
         autoIo.io,
-        { agent },
+        { sl },
       ),
     ).resolves.toBe(0);
 
@@ -1295,10 +1179,8 @@ describe('runKtxCli', () => {
         [
           '--project-dir',
           tempDir,
-          'agent',
           'sl',
           'query',
-          '--json',
           '--connection-id',
           'warehouse',
           '--query-file',
@@ -1306,7 +1188,7 @@ describe('runKtxCli', () => {
           '--no-input',
         ],
         neverIo.io,
-        { agent },
+        { sl },
       ),
     ).resolves.toBe(0);
 
@@ -1315,10 +1197,8 @@ describe('runKtxCli', () => {
         [
           '--project-dir',
           tempDir,
-          'agent',
           'sl',
           'query',
-          '--json',
           '--connection-id',
           'warehouse',
           '--query-file',
@@ -1327,145 +1207,39 @@ describe('runKtxCli', () => {
           '--no-input',
         ],
         conflictIo.io,
-        { agent },
+        { sl },
       ),
     ).resolves.toBe(1);
 
-    expect(agent).toHaveBeenNthCalledWith(
+    expect(sl).toHaveBeenNthCalledWith(
       1,
       {
-        command: 'sl-query',
+        command: 'query',
         projectDir: tempDir,
-        json: true,
         connectionId: 'warehouse',
         queryFile: '/tmp/query.json',
         execute: false,
+        format: 'json',
         cliVersion: '0.0.0-private',
         runtimeInstallPolicy: 'auto',
       },
       autoIo.io,
     );
-    expect(agent).toHaveBeenNthCalledWith(
+    expect(sl).toHaveBeenNthCalledWith(
       2,
       {
-        command: 'sl-query',
+        command: 'query',
         projectDir: tempDir,
-        json: true,
         connectionId: 'warehouse',
         queryFile: '/tmp/query.json',
         execute: false,
+        format: 'json',
         cliVersion: '0.0.0-private',
         runtimeInstallPolicy: 'never',
       },
       neverIo.io,
     );
     expect(conflictIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
-  });
-
-  it('prints semantic-layer hybrid search metadata from the hidden agent sl list command', async () => {
-    const agent = vi.fn(async (args, io) => {
-      expect(args).toEqual({
-        command: 'sl-list',
-        projectDir: tempDir,
-        json: true,
-        connectionId: 'warehouse',
-        query: 'paid',
-      });
-      io.stdout.write(
-        `${JSON.stringify(
-          {
-            sources: [
-              {
-                connectionId: 'warehouse',
-                connectionName: 'warehouse',
-                name: 'orders',
-                columnCount: 2,
-                measureCount: 1,
-                joinCount: 0,
-                score: 0.03278688524590164,
-                matchReasons: ['dictionary'],
-                dictionaryMatches: [{ column: 'status', values: ['paid'] }],
-              },
-            ],
-            totalSources: 1,
-          },
-          null,
-          2,
-        )}\n`,
-      );
-      return 0;
-    });
-    const io = makeIo();
-
-    await expect(
-      runKtxCli(
-        ['--project-dir', tempDir, 'agent', 'sl', 'list', '--json', '--connection-id', 'warehouse', '--query', 'paid'],
-        io.io,
-        { agent },
-      ),
-    ).resolves.toBe(0);
-
-    expect(JSON.parse(io.stdout())).toEqual({
-      sources: [
-        expect.objectContaining({
-          connectionId: 'warehouse',
-          name: 'orders',
-          matchReasons: ['dictionary'],
-          dictionaryMatches: [{ column: 'status', values: ['paid'] }],
-        }),
-      ],
-      totalSources: 1,
-    });
-  });
-
-  it('prints wiki hybrid search metadata from the hidden agent wiki search command', async () => {
-    const agent = vi.fn(async (args, io) => {
-      expect(args).toEqual({
-        command: 'wiki-search',
-        projectDir: tempDir,
-        json: true,
-        query: 'paid order',
-        limit: 5,
-      });
-      io.stdout.write(
-        `${JSON.stringify(
-          {
-            results: [
-              {
-                key: 'metrics-revenue',
-                path: 'knowledge/global/metrics-revenue.md',
-                scope: 'GLOBAL',
-                summary: 'Revenue metric definition',
-                score: 0.02459016393442623,
-                matchReasons: ['lexical', 'token'],
-              },
-            ],
-            totalFound: 1,
-          },
-          null,
-          2,
-        )}\n`,
-      );
-      return 0;
-    });
-    const io = makeIo();
-
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'agent', 'wiki', 'search', 'paid order', '--json', '--limit', '5'], io.io, {
-        agent,
-      }),
-    ).resolves.toBe(0);
-
-    expect(JSON.parse(io.stdout())).toEqual({
-      results: [
-        expect.objectContaining({
-          key: 'metrics-revenue',
-          path: 'knowledge/global/metrics-revenue.md',
-          matchReasons: ['lexical', 'token'],
-        }),
-      ],
-      totalFound: 1,
-    });
   });
 
   it('dispatches public connection subcommands through the existing connection implementation', async () => {

@@ -53,6 +53,7 @@ import type {
   UnresolvedCardInfo,
   WorkUnit,
 } from './types.js';
+import { repairWikiSlRefs, type WikiSlRefRepairResult } from './wiki-sl-ref-repair.js';
 
 function workUnitToMemoryFlowPlannedWorkUnit(workUnit: WorkUnit): MemoryFlowPlannedWorkUnit {
   return {
@@ -528,6 +529,7 @@ export class IngestBundleRunner {
       let sourceContextReport: { capped?: boolean; warnings?: string[] } | undefined;
       let parseArtifacts: unknown;
       let postProcessorOutcome: IngestReportPostProcessorOutcome | undefined;
+      let wikiSlRefRepairResult: WikiSlRefRepairResult | null = null;
       let reconcileNotes: string[] = [];
       let triageResult: PageTriageRunResult | null = null;
       if (overrideReport) {
@@ -662,6 +664,7 @@ export class IngestBundleRunner {
             touchedSlSources: session.touchedSlSources,
             actions: sessionActions,
             allowedRawPaths: new Set(wu.rawFiles),
+            allowedConnectionNames: new Set(slConnectionIds),
             semanticLayerService: scopedSemanticLayerService,
             wikiService: scopedWikiService,
             configService: sessionWorktree.config,
@@ -898,6 +901,7 @@ export class IngestBundleRunner {
         touchedSlSources: reconcileSession.touchedSlSources,
         actions: reconcileActions,
         allowedRawPaths: reconciliationAllowedRawPaths,
+        allowedConnectionNames: new Set(slConnectionIds),
         semanticLayerService: rcScopedSl,
         wikiService: rcScopedWiki,
         configService: sessionWorktree.config,
@@ -1138,6 +1142,19 @@ export class IngestBundleRunner {
         }
       }
 
+      const repairConnectionIds = [
+        ...new Set([
+          ...slConnectionIds,
+          ...(postProcessorOutcome?.touchedSources ?? []).map((source) => source.connectionId),
+        ]),
+      ].sort();
+      wikiSlRefRepairResult = await repairWikiSlRefs({
+        wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
+        semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+        configService: sessionWorktree.config,
+        connectionIds: repairConnectionIds,
+      });
+
       // Stage 6 — squash commit
       const stage6 = ctx?.startPhase(0.04);
       await stage6?.updateProgress(0.0, 'Saving changes');
@@ -1354,6 +1371,8 @@ export class IngestBundleRunner {
         provenanceRows: reportProvenanceRows,
         toolTranscripts: reportToolTranscripts,
         postProcessor: postProcessorOutcome,
+        wikiSlRefRepairs: wikiSlRefRepairResult.repairs,
+        wikiSlRefRepairWarnings: wikiSlRefRepairResult.warnings,
         ...(reportMemoryFlow ? { memoryFlow: reportMemoryFlow } : {}),
         context: contextReport
           ? {

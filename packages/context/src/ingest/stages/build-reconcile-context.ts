@@ -1,5 +1,10 @@
 import type { Tool, ToolSet } from 'ai';
 import { buildCanonicalPinsPromptBlock, type CanonicalPin } from '../canonical-pins.js';
+import {
+  createVerificationLedgerState,
+  VERIFICATION_LEDGER_PROMPT,
+  withVerificationLedger,
+} from '../tools/verification-ledger.tool.js';
 import type { EvictionUnit } from '../types.js';
 import type { StageIndex } from './stage-index.types.js';
 
@@ -12,6 +17,7 @@ export function buildReconcileSystemPrompt(params: {
 }): string {
   return [
     params.baseFraming.trimEnd(),
+    VERIFICATION_LEDGER_PROMPT,
     params.skillsPrompt.trimEnd(),
     buildCanonicalPinsPromptBlock(params.canonicalPins),
     `\n<context>\nsyncId: ${params.syncId}\nsource: ${params.sourceKey}\n</context>`,
@@ -188,16 +194,20 @@ export interface ReconcileToolSetInput {
 }
 
 export function buildReconcileToolSet(input: ReconcileToolSetInput): ToolSet {
-  return {
-    ...input.toolsetTools,
-    ...input.loadSkillTool,
-    ...input.stageListTool,
-    ...input.stageDiffTool,
-    ...input.evictionListTool,
-    ...input.emitConflictResolutionTool,
-    ...input.emitEvictionDecisionTool,
-    ...input.emitArtifactResolutionTool,
-    ...input.emitUnmappedFallbackTool,
-    ...input.readRawSpanTool,
-  };
+  const state = createVerificationLedgerState();
+  return withVerificationLedger(
+    {
+      ...input.toolsetTools,
+      ...input.loadSkillTool,
+      ...input.stageListTool,
+      ...input.stageDiffTool,
+      ...input.evictionListTool,
+      ...input.emitConflictResolutionTool,
+      ...input.emitEvictionDecisionTool,
+      ...input.emitArtifactResolutionTool,
+      ...input.emitUnmappedFallbackTool,
+      ...input.readRawSpanTool,
+    },
+    state,
+  );
 }

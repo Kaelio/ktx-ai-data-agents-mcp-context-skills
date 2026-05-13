@@ -9,6 +9,11 @@ import { parseMetricflowPullConfig } from './pull-config.js';
 
 export interface MetricflowSourceAdapterDeps {
   homeDir: string;
+  targetConnectionIds?: string[];
+}
+
+function uniqueSorted(values: readonly string[] | undefined): string[] {
+  return [...new Set(values ?? [])].sort((left, right) => left.localeCompare(right));
 }
 
 export class MetricflowSourceAdapter implements SourceAdapter {
@@ -28,6 +33,10 @@ export class MetricflowSourceAdapter implements SourceAdapter {
       cacheDir: this.resolveCacheDir(ctx.connectionId),
       stagedDir,
     });
+  }
+
+  async listTargetConnectionIds(_stagedDir: string): Promise<string[]> {
+    return uniqueSorted(this.deps.targetConnectionIds);
   }
 
   async chunk(stagedDir: string, diffSet?: DiffSet): Promise<ChunkResult> {

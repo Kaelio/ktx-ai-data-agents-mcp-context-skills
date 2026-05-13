@@ -511,4 +511,4 @@ No authentication required — SQLite is file-based. The file must be readable b
 | Scan returns no tables | Schema/database/project filter is wrong or the user lacks metadata permissions | Verify the schema list and grant metadata read permissions |
 | Historic SQL is empty | Query history extension or warehouse history view is unavailable | Enable the warehouse-specific history feature, then rerun scan or setup |
 | Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on structural scan output |
-| SQL execution fails through agents | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the agent command flags |
+| Semantic query execution fails | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the `ktx sl query` flags |

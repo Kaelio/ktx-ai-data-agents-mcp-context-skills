@@ -205,6 +205,17 @@ function parseJsonStdout(label, result) {
   }
 }
 
+function parseJsonStdoutWithExitCode(label, result, expectedCode) {
+  if (result.code !== expectedCode) {
+    throw new Error(`${label} failed with code ${result.code}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+  try {
+    return JSON.parse(result.stdout);
+  } catch (error) {
+    throw new Error(`${label} did not write JSON stdout: ${error.message}\nstdout:\n${result.stdout}`);
+  }
+}
+
 function requireOutput(label, result, pattern) {
   if (!pattern.test(result.stdout)) {
     throw new Error(`${label} stdout did not match ${pattern}\nstdout:\n${result.stdout}`);
@@ -283,13 +294,14 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
     requireSuccess(commands[0].label, version);
     requireOutput(commands[0].label, version, expectedPublicKtxVersionPattern());
 
-    const missingStatus = parseJsonStdout(
+    const missingStatus = parseJsonStdoutWithExitCode(
       commands[1].label,
       await run(commands[1].command, commands[1].args, {
         cwd: installDir,
         env: smokeEnv,
         timeoutMs: commands[1].timeoutMs,
       }),
+      1,
     );
     if (missingStatus.kind !== 'missing') {
       throw new Error(`Expected missing runtime before install, got ${JSON.stringify(missingStatus)}`);

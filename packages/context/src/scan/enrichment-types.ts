@@ -68,15 +68,6 @@ export interface KtxDescriptionUpdate {
   columnDescriptions?: Record<string, string | null>;
 }
 
-const PREFERRED_METADATA_FIELD_NAMES = [
-  'tags',
-  'constraints',
-  'enum_values',
-  'freshness',
-  'tests',
-  'lineage',
-] as const;
-
 export interface KtxMetadataUpdate {
   connectionId: string;
   table: KtxTableRef;

@@ -12,6 +12,7 @@ export type {
   KnowledgeEventPort,
   KnowledgeGitDiffPort,
   KnowledgeIndexPort,
+  KnowledgeIndexPageListing,
   UpsertPageParams,
   WikiFileStorePort,
 } from './ports.js';

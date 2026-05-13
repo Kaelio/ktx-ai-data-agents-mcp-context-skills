@@ -90,7 +90,7 @@ export async function validateSingleSource(
           `writing it as-is drops the manifest's columns and joins. ` +
           `Remove "sql:", "table:", "grain:", "columns:", and "joins:" and keep only ` +
           `"name:" plus "measures:"/"segments:"/"description:" to write an overlay ` +
-          `that inherits the manifest schema. Call sl_describe_table to see it first.`,
+          `that inherits the manifest schema. Call sl_read_source to inspect the existing source first.`,
       );
       return { errors, warnings };
     }

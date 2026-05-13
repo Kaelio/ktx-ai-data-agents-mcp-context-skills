@@ -151,10 +151,6 @@ export function publicNpmPackageJson(cliPackageJson, dependencies, version = PUB
 }
 
 function bundledWorkspacePackageJson(packageJson) {
-  const dependencies = Object.fromEntries(
-    Object.entries(packageJson.dependencies ?? {}).filter(([name]) => !isWorkspacePackageName(name)),
-  );
-
   return {
     name: packageJson.name,
     version: packageJson.version ?? PUBLIC_NPM_PACKAGE_VERSION,
@@ -164,7 +160,6 @@ function bundledWorkspacePackageJson(packageJson) {
     types: packageJson.types,
     exports: packageJson.exports,
     files: packageJson.files,
-    dependencies: sortedObject(Object.entries(dependencies)),
     license: packageJson.license ?? 'Apache-2.0',
   };
 }

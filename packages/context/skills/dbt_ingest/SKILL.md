@@ -12,16 +12,16 @@ Use this skill for **uploaded** dbt projects (`dbt_project.yml` at stage root, `
 
 | dbt | KTX | Notes |
 |-----|--------|--------|
-| `models:` entry with `columns:` | **Overlay** on the manifest table with the same name (after `wiki_sl_search` / `sl_describe_table`) | One SL source per physical table; model name may differ from DB name — resolve with `read_raw_file` + warehouse context. |
+| `models:` entry with `columns:` | **Overlay** on the manifest table with the same name (after `discover_data` / `entity_details`) | One SL source per physical table; model name may differ from DB name — resolve with `read_raw_file` + warehouse context. |
 | `sources:` → `tables:` | Same as models; use `identifier` when present instead of logical `name`. | Schema + name must match how the connection sees tables. |
 | Column `description` | `descriptions.user` or merged `descriptions` map on the column | Do not overwrite `dbt` description keys from sync. |
 | `data_tests: not_null` / `unique` | Short hint in column `descriptions` or notes: “dbt: not null”, “dbt: unique” | Full structured metadata lands in manifest via **sync**; the skill keeps bundle-time SL text useful for the agent. |
-| `accepted_values` | Add a **brief** line in the column description: allowed values (truncate long lists) | Also mention enum-like use in `wiki_sl_search` / filters. |
-| `relationships` | Add or confirm `joins:` on the overlay **only** when `to` resolves to a real table via `read_raw_file` + `wiki_sl_search` / `sl_describe_table` | If the ref cannot be resolved, capture the intent in a wiki page instead. |
+| `accepted_values` | Add a **brief** line in the column description: allowed values (truncate long lists) | Also mention enum-like use in `discover_data` / filters. |
+| `relationships` | Add or confirm `joins:` on the overlay **only** when `to` resolves to a real table via `read_raw_file` + `discover_data` / `entity_details` | If the ref cannot be resolved, capture the intent in a wiki page instead. |
 
 ## Physical schema grounding
 
-dbt YAML is documentation and test metadata; it is not permission to invent physical columns. Before writing any table-backed SL source, confirm the real warehouse shape with `wiki_sl_search`, `sl_discover`, or `sl_describe_table` and use only confirmed column names in `columns:`, `grain:`, `joins:`, `segments:`, and `measures[].expr`.
+dbt YAML is documentation and test metadata; it is not permission to invent physical columns. Before writing any table-backed SL source, confirm the real warehouse shape with `discover_data`, `sl_discover`, or `entity_details` and use only confirmed column names in `columns:`, `grain:`, `joins:`, `segments:`, and `measures[].expr`.
 
 For dbt context-source ingest, the dbt connection is usually not the warehouse connection. Call `sl_discover` without `connectionId` first, then write overlays to the connection that owns the matching manifest-backed source (for example `postgres-warehouse`), not to the dbt connection (for example `dbt-main`). If no matching manifest-backed source is visible on any warehouse connection, do not call `sl_write_source`; record `emit_unmapped_fallback` and keep the fact wiki-only.
 
@@ -30,6 +30,34 @@ If a `models:` entry has no `columns:` block, or the available raw files do not 
 Include `rawPaths` on every `wiki_write`, `sl_write_source`, and `sl_edit_source` call with only the dbt YAML files that directly support the action.
 
 After every `sl_write_source`, call `sl_validate`. A validation error saying a declared column or measure reference is absent from the physical table is a hard stop: re-read the warehouse-backed source and rewrite with confirmed names, or remove the invalid SL fields.
+
+## Identifier Verification Protocol
+
+Before writing a wiki page or SL source on any topic:
+
+1. `discover_data({query: "<topic>"})` - see what wikis, SL sources, and raw
+   tables already exist. Prefer updating existing pages over creating new ones.
+
+Before emitting any `schema.table` or `schema.table.column` into a wiki body,
+SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
+
+2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
+   confirm the identifier resolves; inspect native types, FK/PK, and
+   sampleValues.
+3. For literal values from the source, such as status codes or plan tiers,
+   check whether they appear in `entity_details` sampleValues for the relevant
+   column. If sampleValues is short or the sample may have missed real values,
+   run a `sql_execution` probe with the same warehouse connection name:
+   `sql_execution({connectionName, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
+4. If the candidate identifier still does not resolve, do one of:
+   - Use `sql_execution({connectionName, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
+     If it errors, the identifier is fictional.
+   - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
+     citing the exact raw path that mentioned it.
+   - When recording `emit_unmapped_fallback` with `no_physical_table`, include
+     the failing probe error in `clarification`.
+5. Never copy `<schema>.<table>` placeholder strings from these instructions
+   into output.
 
 ## 1.1 test hints (descriptions / meta)
 

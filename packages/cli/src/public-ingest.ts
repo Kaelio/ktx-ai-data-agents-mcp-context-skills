@@ -6,9 +6,9 @@ import { profileMark } from './startup-profile.js';
 
 profileMark('module:public-ingest');
 
-export type KtxPublicIngestStepName = 'scan' | 'source-ingest' | 'enrich' | 'memory-update';
-export type KtxPublicIngestStepStatus = 'done' | 'skipped' | 'failed' | 'not-run';
-export type KtxPublicIngestInputMode = 'auto' | 'disabled';
+type KtxPublicIngestStepName = 'scan' | 'source-ingest' | 'enrich' | 'memory-update';
+type KtxPublicIngestStepStatus = 'done' | 'skipped' | 'failed' | 'not-run';
+type KtxPublicIngestInputMode = 'auto' | 'disabled';
 
 export type KtxPublicIngestArgs =
   | {

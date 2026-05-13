@@ -1,14 +1,22 @@
+import { readFile } from 'node:fs/promises';
 import { createDefaultLocalQueryExecutor, type KtxSqlQueryExecutorPort } from '@ktx/context/connections';
+import {
+  createLocalKtxEmbeddingProviderFromConfig,
+  KtxIngestEmbeddingPortAdapter,
+  type KtxEmbeddingPort,
+} from '@ktx/context';
 import type { KtxSemanticLayerComputePort } from '@ktx/context/daemon';
 import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
 import {
   compileLocalSlQuery,
   listLocalSlSources,
   readLocalSlSource,
+  searchLocalSlSources,
   validateLocalSlSource,
   writeLocalSlSource,
   type SemanticLayerQueryInput,
 } from '@ktx/context/sl';
+import { writeJsonResult } from './io/print-list.js';
 import {
   createManagedPythonSemanticLayerComputePort,
   type KtxManagedPythonInstallPolicy,
@@ -20,15 +28,16 @@ profileMark('module:sl');
 type SlQueryFormat = 'json' | 'sql';
 
 export type KtxSlArgs =
-  | { command: 'list'; projectDir: string; connectionId?: string; output?: string; json?: boolean }
-  | { command: 'read'; projectDir: string; connectionId: string; sourceName: string }
+  | { command: 'list'; projectDir: string; connectionId?: string; query?: string; output?: string; json?: boolean }
+  | { command: 'read'; projectDir: string; connectionId: string; sourceName: string; json?: boolean }
   | { command: 'validate'; projectDir: string; connectionId: string; sourceName: string }
   | { command: 'write'; projectDir: string; connectionId: string; sourceName: string; yaml: string }
   | {
       command: 'query';
       projectDir: string;
       connectionId?: string;
-      query: SemanticLayerQueryInput;
+      query?: SemanticLayerQueryInput;
+      queryFile?: string;
       format: SlQueryFormat;
       execute: boolean;
       maxRows?: number;
@@ -43,6 +52,8 @@ interface KtxSlIo {
 
 interface KtxSlDeps {
   loadProject?: typeof loadKtxProject;
+  embeddingService?: KtxEmbeddingPort | null;
+  createEmbeddingProvider?: typeof createLocalKtxEmbeddingProviderFromConfig;
   createSemanticLayerCompute?: () => KtxSemanticLayerComputePort;
   createManagedSemanticLayerCompute?: (options: {
     cliVersion: string;
@@ -52,11 +63,35 @@ interface KtxSlDeps {
   createQueryExecutor?: () => KtxSqlQueryExecutorPort;
 }
 
+function slSearchEmbeddingService(project: KtxLocalProject, deps: KtxSlDeps): KtxEmbeddingPort | null {
+  if ('embeddingService' in deps) {
+    return deps.embeddingService ?? null;
+  }
+  const provider = (deps.createEmbeddingProvider ?? createLocalKtxEmbeddingProviderFromConfig)(
+    project.config.ingest.embeddings,
+  );
+  return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
+}
+
+async function readSlQueryFile(path: string): Promise<SemanticLayerQueryInput> {
+  const parsed = JSON.parse(await readFile(path, 'utf-8')) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${path} must contain a JSON object.`);
+  }
+  return parsed as SemanticLayerQueryInput;
+}
+
 export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: KtxSlDeps = {}): Promise<number> {
   try {
     const project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
     if (args.command === 'list') {
-      const sources = await listLocalSlSources(project, { connectionId: args.connectionId });
+      const sources = args.query
+        ? await searchLocalSlSources(project, {
+            connectionId: args.connectionId,
+            query: args.query,
+            embeddingService: slSearchEmbeddingService(project, deps),
+          })
+        : await listLocalSlSources(project, { connectionId: args.connectionId });
       const { resolveOutputMode } = await import('./io/mode.js');
       const { printList } = await import('./io/print-list.js');
       const mode = resolveOutputMode({ explicit: args.output, json: args.json, io });
@@ -86,6 +121,14 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       if (!source) {
         throw new Error(`Semantic-layer source "${args.connectionId}/${args.sourceName}" was not found`);
       }
+      if (args.json) {
+        writeJsonResult(io, {
+          kind: 'sl.source',
+          data: source,
+          meta: { command: 'sl read' },
+        });
+        return 0;
+      }
       io.stdout.write(source.yaml);
       return 0;
     }
@@ -108,6 +151,10 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       return 0;
     }
     if (args.command === 'query') {
+      const query = args.query ?? (args.queryFile ? await readSlQueryFile(args.queryFile) : undefined);
+      if (!query) {
+        throw new Error('sl query requires query input from --query-file or at least one --measure');
+      }
       const compute = deps.createSemanticLayerCompute
         ? deps.createSemanticLayerCompute()
         : await (deps.createManagedSemanticLayerCompute ?? createManagedPythonSemanticLayerComputePort)({
@@ -118,7 +165,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createDefaultLocalQueryExecutor)() : undefined;
       const result = await compileLocalSlQuery(project as KtxLocalProject, {
         connectionId: args.connectionId,
-        query: args.query,
+        query,
         compute,
         execute: args.execute,
         maxRows: args.maxRows,

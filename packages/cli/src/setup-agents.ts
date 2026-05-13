@@ -123,7 +123,7 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
   return [
     '---',
     'name: ktx',
-    'description: Use local KTX semantic context, wiki knowledge, and safe SQL execution for this project.',
+    'description: Use local KTX semantic context and wiki knowledge for this project.',
     '---',
     '',
     '# KTX Local Context',
@@ -136,11 +136,11 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
     '',
     'Available commands:',
     '',
-    `- \`${ktxCommandLine(input.launcher, ['agent', 'context', ...projectDirArgs])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['agent', 'sl', 'list', ...projectDirArgs])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['agent', 'sl', 'read', '<sourceName>', ...projectDirArgs])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['status', ...projectDirArgs])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['sl', 'list', ...projectDirArgs])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['sl', 'list', ...projectDirArgs, '--query', '<text>'])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['sl', 'read', '<sourceName>', ...projectDirArgs, '--connection-id', '<id>'])}\``,
     `- \`${ktxCommandLine(input.launcher, [
-      'agent',
       'sl',
       'query',
       ...projectDirArgs,
@@ -152,29 +152,17 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
       '--max-rows',
       '100',
     ])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['agent', 'wiki', 'search', '<query>', ...projectDirArgs])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['agent', 'wiki', 'read', '<pageId>', ...projectDirArgs])}\``,
-    `- \`${ktxCommandLine(input.launcher, [
-      'agent',
-      'sql',
-      'execute',
-      ...projectDirArgs,
-      '--connection-id',
-      '<id>',
-      '--sql-file',
-      '<path>',
-      '--max-rows',
-      '100',
-    ])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['wiki', 'search', '<query>', ...projectDirArgs, '--limit', '10'])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['wiki', 'read', '<pageId>', ...projectDirArgs])}\``,
     '',
-    'SQL execution is read-only, requires an explicit row limit, and should use the smallest useful limit.',
+    'Use semantic-layer queries before direct database access. Do not print secrets or credential references.',
     '',
   ].join('\n');
 }
 
 function ruleInstructionContent(input: { projectDir: string }): string {
   return [
-    `Use the \`ktx\` CLI to query local semantic context, wiki knowledge, and execute safe SQL for this project (\`--project-dir ${input.projectDir}\`).`,
+    `Use the \`ktx\` CLI to query local semantic context and wiki knowledge for this project (\`--project-dir ${input.projectDir}\`).`,
     '',
     'Use when the user asks about data schemas, metrics, dimensions, database structure, or wants to run SQL queries.',
     '',

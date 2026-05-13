@@ -150,6 +150,7 @@ export class WikiWriteTool extends BaseTool<typeof wikiWriteInputSchema> {
 Create or update a knowledge page. Provide content for create/rewrite, or replacements for targeted edits.
 For existing pages, you may provide only frontmatter fields such as summary, tags, refs, or sl_refs to update metadata while preserving content.
 tags/refs/sl_refs use REPLACE semantics: omit to keep existing on update, [] to clear, [values] to set.
+Keys must be flat file names, not directory paths. Use tags/source frontmatter for grouping.
 </purpose>`;
   }
 

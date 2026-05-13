@@ -1,10 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AgentRunnerService, type RunLoopParams } from '@ktx/context/agent';
 import {
-  LocalLookerRuntimeStore,
   KtxYamlMetabaseSourceStateReader,
   LocalMetabaseDiscoveryCache,
   MetabaseSourceAdapter,
@@ -13,12 +11,10 @@ import {
   type FetchContext,
   type IngestReportSnapshot,
   type LocalIngestResult,
-  type LocalMetabaseFanoutProgress,
   type LookerMappingClient,
   type LookerRuntimeClient,
   type LookerTableIdentifierParser,
   type MemoryFlowEventSink,
-  type MemoryFlowReplayInput,
   type MetabaseCard,
   type MetabaseCardSummary,
   type MetabaseClientFactory,
@@ -29,7 +25,7 @@ import {
 } from '@ktx/context/ingest';
 import { ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
 import { expect, vi } from 'vitest';
-import { type KtxIngestArgs, runKtxIngest } from './ingest.js';
+import { runKtxIngest } from './ingest.js';
 
 export function makeIo(
   options: {
@@ -266,6 +262,18 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'looker-explore-ecommerce-orders'
     ) {
+      const ledger = params.toolSet.record_verification_ledger;
+      if (!ledger?.execute) {
+        throw new Error('record_verification_ledger tool was not available to the Looker WorkUnit');
+      }
+      await ledger.execute(
+        {
+          summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
+          verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
+          unverifiedIdentifiers: [],
+        },
+        { toolCallId: 'cli-looker-verification-ledger', messages: [] },
+      );
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
         throw new Error('sl_write_source tool was not available to the Looker WorkUnit');
