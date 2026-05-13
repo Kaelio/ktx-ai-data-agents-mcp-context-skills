@@ -1,7 +1,7 @@
 /* @jsxImportSource react */
 import type { MemoryFlowEvent, MemoryFlowReplayInput } from '@ktx/context/ingest/memory-flow';
 import { Box, Text } from 'ink';
-import React, { type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { buildDemoMetrics, formatCost, formatDuration } from './demo-metrics.js';
 import { formatNextStepLines } from './next-steps.js';
 import { profileMark } from './startup-profile.js';
@@ -38,45 +38,6 @@ function isPrepopulatedDemoReplay(input: MemoryFlowReplayInput): boolean {
   return input.metadata?.origin === 'packaged' || input.metadata?.timing === 'prebuilt';
 }
 
-function flowLine(width: number, frame: number, active: boolean): string {
-  if (!active) return '━'.repeat(width);
-  const pulse = ['░', '▒', '▓', '█', '█', '█', '▓', '▒', '░'];
-  const pw = pulse.length;
-  const chars: string[] = [];
-  const offset = (frame * 2) % (width + pw);
-  for (let i = 0; i < width; i += 1) {
-    const p = i - offset + pw;
-    chars.push(p >= 0 && p < pw ? (pulse[p] ?? '━') : '━');
-  }
-  return chars.join('');
-}
-
-function brailleFlow(width: number, frame: number): string {
-  // Braille unicode: U+2800 + dot bitmask
-  // Dots: 1=0x01 2=0x02 3=0x04 4=0x08 5=0x10 6=0x20 7=0x40 8=0x80
-  // Layout: col0=[1,2,3,7] col1=[4,5,6,8]
-  const chars: string[] = [];
-  for (let i = 0; i < width; i += 1) {
-    const density = (i + 1) / width;
-    const phase = (i * 3 + frame * 2) % 12;
-    let dots = 0;
-
-    // Sparse diagonal streams on the left, dense on the right
-    // Each "stream" is a diagonal line of dots moving rightward
-    if ((phase + 0) % 4 < density * 4) dots |= 0x01; // dot 1
-    if ((phase + 1) % 5 < density * 4) dots |= 0x08; // dot 4
-    if ((phase + 2) % 4 < density * 3) dots |= 0x02; // dot 2
-    if ((phase + 3) % 5 < density * 3) dots |= 0x10; // dot 5
-    if ((phase + 4) % 4 < density * 2.5) dots |= 0x04; // dot 3
-    if ((phase + 5) % 5 < density * 2.5) dots |= 0x20; // dot 6
-    if ((phase + 1) % 6 < density * 2) dots |= 0x40; // dot 7
-    if ((phase + 3) % 6 < density * 2) dots |= 0x80; // dot 8
-
-    chars.push(String.fromCharCode(0x2800 + dots));
-  }
-  return chars.join('');
-}
-
 function progressBarOverall(
   finishedCount: number,
   activeCount: number,
@@ -104,43 +65,6 @@ function progressBarOverall(
   return finished + activeChars.join('') + '░'.repeat(queuedWidth);
 }
 
-function sparkleWipe(width: number, frame: number, row: number): string {
-  const chars: string[] = [];
-  const sweepPos = (frame * 2 + row * 6) % (width + 8);
-  const sparkles = ['✨', '✦', '✧', '·'];
-  for (let i = 0; i < width; i += 1) {
-    const dist = i - sweepPos;
-    if (dist < -6) {
-      const t = (i * 11 + row * 5 + frame * 3) % 10;
-      chars.push(t === 0 ? sparkles[0]! : t === 3 ? sparkles[1]! : t === 7 ? sparkles[2]! : ' ');
-    } else if (dist < -3) {
-      const t = (i + frame) % 3;
-      chars.push(t === 0 ? sparkles[1]! : t === 1 ? sparkles[2]! : sparkles[3]!);
-    } else if (dist <= 0) {
-      const gradient = ['░', '▒', '▓', '█'];
-      chars.push(gradient[Math.min(3, dist + 3)] ?? '█');
-    } else if (dist <= 2) {
-      chars.push(dist === 1 ? '▓' : '▒');
-    } else {
-      const noise = (i * 31 + row * 17 + frame * 3) % 5;
-      const messy = ['░', '▒', '▓', '▒', '░'];
-      chars.push(messy[noise] ?? '▒');
-    }
-  }
-  return chars.join('');
-}
-
-function activityWave(width: number, frame: number, offset: number): string {
-  const heights = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-  const chars: string[] = [];
-  for (let i = 0; i < width; i += 1) {
-    const wave = Math.sin(((i * 2 + frame + offset * 5) * Math.PI) / 6);
-    const idx = Math.round(((wave + 1) / 2) * (heights.length - 1));
-    chars.push(heights[idx] ?? '▁');
-  }
-  return chars.join('');
-}
-
 function topicName(key: string): string {
   return (key.split('/').pop()?.replace(/\.md$/, '') ?? key).replace(/[_-]/g, ' ');
 }
@@ -155,17 +79,8 @@ function humanizeInsight(key: string, target: 'sl' | 'wiki', summary: string | u
   return target === 'sl' ? `Query definition: ${name}` : `Knowledge page: ${name}`;
 }
 
-const ADAPTER_PREFIXES = ['live_database_', 'metabase_', 'looker_', 'lookml_', 'metricflow_', 'notion_', 'historic_sql_', 'dbt_descriptions_'];
 const INTERNAL_DEMO_CONNECTION_ID = 'orbit_demo';
 const PUBLIC_DEMO_SOURCE_LABEL = 'Orbit Demo';
-
-function humanizeUnitKey(unitKey: string): string {
-  let key = unitKey.replace(/-/g, '_');
-  for (const prefix of ADAPTER_PREFIXES) {
-    if (key.startsWith(prefix)) { key = key.slice(prefix.length); break; }
-  }
-  return key.replace(/_/g, ' ');
-}
 
 interface SourceInfo {
   type: string;
@@ -222,13 +137,6 @@ function sourceDescription(input: MemoryFlowReplayInput): SourceInfo {
   const count = sourceEvents[0] ? String(sourceEvents[0].fileCount) : '?';
   const info = ADAPTER_LABELS[adapter] ?? { type: adapter, plural: 'sources', verb: 'Reading', description: 'Reading sources, understanding structure, creating definitions' };
   return { type: info.type, name: conn, sourceCount: count, itemNounPlural: info.plural, readingVerb: info.verb, ingestDescription: info.description };
-}
-
-function activeWorkUnit(
-  input: MemoryFlowReplayInput,
-): { unitKey: string; stepIndex: number; stepBudget: number } | null {
-  const units = activeWorkUnits(input);
-  return units.at(-1) ?? null;
 }
 
 function activeWorkUnits(
@@ -299,22 +207,6 @@ function finishedUnits(input: MemoryFlowReplayInput): Array<{ unitKey: string; a
   return units;
 }
 
-function artifactCounts(input: MemoryFlowReplayInput): { sl: number; wiki: number } {
-  let sl = 0;
-  let wiki = 0;
-  for (const e of input.events) {
-    if (e.type === 'candidate_action') {
-      if (e.target === 'sl') sl++;
-      else wiki++;
-    }
-  }
-  return { sl, wiki };
-}
-
-function pad(str: string, width: number): string {
-  return str.length >= width ? str : str + ' '.repeat(width - str.length);
-}
-
 const KTX_LOGO_SMALL = [
   '██╗  ██╗████████╗██╗  ██╗',
   '██║ ██╔╝╚══██╔══╝╚██╗██╔╝',
@@ -344,12 +236,7 @@ export function Hud(props: {
   width: number;
   now?: () => number;
 }): ReactNode {
-  const isRunning = props.input.status === 'running';
-  const isDone = props.input.status === 'done';
-  const isFlowing = isRunning && hasWorkStarted(props.input);
-
   const src = sourceDescription(props.input);
-  const counts = artifactCounts(props.input);
   const metrics = buildDemoMetrics(props.input, props.now ? { now: props.now } : {});
   const workStarted = hasWorkStarted(props.input);
 
@@ -357,11 +244,6 @@ export function Hud(props: {
   const col1Content = sourceEvents.length > 1 || !src.name ? src.type : `${src.type} (${src.name})`;
 
   const innerWidth = Math.max(60, props.width - 6);
-
-  const actives = activeWorkUnits(props.input);
-  const reconEvent = props.input.events.find((e) => e.type === 'reconciliation_finished');
-  const allAnalyzed = isFlowing && actives.length === 0;
-  const isReconciling = allAnalyzed && !reconEvent && !isDone;
 
   const hLine = '─'.repeat(innerWidth);
 
@@ -429,7 +311,6 @@ export function ActivityFeed(props: {
 
   const workStarted = hasWorkStarted(props.input);
   const totalChunks = planEvent?.chunkCount ?? 0;
-  const finishedWithArtifacts = finished.filter((u) => u.artifactCount > 0);
   const finishedAreas = totalChunks > 0 ? Math.min(finished.length, totalChunks) : finished.length;
   const allWorkDone = workStarted && actives.length === 0 && queued.length === 0;
   const isReconciling = allWorkDone && !reconEvent && !isDone && !isError;

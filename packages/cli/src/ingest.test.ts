@@ -4,10 +4,8 @@ import { join } from 'node:path';
 import {
   LocalLookerRuntimeStore,
   LocalMetabaseSourceStateReader,
-  getLocalIngestStatus,
   type LocalIngestResult,
   type LocalMetabaseFanoutProgress,
-  type MemoryFlowReplayInput,
   type RunLocalIngestOptions,
   type SourceAdapter,
 } from '@ktx/context/ingest';
@@ -20,7 +18,6 @@ import {
   CliMetabaseAgentRunner,
   CliMetabaseSourceAdapter,
   completedLocalBundleRun,
-  emitLiveLocalMemoryFlow,
   failedLocalBundleRun,
   localFakeBundleReport,
   makeCliLookerParser,
@@ -28,7 +25,6 @@ import {
   makeIo,
   persistLocalBundleReport,
   runPublicMetabaseSyncModeCase,
-  writeBundleReportFile,
   writeMetabaseConfig,
   writeWarehouseConfig,
 } from './ingest.test-utils.js';

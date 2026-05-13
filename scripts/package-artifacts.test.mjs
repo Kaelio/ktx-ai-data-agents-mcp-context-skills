@@ -27,8 +27,6 @@ import {
   writeArtifactManifest,
 } from './package-artifacts.mjs';
 
-const STALE_METABASE_UNSUPPORTED = ['Standalone Metabase scheduled fetch', 'is intentionally unsupported'].join(' ');
-
 async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }

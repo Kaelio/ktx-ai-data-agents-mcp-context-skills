@@ -9,7 +9,6 @@ import { runWorkspaceKtx } from './run-ktx.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const ktxRootDir = resolve(scriptDir, '..');
-const repoRootDir = resolve(ktxRootDir, '..');
 const defaultProjectDir = resolve(ktxRootDir, 'examples/orbit-relationship-verification');
 const defaultReportPath = resolve(
   ktxRootDir,
