@@ -75,18 +75,6 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
     });
 
   runtime
-    .command('doctor')
-    .description('Check managed Python runtime prerequisites and installation')
-    .option('--json', 'Print JSON output', false)
-    .action(async (options: { json?: boolean }) => {
-      await runRuntimeArgs(context, {
-        command: 'doctor',
-        cliVersion: context.packageInfo.version,
-        json: options.json === true,
-      });
-    });
-
-  runtime
     .command('prune')
     .description('Remove stale managed Python runtimes for older CLI versions')
     .option('--dry-run', 'List stale runtimes without deleting them', false)

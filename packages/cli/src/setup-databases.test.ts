@@ -897,7 +897,7 @@ describe('setup databases step', () => {
       commandIo.stdout.write('  Raw sources: raw-sources/postgres-warehouse/live-database/2026-05-09-221301-local-moywh3ky\n');
       commandIo.stdout.write('  Schema shards: 1\n\n');
       commandIo.stdout.write('Next:\n');
-      commandIo.stdout.write(`  ktx dev scan status --project-dir ${tempDir} local-moywh3ky\n`);
+      commandIo.stdout.write(`  ktx status --project-dir ${tempDir} local-moywh3ky\n`);
       return 0;
     });
 

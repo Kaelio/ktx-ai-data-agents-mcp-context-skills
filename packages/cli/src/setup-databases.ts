@@ -1207,7 +1207,7 @@ async function validateAndScanConnection(input: {
   if (scanCode !== 0) {
     flushBufferedCommandOutput(input.io, scanIo);
     input.io.stderr.write(`Structural scan failed for ${input.connectionId}.\n`);
-    input.io.stderr.write(`Debug command: ktx dev scan --project-dir ${input.projectDir} ${input.connectionId}\n`);
+    input.io.stderr.write(`Debug command: ktx scan --project-dir ${input.projectDir} ${input.connectionId}\n`);
     return false;
   }
   const scanOutput = scanIo.stdoutText();

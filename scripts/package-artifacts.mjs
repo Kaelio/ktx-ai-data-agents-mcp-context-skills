@@ -621,7 +621,7 @@ try {
   assert.deepEqual(missingProjectError.error.nextSteps, [
     'ktx setup --project-dir ' + missingProjectDir,
     'ktx status --project-dir ' + missingProjectDir,
-    'ktx ingest <connection>',
+    'ktx ingest run --connection-id <connection> --adapter <adapter>',
     'ktx agent sl list --json --query "revenue" --project-dir ' + missingProjectDir,
   ]);
   process.stdout.write('ktx agent sl list missing project guidance verified\\n');
@@ -678,7 +678,7 @@ try {
   assert.deepEqual(emptySearchError.error.nextSteps, [
     'ktx setup --project-dir ' + emptyProjectDir,
     'ktx status --project-dir ' + emptyProjectDir,
-    'ktx ingest <connection>',
+    'ktx ingest run --connection-id <connection> --adapter <adapter>',
     'ktx agent sl list --json --query "revenue" --project-dir ' + emptyProjectDir,
   ]);
   process.stdout.write('ktx agent sl list no connections guidance verified\\n');
@@ -769,7 +769,7 @@ try {
   assert.deepEqual(noSourceSearchError.error.nextSteps, [
     'ktx setup --project-dir ' + projectDir,
     'ktx status --project-dir ' + projectDir,
-    'ktx ingest <connection>',
+    'ktx ingest run --connection-id <connection> --adapter <adapter>',
     'ktx agent sl list --json --query "revenue" --project-dir ' + projectDir,
   ]);
   process.stdout.write('ktx agent sl list no indexed sources guidance verified\\n');
@@ -865,12 +865,11 @@ try {
   requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"rows": \\[\\s*\\[\\s*3\\s*\\]\\s*\\]/);
   process.stdout.write('ktx sl query sqlite execute verified\\n');
 
-  const runtimeDoctor = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'doctor']);
-  requireSuccess('ktx dev runtime doctor', runtimeDoctor);
-  requireOutput('ktx dev runtime doctor', runtimeDoctor, /PASS uv/);
-  requireOutput('ktx dev runtime doctor', runtimeDoctor, /PASS Bundled Python wheel/);
-  requireOutput('ktx dev runtime doctor', runtimeDoctor, /PASS Managed Python runtime/);
-  process.stdout.write('ktx dev runtime doctor verified\\n');
+  const runtimeDoctor = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'status']);
+  requireSuccess('ktx dev runtime status', runtimeDoctor);
+  requireOutput('ktx dev runtime status', runtimeDoctor, /KTX Python runtime/);
+  requireOutput('ktx dev runtime status', runtimeDoctor, /status: ready/);
+  process.stdout.write('ktx dev runtime status verified\\n');
 
   const runtimeStart = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'start']);
   requireSuccess('ktx dev runtime start', runtimeStart);
@@ -911,7 +910,7 @@ try {
   await assert.rejects(() => access(staleRuntimeDir));
   process.stdout.write('ktx dev runtime prune verified\\n');
 
-  const structuralScan = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'warehouse',
+  const structuralScan = await run('pnpm', ['exec', 'ktx', 'scan', 'warehouse',
     '--project-dir',
     projectDir,
   ]);
@@ -920,34 +919,10 @@ try {
   requireOutput('ktx scan structural', structuralScan, /Mode: structural/);
   requireOutput('ktx scan structural', structuralScan, /Needs attention\\s+None/);
   const structuralScanRunId = getRunId(structuralScan.stdout);
-
-  const scanStatus = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'status',
-    '--project-dir',
-    projectDir,
-    structuralScanRunId,
-  ]);
-  requireProjectStderr('ktx scan status', scanStatus, projectDir);
-  requireOutput('ktx scan status', scanStatus, new RegExp('Run: ' + structuralScanRunId));
-  requireOutput('ktx scan status', scanStatus, /Status: done/);
-  requireOutput('ktx scan status', scanStatus, /Mode: structural/);
-
-  const scanReport = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'report',
-    '--project-dir',
-    projectDir,
-    '--json',
-    structuralScanRunId,
-  ]);
-  requireSuccess('ktx scan report', scanReport);
-  const scanReportJson = JSON.parse(scanReport.stdout);
-  assert.equal(scanReportJson.mode, 'structural');
-  assert.equal(scanReportJson.connectionId, 'warehouse');
-  assert.equal(scanReportJson.manifestShardsWritten, 1);
-  assert.deepEqual(scanReportJson.artifactPaths.enrichmentArtifacts, []);
-  assert.deepEqual(scanReportJson.artifactPaths.manifestShards, ['semantic-layer/warehouse/_schema/public.yaml']);
   await access(join(projectDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'));
   process.stdout.write('ktx scan structural verified: ' + structuralScanRunId + '\\n');
 
-  const enrichedScan = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'warehouse',
+  const enrichedScan = await run('pnpm', ['exec', 'ktx', 'scan', 'warehouse',
     '--project-dir',
     projectDir,
     '--mode',
@@ -956,24 +931,14 @@ try {
   requireProjectStderr('ktx scan enriched', enrichedScan, projectDir);
   requireOutput('ktx scan enriched', enrichedScan, /Status: done/);
   requireOutput('ktx scan enriched', enrichedScan, /Mode: enriched/);
+  requireOutput('ktx scan enriched', enrichedScan, /Enrichment artifacts:/);
   const enrichedScanRunId = getRunId(enrichedScan.stdout);
-  const enrichedScanReport = await run('pnpm', ['exec', 'ktx', 'dev', 'scan', 'report',
-    '--project-dir',
-    projectDir,
-    '--json',
-    enrichedScanRunId,
-  ]);
-  requireSuccess('ktx scan enriched report', enrichedScanReport);
-  const enrichedScanReportJson = JSON.parse(enrichedScanReport.stdout);
-  assert.equal(enrichedScanReportJson.mode, 'enriched');
-  assert.ok(enrichedScanReportJson.artifactPaths.enrichmentArtifacts.length > 0);
-  assert.deepEqual(enrichedScanReportJson.artifactPaths.manifestShards, ['semantic-layer/warehouse/_schema/public.yaml']);
   process.stdout.write('ktx scan enriched verified: ' + enrichedScanRunId + '\\n');
 
   await mkdir(join(sourceDir, 'orders'), { recursive: true });
   await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\\n', 'utf-8');
 
-  const ingestRun = await run('pnpm', ['exec', 'ktx', 'dev', 'ingest', 'run',
+  const ingestRun = await run('pnpm', ['exec', 'ktx', 'ingest', 'run',
     '--project-dir',
     projectDir,
     '--connection-id',
@@ -983,14 +948,14 @@ try {
     '--source-dir',
     sourceDir,
   ]);
-  assert.equal(ingestRun.code, 1, 'ktx dev ingest run without an LLM provider must fail');
+  assert.equal(ingestRun.code, 1, 'ktx ingest run without an LLM provider must fail');
   assert.match(
     ingestRun.stderr,
-    /ktx dev ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway, or an injected agentRunner/,
+    /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway, or an injected agentRunner/,
   );
 
   await access(join(projectDir, '.ktx', 'db.sqlite'));
-  process.stdout.write('ktx dev ingest provider guard verified\\n');
+  process.stdout.write('ktx ingest provider guard verified\\n');
 } finally {
   if (daemonStarted) {
     await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'stop']);

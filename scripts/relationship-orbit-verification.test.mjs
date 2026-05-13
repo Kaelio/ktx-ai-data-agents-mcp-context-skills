@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { describe, it } from 'node:test';
 import {
-  buildOrbitReportArgv,
   buildOrbitScanArgv,
   defaultOrbitVerificationProjectDir,
+  extractReportPath,
   extractRunId,
   formatOrbitVerificationMarkdown,
   runOrbitVerification,
@@ -59,23 +59,14 @@ describe('relationship Orbit verification helper', () => {
     );
   });
 
-  it('builds the current KTX launcher arguments for scan and JSON report commands', () => {
+  it('builds the current KTX launcher arguments for scan commands', () => {
     assert.deepEqual(buildOrbitScanArgv({ connectionId: 'orbit', projectDir: '/tmp/orbit-project' }), [
-      'dev',
       'scan',
       'orbit',
-      '--enrich',
+      '--mode',
+      'relationships',
       '--project-dir',
       '/tmp/orbit-project',
-    ]);
-    assert.deepEqual(buildOrbitReportArgv({ projectDir: '/tmp/orbit-project', runId: 'scan-orbit-1' }), [
-      'dev',
-      'scan',
-      'report',
-      '--json',
-      '--project-dir',
-      '/tmp/orbit-project',
-      'scan-orbit-1',
     ]);
   });
 
@@ -95,22 +86,17 @@ describe('relationship Orbit verification helper', () => {
       runWorkspaceKtx: async (argv, options) => {
         calls.push(argv);
         envs.push(options.env);
-        if (argv[2] === 'report') {
-          options.stdout.write(successReportJson());
-          return 0;
-        }
-        options.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n');
+        options.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n  Report: reports/scan-report.json\n');
         return 0;
       },
+      readFile: async () => successReportJson(),
     });
 
     assert.equal(result.status, 'success');
     assert.deepEqual(calls, [
-      ['dev', 'scan', 'orbit', '--enrich', '--project-dir', defaultProjectDir],
-      ['dev', 'scan', 'report', '--json', '--project-dir', defaultProjectDir, 'scan-orbit-1'],
+      ['scan', 'orbit', '--mode', 'relationships', '--project-dir', defaultProjectDir],
     ]);
     assert.equal(envs[0].GIT_CEILING_DIRECTORIES, dirname(defaultProjectDir));
-    assert.equal(envs[1].GIT_CEILING_DIRECTORIES, dirname(defaultProjectDir));
     assert.equal(writes.length, 1);
     assert.match(writes[0].content, new RegExp(defaultProjectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
@@ -129,19 +115,15 @@ describe('relationship Orbit verification helper', () => {
         writeFile: async () => {},
         runWorkspaceKtx: async (argv, options) => {
           calls.push(argv);
-          if (argv[2] === 'report') {
-            options.stdout.write(successReportJson());
-            return 0;
-          }
-          options.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n');
+          options.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n  Report: reports/scan-report.json\n');
           return 0;
         },
+        readFile: async () => successReportJson(),
       });
 
       assert.equal(result.projectDir, '/tmp/orbit-project-from-env');
       assert.deepEqual(calls, [
-        ['dev', 'scan', 'orbit', '--enrich', '--project-dir', '/tmp/orbit-project-from-env'],
-        ['dev', 'scan', 'report', '--json', '--project-dir', '/tmp/orbit-project-from-env', 'scan-orbit-1'],
+        ['scan', 'orbit', '--mode', 'relationships', '--project-dir', '/tmp/orbit-project-from-env'],
       ]);
     } finally {
       if (previousProjectDir === undefined) {
@@ -155,6 +137,7 @@ describe('relationship Orbit verification helper', () => {
   it('extracts the run id from human scan output', () => {
     assert.equal(extractRunId(`KTX scan completed\nStatus: done\nRun: scan-orbit-1\nConnection: orbit\n`), 'scan-orbit-1');
     assert.equal(extractRunId('KTX scan completed without a run line\n'), null);
+    assert.equal(extractReportPath('Artifacts\n  Report: reports/scan-report.json\n'), 'reports/scan-report.json');
   });
 
   it('formats successful Orbit verification evidence from the JSON report', () => {
@@ -163,10 +146,9 @@ describe('relationship Orbit verification helper', () => {
       date: '2026-05-07',
       connectionId: 'orbit',
       projectDir: '/tmp/orbit-project',
-      scanCommand: 'pnpm run ktx -- dev scan orbit --enrich --project-dir /tmp/orbit-project',
-      reportCommand: 'pnpm run ktx -- dev scan report --json --project-dir /tmp/orbit-project scan-orbit-1',
+      scanCommand: 'pnpm run ktx -- scan orbit --mode relationships --project-dir /tmp/orbit-project',
+      reportPath: '/tmp/orbit-project/reports/scan-report.json',
       scanExitCode: 0,
-      reportExitCode: 0,
       scanStdout: 'KTX scan completed\nRun: scan-orbit-1\n',
       scanStderr: '',
       report: JSON.parse(successReportJson()),
@@ -189,7 +171,7 @@ describe('relationship Orbit verification helper', () => {
       date: '2026-05-07',
       connectionId: 'orbit',
       projectDir: '/tmp/orbit-project',
-      scanCommand: 'pnpm run ktx -- dev scan orbit --enrich --project-dir /tmp/orbit-project',
+      scanCommand: 'pnpm run ktx -- scan orbit --mode relationships --project-dir /tmp/orbit-project',
       scanExitCode: 1,
       blocker: 'Connection "orbit" was not found',
       scanStdout: '',
@@ -202,7 +184,7 @@ describe('relationship Orbit verification helper', () => {
     assert.doesNotMatch(markdown, /scan\.enrichment\.mode is required/);
   });
 
-  it('runs scan then JSON report and writes success Markdown', async () => {
+  it('runs scan then reads the report artifact and writes success Markdown', async () => {
     const calls = [];
     const writes = [];
     const result = await runOrbitVerification({
@@ -216,19 +198,15 @@ describe('relationship Orbit verification helper', () => {
       },
       runWorkspaceKtx: async (argv, options) => {
         calls.push(argv);
-        if (argv[2] === 'report') {
-          options.stdout.write(successReportJson());
-          return 0;
-        }
-        options.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n');
+        options.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n  Report: reports/scan-report.json\n');
         return 0;
       },
+      readFile: async () => successReportJson(),
     });
 
     assert.equal(result.status, 'success');
     assert.deepEqual(calls, [
-      ['dev', 'scan', 'orbit', '--enrich', '--project-dir', '/tmp/orbit-project'],
-      ['dev', 'scan', 'report', '--json', '--project-dir', '/tmp/orbit-project', 'scan-orbit-1'],
+      ['scan', 'orbit', '--mode', 'relationships', '--project-dir', '/tmp/orbit-project'],
     ]);
     assert.equal(writes.length, 1);
     assert.equal(writes[0].path, '/tmp/orbit-report.md');

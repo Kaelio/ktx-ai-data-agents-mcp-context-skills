@@ -15,7 +15,7 @@ describe('agent semantic-layer search readiness guidance', () => {
       nextSteps: [
         'ktx setup --project-dir /tmp/ktx-search',
         'ktx status --project-dir /tmp/ktx-search',
-        'ktx ingest <connection>',
+        'ktx ingest run --connection-id <connection> --adapter <adapter>',
         'ktx agent sl list --json --query "gross revenue" --project-dir /tmp/ktx-search',
       ],
     });

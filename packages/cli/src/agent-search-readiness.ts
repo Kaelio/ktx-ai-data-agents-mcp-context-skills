@@ -23,7 +23,7 @@ function baseNextSteps(projectDir: string, query: string | undefined): string[] 
   return [
     `ktx setup --project-dir ${projectDir}`,
     `ktx status --project-dir ${projectDir}`,
-    'ktx ingest <connection>',
+    'ktx ingest run --connection-id <connection> --adapter <adapter>',
     projectSearchCommand(projectDir, query),
   ];
 }

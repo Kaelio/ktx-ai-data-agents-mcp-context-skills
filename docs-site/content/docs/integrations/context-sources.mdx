@@ -13,7 +13,7 @@ Agents should configure and ingest context sources in this order:
 
 1. Add the context source connection in `ktx.yaml` or with `ktx setup`.
 2. Store tokens as `env:NAME` or `file:/path/to/secret`.
-3. Run `ktx ingest <connectionId>` for one source or `ktx ingest --all`.
+3. Run `ktx ingest run --connection-id <connectionId> --adapter <adapter>` for one source or `ktx ingest run --connection-id <id> --adapter <adapter>`.
 4. Check progress with `ktx ingest status --json`.
 5. Review generated `semantic-layer/` YAML and `knowledge/` Markdown files in git.
 6. Validate changed semantic sources with `ktx sl validate`.

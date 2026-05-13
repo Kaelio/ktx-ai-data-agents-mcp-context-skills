@@ -518,7 +518,9 @@ export async function runKtxIngest(
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
-      const createAdapters = deps.createAdapters ?? createKtxCliLocalIngestAdapters;
+      const createAdapters =
+        deps.createAdapters ??
+        (deps.runLocalIngest || deps.runLocalMetabaseIngest ? () => [] : createKtxCliLocalIngestAdapters);
       const executeLocalIngest = deps.runLocalIngest ?? runLocalIngest;
       const localIngestOptions = deps.localIngestOptions ?? {};
       const managedDaemon = managedDaemonOptionsForIngestRun(args, io);
@@ -645,7 +647,7 @@ export async function runKtxIngest(
       throw new Error(
         args.runId
           ? `Local ingest run or report "${args.runId}" was not found`
-          : 'No local ingest reports were found. Run `ktx ingest --all` first.',
+          : 'No local ingest reports were found. Run `ktx ingest run --connection-id <id> --adapter <adapter>` first.',
       );
     }
     await writeReportRecord(report, args.outputMode, io, {

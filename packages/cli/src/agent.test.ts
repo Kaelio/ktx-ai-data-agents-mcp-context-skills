@@ -328,7 +328,7 @@ describe('runKtxAgent', () => {
         nextSteps: [
           `ktx setup --project-dir ${tempDir}`,
           `ktx status --project-dir ${tempDir}`,
-          'ktx ingest <connection>',
+          'ktx ingest run --connection-id <connection> --adapter <adapter>',
           `ktx agent sl list --json --query "gross revenue" --project-dir ${tempDir}`,
         ],
       },
@@ -355,7 +355,7 @@ describe('runKtxAgent', () => {
         nextSteps: [
           `ktx setup --project-dir ${tempDir}`,
           `ktx status --project-dir ${tempDir}`,
-          'ktx ingest <connection>',
+          'ktx ingest run --connection-id <connection> --adapter <adapter>',
           `ktx agent sl list --json --query "revenue" --project-dir ${tempDir}`,
         ],
       },
