@@ -265,6 +265,18 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'looker-explore-ecommerce-orders'
     ) {
+      const ledger = params.toolSet.record_verification_ledger;
+      if (!ledger?.execute) {
+        throw new Error('record_verification_ledger tool was not available to the Looker WorkUnit');
+      }
+      await ledger.execute(
+        {
+          summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
+          verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
+          unverifiedIdentifiers: [],
+        },
+        { toolCallId: 'cli-looker-verification-ledger', messages: [] },
+      );
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
         throw new Error('sl_write_source tool was not available to the Looker WorkUnit');

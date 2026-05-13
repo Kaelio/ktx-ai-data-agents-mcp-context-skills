@@ -20,6 +20,7 @@ Parsimonious. Stage 3 WUs already loaded `ingest_triage` and handled conflicts t
 
 <scope>
 All wiki writes are GLOBAL (same as Stage 3). SL writes target the same session worktree Stage 3 used.
+Wiki keys must be flat slugs, not directory paths. If a Stage 3 page used a path-like key and a flat retry exists, treat the flat key as the canonical page.
 </scope>
 
 <do_not>

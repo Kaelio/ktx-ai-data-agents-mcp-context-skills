@@ -13,6 +13,15 @@ export interface UpsertPageParams {
   sourceRunId?: string | null;
 }
 
+export interface KnowledgeIndexPageListing {
+  id?: string;
+  page_key: string;
+  summary: string;
+  scope: string;
+  scope_id: string | null;
+  tags: string[];
+}
+
 export interface KnowledgeIndexPort {
   upsertPage(params: UpsertPageParams): Promise<void>;
   applyDiffTransactional(params: {
@@ -32,9 +41,7 @@ export interface KnowledgeIndexPort {
     scopeId: string | null,
     pageKey: string,
   ): Promise<{ id?: string; page_key: string } | null | undefined>;
-  listPagesForUser(
-    userId: string,
-  ): Promise<Array<{ id?: string; page_key: string; summary: string; scope: string; scope_id: string | null }>>;
+  listPagesForUser(userId: string): Promise<KnowledgeIndexPageListing[]>;
   getUserPageCount(userId: string): Promise<number>;
   incrementUsageCount(pageIds: string[]): Promise<void>;
   searchRRF(

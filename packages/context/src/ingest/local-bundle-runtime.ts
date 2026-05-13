@@ -56,6 +56,7 @@ import {
   buildKnowledgeSearchText,
   type KnowledgeEventPort,
   type KnowledgeIndexPort,
+  type KnowledgeIndexPageListing,
   KnowledgeWikiService,
   searchLocalKnowledgePages,
   SqliteKnowledgeIndex,
@@ -351,15 +352,19 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
 
   async listPagesForUser(
     userId: string,
-  ): Promise<Array<{ page_key: string; summary: string; scope: string; scope_id: string | null }>> {
-    const pages: Array<{ page_key: string; summary: string; scope: string; scope_id: string | null }> = [];
+  ): Promise<KnowledgeIndexPageListing[]> {
+    const pages: KnowledgeIndexPageListing[] = [];
     for (const scope of [
       { scope: 'GLOBAL', scopeId: null, dir: 'knowledge/global' },
       { scope: 'USER', scopeId: userId, dir: `knowledge/user/${userId}` },
     ]) {
       const listed = await this.project.fileStore.listFiles(scope.dir, true);
       for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
-        const pageKey = file.replace(/\.md$/, '');
+        const parsedPath = parseKnowledgeIndexPath(file.startsWith('global/') || file.startsWith('user/') ? file : `${scope.dir.replace('knowledge/', '')}/${file}`);
+        if (!parsedPath || parsedPath.scope !== scope.scope) {
+          continue;
+        }
+        const pageKey = parsedPath.pageKey;
         const raw = await this.project.fileStore.readFile(`${scope.dir}/${file}`);
         const parsed = parseWiki(raw.content);
         pages.push({
@@ -367,6 +372,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
           summary: parsed.summary,
           scope: scope.scope,
           scope_id: scope.scopeId,
+          tags: parseWikiTags(raw.content),
         });
       }
     }
@@ -435,13 +441,6 @@ function parseKnowledgeIndexPath(file: string): { scope: 'GLOBAL' | 'USER'; page
   if (segments.length === 2 && segments[0] === 'global') {
     const pageKey = segments[1].replace(/\.md$/, '');
     return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(pageKey) ? { scope: 'GLOBAL', pageKey } : null;
-  }
-  if (segments.length >= 3 && segments[0] === 'global' && segments[1] === 'historic-sql') {
-    const historicPath = segments.slice(2).join('/').replace(/\.md$/, '');
-    if (historicPath.split('/').every((segment) => /^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(segment))) {
-      return { scope: 'GLOBAL', pageKey: `historic-sql/${historicPath}` };
-    }
-    return null;
   }
   if (segments.length === 3 && segments[0] === 'user') {
     const pageKey = segments[2].replace(/\.md$/, '');
@@ -521,7 +520,7 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
     this.baseTools = [
       new WikiReadTool(deps.wikiService, deps.knowledgeIndex),
       wikiSearchTool,
-      new WikiListTagsTool(deps.wikiService, deps.knowledgeIndex),
+      new WikiListTagsTool(deps.knowledgeIndex),
       new WikiWriteTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
       new WikiRemoveTool(deps.wikiService, deps.knowledgeIndex, deps.knowledgeEvents),
       slDiscoverTool,

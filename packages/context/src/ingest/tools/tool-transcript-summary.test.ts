@@ -36,6 +36,28 @@ describe('tool transcript summaries', () => {
     expect(summary.fatalErrorCount).toBe(0);
   });
 
+  it('treats a suggested flat wiki key retry as recovery for an invalid nested key', () => {
+    const summary = createMutableToolTranscriptSummary('wu-1', '/tmp/wu-1.jsonl');
+
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        input: { key: 'historic-sql/top-accounts-by-contract-arr' },
+        output: { structured: { success: false, key: 'historic-sql/top-accounts-by-contract-arr' } },
+      }),
+    );
+    recordToolTranscriptEntry(
+      summary,
+      entry({
+        input: { key: 'historic-sql-top-accounts-by-contract-arr' },
+        output: { structured: { success: true, key: 'historic-sql-top-accounts-by-contract-arr' } },
+      }),
+    );
+
+    expect(summary.errorCount).toBe(1);
+    expect(summary.fatalErrorCount).toBe(0);
+  });
+
   it('counts unrecovered wiki_remove structured failures as fatal transcript errors', () => {
     const summary = createMutableToolTranscriptSummary('reconcile', '/tmp/reconcile.jsonl');
 

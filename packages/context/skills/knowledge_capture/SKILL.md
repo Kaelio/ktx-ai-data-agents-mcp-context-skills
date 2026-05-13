@@ -100,6 +100,10 @@ The `wiki_write` tool accepts three array fields that go into the page frontmatt
 - **`refs`**: keys of related wiki pages. Add when the new page materially depends on concepts from another (e.g., a churn definition that uses the paid-orders filter from a revenue definition). Don't add refs just because pages share a topic area.
 - **`sl_refs`**: names of SL sources or measures the page relates to. Format: `"source_name"` or `"source_name.measure_name"`. Discover via `sl_discover` → inspect with `sl_read_source` → include the confirmed matches.
 
+Wiki page keys must be flat slugs. Use `large-contract-requesters`, not
+`historic-sql/large-contract-requesters`. Use `tags`, `source`, and content
+headings for grouping.
+
 ### Replace semantics
 
 All three fields use REPLACE semantics on update:

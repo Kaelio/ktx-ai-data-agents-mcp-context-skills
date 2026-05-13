@@ -243,6 +243,37 @@ def test_filtered_count_distinct_keeps_distinct_inside_count():
     assert_valid_sql(result.sql)
 
 
+def test_filtered_count_star_uses_case_one_not_case_star():
+    engine = make_engine(
+        {
+            "accounts": {
+                "name": "accounts",
+                "table": "public.accounts",
+                "grain": ["id"],
+                "columns": [
+                    {"name": "id", "type": "number"},
+                    {"name": "risk_level", "type": "string"},
+                ],
+                "measures": [
+                    {
+                        "name": "high_risk_account_count",
+                        "expr": "count(*)",
+                        "filter": "risk_level = 'high'",
+                    }
+                ],
+            }
+        }
+    )
+
+    result = engine.query(
+        {"measures": ["accounts.high_risk_account_count"], "dimensions": []}
+    )
+
+    assert "THEN *" not in result.sql
+    assert "COUNT(CASE WHEN accounts.risk_level = 'high' THEN 1 END)" in result.sql
+    assert_valid_sql(result.sql)
+
+
 def test_predefined_measure_via_alias_uses_real_table_and_alias_qualification():
     engine = make_engine(_alias_measure_sources())
     result = engine.query(

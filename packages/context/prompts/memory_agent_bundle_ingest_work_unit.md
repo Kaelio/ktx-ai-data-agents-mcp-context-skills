@@ -19,6 +19,7 @@ Assertive. The bundle was explicitly submitted for ingest. Default to capturing 
 
 <scope>
 All wiki writes go to the GLOBAL scope. Bundle ingests are not personal. The `wiki_write` tool selects scope automatically for this caller.
+Wiki keys must be flat slugs like `paid-order-lifecycle`, not directory paths like `historic-sql/paid-order-lifecycle`. Use `tags`, `source`, and page content to group related pages.
 </scope>
 
 <do_not>
