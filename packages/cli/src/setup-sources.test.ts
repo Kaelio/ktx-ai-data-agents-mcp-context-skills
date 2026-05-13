@@ -176,7 +176,10 @@ describe('setup sources step', () => {
   it('writes Metabase config and validates mapping through existing mapping path', async () => {
     await addPrimarySource();
     const validateMetabase = vi.fn(async () => ({ ok: true as const, detail: 'user=admin@example.com' }));
-    const runMapping = vi.fn(async () => 0);
+    const runMapping = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
+      commandIo.stdout.write('Mapping validated — 1 mapping configured\n');
+      return 0;
+    });
     const io = makeIo();
 
     await expect(
@@ -208,7 +211,16 @@ describe('setup sources step', () => {
         syncMode: 'ALL',
       },
     });
-    expect(runMapping).toHaveBeenCalledWith(projectDir, 'prod_metabase', io.io);
+    expect(runMapping).toHaveBeenCalledWith(
+      projectDir,
+      'prod_metabase',
+      expect.objectContaining({
+        stdout: expect.objectContaining({ write: expect.any(Function) }),
+        stderr: expect.objectContaining({ write: expect.any(Function) }),
+      }),
+    );
+    expect(io.stdout()).toContain('│  Mapping validated — 1 mapping configured');
+    expect(io.stdout()).not.toMatch(/^Mapping validated — 1 mapping configured$/m);
   });
 
   it('writes Notion config with the full default knowledge create budget', async () => {
@@ -544,7 +556,14 @@ describe('setup sources step', () => {
       ),
     ).resolves.toEqual({ status: 'failed', projectDir });
 
-    expect(runMapping).toHaveBeenCalledWith(projectDir, 'metabase-main', io.io);
+    expect(runMapping).toHaveBeenCalledWith(
+      projectDir,
+      'metabase-main',
+      expect.objectContaining({
+        stdout: expect.objectContaining({ write: expect.any(Function) }),
+        stderr: expect.objectContaining({ write: expect.any(Function) }),
+      }),
+    );
     expect(io.stderr()).toContain('1: Metabase database does not match KTX connection database');
     expect(io.stderr()).not.toContain('Metabase mapping validation failed');
   });

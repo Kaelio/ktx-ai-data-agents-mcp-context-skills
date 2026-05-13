@@ -664,6 +664,31 @@ function splitOutputLines(output: string): string[] {
     .filter(Boolean);
 }
 
+function writeSetupPrefixedLines(write: (chunk: string) => void, output: string): void {
+  for (const line of output.split(/\r?\n/)) {
+    if (line.length > 0) {
+      write(`│  ${line}\n`);
+    }
+  }
+}
+
+function createSetupPrefixedIo(io: KtxCliIo): KtxCliIo {
+  return {
+    stdout: {
+      isTTY: io.stdout.isTTY,
+      columns: io.stdout.columns,
+      write(chunk: string) {
+        writeSetupPrefixedLines((line) => io.stdout.write(line), chunk);
+      },
+    },
+    stderr: {
+      write(chunk: string) {
+        writeSetupPrefixedLines((line) => io.stderr.write(line), chunk);
+      },
+    },
+  };
+}
+
 function parseMappingListJson(output: string): unknown[] {
   const trimmed = output.trim();
   if (!trimmed) {
@@ -1524,7 +1549,11 @@ export async function runKtxSetupSourcesStep(
         }
         if (source === 'metabase' || source === 'looker') {
           prompts.log?.(`Validating ${sourceLabel(source)} mapping…`);
-          const mappingCode = await (deps.runMapping ?? defaultRunMapping)(args.projectDir, connectionId, io);
+          const mappingCode = await (deps.runMapping ?? defaultRunMapping)(
+            args.projectDir,
+            connectionId,
+            createSetupPrefixedIo(io),
+          );
           if (mappingCode !== 0) {
             await rollback?.();
             return { status: 'failed', projectDir: args.projectDir };
