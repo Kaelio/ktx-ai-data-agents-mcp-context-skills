@@ -23,6 +23,10 @@ interface SetupInterruptOptions {
 const NON_INTERACTIVE_SETUP_MESSAGE =
   'Interactive setup requires a terminal. Re-run this command in a TTY, or pass --no-input with the required options.';
 
+function refSetupInput(input: NodeJS.ReadStream = stdin): void {
+  input.ref?.();
+}
+
 function createSetupInterruptTracker(input: NodeJS.ReadStream = stdin): SetupInterruptTracker {
   let ctrlCPressed = false;
   const onKeypress = (char: string | undefined, key: Key) => {
@@ -73,6 +77,9 @@ export async function withSetupInterruptConfirmation<T>(
   const confirmExit = options.confirmExit ?? defaultConfirmExit;
 
   while (true) {
+    if (!options.tracker) {
+      refSetupInput();
+    }
     const value = await tracker.track(prompt);
     if (!isCancel(value)) {
       return value;

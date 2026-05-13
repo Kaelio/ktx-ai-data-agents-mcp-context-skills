@@ -1234,6 +1234,48 @@ describe('setup databases step', () => {
     expect(config.connections.warehouse).toMatchObject({ driver: 'postgres', url: 'env:DATABASE_URL' });
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(io.stderr()).toContain('Structural scan failed for warehouse.');
+    expect(io.stderr()).toContain('│  Structural scan failed for warehouse.');
+    expect(io.stderr()).not.toMatch(/^Structural scan failed for warehouse\./m);
+  });
+
+  it('prints the native SQLite rebuild command when scanning hits a Node ABI mismatch', async () => {
+    const io = makeIo();
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
+          commandIo.stderr.write(
+            [
+              "The module '/workspace/node_modules/better-sqlite3/build/Release/better_sqlite3.node'",
+              'was compiled against a different Node.js version using',
+              'NODE_MODULE_VERSION 147. This version of Node.js requires',
+              'NODE_MODULE_VERSION 137. Please try re-compiling or re-installing',
+              'the module (for instance, using `npm rebuild` or `npm install`).',
+              '',
+            ].join('\n'),
+          );
+          return 1;
+        }),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
+    expect(io.stderr()).toContain('│  Native SQLite is built for a different Node.js ABI.');
+    expect(io.stderr()).toContain('Fix: pnpm run native:rebuild');
+    expect(io.stderr()).toContain(`Retry: ktx scan --project-dir ${tempDir} warehouse`);
+    expect(io.stderr()).not.toContain('npm rebuild');
+    expect(io.stderr()).not.toMatch(/^Native SQLite is built for a different Node.js ABI\./m);
   });
 
   it('writes Historic SQL config for supported Snowflake databases after validation succeeds', async () => {

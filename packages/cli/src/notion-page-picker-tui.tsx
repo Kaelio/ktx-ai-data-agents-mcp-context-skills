@@ -9,8 +9,8 @@ import {
   visibleNodeIds,
   type PickerCommand,
   type PickerState,
-} from './connection-notion-tree.js';
-import type { KtxCliIo } from '../index.js';
+} from './notion-page-picker-tree.js';
+import type { KtxCliIo } from './cli-runtime.js';
 
 const COLOR_THEME = {
   text: 'white',
@@ -331,7 +331,7 @@ export async function renderNotionPickerTui(
     return result;
   } catch (error) {
     io.stderr.write(
-      `Notion picker requires a TTY. Use --no-input --root-page-id <UUID> for scripted mode. ${sanitizeNotionPickerTuiError(error)}\n`,
+      `Notion picker requires a TTY. Use --no-input --notion-root-page-id <UUID> for scripted mode. ${sanitizeNotionPickerTuiError(error)}\n`,
     );
     return { kind: 'quit' };
   }

@@ -1,9 +1,11 @@
 ---
 title: "ktx connection"
-description: "Add, list, test, and map data sources."
+description: "List and test configured data sources."
 ---
 
-Manage database and source connections in your KTX project. Connections define how KTX reaches your data warehouse, BI tools, and context sources.
+Inspect configured connections in your KTX project. Connections define how KTX
+reaches your data warehouse, BI tools, and context sources. Use `ktx setup` to
+add, remove, or reconfigure connections.
 
 ## Command signature
 
@@ -17,96 +19,23 @@ ktx connection <subcommand> [options]
 |-----------|-------------|
 | `list` | List configured connections |
 | `test <connectionId>` | Test a configured connection |
-| `add <driver> <connectionId>` | Add or replace a configured connection |
-| `remove <connectionId>` | Remove a configured connection from `ktx.yaml` |
-| `map <sourceConnectionId>` | Refresh and validate BI-to-warehouse mappings |
-| `mapping list <connectionId>` | List Metabase database mappings |
-| `mapping set <connectionId> <field> <assignment>` | Set a Metabase or Looker warehouse mapping |
-| `mapping apply-bulk <connectionId>` | Apply mappings from JSON |
-| `mapping set-sync-enabled <connectionId> <dbId>` | Enable or disable sync for one Metabase database |
-| `mapping sync-state get <connectionId>` | Read sync-state selection |
-| `mapping sync-state set <connectionId>` | Write sync-state selection |
-| `mapping refresh <connectionId>` | Refresh Metabase database mappings |
-| `mapping validate <connectionId>` | Validate Metabase database mappings |
-| `mapping clear <connectionId> [dbId]` | Clear Metabase database mappings |
-| `metabase setup` | Guided setup for a Metabase connection |
-| `notion pick <connectionId>` | Pick Notion root pages for a configured Notion connection |
 
 ## Options
 
-### `connection add`
+The `connection` command has command-level options for listing and testing
+existing connections.
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--url <url>` | Connection URL, `env:NAME`, or `file:/path` reference | — |
-| `--schema <schema>` | Schema to include; repeatable | — |
-| `--readonly` | Mark the connection as read-only | `false` |
-| `--force` | Replace an existing connection | `false` |
-| `--allow-literal-credentials` | Allow writing a literal credential URL to `ktx.yaml` | `false` |
-
-#### Notion-specific options for `connection add`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--token-env <name>` | Environment variable containing Notion auth token | — |
-| `--token-file <path>` | File containing Notion auth token | — |
-| `--crawl-mode <mode>` | Notion crawl mode (`all_accessible` or `selected_roots`) | `selected_roots` |
-| `--root-page-id <id>` | Root page to crawl; repeatable | — |
-| `--root-database-id <id>` | Root database to crawl; repeatable | — |
-| `--root-data-source-id <id>` | Root data source to crawl; repeatable | — |
-| `--max-pages <n>` | Maximum pages per run | — |
-| `--max-knowledge-creates <n>` | Maximum knowledge creates per run | — |
-| `--max-knowledge-updates <n>` | Maximum knowledge updates per run | — |
-
-### `connection remove`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--force` | Remove without prompting | `false` |
-| `--no-input` | Disable interactive terminal input | — |
-
-### `connection map`
+### `connection list`
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--json` | Print JSON output | `false` |
 
-### `connection mapping` subcommands
-
-| Flag | Subcommand | Description | Default |
-|------|-----------|-------------|---------|
-| `--json` | `list`, `sync-state get` | Print JSON output | `false` |
-| `--file <path>` | `apply-bulk` | JSON mapping file (required) | — |
-| `--enabled <value>` | `set-sync-enabled` | `true` or `false` (required) | — |
-| `--mode <mode>` | `sync-state set` | `ALL`, `ONLY`, or `EXCEPT` (required) | — |
-| `--collections <ids>` | `sync-state set` | Comma-separated collection ids | — |
-| `--items <ids>` | `sync-state set` | Comma-separated item ids | — |
-| `--tag-names <names>` | `sync-state set` | Comma-separated tag names | — |
-| `--auto-accept` | `refresh` | Accept refresh changes without prompting | `false` |
-
-### `connection metabase setup`
+### `connection test`
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--id <connectionId>` | KTX connection id to write | — |
-| `--url <url>` | Metabase API URL | — |
-| `--api-key <key>` | Metabase API key | — |
-| `--mint-api-key` | Mint a Metabase API key with credentials | `false` |
-| `--username <email>` | Metabase admin username for API-key minting | — |
-| `--password <password>` | Metabase admin password for API-key minting | — |
-| `--map <id=target>` | Assign a Metabase database id to a warehouse connection; repeatable | — |
-| `--sync <metabaseDatabaseId>` | Enable sync for a discovered database; repeatable | — |
-| `--sync-mode <mode>` | Metabase sync selection mode (`ALL`, `ONLY`, or `EXCEPT`) | `ALL` |
-| `--run-ingest` | Run ingest after setup | `false` |
-| `--yes` | Confirm and apply setup changes without prompting | `false` |
-| `--no-input` | Disable interactive terminal input | — |
-
-### `connection notion pick`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--no-input` | Disable interactive terminal input | — |
-| `--root-page-id <id>` | Root page UUID to crawl; repeatable (required with `--no-input`) | — |
+| `--json` | Print JSON output | `false` |
 
 ## Examples
 
@@ -114,43 +43,20 @@ ktx connection <subcommand> [options]
 # List all configured connections
 ktx connection list
 
-# Add a Postgres connection using an environment variable
-ktx connection add postgres my-warehouse --url "env:DATABASE_URL"
-
-# Add a Postgres connection with specific schemas
-ktx connection add postgres analytics --url "env:PG_URL" --schema public --schema analytics
-
-# Add a read-only Snowflake connection
-ktx connection add snowflake sf-prod --url "env:SNOWFLAKE_URL" --readonly
-
 # Test a connection
 ktx connection test my-warehouse
-
-# Remove a connection
-ktx connection remove old-warehouse
-
-# Add a Notion source connection
-ktx connection add notion my-notion \
-  --token-env NOTION_TOKEN \
-  --crawl-mode selected_roots \
-  --root-page-id abc123def456...
-
-# Run guided Metabase setup
-ktx connection metabase setup --url https://metabase.example.com
-
-# Map a BI database to a warehouse connection
-ktx connection mapping set metabase-prod databaseMappings 1=my-warehouse
-
-# Refresh Metabase mappings
-ktx connection mapping refresh metabase-prod --auto-accept
-
-# Pick Notion root pages interactively
-ktx connection notion pick my-notion
 ```
+
+## Setup-managed connections
+
+Run `ktx setup` when you need to add or reconfigure a connection. Interactive
+setup includes the rich Notion page picker for selected root pages and the
+Metabase mapping prompts for BI-to-warehouse mappings.
 
 ## Output
 
-Interactive commands render prompts and status text. Commands with `--json` return machine-readable JSON suitable for scripts and agents.
+Commands with `--json` return machine-readable JSON suitable for scripts and
+agents.
 
 ```json
 {
@@ -168,7 +74,6 @@ Interactive commands render prompts and status text. Commands with `--json` retu
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Connection test fails | Credentials, network access, database, warehouse, or schema is invalid | Verify the same URL with the database's native client, then rerun `ktx connection add ... --force` |
-| Literal credentials rejected | KTX avoids writing raw secrets to `ktx.yaml` by default | Use `env:NAME` or `file:/path/to/secret`; use `--allow-literal-credentials` only for local throwaway projects |
-| Mapping validation fails | BI database mappings do not point at valid warehouse connections | Run `ktx connection mapping refresh <connectionId> --auto-accept`, then set invalid mappings explicitly |
-| Notion pick cannot run non-interactively | `--no-input` was used without root page or database ids | Pass `--root-page-id`, `--root-database-id`, or `--root-data-source-id` with `--no-input` |
+| Connection test fails | Credentials, network access, database, warehouse, or schema is invalid | Verify the same URL with the database's native client, then rerun `ktx setup` and reconfigure the connection |
+| Mapping validation fails during setup | BI database mappings do not point at valid warehouse connections | Rerun `ktx setup` and update the source mapping selections |
+| Notion page picker cannot run | The terminal is non-interactive or Notion discovery failed | Rerun interactive `ktx setup`, or use non-interactive setup flags with explicit root page ids |

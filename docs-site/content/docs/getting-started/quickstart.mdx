@@ -240,7 +240,7 @@ Agent integration ready: yes (claude-code:project)
 | LLM health check fails | Missing, invalid, or unauthorized Anthropic API key | Export `ANTHROPIC_API_KEY` or rerun `ktx setup` and choose the file-backed secret option |
 | OpenAI embedding check fails | `OPENAI_API_KEY` is missing when OpenAI embeddings are selected | Export `OPENAI_API_KEY`, or rerun setup and choose local sentence-transformers embeddings |
 | Local embeddings hang or fail | The managed Python runtime cannot start or the local model runtime is unavailable | Install `uv`, run `ktx dev runtime status`, then run `ktx dev runtime install --feature local-embeddings --yes` and rerun setup |
-| Database connection test fails | Credentials, network access, warehouse, database, or schema value is wrong | Test the same URL with the database's native client, then rerun `ktx connection add ... --force` or rerun setup |
+| Database connection test fails | Credentials, network access, warehouse, database, or schema value is wrong | Test the same URL with the database's native client, then rerun `ktx setup` and reconfigure the connection |
 | `KTX context built: no` in `ktx status` | Setup saved configuration but did not build context | Run `ktx setup` and choose to build context now |
 | Agent integration is incomplete | Setup skipped the agents step or the target was not installed | Run `ktx setup --agents --target codex --project` using the target you need |
 

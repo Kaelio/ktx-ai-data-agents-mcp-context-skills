@@ -2,7 +2,7 @@
 import { render as renderInkTest } from 'ink-testing-library';
 import { act, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildInitialState, buildPickerTree, type NotionPickerPageInput } from './connection-notion-tree.js';
+import { buildInitialState, buildPickerTree, type NotionPickerPageInput } from './notion-page-picker-tree.js';
 import {
   NotionPickerApp,
   notionPickerCommandForInkInput,
@@ -13,7 +13,7 @@ import {
   windowOffset,
   type NotionPickerInkInstance,
   type NotionPickerInkRenderOptions,
-} from './connection-notion-tui.js';
+} from './notion-page-picker-tui.js';
 
 const IDS = {
   engineering: '11111111-1111-1111-1111-111111111111',
@@ -378,7 +378,7 @@ describe('renderNotionPickerTui', () => {
         },
       ),
     ).resolves.toEqual({ kind: 'quit' });
-    expect(stderr).toContain('Use --no-input --root-page-id <UUID> for scripted mode');
+    expect(stderr).toContain('Use --no-input --notion-root-page-id <UUID> for scripted mode');
     expect(stderr).not.toContain('secret');
   });
 });

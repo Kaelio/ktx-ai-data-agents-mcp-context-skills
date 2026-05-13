@@ -1,32 +1,7 @@
 import { z } from 'zod';
 
 const projectDirSchema = z.string().min(1);
-const safeConnectionIdSchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, 'Unsafe connection id');
 const stringArraySchema = z.array(z.string());
-
-export const connectionAddCommandSchema = z.object({
-  command: z.literal('add'),
-  projectDir: projectDirSchema,
-  driver: z.string().min(1),
-  connectionId: safeConnectionIdSchema,
-  url: z.string().optional(),
-  schemas: stringArraySchema,
-  readonly: z.boolean(),
-  force: z.boolean(),
-  allowLiteralCredentials: z.boolean(),
-  notion: z
-    .object({
-      authTokenRef: z.string().min(1),
-      crawlMode: z.enum(['all_accessible', 'selected_roots']),
-      rootPageIds: stringArraySchema,
-      rootDatabaseIds: stringArraySchema,
-      rootDataSourceIds: stringArraySchema,
-      maxPagesPerRun: z.number().int().positive().optional(),
-      maxKnowledgeCreatesPerRun: z.number().int().nonnegative().optional(),
-      maxKnowledgeUpdatesPerRun: z.number().int().nonnegative().optional(),
-    })
-    .optional(),
-});
 
 export const wikiWriteCommandSchema = z.object({
   command: z.literal('write'),

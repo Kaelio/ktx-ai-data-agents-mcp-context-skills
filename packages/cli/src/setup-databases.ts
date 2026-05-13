@@ -949,6 +949,36 @@ function flushBufferedCommandOutput(io: KtxCliIo, bufferedIo: BufferedCommandIo)
   }
 }
 
+function writePrefixedLines(write: (chunk: string) => void, output: string): void {
+  for (const line of output.split(/\r?\n/)) {
+    if (line.length > 0) {
+      write(`│  ${line}\n`);
+    }
+  }
+}
+
+function flushPrefixedBufferedCommandOutput(io: KtxCliIo, bufferedIo: BufferedCommandIo): void {
+  writePrefixedLines((chunk) => io.stdout.write(chunk), bufferedIo.stdoutText());
+  writePrefixedLines((chunk) => io.stderr.write(chunk), bufferedIo.stderrText());
+}
+
+function nativeSqliteAbiMismatchDetail(output: string): string | null {
+  const mentionsBetterSqlite = /\bbetter-sqlite3\b|better_sqlite3/i.test(output);
+  const mentionsAbiMismatch = /compiled against a different Node\.js version|NODE_MODULE_VERSION/i.test(output);
+  if (!mentionsBetterSqlite || !mentionsAbiMismatch) {
+    return null;
+  }
+
+  const versionMatch = output.match(
+    /compiled against[\s\S]*?NODE_MODULE_VERSION\s+(\d+)[\s\S]*?requires[\s\S]*?NODE_MODULE_VERSION\s+(\d+)/i,
+  );
+  if (!versionMatch) {
+    return 'better-sqlite3 native module could not load for the current Node.js runtime.';
+  }
+
+  return `better-sqlite3 was compiled for NODE_MODULE_VERSION ${versionMatch[1]}, but this Node.js requires ${versionMatch[2]}.`;
+}
+
 function readOutputValue(output: string, label: string): string | undefined {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = new RegExp(`^\\s*${escapedLabel}:\\s*(.+?)\\s*$`, 'im').exec(output);
@@ -1443,9 +1473,28 @@ async function validateAndScanConnection(input: {
   const scanIo = createBufferedCommandIo();
   const scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
   if (scanCode !== 0) {
-    flushBufferedCommandOutput(input.io, scanIo);
-    input.io.stderr.write(`Structural scan failed for ${input.connectionId}.\n`);
-    input.io.stderr.write(`Debug command: ktx scan --project-dir ${input.projectDir} ${input.connectionId}\n`);
+    const nativeSqliteDetail = nativeSqliteAbiMismatchDetail(`${scanIo.stderrText()}\n${scanIo.stdoutText()}`);
+    if (nativeSqliteDetail) {
+      writePrefixedLines(
+        (chunk) => input.io.stderr.write(chunk),
+        [
+          `Structural scan failed for ${input.connectionId}.`,
+          'Native SQLite is built for a different Node.js ABI.',
+          `Detail: ${nativeSqliteDetail}`,
+          'Fix: pnpm run native:rebuild',
+          `Retry: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+        ].join('\n'),
+      );
+    } else {
+      flushPrefixedBufferedCommandOutput(input.io, scanIo);
+      writePrefixedLines(
+        (chunk) => input.io.stderr.write(chunk),
+        [
+          `Structural scan failed for ${input.connectionId}.`,
+          `Debug command: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+        ].join('\n'),
+      );
+    }
     return false;
   }
   const scanOutput = scanIo.stdoutText();

@@ -1,51 +1,40 @@
-import { parseNotionConnectionConfig, resolveNotionConnectionAuthToken } from '@ktx/context/connections';
+import { resolveNotionConnectionAuthToken } from '@ktx/context/connections';
 import { type NotionApi, type NotionBotInfo, NotionClient } from '@ktx/context/ingest';
-import {
-  type KtxLocalProject,
-  type KtxProjectConnectionConfig,
-  loadKtxProject,
-  serializeKtxProjectConfig,
-} from '@ktx/context/project';
-import type { KtxCliIo } from '../index.js';
-import { profileMark } from '../startup-profile.js';
-import { buildInitialState, buildPickerTree, type NotionPickerPageInput } from './connection-notion-tree.js';
+import type { KtxProjectConnectionConfig } from '@ktx/context/project';
+import type { KtxCliIo } from './cli-runtime.js';
+import { profileMark } from './startup-profile.js';
+import { buildInitialState, buildPickerTree, type NotionPickerPageInput } from './notion-page-picker-tree.js';
 import {
   type NotionPickerTuiIo,
   type PickerRenderInput,
   type PickerRenderResult,
   renderNotionPickerTui,
-} from './connection-notion-tui.js';
+} from './notion-page-picker-tui.js';
 
-profileMark('module:commands/connection-notion');
+profileMark('module:notion-page-picker');
 
-export type KtxConnectionNotionArgs =
-  | {
-      command: 'pick';
-      projectDir: string;
-      connectionId: string;
-      mode: 'interactive';
-    }
-  | {
-      command: 'pick';
-      projectDir: string;
-      connectionId: string;
-      mode: 'non-interactive';
-      rootPageIds: string[];
-    };
+export interface PickNotionRootPagesArgs {
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+}
 
 export type NotionPickerApi = Pick<NotionApi, 'search' | 'retrieveBotUser'>;
 export type { PickerRenderInput, PickerRenderResult };
 
-interface KtxConnectionNotionDeps {
+export type NotionRootPagePickResult =
+  | { kind: 'selected'; rootPageIds: string[] }
+  | { kind: 'back' }
+  | { kind: 'unavailable'; message: string };
+
+export interface NotionRootPagePickerDeps {
   env?: Record<string, string | undefined>;
-  loadProject?: typeof loadKtxProject;
   createNotionApi?: (authToken: string) => NotionPickerApi;
   renderPicker?: (input: PickerRenderInput, io: NotionPickerTuiIo) => Promise<PickerRenderResult>;
 }
 
 const NOTION_PICKER_PAGE_CAP = 5000;
 
-function assertSafeConnectionId(connectionId: string): void {
+function assertSafeNotionPickerConnectionId(connectionId: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
     throw new Error(`Unsafe connection id: ${connectionId}`);
   }
@@ -168,111 +157,74 @@ export async function resolveNotionWorkspaceLabel(api: NotionPickerApi, connecti
   }
 }
 
-function notionConnection(project: KtxLocalProject, connectionId: string): KtxProjectConnectionConfig {
-  const connection = project.config.connections[connectionId];
-  if (!connection) {
-    throw new Error(`Connection "${connectionId}" not found`);
-  }
+function assertNotionConnection(connection: KtxProjectConnectionConfig, connectionId: string): void {
   if (connection.driver !== 'notion') {
     throw new Error(`Connection "${connectionId}" is not a Notion connection`);
   }
-  return connection;
 }
 
-export async function applyNotionPickerWriteback(
-  project: KtxLocalProject,
-  connectionId: string,
-  rootPageIds: string[],
-): Promise<void> {
-  if (rootPageIds.length === 0) {
-    throw new Error('connection notion pick requires at least one root page id');
-  }
-
-  const existing = notionConnection(project, connectionId);
-  const nextConfig = {
-    ...project.config,
-    connections: {
-      ...project.config.connections,
-      [connectionId]: {
-        ...existing,
-        crawl_mode: 'selected_roots',
-        root_page_ids: rootPageIds,
-      },
-    },
-  };
-
-  await project.fileStore.writeFile(
-    'ktx.yaml',
-    serializeKtxProjectConfig(nextConfig),
-    'ktx',
-    'ktx@example.com',
-    `Pick Notion roots: ${connectionId} (${rootPageIds.length} pages)`,
-  );
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
 }
 
-export async function runKtxConnectionNotion(
-  args: KtxConnectionNotionArgs,
+function notionCrawlMode(connection: KtxProjectConnectionConfig): 'all_accessible' | 'selected_roots' {
+  return connection.crawl_mode === 'all_accessible' ? 'all_accessible' : 'selected_roots';
+}
+
+export async function pickNotionRootPages(
+  args: PickNotionRootPagesArgs,
   io: KtxCliIo = process,
-  deps: KtxConnectionNotionDeps = {},
-): Promise<number> {
+  deps: NotionRootPagePickerDeps = {},
+): Promise<NotionRootPagePickResult> {
   try {
-    assertSafeConnectionId(args.connectionId);
-    const loadProject = deps.loadProject ?? loadKtxProject;
-
-    if (args.mode === 'interactive') {
-      const project = await loadProject({ projectDir: args.projectDir });
-      const rawConnection = notionConnection(project, args.connectionId);
-      const notion = parseNotionConnectionConfig(rawConnection);
-      const authToken = await resolveNotionConnectionAuthToken(notion, { env: deps.env });
-      const api = deps.createNotionApi ? deps.createNotionApi(authToken) : new NotionClient(authToken);
-      const discovery = await discoverNotionPickerPages(api);
-      const tree = buildPickerTree(discovery.pages);
-      const initialState = buildInitialState({
-        tree,
-        existingRootPageIds: notion.root_page_ids,
-        currentCrawlMode: notion.crawl_mode,
-      });
-      const preLoadWarnings = [...discovery.warnings, ...initialState.preLoadWarnings];
-      const renderState =
-        preLoadWarnings.length > 0
-          ? {
-              ...initialState,
-              preLoadWarnings,
-            }
-          : initialState;
-      for (const warning of preLoadWarnings) {
-        io.stderr.write(`${warning}\n`);
-      }
-      const workspaceLabel = await resolveNotionWorkspaceLabel(api, args.connectionId);
-      const result = await (deps.renderPicker ?? renderNotionPickerTui)(
-        {
-          initialState: renderState,
-          connectionId: args.connectionId,
-          workspaceLabel,
-          cappedAtCount: discovery.cappedAtCount,
-          currentCrawlMode: notion.crawl_mode,
-        },
-        io as NotionPickerTuiIo,
-      );
-      if (result.kind === 'quit') {
-        io.stdout.write('No changes saved.\n');
-        return 0;
-      }
-      await applyNotionPickerWriteback(project, args.connectionId, result.rootPageIds);
-      io.stdout.write(`Connection: ${args.connectionId}\n`);
-      io.stdout.write(`rootPageIds: ${result.rootPageIds.length}\n`);
-      io.stdout.write('crawlMode: selected_roots\n');
-      return 0;
+    assertSafeNotionPickerConnectionId(args.connectionId);
+    assertNotionConnection(args.connection, args.connectionId);
+    const crawlMode = notionCrawlMode(args.connection);
+    const authToken = await resolveNotionConnectionAuthToken(
+      {
+        auth_token: typeof args.connection.auth_token === 'string' ? args.connection.auth_token : null,
+        auth_token_ref: typeof args.connection.auth_token_ref === 'string' ? args.connection.auth_token_ref : null,
+      },
+      { env: deps.env },
+    );
+    const api = deps.createNotionApi ? deps.createNotionApi(authToken) : new NotionClient(authToken);
+    const discovery = await discoverNotionPickerPages(api);
+    const tree = buildPickerTree(discovery.pages);
+    const initialState = buildInitialState({
+      tree,
+      existingRootPageIds: stringArray(args.connection.root_page_ids),
+      currentCrawlMode: crawlMode,
+    });
+    const preLoadWarnings = [...discovery.warnings, ...initialState.preLoadWarnings];
+    const renderState =
+      preLoadWarnings.length > 0
+        ? {
+            ...initialState,
+            preLoadWarnings,
+          }
+        : initialState;
+    for (const warning of preLoadWarnings) {
+      io.stderr.write(`${warning}\n`);
     }
-
-    const project = await loadProject({ projectDir: args.projectDir });
-    await applyNotionPickerWriteback(project, args.connectionId, args.rootPageIds);
-    io.stdout.write(`Connection: ${args.connectionId}\n`);
-    io.stdout.write(`rootPageIds: ${args.rootPageIds.length}\n`);
-    io.stdout.write('crawlMode: selected_roots\n');
-    return 0;
+    const workspaceLabel = await resolveNotionWorkspaceLabel(api, args.connectionId);
+    const result = await (deps.renderPicker ?? renderNotionPickerTui)(
+      {
+        initialState: renderState,
+        connectionId: args.connectionId,
+        workspaceLabel,
+        cappedAtCount: discovery.cappedAtCount,
+        currentCrawlMode: crawlMode,
+      },
+      io as NotionPickerTuiIo,
+    );
+    if (result.kind === 'quit') {
+      return { kind: 'back' };
+    }
+    if (result.rootPageIds.length === 0) {
+      return { kind: 'unavailable', message: 'Notion picker did not return any selected pages.' };
+    }
+    return { kind: 'selected', rootPageIds: result.rootPageIds };
   } catch (error) {
-    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    return { kind: 'unavailable', message: error instanceof Error ? error.message : String(error) };
   }
 }
