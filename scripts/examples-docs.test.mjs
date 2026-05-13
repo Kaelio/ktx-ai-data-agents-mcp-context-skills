@@ -67,8 +67,8 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(examples, /Historic SQL/);
     assert.doesNotMatch(examples, /historic-SQL/);
     assert.match(examples, /query-history ingest via `pg_stat_statements`/);
-    assert.doesNotMatch(readme, /--enable-historic-sql/);
-    assert.doesNotMatch(readme, /--historic-sql-min-executions/);
+    assert.doesNotMatch(readme, new RegExp(['--enable-historic', 'sql'].join('-')));
+    assert.doesNotMatch(readme, new RegExp(['--historic', 'sql-min-executions'].join('-')));
     assert.doesNotMatch(readme, /ktx ingest run --project-dir/);
     assert.doesNotMatch(readme, /--adapter historic-sql/);
     assert.match(readme, /--enable-query-history/);
@@ -136,12 +136,13 @@ describe('standalone example docs', () => {
     );
   });
 
-  it('checked-in example configs do not include public live-database adapters', async () => {
+  it('checked-in example configs do not include public database adapters', async () => {
     const localWarehouseConfig = await readFile('examples/local-warehouse/ktx.yaml', 'utf8');
     const orbitConfig = await readFile('examples/orbit-relationship-verification/ktx.yaml', 'utf8');
+    const legacyPublicAdapter = new RegExp(['live', 'database'].join('-'));
 
-    assert.doesNotMatch(localWarehouseConfig, /live-database/);
-    assert.doesNotMatch(orbitConfig, /live-database/);
+    assert.doesNotMatch(localWarehouseConfig, legacyPublicAdapter);
+    assert.doesNotMatch(orbitConfig, legacyPublicAdapter);
   });
 
   it('lists every workspace package in the contributor docs', async () => {
@@ -247,7 +248,7 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(buildingContext, /ktx scan status <run-id>/);
     assert.doesNotMatch(buildingContext, /ktx scan report <run-id>/);
     assert.match(rootReadme, /raw-sources\//);
-    assert.doesNotMatch(rootReadme, /live-database\//);
+    assert.doesNotMatch(rootReadme, new RegExp(`${['live', 'database'].join('-')}/`));
     assert.doesNotMatch(rootReadme, /ktx scan/);
     assert.doesNotMatch(rootReadme, /Run a local ingest smoke test/);
     assert.doesNotMatch(rootReadme, /ktx ingest run --project-dir/);

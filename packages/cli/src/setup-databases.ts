@@ -852,7 +852,13 @@ async function maybeApplyHistoricSqlConfig(input: {
       ],
     });
     if (choice === 'back') return 'back';
-    enabled = choice === 'yes';
+    if (choice === 'yes') {
+      enabled = true;
+    } else if (choice === 'no') {
+      enabled = false;
+    } else {
+      return input.connection;
+    }
   }
 
   const existingRecord = queryHistoryConfigRecord(input.connection) ?? historicSqlConfigRecord(input.connection) ?? {};

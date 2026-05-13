@@ -206,7 +206,7 @@ describe('runKtxIngest', () => {
           databaseConnectionId: 'warehouse',
           databaseUrl: 'env:WAREHOUSE_URL',
           databaseSchemas: [],
-          enableHistoricSql: true,
+          enableQueryHistory: true,
           skipDatabases: false,
           skipSources: true,
         },
