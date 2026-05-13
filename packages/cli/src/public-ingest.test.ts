@@ -523,6 +523,81 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('live-database');
   });
 
+  it('suppresses lower-level source report output during direct public source ingest', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      docs: { driver: 'notion' },
+    });
+    const runIngest = vi.fn(async (_args, ingestIo) => {
+      ingestIo.stdout.write('Report: report-docs-1\n');
+      ingestIo.stdout.write('Adapter: notion\n');
+      ingestIo.stdout.write('Saved memory: 2 wiki, 0 SL\n');
+      return 0;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'docs',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Ingest finished');
+    expect(io.stdout()).toContain('docs');
+    expect(io.stdout()).toContain('Source ingest');
+    expect(io.stdout()).not.toContain('Report: report-docs-1');
+    expect(io.stdout()).not.toContain('Adapter:');
+    expect(io.stdout()).not.toContain('notion\n');
+    expect(io.stderr()).toBe('');
+  });
+
+  it('suppresses historic-sql report output during direct public query-history ingest', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async (_args, ingestIo) => {
+      ingestIo.stdout.write('Report: report-query-history-1\n');
+      ingestIo.stdout.write('Adapter: historic-sql\n');
+      ingestIo.stdout.write('Saved memory: 1 wiki, 1 SL\n');
+      return 0;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Schema ingest runs before query history for warehouse.');
+    expect(io.stdout()).toContain('Ingest finished');
+    expect(io.stdout()).toContain('warehouse');
+    expect(io.stdout()).toContain('done');
+    expect(io.stdout()).not.toContain('Report: report-query-history-1');
+    expect(io.stdout()).not.toContain('Adapter:');
+    expect(io.stdout()).not.toContain('historic-sql');
+    expect(io.stderr()).toBe('');
+  });
+
   it('delegates interactive TTY public ingest to the foreground context-build view', async () => {
     const io = makeIo({ isTTY: true, interactive: true });
     const project = projectWithConnections({ warehouse: { driver: 'postgres' } });

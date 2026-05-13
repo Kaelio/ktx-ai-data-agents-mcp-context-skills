@@ -584,11 +584,25 @@ function createCapturedPublicIngestIo(): CapturedPublicIngestIo {
   };
 }
 
+const INTERNAL_STATUS_LINE_RE =
+  /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Work units|Saved memory|Provenance rows):\s*/;
+
+function publicIngestOutputLine(line: string): string {
+  return line
+    .replace(/\blive-database\b/g, 'database schema')
+    .replace(/\bhistoric-sql\b/g, 'query history')
+    .replace(/\bhistoric SQL\b/gi, 'query history');
+}
+
 function firstCapturedFailureLine(output: string): string | undefined {
   return output
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .find((line) => line.length > 0 && !line.startsWith('KTX scan completed'));
+    .filter((line) => line.length > 0)
+    .filter((line) => !line.startsWith('KTX scan completed'))
+    .filter((line) => !INTERNAL_STATUS_LINE_RE.test(line))
+    .map(publicIngestOutputLine)
+    .find((line) => line.length > 0);
 }
 
 export async function executePublicIngestTarget(
@@ -656,9 +670,19 @@ export async function executePublicIngestTarget(
             ...(target.queryHistory.windowDays !== undefined ? { windowDays: target.queryHistory.windowDays } : {}),
           },
       };
-      const qhExitCode = await runIngest(ingestArgs, io);
+      const capturedIngestIo = deps.ingestProgress ? null : createCapturedPublicIngestIo();
+      const ingestIo = capturedIngestIo ?? io;
+      const qhExitCode = deps.ingestProgress
+        ? await runIngest(ingestArgs, ingestIo, { progress: deps.ingestProgress })
+        : await runIngest(ingestArgs, ingestIo);
       if (qhExitCode !== 0) {
-        return markTargetResult(target, args, 'failed', 'query-history');
+        return markTargetResult(
+          target,
+          args,
+          'failed',
+          'query-history',
+          capturedIngestIo ? firstCapturedFailureLine(capturedIngestIo.capturedOutput()) : undefined,
+        );
       }
     }
 
@@ -677,10 +701,18 @@ export async function executePublicIngestTarget(
     allowImplicitAdapter: true,
   };
   const runIngest = deps.runIngest ?? runKtxIngest;
+  const capturedIngestIo = deps.ingestProgress ? null : createCapturedPublicIngestIo();
+  const ingestIo = capturedIngestIo ?? io;
   const exitCode = deps.ingestProgress
-    ? await runIngest(ingestArgs, io, { progress: deps.ingestProgress })
-    : await runIngest(ingestArgs, io);
-  return markTargetResult(target, args, exitCode === 0 ? 'done' : 'failed');
+    ? await runIngest(ingestArgs, ingestIo, { progress: deps.ingestProgress })
+    : await runIngest(ingestArgs, ingestIo);
+  return markTargetResult(
+    target,
+    args,
+    exitCode === 0 ? 'done' : 'failed',
+    'source-ingest',
+    capturedIngestIo ? firstCapturedFailureLine(capturedIngestIo.capturedOutput()) : undefined,
+  );
 }
 
 export async function runKtxPublicIngest(
