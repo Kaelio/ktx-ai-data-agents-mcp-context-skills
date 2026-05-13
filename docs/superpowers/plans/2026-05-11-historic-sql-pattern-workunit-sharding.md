@@ -30,23 +30,23 @@ No existing spec-derived plan is currently unimplemented in this worktree. This 
 
 ## File Structure
 
-- Create `packages/context/src/ingest/adapters/historic-sql/pattern-inputs.ts`  
+- Create `packages/context/src/ingest/adapters/historic-sql/pattern-inputs.ts`
   Owns deterministic pattern audit ordering, cross-table candidate filtering, byte-bounded shard creation, shard path constants, and shard path detection.
-- Create `packages/context/src/ingest/adapters/historic-sql/pattern-inputs.test.ts`  
+- Create `packages/context/src/ingest/adapters/historic-sql/pattern-inputs.test.ts`
   Covers deterministic shard ordering, single-table exclusion from WorkUnit shards, byte limits, and oversize-template manifest warnings.
-- Modify `packages/context/src/ingest/adapters/historic-sql/stage-unified.ts`  
+- Modify `packages/context/src/ingest/adapters/historic-sql/stage-unified.ts`
   Writes full `patterns-input.json` plus bounded `patterns-input/part-0001.json` shard files, and appends shard warnings to `manifest.json`.
-- Modify `packages/context/src/ingest/adapters/historic-sql/stage-unified.test.ts`  
+- Modify `packages/context/src/ingest/adapters/historic-sql/stage-unified.test.ts`
   Adds a regression for audit file preservation and sharded WorkUnit input creation.
-- Modify `packages/context/src/ingest/adapters/historic-sql/chunk-unified.ts`  
+- Modify `packages/context/src/ingest/adapters/historic-sql/chunk-unified.ts`
   Emits one patterns WorkUnit per changed shard path, treats root `patterns-input.json` as audit-only, and includes shard paths in the scope descriptor and eviction calculation.
-- Modify `packages/context/src/ingest/adapters/historic-sql/chunk-unified.test.ts`  
+- Modify `packages/context/src/ingest/adapters/historic-sql/chunk-unified.test.ts`
   Updates root-file expectations and adds multi-shard diff behavior.
-- Modify `packages/context/skills/historic_sql_patterns/SKILL.md`  
+- Modify `packages/context/skills/historic_sql_patterns/SKILL.md`
   Tells the skill to read the exact pattern shard in `rawFiles` and emit evidence with that shard as `rawPath`.
-- Modify `packages/context/src/ingest/adapters/historic-sql/local-ingest-acceptance.test.ts`  
+- Modify `packages/context/src/ingest/adapters/historic-sql/local-ingest-acceptance.test.ts`
   Updates the fake agent to emit pattern evidence for `historic-sql-patterns-part-0001`.
-- Modify `packages/context/src/ingest/ingest-runtime-assets.test.ts`  
+- Modify `packages/context/src/ingest/ingest-runtime-assets.test.ts`
   Keeps packaged skill assertions aligned with sharded pattern file guidance.
 
 ## Task 1: Add Pattern Input Sharding Helper

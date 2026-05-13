@@ -39,7 +39,7 @@ describe('metabaseRuntimeConfigFromLocalConnection', () => {
     const connection: KtxProjectConnectionConfig = {
       driver: 'metabase',
       api_url: 'https://metabase.example.com',
-      api_key_ref: `file:${keyPath}`,
+      api_key_ref: `file:${keyPath}`, // pragma: allowlist secret
     };
 
     expect(metabaseRuntimeConfigFromLocalConnection('prod-metabase', connection)).toEqual({

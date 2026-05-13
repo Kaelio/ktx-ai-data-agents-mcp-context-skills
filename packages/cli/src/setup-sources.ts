@@ -224,17 +224,20 @@ async function chooseSourceCredentialRef(input: {
   label: string;
   envName: string;
   secretFileName: string;
+  existingRef?: string;
 }): Promise<string | 'back'> {
   while (true) {
     const choice = await input.prompts.select({
       message: `How should KTX find your ${input.label}?`,
       options: [
+        ...(input.existingRef ? [{ value: 'keep', label: 'Keep existing credential' }] : []),
         { value: 'env', label: `Use ${input.envName} from the environment` },
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
         { value: 'back', label: 'Back' },
       ],
     });
     if (choice === 'back') return 'back';
+    if (choice === 'keep' && input.existingRef) return input.existingRef;
     if (choice === 'paste') {
       const value = await input.prompts.password({ message: input.label });
       if (value === undefined) continue;
@@ -256,12 +259,14 @@ async function chooseGitAuthCredentialRef(input: {
   projectDir: string;
   source: KtxSetupSourceType;
   connectionId: string;
+  existingRef?: string;
 }): Promise<string | undefined | 'back'> {
   const label = input.source === 'dbt' ? 'This' : `This ${sourceLabel(input.source)}`;
   while (true) {
     const choice = await input.prompts.select({
       message: `${label} repo requires authentication.`,
       options: [
+        ...(input.existingRef ? [{ value: 'keep', label: 'Keep existing credential' }] : []),
         { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
         { value: 'paste', label: 'Paste a token and save it as a local secret file' },
         { value: 'skip', label: 'Skip — try without authentication' },
@@ -269,6 +274,7 @@ async function chooseGitAuthCredentialRef(input: {
       ],
     });
     if (choice === 'back') return 'back';
+    if (choice === 'keep' && input.existingRef) return input.existingRef;
     if (choice === 'skip') return undefined;
     if (choice === 'paste') {
       const value = await input.prompts.password({ message: 'Git access token' });
@@ -792,7 +798,13 @@ interface WarehouseConnectionChoice {
 type InteractiveSourceConnectionChoice =
   | { kind: 'existing'; connectionId: string; connection: KtxProjectConnectionConfig }
   | { kind: 'new'; args: KtxSetupSourcesArgs }
+  | { kind: 'edited'; connectionId: string; args: KtxSetupSourcesArgs }
   | 'back';
+
+type SourceSetupChoiceResult =
+  | { status: 'ready'; connectionId: string }
+  | { status: 'back' }
+  | { status: 'failed' };
 
 async function runSourcePromptSteps(
   initialState: SourcePromptState,
@@ -825,6 +837,12 @@ function resetRepoLocationFields(state: SourcePromptState): void {
   delete state.sourceAuthTokenRef;
   delete state.sourceSubpath;
   delete state.sourceProjectName;
+}
+
+function sourceLocationFromArgs(args: KtxSetupSourcesArgs): SourceLocationChoice | undefined {
+  if (args.sourcePath) return 'path';
+  if (args.sourceGitUrl) return 'git';
+  return undefined;
 }
 
 function warehouseConnectionChoices(config: KtxProjectConfig): WarehouseConnectionChoice[] {
@@ -963,7 +981,7 @@ async function promptForInteractiveSource(
   testGitRepo: KtxSetupSourcesDeps['testGitRepo'] = testRepoConnection,
   discoverMetabaseDatabaseList?: KtxSetupSourcesDeps['discoverMetabaseDatabases'],
 ): Promise<KtxSetupSourcesArgs | 'back'> {
-  const initialState: SourcePromptState = { ...args, source };
+  const initialState: SourcePromptState = { ...args, source, sourceLocation: sourceLocationFromArgs(args) };
   if (args.sourceConnectionId) {
     initialState.sourceConnectionId = args.sourceConnectionId;
   }
@@ -993,7 +1011,10 @@ async function promptForInteractiveSource(
       ...(state.sourceLocation === 'path'
         ? [
             async (currentState: SourcePromptState) => {
-              const sourcePath = await promptText(prompts, { message: `${source} local path` });
+              const sourcePath = await promptText(prompts, {
+                message: `${source} local path`,
+                ...(currentState.sourcePath ? { initialValue: currentState.sourcePath } : {}),
+              });
               if (sourcePath === undefined) return 'back';
               currentState.sourcePath = sourcePath;
               return 'next';
@@ -1003,13 +1024,19 @@ async function promptForInteractiveSource(
       ...(state.sourceLocation === 'git'
         ? [
             async (currentState: SourcePromptState) => {
-              const sourceGitUrl = await promptText(prompts, { message: `${source} git URL` });
+              const sourceGitUrl = await promptText(prompts, {
+                message: `${source} git URL`,
+                ...(currentState.sourceGitUrl ? { initialValue: currentState.sourceGitUrl } : {}),
+              });
               if (sourceGitUrl === undefined) return 'back';
               currentState.sourceGitUrl = sourceGitUrl;
               return 'next';
             },
             async (currentState: SourcePromptState) => {
-              const branch = await promptText(prompts, { message: `${source} git branch`, initialValue: 'main' });
+              const branch = await promptText(prompts, {
+                message: `${source} git branch`,
+                initialValue: currentState.sourceBranch ?? 'main',
+              });
               if (branch === undefined) return 'back';
               currentState.sourceBranch = branch || 'main';
               return 'next';
@@ -1030,6 +1057,7 @@ async function promptForInteractiveSource(
                 projectDir: args.projectDir,
                 source,
                 connectionId: currentState.sourceConnectionId ?? `${source}-main`,
+                existingRef: currentState.sourceAuthTokenRef,
               });
               if (authRef === 'back') return 'back';
               if (authRef) {
@@ -1103,6 +1131,7 @@ async function promptForInteractiveSource(
               const subpath = await promptText(prompts, {
                 message: sourceSubpathPrompt(source),
                 placeholder: 'optional',
+                ...(currentState.sourceSubpath ? { initialValue: currentState.sourceSubpath } : {}),
               });
               if (subpath === undefined) return 'back';
               if (subpath) {
@@ -1121,7 +1150,10 @@ async function promptForInteractiveSource(
     return await runSourcePromptSteps(initialState, () => [
       ...connectionSteps,
       async (state) => {
-        const sourceUrl = await promptText(prompts, { message: 'Metabase URL' });
+        const sourceUrl = await promptText(prompts, {
+          message: 'Metabase URL',
+          ...(state.sourceUrl ? { initialValue: state.sourceUrl } : {}),
+        });
         if (sourceUrl === undefined) return 'back';
         state.sourceUrl = sourceUrl;
         return 'next';
@@ -1133,6 +1165,7 @@ async function promptForInteractiveSource(
           label: 'Metabase API key',
           envName: 'METABASE_API_KEY',
           secretFileName: `${state.sourceConnectionId ?? 'metabase-main'}-api-key`,
+          existingRef: state.sourceApiKeyRef,
         });
         if (ref === 'back') return 'back';
         state.sourceApiKeyRef = ref;
@@ -1164,13 +1197,19 @@ async function promptForInteractiveSource(
     return await runSourcePromptSteps(initialState, () => [
       ...connectionSteps,
       async (state) => {
-        const sourceUrl = await promptText(prompts, { message: 'Looker base URL' });
+        const sourceUrl = await promptText(prompts, {
+          message: 'Looker base URL',
+          ...(state.sourceUrl ? { initialValue: state.sourceUrl } : {}),
+        });
         if (sourceUrl === undefined) return 'back';
         state.sourceUrl = sourceUrl;
         return 'next';
       },
       async (state) => {
-        const sourceClientId = await promptText(prompts, { message: 'Looker client id' });
+        const sourceClientId = await promptText(prompts, {
+          message: 'Looker client id',
+          ...(state.sourceClientId ? { initialValue: state.sourceClientId } : {}),
+        });
         if (sourceClientId === undefined) return 'back';
         state.sourceClientId = sourceClientId;
         return 'next';
@@ -1182,6 +1221,7 @@ async function promptForInteractiveSource(
           label: 'Looker client secret',
           envName: 'LOOKER_CLIENT_SECRET',
           secretFileName: `${state.sourceConnectionId ?? 'looker-main'}-client-secret`,
+          existingRef: state.sourceClientSecretRef,
         });
         if (ref === 'back') return 'back';
         state.sourceClientSecretRef = ref;
@@ -1200,6 +1240,7 @@ async function promptForInteractiveSource(
         const lookerConnectionName = await promptText(prompts, {
           message: 'Looker connection name',
           placeholder: 'optional',
+          ...(state.sourceTarget ? { initialValue: state.sourceTarget } : {}),
         });
         if (lookerConnectionName === undefined) return 'back';
         if (lookerConnectionName) {
@@ -1221,6 +1262,7 @@ async function promptForInteractiveSource(
         label: 'Notion integration token',
         envName: 'NOTION_TOKEN',
         secretFileName: `${currentState.sourceConnectionId ?? 'notion-main'}-token`,
+        existingRef: currentState.sourceApiKeyRef,
       });
       if (ref === 'back') return 'back';
       currentState.sourceApiKeyRef = ref;
@@ -1285,6 +1327,24 @@ function existingConnectionIdsBySource(
     .sort((left, right) => left.localeCompare(right));
 }
 
+function sourceTypeForConnection(connection: KtxProjectConnectionConfig): KtxSetupSourceType | null {
+  const driver = String(connection.driver ?? '').toLowerCase();
+  return SOURCE_OPTIONS.some((option) => option.value === driver) ? (driver as KtxSetupSourceType) : null;
+}
+
+function contextSourceEditTargets(connections: Record<string, KtxProjectConnectionConfig>): Array<{
+  connectionId: string;
+  source: KtxSetupSourceType;
+}> {
+  return Object.entries(connections)
+    .map(([connectionId, connection]) => {
+      const source = sourceTypeForConnection(connection);
+      return source ? { connectionId, source } : null;
+    })
+    .filter((target): target is { connectionId: string; source: KtxSetupSourceType } => target !== null)
+    .sort((left, right) => left.connectionId.localeCompare(right.connectionId));
+}
+
 function sourceChecklistForConnections(connections: Record<string, KtxProjectConnectionConfig>): {
   options: Array<{ value: KtxSetupSourceType; label: string; hint?: string }>;
   initialValues: KtxSetupSourceType[];
@@ -1314,6 +1374,180 @@ function defaultConnectionIdForSource(
     index += 1;
   }
   return `${base}-${index}`;
+}
+
+function firstStringRecordEntry(value: unknown): [string, string] | undefined {
+  if (!isRecord(value)) return undefined;
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      return [key, raw.trim()];
+    }
+  }
+  return undefined;
+}
+
+function applyRepoSourceArgs(
+  args: KtxSetupSourcesArgs,
+  input: { repoUrl?: string; sourceDir?: string; branch?: string; subpath?: string; authTokenRef?: string },
+): void {
+  if (input.sourceDir) {
+    args.sourcePath = input.sourceDir;
+  } else if (input.repoUrl?.startsWith('file:')) {
+    args.sourcePath = fileURLToPath(input.repoUrl);
+  } else if (input.repoUrl) {
+    args.sourceGitUrl = input.repoUrl;
+  }
+  if (input.branch) args.sourceBranch = input.branch;
+  if (input.subpath) args.sourceSubpath = input.subpath;
+  if (input.authTokenRef) args.sourceAuthTokenRef = input.authTokenRef;
+}
+
+function sourceArgsFromExistingConnection(input: {
+  args: KtxSetupSourcesArgs;
+  source: KtxSetupSourceType;
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+}): KtxSetupSourcesArgs {
+  const sourceArgs: KtxSetupSourcesArgs = {
+    projectDir: input.args.projectDir,
+    inputMode: input.args.inputMode,
+    source: input.source,
+    sourceConnectionId: input.connectionId,
+    runInitialSourceIngest: input.args.runInitialSourceIngest,
+    skipSources: input.args.skipSources,
+  };
+
+  if (input.source === 'dbt') {
+    applyRepoSourceArgs(sourceArgs, {
+      sourceDir: stringField(input.connection.source_dir),
+      repoUrl: stringField(input.connection.repo_url),
+      branch: stringField(input.connection.branch),
+      subpath: stringField(input.connection.path),
+      authTokenRef: stringField(input.connection.auth_token_ref),
+    });
+    const profilesPath = stringField(input.connection.profiles_path);
+    const target = stringField(input.connection.target);
+    const projectName = stringField(input.connection.project_name);
+    if (profilesPath) sourceArgs.sourceProfilesPath = profilesPath;
+    if (target) sourceArgs.sourceTarget = target;
+    if (projectName) sourceArgs.sourceProjectName = projectName;
+    return sourceArgs;
+  }
+
+  if (input.source === 'metricflow') {
+    const metricflow = isRecord(input.connection.metricflow) ? input.connection.metricflow : {};
+    applyRepoSourceArgs(sourceArgs, {
+      repoUrl: stringField(metricflow.repoUrl),
+      branch: stringField(metricflow.branch),
+      subpath: stringField(metricflow.path),
+      authTokenRef: stringField(metricflow.auth_token_ref),
+    });
+    return sourceArgs;
+  }
+
+  if (input.source === 'lookml') {
+    applyRepoSourceArgs(sourceArgs, {
+      repoUrl: stringField(input.connection.repoUrl),
+      branch: stringField(input.connection.branch),
+      subpath: stringField(input.connection.path),
+      authTokenRef: stringField(input.connection.auth_token_ref),
+    });
+    const mappings = isRecord(input.connection.mappings) ? input.connection.mappings : {};
+    const expectedLookerConnectionName = stringField(mappings.expectedLookerConnectionName);
+    if (expectedLookerConnectionName) sourceArgs.sourceTarget = expectedLookerConnectionName;
+    return sourceArgs;
+  }
+
+  if (input.source === 'metabase') {
+    sourceArgs.sourceUrl = stringField(input.connection.api_url);
+    sourceArgs.sourceApiKeyRef = stringField(input.connection.api_key_ref);
+    const mappings = isRecord(input.connection.mappings) ? input.connection.mappings : {};
+    const databaseMapping = firstStringRecordEntry(mappings.databaseMappings);
+    if (databaseMapping) {
+      sourceArgs.metabaseDatabaseId = Number.parseInt(databaseMapping[0], 10);
+      sourceArgs.sourceWarehouseConnectionId = databaseMapping[1];
+    }
+    return sourceArgs;
+  }
+
+  if (input.source === 'looker') {
+    sourceArgs.sourceUrl = stringField(input.connection.base_url);
+    sourceArgs.sourceClientId = stringField(input.connection.client_id);
+    sourceArgs.sourceClientSecretRef = stringField(input.connection.client_secret_ref);
+    const mappings = isRecord(input.connection.mappings) ? input.connection.mappings : {};
+    const connectionMapping = firstStringRecordEntry(mappings.connectionMappings);
+    if (connectionMapping) {
+      sourceArgs.sourceTarget = connectionMapping[0];
+      sourceArgs.sourceWarehouseConnectionId = connectionMapping[1];
+    }
+    return sourceArgs;
+  }
+
+  sourceArgs.sourceApiKeyRef = stringField(input.connection.auth_token_ref);
+  sourceArgs.notionCrawlMode =
+    input.connection.crawl_mode === 'all_accessible' ? 'all_accessible' : 'selected_roots';
+  if (Array.isArray(input.connection.root_page_ids)) {
+    sourceArgs.notionRootPageIds = input.connection.root_page_ids.filter(
+      (pageId): pageId is string => typeof pageId === 'string',
+    );
+  }
+  return sourceArgs;
+}
+
+async function promptEditedSourceConnection(input: {
+  args: KtxSetupSourcesArgs;
+  source: KtxSetupSourceType;
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+  prompts: KtxSetupSourcesPromptAdapter;
+  io: KtxCliIo;
+  testGitRepo?: KtxSetupSourcesDeps['testGitRepo'];
+  pickNotionRootPages?: KtxSetupSourcesDeps['pickNotionRootPages'];
+  discoverMetabaseDatabases?: KtxSetupSourcesDeps['discoverMetabaseDatabases'];
+}): Promise<Extract<InteractiveSourceConnectionChoice, { kind: 'edited' }> | 'back'> {
+  const sourceArgs = await promptForInteractiveSource(
+    sourceArgsFromExistingConnection({
+      args: input.args,
+      source: input.source,
+      connectionId: input.connectionId,
+      connection: input.connection,
+    }),
+    input.source,
+    input.prompts,
+    input.io,
+    {
+      pickNotionRootPages: input.pickNotionRootPages,
+      discoverMetabaseDatabases: input.discoverMetabaseDatabases,
+    },
+    input.connectionId,
+    input.testGitRepo,
+    input.discoverMetabaseDatabases,
+  );
+  return sourceArgs === 'back'
+    ? 'back'
+    : { kind: 'edited', connectionId: input.connectionId, args: sourceArgs };
+}
+
+async function chooseContextSourceToEdit(input: {
+  projectDir: string;
+  prompts: KtxSetupSourcesPromptAdapter;
+}): Promise<{ connectionId: string; source: KtxSetupSourceType } | 'back'> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const targets = contextSourceEditTargets(project.config.connections);
+  if (targets.length === 0) return 'back';
+  const choice = await input.prompts.select({
+    message: 'Context source to edit',
+    options: [
+      ...targets.map((target) => ({
+        value: target.connectionId,
+        label: `${target.connectionId} (${sourceLabel(target.source)})`,
+      })),
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (choice === 'back') return 'back';
+  const target = targets.find((candidate) => candidate.connectionId === choice);
+  return target ?? 'back';
 }
 
 async function chooseInteractiveSourceConnection(input: {
@@ -1355,6 +1589,10 @@ async function chooseInteractiveSourceConnection(input: {
           value: `existing:${connectionId}`,
           label: `Use existing ${label} connection: ${connectionId}`,
         })),
+        ...existingIds.map((connectionId) => ({
+          value: `edit:${connectionId}`,
+          label: `Edit existing ${label} connection: ${connectionId}`,
+        })),
         { value: 'new', label: `Add new ${label} connection` },
         { value: 'back', label: 'Back' },
       ],
@@ -1367,6 +1605,28 @@ async function chooseInteractiveSourceConnection(input: {
         return { kind: 'existing', connectionId, connection };
       }
       continue;
+    }
+    if (choice.startsWith('edit:')) {
+      const connectionId = choice.slice('edit:'.length);
+      const connection = input.connections[connectionId];
+      if (!connection) {
+        continue;
+      }
+      const edited = await promptEditedSourceConnection({
+        args: input.args,
+        source: input.source,
+        connectionId,
+        connection,
+        prompts: input.prompts,
+        io: input.io,
+        testGitRepo: input.testGitRepo,
+        pickNotionRootPages: input.pickNotionRootPages,
+        discoverMetabaseDatabases: input.discoverMetabaseDatabases,
+      });
+      if (edited === 'back') {
+        continue;
+      }
+      return edited;
     }
     const sourceArgs = await promptForInteractiveSource(
       input.args,
@@ -1430,6 +1690,85 @@ async function validateSource(
     return await (deps.validateLookml ?? defaultValidateLookml)(args.connection);
   }
   return await (deps.validateNotion ?? defaultValidateNotion)(args.connection);
+}
+
+async function saveValidateAndMaybeBuildSource(input: {
+  args: KtxSetupSourcesArgs;
+  source: KtxSetupSourceType;
+  sourceChoice: Exclude<InteractiveSourceConnectionChoice, 'back'>;
+  prompts: KtxSetupSourcesPromptAdapter;
+  io: KtxCliIo;
+  deps: KtxSetupSourcesDeps;
+}): Promise<SourceSetupChoiceResult> {
+  const connectionId =
+    input.sourceChoice.kind === 'existing'
+      ? input.sourceChoice.connectionId
+      : input.sourceChoice.kind === 'edited'
+        ? input.sourceChoice.connectionId
+        : (input.sourceChoice.args.sourceConnectionId ?? `${input.source}-main`);
+  const connection =
+    input.sourceChoice.kind === 'existing'
+      ? input.sourceChoice.connection
+      : buildConnection(input.source, input.sourceChoice.args);
+  const rollback =
+    input.sourceChoice.kind === 'existing'
+      ? undefined
+      : await writeSourceConnection(
+          input.args.projectDir,
+          connectionId,
+          connection,
+          sourceAdapter(input.source),
+        );
+
+  if (input.sourceChoice.kind === 'existing') {
+    await ensureSourceAdapterEnabled(input.args.projectDir, input.source);
+  }
+
+  const validation = await validateSource(
+    input.source,
+    { projectDir: input.args.projectDir, connectionId, connection },
+    input.deps,
+  );
+  if (!validation.ok) {
+    await rollback?.();
+    input.io.stderr.write(`${validation.message}\n`);
+    return { status: 'failed' };
+  }
+
+  if (input.source === 'metabase' || input.source === 'looker') {
+    input.prompts.log?.(`Validating ${sourceLabel(input.source)} mapping…`);
+    const mappingCode = await (input.deps.runMapping ?? defaultRunMapping)(
+      input.args.projectDir,
+      connectionId,
+      createSetupPrefixedIo(input.io),
+    );
+    if (mappingCode !== 0) {
+      await rollback?.();
+      return { status: 'failed' };
+    }
+  }
+
+  if (input.args.runInitialSourceIngest) {
+    const ingestResult = await runInitialSourceIngestWithRecovery({
+      args: input.args,
+      connectionId,
+      io: input.io,
+      prompts: input.prompts,
+      deps: input.deps,
+    });
+    if (ingestResult === 'failed') {
+      await rollback?.();
+      return { status: 'failed' };
+    }
+    if (ingestResult === 'back') {
+      await rollback?.();
+      return { status: 'back' };
+    }
+  } else {
+    input.io.stdout.write(`│  Context source ${connectionId} saved. It will be built during the context build step.\n`);
+  }
+
+  return { status: 'ready', connectionId };
 }
 
 export async function runKtxSetupSourcesStep(
@@ -1509,62 +1848,27 @@ export async function runKtxSetupSourcesStep(
           returnToSourceSelection = true;
           break;
         }
-        const connectionId =
-          sourceChoice.kind === 'existing'
-            ? sourceChoice.connectionId
-            : (sourceChoice.args.sourceConnectionId ?? `${source}-main`);
-        const connection =
-          sourceChoice.kind === 'existing' ? sourceChoice.connection : buildConnection(source, sourceChoice.args);
-        const rollback =
-          sourceChoice.kind === 'existing'
-            ? undefined
-            : await writeSourceConnection(args.projectDir, connectionId, connection, sourceAdapter(source));
-        if (sourceChoice.kind === 'existing') {
-          await ensureSourceAdapterEnabled(args.projectDir, source);
-        }
-        const validation = await validateSource(source, { projectDir: args.projectDir, connectionId, connection }, deps);
-
-        if (!validation.ok) {
-          await rollback?.();
-          io.stderr.write(`${validation.message}\n`);
+        const choiceResult = await saveValidateAndMaybeBuildSource({
+          args,
+          source,
+          sourceChoice,
+          prompts,
+          io,
+          deps,
+        });
+        if (choiceResult.status === 'failed') {
           return { status: 'failed', projectDir: args.projectDir };
         }
-        if (source === 'metabase' || source === 'looker') {
-          prompts.log?.(`Validating ${sourceLabel(source)} mapping…`);
-          const mappingCode = await (deps.runMapping ?? defaultRunMapping)(
-            args.projectDir,
-            connectionId,
-            createSetupPrefixedIo(io),
-          );
-          if (mappingCode !== 0) {
-            await rollback?.();
-            return { status: 'failed', projectDir: args.projectDir };
+        if (choiceResult.status === 'back') {
+          if (args.source) {
+            return { status: 'back', projectDir: args.projectDir };
           }
+          returnToSourceSelection = true;
+          break;
         }
-        if (args.runInitialSourceIngest) {
-          const ingestResult = await runInitialSourceIngestWithRecovery({
-            args,
-            connectionId,
-            io,
-            prompts,
-            deps,
-          });
-          if (ingestResult === 'failed') {
-            await rollback?.();
-            return { status: 'failed', projectDir: args.projectDir };
-          }
-          if (ingestResult === 'back') {
-            await rollback?.();
-            if (args.source) {
-              return { status: 'back', projectDir: args.projectDir };
-            }
-            returnToSourceSelection = true;
-            break;
-          }
-        } else {
-          io.stdout.write(`│  Context source ${connectionId} saved. It will be built during the context build step.\n`);
+        if (!readyConnectionIds.includes(choiceResult.connectionId)) {
+          readyConnectionIds.push(choiceResult.connectionId);
         }
-        readyConnectionIds.push(connectionId);
       }
 
       if (returnToSourceSelection) {
@@ -1572,14 +1876,66 @@ export async function runKtxSetupSourcesStep(
       }
 
       if (readyConnectionIds.length > 0 && !args.source && args.inputMode !== 'disabled') {
-        const addMore = await prompts.select({
-          message: `${readyConnectionIds.length} context source${readyConnectionIds.length > 1 ? 's' : ''} configured (${readyConnectionIds.join(', ')}). Add another?`,
-          options: [
-            { value: 'done', label: 'Done — continue to context build' },
-            { value: 'add', label: 'Add another context source' },
-          ],
-        });
-        if (addMore === 'add') {
+        let restartSourceSelection = false;
+        while (true) {
+          const addMore = await prompts.select({
+            message: `${readyConnectionIds.length} context source${readyConnectionIds.length > 1 ? 's' : ''} configured (${readyConnectionIds.join(', ')}). Add another?`,
+            options: [
+              { value: 'done', label: 'Done — continue to context build' },
+              { value: 'edit', label: 'Edit an existing context source' },
+              { value: 'add', label: 'Add another context source' },
+            ],
+          });
+          if (addMore === 'add') {
+            restartSourceSelection = true;
+            break;
+          }
+          if (addMore === 'edit') {
+            const editTarget = await chooseContextSourceToEdit({ projectDir: args.projectDir, prompts });
+            if (editTarget === 'back') {
+              continue;
+            }
+            const projectForEdit = await loadKtxProject({ projectDir: args.projectDir });
+            const connection = projectForEdit.config.connections[editTarget.connectionId];
+            if (!connection) {
+              continue;
+            }
+            const sourceChoice = await promptEditedSourceConnection({
+              args,
+              source: editTarget.source,
+              connectionId: editTarget.connectionId,
+              connection,
+              prompts,
+              io,
+              testGitRepo: deps.testGitRepo,
+              pickNotionRootPages: deps.pickNotionRootPages,
+              discoverMetabaseDatabases: deps.discoverMetabaseDatabases,
+            });
+            if (sourceChoice === 'back') {
+              continue;
+            }
+            const choiceResult = await saveValidateAndMaybeBuildSource({
+              args,
+              source: editTarget.source,
+              sourceChoice,
+              prompts,
+              io,
+              deps,
+            });
+            if (choiceResult.status === 'failed') {
+              return { status: 'failed', projectDir: args.projectDir };
+            }
+            if (choiceResult.status === 'back') {
+              continue;
+            }
+            if (!readyConnectionIds.includes(choiceResult.connectionId)) {
+              readyConnectionIds.push(choiceResult.connectionId);
+            }
+            continue;
+          }
+          break;
+        }
+        if (restartSourceSelection) {
           continue;
         }
       }

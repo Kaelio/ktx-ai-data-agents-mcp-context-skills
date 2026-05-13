@@ -5,10 +5,15 @@ import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetup
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type KtxSetupDatabaseDriver,
+  type KtxSetupDatabasesDeps,
   type KtxSetupDatabasesPromptAdapter,
   runKtxSetupDatabasesStep,
 } from './setup-databases.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import type {
+  DatabaseScopePickResult,
+  PickDatabaseScopeArgs,
+} from './database-tree-picker.js';
 
 function makeIo() {
   let stdout = '';
@@ -29,6 +34,43 @@ function makeIo() {
     },
     stdout: () => stdout,
     stderr: () => stderr,
+  };
+}
+
+type ScopePick =
+  | 'back'
+  | 'enable-all'
+  | { schemas: string[]; tables: string[] };
+
+interface PickerStubs {
+  pickDatabaseScope: KtxSetupDatabasesDeps['pickDatabaseScope'];
+  scopeCalls: PickDatabaseScopeArgs[];
+}
+
+function makePickerStubs(options: { scopes?: ScopePick[] } = {}): PickerStubs {
+  const queue: ScopePick[] = [...(options.scopes ?? [])];
+  const scopeCalls: PickDatabaseScopeArgs[] = [];
+  return {
+    scopeCalls,
+    pickDatabaseScope: vi.fn(async (args: PickDatabaseScopeArgs): Promise<DatabaseScopePickResult> => {
+      scopeCalls.push(args);
+      const next = queue.shift();
+      if (next === undefined || next === 'enable-all') {
+        const enabledTables = args.discovered.map((t) => `${t.schema}.${t.name}`);
+        const activeSchemas = args.supportsSchemaScope
+          ? Array.from(new Set(args.discovered.map((t) => t.schema)))
+          : [];
+        return { kind: 'selected', activeSchemas, enabledTables };
+      }
+      if (next === 'back') {
+        return { kind: 'back' };
+      }
+      return {
+        kind: 'selected',
+        activeSchemas: args.supportsSchemaScope ? next.schemas : [],
+        enabledTables: next.tables,
+      };
+    }),
   };
 }
 
@@ -240,8 +282,9 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Configure PostgreSQL',
       options: [
-        { value: 'existing:warehouse', label: 'Use existing PostgreSQL connection: warehouse' },
-        { value: 'new', label: 'Add new PostgreSQL connection' },
+        { value: 'existing:warehouse', label: 'Keep existing PostgreSQL connection: warehouse' },
+        { value: 'edit:warehouse', label: 'Edit PostgreSQL connection: warehouse' },
+        { value: 'new', label: 'Add another PostgreSQL connection' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -564,7 +607,8 @@ describe('setup databases step', () => {
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'edit', label: 'Edit an existing primary source' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
@@ -608,11 +652,16 @@ describe('setup databases step', () => {
       connectionIds: ['warehouse', 'mysql-warehouse'],
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(1);
+    expect(prompts.multiselect).toHaveBeenCalledWith(expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'edit', label: 'Edit an existing primary source' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
     expect(testConnection).toHaveBeenCalledTimes(1);
@@ -642,11 +691,16 @@ describe('setup databases step', () => {
       connectionIds: ['postgres-warehouse', 'mysql-warehouse'],
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
+    expect(prompts.multiselect).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'edit', label: 'Edit an existing primary source' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -675,12 +729,17 @@ describe('setup databases step', () => {
       connectionIds: ['postgres-warehouse'],
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
+    expect(prompts.multiselect).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(io.stdout()).not.toContain('KTX cannot work without at least one primary source');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'edit', label: 'Edit an existing primary source' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
   });
@@ -715,13 +774,400 @@ describe('setup databases step', () => {
     );
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(prompts.multiselect).toHaveBeenCalledWith(expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(io.stdout()).not.toContain('KTX cannot work without at least one primary source');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'edit', label: 'Edit an existing primary source' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
+    });
+  });
+
+  it('returns from primary source edit selection back to the configured source menu', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      selectValues: ['edit', 'back', 'continue'],
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      { prompts, testConnection, scanConnection },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(prompts.select).toHaveBeenNthCalledWith(2, {
+      message: 'Primary source to edit',
+      options: [
+        { value: 'warehouse', label: 'warehouse (PostgreSQL)' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect(prompts.select).toHaveBeenNthCalledWith(3, {
+      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      options: [
+        { value: 'continue', label: 'Continue to knowledge sources' },
+        { value: 'edit', label: 'Edit an existing primary source' },
+        { value: 'add', label: 'Add additional primary sources' },
+      ],
+    });
+    expect(testConnection).not.toHaveBeenCalled();
+    expect(scanConnection).not.toHaveBeenCalled();
+  });
+
+  it('reruns table selection after editing schema scope so stale enabled tables are removed', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+    });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      return 'back';
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['analytics', 'public']);
+    const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'customers', kind: 'table' as const }]);
+    const pickers = makePickerStubs({
+      scopes: [{ schemas: ['analytics'], tables: ['analytics.customers'] }],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(prompts.text).toHaveBeenCalledWith({
+      message: textInputPrompt('PostgreSQL connection URL'),
+      placeholder: 'env:DATABASE_URL',
+      initialValue: 'env:DATABASE_URL',
+    });
+    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse', ['analytics', 'public']);
+    expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    expect(scanConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      schemas: ['analytics'],
+      enabled_tables: ['analytics.customers'],
+    });
+  });
+
+  it('preselects existing schema and table choices when editing a primary source', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.customers',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+    });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      return 'back';
+    });
+    const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
+    const listTables = vi.fn(async () => [
+      { schema: 'public', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+      { schema: 'public', name: 'products', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({
+      scopes: [{ schemas: ['public'], tables: ['public.customers', 'public.orders'] }],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(pickers.scopeCalls).toHaveLength(1);
+    expect(pickers.scopeCalls[0]).toMatchObject({
+      connectionId: 'warehouse',
+      schemaNoun: 'schema',
+      supportsSchemaScope: true,
+      existing: { enabledTables: ['public.customers', 'public.orders'] },
+    });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      schemas: ['public'],
+      enabled_tables: ['public.customers', 'public.orders'],
+    });
+  });
+
+  it('returns to the configured primary menu when backing out of schema review during edit', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+    });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      return 'back';
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['analytics', 'public']);
+    const listTables = vi.fn(async () => [
+      { schema: 'analytics', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({ scopes: ['back'] });
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(primaryMenuCount).toBe(2);
+    expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    expect(scanConnection).not.toHaveBeenCalled();
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      url: 'env:DATABASE_URL',
+      schemas: ['public'],
+      enabled_tables: ['public.orders'],
+    });
+  });
+
+  it('returns to the configured primary menu when backing out of table review during edit', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({ textValues: ['env:DATABASE_URL'] });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      return 'back';
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['public']);
+    const listTables = vi.fn(async () => [
+      { schema: 'public', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({ scopes: ['back'] });
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(primaryMenuCount).toBe(2);
+    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse', ['public']);
+    expect(scanConnection).not.toHaveBeenCalled();
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      url: 'env:DATABASE_URL',
+      schemas: ['public'],
+      enabled_tables: ['public.orders'],
+    });
+  });
+
+  it('restores an existing primary source edit when the follow-up scan fails', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+    });
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Primary sources already configured: warehouse\nWhat would you like to do?') return 'edit';
+      if (options.message === 'Primary source to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      return 'back';
+    });
+    const listTables = vi.fn(async () => [
+      { schema: 'public', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({ scopes: ['enable-all'] });
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 1),
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
+    );
+
+    expect(result).toEqual({ status: 'failed', projectDir: tempDir });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      enabled_tables: ['public.orders'],
     });
   });
 
@@ -1000,7 +1446,6 @@ describe('setup databases step', () => {
     const prompts = makePromptAdapter({
       selectValues: ['url'],
       textValues: ['', 'env:DATABASE_URL'],
-      multiselectValues: [['orbit_analytics', 'orbit_raw']],
     });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async asyncScanProjectDir => {
@@ -1011,6 +1456,19 @@ describe('setup databases step', () => {
       return 0;
     });
     const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
+    const listTables = vi.fn(async () => [
+      { schema: 'orbit_analytics', name: 'events', kind: 'table' as const },
+      { schema: 'orbit_raw', name: 'inputs', kind: 'table' as const },
+      { schema: 'public', name: 'misc', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({
+      scopes: [
+        {
+          schemas: ['orbit_analytics', 'orbit_raw'],
+          tables: ['orbit_analytics.events', 'orbit_raw.inputs'],
+        },
+      ],
+    });
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -1021,20 +1479,24 @@ describe('setup databases step', () => {
         skipDatabases: false,
       },
       io.io,
-      { prompts, testConnection, scanConnection, listSchemas },
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
     );
 
     expect(result.status).toBe('ready');
     expect(listSchemas).toHaveBeenCalledWith(tempDir, 'postgres-warehouse');
-    expect(prompts.multiselect).toHaveBeenCalledWith({
-      message: expect.stringContaining('PostgreSQL schemas to scan'),
-      options: [
-        { value: 'orbit_analytics', label: 'orbit_analytics' },
-        { value: 'orbit_raw', label: 'orbit_raw' },
-        { value: 'public', label: 'public' },
-      ],
-      initialValues: ['orbit_analytics', 'orbit_raw'],
-      required: true,
+    expect(pickers.scopeCalls).toHaveLength(1);
+    expect(pickers.scopeCalls[0]).toMatchObject({
+      connectionId: 'postgres-warehouse',
+      schemaNoun: 'schema',
+      schemaNounPlural: 'schemas',
+      defaultSchemas: ['orbit_analytics', 'orbit_raw'],
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections['postgres-warehouse']).toMatchObject({

@@ -3,13 +3,19 @@ import { type NotionApi, type NotionBotInfo, NotionClient } from '@ktx/context/i
 import type { KtxProjectConnectionConfig } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { profileMark } from './startup-profile.js';
-import { buildInitialState, buildPickerTree, type NotionPickerPageInput } from './notion-page-picker-tree.js';
 import {
-  type NotionPickerTuiIo,
-  type PickerRenderInput,
-  type PickerRenderResult,
-  renderNotionPickerTui,
-} from './notion-page-picker-tui.js';
+  buildInitialState,
+  buildPickerTree,
+  flattenSelection,
+  type PickerState,
+  type TreePickerNodeInput,
+} from './tree-picker-state.js';
+import {
+  renderTreePickerTui,
+  type TreePickerChrome,
+  type TreePickerResult,
+  type TreePickerTuiIo,
+} from './tree-picker-tui.js';
 
 profileMark('module:notion-page-picker');
 
@@ -19,8 +25,6 @@ export interface PickNotionRootPagesArgs {
 }
 
 export type NotionPickerApi = Pick<NotionApi, 'search' | 'retrieveBotUser'>;
-export type { PickerRenderInput, PickerRenderResult };
-
 export type NotionRootPagePickResult =
   | { kind: 'selected'; rootPageIds: string[] }
   | { kind: 'back' }
@@ -29,10 +33,16 @@ export type NotionRootPagePickResult =
 export interface NotionRootPagePickerDeps {
   env?: Record<string, string | undefined>;
   createNotionApi?: (authToken: string) => NotionPickerApi;
-  renderPicker?: (input: PickerRenderInput, io: NotionPickerTuiIo) => Promise<PickerRenderResult>;
+  renderPicker?: (
+    chrome: TreePickerChrome,
+    initialState: PickerState,
+    io: TreePickerTuiIo,
+  ) => Promise<TreePickerResult>;
 }
 
 const NOTION_PICKER_PAGE_CAP = 5000;
+const NOTION_SCRIPTED_MODE_HINT =
+  'Notion picker requires a TTY. Use --no-input --notion-root-page-id <UUID> for scripted mode.';
 
 function assertSafeNotionPickerConnectionId(connectionId: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
@@ -48,6 +58,14 @@ export function normalizeNotionPageId(value: string): string {
   }
   const lower = compact.toLowerCase();
   return `${lower.slice(0, 8)}-${lower.slice(8, 12)}-${lower.slice(12, 16)}-${lower.slice(16, 20)}-${lower.slice(20)}`;
+}
+
+function tryNormalizeNotionPageId(value: string): string | null {
+  try {
+    return normalizeNotionPageId(value);
+  } catch {
+    return null;
+  }
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -88,7 +106,7 @@ function extractParentPageId(page: Record<string, unknown>): string | null {
   return normalizeNotionPageId(parent.page_id);
 }
 
-export function notionPickerPageFromSearchResult(result: Record<string, unknown>): NotionPickerPageInput {
+export function notionPickerPageFromSearchResult(result: Record<string, unknown>): TreePickerNodeInput {
   const id = typeof result.id === 'string' ? normalizeNotionPageId(result.id) : '';
   if (!id) {
     throw new Error('Notion page search result is missing id');
@@ -104,9 +122,9 @@ export function notionPickerPageFromSearchResult(result: Record<string, unknown>
 export async function discoverNotionPickerPages(
   api: NotionPickerApi,
   options: { cap?: number } = {},
-): Promise<{ pages: NotionPickerPageInput[]; cappedAtCount: number | null; warnings: string[] }> {
+): Promise<{ pages: TreePickerNodeInput[]; cappedAtCount: number | null; warnings: string[] }> {
   const cap = options.cap ?? NOTION_PICKER_PAGE_CAP;
-  const pages: NotionPickerPageInput[] = [];
+  const pages: TreePickerNodeInput[] = [];
   const warnings: string[] = [];
   let cursor: string | null | undefined = null;
 
@@ -171,6 +189,33 @@ function notionCrawlMode(connection: KtxProjectConnectionConfig): 'all_accessibl
   return connection.crawl_mode === 'all_accessible' ? 'all_accessible' : 'selected_roots';
 }
 
+function selectedPageCountText(count: number): string {
+  return `${count} selected ${count === 1 ? 'page' : 'pages'}`;
+}
+
+function notionChrome(args: {
+  workspaceLabel: string;
+  cappedAtCount: number | null;
+  currentCrawlMode: 'all_accessible' | 'selected_roots';
+}): TreePickerChrome {
+  const warningLines: string[] = [];
+  if (args.cappedAtCount) {
+    warningLines.push(`${args.cappedAtCount}-page cap reached - some pages not shown`);
+  }
+  return {
+    title: 'Select Notion pages to ingest',
+    subtitleLines: [`Workspace: ${args.workspaceLabel}`],
+    warningLines,
+    confirmSaveMessage:
+      args.currentCrawlMode === 'all_accessible'
+        ? (state) =>
+            `Switch crawl_mode from all_accessible to selected_roots? Will limit ingest to ${selectedPageCountText(
+              flattenSelection(state.checked, state.byId).length,
+            )}. Press Enter to confirm or Escape to go back.`
+        : undefined,
+  };
+}
+
 export async function pickNotionRootPages(
   args: PickNotionRootPagesArgs,
   io: KtxCliIo = process,
@@ -190,10 +235,14 @@ export async function pickNotionRootPages(
     const api = deps.createNotionApi ? deps.createNotionApi(authToken) : new NotionClient(authToken);
     const discovery = await discoverNotionPickerPages(api);
     const tree = buildPickerTree(discovery.pages);
+    const normalizedExistingIds = stringArray(args.connection.root_page_ids)
+      .map((raw) => tryNormalizeNotionPageId(raw))
+      .filter((id): id is string => id !== null);
     const initialState = buildInitialState({
       tree,
-      existingRootPageIds: stringArray(args.connection.root_page_ids),
-      currentCrawlMode: crawlMode,
+      existingSelectedIds: normalizedExistingIds,
+      requireConfirmOnSave: crawlMode === 'all_accessible',
+      staleWarning: (count) => `${count} stored root_page_ids no longer visible - they will be removed if you save`,
     });
     const preLoadWarnings = [...discovery.warnings, ...initialState.preLoadWarnings];
     const renderState =
@@ -207,23 +256,25 @@ export async function pickNotionRootPages(
       io.stderr.write(`${warning}\n`);
     }
     const workspaceLabel = await resolveNotionWorkspaceLabel(api, args.connectionId);
-    const result = await (deps.renderPicker ?? renderNotionPickerTui)(
-      {
-        initialState: renderState,
-        connectionId: args.connectionId,
-        workspaceLabel,
-        cappedAtCount: discovery.cappedAtCount,
-        currentCrawlMode: crawlMode,
-      },
-      io as NotionPickerTuiIo,
-    );
+    const chrome = notionChrome({
+      workspaceLabel,
+      cappedAtCount: discovery.cappedAtCount,
+      currentCrawlMode: crawlMode,
+    });
+    const renderPicker =
+      deps.renderPicker ??
+      ((chromeArg, state, ioArg) =>
+        renderTreePickerTui({ chrome: chromeArg, initialState: state }, ioArg, {
+          scriptedModeHint: NOTION_SCRIPTED_MODE_HINT,
+        }));
+    const result = await renderPicker(chrome, renderState, io as TreePickerTuiIo);
     if (result.kind === 'quit') {
       return { kind: 'back' };
     }
-    if (result.rootPageIds.length === 0) {
+    if (result.selectedIds.length === 0) {
       return { kind: 'unavailable', message: 'Notion picker did not return any selected pages.' };
     }
-    return { kind: 'selected', rootPageIds: result.rootPageIds };
+    return { kind: 'selected', rootPageIds: result.selectedIds };
   } catch (error) {
     return { kind: 'unavailable', message: error instanceof Error ? error.message : String(error) };
   }

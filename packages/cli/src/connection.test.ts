@@ -159,7 +159,7 @@ describe('runKtxConnection', () => {
       prod_metabase: {
         driver: 'metabase',
         api_url: 'http://metabase.example.test',
-        api_key: 'mb_test',
+        api_key: 'mb_test', // pragma: allowlist secret
       },
     });
     const testConnection = vi.fn(async () => ({ success: true as const }));

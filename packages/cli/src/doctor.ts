@@ -4,15 +4,13 @@ import { access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import type { KtxLocalProject, KtxProjectEmbeddingConfig } from '@ktx/context/project';
-import type { KtxEmbeddingConfig, KtxEmbeddingHealthCheckOptions, KtxEmbeddingHealthCheckResult } from '@ktx/llm';
-import type { HistoricSqlDoctorDeps } from './historic-sql-doctor.js';
 
 const execFileAsync = promisify(execFile);
 
 type DoctorStatus = 'pass' | 'warn' | 'fail';
 type KtxDoctorOutputMode = 'plain' | 'json';
 type KtxDoctorInputMode = 'auto' | 'disabled';
+type DoctorGroup = 'toolchain' | 'project' | 'search' | 'history';
 
 export interface DoctorCheck {
   id: string;
@@ -20,6 +18,7 @@ export interface DoctorCheck {
   status: DoctorStatus;
   detail: string;
   fix?: string;
+  group?: DoctorGroup;
 }
 
 interface DoctorReport {
@@ -28,11 +27,22 @@ interface DoctorReport {
 }
 
 export type KtxDoctorArgs =
-  | { command: 'setup'; outputMode: KtxDoctorOutputMode; inputMode?: KtxDoctorInputMode }
-  | { command: 'project'; projectDir: string; outputMode: KtxDoctorOutputMode; inputMode?: KtxDoctorInputMode };
+  | {
+      command: 'setup';
+      outputMode: KtxDoctorOutputMode;
+      inputMode?: KtxDoctorInputMode;
+      verbose?: boolean;
+    }
+  | {
+      command: 'project';
+      projectDir: string;
+      outputMode: KtxDoctorOutputMode;
+      inputMode?: KtxDoctorInputMode;
+      verbose?: boolean;
+    };
 
 interface KtxDoctorIo {
-  stdout: { write(chunk: string): void };
+  stdout: { isTTY?: boolean; write(chunk: string): void };
   stderr: { write(chunk: string): void };
 }
 
@@ -44,20 +54,8 @@ interface SetupDoctorDeps {
   importBetterSqlite3?: () => Promise<unknown>;
 }
 
-type EmbeddingHealthCheck = (
-  config: KtxEmbeddingConfig,
-  options?: KtxEmbeddingHealthCheckOptions,
-) => Promise<KtxEmbeddingHealthCheckResult>;
-
-interface SemanticSearchDoctorDeps {
-  env?: NodeJS.ProcessEnv;
-  embeddingHealthCheck?: EmbeddingHealthCheck;
-  embeddingProbeTimeoutMs?: number;
-}
-
-interface KtxDoctorDeps extends SemanticSearchDoctorDeps, HistoricSqlDoctorDeps {
+interface KtxDoctorDeps {
   runSetupChecks?: () => Promise<DoctorCheck[]>;
-  runHistoricSqlDoctorChecks?: (project: KtxLocalProject, deps: HistoricSqlDoctorDeps) => Promise<DoctorCheck[]>;
 }
 
 function workspaceRootDir(): string {
@@ -116,197 +114,6 @@ function versionAtLeast(value: string, minimum: [number, number, number]): boole
 
 function check(status: DoctorStatus, id: string, label: string, detail: string, fix?: string): DoctorCheck {
   return fix ? { id, label, status, detail, fix } : { id, label, status, detail };
-}
-
-interface ConnectionConfigWarning {
-  id: string;
-  connectionId: string;
-  detail: string;
-  fix: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hasOwnField(value: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-function connectionConfigWarning(
-  connectionId: string,
-  key: string,
-  detail: string,
-  fix: string,
-): ConnectionConfigWarning {
-  return {
-    id: `connection-config-${connectionId}-${key}`.replace(/[^a-zA-Z0-9_-]/g, '-'),
-    connectionId,
-    detail,
-    fix,
-  };
-}
-
-function connectionConfigWarnings(project: KtxLocalProject): ConnectionConfigWarning[] {
-  const warnings: ConnectionConfigWarning[] = [];
-  for (const [connectionId, connection] of Object.entries(project.config.connections)) {
-    const driver = String(connection.driver ?? '').toLowerCase();
-    if (hasOwnField(connection, 'readonly')) {
-      warnings.push(
-        connectionConfigWarning(
-          connectionId,
-          'readonly',
-          `connections.${connectionId}.readonly is no longer used.`,
-          `Remove connections.${connectionId}.readonly from ktx.yaml.`,
-        ),
-      );
-    }
-
-    if ((driver === 'sqlite' || driver === 'sqlite3') && hasOwnField(connection, 'file_path')) {
-      warnings.push(
-        connectionConfigWarning(
-          connectionId,
-          'file-path',
-          `connections.${connectionId}.file_path was removed.`,
-          `Rename connections.${connectionId}.file_path to path.`,
-        ),
-      );
-    }
-
-    if (driver === 'notion' && hasOwnField(connection, 'last_successful_cursor')) {
-      warnings.push(
-        connectionConfigWarning(
-          connectionId,
-          'last-successful-cursor',
-          `connections.${connectionId}.last_successful_cursor is local sync state.`,
-          'Remove it from ktx.yaml. KTX stores the Notion cursor in .ktx/db.sqlite.',
-        ),
-      );
-    }
-
-    const historicSql = isRecord(connection.historicSql) ? connection.historicSql : null;
-    if (!historicSql) {
-      continue;
-    }
-    if (hasOwnField(historicSql, 'concurrency')) {
-      warnings.push(
-        connectionConfigWarning(
-          connectionId,
-          'historic-sql-concurrency',
-          `connections.${connectionId}.historicSql.concurrency is no longer used.`,
-          `Remove connections.${connectionId}.historicSql.concurrency from ktx.yaml.`,
-        ),
-      );
-    }
-    const historicDialect = String(historicSql.dialect ?? driver).toLowerCase();
-    if (
-      (historicDialect === 'postgres' || historicDialect === 'postgresql') &&
-      hasOwnField(historicSql, 'windowDays')
-    ) {
-      warnings.push(
-        connectionConfigWarning(
-          connectionId,
-          'historic-sql-window-days',
-          `connections.${connectionId}.historicSql.windowDays does not constrain pg_stat_statements.`,
-          `Remove connections.${connectionId}.historicSql.windowDays from ktx.yaml.`,
-        ),
-      );
-    }
-  }
-  return warnings;
-}
-
-const SEMANTIC_SEARCH_HEALTH_TEXT = 'KTX semantic search doctor probe';
-const SEMANTIC_SEARCH_HEALTH_TIMEOUT_MS = 5_000;
-const SEMANTIC_SEARCH_LOCAL_HEALTH_TIMEOUT_MS = 120_000;
-
-function semanticEmbeddingSetupFix(projectDir: string, backend: KtxProjectEmbeddingConfig['backend']): string {
-  if (backend === 'openai') {
-    return `Set OPENAI_API_KEY or rerun: ktx setup --project-dir ${projectDir} --embedding-backend openai --no-input`;
-  }
-  return `Run: ktx setup --project-dir ${projectDir} --no-input`;
-}
-
-function embeddingConfigLabel(config: KtxProjectEmbeddingConfig | KtxEmbeddingConfig): string {
-  const model = config.model?.trim() || 'model not configured';
-  return `${config.backend}/${model} (${config.dimensions}d)`;
-}
-
-function semanticLaneFallbackDetail(reason: string): string {
-  return `${reason}. Semantic lane will be skipped; lexical, dictionary, and token lanes remain available.`;
-}
-
-async function defaultEmbeddingHealthCheck(
-  config: KtxEmbeddingConfig,
-  options?: KtxEmbeddingHealthCheckOptions,
-): Promise<KtxEmbeddingHealthCheckResult> {
-  const { runKtxEmbeddingHealthCheck } = await import('@ktx/llm');
-  return runKtxEmbeddingHealthCheck(config, options);
-}
-
-async function runSemanticSearchEmbeddingCheck(
-  config: KtxProjectEmbeddingConfig,
-  projectDir: string,
-  deps: SemanticSearchDoctorDeps = {},
-): Promise<DoctorCheck> {
-  if (config.backend === 'none' || config.backend === 'deterministic') {
-    return check(
-      'warn',
-      'semantic-search-embeddings',
-      'Semantic search embeddings',
-      semanticLaneFallbackDetail(`ingest.embeddings.backend is ${config.backend}`),
-      semanticEmbeddingSetupFix(projectDir, config.backend),
-    );
-  }
-
-  try {
-    const { resolveLocalKtxEmbeddingConfig } = await import('@ktx/context');
-    const resolved = resolveLocalKtxEmbeddingConfig(config, deps.env ?? process.env);
-    if (!resolved) {
-      return check(
-        'warn',
-        'semantic-search-embeddings',
-        'Semantic search embeddings',
-        semanticLaneFallbackDetail(`No runtime embedding config resolved for ${embeddingConfigLabel(config)}`),
-        semanticEmbeddingSetupFix(projectDir, config.backend),
-      );
-    }
-
-    const healthCheck = deps.embeddingHealthCheck ?? defaultEmbeddingHealthCheck;
-    const timeoutMs =
-      deps.embeddingProbeTimeoutMs ??
-      (resolved.backend === 'sentence-transformers'
-        ? SEMANTIC_SEARCH_LOCAL_HEALTH_TIMEOUT_MS
-        : SEMANTIC_SEARCH_HEALTH_TIMEOUT_MS);
-    const health = await healthCheck(resolved, {
-      text: SEMANTIC_SEARCH_HEALTH_TEXT,
-      timeoutMs,
-    });
-    if (health.ok) {
-      return check(
-        'pass',
-        'semantic-search-embeddings',
-        'Semantic search embeddings',
-        `${embeddingConfigLabel(resolved)} probe succeeded`,
-      );
-    }
-
-    return check(
-      'warn',
-      'semantic-search-embeddings',
-      'Semantic search embeddings',
-      semanticLaneFallbackDetail(`${embeddingConfigLabel(resolved)} probe failed: ${health.message}`),
-      semanticEmbeddingSetupFix(projectDir, config.backend),
-    );
-  } catch (error) {
-    return check(
-      'warn',
-      'semantic-search-embeddings',
-      'Semantic search embeddings',
-      semanticLaneFallbackDetail(`${embeddingConfigLabel(config)} probe failed: ${failureMessage(error)}`),
-      semanticEmbeddingSetupFix(projectDir, config.backend),
-    );
-  }
 }
 
 export async function runSetupDoctorChecks(deps: SetupDoctorDeps = {}): Promise<DoctorCheck[]> {
@@ -402,67 +209,231 @@ export async function runSetupDoctorChecks(deps: SetupDoctorDeps = {}): Promise<
     );
   }
 
-  return checks;
+  return checks.map((entry) => ({ ...entry, group: 'toolchain' }));
 }
 
-async function runProjectChecks(projectDir: string, deps: KtxDoctorDeps = {}): Promise<DoctorCheck[]> {
-  const { loadKtxProject } = await import('@ktx/context/project');
-  const checks: DoctorCheck[] = [];
-  try {
-    const project = await loadKtxProject({ projectDir });
-    checks.push(check('pass', 'project-config', 'Project config', project.config.project));
-    const connectionCount = Object.keys(project.config.connections).length;
-    checks.push(
-      connectionCount > 0
-        ? check('pass', 'connections', 'Connections', `${connectionCount} configured`)
-        : check(
-            'warn',
-            'connections',
-            'Connections',
-            '0 configured',
-            'Add a connection to ktx.yaml or run `ktx setup`',
-          ),
-    );
-    for (const warning of connectionConfigWarnings(project)) {
-      checks.push(
-        check(
-          'warn',
-          warning.id,
-          `Connection config (${warning.connectionId})`,
-          warning.detail,
-          warning.fix,
-        ),
-      );
-    }
-    checks.push(check('pass', 'storage', 'Storage', `${project.config.storage.state}/${project.config.storage.search}`));
-    checks.push(check('pass', 'llm-provider', 'LLM provider', project.config.llm.provider.backend));
-    checks.push(await runSemanticSearchEmbeddingCheck(project.config.ingest.embeddings, projectDir, deps));
-    const runHistoricSqlDoctorChecks =
-      deps.runHistoricSqlDoctorChecks ?? (await import('./historic-sql-doctor.js')).runPostgresHistoricSqlDoctorChecks;
-    checks.push(...(await runHistoricSqlDoctorChecks(project, deps)));
-  } catch (error) {
-    checks.push(
-      check(
-        'fail',
-        'project-config',
-        'Project config',
-        failureMessage(error),
-        `Run: ktx init ${projectDir} --name <project-name>`,
-      ),
-    );
+const STATUS_SYMBOL: Record<DoctorStatus, string> = { pass: '✓', warn: '⚠', fail: '✗' };
+
+const GROUP_ORDER: DoctorGroup[] = ['toolchain', 'project', 'search', 'history'];
+
+const GROUP_LABEL: Record<DoctorGroup, string> = {
+  toolchain: 'Environment',
+  project: 'Project',
+  search: 'Semantic search',
+  history: 'Query history',
+};
+
+function shouldUseColor(io: KtxDoctorIo): boolean {
+  if (io.stdout.isTTY !== true) return false;
+  const env = process.env;
+  return !env.NO_COLOR && env.TERM !== 'dumb' && !env.CI;
+}
+
+function styleStatus(useColor: boolean, status: DoctorStatus, text: string): string {
+  if (!useColor) return text;
+  const code = status === 'pass' ? 32 : status === 'warn' ? 33 : 31;
+  return `\u001b[${code}m${text}\u001b[39m`;
+}
+
+function styleDim(useColor: boolean, text: string): string {
+  return useColor ? `\u001b[2m${text}\u001b[22m` : text;
+}
+
+function styleBold(useColor: boolean, text: string): string {
+  return useColor ? `\u001b[1m${text}\u001b[22m` : text;
+}
+
+function groupOf(entry: DoctorCheck): DoctorGroup {
+  return entry.group ?? 'project';
+}
+
+function aggregateStatus(checks: DoctorCheck[]): DoctorStatus {
+  if (checks.some((c) => c.status === 'fail')) return 'fail';
+  if (checks.some((c) => c.status === 'warn')) return 'warn';
+  return 'pass';
+}
+
+function abbreviateHome(filePath: string | undefined): string | undefined {
+  if (!filePath) return filePath;
+  const home = process.env.HOME;
+  if (home && (filePath === home || filePath.startsWith(`${home}/`))) {
+    return filePath === home ? '~' : `~${filePath.slice(home.length)}`;
   }
-  return checks;
+  return filePath;
 }
 
-export function formatDoctorReport(report: DoctorReport): string {
-  const lines = [report.title];
-  for (const item of report.checks) {
-    lines.push(`${item.status.toUpperCase()} ${item.label}: ${item.detail}`);
-    if (item.fix) {
-      lines.push(`     Fix: ${item.fix}`);
+function groupSummaryWhenAllPass(entries: DoctorCheck[]): string {
+  if (entries.length === 1) {
+    const only = entries[0]!;
+    return only.detail || only.label;
+  }
+  return entries.map((c) => c.label).join(' · ');
+}
+
+interface RenderOptions {
+  verbose: boolean;
+  useColor: boolean;
+  durationMs?: number;
+  projectName?: string;
+  projectDir?: string;
+  command?: 'setup' | 'project';
+}
+
+const NEXT_STEPS_PROJECT = ['ktx scan', 'ktx wiki', 'ktx sl ask "…"'];
+
+export function formatDoctorReport(report: DoctorReport, options: Partial<RenderOptions> = {}): string {
+  const opts: RenderOptions = {
+    verbose: options.verbose ?? false,
+    useColor: options.useColor ?? false,
+    durationMs: options.durationMs,
+    projectName: options.projectName,
+    projectDir: options.projectDir,
+    command: options.command,
+  };
+  return renderPlainReport(report, opts);
+}
+
+function renderSetupReport(report: DoctorReport, options: RenderOptions): string {
+  const { verbose, useColor } = options;
+  const dim = (text: string) => styleDim(useColor, text);
+  const bold = (text: string) => styleBold(useColor, text);
+  const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
+  const symbol = (s: DoctorStatus) => status(s, STATUS_SYMBOL[s]);
+
+  const fails = report.checks.filter((c) => c.status === 'fail');
+  const lines: string[] = [];
+  lines.push(bold(report.title));
+  lines.push('');
+  lines.push(`  No project here yet.`);
+  lines.push('');
+
+  if (fails.length > 0) {
+    lines.push(`  Before you can run ${bold('ktx setup')}, fix this:`);
+    for (const entry of fails) {
+      lines.push(`      ${symbol('fail')} ${entry.label}: ${entry.detail}`);
+      if (entry.fix) {
+        lines.push(`        ${dim(`→ ${entry.fix}`)}`);
+      }
     }
+    lines.push('');
+  } else {
+    lines.push(`  Run  ${bold('ktx setup')}  to get started.`);
+    lines.push('');
+  }
+
+  if (verbose) {
+    lines.push(dim('  Toolchain:'));
+    for (const entry of report.checks) {
+      lines.push(`      ${symbol(entry.status)} ${entry.label}: ${entry.detail}`);
+      if (entry.fix && entry.status !== 'pass') {
+        lines.push(`        ${dim(`→ ${entry.fix}`)}`);
+      }
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function renderPlainReport(report: DoctorReport, options: RenderOptions): string {
+  if (options.command === 'setup') return renderSetupReport(report, options);
+  const { verbose, useColor, durationMs, projectName, projectDir } = options;
+  const dim = (text: string) => styleDim(useColor, text);
+  const bold = (text: string) => styleBold(useColor, text);
+  const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
+  const symbol = (s: DoctorStatus) => status(s, STATUS_SYMBOL[s]);
+
+  const lines: string[] = [];
+  const titleParts: string[] = [bold(report.title)];
+  if (projectName) titleParts.push(projectName);
+  const abbreviatedDir = abbreviateHome(projectDir);
+  const titleLine = titleParts.join(` ${dim('·')} `);
+  const dirSuffix = abbreviatedDir ? ` ${dim(`(${abbreviatedDir})`)}` : '';
+  lines.push(`${titleLine}${dirSuffix}`);
+  lines.push('');
+
+  const groups = new Map<DoctorGroup, DoctorCheck[]>();
+  for (const entry of report.checks) {
+    const group = groupOf(entry);
+    const bucket = groups.get(group) ?? [];
+    bucket.push(entry);
+    groups.set(group, bucket);
+  }
+
+  const orderedGroups: DoctorGroup[] = [];
+  for (const g of GROUP_ORDER) {
+    if (groups.has(g)) orderedGroups.push(g);
+  }
+  for (const g of groups.keys()) {
+    if (!orderedGroups.includes(g)) orderedGroups.push(g);
+  }
+
+  const labelWidth = orderedGroups.reduce(
+    (max, g) => Math.max(max, (GROUP_LABEL[g] ?? g).length),
+    0,
+  );
+
+  for (const group of orderedGroups) {
+    const entries = groups.get(group) ?? [];
+    const head = aggregateStatus(entries);
+    const nonPass = entries.filter((c) => c.status !== 'pass');
+    const label = (GROUP_LABEL[group] ?? group).padEnd(labelWidth);
+
+    if (nonPass.length === 0) {
+      lines.push(`  ${symbol(head)} ${label}    ${dim(groupSummaryWhenAllPass(entries))}`);
+      if (verbose) {
+        for (const entry of entries) {
+          lines.push(`      ${symbol(entry.status)} ${entry.label}: ${entry.detail}`);
+        }
+      }
+      continue;
+    }
+
+    if (entries.length === 1) {
+      const only = entries[0]!;
+      lines.push(`  ${symbol(only.status)} ${label}    ${only.detail}`);
+      if (only.fix) {
+        lines.push(`  ${' '.repeat(2 + labelWidth + 4)}${dim(`→ ${only.fix}`)}`);
+      }
+      continue;
+    }
+
+    lines.push(`  ${symbol(head)} ${label}    ${dim(`${nonPass.length} of ${entries.length} need attention`)}`);
+    for (const entry of entries) {
+      if (entry.status === 'pass' && !verbose) continue;
+      lines.push(`      ${symbol(entry.status)} ${entry.label}: ${entry.detail}`);
+      if (entry.fix) {
+        lines.push(`        ${dim(`→ ${entry.fix}`)}`);
+      }
+    }
+  }
+
+  lines.push('');
+
+  const totalFail = report.checks.filter((c) => c.status === 'fail').length;
+  const totalWarn = report.checks.filter((c) => c.status === 'warn').length;
+  const durationText = durationMs !== undefined ? ` ${dim(`(${(durationMs / 1000).toFixed(2)}s)`)}` : '';
+
+  if (totalFail === 0 && totalWarn === 0) {
+    const hint = `  ${dim('Try:')} ${NEXT_STEPS_PROJECT.join(dim('  ·  '))}`;
+    lines.push(`${status('pass', 'Everything ready.')}${hint}${durationText}`);
+  } else if (totalFail === 0) {
+    const word = totalWarn === 1 ? 'warning' : 'warnings';
+    lines.push(
+      `${status('warn', `${totalWarn} ${word}.`)} ${dim('Run')} ktx status --verbose ${dim('for full details.')}${durationText}`,
+    );
+  } else {
+    const fWord = totalFail === 1 ? 'issue' : 'issues';
+    const warnSuffix =
+      totalWarn > 0
+        ? ` ${dim('·')} ${status('warn', `${totalWarn} ${totalWarn === 1 ? 'warning' : 'warnings'}`)}`
+        : '';
+    lines.push(
+      `${status('fail', `${totalFail} ${fWord} to fix.`)}${warnSuffix}${durationText}`,
+    );
   }
   lines.push('');
+
   return lines.join('\n');
 }
 
@@ -470,12 +441,12 @@ function hasFailures(report: DoctorReport): boolean {
   return report.checks.some((item) => item.status === 'fail');
 }
 
-function writeReport(report: DoctorReport, outputMode: KtxDoctorOutputMode, io: KtxDoctorIo): void {
+function writeReport(report: DoctorReport, outputMode: KtxDoctorOutputMode, io: KtxDoctorIo, options: RenderOptions): void {
   if (outputMode === 'json') {
     io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     return;
   }
-  io.stdout.write(formatDoctorReport(report));
+  io.stdout.write(renderPlainReport(report, options));
 }
 
 export async function runKtxDoctor(
@@ -483,18 +454,41 @@ export async function runKtxDoctor(
   io: KtxDoctorIo = process,
   deps: KtxDoctorDeps = {},
 ): Promise<number> {
+  const startedAt = Date.now();
   try {
     const runSetupChecks = deps.runSetupChecks ?? (() => runSetupDoctorChecks());
-    const setupChecks = await runSetupChecks();
-    const report: DoctorReport =
-      args.command === 'setup'
-        ? { title: 'KTX setup doctor', checks: setupChecks }
-        : {
-            title: 'KTX project doctor',
-            checks: [...setupChecks, ...(await runProjectChecks(args.projectDir, deps))],
-          };
 
-    writeReport(report, args.outputMode, io);
+    if (args.command === 'project') {
+      const { loadKtxProject } = await import('@ktx/context/project');
+      const { buildProjectStatus, renderProjectStatus } = await import('./status-project.js');
+      const project = await loadKtxProject({ projectDir: args.projectDir });
+      const projectStatus = buildProjectStatus(project);
+      const verbose = args.verbose ?? false;
+      const toolchainChecks = verbose ? await runSetupChecks() : undefined;
+      if (args.outputMode === 'json') {
+        io.stdout.write(`${JSON.stringify(projectStatus, null, 2)}\n`);
+      } else {
+        io.stdout.write(
+          renderProjectStatus(projectStatus, {
+            verbose,
+            useColor: shouldUseColor(io),
+            durationMs: Date.now() - startedAt,
+            toolchainChecks,
+          }),
+        );
+      }
+      return projectStatus.verdict === 'blocked' ? 1 : 0;
+    }
+
+    const setupChecks = await runSetupChecks();
+    const report: DoctorReport = { title: 'KTX status', checks: setupChecks };
+    const renderOptions: RenderOptions = {
+      verbose: args.verbose ?? false,
+      useColor: shouldUseColor(io),
+      durationMs: Date.now() - startedAt,
+      command: args.command,
+    };
+    writeReport(report, args.outputMode, io, renderOptions);
     return hasFailures(report) ? 1 : 0;
   } catch (error) {
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

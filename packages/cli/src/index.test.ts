@@ -444,20 +444,54 @@ describe('runKtxCli', () => {
     expect(io.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
   });
 
-  it('documents setup as a bare command without subcommands', async () => {
+  it('documents setup with only the common interactive options visible', async () => {
     const testIo = makeIo();
 
     await expect(runKtxCli(['setup', '--help'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx setup [options]');
-    expect(testIo.stdout()).not.toContain('Commands:');
-    expect(testIo.stdout()).not.toContain('setup demo');
-    expect(testIo.stdout()).not.toContain('setup context');
-    expect(testIo.stdout()).not.toContain('--skip-llm');
-    expect(testIo.stdout()).not.toContain('--skip-embeddings');
-    expect(testIo.stdout()).not.toContain('--embedding-model');
-    expect(testIo.stdout()).not.toContain('--embedding-dimensions');
-    expect(testIo.stdout()).not.toContain('--embedding-base-url');
+    const stdout = testIo.stdout();
+    expect(stdout).toContain('Usage: ktx setup [options]');
+    expect(stdout).toContain('--agents');
+    expect(stdout).toContain('--target <target>');
+    expect(stdout).toContain('--global');
+    expect(stdout).toContain('--yes');
+    expect(stdout).toContain('--no-input');
+    expect(stdout).toContain('Global Options:');
+    expect(stdout.match(/--project-dir <path>/g)).toHaveLength(1);
+    expect(stdout).not.toContain('Commands:');
+    expect(stdout).not.toContain('setup demo');
+    expect(stdout).not.toContain('setup context');
+
+    for (const hiddenFlag of [
+      '--new',
+      '--existing',
+      '--agent-scope',
+      '--skip-agents',
+      '--llm-backend',
+      '--anthropic-api-key-env',
+      '--vertex-project',
+      '--embedding-backend',
+      '--database ',
+      '--database-connection-id',
+      '--new-database-connection-id',
+      '--enable-historic-sql',
+      '--historic-sql-min-executions',
+      '--skip-databases',
+      '--source ',
+      '--source-connection-id',
+      '--metabase-database-id',
+      '--notion-root-page-id',
+      '--skip-initial-source-ingest',
+      '--skip-sources',
+      '--skip-llm',
+      '--skip-embeddings',
+      '--embedding-model',
+      '--embedding-dimensions',
+      '--embedding-base-url',
+    ]) {
+      expect(stdout).not.toContain(hiddenFlag);
+    }
+    expect(stdout).not.toMatch(/^  --project\s/m);
     expect(testIo.stderr()).toBe('');
   });
 
@@ -725,6 +759,23 @@ describe('runKtxCli', () => {
     expect(setup).not.toHaveBeenCalled();
   });
 
+  it('rejects removed setup options', async () => {
+    const setup = vi.fn(async () => 0);
+    const cases = [
+      ['setup', '--project'],
+      ['setup', '--agent-scope', 'global'],
+      ['setup', '--skip-initial-source-ingest'],
+    ];
+
+    for (const args of cases) {
+      const testIo = makeIo();
+      await expect(runKtxCli(['--project-dir', tempDir, ...args], testIo.io, { setup })).resolves.toBe(1);
+      expect(testIo.stderr()).toMatch(/unknown option|error:/i);
+    }
+
+    expect(setup).not.toHaveBeenCalled();
+  });
+
   it('prints ingest help without invoking ingest execution', async () => {
     const testIo = makeIo();
     const ingest = vi.fn();
@@ -961,7 +1012,7 @@ describe('runKtxCli', () => {
 
     expect(setup).not.toHaveBeenCalled();
     expect(doctor).toHaveBeenCalledWith(
-      { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
+      { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled', verbose: false },
       statusIo.io,
     );
     expect(statusIo.stderr()).toBe('');
@@ -984,7 +1035,7 @@ describe('runKtxCli', () => {
       await expect(runKtxCli(['status', '--json', '--no-input'], statusIo.io, { doctor })).resolves.toBe(0);
 
       expect(doctor).toHaveBeenCalledWith(
-        { command: 'setup', outputMode: 'json', inputMode: 'disabled' },
+        { command: 'setup', outputMode: 'json', inputMode: 'disabled', verbose: false },
         statusIo.io,
       );
       expect(statusIo.stderr()).toBe('');
@@ -1250,7 +1301,6 @@ describe('runKtxCli', () => {
           '--agents',
           '--target',
           'codex',
-          '--project',
           '--no-input',
           '--yes',
         ],

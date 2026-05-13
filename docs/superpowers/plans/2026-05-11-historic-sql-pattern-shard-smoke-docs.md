@@ -39,13 +39,13 @@ Remaining gap this plan fixes:
 
 ## File Structure
 
-- Modify `scripts/examples-docs.test.mjs`  
+- Modify `scripts/examples-docs.test.mjs`
   Pins docs and smoke script to the sharded pattern WorkUnit contract.
-- Modify `examples/postgres-historic/scripts/smoke.sh`  
+- Modify `examples/postgres-historic/scripts/smoke.sh`
   Validates `patterns-input/part-*.json` shard files and `historic-sql-patterns-part-*` stage-only WorkUnits.
-- Modify `examples/postgres-historic/README.md`  
+- Modify `examples/postgres-historic/README.md`
   Documents `patterns-input.json` as the full audit artifact and `patterns-input/part-*.json` as bounded pattern WorkUnit input.
-- Modify `examples/README.md`  
+- Modify `examples/README.md`
   Updates the short example catalog entry with the same audit-vs-shard wording.
 
 ### Task 1: Pin Example Tests To Pattern Shards

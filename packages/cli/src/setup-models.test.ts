@@ -7,10 +7,8 @@ import {
   BUNDLED_ANTHROPIC_MODELS,
   fetchAnthropicModels,
   type KtxSetupModelPromptAdapter,
-  runKtxSetupGcloudApplicationDefaultAuth,
   runKtxSetupAnthropicModelStep,
 } from './setup-models.js';
-import type { KtxCliIo } from './cli-runtime.js';
 
 function makeIo() {
   let stdout = '';
@@ -32,6 +30,17 @@ function makeIo() {
     stdout: () => stdout,
     stderr: () => stderr,
   };
+}
+
+function makeSpinnerEvents() {
+  const events: string[] = [];
+  const spinner = vi.fn(() => ({
+    start: (msg: string) => events.push(`start:${msg}`),
+    message: (msg: string) => events.push(`message:${msg}`),
+    stop: (msg: string) => events.push(`stop:${msg}`),
+    error: (msg: string) => events.push(`error:${msg}`),
+  }));
+  return { events, spinner };
 }
 
 function makePromptAdapter(options: {
@@ -191,6 +200,7 @@ describe('setup Anthropic model step', () => {
 
   it('configures env credentials, selected model, prompt caching, and llm completion state', async () => {
     const io = makeIo();
+    const { events: spinnerEvents, spinner } = makeSpinnerEvents();
     const result = await runKtxSetupAnthropicModelStep(
       {
         projectDir: tempDir,
@@ -203,6 +213,7 @@ describe('setup Anthropic model step', () => {
       {
         env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
         healthCheck: vi.fn(async () => ({ ok: true as const })),
+        spinner,
       },
     );
 
@@ -219,6 +230,10 @@ describe('setup Anthropic model step', () => {
     expect(config.scan.enrichment.mode).toBe('llm');
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
+    expect(spinnerEvents).toEqual([
+      'start:Checking Anthropic API LLM (claude-sonnet-4-6).',
+      'stop:LLM test passed (Anthropic API, claude-sonnet-4-6)',
+    ]);
     expect(io.stdout()).toContain('LLM ready: yes');
     expect(io.stdout()).not.toContain('sk-ant-test');
   });
@@ -226,6 +241,7 @@ describe('setup Anthropic model step', () => {
   it('configures Vertex AI provider, selected model, prompt caching, and llm completion state', async () => {
     const io = makeIo();
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
+    const { events: spinnerEvents, spinner } = makeSpinnerEvents();
 
     const result = await runKtxSetupAnthropicModelStep(
       {
@@ -238,7 +254,7 @@ describe('setup Anthropic model step', () => {
         skipLlm: false,
       },
       io.io,
-      { env: {}, healthCheck },
+      { env: {}, healthCheck, spinner },
     );
 
     expect(result.status).toBe('ready');
@@ -260,13 +276,16 @@ describe('setup Anthropic model step', () => {
     expect(config.scan.enrichment.mode).toBe('llm');
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
+    expect(spinnerEvents).toEqual([
+      'start:Checking Vertex AI LLM (claude-sonnet-4-6).',
+      'stop:LLM test passed (Vertex AI, claude-sonnet-4-6)',
+    ]);
     expect(io.stdout()).toContain('LLM ready: yes (claude-sonnet-4-6)');
   });
 
-  it('can run gcloud auth for Vertex AI and infer project and default location', async () => {
+  it('uses existing Vertex AI credentials without offering to run gcloud auth', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'gcloud', 'local-gcp-project', 'claude-sonnet-4-6'] });
-    const runGcloudAuth = vi.fn(async () => ({ ok: true as const }));
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'existing', 'local-gcp-project', 'claude-sonnet-4-6'] });
     const readGcloudProject = vi.fn(async () => 'local-gcp-project');
     const listGcloudProjects = vi.fn(async () => [
       { projectId: 'local-gcp-project', name: 'Local project' },
@@ -280,7 +299,6 @@ describe('setup Anthropic model step', () => {
       {
         prompts,
         env: {},
-        runGcloudAuth,
         readGcloudProject,
         listGcloudProjects,
         healthCheck,
@@ -288,7 +306,15 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(runGcloudAuth).toHaveBeenCalledWith(io.io);
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('How should KTX authenticate with Google Vertex AI?'),
+        options: [
+          { value: 'existing', label: 'Use existing gcloud/Application Default Credentials' },
+          { value: 'back', label: 'Back' },
+        ],
+      }),
+    );
     expect(readGcloudProject).toHaveBeenCalled();
     expect(listGcloudProjects).toHaveBeenCalled();
     expect(prompts.text).not.toHaveBeenCalled();
@@ -299,6 +325,22 @@ describe('setup Anthropic model step', () => {
           { value: 'local-gcp-project', label: 'local-gcp-project - Local project (current gcloud project)' },
           { value: 'other-gcp-project', label: 'other-gcp-project - Other project' },
           { value: 'manual', label: 'Enter a project ID manually' },
+          { value: 'back', label: 'Back' },
+        ],
+      }),
+    );
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Anthropic model should KTX use?'),
+        options: [
+          { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
+          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+          { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+          { value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
+          { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+          { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+          { value: 'claude-opus-4-1', label: 'Claude Opus 4.1' },
+          { value: 'manual', label: 'Enter a model ID manually' },
           { value: 'back', label: 'Back' },
         ],
       }),
@@ -413,35 +455,6 @@ describe('setup Anthropic model step', () => {
         message: expect.stringContaining('Which LLM provider should KTX use?'),
       }),
     );
-  });
-
-  it('runs only gcloud application-default login for Vertex AI auth', async () => {
-    const io = makeIo();
-    const runGcloud = vi.fn(async () => ({ ok: true as const }));
-
-    await expect(runKtxSetupGcloudApplicationDefaultAuth(io.io, runGcloud)).resolves.toEqual({ ok: true });
-
-    expect(runGcloud).toHaveBeenCalledTimes(1);
-    expect(runGcloud).toHaveBeenCalledWith(['auth', 'application-default', 'login'], expect.anything());
-    expect(runGcloud).not.toHaveBeenCalledWith(['auth', 'login'], expect.anything());
-    expect(io.stdout()).toContain('gcloud auth application-default login');
-    expect(io.stdout()).not.toContain('gcloud auth login');
-  });
-
-  it('indents gcloud auth output inside the setup gutter', async () => {
-    const io = makeIo();
-    const runGcloud = vi.fn(async (_args: string[], commandIo: KtxCliIo) => {
-      commandIo.stdout.write('Your browser has been opened to visit:\n\n    https://accounts.example/auth\n');
-      commandIo.stderr.write('Credentials saved to file: [/tmp/application_default_credentials.json]\n');
-      return { ok: true as const };
-    });
-
-    await expect(runKtxSetupGcloudApplicationDefaultAuth(io.io, runGcloud)).resolves.toEqual({ ok: true });
-
-    expect(io.stdout()).toContain('│  Your browser has been opened to visit:');
-    expect(io.stdout()).toContain('│      https://accounts.example/auth');
-    expect(io.stderr()).toContain('│  Credentials saved to file: [/tmp/application_default_credentials.json]');
-    expect(io.stdout()).not.toContain('\nYour browser has been opened');
   });
 
   it('explains common Vertex AI Forbidden health-check causes', async () => {

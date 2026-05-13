@@ -37,7 +37,7 @@ The most full-featured connector. Supports schema introspection, foreign key det
 connections:
   my-postgres:
     driver: postgres
-    url: postgresql://user:password@host:5432/database
+    url: env:DATABASE_URL
     schema: public
 ```
 
@@ -326,7 +326,7 @@ Standard MySQL/MariaDB connector with full foreign key support and schema intros
 connections:
   my-mysql:
     driver: mysql
-    url: mysql://user:password@host:3306/database
+    url: env:MYSQL_DATABASE_URL
 ```
 
 Or with individual fields:
@@ -383,7 +383,7 @@ Connects to Microsoft SQL Server and Azure SQL. Supports multi-schema scanning w
 connections:
   my-sqlserver:
     driver: sqlserver
-    url: mssql://user:password@host:1433/database?trustServerCertificate=true
+    url: env:SQLSERVER_DATABASE_URL
 ```
 
 Or with individual fields:

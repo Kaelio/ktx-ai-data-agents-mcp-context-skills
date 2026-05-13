@@ -862,6 +862,7 @@ describe('setup sources step', () => {
       message: 'Configure dbt',
       options: [
         { value: 'existing:dbt-main', label: 'Use existing dbt connection: dbt-main' },
+        { value: 'edit:dbt-main', label: 'Edit existing dbt connection: dbt-main' },
         { value: 'new', label: 'Add new dbt connection' },
         { value: 'back', label: 'Back' },
       ],
@@ -989,12 +990,324 @@ describe('setup sources step', () => {
             value: `existing:${testCase.connectionId}`,
             label: `Use existing ${testCase.expectedLabel} connection: ${testCase.connectionId}`,
           },
+          {
+            value: `edit:${testCase.connectionId}`,
+            label: `Edit existing ${testCase.expectedLabel} connection: ${testCase.connectionId}`,
+          },
           { value: 'new', label: `Add new ${testCase.expectedLabel} connection` },
           { value: 'back', label: 'Back' },
         ],
       });
       expect(testPrompts.text).not.toHaveBeenCalled();
     }
+  });
+
+  it('edits an existing Notion source and reopens the page picker with stored pages selected', async () => {
+    await addPrimarySource();
+    await addConnection('notion-main', {
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['old-page'],
+      root_database_ids: [],
+      root_data_source_ids: [],
+    });
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=1' }));
+    const pickNotionRootPages = vi.fn(async () => ({ kind: 'selected' as const, rootPageIds: ['new-page'] }));
+    const testPrompts = prompts({
+      multiselect: [['notion']],
+      select: ['edit:notion-main', 'keep', 'selected_roots', 'done'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        {
+          prompts: testPrompts,
+          validateNotion,
+          pickNotionRootPages,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: 'How should KTX find your Notion integration token?',
+      options: [
+        { value: 'keep', label: 'Keep existing credential' },
+        { value: 'env', label: 'Use NOTION_TOKEN from the environment' },
+        { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect(pickNotionRootPages).toHaveBeenCalledWith(
+      {
+        connectionId: 'notion-main',
+        connection: expect.objectContaining({
+          driver: 'notion',
+          auth_token_ref: 'env:NOTION_TOKEN',
+          crawl_mode: 'selected_roots',
+          root_page_ids: ['old-page'],
+        }),
+      },
+      expect.anything(),
+    );
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['new-page'],
+    });
+  });
+
+  it('edits an existing Metabase source with the current URL and credential as defaults', async () => {
+    await addPrimarySource();
+    await addConnection('metabase-main', {
+      driver: 'metabase',
+      api_url: 'https://metabase-old.example.com',
+      api_key_ref: 'env:METABASE_API_KEY', // pragma: allowlist secret
+      mappings: {
+        databaseMappings: { '1': 'warehouse' },
+        syncEnabled: { '1': true },
+        syncMode: 'ALL',
+      },
+    });
+    const testPrompts = prompts({
+      multiselect: [['metabase']],
+      select: ['edit:metabase-main', 'keep', 'done'],
+      text: ['https://metabase-new.example.com'],
+    });
+    const discoverMetabaseDatabases = vi.fn(async () => [
+      { id: 2, name: 'Analytics', engine: 'postgres', host: 'db.example.com', dbName: 'analytics' },
+    ]);
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        {
+          prompts: testPrompts,
+          discoverMetabaseDatabases,
+          validateMetabase: vi.fn(async () => ({ ok: true as const, detail: 'mapping validated' })),
+          runMapping: vi.fn(async () => 0),
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['metabase-main'] });
+
+    expect(testPrompts.text).toHaveBeenCalledWith({
+      message: textInputPrompt('Metabase URL'),
+      initialValue: 'https://metabase-old.example.com',
+    });
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: 'How should KTX find your Metabase API key?',
+      options: [
+        { value: 'keep', label: 'Keep existing credential' },
+        { value: 'env', label: 'Use METABASE_API_KEY from the environment' },
+        { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect(discoverMetabaseDatabases).toHaveBeenCalledWith({
+      sourceUrl: 'https://metabase-new.example.com',
+      sourceApiKeyRef: 'env:METABASE_API_KEY',
+      sourceConnectionId: 'metabase-main',
+    });
+    expect((await readConfig()).connections['metabase-main']).toMatchObject({
+      driver: 'metabase',
+      api_url: 'https://metabase-new.example.com',
+      api_key_ref: 'env:METABASE_API_KEY',
+      mappings: {
+        databaseMappings: { '2': 'warehouse' },
+        syncEnabled: { '2': true },
+        syncMode: 'ALL',
+      },
+    });
+  });
+
+  it('rolls back an edited context source when validation fails', async () => {
+    await addPrimarySource();
+    await addConnection('dbt-main', {
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
+    const validateDbt = vi.fn(async () => ({ ok: false as const, message: 'dbt project not found' }));
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['edit:dbt-main', 'path'],
+      text: ['/repo/new-dbt', ''],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        {
+          prompts: testPrompts,
+          validateDbt,
+        },
+      ),
+    ).resolves.toEqual({ status: 'failed', projectDir });
+
+    expect(validateDbt).toHaveBeenCalledWith(expect.objectContaining({
+      driver: 'dbt',
+      source_dir: '/repo/new-dbt',
+    }));
+    const config = await readConfig();
+    expect(config.connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
+    expect(config.ingest.adapters).not.toContain('dbt');
+  });
+
+  it('lets git-backed context source edits keep the existing repo credential', async () => {
+    await addPrimarySource();
+    await addConnection('metricflow-main', {
+      driver: 'metricflow',
+      metricflow: {
+        repoUrl: 'https://github.com/acme/private-metricflow',
+        branch: 'main',
+        path: 'metrics',
+        auth_token_ref: 'env:METRICFLOW_REPO_TOKEN', // pragma: allowlist secret
+      },
+    });
+    const testGitRepo = vi.fn(async () => ({ ok: false as const, error: 'authentication required' }));
+    const testPrompts = prompts({
+      multiselect: [['metricflow']],
+      select: ['edit:metricflow-main', 'git', 'keep', 'done'],
+      text: ['https://github.com/acme/private-metricflow', 'main', 'metrics'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        {
+          prompts: testPrompts,
+          testGitRepo,
+          validateMetricflow: vi.fn(async () => ({ ok: true as const, detail: 'metrics=1' })),
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['metricflow-main'] });
+
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: 'This MetricFlow repo requires authentication.',
+      options: [
+        { value: 'keep', label: 'Keep existing credential' },
+        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
+        { value: 'paste', label: 'Paste a token and save it as a local secret file' },
+        { value: 'skip', label: 'Skip — try without authentication' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect((await readConfig()).connections['metricflow-main']).toMatchObject({
+      driver: 'metricflow',
+      metricflow: {
+        repoUrl: 'https://github.com/acme/private-metricflow',
+        branch: 'main',
+        path: 'metrics',
+        auth_token_ref: 'env:METRICFLOW_REPO_TOKEN',
+      },
+    });
+  });
+
+  it('edits an existing context source from the configured-source follow-up menu', async () => {
+    await addPrimarySource();
+    await addConnection('dbt-main', {
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
+    const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['existing:dbt-main', 'edit', 'dbt-main', 'path', 'done'],
+      text: ['/repo/edited-dbt', ''],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        {
+          prompts: testPrompts,
+          validateDbt,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
+
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: '1 context source configured (dbt-main). Add another?',
+      options: [
+        { value: 'done', label: 'Done — continue to context build' },
+        { value: 'edit', label: 'Edit an existing context source' },
+        { value: 'add', label: 'Add another context source' },
+      ],
+    });
+    expect(testPrompts.select).toHaveBeenCalledWith({
+      message: 'Context source to edit',
+      options: [
+        { value: 'dbt-main', label: 'dbt-main (dbt)' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect(testPrompts.text).toHaveBeenCalledWith({
+      message: textInputPrompt('dbt local path'),
+      initialValue: '/repo/existing-dbt',
+    });
+    expect(validateDbt).toHaveBeenLastCalledWith(expect.objectContaining({
+      driver: 'dbt',
+      source_dir: '/repo/edited-dbt',
+    }));
+    expect((await readConfig()).connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      source_dir: '/repo/edited-dbt',
+      project_name: 'analytics',
+    });
+  });
+
+  it('backs out of editing an existing context source to the source connection menu', async () => {
+    await addPrimarySource();
+    await addConnection('dbt-main', {
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
+    const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['edit:dbt-main', 'back', 'existing:dbt-main'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        {
+          prompts: testPrompts,
+          validateDbt,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
+
+    expect(
+      vi
+        .mocked(testPrompts.select)
+        .mock.calls.map(([options]) => options.message)
+        .filter((message) => message === 'Configure dbt'),
+    ).toHaveLength(2);
+    expect(validateDbt).toHaveBeenCalledWith({
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
+    expect((await readConfig()).connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
   });
 
   it('lets Escape from dbt git URL return to source location selection', async () => {

@@ -9,7 +9,7 @@ describe('historic-SQL redaction', () => {
     ]);
 
     const sql =
-      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'";
+      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'"; // pragma: allowlist secret
 
     expect(redactHistoricSqlText(sql, redactors)).toBe(
       "select * from public.api_events where api_key = '[REDACTED]' and note = '[REDACTED]'",

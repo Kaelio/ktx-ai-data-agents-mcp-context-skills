@@ -4,7 +4,7 @@
       "id": "chinook_with_declared_metadata",
       "displayName": "Chinook (SQLite, declared metadata)",
       "url": "https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_Sqlite.sqlite",
-      "sha256": "7651ba378ac2fcd0dfc3c66fb101f7a7eed3ba39a612ec642b96e20702061f15",
+      "sha256": "7651ba378ac2fcd0dfc3c66fb101f7a7eed3ba39a612ec642b96e20702061f15", "_allowlist": "// pragma: allowlist secret",
       "license": "MIT",
       "source": "https://github.com/lerocha/chinook-database"
     },
@@ -12,7 +12,7 @@
       "id": "northwind_with_declared_metadata",
       "displayName": "Northwind (SQLite, declared metadata)",
       "url": "https://github.com/jpwhite3/northwind-SQLite3/raw/main/dist/northwind.db",
-      "sha256": "2f4f5c68dfcd33ba27373eae48c7a4869800c68095ee0f9f0da494f83382a877",
+      "sha256": "2f4f5c68dfcd33ba27373eae48c7a4869800c68095ee0f9f0da494f83382a877", "_allowlist": "// pragma: allowlist secret",
       "license": "MIT",
       "source": "https://github.com/jpwhite3/northwind-SQLite3"
     },
@@ -20,7 +20,7 @@
       "id": "sakila_with_declared_metadata",
       "displayName": "Sakila (SQLite, declared metadata)",
       "url": "https://raw.githubusercontent.com/bradleygrant/sakila-sqlite3/master/sakila_master.db",
-      "sha256": "88c91a4a1a6b61f9d3f35904c0a173c887b25e73f20c3c2fdb073818c06f4268",
+      "sha256": "88c91a4a1a6b61f9d3f35904c0a173c887b25e73f20c3c2fdb073818c06f4268", "_allowlist": "// pragma: allowlist secret",
       "license": "BSD-2-Clause",
       "source": "https://github.com/bradleygrant/sakila-sqlite3"
     },

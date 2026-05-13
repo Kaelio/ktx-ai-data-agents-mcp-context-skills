@@ -16,8 +16,9 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
     .command('status')
     .description('Check current KTX setup and project readiness')
     .option('--json', 'Print JSON output', false)
+    .option('-v, --verbose', 'Show every check, including passing ones', false)
     .option('--no-input', 'Disable interactive terminal input')
-    .action(async (options: { json?: boolean; input?: boolean }, command) => {
+    .action(async (options: { json?: boolean; verbose?: boolean; input?: boolean }, command) => {
       const runner = context.deps.doctor ?? (await import('../doctor.js')).runKtxDoctor;
       const explicitOrEnvProjectDir = resolveCommandProjectDirOverride(command);
       const nearestProjectDir = explicitOrEnvProjectDir ? undefined : findNearestKtxProjectDir(process.cwd());
@@ -27,6 +28,7 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
             {
               command: 'setup',
               outputMode: outputMode(options),
+              verbose: options.verbose === true,
               ...inputMode(options),
             },
             context.io,
@@ -40,6 +42,7 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
             command: 'project',
             projectDir: resolveCommandProjectDir(command),
             outputMode: outputMode(options),
+            verbose: options.verbose === true,
             ...inputMode(options),
           },
           context.io,
