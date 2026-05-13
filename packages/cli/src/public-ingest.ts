@@ -303,16 +303,20 @@ export function buildPublicIngestPlan(
 function defaultSteps(target: KtxPublicIngestPlanTarget): KtxPublicIngestTargetResult['steps'] {
   return [
     {
-      operation: 'scan',
-      status: target.steps.includes('scan') ? 'not-run' : 'skipped',
-      ...(target.operation === 'scan' ? { debugCommand: target.debugCommand } : {}),
+      operation: 'database-schema',
+      status: target.steps.includes('database-schema') ? 'not-run' : 'skipped',
+      ...(target.operation === 'database-ingest' ? { debugCommand: target.debugCommand } : {}),
+    },
+    {
+      operation: 'query-history',
+      status: target.steps.includes('query-history') ? 'not-run' : 'skipped',
+      ...(target.operation === 'database-ingest' ? { debugCommand: target.debugCommand } : {}),
     },
     {
       operation: 'source-ingest',
       status: target.steps.includes('source-ingest') ? 'not-run' : 'skipped',
       ...(target.operation === 'source-ingest' ? { debugCommand: target.debugCommand } : {}),
     },
-    { operation: 'enrich', status: 'skipped' },
     {
       operation: 'memory-update',
       status: target.steps.includes('memory-update') ? 'not-run' : 'skipped',
@@ -321,8 +325,13 @@ function defaultSteps(target: KtxPublicIngestPlanTarget): KtxPublicIngestTargetR
   ];
 }
 
-function markTargetResult(target: KtxPublicIngestPlanTarget, status: 'done' | 'failed'): KtxPublicIngestTargetResult {
-  const failedOperation = target.operation === 'scan' ? 'scan' : 'source-ingest';
+function markTargetResult(
+  target: KtxPublicIngestPlanTarget,
+  status: 'done' | 'failed',
+  failedOperation?: KtxPublicIngestStepName,
+): KtxPublicIngestTargetResult {
+  const selectedFailedOperation =
+    failedOperation ?? (target.operation === 'database-ingest' ? 'database-schema' : 'source-ingest');
   return {
     connectionId: target.connectionId,
     driver: target.driver,
@@ -333,8 +342,12 @@ function markTargetResult(target: KtxPublicIngestPlanTarget, status: 'done' | 'f
       if (status === 'done') {
         return { ...step, status: 'done' };
       }
-      if (step.operation === failedOperation) {
-        return { ...step, status: 'failed', detail: `${target.connectionId} failed at ${failedOperation}.` };
+      if (step.operation === selectedFailedOperation) {
+        return {
+          ...step,
+          status: 'failed',
+          detail: `${target.connectionId} failed at ${selectedFailedOperation}.`,
+        };
       }
       return { ...step, status: 'not-run' };
     }),
@@ -353,13 +366,16 @@ function renderPlainResults(results: KtxPublicIngestTargetResult[], io: KtxCliIo
   const failures = results.filter(resultFailed);
   io.stdout.write(failures.length > 0 ? 'Ingest finished with partial failures\n' : 'Ingest finished\n');
   io.stdout.write('\n');
-  io.stdout.write('Source         Scan      Source ingest  Enrich   Memory update\n');
+  io.stdout.write('Source         Database schema  Query history  Source ingest  Memory update\n');
   for (const result of results) {
     io.stdout.write(
-      `${result.connectionId.padEnd(14)} ${stepStatus(result, 'scan').padEnd(9)} ${stepStatus(
+      `${result.connectionId.padEnd(14)} ${stepStatus(result, 'database-schema').padEnd(16)} ${stepStatus(
+        result,
+        'query-history',
+      ).padEnd(14)} ${stepStatus(
         result,
         'source-ingest',
-      ).padEnd(14)} ${stepStatus(result, 'enrich').padEnd(8)} ${stepStatus(result, 'memory-update')}\n`,
+      ).padEnd(14)} ${stepStatus(result, 'memory-update')}\n`,
     );
   }
 
@@ -395,21 +411,47 @@ export async function executePublicIngestTarget(
   io: KtxCliIo,
   deps: KtxPublicIngestDeps,
 ): Promise<KtxPublicIngestTargetResult> {
-  if (target.operation === 'scan') {
+  if (target.operation === 'database-ingest') {
     const { runKtxScan } = await import('./scan.js');
     const scanArgs: KtxScanArgs = {
       command: 'run',
       projectDir: args.projectDir,
       connectionId: target.connectionId,
-      mode: args.scanMode ?? 'structural',
-      detectRelationships: args.detectRelationships ?? false,
+      mode: target.databaseDepth === 'deep' ? 'enriched' : 'structural',
+      detectRelationships: target.databaseDepth === 'deep' ? true : false,
       dryRun: false,
     };
     const runScan = deps.runScan ?? runKtxScan;
-    const exitCode = deps.scanProgress
+    const scanExitCode = deps.scanProgress
       ? await runScan(scanArgs, io, { progress: deps.scanProgress })
       : await runScan(scanArgs, io);
-    return markTargetResult(target, exitCode === 0 ? 'done' : 'failed');
+    if (scanExitCode !== 0) {
+      return markTargetResult(target, 'failed', 'database-schema');
+    }
+
+    if (target.queryHistory?.enabled === true) {
+      const { runKtxIngest } = await import('./ingest.js');
+      const runIngest = deps.runIngest ?? runKtxIngest;
+      const ingestArgs: KtxIngestArgs = {
+        command: 'run',
+        projectDir: args.projectDir,
+        connectionId: target.connectionId,
+        adapter: 'historic-sql',
+        outputMode: sourceIngestOutputMode(args, io),
+        inputMode: args.inputMode,
+        allowImplicitAdapter: true,
+        historicSqlPullConfigOverride: {
+          dialect: target.queryHistory.dialect,
+          ...(target.queryHistory.windowDays !== undefined ? { windowDays: target.queryHistory.windowDays } : {}),
+        },
+      };
+      const qhExitCode = await runIngest(ingestArgs, io);
+      if (qhExitCode !== 0) {
+        return markTargetResult(target, 'failed', 'query-history');
+      }
+    }
+
+    return markTargetResult(target, 'done');
   }
 
   const { runKtxIngest } = await import('./ingest.js');
@@ -452,6 +494,12 @@ export async function runKtxPublicIngest(
   const project = await loadProject({ projectDir: args.projectDir });
   const plan = buildPublicIngestPlan(project, args);
   const results: KtxPublicIngestTargetResult[] = [];
+
+  if (!args.json && plan.warnings.length > 0) {
+    for (const warning of plan.warnings) {
+      io.stderr.write(`Warning: ${warning}\n`);
+    }
+  }
 
   for (const target of plan.targets) {
     results.push(await executePublicIngestTarget(target, args, io, deps));

@@ -161,6 +161,75 @@ describe('buildPublicIngestPlan', () => {
 });
 
 describe('runKtxPublicIngest', () => {
+  it('maps fast and deep database targets to scan internals', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      fast: { driver: 'postgres' },
+      deep: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+    const runScan = vi.fn(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        { command: 'run', projectDir: '/tmp/project', all: true, json: false, inputMode: 'disabled', queryHistory: 'default' },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runScan).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ connectionId: 'deep', mode: 'enriched', detectRelationships: true }),
+      expect.anything(),
+    );
+    expect(runScan).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ connectionId: 'fast', mode: 'structural', detectRelationships: false }),
+      expect.anything(),
+    );
+  });
+
+  it('runs query history after schema ingest with current-run window override', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true, windowDays: 90 } } },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+          queryHistoryWindowDays: 30,
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runScan).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'warehouse', mode: 'enriched' }),
+      expect.anything(),
+    );
+    expect(runIngest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        connectionId: 'warehouse',
+        adapter: 'historic-sql',
+        allowImplicitAdapter: true,
+        historicSqlPullConfigOverride: expect.objectContaining({ dialect: 'postgres', windowDays: 30 }),
+      }),
+      expect.anything(),
+    );
+  });
+
   it('runs all independent targets and reports partial failures', async () => {
     const io = makeIo();
     const project = projectWithConnections({
@@ -205,8 +274,8 @@ describe('runKtxPublicIngest', () => {
       expect.anything(),
     );
     expect(io.stdout()).toContain('Ingest finished with partial failures');
-    expect(io.stdout()).toContain('warehouse failed at scan.');
-    expect(io.stdout()).toContain('Debug: ktx scan warehouse --debug');
+    expect(io.stdout()).toContain('warehouse failed at database-schema.');
+    expect(io.stdout()).toContain('Debug: ktx ingest warehouse --debug');
   });
 
   it('can request enriched relationship scans for setup-managed context builds', async () => {

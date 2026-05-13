@@ -49,6 +49,8 @@ export type KtxIngestArgs =
       cliVersion?: string;
       runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
       debugLlmRequestFile?: string;
+      allowImplicitAdapter?: boolean;
+      historicSqlPullConfigOverride?: Record<string, unknown>;
       outputMode: KtxIngestOutputMode;
       inputMode?: KtxIngestInputMode;
     }
@@ -571,6 +573,19 @@ export async function runKtxIngest(
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
+      const ingestProject =
+        args.allowImplicitAdapter && !project.config.ingest.adapters.includes(args.adapter)
+          ? {
+              ...project,
+              config: {
+                ...project.config,
+                ingest: {
+                  ...project.config.ingest,
+                  adapters: [...project.config.ingest.adapters, args.adapter],
+                },
+              },
+            }
+          : project;
       const createAdapters =
         deps.createAdapters ??
         (deps.runLocalIngest || deps.runLocalMetabaseIngest ? () => [] : createKtxCliLocalIngestAdapters);
@@ -583,11 +598,14 @@ export async function runKtxIngest(
         ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
         ...(managedDaemon ? { managedDaemon } : {}),
         ...(args.adapter === 'historic-sql' ? { historicSqlConnectionId: args.connectionId } : {}),
+        ...(args.historicSqlPullConfigOverride
+          ? { historicSqlPullConfigOverride: args.historicSqlPullConfigOverride }
+          : {}),
         logger: operationalLogger,
       };
       const queryExecutor =
         localIngestOptions.queryExecutor ??
-        (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(project);
+        (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(ingestProject);
       if (args.adapter === 'metabase' && args.sourceDir) {
         throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
       }
@@ -604,8 +622,8 @@ export async function runKtxIngest(
                 deps.progress,
               );
         const result = await executeMetabaseFanout({
-          project,
-          adapters: createAdapters(project, adapterOptions),
+          project: ingestProject,
+          adapters: createAdapters(ingestProject, adapterOptions),
           metabaseConnectionId: args.connectionId,
           ...localIngestOptions,
           queryExecutor,
@@ -668,8 +686,8 @@ export async function runKtxIngest(
 
       try {
         const result = await executeLocalIngest({
-          project,
-          adapters: createAdapters(project, adapterOptions),
+          project: ingestProject,
+          adapters: createAdapters(ingestProject, adapterOptions),
           adapter: args.adapter,
           connectionId: args.connectionId,
           sourceDir: args.sourceDir,
