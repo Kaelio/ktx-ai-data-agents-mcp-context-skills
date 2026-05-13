@@ -1,11 +1,11 @@
-export interface NotionPickerPageInput {
+export interface TreePickerNodeInput {
   id: string;
   title?: string | null;
   archived?: boolean;
   parentId?: string | null;
 }
 
-interface NotionPickerNode {
+export interface TreePickerNode {
   id: string;
   title: string;
   archived: boolean;
@@ -15,17 +15,22 @@ interface NotionPickerNode {
   path: string;
 }
 
+type PendingConfirmKind = 'save-confirm' | 'skip-empty';
+
+export type SkipEmptyAction = 'quit' | 'save-empty';
+
 export interface PickerState {
-  tree: NotionPickerNode[];
-  byId: Map<string, NotionPickerNode>;
+  tree: TreePickerNode[];
+  byId: Map<string, TreePickerNode>;
   expanded: Set<string>;
   checked: Set<string>;
   cursorId: string;
   search: { editing: boolean; query: string };
-  pendingConfirm: 'mode-switch' | 'skip-empty' | null;
+  pendingConfirm: PendingConfirmKind | null;
   preLoadWarnings: string[];
   transientHint: { text: string; expiresAt: number } | null;
-  currentCrawlMode: 'all_accessible' | 'selected_roots';
+  requireConfirmOnSave: boolean;
+  skipEmptyAction: SkipEmptyAction;
 }
 
 export type PickerCommand =
@@ -65,25 +70,12 @@ const TRANSIENT_HINT_DURATION_MS = 2500;
 
 const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 
-function normalizePageId(value: string): string {
-  const trimmed = value.trim();
-  const compact = trimmed.replace(/-/g, '');
-  if (/^[0-9a-fA-F]{32}$/.test(compact)) {
-    const lower = compact.toLowerCase();
-    return `${lower.slice(0, 8)}-${lower.slice(8, 12)}-${lower.slice(12, 16)}-${lower.slice(
-      16,
-      20,
-    )}-${lower.slice(20)}`;
-  }
-  return trimmed;
-}
-
 function titleValue(value: string | null | undefined): string {
   const trimmed = value?.trim() ?? '';
   return trimmed.length > 0 ? trimmed : 'Untitled';
 }
 
-function sortedNodeIds(ids: string[], nodes: Map<string, MutableNode | NotionPickerNode>): string[] {
+function sortedNodeIds(ids: string[], nodes: Map<string, MutableNode | TreePickerNode>): string[] {
   return [...ids].sort((leftId, rightId) => {
     const left = nodes.get(leftId);
     const right = nodes.get(rightId);
@@ -107,7 +99,7 @@ export function clearExpiredTransientHint(state: PickerState, now = Date.now()):
   return cloneState(state, { transientHint: null });
 }
 
-function ancestorsOf(nodeId: string, byId: Map<string, NotionPickerNode>): string[] {
+function ancestorsOf(nodeId: string, byId: Map<string, TreePickerNode>): string[] {
   const ancestors: string[] = [];
   let parentId = byId.get(nodeId)?.parentId ?? null;
   const seen = new Set<string>();
@@ -119,7 +111,7 @@ function ancestorsOf(nodeId: string, byId: Map<string, NotionPickerNode>): strin
   return ancestors;
 }
 
-function descendantsOf(nodeId: string, byId: Map<string, NotionPickerNode>): string[] {
+function descendantsOf(nodeId: string, byId: Map<string, TreePickerNode>): string[] {
   const result: string[] = [];
   const stack = [...(byId.get(nodeId)?.childIds ?? [])].reverse();
   while (stack.length > 0) {
@@ -152,18 +144,18 @@ function matchingIds(state: PickerState): Set<string> {
   );
 }
 
-export function buildPickerTree(searchResults: NotionPickerPageInput[]): NotionPickerNode[] {
+export function buildPickerTree(inputs: TreePickerNodeInput[]): TreePickerNode[] {
   const nodes = new Map<string, MutableNode>();
-  for (const result of searchResults) {
-    const id = normalizePageId(result.id);
-    if (nodes.has(id)) {
+  for (const result of inputs) {
+    const id = result.id.trim();
+    if (id.length === 0 || nodes.has(id)) {
       continue;
     }
     nodes.set(id, {
       id,
       title: titleValue(result.title),
       archived: result.archived === true,
-      parentId: result.parentId ? normalizePageId(result.parentId) : null,
+      parentId: result.parentId ? result.parentId.trim() : null,
       childIds: [],
     });
   }
@@ -202,7 +194,7 @@ export function buildPickerTree(searchResults: NotionPickerPageInput[]): NotionP
     [...nodes.values()].filter((node) => node.parentId === null).map((node) => node.id),
     nodes,
   );
-  const tree: NotionPickerNode[] = [];
+  const tree: TreePickerNode[] = [];
 
   function visit(nodeId: string, depth: number, pathPrefix: string[]): void {
     const raw = nodes.get(nodeId);
@@ -210,7 +202,7 @@ export function buildPickerTree(searchResults: NotionPickerPageInput[]): NotionP
       return;
     }
     const path = [...pathPrefix, raw.title].join(' / ');
-    const node: NotionPickerNode = {
+    const node: TreePickerNode = {
       id: raw.id,
       title: raw.title,
       archived: raw.archived,
@@ -232,11 +224,11 @@ export function buildPickerTree(searchResults: NotionPickerPageInput[]): NotionP
   return tree;
 }
 
-export function isAncestorChecked(nodeId: string, checked: Set<string>, byId: Map<string, NotionPickerNode>): boolean {
+export function isAncestorChecked(nodeId: string, checked: Set<string>, byId: Map<string, TreePickerNode>): boolean {
   return ancestorsOf(nodeId, byId).some((ancestorId) => checked.has(ancestorId));
 }
 
-function checkedAncestor(nodeId: string, state: PickerState): NotionPickerNode | null {
+function checkedAncestor(nodeId: string, state: PickerState): TreePickerNode | null {
   for (const ancestorId of ancestorsOf(nodeId, state.byId)) {
     if (state.checked.has(ancestorId)) {
       return state.byId.get(ancestorId) ?? null;
@@ -247,7 +239,7 @@ function checkedAncestor(nodeId: string, state: PickerState): NotionPickerNode |
 
 export function canToggle(nodeId: string, state: PickerState): { ok: true } | { ok: false; reason: string } {
   if (!state.byId.has(nodeId)) {
-    return { ok: false, reason: 'Page not found' };
+    return { ok: false, reason: 'Node not found' };
   }
   const ancestor = checkedAncestor(nodeId, state);
   if (ancestor) {
@@ -276,7 +268,7 @@ export function toggleChecked(state: PickerState, nodeId: string, now = Date.now
   return cloneState(state, { checked, transientHint: null });
 }
 
-export function flattenSelection(checked: Set<string>, byId: Map<string, NotionPickerNode>): string[] {
+export function flattenSelection(checked: Set<string>, byId: Map<string, TreePickerNode>): string[] {
   const result: string[] = [];
   for (const node of byId.values()) {
     if (checked.has(node.id) && !isAncestorChecked(node.id, checked, byId)) {
@@ -402,16 +394,21 @@ export function moveCursor(state: PickerState, dir: 'up' | 'down' | 'left' | 'ri
 }
 
 export function buildInitialState(args: {
-  tree: NotionPickerNode[];
-  existingRootPageIds: string[];
-  currentCrawlMode?: 'all_accessible' | 'selected_roots';
+  tree: TreePickerNode[];
+  existingSelectedIds: string[];
+  requireConfirmOnSave?: boolean;
+  skipEmptyAction?: SkipEmptyAction;
+  staleWarning?: (staleCount: number) => string;
 }): PickerState {
   const byId = new Map(args.tree.map((node) => [node.id, node]));
   const checked = new Set<string>();
   let staleCount = 0;
 
-  for (const rawId of args.existingRootPageIds) {
-    const id = normalizePageId(rawId);
+  for (const rawId of args.existingSelectedIds) {
+    const id = rawId.trim();
+    if (id.length === 0) {
+      continue;
+    }
     if (byId.has(id)) {
       checked.add(id);
     } else {
@@ -427,6 +424,12 @@ export function buildInitialState(args: {
     }
   }
 
+  const preLoadWarnings: string[] = [];
+  if (staleCount > 0) {
+    const warning = args.staleWarning ? args.staleWarning(staleCount) : `${staleCount} stored selections no longer visible`;
+    preLoadWarnings.push(warning);
+  }
+
   return {
     tree: args.tree,
     byId,
@@ -435,16 +438,18 @@ export function buildInitialState(args: {
     cursorId: args.tree[0]?.id ?? '',
     search: { editing: false, query: '' },
     pendingConfirm: null,
-    preLoadWarnings: staleCount > 0 ? [`${staleCount} stored root_page_ids no longer visible`] : [],
+    preLoadWarnings,
     transientHint: null,
-    currentCrawlMode: args.currentCrawlMode ?? 'selected_roots',
+    requireConfirmOnSave: args.requireConfirmOnSave ?? false,
+    skipEmptyAction: args.skipEmptyAction ?? 'quit',
   };
 }
 
 export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()): { next: PickerState; effect: PickerEffect } {
   if (state.pendingConfirm) {
     if (cmd === 'save-confirm') {
-      const effect: PickerEffect = state.pendingConfirm === 'skip-empty' ? 'quit-without-save' : 'save';
+      const effect: PickerEffect =
+        state.pendingConfirm === 'skip-empty' ? (state.skipEmptyAction === 'save-empty' ? 'save' : 'quit-without-save') : 'save';
       return { next: cloneState(state, { pendingConfirm: null }), effect };
     }
     if (cmd === 'save-cancel') {
@@ -501,8 +506,8 @@ export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()
       if (state.checked.size === 0) {
         return { next: cloneState(state, { pendingConfirm: 'skip-empty' }), effect: null };
       }
-      if (state.currentCrawlMode === 'all_accessible') {
-        return { next: cloneState(state, { pendingConfirm: 'mode-switch' }), effect: null };
+      if (state.requireConfirmOnSave) {
+        return { next: cloneState(state, { pendingConfirm: 'save-confirm' }), effect: null };
       }
       return { next: state, effect: 'save' };
     case 'save-confirm':

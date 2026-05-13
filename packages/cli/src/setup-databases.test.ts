@@ -5,10 +5,15 @@ import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetup
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type KtxSetupDatabaseDriver,
+  type KtxSetupDatabasesDeps,
   type KtxSetupDatabasesPromptAdapter,
   runKtxSetupDatabasesStep,
 } from './setup-databases.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import type {
+  DatabaseScopePickResult,
+  PickDatabaseScopeArgs,
+} from './database-tree-picker.js';
 
 function makeIo() {
   let stdout = '';
@@ -29,6 +34,43 @@ function makeIo() {
     },
     stdout: () => stdout,
     stderr: () => stderr,
+  };
+}
+
+type ScopePick =
+  | 'back'
+  | 'enable-all'
+  | { schemas: string[]; tables: string[] };
+
+interface PickerStubs {
+  pickDatabaseScope: KtxSetupDatabasesDeps['pickDatabaseScope'];
+  scopeCalls: PickDatabaseScopeArgs[];
+}
+
+function makePickerStubs(options: { scopes?: ScopePick[] } = {}): PickerStubs {
+  const queue: ScopePick[] = [...(options.scopes ?? [])];
+  const scopeCalls: PickDatabaseScopeArgs[] = [];
+  return {
+    scopeCalls,
+    pickDatabaseScope: vi.fn(async (args: PickDatabaseScopeArgs): Promise<DatabaseScopePickResult> => {
+      scopeCalls.push(args);
+      const next = queue.shift();
+      if (next === undefined || next === 'enable-all') {
+        const enabledTables = args.discovered.map((t) => `${t.schema}.${t.name}`);
+        const activeSchemas = args.supportsSchemaScope
+          ? Array.from(new Set(args.discovered.map((t) => t.schema)))
+          : [];
+        return { kind: 'selected', activeSchemas, enabledTables };
+      }
+      if (next === 'back') {
+        return { kind: 'back' };
+      }
+      return {
+        kind: 'selected',
+        activeSchemas: args.supportsSchemaScope ? next.schemas : [],
+        enabledTables: next.tables,
+      };
+    }),
   };
 }
 
@@ -862,7 +904,6 @@ describe('setup databases step', () => {
     await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({
       textValues: ['env:DATABASE_URL'],
-      multiselectValues: [['analytics']],
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
@@ -879,11 +920,21 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
     const listSchemas = vi.fn(async () => ['analytics', 'public']);
     const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'customers', kind: 'table' as const }]);
+    const pickers = makePickerStubs({
+      scopes: [{ schemas: ['analytics'], tables: ['analytics.customers'] }],
+    });
 
     const result = await runKtxSetupDatabasesStep(
       { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
       makeIo().io,
-      { prompts, testConnection, scanConnection, listSchemas, listTables },
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
     );
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
@@ -892,7 +943,7 @@ describe('setup databases step', () => {
       placeholder: 'env:DATABASE_URL',
       initialValue: 'env:DATABASE_URL',
     });
-    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse');
+    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse', ['analytics', 'public']);
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
     expect(scanConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -926,7 +977,6 @@ describe('setup databases step', () => {
     await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({
       textValues: ['env:DATABASE_URL'],
-      multiselectValues: [['public'], ['public.customers', 'public.orders']],
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
@@ -937,7 +987,6 @@ describe('setup databases step', () => {
       if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
       if (options.message.startsWith('Enable query-history ingest')) return 'no';
-      if (options.message.startsWith('Tables found in selected schemas')) return 'customize';
       return 'back';
     });
     const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
@@ -946,6 +995,9 @@ describe('setup databases step', () => {
       { schema: 'public', name: 'orders', kind: 'table' as const },
       { schema: 'public', name: 'products', kind: 'table' as const },
     ]);
+    const pickers = makePickerStubs({
+      scopes: [{ schemas: ['public'], tables: ['public.customers', 'public.orders'] }],
+    });
 
     const result = await runKtxSetupDatabasesStep(
       { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
@@ -956,29 +1008,17 @@ describe('setup databases step', () => {
         scanConnection: vi.fn(async () => 0),
         listSchemas,
         listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
       },
     );
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
-    expect(prompts.multiselect).toHaveBeenNthCalledWith(1, {
-      message: expect.stringContaining('PostgreSQL schemas to include'),
-      options: [
-        { value: 'orbit_analytics', label: 'orbit_analytics' },
-        { value: 'orbit_raw', label: 'orbit_raw' },
-        { value: 'public', label: 'public' },
-      ],
-      initialValues: ['public'],
-      required: true,
-    });
-    expect(prompts.multiselect).toHaveBeenNthCalledWith(2, {
-      message: expect.stringContaining('Tables to enable for warehouse'),
-      options: [
-        { value: 'public.customers', label: 'public.customers' },
-        { value: 'public.orders', label: 'public.orders' },
-        { value: 'public.products', label: 'public.products' },
-      ],
-      initialValues: ['public.customers', 'public.orders'],
-      required: true,
+    expect(pickers.scopeCalls).toHaveLength(1);
+    expect(pickers.scopeCalls[0]).toMatchObject({
+      connectionId: 'warehouse',
+      schemaNoun: 'schema',
+      supportsSchemaScope: true,
+      existing: { enabledTables: ['public.customers', 'public.orders'] },
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
@@ -1010,7 +1050,6 @@ describe('setup databases step', () => {
     await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({
       textValues: ['env:DATABASE_URL'],
-      multiselectValues: [['back']],
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
@@ -1026,19 +1065,29 @@ describe('setup databases step', () => {
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
     const listSchemas = vi.fn(async () => ['analytics', 'public']);
-    const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'customers', kind: 'table' as const }]);
+    const listTables = vi.fn(async () => [
+      { schema: 'analytics', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({ scopes: ['back'] });
 
     const result = await runKtxSetupDatabasesStep(
       { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
       makeIo().io,
-      { prompts, testConnection, scanConnection, listSchemas, listTables },
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
     );
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
     expect(primaryMenuCount).toBe(2);
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
     expect(scanConnection).not.toHaveBeenCalled();
-    expect(listTables).not.toHaveBeenCalled();
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
       url: 'env:DATABASE_URL',
@@ -1078,7 +1127,6 @@ describe('setup databases step', () => {
       if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
       if (options.message.startsWith('Enable query-history ingest')) return 'no';
-      if (options.message.startsWith('Tables found in selected schemas')) return 'back';
       return 'back';
     });
     const testConnection = vi.fn(async () => 0);
@@ -1088,16 +1136,24 @@ describe('setup databases step', () => {
       { schema: 'public', name: 'customers', kind: 'table' as const },
       { schema: 'public', name: 'orders', kind: 'table' as const },
     ]);
+    const pickers = makePickerStubs({ scopes: ['back'] });
 
     const result = await runKtxSetupDatabasesStep(
       { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
       makeIo().io,
-      { prompts, testConnection, scanConnection, listSchemas, listTables },
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
     );
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
     expect(primaryMenuCount).toBe(2);
-    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse');
+    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse', ['public']);
     expect(scanConnection).not.toHaveBeenCalled();
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
@@ -1130,20 +1186,19 @@ describe('setup databases step', () => {
     await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({
       textValues: ['env:DATABASE_URL'],
-      multiselectValues: [['public']],
     });
     vi.mocked(prompts.select).mockImplementation(async (options) => {
       if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') return 'edit';
       if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
       if (options.message.startsWith('Enable query-history ingest')) return 'no';
-      if (options.message.startsWith('Tables found in selected schemas')) return 'all';
       return 'back';
     });
     const listTables = vi.fn(async () => [
       { schema: 'public', name: 'customers', kind: 'table' as const },
       { schema: 'public', name: 'orders', kind: 'table' as const },
     ]);
+    const pickers = makePickerStubs({ scopes: ['enable-all'] });
 
     const result = await runKtxSetupDatabasesStep(
       { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
@@ -1153,6 +1208,7 @@ describe('setup databases step', () => {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 1),
         listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
       },
     );
 
@@ -1435,7 +1491,6 @@ describe('setup databases step', () => {
     const prompts = makePromptAdapter({
       selectValues: ['url'],
       textValues: ['', 'env:DATABASE_URL'],
-      multiselectValues: [['orbit_analytics', 'orbit_raw']],
     });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async asyncScanProjectDir => {
@@ -1446,6 +1501,19 @@ describe('setup databases step', () => {
       return 0;
     });
     const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
+    const listTables = vi.fn(async () => [
+      { schema: 'orbit_analytics', name: 'events', kind: 'table' as const },
+      { schema: 'orbit_raw', name: 'inputs', kind: 'table' as const },
+      { schema: 'public', name: 'misc', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({
+      scopes: [
+        {
+          schemas: ['orbit_analytics', 'orbit_raw'],
+          tables: ['orbit_analytics.events', 'orbit_raw.inputs'],
+        },
+      ],
+    });
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -1456,22 +1524,25 @@ describe('setup databases step', () => {
         skipDatabases: false,
       },
       io.io,
-      { prompts, testConnection, scanConnection, listSchemas },
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
     );
 
     expect(result.status).toBe('ready');
     expect(listSchemas).toHaveBeenCalledWith(tempDir, 'postgres-warehouse');
-    expect(prompts.multiselect).toHaveBeenCalledWith({
-      message: expect.stringContaining('PostgreSQL schemas to include'),
-      options: [
-        { value: 'orbit_analytics', label: 'orbit_analytics' },
-        { value: 'orbit_raw', label: 'orbit_raw' },
-        { value: 'public', label: 'public' },
-      ],
-      initialValues: ['orbit_analytics', 'orbit_raw'],
-      required: true,
+    expect(pickers.scopeCalls).toHaveLength(1);
+    expect(pickers.scopeCalls[0]).toMatchObject({
+      connectionId: 'postgres-warehouse',
+      schemaNoun: 'schema',
+      schemaNounPlural: 'schemas',
+      defaultSchemas: ['orbit_analytics', 'orbit_raw'],
     });
-    expect(String(vi.mocked(prompts.multiselect).mock.calls[0]?.[0].message)).not.toContain('to scan');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections['postgres-warehouse']).toMatchObject({
       schemas: ['orbit_analytics', 'orbit_raw'],
