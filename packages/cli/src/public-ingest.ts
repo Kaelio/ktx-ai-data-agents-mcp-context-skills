@@ -109,7 +109,10 @@ const queryHistoryDialectByDriver = new Map<string, HistoricSqlDialect>([
 ]);
 
 function storedQueryHistory(connection: KtxProjectConnectionConfig): Record<string, unknown> {
-  const value = connection.context?.queryHistory;
+  const context = connection.context;
+  const contextRecord =
+    context && typeof context === 'object' && !Array.isArray(context) ? (context as Record<string, unknown>) : {};
+  const value = contextRecord.queryHistory;
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 

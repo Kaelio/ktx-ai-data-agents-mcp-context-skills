@@ -378,9 +378,6 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
       status.agents.length > 0 ? ` (${status.agents.map((agent) => `${agent.target}:${agent.scope}`).join(', ')})` : ''
     }`,
   ];
-  if (!status.context.ready && status.context.watchCommand && status.context.status === 'running') {
-    lines.push(`Resume: ${status.context.watchCommand}`);
-  }
   if (!status.context.ready && status.context.status === 'failed' && status.context.detail) {
     lines.push(`Retry: ${status.context.retryCommand ?? `ktx setup --project-dir ${status.project.path}`}`);
   }
@@ -412,7 +409,7 @@ function setupContextReady(status: KtxSetupStatus): boolean {
 }
 
 function setupContextActive(status: KtxSetupStatus): boolean {
-  return status.context.status === 'running' || status.context.status === 'detached';
+  return status.context.status === 'running';
 }
 
 function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {

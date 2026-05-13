@@ -153,10 +153,18 @@ function normalizeState(projectDir: string, value: unknown): KtxSetupContextStat
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return notStartedState(projectDir);
   }
-  const record = value as Partial<KtxSetupContextState>;
-  const rawStatus = record.status ?? 'not_started';
+  const record = value as Record<string, unknown>;
+  const rawStatus = typeof record.status === 'string' ? record.status : 'not_started';
   const legacyActive = rawStatus === 'detached' || rawStatus === 'paused' || rawStatus === 'running';
-  const status: KtxSetupContextBuildStatus = legacyActive ? 'stale' : rawStatus;
+  const status: KtxSetupContextBuildStatus = legacyActive
+    ? 'stale'
+    : rawStatus === 'completed' ||
+        rawStatus === 'failed' ||
+        rawStatus === 'interrupted' ||
+        rawStatus === 'not_started' ||
+        rawStatus === 'stale'
+      ? rawStatus
+      : 'not_started';
   const runId = typeof record.runId === 'string' && record.runId.length > 0 ? record.runId : undefined;
   return {
     ...(runId ? { runId } : {}),

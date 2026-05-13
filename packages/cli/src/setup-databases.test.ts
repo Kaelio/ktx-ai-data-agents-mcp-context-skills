@@ -1438,8 +1438,14 @@ describe('setup databases step', () => {
       },
     });
     expect(config.connections.warehouse.historicSql).toBeUndefined();
-    expect(config.connections.warehouse.context?.queryHistory).not.toHaveProperty('windowDays');
-    expect(config.connections.warehouse.context?.queryHistory).not.toHaveProperty('redactionPatterns');
+    const warehouseContext =
+      config.connections.warehouse.context &&
+      typeof config.connections.warehouse.context === 'object' &&
+      !Array.isArray(config.connections.warehouse.context)
+        ? (config.connections.warehouse.context as Record<string, unknown>)
+        : {};
+    expect(warehouseContext.queryHistory).not.toHaveProperty('windowDays');
+    expect(warehouseContext.queryHistory).not.toHaveProperty('redactionPatterns');
     expect(configText).not.toContain('live-database');
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);

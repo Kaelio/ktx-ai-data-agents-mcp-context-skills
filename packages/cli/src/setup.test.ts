@@ -1655,7 +1655,6 @@ describe('setup status', () => {
 
     const status = await readKtxSetupStatus(tempDir);
     expect(status.context.status).toBe('stale');
-    expect(status.context.watchCommand).toBeUndefined();
     const state = await readKtxSetupContextState(tempDir);
     expect(state.status).toBe('stale');
   });

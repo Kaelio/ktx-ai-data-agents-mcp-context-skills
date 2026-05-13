@@ -2,7 +2,7 @@ import type { KtxProjectConfig, KtxProjectConnectionConfig } from '@ktx/context/
 
 export type KtxDatabaseContextDepth = 'fast' | 'deep';
 
-export const KTX_DATABASE_DRIVER_IDS = new Set([
+const KTX_DATABASE_DRIVER_IDS = new Set([
   'sqlite',
   'postgres',
   'postgresql',
@@ -23,7 +23,7 @@ export function isDatabaseDriver(driver: string): boolean {
   return KTX_DATABASE_DRIVER_IDS.has(driver.trim().toLowerCase());
 }
 
-export function connectionContextRecord(connection: KtxProjectConnectionConfig): Record<string, unknown> {
+function connectionContextRecord(connection: KtxProjectConnectionConfig): Record<string, unknown> {
   const context = connection.context;
   return typeof context === 'object' && context !== null && !Array.isArray(context)
     ? (context as Record<string, unknown>)

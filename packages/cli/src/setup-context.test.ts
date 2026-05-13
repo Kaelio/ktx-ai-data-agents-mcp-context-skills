@@ -15,6 +15,7 @@ import {
   contextBuildCommands,
   readKtxSetupContextState,
   runKtxSetupContextStep,
+  type KtxSetupContextDeps,
   writeKtxSetupContextState,
 } from './setup-context.js';
 
@@ -39,7 +40,16 @@ function makeIo() {
   };
 }
 
-async function writeReadyProject(projectDir: string, overrides: Partial<KtxProjectConfig> = {}) {
+type ReadyProjectOverrides = Omit<Partial<KtxProjectConfig>, 'ingest' | 'llm' | 'scan'> & {
+  ingest?: Partial<KtxProjectConfig['ingest']>;
+  llm?: Partial<KtxProjectConfig['llm']>;
+  scan?: Omit<Partial<KtxProjectConfig['scan']>, 'enrichment' | 'relationships'> & {
+    enrichment?: Partial<KtxProjectConfig['scan']['enrichment']>;
+    relationships?: Partial<KtxProjectConfig['scan']['relationships']>;
+  };
+};
+
+async function writeReadyProject(projectDir: string, overrides: ReadyProjectOverrides = {}) {
   const defaults = buildDefaultKtxProjectConfig('revenue');
   const readyConfig: KtxProjectConfig = {
     ...defaults,
@@ -333,7 +343,9 @@ describe('setup context build state', () => {
     await writeFile(join(tempDir, 'wiki', 'global', 'metrics.md'), '# Metrics\n');
     await writeReadyEnrichedScanReport(tempDir);
     const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
+      exitCode: 0,
+    }));
 
     await expect(
       runKtxSetupContextStep(
@@ -415,7 +427,9 @@ describe('setup context build state', () => {
       manifestShards: ['semantic-layer/warehouse/_schema/public.yaml'],
     });
     const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
+      exitCode: 0,
+    }));
 
     await expect(
       runKtxSetupContextStep(
@@ -438,7 +452,9 @@ describe('setup context build state', () => {
       scan: { enrichment: { mode: 'none' } },
     });
     const io = makeIo();
-    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
+      exitCode: 0,
+    }));
     const verifyContextReady = vi.fn(async () => ({
       ready: true,
       agentContextReady: true,
@@ -472,7 +488,7 @@ describe('setup context build state', () => {
     await writeReadyProject(tempDir, {
       connections: { warehouse: { driver: 'postgres', readonly: true } },
       llm: {
-        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } },
+        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
         models: { default: 'gpt-test' },
       },
       scan: {
