@@ -52,6 +52,24 @@ describe('walkCommandTree', () => {
 
     expect(walkCommandTree(command).arguments).toEqual(['<connectionId>', '[schemas...]']);
   });
+
+  it('omits Commander hidden commands from the public tree', () => {
+    const root = new Command('ktx');
+    root.command('scan', { hidden: true }).description('Run a standalone connection scan');
+    const ingest = root.command('ingest').description('Build or inspect KTX context');
+    ingest.command('run', { hidden: true }).description('Run local ingest by adapter');
+    ingest.command('watch', { hidden: true }).description('Open a stored visual report');
+    ingest.command('status').description('Print status');
+    root.command('status').description('Check readiness');
+
+    const tree = walkCommandTree(root);
+
+    expect(tree.children.map((child) => child.name)).toEqual(['ingest', 'status']);
+    expect(tree.children[0]).toMatchObject({
+      name: 'ingest',
+      children: [{ name: 'status', description: 'Print status', aliases: [], arguments: [], children: [] }],
+    });
+  });
 });
 
 describe('formatCommandTree', () => {
