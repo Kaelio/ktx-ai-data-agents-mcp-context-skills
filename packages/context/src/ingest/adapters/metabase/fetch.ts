@@ -97,15 +97,16 @@ export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Pr
       `mapping for database ${pullConfig.metabaseDatabaseId} does not point to connection ${params.ctx.connectionId} (points to ${mapping.targetConnectionId})`,
     );
   }
-  if (mapping.metabaseDatabaseName === null) {
-    throw new IngestInputError(
-      `mapping for database ${pullConfig.metabaseDatabaseId} on Metabase connection ${pullConfig.metabaseConnectionId} is unhydrated; run \`ktx connection mapping refresh ${pullConfig.metabaseConnectionId}\` to populate metabaseDatabaseName before ingest.`,
-    );
-  }
-  const mappingDatabaseName: string = mapping.metabaseDatabaseName;
 
   const client = await params.clientFactory.createClient(pullConfig, params.ctx);
   try {
+    let mappingDatabaseName = mapping.metabaseDatabaseName;
+    let mappingEngine = mapping.metabaseEngine;
+    if (mappingDatabaseName === null) {
+      const database = await client.getDatabase(pullConfig.metabaseDatabaseId);
+      mappingDatabaseName = database.name;
+      mappingEngine = database.engine ?? null;
+    }
     const stagedForScope: StagedSyncConfig = {
       metabaseConnectionId: pullConfig.metabaseConnectionId,
       metabaseDatabaseId: pullConfig.metabaseDatabaseId,
@@ -118,7 +119,7 @@ export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Pr
       mapping: {
         metabaseDatabaseId: mapping.metabaseDatabaseId,
         metabaseDatabaseName: mappingDatabaseName,
-        metabaseEngine: mapping.metabaseEngine,
+        metabaseEngine: mappingEngine,
         targetConnectionId: mapping.targetConnectionId,
       },
     };
@@ -233,7 +234,7 @@ export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Pr
     const databaseFile: StagedDatabaseFile = {
       metabaseDatabaseId: mapping.metabaseDatabaseId,
       metabaseDatabaseName: mappingDatabaseName,
-      metabaseEngine: mapping.metabaseEngine,
+      metabaseEngine: mappingEngine,
       targetConnectionId: mapping.targetConnectionId,
     };
     await writeFile(

@@ -8,7 +8,7 @@ const verificationLedgerInputSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
-export interface VerificationLedgerEntry {
+interface VerificationLedgerEntry {
   summary: string;
   verifiedIdentifiers: string[];
   unverifiedIdentifiers: string[];

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type KtxSetupEmbeddingsPromptAdapter, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
 
@@ -172,7 +172,7 @@ describe('setup embeddings step', () => {
       sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');
     expect(spinnerEvents).toContainEqual(
       'start:Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
@@ -251,7 +251,7 @@ describe('setup embeddings step', () => {
       sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');
   });
 
@@ -301,7 +301,7 @@ describe('setup embeddings step', () => {
 
     expect(result.status).toBe('failed');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps ?? []).not.toContain('embeddings');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(config.ingest.embeddings.backend).toBe('deterministic');
     expect(io.stderr()).toContain('Local embedding health check failed: 401 invalid api key [redacted]');
     expect(io.stderr()).toContain('Prepare the runtime with: ktx dev runtime start --feature local-embeddings');
@@ -413,7 +413,7 @@ describe('setup embeddings step', () => {
 
     expect(result.status).toBe('skipped');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps ?? []).not.toContain('embeddings');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(config.ingest.embeddings.backend).toBe('deterministic');
   });
 
@@ -450,10 +450,6 @@ describe('setup embeddings step', () => {
         'project: warehouse',
         'setup:',
         '  database_connection_ids: []',
-        '  completed_steps:',
-        '    - project',
-        '    - llm',
-        '    - embeddings',
         'connections: {}',
         'ingest:',
         '  embeddings:',
@@ -466,6 +462,7 @@ describe('setup embeddings step', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'llm', 'embeddings'] });
 
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
     await expect(

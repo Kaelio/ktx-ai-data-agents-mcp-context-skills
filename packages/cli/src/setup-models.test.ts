@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BUNDLED_ANTHROPIC_MODELS,
@@ -160,7 +160,7 @@ describe('setup Anthropic model step', () => {
       promptCaching: { enabled: true },
     });
     expect(config.scan.enrichment.mode).toBe('llm');
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
     expect(io.stdout()).toContain('LLM ready: yes');
     expect(io.stdout()).not.toContain('sk-ant-test');
@@ -199,7 +199,7 @@ describe('setup Anthropic model step', () => {
       },
       models: { default: 'claude-sonnet-4-6' },
     });
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
     expect(io.stdout()).not.toContain('sk-ant-file');
   });
@@ -516,8 +516,7 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('failed');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps ?? []).not.toContain('llm');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(io.stderr()).toContain('Anthropic model health check failed: 401 invalid x-api-key [redacted]');
     expect(io.stderr()).not.toContain('sk-ant-test');
   });
@@ -553,7 +552,7 @@ describe('setup Anthropic model step', () => {
     expect(io.stderr()).toContain('Choose a different credential source or model, or Back.');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.llm.models.default).toBe('claude-sonnet-4-6');
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
     expect(io.stderr()).not.toContain('sk-ant-test');
   });
@@ -565,8 +564,7 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('skipped');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps ?? []).not.toContain('llm');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 
   it('returns back without writing config when Back is selected', async () => {
@@ -650,9 +648,6 @@ describe('setup Anthropic model step', () => {
         'project: warehouse',
         'setup:',
         '  database_connection_ids: []',
-        '  completed_steps:',
-        '    - project',
-        '    - llm',
         'connections: {}',
         'llm:',
         '  provider:',
@@ -669,6 +664,7 @@ describe('setup Anthropic model step', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'llm'] });
 
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
     await expect(
@@ -698,9 +694,6 @@ describe('setup Anthropic model step', () => {
         'project: warehouse',
         'setup:',
         '  database_connection_ids: []',
-        '  completed_steps:',
-        '    - project',
-        '    - llm',
         'connections: {}',
         'llm:',
         '  provider:',
@@ -715,6 +708,7 @@ describe('setup Anthropic model step', () => {
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'llm'] });
 
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
     const io = makeIo();

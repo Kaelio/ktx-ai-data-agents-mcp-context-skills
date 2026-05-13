@@ -59,8 +59,7 @@ describe('setup project step', () => {
 
     expect(result.status).toBe('ready');
     expect(result.projectDir).toBe(projectDir);
-    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
     await expect(stat(join(projectDir, '.git'))).resolves.toBeDefined();
     await expect(readFile(join(projectDir, '.ktx/.gitignore'), 'utf-8')).resolves.toContain('secrets/');
@@ -68,7 +67,7 @@ describe('setup project step', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('loads an existing project with --existing and preserves existing setup metadata', async () => {
+  it('loads an existing project with --existing and drops config setup progress', async () => {
     const projectDir = join(tempDir, 'warehouse');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     await writeFile(
@@ -94,9 +93,9 @@ describe('setup project step', () => {
     const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: [],
     });
-    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['llm', 'project'] });
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
+    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
   });
 
   it('creates a missing auto-mode project only when --yes is present in no-input mode', async () => {
@@ -152,8 +151,7 @@ describe('setup project step', () => {
       }),
     );
     expect(prompts.text).not.toHaveBeenCalled();
-    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
   });
 
