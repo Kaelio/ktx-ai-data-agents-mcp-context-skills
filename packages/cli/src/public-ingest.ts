@@ -128,10 +128,17 @@ const queryHistoryDialectByDriver = new Map<string, HistoricSqlDialect>([
   ['snowflake', 'snowflake'],
 ]);
 
+interface KtxUnsupportedQueryHistoryWarning {
+  connectionId: string;
+  driver: string;
+  reason: 'explicit' | 'stored';
+}
+
 interface KtxPublicIngestWarningAccumulator {
   warnings: string[];
   ignoredDepthForSources: string[];
   ignoredQueryHistoryForSources: string[];
+  unsupportedQueryHistoryForDatabases: KtxUnsupportedQueryHistoryWarning[];
 }
 
 function createWarningAccumulator(): KtxPublicIngestWarningAccumulator {
@@ -139,6 +146,7 @@ function createWarningAccumulator(): KtxPublicIngestWarningAccumulator {
     warnings: [],
     ignoredDepthForSources: [],
     ignoredQueryHistoryForSources: [],
+    unsupportedQueryHistoryForDatabases: [],
   };
 }
 
@@ -154,6 +162,55 @@ function sourceIgnoredWarning(option: string, connectionIds: string[], all: bool
   return `${option} affects database ingest only; ignoring it for ${connectionIds[0]}.`;
 }
 
+function unsupportedDriverList(entries: KtxUnsupportedQueryHistoryWarning[]): string {
+  return [...new Set(entries.map((entry) => entry.driver))]
+    .sort((left, right) => left.localeCompare(right))
+    .join(', ');
+}
+
+function unsupportedQueryHistoryWarnings(
+  entries: KtxUnsupportedQueryHistoryWarning[],
+  all: boolean,
+): string[] {
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const warnings: string[] = [];
+  const explicitEntries = entries.filter((entry) => entry.reason === 'explicit');
+  const storedEntries = entries.filter((entry) => entry.reason === 'stored');
+
+  if (explicitEntries.length === 1 || (!all && explicitEntries.length > 0)) {
+    warnings.push(
+      ...explicitEntries.map(
+        (entry) =>
+          `--query-history is not supported for ${entry.driver}; running schema ingest for ${entry.connectionId}.`,
+      ),
+    );
+  } else if (explicitEntries.length > 1) {
+    warnings.push(
+      `--query-history is not supported for ${explicitEntries.length} database connections (${unsupportedDriverList(
+        explicitEntries,
+      )}); running schema ingest for those connections.`,
+    );
+  }
+
+  if (storedEntries.length === 1 || (!all && storedEntries.length > 0)) {
+    warnings.push(
+      ...storedEntries.map(
+        (entry) =>
+          `${entry.connectionId} has query history enabled in ktx.yaml, but ${entry.driver} does not support it; running schema ingest.`,
+      ),
+    );
+  } else if (storedEntries.length > 1) {
+    warnings.push(
+      `${storedEntries.length} database connections have query history enabled in ktx.yaml, but their drivers do not support it; running schema ingest for those connections.`,
+    );
+  }
+
+  return warnings;
+}
+
 function finalizeWarnings(
   accumulator: KtxPublicIngestWarningAccumulator,
   args: {
@@ -163,7 +220,10 @@ function finalizeWarnings(
     queryHistoryWindowDays?: number;
   },
 ): string[] {
-  const warnings = [...accumulator.warnings];
+  const warnings = [
+    ...accumulator.warnings,
+    ...unsupportedQueryHistoryWarnings(accumulator.unsupportedQueryHistoryForDatabases, args.all),
+  ];
   const depthOption = args.depth ? `--${args.depth}` : null;
   if (depthOption) {
     const warning = sourceIgnoredWarning(depthOption, accumulator.ignoredDepthForSources, args.all);
@@ -239,7 +299,7 @@ function resolveDatabaseTargetOptions(input: {
     queryHistoryWindowDays?: number;
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
   };
-  warnings: string[];
+  warnings: KtxPublicIngestWarningAccumulator;
 }): Pick<KtxPublicIngestPlanTarget, 'databaseDepth' | 'queryHistory' | 'steps'> {
   const storedQh = storedQueryHistory(input.connection);
   const dialect = queryHistoryDialectByDriver.get(input.driver);
@@ -261,11 +321,12 @@ function resolveDatabaseTargetOptions(input: {
   };
 
   if (requestedQh && !dialect) {
-    input.warnings.push(
-      explicitQueryHistory === 'enabled' || input.args.queryHistoryWindowDays !== undefined
-        ? `--query-history is not supported for ${input.driver}; running schema ingest for ${input.connectionId}.`
-        : `${input.connectionId} has query history enabled in ktx.yaml, but ${input.driver} does not support it; running schema ingest.`,
-    );
+    input.warnings.unsupportedQueryHistoryForDatabases.push({
+      connectionId: input.connectionId,
+      driver: input.driver,
+      reason:
+        explicitQueryHistory === 'enabled' || input.args.queryHistoryWindowDays !== undefined ? 'explicit' : 'stored',
+    });
     return {
       databaseDepth: depth,
       queryHistory: { ...queryHistory, unsupported: true },
@@ -275,7 +336,7 @@ function resolveDatabaseTargetOptions(input: {
 
   if (requestedQh && dialect) {
     if (depth === 'fast') {
-      input.warnings.push(`--query-history requires deep ingest; running ${input.connectionId} with --deep.`);
+      input.warnings.warnings.push(`--query-history requires deep ingest; running ${input.connectionId} with --deep.`);
     }
     depth = 'deep';
     return {
@@ -295,7 +356,7 @@ function resolveDatabaseTargetOptions(input: {
   }
 
   if (input.args.depth === 'fast' && explicitQueryHistory !== 'enabled' && storedEnabled) {
-    input.warnings.push(
+    input.warnings.warnings.push(
       `${input.connectionId} has query history enabled in ktx.yaml, but --fast skips query-history processing.`,
     );
     return {
@@ -346,7 +407,7 @@ function targetForConnection(
   }
 
   if (isDatabaseDriver(driver)) {
-    const options = resolveDatabaseTargetOptions({ connectionId, driver, connection, args, warnings: warnings.warnings });
+    const options = resolveDatabaseTargetOptions({ connectionId, driver, connection, args, warnings });
     const gaps = options.databaseDepth === 'deep' ? deepReadinessGaps(projectConfig) : [];
     return {
       connectionId,

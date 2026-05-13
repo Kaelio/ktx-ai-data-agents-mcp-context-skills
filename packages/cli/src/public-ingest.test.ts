@@ -207,6 +207,73 @@ describe('buildPublicIngestPlan', () => {
     expect(plan.warnings).toEqual(['--query-history is not supported for sqlite; running schema ingest for local.']);
   });
 
+  it('aggregates unsupported query-history warnings for all database targets', () => {
+    const plan = buildPublicIngestPlan(
+      deepReadyProject({
+        local: { driver: 'sqlite' },
+        mysql_warehouse: { driver: 'mysql' },
+        warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      }),
+      {
+        projectDir: '/tmp/project',
+        all: true,
+        depth: 'deep',
+        queryHistory: 'enabled',
+      },
+    );
+
+    expect(plan.targets).toEqual([
+      expect.objectContaining({
+        connectionId: 'local',
+        queryHistory: { enabled: false, unsupported: true },
+        steps: ['database-schema'],
+      }),
+      expect.objectContaining({
+        connectionId: 'mysql_warehouse',
+        queryHistory: { enabled: false, unsupported: true },
+        steps: ['database-schema'],
+      }),
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        queryHistory: expect.objectContaining({ enabled: true, dialect: 'postgres' }),
+        steps: ['database-schema', 'query-history'],
+      }),
+    ]);
+    expect(plan.warnings).toEqual([
+      '--query-history is not supported for 2 database connections (mysql, sqlite); running schema ingest for those connections.',
+    ]);
+  });
+
+  it('aggregates stored unsupported query-history config warnings for all database targets', () => {
+    const plan = buildPublicIngestPlan(
+      projectWithConnections({
+        local: { driver: 'sqlite', context: { queryHistory: { enabled: true } } },
+        mysql_warehouse: { driver: 'mysql', context: { queryHistory: { enabled: true } } },
+      }),
+      {
+        projectDir: '/tmp/project',
+        all: true,
+        queryHistory: 'default',
+      },
+    );
+
+    expect(plan.targets).toEqual([
+      expect.objectContaining({
+        connectionId: 'local',
+        queryHistory: { enabled: false, unsupported: true },
+        steps: ['database-schema'],
+      }),
+      expect.objectContaining({
+        connectionId: 'mysql_warehouse',
+        queryHistory: { enabled: false, unsupported: true },
+        steps: ['database-schema'],
+      }),
+    ]);
+    expect(plan.warnings).toEqual([
+      '2 database connections have query history enabled in ktx.yaml, but their drivers do not support it; running schema ingest for those connections.',
+    ]);
+  });
+
   it('treats query-history window override as current-run query-history enablement', () => {
     const project = deepReadyProject({
       warehouse: { driver: 'postgres', context: { queryHistory: { enabled: false, windowDays: 90 } } },
