@@ -12,7 +12,6 @@ storage:
 ingest:
   adapters:
     - fake
-    - live-database
 agent:
   run_research:
     enabled: false

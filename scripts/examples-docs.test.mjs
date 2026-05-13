@@ -64,11 +64,17 @@ describe('standalone example docs', () => {
     const smoke = await readText('examples/postgres-historic/scripts/smoke.sh');
 
     assert.match(examples, /postgres-historic/);
-    assert.match(examples, /unified Historic SQL artifacts/);
-    assert.match(readme, /--enable-historic-sql/);
-    assert.match(readme, /--historic-sql-min-executions 2/);
+    assert.doesNotMatch(examples, /Historic SQL/);
+    assert.doesNotMatch(examples, /historic-SQL/);
+    assert.match(examples, /query-history ingest via `pg_stat_statements`/);
+    assert.doesNotMatch(readme, /--enable-historic-sql/);
+    assert.doesNotMatch(readme, /--historic-sql-min-executions/);
+    assert.doesNotMatch(readme, /ktx ingest run --project-dir/);
+    assert.doesNotMatch(readme, /--adapter historic-sql/);
+    assert.match(readme, /--enable-query-history/);
+    assert.match(readme, /--query-history-min-executions 2/);
     assert.match(readme, /ktx status --project-dir/);
-    assert.match(readme, /Postgres Historic SQL/);
+    assert.match(readme, /Postgres query history/);
     assert.match(readme, /manifest\.json/);
     assert.match(readme, /tables\/\*\.json/);
     assert.match(readme, /patterns-input\.json/);
@@ -90,7 +96,7 @@ describe('standalone example docs', () => {
     assert.match(smoke, /historic-sql-patterns-part-/);
     assert.match(smoke, /patterns-input\/part-/);
     assert.doesNotMatch(smoke, new RegExp(["unitKey === 'historic", 'sql', "patterns'"].join('-')));
-    assert.match(smoke, /--historic-sql-min-executions 2/);
+    assert.match(smoke, /--query-history-min-executions 2/);
     assert.match(smoke, /KTX_RUNTIME_ROOT/);
     assert.match(smoke, /managedDaemon/);
     assert.match(smoke, /installPolicy: 'auto'/);
@@ -128,6 +134,14 @@ describe('standalone example docs', () => {
           .join('|'),
       ),
     );
+  });
+
+  it('checked-in example configs do not include public live-database adapters', async () => {
+    const localWarehouseConfig = await readFile('examples/local-warehouse/ktx.yaml', 'utf8');
+    const orbitConfig = await readFile('examples/orbit-relationship-verification/ktx.yaml', 'utf8');
+
+    assert.doesNotMatch(localWarehouseConfig, /live-database/);
+    assert.doesNotMatch(orbitConfig, /live-database/);
   });
 
   it('lists every workspace package in the contributor docs', async () => {
