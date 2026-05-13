@@ -1369,34 +1369,25 @@ async function maybeConfigureTableScope(input: {
 
 async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const adapters = project.config.ingest.adapters.includes('historic-sql')
-    ? project.config.ingest.adapters
-    : [...project.config.ingest.adapters, 'historic-sql'];
   const maxConcurrency = Math.max(
     project.config.ingest.workUnits.maxConcurrency,
     HISTORIC_SQL_WORK_UNIT_MAX_CONCURRENCY,
   );
-  if (
-    adapters === project.config.ingest.adapters &&
-    maxConcurrency === project.config.ingest.workUnits.maxConcurrency
-  ) {
+  if (maxConcurrency === project.config.ingest.workUnits.maxConcurrency) {
     return;
   }
   await writeFile(
     project.configPath,
-    serializeKtxProjectConfig(
-      {
-        ...project.config,
-        ingest: {
-          ...project.config.ingest,
-          adapters,
-          workUnits: {
-            ...project.config.ingest.workUnits,
-            maxConcurrency,
-          },
+    serializeKtxProjectConfig({
+      ...project.config,
+      ingest: {
+        ...project.config.ingest,
+        workUnits: {
+          ...project.config.ingest.workUnits,
+          maxConcurrency,
         },
       },
-    ),
+    }),
     'utf-8',
   );
 }

@@ -756,7 +756,7 @@ describe('setup sources step', () => {
     expect(testPrompts.text).toHaveBeenCalledTimes(4);
   });
 
-  it('enables the dbt adapter when adding a dbt source connection', async () => {
+  it('adds a dbt source connection without adapter allow-list entries', async () => {
     await addPrimarySource();
     const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
 
@@ -776,7 +776,11 @@ describe('setup sources step', () => {
       ),
     ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
 
-    expect((await readConfig()).ingest.adapters).toContain('dbt');
+    const configText = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect(configText).not.toMatch(/^\s+adapters:/m);
+    expect((await readConfig()).ingest.adapters).toEqual([]);
   });
 
   it('lets interactive setup retry or continue after initial source ingest fails', async () => {

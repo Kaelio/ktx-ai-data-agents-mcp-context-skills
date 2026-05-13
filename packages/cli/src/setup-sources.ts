@@ -156,10 +156,6 @@ function sourceLabel(source: KtxSetupSourceType): string {
   return SOURCE_LABELS[source];
 }
 
-function sourceAdapter(source: KtxSetupSourceType): string {
-  return source;
-}
-
 function connectionNamePrompt(label: string): string {
   return `Name this ${label} connection\nKTX will use this short name in commands and config. You can rename it now.`;
 }
@@ -313,24 +309,16 @@ async function writeSourceConnection(
   projectDir: string,
   connectionId: string,
   connection: KtxProjectConnectionConfig,
-  adapter: string,
 ): Promise<() => Promise<void>> {
   assertSafeConnectionId(connectionId);
   const project = await loadKtxProject({ projectDir });
   const previousConnection = project.config.connections[connectionId];
   const hadPreviousConnection = previousConnection !== undefined;
-  const shouldRemoveAdapterOnRollback = !project.config.ingest.adapters.includes(adapter);
   const config = {
     ...project.config,
     connections: {
       ...project.config.connections,
       [connectionId]: connection,
-    },
-    ingest: {
-      ...project.config.ingest,
-      adapters: project.config.ingest.adapters.includes(adapter)
-        ? [...project.config.ingest.adapters]
-        : [...project.config.ingest.adapters, adapter],
     },
   };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
@@ -345,29 +333,8 @@ async function writeSourceConnection(
     await writeProjectConfig(projectDir, {
       ...latest.config,
       connections,
-      ingest: {
-        ...latest.config.ingest,
-        adapters: shouldRemoveAdapterOnRollback
-          ? latest.config.ingest.adapters.filter((candidate) => candidate !== adapter)
-          : latest.config.ingest.adapters,
-      },
     });
   };
-}
-
-async function ensureSourceAdapterEnabled(projectDir: string, source: KtxSetupSourceType): Promise<void> {
-  const adapter = sourceAdapter(source);
-  const project = await loadKtxProject({ projectDir });
-  if (project.config.ingest.adapters.includes(adapter)) {
-    return;
-  }
-  await writeProjectConfig(projectDir, {
-    ...project.config,
-    ingest: {
-      ...project.config.ingest,
-      adapters: [...project.config.ingest.adapters, adapter],
-    },
-  });
 }
 
 async function markSourcesComplete(projectDir: string): Promise<void> {
@@ -1519,10 +1486,7 @@ export async function runKtxSetupSourcesStep(
         const rollback =
           sourceChoice.kind === 'existing'
             ? undefined
-            : await writeSourceConnection(args.projectDir, connectionId, connection, sourceAdapter(source));
-        if (sourceChoice.kind === 'existing') {
-          await ensureSourceAdapterEnabled(args.projectDir, source);
-        }
+            : await writeSourceConnection(args.projectDir, connectionId, connection);
         const validation = await validateSource(source, { projectDir: args.projectDir, connectionId, connection }, deps);
 
         if (!validation.ok) {

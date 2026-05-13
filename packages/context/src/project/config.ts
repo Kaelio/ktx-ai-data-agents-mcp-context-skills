@@ -392,7 +392,7 @@ export function buildDefaultKtxProjectConfig(projectName = 'ktx-project'): KtxPr
       models: {},
     },
     ingest: {
-      adapters: ['live-database', 'lookml', 'metabase', 'metricflow', 'notion'],
+      adapters: [],
       embeddings: {
         backend: 'deterministic',
         model: 'deterministic',
@@ -530,5 +530,15 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
 }
 
 export function serializeKtxProjectConfig(config: KtxProjectConfig): string {
-  return `${YAML.stringify(config, { indent: 2, lineWidth: 0 }).trimEnd()}\n`;
+  const serializedConfig =
+    config.ingest.adapters.length === 0
+      ? {
+          ...config,
+          ingest: {
+            embeddings: config.ingest.embeddings,
+            workUnits: config.ingest.workUnits,
+          },
+        }
+      : config;
+  return `${YAML.stringify(serializedConfig, { indent: 2, lineWidth: 0 }).trimEnd()}\n`;
 }

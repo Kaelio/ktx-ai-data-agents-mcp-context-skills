@@ -277,7 +277,8 @@ describe('setup databases step', () => {
     });
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', expect.anything());
     expect(scanConnection).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', expect.anything());
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections['postgres-warehouse']).toEqual({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
@@ -621,7 +622,8 @@ describe('setup databases step', () => {
     });
     expect(testConnection).toHaveBeenCalledTimes(1);
     expect(testConnection).toHaveBeenCalledWith(tempDir, 'mysql-warehouse', expect.anything());
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.setup?.database_connection_ids).toEqual(['warehouse', 'mysql-warehouse']);
   });
 
@@ -835,7 +837,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     const connection = config.connections['postgres-warehouse'];
     expect(connection).toMatchObject({
       driver: 'postgres',
@@ -875,7 +878,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     const connection = config.connections['postgres-warehouse'];
     expect(connection.url).toBe(`file:${resolve(tempDir, '.ktx/secrets/postgres-warehouse-url')}`);
     expect(connection.driver).toBe('postgres');
@@ -1360,7 +1364,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections.snowflake).toMatchObject({
       driver: 'snowflake',
       authMethod: 'password',
@@ -1378,7 +1383,10 @@ describe('setup databases step', () => {
         redactionPatterns: ['(?i)secret'],
       },
     });
-    expect(config.ingest.adapters).toContain('historic-sql');
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect(configText).not.toMatch(/^\s+adapters:/m);
+    expect(config.ingest.adapters).toEqual([]);
   });
 
   it('writes Postgres Historic SQL config with minExecutions and ignores window/redaction output', async () => {
@@ -1407,7 +1415,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections.warehouse).toMatchObject({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
@@ -1427,7 +1436,10 @@ describe('setup databases step', () => {
     });
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('windowDays');
     expect(config.connections.warehouse.historicSql).not.toHaveProperty('redactionPatterns');
-    expect(config.ingest.adapters).toContain('historic-sql');
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect(configText).not.toMatch(/^\s+adapters:/m);
+    expect(config.ingest.adapters).toEqual([]);
     expect(config.ingest.workUnits.maxConcurrency).toBe(6);
     expect(io.stdout()).toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements ready');
@@ -1468,7 +1480,8 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
+    const config = parseKtxProjectConfig(configText);
     expect(config.connections.analytics).toMatchObject({
       historicSql: {
         enabled: true,
@@ -1480,7 +1493,10 @@ describe('setup databases step', () => {
         redactionPatterns: [],
       },
     });
-    expect(config.ingest.adapters).toContain('historic-sql');
+    expect(configText).not.toContain('live-database');
+    expect(configText).not.toContain('historic-sql');
+    expect(configText).not.toMatch(/^\s+adapters:/m);
+    expect(config.ingest.adapters).toEqual([]);
   });
 
   it('enables Historic SQL on an existing Postgres connection', async () => {
