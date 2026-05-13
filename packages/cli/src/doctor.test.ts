@@ -266,7 +266,7 @@ describe('runKtxDoctor', () => {
     expect(testIo.stdout()).toContain('PASS Connections: 1 configured');
   });
 
-  it('includes Postgres historic-SQL readiness in project doctor output', async () => {
+  it('includes Postgres query-history readiness in project doctor output', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -276,9 +276,9 @@ describe('runKtxDoctor', () => {
         '    driver: postgres',
         '    url: env:WAREHOUSE_DATABASE_URL',
         '    readonly: true',
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: postgres',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
         'ingest:',
         '  adapters:',
         '    - live-database',
@@ -290,8 +290,8 @@ describe('runKtxDoctor', () => {
     const testIo = makeIo();
     const runHistoricSqlDoctorChecks = vi.fn(async () => [
       {
-        id: 'historic-sql-postgres-warehouse',
-        label: 'Postgres Historic SQL (warehouse)',
+        id: 'query-history-postgres-warehouse',
+        label: 'Postgres query history (warehouse)',
         status: 'pass' as const,
         detail:
           'pg_stat_statements ready (PostgreSQL 16.4); info: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
@@ -312,7 +312,7 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     expect(runHistoricSqlDoctorChecks).toHaveBeenCalledTimes(1);
-    expect(testIo.stdout()).toContain('PASS Postgres Historic SQL (warehouse): pg_stat_statements ready');
+    expect(testIo.stdout()).toContain('PASS Postgres query history (warehouse): pg_stat_statements ready');
     expect(testIo.stdout()).toContain('info: pg_stat_statements.max is 1000');
     expect(testIo.stdout()).not.toContain('Fix: Update the Postgres parameter group or config');
   });

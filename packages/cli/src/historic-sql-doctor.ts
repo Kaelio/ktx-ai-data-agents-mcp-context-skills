@@ -32,16 +32,26 @@ function check(status: DoctorCheck['status'], id: string, label: string, detail:
   return fix ? { id, label, status, detail, fix } : { id, label, status, detail };
 }
 
-function historicSqlRecord(connection: KtxProjectConnectionConfig): Record<string, unknown> | null {
-  const historicSql = connection.historicSql;
-  return historicSql && typeof historicSql === 'object' && !Array.isArray(historicSql)
-    ? (historicSql as Record<string, unknown>)
-    : null;
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
-function isEnabledPostgresHistoricSql(connection: KtxProjectConnectionConfig): boolean {
-  const historicSql = historicSqlRecord(connection);
-  return historicSql?.enabled === true && historicSql.dialect === 'postgres';
+function queryHistoryRecord(connection: KtxProjectConnectionConfig): Record<string, unknown> | null {
+  const context = recordValue(connection.context);
+  return recordValue(context?.queryHistory);
+}
+
+function legacyHistoricSqlRecord(connection: KtxProjectConnectionConfig): Record<string, unknown> | null {
+  return recordValue(connection.historicSql);
+}
+
+function isEnabledPostgresQueryHistory(connection: KtxProjectConnectionConfig): boolean {
+  const queryHistory = queryHistoryRecord(connection);
+  if (queryHistory) {
+    return queryHistory.enabled === true;
+  }
+  const legacy = legacyHistoricSqlRecord(connection);
+  return legacy?.enabled === true && legacy.dialect === 'postgres';
 }
 
 function isPostgresDriver(connection: KtxProjectConnectionConfig): boolean {
@@ -50,7 +60,7 @@ function isPostgresDriver(connection: KtxProjectConnectionConfig): boolean {
 }
 
 function checkId(connectionId: string): string {
-  return `historic-sql-postgres-${connectionId.replace(/[^a-z0-9_-]+/gi, '-')}`;
+  return `query-history-postgres-${connectionId.replace(/[^a-z0-9_-]+/gi, '-')}`;
 }
 
 function capabilityFailureFix(error: unknown, connectionId: string, projectDir: string): string {
@@ -61,7 +71,7 @@ function capabilityFailureFix(error: unknown, connectionId: string, projectDir: 
     return String(error.remediation);
   }
   if (error instanceof Error && error.name === 'HistoricSqlVersionUnsupportedError') {
-    return 'Use PostgreSQL 14 or newer, or disable historicSql for this connection';
+    return 'Use PostgreSQL 14 or newer, or disable query history for this connection';
   }
   return `Fix connections.${connectionId} Postgres settings, then rerun \`ktx status --project-dir ${projectDir}\``;
 }
@@ -107,12 +117,12 @@ export async function runPostgresHistoricSqlDoctorChecks(
   deps: HistoricSqlDoctorDeps = {},
 ): Promise<DoctorCheck[]> {
   const targets = Object.entries(project.config.connections)
-    .filter(([, connection]) => isEnabledPostgresHistoricSql(connection))
+    .filter(([, connection]) => isEnabledPostgresQueryHistory(connection))
     .sort(([left], [right]) => left.localeCompare(right));
 
   if (targets.length === 0) {
     return [
-      check('pass', 'historic-sql-postgres', 'Postgres Historic SQL', 'No enabled Postgres historic-SQL connections'),
+      check('pass', 'query-history-postgres', 'Postgres query history', 'No enabled Postgres query-history connections'),
     ];
   }
 
@@ -120,15 +130,15 @@ export async function runPostgresHistoricSqlDoctorChecks(
   const env = deps.env ?? process.env;
   const checks: DoctorCheck[] = [];
   for (const [connectionId, connection] of targets) {
-    const label = `Postgres Historic SQL (${connectionId})`;
+    const label = `Postgres query history (${connectionId})`;
     if (!isPostgresDriver(connection)) {
       checks.push(
         check(
           'fail',
           checkId(connectionId),
           label,
-          `connections.${connectionId}.historicSql.dialect is postgres but driver is ${String(connection.driver)}`,
-          `Set connections.${connectionId}.driver to postgres or disable historicSql for this connection`,
+          `connections.${connectionId}.context.queryHistory is enabled but driver is ${String(connection.driver)}`,
+          `Set connections.${connectionId}.driver to postgres or disable query history for this connection`,
         ),
       );
       continue;

@@ -22,7 +22,7 @@ function projectWithConnections(connections: Record<string, KtxProjectConnection
 }
 
 describe('runPostgresHistoricSqlDoctorChecks', () => {
-  it('passes when no Postgres historic-SQL connections are enabled', async () => {
+  it('passes when no Postgres query-history connections are enabled', async () => {
     const checks = await runPostgresHistoricSqlDoctorChecks(
       projectWithConnections({
         warehouse: { driver: 'sqlite', path: './warehouse.db', readonly: true },
@@ -34,10 +34,10 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
 
     expect(checks).toEqual([
       {
-        id: 'historic-sql-postgres',
-        label: 'Postgres Historic SQL',
+        id: 'query-history-postgres',
+        label: 'Postgres query history',
         status: 'pass',
-        detail: 'No enabled Postgres historic-SQL connections',
+        detail: 'No enabled Postgres query-history connections',
       },
     ]);
   });
@@ -54,7 +54,7 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
           readonly: true,
-          historicSql: { enabled: true, dialect: 'postgres' },
+          context: { queryHistory: { enabled: true } },
         },
       }),
       { postgresHistoricSqlProbe: probe },
@@ -67,14 +67,14 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         driver: 'postgres',
         url: 'env:WAREHOUSE_DATABASE_URL',
         readonly: true,
-        historicSql: { enabled: true, dialect: 'postgres' },
+        context: { queryHistory: { enabled: true } },
       },
       env: process.env,
     });
     expect(checks).toEqual([
       {
-        id: 'historic-sql-postgres-warehouse',
-        label: 'Postgres Historic SQL (warehouse)',
+        id: 'query-history-postgres-warehouse',
+        label: 'Postgres query history (warehouse)',
         status: 'pass',
         detail: 'pg_stat_statements ready (PostgreSQL 16.4)',
       },
@@ -88,7 +88,7 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
           readonly: true,
-          historicSql: { enabled: true, dialect: 'postgres' },
+          context: { queryHistory: { enabled: true } },
         },
       }),
       {
@@ -104,8 +104,8 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
 
     expect(checks).toEqual([
       {
-        id: 'historic-sql-postgres-warehouse',
-        label: 'Postgres Historic SQL (warehouse)',
+        id: 'query-history-postgres-warehouse',
+        label: 'Postgres query history (warehouse)',
         status: 'pass',
         detail:
           'pg_stat_statements ready (PostgreSQL 16.4); info: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
@@ -120,7 +120,7 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
           readonly: true,
-          historicSql: { enabled: true, dialect: 'postgres' },
+          context: { queryHistory: { enabled: true } },
         },
       }),
       {
@@ -138,8 +138,8 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
 
     expect(checks).toEqual([
       {
-        id: 'historic-sql-postgres-warehouse',
-        label: 'Postgres Historic SQL (warehouse)',
+        id: 'query-history-postgres-warehouse',
+        label: 'Postgres query history (warehouse)',
         status: 'warn',
         detail:
           'pg_stat_statements ready (PostgreSQL 16.4) with warnings: pg_stat_statements.track is none; set it to top or all in the Postgres parameter group or config; info: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
@@ -148,14 +148,42 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
     ]);
   });
 
-  it('fails when a connection has postgres historic SQL but is not a Postgres driver', async () => {
+  it('still checks legacy historicSql blocks before setup migration', async () => {
+    const probe = vi.fn<PostgresHistoricSqlDoctorProbe>(async () => ({
+      pgServerVersion: 'PostgreSQL 16.4',
+      warnings: [],
+    }));
+
+    const checks = await runPostgresHistoricSqlDoctorChecks(
+      projectWithConnections({
+        warehouse: {
+          driver: 'postgres',
+          url: 'env:WAREHOUSE_DATABASE_URL',
+          readonly: true,
+          historicSql: { enabled: true, dialect: 'postgres' },
+        },
+      }),
+      { postgresHistoricSqlProbe: probe },
+    );
+
+    expect(checks).toEqual([
+      {
+        id: 'query-history-postgres-warehouse',
+        label: 'Postgres query history (warehouse)',
+        status: 'pass',
+        detail: 'pg_stat_statements ready (PostgreSQL 16.4)',
+      },
+    ]);
+  });
+
+  it('fails when a connection has postgres query history but is not a Postgres driver', async () => {
     const checks = await runPostgresHistoricSqlDoctorChecks(
       projectWithConnections({
         warehouse: {
           driver: 'mysql',
           url: 'env:WAREHOUSE_DATABASE_URL',
           readonly: true,
-          historicSql: { enabled: true, dialect: 'postgres' },
+          context: { queryHistory: { enabled: true } },
         },
       }),
       {
@@ -165,11 +193,11 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
 
     expect(checks).toEqual([
       {
-        id: 'historic-sql-postgres-warehouse',
-        label: 'Postgres Historic SQL (warehouse)',
+        id: 'query-history-postgres-warehouse',
+        label: 'Postgres query history (warehouse)',
         status: 'fail',
-        detail: 'connections.warehouse.historicSql.dialect is postgres but driver is mysql',
-        fix: 'Set connections.warehouse.driver to postgres or disable historicSql for this connection',
+        detail: 'connections.warehouse.context.queryHistory is enabled but driver is mysql',
+        fix: 'Set connections.warehouse.driver to postgres or disable query history for this connection',
       },
     ]);
   });
@@ -181,7 +209,7 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
           readonly: true,
-          historicSql: { enabled: true, dialect: 'postgres' },
+          context: { queryHistory: { enabled: true } },
         },
       }),
       {
@@ -197,8 +225,8 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
 
     expect(checks).toEqual([
       {
-        id: 'historic-sql-postgres-warehouse',
-        label: 'Postgres Historic SQL (warehouse)',
+        id: 'query-history-postgres-warehouse',
+        label: 'Postgres query history (warehouse)',
         status: 'fail',
         detail: 'pg_stat_statements extension is not installed in the connection database.',
         fix: 'Run CREATE EXTENSION pg_stat_statements; against the connection database.',
