@@ -615,8 +615,8 @@ async function buildUrlConnectionConfig(input: {
     const choice = await input.prompts.select({
       message: `How do you want to connect to ${label}?`,
       options: [
-        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'url', label: 'Paste a connection URL' },
+        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -1184,9 +1184,7 @@ async function validateAndScanConnection(input: {
   const testOutput = testIo.stdoutText();
   const outputDriver = normalizeDriver(readOutputValue(testOutput, 'Driver'));
   const driverDisplay = outputDriver ? driverLabel(outputDriver) : (configuredDriverLabel ?? 'Unknown driver');
-  const tableCount = Number(readOutputValue(testOutput, 'Tables') ?? NaN);
-  const testLines = ['✓ Connection test passed'];
-  testLines.push(`Driver: ${driverDisplay}${Number.isFinite(tableCount) ? ` · Tables: ${tableCount}` : ''}`);
+  const testLines = ['✓ Connection test passed', `Driver: ${driverDisplay}`];
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
 
   if (!(await maybeConfigureSchemaScope(input))) {
