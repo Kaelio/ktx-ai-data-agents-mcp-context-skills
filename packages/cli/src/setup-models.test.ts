@@ -283,9 +283,9 @@ describe('setup Anthropic model step', () => {
     expect(io.stdout()).toContain('LLM ready: yes (claude-sonnet-4-6)');
   });
 
-  it('uses existing Vertex AI credentials without offering to run gcloud auth', async () => {
+  it('uses existing Vertex AI credentials without an extra auth choice', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'existing', 'local-gcp-project', 'claude-sonnet-4-6'] });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'local-gcp-project', 'claude-sonnet-4-6'] });
     const readGcloudProject = vi.fn(async () => 'local-gcp-project');
     const listGcloudProjects = vi.fn(async () => [
       { projectId: 'local-gcp-project', name: 'Local project' },
@@ -306,13 +306,9 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.select).not.toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('How should KTX authenticate with Google Vertex AI?'),
-        options: [
-          { value: 'existing', label: 'Use existing gcloud/Application Default Credentials' },
-          { value: 'back', label: 'Back' },
-        ],
       }),
     );
     expect(readGcloudProject).toHaveBeenCalled();
@@ -358,9 +354,45 @@ describe('setup Anthropic model step', () => {
     });
   });
 
+  it('skips the Vertex AI auth choice when Application Default Credentials are the only option', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'local-gcp-project', 'claude-sonnet-4-6'] });
+    const healthCheck = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
+      io.io,
+      {
+        prompts,
+        env: {},
+        readGcloudProject: vi.fn(async () => 'local-gcp-project'),
+        listGcloudProjects: vi.fn(async () => [{ projectId: 'local-gcp-project', name: 'Local project' }]),
+        healthCheck,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.select).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('How should KTX authenticate with Google Vertex AI?'),
+      }),
+    );
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
+      }),
+    );
+    expect(healthCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backend: 'vertex',
+        vertex: { project: 'local-gcp-project', location: 'us-east5' },
+      }),
+    );
+  });
+
   it('lets users choose a different visible gcloud project for Vertex AI', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'existing', 'other-gcp-project', 'claude-sonnet-4-6'] });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'other-gcp-project', 'claude-sonnet-4-6'] });
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -395,7 +427,7 @@ describe('setup Anthropic model step', () => {
   it('allows manual Vertex AI project entry when gcloud project listing is empty', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({
-      selectValues: ['vertex', 'existing', 'manual', 'claude-sonnet-4-6'],
+      selectValues: ['vertex', 'manual', 'claude-sonnet-4-6'],
       textValues: ['manual-gcp-project'],
     });
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
@@ -434,8 +466,49 @@ describe('setup Anthropic model step', () => {
     );
   });
 
+  it('lets users retry Vertex AI project listing after gcloud auth fails', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'retry', 'other-gcp-project', 'claude-sonnet-4-6'] });
+    const listGcloudProjects = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Reauthentication failed. cannot prompt during non-interactive execution.'))
+      .mockResolvedValueOnce([
+        { projectId: 'local-gcp-project', name: 'Local project' },
+        { projectId: 'other-gcp-project', name: 'Other project' },
+      ]);
+    const healthCheck = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
+      io.io,
+      {
+        prompts,
+        env: {},
+        readGcloudProject: vi.fn(async () => 'local-gcp-project'),
+        listGcloudProjects,
+        healthCheck,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(listGcloudProjects).toHaveBeenCalledTimes(2);
+    expect(io.stdout()).toContain('Could not list Google Cloud projects with gcloud');
+    expect(io.stdout()).toContain('gcloud auth login --update-adc');
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
+        options: expect.arrayContaining([{ value: 'retry', label: 'Retry loading Google Cloud projects' }]),
+      }),
+    );
+    expect(healthCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vertex: { project: 'other-gcp-project', location: 'us-east5' },
+      }),
+    );
+  });
+
   it('returns from Vertex AI project selection Back to provider selection', async () => {
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'existing', 'back', 'back'] });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'back', 'back'] });
 
     const result = await runKtxSetupAnthropicModelStep(
       { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
@@ -450,7 +523,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('back');
     expect(prompts.select).toHaveBeenNthCalledWith(
-      4,
+      3,
       expect.objectContaining({
         message: expect.stringContaining('Which LLM provider should KTX use?'),
       }),

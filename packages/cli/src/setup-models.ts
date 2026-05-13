@@ -101,9 +101,6 @@ const ANTHROPIC_MODEL_PROMPT_CONTEXT =
   'KTX uses this as the default model for ingest agents that turn schemas, SQL, BI metadata, and docs ' +
   'into semantic-layer sources and wiki context.';
 
-const VERTEX_AUTH_PROMPT_CONTEXT =
-  'KTX uses Google Cloud Application Default Credentials for local Vertex AI access and does not store Google ' +
-  'credentials in ktx.yaml. If needed, run gcloud auth application-default login before continuing.';
 const VERTEX_PROJECT_PROMPT_CONTEXT =
   'KTX stores the selected Google Cloud project ID in ktx.yaml and uses Application Default Credentials for ' +
   'access. Project visibility depends on the signed-in Google account and organization permissions.';
@@ -148,8 +145,6 @@ type VertexConfigChoice =
     }
   | { status: 'back' | 'missing-input' };
 
-type VertexAuthChoice = { status: 'ready' } | { status: 'back' };
-
 interface GcloudProjectChoice {
   projectId: string;
   name?: string;
@@ -170,34 +165,30 @@ async function defaultReadGcloudProject(): Promise<string | undefined> {
 }
 
 async function defaultListGcloudProjects(): Promise<GcloudProjectChoice[]> {
-  try {
-    const { stdout } = await execFileAsync('gcloud', ['projects', 'list', '--format=json(projectId,name)'], {
-      encoding: 'utf8',
-    });
-    const parsed = JSON.parse(stdout.trim() || '[]') as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .map((item): GcloudProjectChoice | undefined => {
-        if (!item || typeof item !== 'object') {
-          return undefined;
-        }
-        const record = item as { projectId?: unknown; name?: unknown };
-        if (typeof record.projectId !== 'string' || !record.projectId.trim()) {
-          return undefined;
-        }
-        const name = typeof record.name === 'string' && record.name.trim() ? record.name.trim() : undefined;
-        return {
-          projectId: record.projectId.trim(),
-          ...(name ? { name } : {}),
-        };
-      })
-      .filter((project): project is GcloudProjectChoice => Boolean(project));
-  } catch {
+  const { stdout } = await execFileAsync('gcloud', ['projects', 'list', '--format=json(projectId,name)'], {
+    encoding: 'utf8',
+  });
+  const parsed = JSON.parse(stdout.trim() || '[]') as unknown;
+  if (!Array.isArray(parsed)) {
     return [];
   }
+
+  return parsed
+    .map((item): GcloudProjectChoice | undefined => {
+      if (!item || typeof item !== 'object') {
+        return undefined;
+      }
+      const record = item as { projectId?: unknown; name?: unknown };
+      if (typeof record.projectId !== 'string' || !record.projectId.trim()) {
+        return undefined;
+      }
+      const name = typeof record.name === 'string' && record.name.trim() ? record.name.trim() : undefined;
+      return {
+        projectId: record.projectId.trim(),
+        ...(name ? { name } : {}),
+      };
+    })
+    .filter((project): project is GcloudProjectChoice => Boolean(project));
 }
 
 export async function fetchAnthropicModels(
@@ -495,28 +486,6 @@ async function chooseBackend(
   return { status: 'ready', backend: choice === 'vertex' ? 'vertex' : 'anthropic', prompted: true };
 }
 
-async function chooseVertexAuth(
-  args: KtxSetupModelArgs,
-  deps: KtxSetupModelDeps,
-): Promise<VertexAuthChoice> {
-  if (args.inputMode === 'disabled' || args.vertexProject || args.vertexLocation) {
-    return { status: 'ready' };
-  }
-
-  const prompts = deps.prompts ?? createPromptAdapter();
-  const choice = await prompts.select({
-    message: `How should KTX authenticate with Google Vertex AI?\n\n${VERTEX_AUTH_PROMPT_CONTEXT}`,
-    options: [
-      { value: 'existing', label: 'Use existing gcloud/Application Default Credentials' },
-      { value: 'back', label: 'Back' },
-    ],
-  });
-  if (choice === 'back') {
-    return { status: 'back' };
-  }
-  return { status: 'ready' };
-}
-
 function resolveProvidedVertexRef(
   label: 'project' | 'location',
   ref: string,
@@ -572,51 +541,72 @@ function formatGcloudProjectLabel(project: GcloudProjectChoice, currentProject: 
   return `${project.projectId}${name}${current}`;
 }
 
+function formatGcloudProjectListFailure(error: unknown): string {
+  const stderr = typeof (error as { stderr?: unknown })?.stderr === 'string' ? (error as { stderr: string }).stderr : '';
+  const message = error instanceof Error ? error.message : '';
+  const details = `${stderr}\n${message}`;
+  const reason = /reauthentication failed|cannot prompt/i.test(details)
+    ? 'gcloud needs reauthentication before it can list projects.'
+    : 'gcloud returned an error while listing projects.';
+  return [
+    `│  Could not list Google Cloud projects with gcloud: ${reason}`,
+    '│  Run `gcloud auth login --update-adc` in another terminal, then choose Retry loading Google Cloud projects.',
+  ].join('\n');
+}
+
 async function chooseInteractiveVertexProject(
   currentProject: string | undefined,
   io: KtxCliIo,
   deps: KtxSetupModelDeps,
 ): Promise<{ status: 'ready'; ref: string; value: string } | { status: 'back' | 'missing-input' }> {
   const prompts = deps.prompts ?? createPromptAdapter();
-  let projects: GcloudProjectChoice[] = [];
-  try {
-    projects = await (deps.listGcloudProjects ?? defaultListGcloudProjects)();
-  } catch {
-    io.stderr.write('Could not list Google Cloud projects with gcloud. Enter a project ID manually or choose Back.\n');
-  }
+  while (true) {
+    let projects: GcloudProjectChoice[] = [];
+    let listFailed = false;
+    try {
+      projects = await (deps.listGcloudProjects ?? defaultListGcloudProjects)();
+    } catch (error) {
+      listFailed = true;
+      io.stdout.write(`${formatGcloudProjectListFailure(error)}\n`);
+    }
 
-  const orderedProjects = orderGcloudProjects(projects, currentProject);
-  if (orderedProjects.length === 0) {
-    io.stdout.write('│  gcloud did not return any visible Google Cloud projects. Enter a project ID manually or choose Back.\n');
-  }
+    const orderedProjects = orderGcloudProjects(projects, currentProject);
+    if (orderedProjects.length === 0 && !listFailed) {
+      io.stdout.write('│  gcloud did not return any visible Google Cloud projects. Enter a project ID manually or choose Back.\n');
+    }
 
-  const choice = await prompts.select({
-    message: `Which Google Cloud project should KTX use for Vertex AI?\n\n${VERTEX_PROJECT_PROMPT_CONTEXT}`,
-    options: [
-      ...orderedProjects.map((project) => ({
-        value: project.projectId,
-        label: formatGcloudProjectLabel(project, currentProject),
-      })),
-      { value: 'manual', label: 'Enter a project ID manually' },
-      { value: 'back', label: 'Back' },
-    ],
-  });
-  if (choice === 'back') {
-    return { status: 'back' };
-  }
-  if (choice === 'manual') {
-    const manual = await prompts.text({
-      message: withTextInputNavigation('Google Cloud project ID'),
-      placeholder: currentProject ?? orderedProjects[0]?.projectId,
+    const choice = await prompts.select({
+      message: `Which Google Cloud project should KTX use for Vertex AI?\n\n${VERTEX_PROJECT_PROMPT_CONTEXT}`,
+      options: [
+        ...orderedProjects.map((project) => ({
+          value: project.projectId,
+          label: formatGcloudProjectLabel(project, currentProject),
+        })),
+        ...(listFailed ? [{ value: 'retry', label: 'Retry loading Google Cloud projects' }] : []),
+        { value: 'manual', label: 'Enter a project ID manually' },
+        { value: 'back', label: 'Back' },
+      ],
     });
-    if (manual === undefined) {
+    if (choice === 'back') {
       return { status: 'back' };
     }
-    const project = normalizeGcloudProjectId(manual);
-    return project ? { status: 'ready', ref: project, value: project } : { status: 'missing-input' };
-  }
+    if (choice === 'retry') {
+      continue;
+    }
+    if (choice === 'manual') {
+      const manual = await prompts.text({
+        message: withTextInputNavigation('Google Cloud project ID'),
+        placeholder: currentProject ?? orderedProjects[0]?.projectId,
+      });
+      if (manual === undefined) {
+        return { status: 'back' };
+      }
+      const project = normalizeGcloudProjectId(manual);
+      return project ? { status: 'ready', ref: project, value: project } : { status: 'missing-input' };
+    }
 
-  return { status: 'ready', ref: choice, value: choice };
+    return { status: 'ready', ref: choice, value: choice };
+  }
 }
 
 async function chooseVertexConfig(
@@ -871,15 +861,6 @@ export async function runKtxSetupAnthropicModelStep(
       : attemptArgs;
 
     if (backendChoice.backend === 'vertex') {
-      const auth = await chooseVertexAuth(backendArgs, deps);
-      if (auth.status === 'back' && backendChoice.prompted) {
-        attemptArgs = buildInteractiveRetryArgs(args);
-        continue;
-      }
-      if (auth.status !== 'ready') {
-        return { status: auth.status, projectDir: args.projectDir };
-      }
-
       const vertex = await chooseVertexConfig(backendArgs, io, deps);
       if (vertex.status === 'back' && backendChoice.prompted) {
         attemptArgs = buildInteractiveRetryArgs(args);
