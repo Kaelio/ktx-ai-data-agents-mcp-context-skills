@@ -176,6 +176,7 @@ const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscove
 };
 
 type UrlDriverType = Extract<KtxSetupDatabaseDriver, 'postgres' | 'mysql' | 'clickhouse' | 'sqlserver'>;
+type ConnectionSetupStatus = 'ready' | 'back' | 'failed';
 
 const DRIVER_CONNECTION_DEFAULTS: Record<UrlDriverType, { port: string }> = {
   postgres: { port: '5432' },
@@ -225,6 +226,16 @@ function normalizeDriver(driver: string | undefined): KtxSetupDatabaseDriver | n
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
+function stringConfigField(connection: KtxProjectConnectionConfig | undefined, field: string): string | undefined {
+  const value = connection?.[field];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function numberConfigField(connection: KtxProjectConnectionConfig | undefined, field: string): number | undefined {
+  const value = connection?.[field];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function historicSqlConfigRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> | null {
@@ -454,6 +465,18 @@ function configuredPrimaryConnectionIds(
     .sort((left, right) => left.localeCompare(right));
 }
 
+function configuredPrimaryDrivers(
+  connections: Record<string, KtxProjectConnectionConfig>,
+  connectionIds: string[],
+): KtxSetupDatabaseDriver[] {
+  const configured = new Set(
+    connectionIds
+      .map((connectionId) => normalizeDriver(connections[connectionId]?.driver))
+      .filter((driver): driver is KtxSetupDatabaseDriver => driver !== null),
+  );
+  return DRIVER_OPTIONS.map((option) => option.value).filter((driver) => configured.has(driver));
+}
+
 function configuredPrimarySourcesPrompt(connectionIds: string[]): {
   message: string;
   options: Array<{ value: string; label: string }>;
@@ -462,7 +485,8 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
     message: `Primary sources already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
       { value: 'continue', label: 'Continue to knowledge sources' },
-      { value: 'add', label: 'Add another primary source' },
+      { value: 'edit', label: 'Edit an existing primary source' },
+      { value: 'add', label: 'Add more primary sources' },
     ],
   };
 }
@@ -552,23 +576,40 @@ async function buildFieldsConnectionConfig(input: {
   connectionId: string;
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
+  existingConnection?: KtxProjectConnectionConfig;
 }): Promise<KtxProjectConnectionConfig | null | 'back'> {
   const label = driverLabel(input.driver);
   const defaults = DRIVER_CONNECTION_DEFAULTS[input.driver];
 
-  const host = await promptText(input.prompts, `${label} host`, 'localhost');
+  const host = await promptText(
+    input.prompts,
+    `${label} host`,
+    stringConfigField(input.existingConnection, 'host') ?? 'localhost',
+  );
   if (host === undefined) return 'back';
   if (!host) return null;
 
-  const portStr = await promptText(input.prompts, `${label} port`, defaults.port);
+  const portStr = await promptText(
+    input.prompts,
+    `${label} port`,
+    String(numberConfigField(input.existingConnection, 'port') ?? defaults.port),
+  );
   if (portStr === undefined) return 'back';
   const port = Number(portStr || defaults.port);
 
-  const database = await promptText(input.prompts, `${label} database name`);
+  const database = await promptText(
+    input.prompts,
+    `${label} database name`,
+    stringConfigField(input.existingConnection, 'database'),
+  );
   if (database === undefined) return 'back';
   if (!database) return null;
 
-  const username = await promptText(input.prompts, `${label} username`);
+  const username = await promptText(
+    input.prompts,
+    `${label} username`,
+    stringConfigField(input.existingConnection, 'username'),
+  );
   if (username === undefined) return 'back';
   if (!username) return null;
 
@@ -583,6 +624,7 @@ async function buildFieldsConnectionConfig(input: {
     });
     if (credentialResult === 'back') return 'back';
     if (credentialResult) passwordRef = credentialResult;
+    if (!credentialResult) passwordRef = stringConfigField(input.existingConnection, 'password');
   }
 
   return {
@@ -601,9 +643,14 @@ async function buildPastedUrlConnectionConfig(input: {
   connectionId: string;
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
+  existingConnection?: KtxProjectConnectionConfig;
 }): Promise<KtxProjectConnectionConfig | null | 'back'> {
   const label = driverLabel(input.driver);
-  const rawUrl = await promptText(input.prompts, `${label} connection URL`);
+  const rawUrl = await promptText(
+    input.prompts,
+    `${label} connection URL`,
+    stringConfigField(input.existingConnection, 'url'),
+  );
   if (rawUrl === undefined) return 'back';
   if (!rawUrl) return null;
 
@@ -642,6 +689,7 @@ async function buildUrlConnectionConfig(input: {
   connectionId: string;
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
+  existingConnection?: KtxProjectConnectionConfig;
 }): Promise<KtxProjectConnectionConfig | null | 'back'> {
   if (input.args.inputMode === 'disabled' && !input.args.databaseUrl) return null;
 
@@ -689,6 +737,7 @@ async function buildConnectionConfig(input: {
   connectionId: string;
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
+  existingConnection?: KtxProjectConnectionConfig;
 }): Promise<KtxProjectConnectionConfig | null | 'back'> {
   const { driver, args, prompts } = input;
   if (driver === 'sqlite') {
@@ -698,22 +747,37 @@ async function buildConnectionConfig(input: {
       (await promptText(
         prompts,
         'SQLite database file\nEnter a relative or absolute path, for example ./warehouse.sqlite.',
+        stringConfigField(input.existingConnection, 'path'),
       ));
     if (path === undefined) return 'back';
     return path ? { driver: 'sqlite', path } : null;
   }
   if (driver === 'postgres' || driver === 'mysql' || driver === 'clickhouse' || driver === 'sqlserver') {
-    return await buildUrlConnectionConfig({ driver, connectionId: input.connectionId, args, prompts });
+    return await buildUrlConnectionConfig({
+      driver,
+      connectionId: input.connectionId,
+      args,
+      prompts,
+      existingConnection: input.existingConnection,
+    });
   }
   if (driver === 'bigquery') {
-    const datasetId = await promptText(prompts, 'BigQuery dataset\nFor example analytics.');
+    const datasetId = await promptText(
+      prompts,
+      'BigQuery dataset\nFor example analytics.',
+      stringConfigField(input.existingConnection, 'dataset_id'),
+    );
     if (datasetId === undefined) return 'back';
-    const credentialsPath = await promptText(prompts, 'Path to service account JSON file');
+    const credentialsPath = await promptText(
+      prompts,
+      'Path to service account JSON file',
+      stringConfigField(input.existingConnection, 'credentials_json'),
+    );
     if (credentialsPath === undefined) return 'back';
     const location = await promptText(
       prompts,
       'BigQuery location\nPress Enter for US, or enter a location like EU.',
-      'US',
+      stringConfigField(input.existingConnection, 'location') ?? 'US',
     );
     if (location === undefined) return 'back';
     if (!datasetId || !credentialsPath) return null;
@@ -725,19 +789,35 @@ async function buildConnectionConfig(input: {
     };
   }
   if (driver === 'snowflake') {
-    const account = await promptText(prompts, 'Snowflake account identifier');
+    const account = await promptText(
+      prompts,
+      'Snowflake account identifier',
+      stringConfigField(input.existingConnection, 'account'),
+    );
     if (account === undefined) return 'back';
-    const warehouse = await promptText(prompts, 'Snowflake warehouse\nFor example ANALYTICS_WH.');
+    const warehouse = await promptText(
+      prompts,
+      'Snowflake warehouse\nFor example ANALYTICS_WH.',
+      stringConfigField(input.existingConnection, 'warehouse'),
+    );
     if (warehouse === undefined) return 'back';
-    const database = await promptText(prompts, 'Snowflake database name');
+    const database = await promptText(
+      prompts,
+      'Snowflake database name',
+      stringConfigField(input.existingConnection, 'database'),
+    );
     if (database === undefined) return 'back';
     const schemaName = await promptText(
       prompts,
       'Snowflake schema\nPress Enter for PUBLIC, or enter a schema name.',
-      'PUBLIC',
+      stringConfigField(input.existingConnection, 'schema_name') ?? 'PUBLIC',
     );
     if (schemaName === undefined) return 'back';
-    const username = await promptText(prompts, 'Snowflake username');
+    const username = await promptText(
+      prompts,
+      'Snowflake username',
+      stringConfigField(input.existingConnection, 'username'),
+    );
     if (username === undefined) return 'back';
     const passwordRef = await promptCredential({
       prompts,
@@ -747,9 +827,14 @@ async function buildConnectionConfig(input: {
       secretName: 'password', // pragma: allowlist secret
     });
     if (passwordRef === 'back') return 'back'; // pragma: allowlist secret
-    const role = await promptText(prompts, 'Snowflake role (optional)\nPress Enter to skip.');
+    const role = await promptText(
+      prompts,
+      'Snowflake role (optional)\nPress Enter to skip.',
+      stringConfigField(input.existingConnection, 'role'),
+    );
     if (role === undefined) return 'back';
-    if (!account || !warehouse || !database || !schemaName || !username || !passwordRef) return null;
+    const resolvedPasswordRef = passwordRef ?? stringConfigField(input.existingConnection, 'password');
+    if (!account || !warehouse || !database || !schemaName || !username || !resolvedPasswordRef) return null;
     return {
       driver: 'snowflake',
       authMethod: 'password',
@@ -758,7 +843,7 @@ async function buildConnectionConfig(input: {
       database,
       schema_name: schemaName,
       username,
-      password: passwordRef,
+      password: resolvedPasswordRef,
       ...(role ? { role } : {}),
     };
   }
@@ -1096,6 +1181,59 @@ async function writeConnectionConfig(input: {
   }
 }
 
+async function createConnectionConfigRollback(projectDir: string, connectionId: string): Promise<() => Promise<void>> {
+  const project = await loadKtxProject({ projectDir });
+  const previousConnection = project.config.connections[connectionId];
+  const hadPreviousConnection = previousConnection !== undefined;
+  return async () => {
+    const latest = await loadKtxProject({ projectDir });
+    const connections = { ...latest.config.connections };
+    if (hadPreviousConnection) {
+      connections[connectionId] = previousConnection;
+    } else {
+      delete connections[connectionId];
+    }
+    await writeFile(
+      latest.configPath,
+      serializeKtxProjectConfig({
+        ...latest.config,
+        connections,
+      }),
+      'utf-8',
+    );
+  };
+}
+
+function withExistingPrimaryEditPromptDefaults(input: {
+  previous: KtxProjectConnectionConfig;
+  next: KtxProjectConnectionConfig;
+  driver: KtxSetupDatabaseDriver;
+}): KtxProjectConnectionConfig {
+  const merged: KtxProjectConnectionConfig = { ...input.next };
+  const spec = SCOPE_DISCOVERY_SPECS[input.driver];
+  if (spec) {
+    const nextArray = input.next[spec.configArrayField];
+    const previousArray = input.previous[spec.configArrayField];
+    if (
+      !(Array.isArray(nextArray) && nextArray.length > 0) &&
+      Array.isArray(previousArray) &&
+      previousArray.length > 0
+    ) {
+      delete merged[spec.configSingleField];
+      merged[spec.configArrayField] = previousArray;
+    } else if (!Object.hasOwn(input.next, spec.configArrayField) && !Object.hasOwn(input.next, spec.configSingleField)) {
+      const previousSingle = input.previous[spec.configSingleField];
+      if (typeof previousSingle === 'string' && previousSingle.trim().length > 0) {
+        merged[spec.configSingleField] = previousSingle;
+      }
+    }
+  }
+  if (!Object.hasOwn(input.next, 'enabled_tables') && Array.isArray(input.previous.enabled_tables)) {
+    merged.enabled_tables = input.previous.enabled_tables;
+  }
+  return merged;
+}
+
 function configuredScopeValues(
   connection: KtxProjectConnectionConfig | undefined,
   spec: ScopeDiscoverySpec,
@@ -1156,18 +1294,19 @@ async function maybeConfigureSchemaScope(input: {
   prompts: KtxSetupDatabasesPromptAdapter;
   deps: KtxSetupDatabasesDeps;
   io: KtxCliIo;
-}): Promise<boolean> {
+  forcePrompt?: boolean;
+}): Promise<ConnectionSetupStatus> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
   const driver = normalizeDriver(connection?.driver);
-  if (!driver) return true;
+  if (!driver) return 'ready';
 
   const spec = SCOPE_DISCOVERY_SPECS[driver];
-  if (!spec) return true;
+  if (!spec) return 'ready';
 
   const arrayVal = connection?.[spec.configArrayField];
-  if (Array.isArray(arrayVal) && arrayVal.length > 0) {
-    return true;
+  if (Array.isArray(arrayVal) && arrayVal.length > 0 && input.forcePrompt !== true) {
+    return 'ready';
   }
 
   if (input.args.databaseSchemas.length > 0) {
@@ -1177,7 +1316,7 @@ async function maybeConfigureSchemaScope(input: {
       values: input.args.databaseSchemas,
       spec,
     });
-    return true;
+    return 'ready';
   }
 
   writeSetupSection(input.io, `Discovering ${spec.promptLabel.toLowerCase()}`, [
@@ -1190,14 +1329,18 @@ async function maybeConfigureSchemaScope(input: {
       await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId),
     );
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     input.io.stderr.write(
-      `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; continuing with existing ${spec.noun} scope. ` +
-        `Pass --database-schema to set it explicitly. ${error instanceof Error ? error.message : String(error)}\n`,
+      input.forcePrompt === true
+        ? `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; edit was not saved. ` +
+            `Pass --database-schema to set it explicitly. ${detail}\n`
+        : `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; continuing with existing ${spec.noun} scope. ` +
+            `Pass --database-schema to set it explicitly. ${detail}\n`,
     );
-    return true;
+    return input.forcePrompt === true ? 'failed' : 'ready';
   }
   if (discovered.length === 0) {
-    return true;
+    return 'ready';
   }
 
   let selected: string[];
@@ -1217,7 +1360,7 @@ async function maybeConfigureSchemaScope(input: {
       required: true,
     });
     if (choices.includes('back')) {
-      return false;
+      return 'back';
     }
     selected = choices.length > 0 ? choices : initialValues;
   }
@@ -1232,7 +1375,7 @@ async function maybeConfigureSchemaScope(input: {
   writeSetupSection(input.io, `${capitalNounPlural} saved for ${input.connectionId}`, [
     `✓ ${selected.join(', ')}`,
   ]);
-  return true;
+  return 'ready';
 }
 
 async function maybeConfigureTableScope(input: {
@@ -1242,19 +1385,20 @@ async function maybeConfigureTableScope(input: {
   prompts: KtxSetupDatabasesPromptAdapter;
   io: KtxCliIo;
   deps: KtxSetupDatabasesDeps;
-}): Promise<boolean> {
+  forcePrompt?: boolean;
+}): Promise<ConnectionSetupStatus> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
   const driver = normalizeDriver(connection?.driver);
-  if (!driver || driver === 'sqlite') return true;
+  if (!driver || driver === 'sqlite') return 'ready';
 
   const existingTables = connection?.enabled_tables;
-  if (Array.isArray(existingTables) && existingTables.length > 0) {
-    return true;
+  if (Array.isArray(existingTables) && existingTables.length > 0 && input.forcePrompt !== true) {
+    return 'ready';
   }
 
   if (input.args.inputMode === 'disabled') {
-    return true;
+    return 'ready';
   }
 
   writeSetupSection(input.io, 'Discovering tables', [
@@ -1268,15 +1412,20 @@ async function maybeConfigureTableScope(input: {
       input.connectionId,
     );
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     input.io.stderr.write(
-      `Could not discover tables for ${input.connectionId}; continuing without table filter. ` +
-        `${error instanceof Error ? error.message : String(error)}\n`,
+      input.forcePrompt === true
+        ? `Could not discover tables for ${input.connectionId}; edit was not saved. ${detail}\n`
+        : `Could not discover tables for ${input.connectionId}; continuing without table filter. ${detail}\n`,
     );
-    return true;
+    return input.forcePrompt === true ? 'failed' : 'ready';
   }
 
   if (discovered.length === 0) {
-    return true;
+    if (input.forcePrompt === true) {
+      input.io.stderr.write(`No tables discovered for ${input.connectionId}; edit was not saved.\n`);
+    }
+    return input.forcePrompt === true ? 'failed' : 'ready';
   }
 
   const allQualified = discovered.map((t) => `${t.schema}.${t.name}`);
@@ -1290,7 +1439,7 @@ async function maybeConfigureTableScope(input: {
     writeSetupSection(input.io, `Tables enabled for ${input.connectionId}`, [
       `✓ ${allQualified[0]}`,
     ]);
-    return true;
+    return 'ready';
   }
 
   const bySchema = new Map<string, KtxTableListEntry[]>();
@@ -1316,7 +1465,7 @@ async function maybeConfigureTableScope(input: {
     });
 
     if (action === 'back') {
-      return false;
+      return 'back';
     }
 
     if (action === 'all') {
@@ -1332,7 +1481,10 @@ async function maybeConfigureTableScope(input: {
           const suffix = t.kind === 'view' ? ' (view)' : '';
           return { value: qualified, label: `${qualified}${suffix}` };
         }),
-        initialValues: allQualified,
+        initialValues:
+          Array.isArray(existingTables) && input.forcePrompt === true
+            ? existingTables.filter((table): table is string => typeof table === 'string' && allQualified.includes(table))
+            : allQualified,
         required: true,
       });
 
@@ -1356,7 +1508,7 @@ async function maybeConfigureTableScope(input: {
   writeSetupSection(input.io, `Tables enabled for ${input.connectionId}`, [
     `✓ ${selected.length}/${discovered.length} tables enabled`,
   ]);
-  return true;
+  return 'ready';
 }
 
 async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void> {
@@ -1466,7 +1618,8 @@ async function validateAndScanConnection(input: {
   deps: KtxSetupDatabasesDeps;
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
-}): Promise<boolean> {
+  forceScopeAndTables?: boolean;
+}): Promise<ConnectionSetupStatus> {
   const testConnection = input.deps.testConnection ?? defaultTestConnection;
   const scanConnection = input.deps.scanConnection ?? defaultScanConnection;
   const project = await loadKtxProject({ projectDir: input.projectDir });
@@ -1477,7 +1630,7 @@ async function validateAndScanConnection(input: {
   if (testCode !== 0) {
     flushBufferedCommandOutput(input.io, testIo);
     input.io.stderr.write(`Connection test failed for ${input.connectionId}.\n`);
-    return false;
+    return 'failed';
   }
   const testOutput = testIo.stdoutText();
   const outputDriver = normalizeDriver(readOutputValue(testOutput, 'Driver'));
@@ -1486,12 +1639,22 @@ async function validateAndScanConnection(input: {
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
 
   while (true) {
-    if (!(await maybeConfigureSchemaScope(input))) {
-      return false;
+    const schemaStatus = await maybeConfigureSchemaScope({ ...input, forcePrompt: input.forceScopeAndTables });
+    if (schemaStatus !== 'ready') {
+      return schemaStatus;
     }
 
-    if (await maybeConfigureTableScope(input)) {
+    const tableStatus = await maybeConfigureTableScope({ ...input, forcePrompt: input.forceScopeAndTables });
+    if (tableStatus === 'ready') {
       break;
+    }
+
+    if (input.forceScopeAndTables) {
+      return tableStatus;
+    }
+
+    if (tableStatus === 'failed') {
+      return 'failed';
     }
 
     await clearScopeConfig(input.projectDir, input.connectionId);
@@ -1554,7 +1717,7 @@ async function validateAndScanConnection(input: {
       );
     }
     if (scanCode !== 0) {
-      return false;
+      return 'failed';
     }
   }
   const scanOutput = scanIo.stdoutText();
@@ -1570,14 +1733,14 @@ async function validateAndScanConnection(input: {
   writeSetupSection(input.io, 'Primary source ready', [
     `${input.connectionId} · ${driverDisplay} · structural scan complete`,
   ]);
-  return true;
+  return 'ready';
 }
 
 async function chooseDrivers(
   args: KtxSetupDatabasesArgs,
   io: KtxCliIo,
   prompts: KtxSetupDatabasesPromptAdapter,
-  options?: { hasPrimarySources?: boolean },
+  options?: { hasPrimarySources?: boolean; initialDrivers?: KtxSetupDatabaseDriver[] },
 ): Promise<KtxSetupDatabaseDriver[] | 'back' | 'missing-input'> {
   if (args.databaseDrivers && args.databaseDrivers.length > 0) {
     return [...new Set(args.databaseDrivers)];
@@ -1592,10 +1755,12 @@ async function chooseDrivers(
     return 'missing-input';
   }
   while (true) {
+    const initialValues = unique(options?.initialDrivers ?? []);
     const choices = await prompts.multiselect({
       message: withMultiselectNavigation('Which primary sources should KTX connect to?'),
       options: [...DRIVER_OPTIONS],
-      required: false,
+      ...(initialValues.length > 0 ? { initialValues } : {}),
+      required: options?.hasPrimarySources === true,
     });
     if (choices.includes('back')) {
       return 'back';
@@ -1617,7 +1782,7 @@ async function chooseConnectionIdForDriver(input: {
   connections: Record<string, KtxProjectConnectionConfig>;
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
-}): Promise<{ kind: 'existing' | 'new'; connectionId: string } | 'back' | 'missing-input'> {
+}): Promise<{ kind: 'existing' | 'new' | 'edit'; connectionId: string } | 'back' | 'missing-input'> {
   if (input.args.databaseConnectionId) {
     return { kind: 'new', connectionId: input.args.databaseConnectionId };
   }
@@ -1647,14 +1812,19 @@ async function chooseConnectionIdForDriver(input: {
       options: [
         ...existingIds.map((connectionId) => ({
           value: `existing:${connectionId}`,
-          label: `Use existing ${label} connection: ${connectionId}`,
+          label: `Keep existing ${label} connection: ${connectionId}`,
         })),
-        { value: 'new', label: `Add new ${label} connection` },
+        ...existingIds.map((connectionId) => ({
+          value: `edit:${connectionId}`,
+          label: `Edit ${label} connection: ${connectionId}`,
+        })),
+        { value: 'new', label: `Add another ${label} connection` },
         { value: 'back', label: 'Back' },
       ],
     });
     if (choice === 'back') return 'back';
     if (choice.startsWith('existing:')) return { kind: 'existing', connectionId: choice.slice('existing:'.length) };
+    if (choice.startsWith('edit:')) return { kind: 'edit', connectionId: choice.slice('edit:'.length) };
     const entered = await input.prompts.text({
       message: withTextInputNavigation(connectionNamePrompt(label)),
       placeholder: defaultId,
@@ -1664,6 +1834,102 @@ async function chooseConnectionIdForDriver(input: {
     const connectionId = entered.trim() || defaultId;
     return connectionId ? { kind: 'new', connectionId } : 'missing-input';
   }
+}
+
+async function choosePrimarySourceToEdit(input: {
+  projectDir: string;
+  connectionIds: string[];
+  prompts: KtxSetupDatabasesPromptAdapter;
+}): Promise<string | 'back'> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const options = input.connectionIds
+    .map((connectionId) => {
+      const driver = normalizeDriver(project.config.connections[connectionId]?.driver);
+      if (!driver) return null;
+      return { value: connectionId, label: `${connectionId} (${driverLabel(driver)})` };
+    })
+    .filter((option): option is { value: string; label: string } => option !== null);
+  if (options.length === 0) return 'back';
+  const choice = await input.prompts.select({
+    message: 'Primary source to edit',
+    options: [...options, { value: 'back', label: 'Back' }],
+  });
+  return choice === 'back' ? 'back' : choice;
+}
+
+async function runPrimarySourceFullEdit(input: {
+  projectDir: string;
+  connectionId: string;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+  io: KtxCliIo;
+  deps: KtxSetupDatabasesDeps;
+}): Promise<'ready' | 'back' | 'failed'> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const existing = project.config.connections[input.connectionId];
+  const driver = normalizeDriver(existing?.driver);
+  if (!existing || !driver) {
+    input.io.stderr.write(`Connection "${input.connectionId}" is not a configured primary source.\n`);
+    return 'failed';
+  }
+
+  const rollback = await createConnectionConfigRollback(input.projectDir, input.connectionId);
+  const replacement = await buildConnectionConfig({
+    driver,
+    connectionId: input.connectionId,
+    args: input.args,
+    prompts: input.prompts,
+    existingConnection: existing,
+  });
+  if (replacement === 'back') {
+    await rollback();
+    return 'back';
+  }
+  if (!replacement) {
+    await rollback();
+    return 'failed';
+  }
+
+  const withHistoricSql = await maybeApplyHistoricSqlConfig({
+    connection: replacement,
+    driver,
+    args: input.args,
+    prompts: input.prompts,
+  });
+  if (withHistoricSql === 'back') {
+    await rollback();
+    return 'back';
+  }
+
+  await writeConnectionConfig({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    connection: withExistingPrimaryEditPromptDefaults({
+      previous: existing,
+      next: {
+        ...withHistoricSql,
+        ...(!Object.hasOwn(withHistoricSql, 'historicSql') && existing.historicSql !== undefined
+          ? { historicSql: existing.historicSql }
+          : {}),
+      },
+      driver,
+    }),
+  });
+
+  const validated = await validateAndScanConnection({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    io: input.io,
+    deps: input.deps,
+    args: input.args,
+    prompts: input.prompts,
+    forceScopeAndTables: true,
+  });
+  if (validated !== 'ready') {
+    await rollback();
+    return validated;
+  }
+  return 'ready';
 }
 
 export async function runKtxSetupDatabasesStep(
@@ -1688,7 +1954,18 @@ export async function runKtxSetupDatabasesStep(
         prompts,
       });
       if (historicSqlResult === 'back') return { status: 'back', projectDir: args.projectDir };
-      if (!(await validateAndScanConnection({ projectDir: args.projectDir, connectionId, io, deps, args, prompts }))) {
+      const setupStatus = await validateAndScanConnection({
+        projectDir: args.projectDir,
+        connectionId,
+        io,
+        deps,
+        args,
+        prompts,
+      });
+      if (setupStatus === 'back') {
+        return { status: 'back', projectDir: args.projectDir };
+      }
+      if (setupStatus === 'failed') {
         return { status: 'failed', projectDir: args.projectDir };
       }
       selectedConnectionIds.push(connectionId);
@@ -1712,10 +1989,43 @@ export async function runKtxSetupDatabasesStep(
         await markDatabasesComplete(args.projectDir, selectedConnectionIds);
         return { status: 'ready', projectDir: args.projectDir, connectionIds: selectedConnectionIds };
       }
+      if (action === 'edit') {
+        const connectionId = await choosePrimarySourceToEdit({
+          projectDir: args.projectDir,
+          connectionIds: selectedConnectionIds,
+          prompts,
+        });
+        if (connectionId === 'back') {
+          showConfiguredPrimaryMenu = true;
+          continue;
+        }
+        const editResult = await runPrimarySourceFullEdit({
+          projectDir: args.projectDir,
+          connectionId,
+          args,
+          prompts,
+          io,
+          deps,
+        });
+        if (editResult === 'back') {
+          showConfiguredPrimaryMenu = true;
+          continue;
+        }
+        if (editResult === 'failed') {
+          return { status: 'failed', projectDir: args.projectDir };
+        }
+        pushUniqueConnectionId(selectedConnectionIds, connectionId);
+        showConfiguredPrimaryMenu = true;
+        continue;
+      }
     }
     showConfiguredPrimaryMenu = false;
 
-    const drivers = await chooseDrivers(args, io, prompts, { hasPrimarySources: selectedConnectionIds.length > 0 });
+    const driverProject = await loadKtxProject({ projectDir: args.projectDir });
+    const drivers = await chooseDrivers(args, io, prompts, {
+      hasPrimarySources: selectedConnectionIds.length > 0,
+      initialDrivers: configuredPrimaryDrivers(driverProject.config.connections, selectedConnectionIds),
+    });
     if (drivers === 'back') {
       if (selectedConnectionIds.length > 0 && canReturnToDriverSelection && args.inputMode !== 'disabled') {
         showConfiguredPrimaryMenu = true;
@@ -1750,7 +2060,26 @@ export async function runKtxSetupDatabasesStep(
         return { status: 'missing-input', projectDir: args.projectDir };
       }
 
-      if (connectionChoice.kind === 'new') {
+      let connectionAlreadyValidated = false;
+      if (connectionChoice.kind === 'edit') {
+        const editResult = await runPrimarySourceFullEdit({
+          projectDir: args.projectDir,
+          connectionId: connectionChoice.connectionId,
+          args,
+          prompts,
+          io,
+          deps,
+        });
+        if (editResult === 'back') {
+          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+          returnToDriverSelection = true;
+          break;
+        }
+        if (editResult === 'failed') {
+          return { status: 'failed', projectDir: args.projectDir };
+        }
+        connectionAlreadyValidated = true;
+      } else if (connectionChoice.kind === 'new') {
         let connection = await buildConnectionConfig({
           driver,
           connectionId: connectionChoice.connectionId,
@@ -1819,16 +2148,22 @@ export async function runKtxSetupDatabasesStep(
       }
 
       let connectionSkipped = false;
-      while (
-        !(await validateAndScanConnection({
-          projectDir: args.projectDir,
-          connectionId: connectionChoice.connectionId,
-          io,
-          deps,
-          args,
-          prompts,
-        }))
-      ) {
+      let setupStatus: ConnectionSetupStatus = connectionAlreadyValidated
+        ? 'ready'
+        : await validateAndScanConnection({
+            projectDir: args.projectDir,
+            connectionId: connectionChoice.connectionId,
+            io,
+            deps,
+            args,
+            prompts,
+          });
+      while (!connectionAlreadyValidated && setupStatus !== 'ready') {
+        if (setupStatus === 'back') {
+          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
+          returnToDriverSelection = true;
+          break;
+        }
         if (args.inputMode === 'disabled') return { status: 'failed', projectDir: args.projectDir };
         const action = await prompts.select({
           message: `Primary source setup failed for ${connectionChoice.connectionId}`,
@@ -1848,7 +2183,16 @@ export async function runKtxSetupDatabasesStep(
           connectionSkipped = true;
           break;
         }
-        if (action === 're-enter') {
+        if (action === 'retry') {
+          setupStatus = await validateAndScanConnection({
+            projectDir: args.projectDir,
+            connectionId: connectionChoice.connectionId,
+            io,
+            deps,
+            args,
+            prompts,
+          });
+        } else if (action === 're-enter') {
           const connection = await buildConnectionConfig({
             driver,
             connectionId: connectionChoice.connectionId,
@@ -1871,6 +2215,14 @@ export async function runKtxSetupDatabasesStep(
             projectDir: args.projectDir,
             connectionId: connectionChoice.connectionId,
             connection: withHistoricSql,
+          });
+          setupStatus = await validateAndScanConnection({
+            projectDir: args.projectDir,
+            connectionId: connectionChoice.connectionId,
+            io,
+            deps,
+            args,
+            prompts,
           });
         }
       }
