@@ -102,6 +102,18 @@ public verb because `watch` conflicts with the foreground-only model. If a
 stored-report visual replay remains useful, expose it as `replay` or hide it
 under an advanced/debug namespace.
 
+Any surviving `ktx ingest` subcommand reserves its command name as a connection
+id. In v1, `status` and `replay` are reserved when those report-viewing
+subcommands remain. `run` is also reserved while the old adapter-backed command
+exists anywhere under `ktx ingest`, even if it is hidden or advanced. `watch`
+is reserved until the live-watch command is removed or moved out of
+`ktx ingest`. Setup and config validation must reject a connection id that
+matches a reserved ingest subcommand with a clear message, such as:
+
+```text
+"status" is reserved for ktx ingest status; choose a different connection id.
+```
+
 ## Database ingest depth
 
 Database ingest always includes a schema baseline. The depth controls how much
@@ -197,9 +209,20 @@ ktx ingest warehouse --no-query-history
 ktx ingest warehouse --query-history-window-days 30
 ```
 
-Query-history flags apply only to database connections that support the
-feature. Non-applicable flags produce warnings and continue when the target
-can otherwise be ingested.
+Query-history flags apply only to database connections that support the feature.
+In v1, supported query-history drivers are `postgres` or `postgresql`,
+`bigquery`, and `snowflake`. They map to the existing historic-SQL dialects
+`postgres`, `bigquery`, and `snowflake`. `sqlite`, `mysql`, `clickhouse`, and
+`sqlserver` are database ingest targets but do not support query history in v1.
+
+Non-applicable query-history flags produce warnings and continue when the target
+can otherwise be ingested. For a single unsupported database target,
+`--query-history` or `--query-history-window-days` runs schema ingest, skips the
+query-history facet, and prints a warning. For `--all`, KTX aggregates those
+warnings and continues other eligible targets. Stored
+`connections.<id>.context.queryHistory.enabled: true` on an unsupported driver
+is a config warning and is skipped for that driver; it must not abort schema
+ingest for that target.
 
 Query history uses schema context as grounding. KTX must run the database
 schema facet before query-history processing in the same ingest run. If a user
@@ -277,27 +300,47 @@ connections:
 `context.queryHistory` is the canonical user-facing shape. Runtime code maps it
 to the existing historic-SQL pull config as follows:
 
-- `dialect` is derived from the database driver (`postgres`, `bigquery`, or
-  `snowflake`) and is not normally user-authored.
+- `dialect` is derived from the database driver (`postgres` or `postgresql`,
+  `bigquery`, or `snowflake`) and is not normally user-authored.
 - `windowDays`, `minExecutions`, and `redactionPatterns` copy through directly.
 - `filters.dropTrivialProbes` defaults to `true`.
 - `filters.serviceAccounts.patterns` and `filters.serviceAccounts.mode` map to
   the existing service-account filter fields. The default mode is `exclude`.
+- `concurrency`, `staleArchiveAfterDays`,
+  `filters.orchestrators.mode`, and `filters.dropFailedBelow` are advanced
+  query-history fields. When present, they map directly to the same fields in
+  `historicSqlUnifiedPullConfigSchema`. When absent, KTX uses the existing
+  historic-SQL schema defaults and omitted-field behavior.
 
 Existing `connection.historicSql` blocks are legacy cutover input. Setup or the
-config rewrite path must migrate them into `connection.context.queryHistory`
-while preserving `windowDays`, `minExecutions`, `redactionPatterns`,
-`filters.dropTrivialProbes`, and service-account `patterns` and `mode`. If both
-`context.queryHistory` and `historicSql` are present, `context.queryHistory`
-wins and KTX emits a config-cleanup warning instead of running both.
+explicit config rewrite path must migrate them into
+`connection.context.queryHistory` while preserving all mapped query-history
+fields, including the advanced fields listed above. `ktx ingest` must not
+rewrite `ktx.yaml`; it may read legacy `historicSql` blocks for the current run
+and emit a cleanup warning. If both `context.queryHistory` and `historicSql` are
+present, `context.queryHistory` wins and KTX emits a config-cleanup warning
+instead of running both.
+
+Config migration must be idempotent. A setup or explicit rewrite pass that
+migrates a connection removes the legacy `connection.historicSql` block after
+copying preserved fields, does not regenerate normal `ingest.adapters` entries,
+and produces the same `ktx.yaml` on repeated runs. If `ktx ingest` sees a legacy
+block before cleanup, the warning may repeat because ingest is config-read-only.
 
 `ingest.adapters` is no longer normal user config. Existing `ingest.adapters`
 entries load as advanced/internal overrides during the transition, but
-`live-database` and `historic-sql` entries must not be required for public
-`ktx ingest <connectionId>` behavior, must not be regenerated in normal
-`ktx.yaml`, and must not cause config-load failure solely because they are
-present. The implementation plan can remove adapter parsing after checked-in
-configs and examples no longer need it.
+public `ktx ingest <connectionId>` must not fail solely because the
+driver-to-adapter mapping chooses an adapter missing from that list. The rule
+applies to database internals (`live-database` and `historic-sql`) and to all
+source adapters selected from configured drivers, including `notion`, `dbt`,
+`metabase`, `looker`, `metricflow`, and `lookml`.
+
+The implementation can satisfy this by bypassing the adapter allow-list for
+connection-centric public ingest, or by synthesizing the adapters required by
+configured connections before dispatch. The old adapter-backed advanced command
+may continue to honor `ingest.adapters` while it exists. Normal generated
+`ktx.yaml` must not include `live-database`, `historic-sql`, or source adapter
+entries just to make public `ktx ingest <connectionId>` work.
 
 ## Setup flow
 
@@ -340,8 +383,12 @@ Setup readiness is depth-aware:
   skipped for fast contexts.
 - For `deep`, a database context is ready only when the enriched scan completed
   table descriptions, column descriptions, embeddings, and schema manifest
-  shards. Relationship artifacts are also required when relationship discovery
-  is enabled.
+  shards. When relationship discovery is enabled, readiness requires the
+  relationship stage to have completed for the latest enriched scan. A
+  completed relationship stage with zero accepted, review, rejected, or skipped
+  relationships still counts as ready; readiness must not require non-empty
+  relationship artifacts or accepted relationships. If relationship discovery is
+  disabled, the relationship stage is not part of the readiness gate.
 
 The missing-input gate uses the same rule. Missing model, embedding, or
 scan-enrichment configuration must not block a user who selected `fast`. The
@@ -404,6 +451,20 @@ Remove these user-facing concepts from context build:
 
 Existing `running` or `detached` state from older versions must be treated as
 stale or interrupted with a clear rerun instruction.
+
+`.ktx/setup/context-build.json` remains only as a foreground status cache, not a
+background control plane. New writes may use `not_started`, `running`,
+`completed`, `failed`, `interrupted`, or `stale`. `running` means the current
+foreground process is active; a later setup process that finds a leftover
+`running` record from an older process must mark it `stale` or `interrupted`
+before offering a fresh run. `detached` and `paused` are legacy-only statuses
+and must be normalized to `stale` or `interrupted` on read or on the next setup
+write.
+
+The state file must not keep user-facing `watch`, `resume`, or `stop` command
+affordances after this redesign. It may retain run ids, report ids, artifact
+paths, source progress, failure details, and a retry/build command when those
+help status reporting.
 
 ## Internal naming and migration
 
@@ -478,6 +539,10 @@ The implementation is complete when these conditions hold:
 
 - `ktx ingest <connectionId>` works for database and source connections.
 - `ktx ingest --all` runs database targets before source targets.
+- `ktx ingest <connectionId>` does not require `ingest.adapters` entries for
+  any adapter chosen from the configured connection driver.
+- Connection ids that collide with surviving `ktx ingest` subcommands are
+  rejected during setup or config validation.
 - `--fast` and `--deep` control database depth and are mutually exclusive.
 - `--fast` maps to structural database ingest without relationship detection.
 - `--deep` maps to enriched database ingest with relationship detection when
@@ -502,13 +567,22 @@ The implementation is complete when these conditions hold:
 - Normal CLI help and output do not present `ktx ingest watch` as live context
   build control.
 - Query history is optional, connection-local, and overridable per ingest run.
+- Query history is supported only for `postgres` or `postgresql`, `bigquery`,
+  and `snowflake` in v1; unsupported database drivers warn and skip the
+  query-history facet without blocking schema ingest.
 - Stored query-history enablement upgrades default database ingest to deep, but
   explicit `--fast` skips stored query history for that run with a warning.
 - `--query-history-window-days` overrides the effective historic-SQL
   `windowDays` pull config for the current run only and does not rewrite
   `ktx.yaml`.
+- Legacy `connection.historicSql` migration is idempotent, preserves all mapped
+  query-history fields, and is performed by setup or an explicit config rewrite,
+  not by `ktx ingest`.
 - Context build has no detach, attach, watch, resume, stop, or background
   execution path.
+- `.ktx/setup/context-build.json` is retained only as foreground status cache
+  state; legacy `detached` or `paused` records do not trigger background
+  recovery branches.
 - Existing setup context progress UX is consolidated with `ktx ingest` rather
   than duplicated.
 - Non-TTY and JSON output remain suitable for scripts.
