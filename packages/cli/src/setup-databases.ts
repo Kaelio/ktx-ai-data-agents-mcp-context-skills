@@ -541,7 +541,7 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
   options: Array<{ value: string; label: string }>;
 } {
   return {
-    message: `Databases already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
+    message: `Databases configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
       { value: 'continue', label: 'Continue to context sources' },
       { value: 'edit', label: 'Edit an existing database' },

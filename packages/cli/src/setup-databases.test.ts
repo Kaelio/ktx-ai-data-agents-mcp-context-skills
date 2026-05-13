@@ -628,7 +628,7 @@ describe('setup databases step', () => {
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
     expect(prompts.multiselect).not.toHaveBeenCalled();
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Databases already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
         { value: 'edit', label: 'Edit an existing database' },
@@ -687,7 +687,7 @@ describe('setup databases step', () => {
       required: true,
     }));
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Databases already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
         { value: 'edit', label: 'Edit an existing database' },
@@ -733,7 +733,7 @@ describe('setup databases step', () => {
       required: true,
     }));
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
+      message: 'Databases configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
         { value: 'edit', label: 'Edit an existing database' },
@@ -778,7 +778,7 @@ describe('setup databases step', () => {
     }));
     expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(3, {
-      message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
+      message: 'Databases configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
         { value: 'edit', label: 'Edit an existing database' },
@@ -823,7 +823,7 @@ describe('setup databases step', () => {
     }));
     expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
-      message: 'Databases already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
         { value: 'edit', label: 'Edit an existing database' },
@@ -870,7 +870,7 @@ describe('setup databases step', () => {
       ],
     });
     expect(prompts.select).toHaveBeenNthCalledWith(3, {
-      message: 'Databases already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
         { value: 'edit', label: 'Edit an existing database' },
@@ -907,7 +907,7 @@ describe('setup databases step', () => {
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
@@ -980,7 +980,7 @@ describe('setup databases step', () => {
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
@@ -1053,7 +1053,7 @@ describe('setup databases step', () => {
     });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
@@ -1120,7 +1120,7 @@ describe('setup databases step', () => {
     const prompts = makePromptAdapter({ textValues: ['env:DATABASE_URL'] });
     let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+      if (options.message === 'Databases configured: warehouse\nWhat would you like to do?') {
         primaryMenuCount += 1;
         return primaryMenuCount === 1 ? 'edit' : 'continue';
       }
@@ -1188,7 +1188,7 @@ describe('setup databases step', () => {
       textValues: ['env:DATABASE_URL'],
     });
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') return 'edit';
+      if (options.message === 'Databases configured: warehouse\nWhat would you like to do?') return 'edit';
       if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
       if (options.message.startsWith('Enable query-history ingest')) return 'no';
