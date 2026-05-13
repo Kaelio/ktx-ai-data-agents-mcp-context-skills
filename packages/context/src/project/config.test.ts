@@ -81,16 +81,13 @@ describe('KTX project config', () => {
     });
   });
 
-  it('parses and serializes setup wizard metadata', () => {
+  it('parses and serializes setup warehouse metadata without setup progress', () => {
     const config = parseKtxProjectConfig(`
 project: revenue
 setup:
   database_connection_ids:
     - warehouse
     - analytics
-  completed_steps:
-    - project
-    - llm
 connections:
   warehouse:
     driver: postgres
@@ -99,13 +96,12 @@ connections:
 
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse', 'analytics'],
-      completed_steps: ['project', 'llm'],
     });
 
     const serialized = serializeKtxProjectConfig(config);
     expect(serialized).toContain('setup:');
     expect(serialized).toContain('database_connection_ids:');
-    expect(serialized).toContain('completed_steps:');
+    expect(serialized).not.toContain('completed_steps:');
   });
 
   it('parses global direct Anthropic LLM config', () => {

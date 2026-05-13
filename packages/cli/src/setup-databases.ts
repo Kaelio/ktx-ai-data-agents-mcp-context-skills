@@ -7,7 +7,6 @@ import {
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
   setKtxSetupDatabaseConnectionIds,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxTableListEntry } from '@ktx/context/scan';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -1018,7 +1017,7 @@ async function writeConnectionConfig(input: {
       [input.connectionId]: input.connection,
     },
   };
-  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
 
   const historicSql =
     typeof input.connection.historicSql === 'object' &&
@@ -1312,7 +1311,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
   await writeFile(
     project.configPath,
     serializeKtxProjectConfig(
-      stripKtxSetupCompletedSteps({
+      {
         ...project.config,
         ingest: {
           ...project.config.ingest,
@@ -1322,7 +1321,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
             maxConcurrency,
           },
         },
-      }),
+      },
     ),
     'utf-8',
   );
@@ -1331,7 +1330,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
 async function markDatabasesComplete(projectDir: string, connectionIds: string[]): Promise<void> {
   const project = await loadKtxProject({ projectDir });
   const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds));
-  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(config)), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'databases');
 }
 

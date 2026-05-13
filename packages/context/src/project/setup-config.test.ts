@@ -4,12 +4,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildDefaultKtxProjectConfig } from './config.js';
 import {
-  ktxSetupCompletedSteps,
   markKtxSetupStateStepComplete,
   mergeKtxSetupGitignoreEntries,
   readKtxSetupState,
   setKtxSetupDatabaseConnectionIds,
-  stripKtxSetupCompletedSteps,
 } from './setup-config.js';
 
 describe('KTX setup config helpers', () => {
@@ -46,36 +44,6 @@ describe('KTX setup config helpers', () => {
       database_connection_ids: ['warehouse', 'analytics'],
     });
     expect(config.setup).toBeUndefined();
-  });
-
-  it('strips setup completed steps while preserving database connection ids', () => {
-    const config = {
-      ...buildDefaultKtxProjectConfig('warehouse'),
-      setup: {
-        database_connection_ids: ['warehouse'],
-        completed_steps: ['project', 'databases'],
-      },
-    };
-
-    expect(stripKtxSetupCompletedSteps(config).setup).toEqual({
-      database_connection_ids: ['warehouse'],
-    });
-  });
-
-  it('combines config setup steps with local state for reads', () => {
-    const config = {
-      ...buildDefaultKtxProjectConfig('warehouse'),
-      setup: {
-        database_connection_ids: ['warehouse'],
-        completed_steps: ['project', 'databases'],
-      },
-    };
-
-    expect(ktxSetupCompletedSteps(config, { completed_steps: ['databases', 'sources'] })).toEqual([
-      'project',
-      'databases',
-      'sources',
-    ]);
   });
 
   it('merges setup-local gitignore entries without removing existing lines', () => {

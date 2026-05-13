@@ -67,16 +67,33 @@ function resolvedProviderConfig(
   };
 }
 
+function resolvedVertexConfig(
+  config: { project?: string; location?: string } | undefined,
+  env: NodeJS.ProcessEnv,
+): { project?: string; location: string } | undefined {
+  if (!config) {
+    return undefined;
+  }
+
+  const project = resolveOptional(config.project, env);
+  const location = resolveRequired(config.location, env, 'llm.provider.vertex.location is required');
+  return {
+    ...(project ? { project } : {}),
+    location,
+  };
+}
+
 export function resolveLocalKtxLlmConfig(config: KtxProjectLlmConfig, env: NodeJS.ProcessEnv): KtxLlmConfig | null {
   if (config.provider.backend === 'none') {
     return null;
   }
   const modelSlots = resolveModelSlots(config.models, env);
+  const vertex = config.provider.backend === 'vertex' ? resolvedVertexConfig(config.provider.vertex, env) : undefined;
   const anthropic = resolvedProviderConfig(config.provider.anthropic, env);
   const gateway = resolvedProviderConfig(config.provider.gateway, env);
   return {
     backend: config.provider.backend,
-    ...(config.provider.vertex ? { vertex: config.provider.vertex } : {}),
+    ...(vertex ? { vertex } : {}),
     ...(anthropic ? { anthropic } : {}),
     ...(gateway ? { gateway } : {}),
     modelSlots,

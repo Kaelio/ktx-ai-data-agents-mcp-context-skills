@@ -75,7 +75,6 @@ export interface KtxProjectConnectionConfig {
 
 export interface KtxProjectSetupConfig {
   database_connection_ids: string[];
-  completed_steps?: string[];
 }
 
 export interface KtxProjectConfig {
@@ -493,7 +492,6 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
       ? {
           setup: {
             database_connection_ids: stringArray(setup.database_connection_ids, []),
-            completed_steps: stringArray(setup.completed_steps, []),
           },
         }
       : {}),

@@ -4,8 +4,9 @@ import {
   DEFAULT_METABASE_CLIENT_CONFIG,
   DefaultLookerConnectionClientFactory,
   DefaultMetabaseConnectionClientFactory,
+  KtxYamlMetabaseSourceStateReader,
   LocalLookerRuntimeStore,
-  LocalMetabaseSourceStateReader,
+  LocalMetabaseDiscoveryCache,
   computeLookerMappingDrift,
   computeMetabaseMappingDrift,
   discoverLookerConnections,
@@ -16,10 +17,18 @@ import {
   validateLookerMappings,
   validateMappingPhysicalMatch,
   type LookerMappingClient,
+  type LocalMetabaseMappingListRow,
   type MetabaseRuntimeClient,
   type MetabaseSyncMode,
 } from '@ktx/context/ingest';
-import { type KtxLocalProject, ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
+import {
+  type KtxLocalProject,
+  type KtxProjectConfig,
+  ktxLocalStateDbPath,
+  loadKtxProject,
+  parseMetabaseMappingBootstrap,
+  serializeKtxProjectConfig,
+} from '@ktx/context/project';
 import type { KtxCliIo } from '../index.js';
 import { profileMark } from '../startup-profile.js';
 
@@ -82,6 +91,89 @@ function parseId(value: string, label: string): number {
     throw new Error(`${label} must be a positive integer`);
   }
   return parsed;
+}
+
+interface MetabaseMappingsBlock {
+  databaseMappings: Record<string, string | null>;
+  syncEnabled: Record<string, boolean>;
+  syncMode: MetabaseSyncMode;
+  selections: { collections: number[]; items: number[] };
+  defaultTagNames: string[];
+}
+
+function currentMetabaseMappings(project: KtxLocalProject, connectionId: string): MetabaseMappingsBlock {
+  const connection = project.config.connections[connectionId];
+  if (!connection) {
+    throw new Error(`Connection "${connectionId}" is not configured in ktx.yaml`);
+  }
+  const bootstrap = parseMetabaseMappingBootstrap(connectionId, connection);
+  return {
+    databaseMappings: { ...bootstrap.databaseMappings },
+    syncEnabled: { ...bootstrap.syncEnabled },
+    syncMode: bootstrap.syncMode,
+    selections: {
+      collections: [...bootstrap.selections.collections],
+      items: [...bootstrap.selections.items],
+    },
+    defaultTagNames: [...bootstrap.defaultTagNames],
+  };
+}
+
+function hasMetabaseMappings(block: MetabaseMappingsBlock): boolean {
+  return (
+    Object.keys(block.databaseMappings).length > 0 ||
+    Object.keys(block.syncEnabled).length > 0 ||
+    block.syncMode !== 'ALL' ||
+    block.selections.collections.length > 0 ||
+    block.selections.items.length > 0 ||
+    block.defaultTagNames.length > 0
+  );
+}
+
+function serializeMetabaseMappingsBlock(block: MetabaseMappingsBlock): Record<string, unknown> | undefined {
+  if (!hasMetabaseMappings(block)) {
+    return undefined;
+  }
+  return {
+    databaseMappings: block.databaseMappings,
+    syncEnabled: block.syncEnabled,
+    syncMode: block.syncMode,
+    selections: block.selections,
+    defaultTagNames: block.defaultTagNames,
+  };
+}
+
+async function writeMetabaseMappings(
+  project: KtxLocalProject,
+  connectionId: string,
+  block: MetabaseMappingsBlock,
+  message: string,
+): Promise<void> {
+  const connection = project.config.connections[connectionId];
+  if (!connection) {
+    throw new Error(`Connection "${connectionId}" is not configured in ktx.yaml`);
+  }
+  const mappings = serializeMetabaseMappingsBlock(block);
+  const nextConnection = { ...connection };
+  if (mappings) {
+    nextConnection.mappings = mappings;
+  } else {
+    delete nextConnection.mappings;
+  }
+  const nextConfig: KtxProjectConfig = {
+    ...project.config,
+    connections: {
+      ...project.config.connections,
+      [connectionId]: nextConnection,
+    },
+  };
+  await project.fileStore.writeFile(
+    'ktx.yaml',
+    serializeKtxProjectConfig(nextConfig),
+    'ktx',
+    'ktx@example.com',
+    message,
+  );
 }
 
 async function createDefaultMetabaseClient(
@@ -149,9 +241,7 @@ function targetPhysicalInfo(project: KtxLocalProject, connectionId: string) {
   };
 }
 
-function renderMapping(
-  row: Awaited<ReturnType<LocalMetabaseSourceStateReader['listDatabaseMappings']>>[number],
-): string {
+function renderMapping(row: LocalMetabaseMappingListRow): string {
   const name = row.metabaseDatabaseName ?? 'unhydrated';
   const target = row.targetConnectionId ?? '[unmapped]';
   return `${row.metabaseDatabaseId} -> ${target} (${name}, sync: ${row.syncEnabled ? 'on' : 'off'}, source: ${
@@ -255,92 +345,78 @@ export async function runKtxConnectionMapping(
     }
 
     assertMetabaseConnection(project, args.connectionId);
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+    const metabaseStateReader = new KtxYamlMetabaseSourceStateReader(project, { discoveryCache });
 
     if (args.command === 'list') {
-      const rows = await store.listDatabaseMappings(args.connectionId);
+      const rows = await metabaseStateReader.listDatabaseMappings(args.connectionId);
       io.stdout.write(args.json ? `${JSON.stringify(rows, null, 2)}\n` : `${rows.map(renderMapping).join('\n')}\n`);
       return 0;
     }
 
     if (args.command === 'set') {
+      if (args.field !== 'databaseMappings') {
+        throw new Error('Metabase mapping set requires databaseMappings <metabaseDatabaseId>=<targetConnectionId>');
+      }
       assertTargetConnection(project, args.value);
-      await store.upsertDatabaseMapping({
-        connectionId: args.connectionId,
-        metabaseDatabaseId: parseId(args.key, 'metabaseDatabaseId'),
-        targetConnectionId: args.value,
-        syncEnabled: true,
-        source: 'cli',
-      });
+      const block = currentMetabaseMappings(project, args.connectionId);
+      const metabaseDatabaseId = String(parseId(args.key, 'metabaseDatabaseId'));
+      block.databaseMappings[metabaseDatabaseId] = args.value;
+      block.syncEnabled[metabaseDatabaseId] = true;
+      await writeMetabaseMappings(project, args.connectionId, block, `Set Metabase mapping ${args.connectionId}.${metabaseDatabaseId}`);
       io.stdout.write(`Set databaseMappings.${args.key} = ${args.value}\n`);
       return 0;
     }
 
     if (args.command === 'apply-bulk') {
       const payload = JSON.parse(await readFile(args.filePath, 'utf8')) as MetabaseBulkMappingPayload;
-      const existingState = await store.getSourceState(args.connectionId);
-      const existingRows = await store.listDatabaseMappings(args.connectionId);
-      const existingById = new Map(existingRows.map((row) => [row.metabaseDatabaseId, row]));
+      const block = currentMetabaseMappings(project, args.connectionId);
       const databaseMappings = payload.databaseMappings ?? {};
       for (const targetConnectionId of Object.values(databaseMappings)) {
         if (targetConnectionId) {
           assertTargetConnection(project, targetConnectionId);
         }
       }
-      const mappingIds = new Set([
-        ...existingRows.map((row) => row.metabaseDatabaseId),
-        ...Object.keys(databaseMappings).map((id) => parseId(id, 'metabaseDatabaseId')),
-        ...Object.keys(payload.syncEnabled ?? {}).map((id) => parseId(id, 'metabaseDatabaseId')),
-      ]);
-      await store.replaceSourceState({
-        connectionId: args.connectionId,
-        syncMode: payload.syncMode ?? existingState.syncMode,
-        defaultTagNames: payload.defaultTagNames ?? existingState.defaultTagNames,
-        selections:
-          payload.selections === undefined
-            ? existingState.selections
-            : [
-                ...(payload.selections.collections ?? []).map((id) => ({
-                  selectionType: 'collection' as const,
-                  metabaseObjectId: id,
-                })),
-                ...(payload.selections.items ?? []).map((id) => ({
-                  selectionType: 'item' as const,
-                  metabaseObjectId: id,
-                })),
-              ],
-        mappings: [...mappingIds]
-          .sort((a, b) => a - b)
-          .map((id) => {
-            const existing = existingById.get(id);
-            return {
-              metabaseDatabaseId: id,
-              metabaseDatabaseName: existing?.metabaseDatabaseName ?? null,
-              metabaseEngine: existing?.metabaseEngine ?? null,
-              metabaseHost: existing?.metabaseHost ?? null,
-              metabaseDbName: existing?.metabaseDbName ?? null,
-              targetConnectionId: databaseMappings[String(id)] ?? existing?.targetConnectionId ?? null,
-              syncEnabled: payload.syncEnabled?.[String(id)] ?? existing?.syncEnabled ?? false,
-              source: 'cli',
-            };
-          }),
-      });
+      for (const id of Object.keys(databaseMappings)) {
+        parseId(id, 'metabaseDatabaseId');
+        block.databaseMappings[id] = databaseMappings[id] ?? null;
+      }
+      for (const [id, enabled] of Object.entries(payload.syncEnabled ?? {})) {
+        parseId(id, 'metabaseDatabaseId');
+        block.syncEnabled[id] = enabled;
+      }
+      if (payload.syncMode !== undefined) {
+        block.syncMode = payload.syncMode;
+      }
+      if (payload.defaultTagNames !== undefined) {
+        block.defaultTagNames = payload.defaultTagNames;
+      }
+      if (payload.selections !== undefined) {
+        block.selections = {
+          collections: payload.selections.collections ?? [],
+          items: payload.selections.items ?? [],
+        };
+      }
+      await writeMetabaseMappings(project, args.connectionId, block, `Apply Metabase mappings ${args.connectionId}`);
       io.stdout.write(`Applied bulk mappings for ${args.connectionId}\n`);
       return 0;
     }
 
     if (args.command === 'set-sync-enabled') {
-      await store.setMappingSyncEnabled({
-        connectionId: args.connectionId,
-        metabaseDatabaseId: args.metabaseDatabaseId,
-        syncEnabled: args.enabled,
-      });
+      const block = currentMetabaseMappings(project, args.connectionId);
+      block.syncEnabled[String(args.metabaseDatabaseId)] = args.enabled;
+      await writeMetabaseMappings(
+        project,
+        args.connectionId,
+        block,
+        `Set Metabase sync ${args.connectionId}.${args.metabaseDatabaseId}`,
+      );
       io.stdout.write(`Set syncEnabled.${args.metabaseDatabaseId} = ${args.enabled}\n`);
       return 0;
     }
 
     if (args.command === 'sync-state-get') {
-      const state = await store.getSourceState(args.connectionId);
+      const state = await metabaseStateReader.getSourceState(args.connectionId);
       const payload = {
         syncMode: state.syncMode,
         selections: state.selections,
@@ -351,15 +427,11 @@ export async function runKtxConnectionMapping(
     }
 
     if (args.command === 'sync-state-set') {
-      await store.setSyncState({
-        connectionId: args.connectionId,
-        syncMode: args.syncMode,
-        defaultTagNames: args.tagNames,
-        selections: [
-          ...args.collectionIds.map((id) => ({ selectionType: 'collection' as const, metabaseObjectId: id })),
-          ...args.itemIds.map((id) => ({ selectionType: 'item' as const, metabaseObjectId: id })),
-        ],
-      });
+      const block = currentMetabaseMappings(project, args.connectionId);
+      block.syncMode = args.syncMode;
+      block.defaultTagNames = args.tagNames;
+      block.selections = { collections: args.collectionIds, items: args.itemIds };
+      await writeMetabaseMappings(project, args.connectionId, block, `Set Metabase sync state ${args.connectionId}`);
       io.stdout.write(`Set sync state for ${args.connectionId}\n`);
       return 0;
     }
@@ -368,15 +440,11 @@ export async function runKtxConnectionMapping(
       const client = await (deps.createMetabaseClient ?? createDefaultMetabaseClient)(project, args.connectionId);
       try {
         const discovered = await discoverMetabaseDatabases(client);
-        const existing = Object.fromEntries(
-          (await store.listDatabaseMappings(args.connectionId)).map((row) => [
-            String(row.metabaseDatabaseId),
-            row.targetConnectionId,
-          ]),
-        );
+        const block = currentMetabaseMappings(project, args.connectionId);
+        const existing = block.databaseMappings;
         const drift = computeMetabaseMappingDrift({ currentMappings: existing, discovered });
         if (args.autoAccept) {
-          await store.refreshDiscoveredDatabases({ connectionId: args.connectionId, discovered });
+          await discoveryCache.refreshDiscoveredDatabases({ connectionId: args.connectionId, discovered });
         }
         io.stdout.write(`Discovery: ${discovered.length} ${discovered.length === 1 ? 'database' : 'databases'}\n`);
         io.stdout.write(`Unmapped discovered: ${drift.unmappedDiscovered.length}\n`);
@@ -388,7 +456,9 @@ export async function runKtxConnectionMapping(
     }
 
     if (args.command === 'validate') {
-      const rows = await store.listDatabaseMappings(args.connectionId);
+      const rows = (await metabaseStateReader.listDatabaseMappings(args.connectionId)).filter(
+        (row) => row.source === 'ktx.yaml',
+      );
       const failures = rows.flatMap((row) => {
         if (!row.targetConnectionId) {
           return [];
@@ -412,7 +482,18 @@ export async function runKtxConnectionMapping(
     }
 
     const metabaseDatabaseId = args.metabaseDatabaseId ?? (args.mappingKey ? parseId(args.mappingKey, 'metabaseDatabaseId') : undefined);
-    await store.clearDatabaseMappings({ connectionId: args.connectionId, metabaseDatabaseId });
+    const block = currentMetabaseMappings(project, args.connectionId);
+    if (metabaseDatabaseId === undefined) {
+      block.databaseMappings = {};
+      block.syncEnabled = {};
+      block.syncMode = 'ALL';
+      block.selections = { collections: [], items: [] };
+      block.defaultTagNames = [];
+    } else {
+      delete block.databaseMappings[String(metabaseDatabaseId)];
+      delete block.syncEnabled[String(metabaseDatabaseId)];
+    }
+    await writeMetabaseMappings(project, args.connectionId, block, `Clear Metabase mappings ${args.connectionId}`);
     io.stdout.write(
       metabaseDatabaseId
         ? `Cleared databaseMappings.${metabaseDatabaseId}\n`

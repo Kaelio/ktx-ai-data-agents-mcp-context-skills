@@ -482,7 +482,7 @@ describe('local ingest adapters', () => {
       }),
       config: {
         ...project.config,
-        setup: { database_connection_ids: ['warehouse'], completed_steps: [] },
+        setup: { database_connection_ids: ['warehouse'] },
         connections: {
           warehouse: {
             driver: 'postgres',

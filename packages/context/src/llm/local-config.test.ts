@@ -37,6 +37,52 @@ describe('local KTX LLM config', () => {
     });
   });
 
+  it('resolves Vertex AI env references into a KtxLlmConfig', () => {
+    const config: KtxProjectLlmConfig = {
+      provider: {
+        backend: 'vertex',
+        vertex: { project: 'env:GOOGLE_VERTEX_PROJECT', location: 'env:GOOGLE_VERTEX_LOCATION' },
+      },
+      models: { default: 'env:KTX_MODEL' },
+      promptCaching: { enabled: true, vertexFallbackTo5m: true },
+    };
+
+    expect(
+      resolveLocalKtxLlmConfig(config, {
+        GOOGLE_VERTEX_PROJECT: 'local-gcp-project',
+        GOOGLE_VERTEX_LOCATION: 'us-east5',
+        KTX_MODEL: 'claude-sonnet-4-6',
+      }),
+    ).toEqual({
+      backend: 'vertex',
+      vertex: { project: 'local-gcp-project', location: 'us-east5' },
+      modelSlots: { default: 'claude-sonnet-4-6' },
+      promptCaching: { enabled: true, vertexFallbackTo5m: true },
+    });
+  });
+
+  it('ignores inactive Vertex AI references for non-Vertex backends', () => {
+    const config: KtxProjectLlmConfig = {
+      provider: {
+        backend: 'anthropic',
+        anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
+        vertex: { location: 'env:MISSING_VERTEX_LOCATION' },
+      },
+      models: { default: 'claude-sonnet-4-6' },
+    };
+
+    expect(
+      resolveLocalKtxLlmConfig(config, {
+        ANTHROPIC_API_KEY: 'sk-ant-test', // pragma: allowlist secret
+      }),
+    ).toEqual({
+      backend: 'anthropic',
+      anthropic: { apiKey: 'sk-ant-test' }, // pragma: allowlist secret
+      modelSlots: { default: 'claude-sonnet-4-6' },
+      promptCaching: undefined,
+    });
+  });
+
   it('returns null when the local LLM backend is disabled', () => {
     expect(
       createLocalKtxLlmProviderFromConfig({

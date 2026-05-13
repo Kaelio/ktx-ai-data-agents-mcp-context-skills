@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { gray } from './io/symbols.js';
 import { type KtxSetupProjectPromptAdapter, runKtxSetupProjectStep } from './setup-project.js';
 
 function makeIo(options: { stdoutIsTty?: boolean } = {}) {
@@ -37,6 +38,12 @@ function makePromptAdapter(options: { choice?: string; choices?: string[]; textV
   } satisfies KtxSetupProjectPromptAdapter;
 }
 
+function defaultSubfolderLabel(parentDir: string): string {
+  const childName = 'ktx-project';
+  const childDir = join(parentDir, childName);
+  return `New subfolder (${gray(childDir.slice(0, -childName.length))}${childName})`;
+}
+
 describe('setup project step', () => {
   let tempDir: string;
 
@@ -59,8 +66,7 @@ describe('setup project step', () => {
 
     expect(result.status).toBe('ready');
     expect(result.projectDir).toBe(projectDir);
-    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
     await expect(stat(join(projectDir, '.git'))).resolves.toBeDefined();
     await expect(readFile(join(projectDir, '.ktx/.gitignore'), 'utf-8')).resolves.toContain('secrets/');
@@ -68,7 +74,7 @@ describe('setup project step', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('loads an existing project with --existing and preserves existing setup metadata', async () => {
+  it('loads an existing project with --existing and drops config setup progress', async () => {
     const projectDir = join(tempDir, 'warehouse');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     await writeFile(
@@ -94,9 +100,9 @@ describe('setup project step', () => {
     const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: [],
     });
-    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['llm', 'project'] });
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
+    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
   });
 
   it('creates a missing auto-mode project only when --yes is present in no-input mode', async () => {
@@ -144,16 +150,18 @@ describe('setup project step', () => {
       expect.objectContaining({
         message: 'Where should KTX create the project?',
         options: [
-          expect.objectContaining({ value: 'current', label: 'Current directory' }),
-          expect.objectContaining({ value: 'new-default', label: 'New subfolder (./ktx-project)' }),
+          expect.objectContaining({ value: 'current', label: `Current directory (${projectDir})` }),
+          expect.objectContaining({
+            value: 'new-default',
+            label: defaultSubfolderLabel(projectDir),
+          }),
           expect.objectContaining({ value: 'new-custom', label: 'Custom path' }),
           expect.objectContaining({ value: 'exit', label: 'Exit' }),
         ],
       }),
     );
     expect(prompts.text).not.toHaveBeenCalled();
-    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
   });
 
@@ -176,7 +184,10 @@ describe('setup project step', () => {
       expect.objectContaining({
         message: 'Where should KTX create the project?',
         options: expect.arrayContaining([
-          expect.objectContaining({ value: 'new-default', label: 'New subfolder (./ktx-project)' }),
+          expect.objectContaining({
+            value: 'new-default',
+            label: defaultSubfolderLabel(startDir),
+          }),
         ]),
       }),
     );
