@@ -116,11 +116,17 @@ interface MetabaseNativeStage {
   'template-tags'?: Record<string, MetabaseTemplateTag>;
 }
 
+interface MetabaseLegacyNativeQuery {
+  query?: string;
+  'template-tags'?: Record<string, MetabaseTemplateTag>;
+}
+
 export interface MetabaseDatasetQuery {
   'lib/type'?: 'mbql/query';
   database?: number;
   type?: 'native' | 'query';
   stages?: MetabaseNativeStage[];
+  native?: MetabaseLegacyNativeQuery;
 }
 
 export interface MetabaseNativeQueryResult {

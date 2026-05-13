@@ -37,6 +37,21 @@ function nativeCard(query: string, templateTags: Record<string, MetabaseTemplate
   };
 }
 
+function legacyNativeCard(query: string, templateTags: Record<string, MetabaseTemplateTag> = {}): MetabaseCard {
+  return {
+    id: 1,
+    name: 'Legacy native card',
+    type: 'model',
+    query_type: 'native',
+    database_id: 6,
+    dataset_query: {
+      type: 'native',
+      database: 6,
+      native: { query, 'template-tags': templateTags },
+    },
+  };
+}
+
 describe('DefaultMetabaseConnectionClientFactory', () => {
   it('resolves runtime credentials by the explicit Metabase source connection id and merges overrides', async () => {
     const resolveCredentials = vi.fn().mockResolvedValue(runtime);
@@ -271,6 +286,25 @@ describe('getDummyValueForWidgetType', () => {
     expect(getDummyValueForWidgetType('string/=')).toEqual(['placeholder']);
     expect(getDummyValueForWidgetType('category')).toEqual(['placeholder']);
     expect(getDummyValueForWidgetType(undefined)).toEqual(['placeholder']);
+  });
+});
+
+describe('MetabaseClient legacy native dataset query support', () => {
+  it('reads SQL and template tags from dataset_query.native', async () => {
+    const client = new MetabaseClient(runtime, fastRetryConfig);
+    const card = legacyNativeCard('SELECT * FROM orders WHERE status = {{ status }}', {
+      status: {
+        name: 'status',
+        type: 'text',
+        default: 'paid',
+      },
+    });
+
+    expect(client.getNativeSql(card)).toBe('SELECT * FROM orders WHERE status = {{ status }}');
+    expect(client.getTemplateTags(card)).toEqual({
+      status: expect.objectContaining({ name: 'status', type: 'text' }),
+    });
+    await expect(client.getCardSql(card)).resolves.toBe('SELECT * FROM orders WHERE status = {{ status }}');
   });
 });
 

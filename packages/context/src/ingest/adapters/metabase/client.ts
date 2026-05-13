@@ -150,6 +150,9 @@ function injectNativeSql(datasetQuery: MetabaseDatasetQuery, sql: string): Metab
     stages[0] = { ...stages[0], native: sql };
     return { ...datasetQuery, stages };
   }
+  if (datasetQuery?.native?.query !== undefined) {
+    return { ...datasetQuery, native: { ...datasetQuery.native, query: sql } };
+  }
   return datasetQuery;
 }
 
@@ -368,11 +371,11 @@ export class MetabaseClient implements MetabaseRuntimeClient {
   }
 
   getNativeSql(card: MetabaseCard): string | null {
-    return card.dataset_query?.stages?.[0]?.native ?? null;
+    return card.dataset_query?.stages?.[0]?.native ?? card.dataset_query?.native?.query ?? null;
   }
 
   getTemplateTags(card: MetabaseCard): Record<string, MetabaseTemplateTag> {
-    return card.dataset_query?.stages?.[0]?.['template-tags'] ?? {};
+    return card.dataset_query?.stages?.[0]?.['template-tags'] ?? card.dataset_query?.native?.['template-tags'] ?? {};
   }
 
   async getCardSql(card: MetabaseCard): Promise<string | null> {
