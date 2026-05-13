@@ -113,10 +113,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const RESERVED_INGEST_CONNECTION_IDS = new Map([
-  ['status', 'ktx ingest status'],
-  ['replay', 'ktx ingest replay'],
-  ['run', 'ktx ingest run'],
-  ['watch', 'ktx ingest watch'],
+  ['status', 'the KTX ingest command namespace'],
+  ['replay', 'the KTX ingest command namespace'],
+  ['run', 'the KTX ingest command namespace'],
+  ['watch', 'the KTX ingest command namespace'],
 ]);
 
 export function reservedKtxIngestConnectionIdMessage(connectionId: string): string | null {

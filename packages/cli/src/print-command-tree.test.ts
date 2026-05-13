@@ -12,7 +12,7 @@ describe('renderKtxCommandTree', () => {
       .filter((line) => /^ {2}[├└]── \S/.test(line))
       .map((line) => line.replace(/^ {2}[├└]── /, '').trim().split(' ')[0]);
 
-    for (const expected of ['setup', 'connection', 'ingest', 'sl']) {
+    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'dev']) {
       expect(topLevel).toContain(expected);
     }
 
@@ -24,9 +24,15 @@ describe('renderKtxCommandTree', () => {
     expect(output).not.toContain('│   ├── metabase');
     expect(output).not.toContain('│   ├── notion');
     expect(output).not.toContain('scan <connectionId>');
+    expect(output).not.toContain('│   ├── status');
+    expect(output).not.toContain('│   ├── replay');
+    expect(output).not.toContain('│   └── replay');
     expect(output).not.toContain('│   ├── run');
     expect(output).not.toContain('│   ├── watch');
     expect(output).not.toContain('│   └── watch');
+    expect(output).not.toContain('│   ├── read');
+    expect(output).not.toContain('│   ├── write');
+    expect(output).not.toContain('│   └── write');
   });
 
   it('ends with a single trailing newline', () => {

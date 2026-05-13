@@ -50,28 +50,6 @@ async function runBuiltCli(args: string[], options: { env?: NodeJS.ProcessEnv } 
   }
 }
 
-async function writeWarehouseConfig(projectDir: string): Promise<void> {
-  await writeFile(
-    join(projectDir, 'ktx.yaml'),
-    [
-      'project: warehouse',
-      'connections:',
-      '  warehouse:',
-      '    driver: postgres',
-      'ingest:',
-      '  adapters:',
-      '    - fake',
-      '',
-    ].join('\n'),
-    'utf-8',
-  );
-}
-
-async function writeSourceFixture(sourceDir: string): Promise<void> {
-  await mkdir(join(sourceDir, 'orders'), { recursive: true });
-  await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
-}
-
 function createSqliteWarehouse(dbPath: string): void {
   const db = new Database(dbPath);
   try {
@@ -157,33 +135,23 @@ describe('standalone built ktx CLI smoke', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('reports missing local ingest LLM config through the built binary', async () => {
+  it('rejects removed low-level ingest run through the built binary', async () => {
     const projectDir = join(tempDir, 'project');
-    const sourceDir = join(tempDir, 'source');
 
     const init = await runSetupNewProject(projectDir);
     expectProjectStderr(init, projectDir);
     expect(init.stdout).toContain(`Project: ${projectDir}`);
 
-    await writeWarehouseConfig(projectDir);
-    await writeSourceFixture(sourceDir);
-
     const run = await runBuiltCli([
       'ingest',
       'run',
-      '--project-dir',
-      projectDir,
       '--connection-id',
       'warehouse',
       '--adapter',
       'fake',
-      '--source-dir',
-      sourceDir,
     ]);
     expect(run).toMatchObject({ code: 1, stdout: '' });
-    expect(run.stderr).toContain(
-      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner',
-    );
+    expect(run.stderr).toContain("unknown command 'run'");
   });
 
   it('rejects the removed agent command through the built binary', async () => {

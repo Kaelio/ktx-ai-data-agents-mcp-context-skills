@@ -495,11 +495,11 @@ describe('verification snippets', () => {
     assert.match(source, /ktx ingest deep verified/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
-    assert.match(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
+    assert.doesNotMatch(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
     assert.match(source, /access\(join\(projectDir, '\.ktx', 'db\.sqlite'\)\)/);
     assert.match(source, /SQLite wiki index/);
-    assert.match(source, /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
-    assert.match(source, /ktx ingest provider guard verified/);
+    assert.doesNotMatch(source, /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
+    assert.match(source, /ktx ingest state verified/);
   });
 
   describe('npmCliSmokeSource', () => {

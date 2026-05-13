@@ -113,10 +113,6 @@ export function buildLiveDatabaseIngestArgs(projectDir, _databaseIntrospectionUr
   ];
 }
 
-export function buildLiveDatabaseStatusArgs(projectDir, runId) {
-  return ['exec', 'ktx', 'ingest', 'status', '--project-dir', projectDir, runId];
-}
-
 async function run(command, args, options = {}) {
   process.stdout.write(`$ ${command} ${args.join(' ')}\n`);
   return new Promise((resolve) => {
@@ -167,7 +163,7 @@ function requireOutput(label, result, pattern) {
 function getRunId(stdout) {
   const match = stdout.match(/^Run: (.+)$/m);
   if (!match) {
-    throw new Error(`ingest run output did not include a run id\nstdout:\n${stdout}`);
+    throw new Error(`ingest output did not include a run id\nstdout:\n${stdout}`);
   }
   return match[1];
 }
@@ -322,16 +318,6 @@ async function main() {
     requireOutput('ktx ingest warehouse --fast', ingestRun, /Database schema/);
 
     const runId = getRunId(ingestRun.stdout);
-    const ingestStatus = await run('pnpm', buildLiveDatabaseStatusArgs(projectDir, runId), {
-      cwd: cleanInstallDir,
-      env: managedRuntimeEnv(cleanInstallDir),
-      timeout: 30_000,
-    });
-    requireSuccess('ktx ingest status live-database', ingestStatus);
-    requireOutput('ktx ingest status live-database', ingestStatus, new RegExp(`Run: ${runId}`));
-    requireOutput('ktx ingest status live-database', ingestStatus, /Status: done/);
-    requireOutput('ktx ingest status live-database', ingestStatus, /Raw files: 4/);
-    requireOutput('ktx ingest status live-database', ingestStatus, /Work units: 2/);
     await assertPathExists(join(projectDir, '.ktx', 'db.sqlite'), 'SQLite local ingest state');
     process.stdout.write(`Installed live-database artifact smoke passed: ${runId}\n`);
   } finally {

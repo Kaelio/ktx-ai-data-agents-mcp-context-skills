@@ -52,14 +52,14 @@ describe('dev Commander tree', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('keeps dev callable while hiding it from root command rows', async () => {
+  it('lists dev in root command rows', async () => {
     const testIo = makeIo();
 
     await expect(runKtxCli(['--help'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Advanced:');
-    expect(testIo.stdout()).toContain('ktx dev');
-    expect(testIo.stdout()).not.toContain('dev                              Low-level diagnostics');
+    expect(testIo.stdout()).not.toContain('Advanced:');
+    expect(testIo.stdout()).toContain('dev');
+    expect(testIo.stdout()).toMatch(/Low-level project initialization and runtime\s+management/);
     expect(testIo.stderr()).toBe('');
   });
 
@@ -132,9 +132,8 @@ describe('dev Commander tree', () => {
   ])('prints generated nested help for $argv', async ({ argv, expected }) => {
     const io = makeIo();
     const doctor = vi.fn(async () => 0);
-    const ingest = vi.fn(async () => 0);
 
-    await expect(runKtxCli(argv, io.io, { doctor, ingest })).resolves.toBe(0);
+    await expect(runKtxCli(argv, io.io, { doctor })).resolves.toBe(0);
 
     for (const text of expected) {
       expect(io.stdout()).toContain(text);
@@ -145,28 +144,25 @@ describe('dev Commander tree', () => {
     }
     expect(io.stderr()).toBe('');
     expect(doctor).not.toHaveBeenCalled();
-    expect(ingest).not.toHaveBeenCalled();
   });
 
-  it('keeps legacy adapter-backed ingest run callable but hidden from ingest help', async () => {
+  it('rejects removed adapter-backed ingest run and keeps it out of ingest help', async () => {
     const helpIo = makeIo();
     const runIo = makeIo();
-    const ingest = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
 
-    await expect(runKtxCli(['ingest', '--help'], helpIo.io, { ingest })).resolves.toBe(0);
+    await expect(runKtxCli(['ingest', '--help'], helpIo.io, { publicIngest })).resolves.toBe(0);
     await expect(
       runKtxCli(
         ['ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase', '--project-dir', '/tmp/project'],
         runIo.io,
-        { ingest },
+        { publicIngest },
       ),
-    ).resolves.toBe(0);
+    ).resolves.toBe(1);
 
     expect(helpIo.stdout()).not.toMatch(/^  run\s/m);
-    expect(ingest).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'run', connectionId: 'warehouse', adapter: 'metabase' }),
-      runIo.io,
-    );
+    expect(runIo.stderr()).toMatch(/unknown command|error:/);
+    expect(publicIngest).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -177,17 +173,17 @@ describe('dev Commander tree', () => {
     { argv: ['scan', 'warehouse', '--project-dir', '/tmp/project', '--mode', 'relationships'] },
   ])('rejects removed top-level scan command $argv', async ({ argv }) => {
     const io = makeIo();
-    const ingest = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
 
-    await expect(runKtxCli(argv, io.io, { ingest })).resolves.toBe(1);
+    await expect(runKtxCli(argv, io.io, { publicIngest })).resolves.toBe(1);
 
-    expect(ingest).not.toHaveBeenCalled();
+    expect(publicIngest).not.toHaveBeenCalled();
     expect(io.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('dispatches top-level ingest run through the low-level ingest Commander registration', async () => {
+  it('rejects top-level ingest run through the removed low-level ingest registration', async () => {
     const io = makeIo();
-    const ingest = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
 
     await expect(
       runKtxCli(
@@ -203,24 +199,11 @@ describe('dev Commander tree', () => {
           '--json',
         ],
         io.io,
-        { ingest },
+        { publicIngest },
       ),
-    ).resolves.toBe(0);
+    ).resolves.toBe(1);
 
-    expect(ingest).toHaveBeenCalledWith(
-      {
-        command: 'run',
-        projectDir: '/tmp/project',
-        connectionId: 'warehouse',
-        adapter: 'metabase',
-        sourceDir: undefined,
-        databaseIntrospectionUrl: undefined,
-        cliVersion: '0.0.0-private',
-        runtimeInstallPolicy: 'prompt',
-        outputMode: 'json',
-      },
-      io.io,
-    );
-    expect(io.stderr()).toBe('');
+    expect(publicIngest).not.toHaveBeenCalled();
+    expect(io.stderr()).toMatch(/unknown command|error:/);
   });
 });

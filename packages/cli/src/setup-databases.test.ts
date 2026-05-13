@@ -1839,7 +1839,9 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('failed');
-    expect(io.stderr()).toContain('"replay" is reserved for ktx ingest replay; choose a different connection id.');
+    expect(io.stderr()).toContain(
+      '"replay" is reserved for the KTX ingest command namespace; choose a different connection id.',
+    );
   });
 
   it('leaves setup incomplete when databases are skipped', async () => {

@@ -120,6 +120,22 @@ async function writeLiveDatabaseConfig(projectDir: string): Promise<void> {
   );
 }
 
+async function writeDatabaseConfigWithoutIngestAdapters(projectDir: string): Promise<void> {
+  await writeFile(
+    join(projectDir, 'ktx.yaml'),
+    [
+      'project: warehouse',
+      'connections:',
+      '  warehouse:',
+      '    driver: postgres',
+      '    url: env:DATABASE_URL',
+      '    readonly: true',
+      '',
+    ].join('\n'),
+    'utf-8',
+  );
+}
+
 function fetchOnlyAdapter(options: { extractedAt?: () => string } = {}): SourceAdapter {
   return {
     source: 'live-database',
@@ -241,6 +257,27 @@ describe('local scan', () => {
     await expect(getLocalScanReport(project, 'scan-run-1')).resolves.toMatchObject({
       runId: 'scan-run-1',
       connectionId: 'warehouse',
+    });
+  });
+
+  it('runs a structural database scan when live-database is not listed in ktx.yaml', async () => {
+    await writeDatabaseConfigWithoutIngestAdapters(project.projectDir);
+    project = await loadKtxProject({ projectDir: project.projectDir });
+
+    const result = await runLocalScan({
+      project,
+      adapters: [fetchOnlyAdapter()],
+      connectionId: 'warehouse',
+      jobId: 'scan-run-without-public-adapter',
+      now: () => new Date('2026-04-29T09:10:00.000Z'),
+    });
+
+    expect(result.report).toMatchObject({
+      connectionId: 'warehouse',
+      runId: 'scan-run-without-public-adapter',
+      artifactPaths: {
+        reportPath: 'raw-sources/warehouse/live-database/2026-04-29-091000-scan-run-without-public-adapter/scan-report.json',
+      },
     });
   });
 

@@ -87,21 +87,7 @@ Useful output flags:
 | `--json` | Output as JSON |
 | `--plain` | Plain text output |
 
-### Inspecting stored reports
-
-```bash
-# Check status of the latest ingest
-ktx ingest status
-
-# Check a specific run
-ktx ingest status <run-id>
-
-# Replay a past ingest run
-ktx ingest replay <run-id>
-```
-
-`ktx ingest replay` opens the stored memory-flow output for a completed run.
-Foreground context builds do not detach into background control sessions; if a
+Foreground context builds do not detach into background control sessions. If a
 run is interrupted, rerun `ktx ingest <connection-id>` or `ktx ingest --all`.
 
 ### Supported context sources
@@ -178,12 +164,8 @@ sl_refs: [orders]
 Orders in "pending" status for more than 48 hours are flagged for review.
 ```
 
-### Deterministic replay
+### Ingest transcripts
 
-Every ingest session records a full transcript — tool calls, LLM responses, and write decisions. You can replay any session to debug why a source was written a certain way:
-
-```bash
-ktx ingest replay <run-id> --viz
-```
-
-This opens the same TUI view as the original run, letting you step through the agent's reasoning.
+Every ingest session records a full transcript: tool calls, LLM responses, and
+write decisions. Inspect the stored transcript files when you need to debug why
+a source was written a certain way.

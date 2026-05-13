@@ -10,7 +10,7 @@ connections:
   ${connectionId}:
     driver: postgres
 `),
-    ).toThrow(`"${connectionId}" is reserved for ktx ingest ${connectionId}`);
+    ).toThrow(`"${connectionId}" is reserved for the KTX ingest command namespace`);
   });
 
   it('builds the default standalone project config', () => {

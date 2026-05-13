@@ -984,46 +984,4 @@ describe('runKtxPublicIngest', () => {
     );
   });
 
-  it('routes public status and watch to the ingest status renderer', async () => {
-    const runIngest = vi.fn(async () => 0);
-    const statusIo = makeIo();
-    const watchIo = makeIo();
-
-    await expect(
-      runKtxPublicIngest(
-        { command: 'status', projectDir: '/tmp/ktx', json: false, inputMode: 'disabled' },
-        statusIo.io,
-        { runIngest },
-      ),
-    ).resolves.toBe(0);
-    await expect(
-      runKtxPublicIngest(
-        { command: 'watch', projectDir: '/tmp/ktx', runId: 'run-1', json: false, inputMode: 'auto' },
-        watchIo.io,
-        { runIngest },
-      ),
-    ).resolves.toBe(0);
-
-    expect(runIngest).toHaveBeenNthCalledWith(
-      1,
-      {
-        command: 'status',
-        projectDir: '/tmp/ktx',
-        outputMode: 'plain',
-        inputMode: 'disabled',
-      },
-      statusIo.io,
-    );
-    expect(runIngest).toHaveBeenNthCalledWith(
-      2,
-      {
-        command: 'watch',
-        projectDir: '/tmp/ktx',
-        runId: 'run-1',
-        outputMode: 'viz',
-        inputMode: 'auto',
-      },
-      watchIo.io,
-    );
-  });
 });

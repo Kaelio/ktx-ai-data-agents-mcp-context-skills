@@ -276,7 +276,9 @@ describe('setup sources step', () => {
     );
 
     expect(result.status).toBe('failed');
-    expect(io.stderr()).toContain('"status" is reserved for ktx ingest status; choose a different connection id.');
+    expect(io.stderr()).toContain(
+      '"status" is reserved for the KTX ingest command namespace; choose a different connection id.',
+    );
   });
 
   it('uses selected Notion roots when root page ids are provided even if crawl mode says all accessible', async () => {

@@ -10,17 +10,13 @@ export interface CommandTreeNode {
   children: CommandTreeNode[];
 }
 
-function isHiddenCommand(command: CommandUnknownOpts): boolean {
-  return (command as CommandUnknownOpts & { _hidden?: boolean })._hidden === true;
-}
-
 export function walkCommandTree(command: CommandUnknownOpts): CommandTreeNode {
   return {
     name: command.name(),
     description: command.description(),
     aliases: command.aliases(),
     arguments: command.registeredArguments.map(formatArgumentDeclaration),
-    children: command.commands.filter((child) => !isHiddenCommand(child)).map((child) => walkCommandTree(child)),
+    children: command.commands.map((child) => walkCommandTree(child)),
   };
 }
 

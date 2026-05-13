@@ -1,6 +1,6 @@
 ---
 title: "ktx ingest"
-description: "Build, inspect, and replay KTX context ingest runs."
+description: "Build or refresh KTX context from configured connections."
 ---
 
 `ktx ingest` builds or refreshes KTX context from configured connections.
@@ -36,16 +36,6 @@ connections when you use `--all`.
 database connections. Query-history flags apply only to database connections
 that support query history.
 
-## Status and replay
-
-| Subcommand | Description |
-|------------|-------------|
-| `status [runId]` | Print status for the latest or selected stored ingest run or report file |
-| `replay <runId>` | Replay a stored ingest run or bundle report through memory-flow output |
-
-Both subcommands accept `--report-file <path>`, `--plain`, `--json`, `--viz`,
-and `--no-input`.
-
 ## Examples
 
 ```bash
@@ -57,14 +47,6 @@ ktx ingest warehouse --query-history-window-days 30
 ktx ingest notion
 ktx ingest --all
 ktx ingest --all --deep
-
-ktx ingest status
-ktx ingest status run-abc123
-ktx ingest status --json
-
-ktx ingest replay run-abc123
-ktx ingest replay run-abc123 --viz
-ktx ingest replay run-abc123 --report-file /tmp/ingest-report.json
 ```
 
 ## Common errors
@@ -74,5 +56,4 @@ ktx ingest replay run-abc123 --report-file /tmp/ingest-report.json
 | Connection not configured | The connection id is not present in `ktx.yaml` | Add the connection with `ktx setup` or update `ktx.yaml` |
 | Deep readiness is missing | `--deep` or query history needs model, embedding, and scan-enrichment configuration | Run `ktx setup` or rerun with `--fast` |
 | Query history is unsupported | The selected database driver does not support query history | Run schema ingest without query-history flags |
-| Latest run not found | No stored ingest report exists in this project | Run `ktx ingest <connectionId>` first |
-| Visual replay fails in a non-interactive shell | Visual report replay needs a terminal | Use `ktx ingest status --json` for agent and CI workflows |
+| No ingest target was selected | No connection id was provided and `--all` was omitted | Run `ktx ingest <connectionId>` or `ktx ingest --all` |

@@ -342,6 +342,22 @@ function createFilteredConnector(connector: KtxScanConnector, enabledTables: Set
   };
 }
 
+function withInternalLiveDatabaseAdapter(project: KtxLocalProject): KtxLocalProject {
+  if (project.config.ingest.adapters.includes(LIVE_DATABASE_ADAPTER)) {
+    return project;
+  }
+  return {
+    ...project,
+    config: {
+      ...project.config,
+      ingest: {
+        ...project.config.ingest,
+        adapters: [...project.config.ingest.adapters, LIVE_DATABASE_ADAPTER],
+      },
+    },
+  };
+}
+
 export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalScanRunResult> {
   const mode = options.mode ?? 'structural';
   assertSupportedMode(mode);
@@ -367,7 +383,7 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
 
   await options.progress?.update(0.15, 'Inspecting database schema');
   const record = await runLocalStageOnlyIngest({
-    project: options.project,
+    project: withInternalLiveDatabaseAdapter(options.project),
     adapters,
     adapter: LIVE_DATABASE_ADAPTER,
     connectionId: options.connectionId,

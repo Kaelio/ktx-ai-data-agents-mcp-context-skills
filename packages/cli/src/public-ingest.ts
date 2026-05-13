@@ -23,26 +23,19 @@ type KtxPublicIngestQueryHistoryFlag = 'default' | 'enabled' | 'disabled';
 type HistoricSqlDialect = 'postgres' | 'bigquery' | 'snowflake';
 
 export type KtxPublicIngestArgs =
-  | {
-      command: 'run';
-      projectDir: string;
-      targetConnectionId?: string;
-      all: boolean;
-      json: boolean;
-      inputMode: KtxPublicIngestInputMode;
-      depth?: KtxPublicIngestDepth;
-      queryHistory?: KtxPublicIngestQueryHistoryFlag;
-      queryHistoryWindowDays?: number;
-      scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
-      detectRelationships?: boolean;
-    }
-  | {
-      command: 'status' | 'watch';
-      projectDir: string;
-      runId?: string;
-      json: boolean;
-      inputMode: KtxPublicIngestInputMode;
-    };
+  {
+    command: 'run';
+    projectDir: string;
+    targetConnectionId?: string;
+    all: boolean;
+    json: boolean;
+    inputMode: KtxPublicIngestInputMode;
+    depth?: KtxPublicIngestDepth;
+    queryHistory?: KtxPublicIngestQueryHistoryFlag;
+    queryHistoryWindowDays?: number;
+    scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
+    detectRelationships?: boolean;
+  };
 
 export interface KtxPublicIngestPlanTarget {
   connectionId: string;
@@ -775,20 +768,6 @@ export async function runKtxPublicIngest(
   io: KtxCliIo,
   deps: KtxPublicIngestDeps = {},
 ): Promise<number> {
-  if (args.command !== 'run') {
-    const { runKtxIngest } = await import('./ingest.js');
-    return await (deps.runIngest ?? runKtxIngest)(
-      {
-        command: args.command,
-        projectDir: args.projectDir,
-        ...(args.runId ? { runId: args.runId } : {}),
-        outputMode: args.json ? 'json' : args.command === 'watch' ? 'viz' : 'plain',
-        inputMode: args.inputMode,
-      },
-      io,
-    );
-  }
-
   const loadProject = deps.loadProject ?? loadKtxProject;
   const project = await loadProject({ projectDir: args.projectDir });
   if (shouldUseForegroundContextBuildView(args, io)) {

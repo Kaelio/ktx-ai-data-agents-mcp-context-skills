@@ -35,7 +35,7 @@ import { profileMark } from './startup-profile.js';
 
 profileMark('module:ingest');
 
-export type KtxIngestOutputMode = 'plain' | 'json' | 'viz';
+type KtxIngestOutputMode = 'plain' | 'json' | 'viz';
 type KtxIngestInputMode = 'auto' | 'disabled';
 
 export type KtxIngestArgs =

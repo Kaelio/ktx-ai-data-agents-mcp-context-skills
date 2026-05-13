@@ -5,7 +5,6 @@ import {
   buildDockerRunArgs,
   buildKtxYaml,
   buildLiveDatabaseIngestArgs,
-  buildLiveDatabaseStatusArgs,
   buildPostgresUrl,
   buildPostgresReadyArgs,
   buildSeedSql,
@@ -95,7 +94,7 @@ describe('installed live-database artifact smoke helpers', () => {
     ]);
   });
 
-  it('builds installed CLI public database ingest and status commands', () => {
+  it('builds the installed CLI public database ingest command', () => {
     assert.deepEqual(buildLiveDatabaseIngestArgs('/tmp/project', 'http://127.0.0.1:8765'), [
       'exec',
       'ktx',
@@ -107,14 +106,5 @@ describe('installed live-database artifact smoke helpers', () => {
       '--no-input',
     ]);
 
-    assert.deepEqual(buildLiveDatabaseStatusArgs('/tmp/project', 'local-run-1'), [
-      'exec',
-      'ktx',
-      'ingest',
-      'status',
-      '--project-dir',
-      '/tmp/project',
-      'local-run-1',
-    ]);
   });
 });

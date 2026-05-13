@@ -228,7 +228,7 @@ export async function localPullConfigForAdapter(
 ): Promise<unknown> {
   if (adapter.source === 'metabase') {
     throw new Error(
-      'Metabase scheduled pulls fan out by mapping. Call runLocalMetabaseIngest() or use `ktx ingest run --adapter metabase --connection-id <metabase-source-id>` from the CLI.',
+      'Metabase scheduled pulls fan out by mapping. Call runLocalMetabaseIngest() or use `ktx ingest <metabase-source-id>` from the CLI.',
     );
   }
   const connection = project.config.connections[connectionId];

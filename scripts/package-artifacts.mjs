@@ -561,7 +561,7 @@ function requireIncludes(values, expected, label) {
 
 function getRunId(stdout) {
   const match = stdout.match(/^Run: (.+)$/m);
-  assert.ok(match, 'ingest run output did not include a run id');
+  assert.ok(match, 'ingest output did not include a run id');
   return match[1];
 }
 
@@ -588,7 +588,6 @@ process.env.KTX_RUNTIME_ROOT = join(root, 'managed-runtime');
 let daemonStarted = false;
 try {
   const projectDir = join(root, 'project');
-  const sourceDir = join(root, 'source');
 
   const version = await run('pnpm', ['exec', 'ktx', '--version']);
   requireSuccess('ktx public package version', version);
@@ -842,27 +841,8 @@ try {
   const enrichedScanRunId = getRunId(enrichedScan.stdout);
   process.stdout.write('ktx ingest deep verified: ' + enrichedScanRunId + '\\n');
 
-  await mkdir(join(sourceDir, 'orders'), { recursive: true });
-  await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\\n', 'utf-8');
-
-  const ingestRun = await run('pnpm', ['exec', 'ktx', 'ingest', 'run',
-    '--project-dir',
-    projectDir,
-    '--connection-id',
-    'warehouse',
-    '--adapter',
-    'fake',
-    '--source-dir',
-    sourceDir,
-  ]);
-  assert.equal(ingestRun.code, 1, 'ktx ingest run without an LLM provider must fail');
-  assert.match(
-    ingestRun.stderr,
-    /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway, or an injected agentRunner/,
-  );
-
   await access(join(projectDir, '.ktx', 'db.sqlite'));
-  process.stdout.write('ktx ingest provider guard verified\\n');
+  process.stdout.write('ktx ingest state verified\\n');
 } finally {
   if (daemonStarted) {
     await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'stop']);

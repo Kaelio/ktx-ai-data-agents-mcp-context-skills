@@ -53,7 +53,27 @@ type CommandPathNode = CommandWithGlobalOptions & {
 };
 
 const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status']);
-const REMOVED_ROOT_COMMANDS = new Set(['scan']);
+const REMOVED_COMMAND_PATHS = new Set([
+  'scan',
+  'ingest run',
+  'ingest status',
+  'ingest watch',
+  'ingest replay',
+  'wiki read',
+  'wiki write',
+]);
+const GLOBAL_OPTIONS_WITH_VALUE = new Set(['--project-dir']);
+const OPTIONS_WITH_VALUE = new Set([
+  '--project-dir',
+  '--query-history-window-days',
+  '--user-id',
+  '--limit',
+  '--format',
+  '--connection-id',
+  '--source-name',
+  '--query-file',
+  '--max-rows',
+]);
 
 export interface CommandWithGlobalOptions {
   opts: () => object;
@@ -175,9 +195,6 @@ function shouldSuppressProjectDirLine(path: string[], options: Record<string, un
     return true;
   }
 
-  if (commandPathKey === 'ktx ingest watch') {
-    return options.json !== true && options.plain !== true;
-  }
   const demoIndex = path.indexOf('demo');
   if (demoIndex >= 0) {
     const demoCommand = path[demoIndex + 1];
@@ -222,10 +239,6 @@ function createBaseProgram(info: KtxCliPackageInfo, io: KtxCliIo): Command {
     .version(`${info.name} ${info.version}`, '-v, --version', 'Show CLI version')
     .helpOption('-h, --help', 'Show this help text')
     .configureHelp({ showGlobalOptions: true })
-    .addHelpText(
-      'after',
-      '\nAdvanced:\n  ktx dev        Low-level project initialization and runtime management.\n',
-    )
     .showHelpAfterError()
     .exitOverride()
     .configureOutput({
@@ -253,6 +266,45 @@ function writeProjectDir(io: KtxCliIo, commandContext: CommandPathNode): void {
 
 function formatCliError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function commandPathFromArgv(argv: string[]): string[] {
+  const path: string[] = [];
+  for (let index = 0; index < argv.length && path.length < 2; index += 1) {
+    const arg = argv[index];
+    if (arg === undefined) {
+      continue;
+    }
+    if (arg === '--') {
+      break;
+    }
+    if ((path.length === 0 ? GLOBAL_OPTIONS_WITH_VALUE : OPTIONS_WITH_VALUE).has(arg)) {
+      index += 1;
+      continue;
+    }
+    const optionsWithValue = path.length === 0 ? GLOBAL_OPTIONS_WITH_VALUE : OPTIONS_WITH_VALUE;
+    if ([...optionsWithValue].some((option) => arg.startsWith(`${option}=`))) {
+      continue;
+    }
+    if (path.length === 0 && arg === '--debug') {
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      continue;
+    }
+    path.push(arg);
+  }
+  return path;
+}
+
+function removedCommandName(argv: string[]): string | null {
+  const path = commandPathFromArgv(argv);
+  if (path.length === 0) {
+    return null;
+  }
+
+  const pathKey = path.join(' ');
+  return REMOVED_COMMAND_PATHS.has(pathKey) ? path.at(-1) ?? null : null;
 }
 
 async function runBareInteractiveCommand(
@@ -309,10 +361,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
 
   registerSetupCommands(program, context);
   registerConnectionCommands(program, context);
-  registerIngestCommands(program, context, {
-    runIngestWithProgress: async (ingestArgs, ingestIo, ingestDeps, defaultRunIngest) =>
-      await (ingestDeps.ingest ?? defaultRunIngest)(ingestArgs, ingestIo),
-  });
+  registerIngestCommands(program, context);
   registerWikiCommands(program, context);
   registerSlCommands(program, context);
   registerStatusCommands(program, context);
@@ -366,8 +415,9 @@ export async function runCommanderKtxCli(
     return 0;
   }
 
-  if (REMOVED_ROOT_COMMANDS.has(argv[0] ?? '')) {
-    io.stderr.write(`error: unknown command '${argv[0]}'\n`);
+  const removedCommand = removedCommandName(argv);
+  if (removedCommand) {
+    io.stderr.write(`error: unknown command '${removedCommand}'\n`);
     return 1;
   }
 

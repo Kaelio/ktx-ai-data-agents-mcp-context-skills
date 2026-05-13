@@ -113,7 +113,7 @@ export async function runKtxKnowledge(
         const pages = await listLocalKnowledgePages(project, { userId: args.userId });
         if (pages.length === 0) {
           io.stderr.write(
-            `No local wiki pages found in ${project.projectDir}. Create one with \`ktx wiki write <key> --summary <summary> --content <content>\` or run ingest.\n`,
+            `No local wiki pages found in ${project.projectDir}. Add Markdown files under wiki/ or run \`ktx ingest <connectionId>\`.\n`,
           );
         } else {
           io.stderr.write(

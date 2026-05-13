@@ -257,7 +257,6 @@ describe('standalone example docs', () => {
     assert.match(ingestReference, /--query-history-window-days <days>/);
     assert.match(buildingContext, /ktx ingest <connection-id>/);
     assert.match(buildingContext, /ktx ingest --all/);
-    assert.match(buildingContext, /ktx ingest replay <run-id>/);
     assert.match(contextSources, /ktx ingest <connectionId>/);
     assert.match(contextAsCode, /ktx ingest --all --no-input/);
     assert.match(quickstart, /schema context/);
@@ -272,11 +271,15 @@ describe('standalone example docs', () => {
 
     assert.doesNotMatch(cliMeta, /ktx-scan/);
     assert.doesNotMatch(ingestReference, /ktx ingest run/);
+    assert.doesNotMatch(ingestReference, /ktx ingest status/);
+    assert.doesNotMatch(ingestReference, /ktx ingest replay/);
     assert.doesNotMatch(ingestReference, /--adapter/);
     assert.doesNotMatch(ingestReference, /ktx ingest watch/);
     assert.doesNotMatch(ingestReference, /live-database/);
     assert.doesNotMatch(devReference, /ktx scan/);
     assert.doesNotMatch(buildingContext, /ktx ingest watch/);
+    assert.doesNotMatch(buildingContext, /ktx ingest status/);
+    assert.doesNotMatch(buildingContext, /ktx ingest replay/);
     assert.doesNotMatch(buildingContext, /historic-sql/);
     assert.doesNotMatch(buildingContext, /live-database/);
     assert.doesNotMatch(contextSources, /ktx ingest run --connection-id/);

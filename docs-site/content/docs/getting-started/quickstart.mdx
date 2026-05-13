@@ -211,8 +211,8 @@ KTX writes project state as plain files so agents can inspect and edit changes i
 | `ktx.yaml` | `ktx setup` | Main project configuration: connections, LLM settings, embeddings, and context sources |
 | `.ktx/secrets/*` | `ktx setup` when file-backed secrets are selected | Local secret files referenced from `ktx.yaml`; do not commit these |
 | `semantic-layer/<connection-id>/*.yaml` | context build, ingestion, or direct file edits | Semantic source definitions agents use for SQL generation |
-| `wiki/global/*.md` | ingestion, memory capture, `ktx wiki write --scope global`, or direct file edits | Shared business context and metric definitions |
-| `wiki/user/<user-id>/*.md` | memory capture, `ktx wiki write --scope user`, or direct file edits | User-scoped notes for one agent/user context |
+| `wiki/global/*.md` | ingestion, memory capture, or direct file edits | Shared business context and metric definitions |
+| `wiki/user/<user-id>/*.md` | memory capture or direct file edits | User-scoped notes for one agent/user context |
 | `.claude/skills/ktx/SKILL.md`, `.agents/skills/ktx/SKILL.md` | CLI-mode agent integration setup | Agent instructions for calling public `ktx` commands |
 
 ## Verify it worked

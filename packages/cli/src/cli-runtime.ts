@@ -2,7 +2,6 @@ import { createRequire } from 'node:module';
 
 import type { KtxConnectionArgs } from './connection.js';
 import type { KtxDoctorArgs } from './doctor.js';
-import type { KtxIngestArgs } from './ingest.js';
 import type { KtxKnowledgeArgs } from './knowledge.js';
 import type { KtxPublicIngestArgs } from './public-ingest.js';
 import type { KtxRuntimeArgs } from './runtime.js';
@@ -29,7 +28,6 @@ export interface KtxCliDeps {
   setup?: (args: KtxSetupArgs, io: KtxCliIo) => Promise<number>;
   connection?: (args: KtxConnectionArgs, io: KtxCliIo) => Promise<number>;
   doctor?: (args: KtxDoctorArgs, io: KtxCliIo) => Promise<number>;
-  ingest?: (args: KtxIngestArgs, io: KtxCliIo) => Promise<number>;
   publicIngest?: (args: KtxPublicIngestArgs, io: KtxCliIo) => Promise<number>;
   runtime?: (args: KtxRuntimeArgs, io: KtxCliIo) => Promise<number>;
   knowledge?: (args: KtxKnowledgeArgs, io: KtxCliIo) => Promise<number>;
