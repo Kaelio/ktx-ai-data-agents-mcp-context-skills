@@ -206,10 +206,10 @@ export const DEMO_REPLAY_TARGETS = {
 
 export function buildDemoReplayTimeline(): DemoReplayEvent[] {
   return [
-    // postgres-warehouse: scan
+    // postgres-warehouse: database schema context
     { delayMs: 0, connectionId: 'postgres-warehouse', status: 'running', detailLine: null, summaryText: null },
-    { delayMs: 1200, connectionId: 'postgres-warehouse', status: 'running', detailLine: '[50%] scanning tables...', summaryText: null },
-    { delayMs: 2400, connectionId: 'postgres-warehouse', status: 'done', detailLine: null, summaryText: '56 tables scanned' },
+    { delayMs: 1200, connectionId: 'postgres-warehouse', status: 'running', detailLine: '[50%] reading schema...', summaryText: null },
+    { delayMs: 2400, connectionId: 'postgres-warehouse', status: 'done', detailLine: null, summaryText: '56 tables' },
     // dbt-main
     { delayMs: 2400, connectionId: 'dbt-main', status: 'running', detailLine: null, summaryText: null },
     { delayMs: 3600, connectionId: 'dbt-main', status: 'running', detailLine: '[60%] ingesting models...', summaryText: null },

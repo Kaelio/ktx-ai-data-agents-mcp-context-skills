@@ -134,6 +134,17 @@ describe('buildDemoReplayTimeline', () => {
       expect(timeline[i].delayMs).toBeGreaterThanOrEqual(timeline[i - 1].delayMs);
     }
   });
+
+  it('uses schema-context wording for database progress', () => {
+    const renderedTimeline = timeline
+      .map((event) => [event.detailLine, event.summaryText].filter(Boolean).join(' '))
+      .join('\n');
+
+    expect(renderedTimeline).toContain('reading schema');
+    expect(renderedTimeline).toContain('56 tables');
+    expect(renderedTimeline).not.toContain('scanning');
+    expect(renderedTimeline).not.toContain('scanned');
+  });
 });
 
 describe('DEMO_REPLAY_TARGETS', () => {
