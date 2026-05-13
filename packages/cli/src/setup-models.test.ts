@@ -492,12 +492,29 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('ready');
     expect(listGcloudProjects).toHaveBeenCalledTimes(2);
-    expect(io.stdout()).toContain('Could not list Google Cloud projects with gcloud');
-    expect(io.stdout()).toContain('gcloud auth login --update-adc');
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
+        message: expect.stringContaining('Could not list Google Cloud projects with gcloud'),
         options: expect.arrayContaining([{ value: 'retry', label: 'Retry loading Google Cloud projects' }]),
+      }),
+    );
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          `${String.fromCharCode(0x1b)}[33mCould not list Google Cloud projects with gcloud`,
+        ),
+      }),
+    );
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('gcloud auth login --update-adc'),
+      }),
+    );
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          `${String.fromCharCode(0x1b)}[33mRun \`gcloud auth login --update-adc\``,
+        ),
       }),
     );
     expect(healthCheck).toHaveBeenCalledWith(

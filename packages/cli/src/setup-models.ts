@@ -20,6 +20,12 @@ import {
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 
+const ESC = String.fromCharCode(0x1b);
+
+function yellow(text: string): string {
+  return `${ESC}[33m${text}${ESC}[39m`;
+}
+
 export interface KtxSetupModelArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
@@ -549,9 +555,11 @@ function formatGcloudProjectListFailure(error: unknown): string {
     ? 'gcloud needs reauthentication before it can list projects.'
     : 'gcloud returned an error while listing projects.';
   return [
-    `│  Could not list Google Cloud projects with gcloud: ${reason}`,
-    '│  Run `gcloud auth login --update-adc` in another terminal, then choose Retry loading Google Cloud projects.',
-  ].join('\n');
+    `Could not list Google Cloud projects with gcloud: ${reason}`,
+    'Run `gcloud auth login --update-adc` in another terminal, then choose Retry loading Google Cloud projects.',
+  ]
+    .map((line) => yellow(line))
+    .join('\n');
 }
 
 async function chooseInteractiveVertexProject(
@@ -563,11 +571,12 @@ async function chooseInteractiveVertexProject(
   while (true) {
     let projects: GcloudProjectChoice[] = [];
     let listFailed = false;
+    let listFailureMessage: string | undefined;
     try {
       projects = await (deps.listGcloudProjects ?? defaultListGcloudProjects)();
     } catch (error) {
       listFailed = true;
-      io.stdout.write(`${formatGcloudProjectListFailure(error)}\n`);
+      listFailureMessage = formatGcloudProjectListFailure(error);
     }
 
     const orderedProjects = orderGcloudProjects(projects, currentProject);
@@ -576,7 +585,12 @@ async function chooseInteractiveVertexProject(
     }
 
     const choice = await prompts.select({
-      message: `Which Google Cloud project should KTX use for Vertex AI?\n\n${VERTEX_PROJECT_PROMPT_CONTEXT}`,
+      message: `Which Google Cloud project should KTX use for Vertex AI?\n\n${[
+        VERTEX_PROJECT_PROMPT_CONTEXT,
+        listFailureMessage,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join('\n\n')}`,
       options: [
         ...orderedProjects.map((project) => ({
           value: project.projectId,
