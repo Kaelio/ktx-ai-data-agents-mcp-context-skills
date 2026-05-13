@@ -142,8 +142,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'How do you want to connect to PostgreSQL?',
       options: [
-        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'url', label: 'Paste a connection URL' },
+        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -152,6 +152,43 @@ describe('setup databases step', () => {
       'Which primary sources should KTX connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
     );
+  });
+
+  it('offers connection URL paste first for URL-capable primary sources', async () => {
+    const cases: Array<{ driver: KtxSetupDatabaseDriver; label: string }> = [
+      { driver: 'postgres', label: 'PostgreSQL' },
+      { driver: 'mysql', label: 'MySQL' },
+      { driver: 'clickhouse', label: 'ClickHouse' },
+      { driver: 'sqlserver', label: 'SQL Server' },
+    ];
+
+    for (const testCase of cases) {
+      const prompts = makePromptAdapter({
+        selectValues: ['back'],
+      });
+
+      const result = await runKtxSetupDatabasesStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'auto',
+          databaseDrivers: [testCase.driver],
+          skipDatabases: false,
+          databaseSchemas: [],
+        },
+        makeIo().io,
+        { prompts },
+      );
+
+      expect(result.status).toBe('back');
+      expect(prompts.select).toHaveBeenCalledWith({
+        message: `How do you want to connect to ${testCase.label}?`,
+        options: [
+          { value: 'url', label: 'Paste a connection URL' },
+          { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
+          { value: 'back', label: 'Back' },
+        ],
+      });
+    }
   });
 
   it('lets Back leave database setup when the driver came from flags', async () => {
@@ -488,8 +525,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(1, {
       message: 'How do you want to connect to PostgreSQL?',
       options: [
-        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'url', label: 'Paste a connection URL' },
+        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'back', label: 'Back' },
       ],
     });

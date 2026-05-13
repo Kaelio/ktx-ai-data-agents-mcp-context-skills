@@ -615,8 +615,8 @@ async function buildUrlConnectionConfig(input: {
     const choice = await input.prompts.select({
       message: `How do you want to connect to ${label}?`,
       options: [
-        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'url', label: 'Paste a connection URL' },
+        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'back', label: 'Back' },
       ],
     });
