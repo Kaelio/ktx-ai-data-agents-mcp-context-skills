@@ -466,14 +466,15 @@ describe('runKtxPublicIngest', () => {
     ).resolves.toBe(1);
 
     expect(runIngest).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         command: 'run',
         projectDir: '/tmp/project',
         connectionId: 'prod_metabase',
         adapter: 'metabase',
+        allowImplicitAdapter: true,
         outputMode: 'plain',
         inputMode: 'disabled',
-      },
+      }),
       expect.anything(),
     );
     expect(runScan).toHaveBeenCalledWith(
@@ -550,7 +551,7 @@ describe('runKtxPublicIngest', () => {
         detectRelationships: true,
         dryRun: false,
       },
-      io.io,
+      expect.objectContaining({ capturedOutput: expect.any(Function) }),
     );
   });
 

@@ -44,7 +44,7 @@ export interface ContextBuildArgs {
   depth?: Extract<KtxPublicIngestArgs, { command: 'run' }>['depth'];
   queryHistory?: Extract<KtxPublicIngestArgs, { command: 'run' }>['queryHistory'];
   queryHistoryWindowDays?: number;
-  scanMode?: 'structural' | 'enriched';
+  scanMode?: Extract<KtxPublicIngestArgs, { command: 'run' }>['scanMode'];
   detectRelationships?: boolean;
 }
 

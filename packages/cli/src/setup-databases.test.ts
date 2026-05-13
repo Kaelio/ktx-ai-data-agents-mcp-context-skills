@@ -1231,9 +1231,11 @@ describe('setup databases step', () => {
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({ driver: 'postgres', url: 'env:DATABASE_URL' });
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
-    expect(io.stderr()).toContain('Structural scan failed for warehouse.');
-    expect(io.stderr()).toContain('│  Structural scan failed for warehouse.');
-    expect(io.stderr()).not.toMatch(/^Structural scan failed for warehouse\./m);
+    expect(io.stderr()).toContain('Fast database ingest failed for warehouse.');
+    expect(io.stderr()).toContain('│  Fast database ingest failed for warehouse.');
+    expect(io.stderr()).toContain(`Debug command: ktx ingest warehouse --project-dir ${tempDir} --fast --debug`);
+    expect(io.stderr()).not.toContain('Structural scan failed for warehouse.');
+    expect(io.stderr()).not.toMatch(/^Fast database ingest failed for warehouse\./m);
   });
 
   it('prints the native SQLite rebuild command when scanning hits a Node ABI mismatch', async () => {
@@ -1329,7 +1331,8 @@ describe('setup databases step', () => {
     expect(scanConnection).toHaveBeenCalledTimes(2);
     expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('Rebuilding Native SQLite with pnpm run native:rebuild…');
-    expect(io.stdout()).toContain('◇  Scan complete for warehouse');
+    expect(io.stdout()).toContain('◇  Schema context complete for warehouse');
+    expect(io.stdout()).toContain('│  Changes: 0 changes across 56 tables');
   });
 
   it('writes query history config for supported Snowflake databases after validation succeeds', async () => {
