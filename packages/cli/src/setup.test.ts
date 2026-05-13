@@ -584,13 +584,13 @@ describe('setup status', () => {
 
     expect(projectPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Which KTX project should setup use?',
+        message: 'Where should KTX create the project?',
         options: expect.arrayContaining([expect.objectContaining({ value: 'back', label: 'Back' })]),
       }),
     );
     expect(projectPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Which KTX project should setup use?',
+        message: 'Where should KTX create the project?',
         options: expect.not.arrayContaining([expect.objectContaining({ value: 'exit', label: 'Exit' })]),
       }),
     );

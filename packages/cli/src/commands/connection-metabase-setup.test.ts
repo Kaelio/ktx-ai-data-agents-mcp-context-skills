@@ -230,7 +230,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
 
     expect(io.stdout()).toContain('Connection: metabase');
     expect(io.stdout()).toContain('Discovered 1 database');
-    expect(io.stdout()).toContain(`ktx ingest metabase --project-dir ${projectDir}`);
+    expect(io.stdout()).toContain(`ktx ingest run --connection-id metabase --adapter metabase --project-dir ${projectDir}`);
     expect(io.stdout()).not.toContain('mb_example');
     expect(io.stderr()).not.toContain('mb_example');
 
@@ -784,7 +784,7 @@ describe('runKtxConnectionMetabaseSetup', () => {
 
     const config = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(config).toContain('driver: metabase');
-    expect(io.stderr()).toContain(`ktx ingest metabase --project-dir ${projectDir}`);
+    expect(io.stderr()).toContain(`ktx ingest run --connection-id metabase --adapter metabase --project-dir ${projectDir}`);
 
     const updatedProject = await loadKtxProject({ projectDir });
     const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
