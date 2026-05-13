@@ -1,6 +1,6 @@
 ---
 name: sl
-description: KTX's semantic layer — a structured catalog of sources (tables/views), measures, joins, and segments expressed as YAML. Covers the schema and how to query it via `semantic_query`. Use when the task involves querying pre-defined metrics (ARR, churn, retention, LTV, MAU) or reading SL source YAML to understand the catalog. Capture is handled by the `sl_capture` skill (memory-agent only).
+description: KTX's semantic layer — a structured catalog of sources (tables/views), measures, joins, and segments expressed as YAML. Covers the schema and how to query it via `sl_query`. Use when the task involves querying pre-defined metrics (ARR, churn, retention, LTV, MAU) or reading SL source YAML to understand the catalog. Capture is handled by the `sl_capture` skill (memory-agent only).
 ---
 
 # Semantic Layer
@@ -9,7 +9,7 @@ KTX's semantic layer (SL) is a structured catalog. Each **source** represents a 
 
 This skill covers two parts:
 - **Part 1** — Schema reference (what an SL source looks like).
-- **Part 2** — Querying via `semantic_query`.
+- **Part 2** — Querying via `sl_query`.
 
 Capture (when and how to add new patterns to the SL) is a separate concern handled by the memory-agent — see the `sl_capture` skill if you are running in capture mode. The research agent **reads** and **queries** the SL via the tools described here; it does not write to it.
 
@@ -162,7 +162,7 @@ segments:
     description: Orders that were paid and not refunded
 ```
 
-Named, reusable boolean predicates scoped to one source. Reference by bare name in a measure's `segments: []`, or by dotted form `source.segment_name` in a `semantic_query`. Segments are predicates only — they are NOT selectable as dimensions. If you need to group by the predicate, add a `columns[]` entry instead.
+Named, reusable boolean predicates scoped to one source. Reference by bare name in a measure's `segments: []`, or by dotted form `source.segment_name` in an `sl_query`. Segments are predicates only — they are NOT selectable as dimensions. If you need to group by the predicate, add a `columns[]` entry instead.
 
 ### Cross-references with the wiki
 
@@ -170,11 +170,11 @@ The reverse edge (wiki pages that cite this source) is derived automatically fro
 
 ---
 
-## Part 2 — Querying via `semantic_query`
+## Part 2 — Querying via `sl_query`
 
-The `semantic_query` tool generates correct SQL from a structured query. It handles joins, fan-out prevention, aggregation correctness, and filter classification automatically. Prefer it over writing raw SQL whenever the SL has the relevant sources.
+The `sl_query` tool generates correct SQL from a structured query. It handles joins, fan-out prevention, aggregation correctness, and filter classification automatically. Prefer it over writing raw SQL whenever the SL has the relevant sources.
 
-### When to prefer semantic_query over raw SQL
+### When to prefer sl_query over raw SQL
 
 - A pre-defined measure already exists (`source.measure_name` appears in the catalog).
 - The question combines fields from multiple sources — the engine resolves the join path automatically.
@@ -189,15 +189,12 @@ Use raw SQL (`sql_execution`) only when:
 ```json
 {
   "connectionId": "uuid-of-the-connection",
-  "reasoning": "Brief note on what this query analyzes",
-  "query": {
-    "measures": ["orders.total_revenue", "sum(orders.amount)"],
-    "dimensions": ["customers.segment", { "field": "orders.created_at", "granularity": "month" }],
-    "filters": ["orders.status != 'cancelled'", "orders.total_revenue > 10000"],
-    "segments": ["orders.paid_non_refunded"],
-    "order_by": [{ "field": "orders.created_at", "direction": "desc" }],
-    "limit": 1000
-  }
+  "measures": ["orders.total_revenue", "sum(orders.amount)"],
+  "dimensions": ["customers.segment", { "field": "orders.created_at", "granularity": "month" }],
+  "filters": ["orders.status != 'cancelled'", "orders.total_revenue > 10000"],
+  "segments": ["orders.paid_non_refunded"],
+  "order_by": [{ "field": "orders.created_at", "direction": "desc" }],
+  "limit": 1000
 }
 ```
 

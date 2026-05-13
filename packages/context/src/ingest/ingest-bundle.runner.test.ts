@@ -695,7 +695,8 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         await params.toolSet.emit_unmapped_fallback.execute(
           {
             rawPath: 'a.yml',
-            reason: 'semantic_not_representable',
+            reason: 'parse_error',
+            clarification: 'semantic_not_representable',
             fallback: 'flagged',
           },
           { toolCallId: 'fallback-1', messages: [] },
@@ -954,6 +955,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
             {
               rawPath: 'a.yml',
               reason: 'conversion_metric_unsupported',
+              detail: expect.stringContaining('conversion metric'),
               fallback: 'flagged',
             },
           ],
@@ -1006,7 +1008,8 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         await params.toolSet.emit_unmapped_fallback.execute(
           {
             rawPath: 'cards/untranslated.json',
-            reason: 'metabase_sql_untranslated',
+            reason: 'parse_error',
+            clarification: 'metabase_sql_untranslated',
             fallback: 'flagged',
           },
           { toolCallId: 'fallback-1', messages: [] },
@@ -1053,7 +1056,8 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           unmappedFallbacks: [
             {
               rawPath: 'cards/untranslated.json',
-              reason: 'metabase_sql_untranslated',
+              reason: 'parse_error',
+              detail: expect.stringContaining('metabase_sql_untranslated'),
               fallback: 'flagged',
             },
           ],

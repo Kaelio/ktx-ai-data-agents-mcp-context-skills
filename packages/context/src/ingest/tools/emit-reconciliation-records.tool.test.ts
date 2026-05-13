@@ -182,6 +182,30 @@ describe('reconciliation emit tools', () => {
     ]);
   });
 
+  it('records MetricFlow-specific unsupported fallback reasons', async () => {
+    const stageIndex = makeStageIndex();
+    const tool = createEmitUnmappedFallbackTool({
+      stageIndex,
+      allowedPaths: new Set(['metrics/conversion.yml']),
+    });
+
+    const output = await executeTool(tool, {
+      rawPath: 'metrics/conversion.yml',
+      reason: 'conversion_metric_unsupported',
+      fallback: 'flagged',
+    });
+
+    expect(output).toContain('conversion metric');
+    expect(stageIndex.unmappedFallbacks).toEqual([
+      {
+        rawPath: 'metrics/conversion.yml',
+        reason: 'conversion_metric_unsupported',
+        detail: expect.stringContaining('conversion metric'),
+        fallback: 'flagged',
+      },
+    ]);
+  });
+
   it('rejects unmapped fallback decisions for raw paths outside the allowed set', async () => {
     const stageIndex = makeStageIndex();
     const tool = createEmitUnmappedFallbackTool({

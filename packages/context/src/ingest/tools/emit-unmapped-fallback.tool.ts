@@ -17,6 +17,8 @@ const unmappedFallbackReasonSchema = z.enum([
   'unsupported_dialect',
   'parse_error',
   'missing_target_table',
+  'cumulative_metric_unsupported',
+  'conversion_metric_unsupported',
 ]);
 
 function sameUnmappedFallback(left: UnmappedFallbackRecord, right: UnmappedFallbackRecord): boolean {
@@ -47,6 +49,10 @@ function canonicalDetail(reason: UnmappedFallbackReason, tableRef: string | unde
       return `${tableClause} uses a SQL dialect that is not yet supported.`;
     case 'parse_error':
       return `${tableClause} could not be parsed.`;
+    case 'cumulative_metric_unsupported':
+      return `${tableClause} is a cumulative metric, which is not yet supported as a first-class semantic-layer primitive.`;
+    case 'conversion_metric_unsupported':
+      return `${tableClause} is a conversion metric, which is not yet supported as a first-class semantic-layer primitive.`;
   }
 }
 

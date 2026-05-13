@@ -12,7 +12,7 @@ export interface EvictionListDeps {
 export function createEvictionListTool(deps: EvictionListDeps) {
   return tool({
     description:
-      'List every artifact that the most recent completed sync produced from a now-deleted raw file. Remove each listed artifact and record the decision with context_eviction_decision_write so the ingest report lists every deleted-source decision.',
+      'List every artifact that the most recent completed sync produced from a now-deleted raw file. Remove each listed artifact and record the decision with emit_eviction_decision so the ingest report lists every deleted-source decision.',
     inputSchema: z.object({}),
     execute: async () => {
       if (deps.deletedRawPaths.length === 0) {
