@@ -5,15 +5,11 @@ import { basename, join, resolve } from 'node:path';
 import { cancel, isCancel, select, text } from '@clack/prompts';
 import {
   initKtxProject,
-  ktxSetupCompletedSteps,
   type KtxLocalProject,
   loadKtxProject,
   markKtxSetupStateStepComplete,
   mergeKtxSetupGitignoreEntries,
-  readKtxSetupState,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
-  writeKtxSetupState,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
@@ -170,10 +166,7 @@ async function normalizeSetupGitignore(projectDir: string): Promise<void> {
 }
 
 async function persistProjectStep(project: KtxLocalProject): Promise<KtxLocalProject> {
-  const completedSteps = ktxSetupCompletedSteps(project.config, await readKtxSetupState(project.projectDir));
-  const config = stripKtxSetupCompletedSteps(project.config);
-  await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
-  await writeKtxSetupState(project.projectDir, { completed_steps: completedSteps });
+  await writeFile(project.configPath, serializeKtxProjectConfig(project.config), 'utf-8');
   await markKtxSetupStateStepComplete(project.projectDir, 'project');
   await normalizeSetupGitignore(project.projectDir);
   return await loadKtxProject({ projectDir: project.projectDir });

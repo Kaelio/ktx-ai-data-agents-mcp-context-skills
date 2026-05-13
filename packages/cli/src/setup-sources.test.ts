@@ -102,7 +102,6 @@ describe('setup sources step', () => {
         },
         setup: {
           ...config.setup,
-          completed_steps: config.setup?.completed_steps ?? [],
           database_connection_ids: ['warehouse'],
         },
       }),
@@ -137,7 +136,7 @@ describe('setup sources step', () => {
       projectDir,
     });
 
-    expect((await readConfig()).setup?.completed_steps).toEqual(undefined);
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(io.stdout()).toContain('Context source setup skipped.');
   });
@@ -171,7 +170,7 @@ describe('setup sources step', () => {
       source_dir: '/repo/dbt',
       project_name: 'analytics',
     });
-    expect(config.setup?.completed_steps).toBeUndefined();
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(runInitialIngest).toHaveBeenCalledWith(projectDir, 'analytics_dbt', io.io, { inputMode: 'disabled' });
   });
@@ -480,7 +479,7 @@ describe('setup sources step', () => {
       ),
     ).resolves.toEqual({ status: 'failed', projectDir });
 
-    expect((await readConfig()).setup?.completed_steps ?? []).not.toContain('sources');
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(io.stderr()).toContain('No LookML files found');
   });
 
@@ -1032,7 +1031,7 @@ describe('setup sources step', () => {
 
     expect(testPrompts.multiselect).not.toHaveBeenCalled();
     expect(io.stdout()).toContain('Connect a primary source before adding context sources.');
-    expect((await readConfig()).setup?.completed_steps ?? []).not.toContain('sources');
+    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 
   it('auto-detects dbt_project.yml at the root of a local path', async () => {

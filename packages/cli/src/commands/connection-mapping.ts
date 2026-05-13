@@ -28,7 +28,6 @@ import {
   loadKtxProject,
   parseMetabaseMappingBootstrap,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from '../index.js';
 import { profileMark } from '../startup-profile.js';
@@ -170,7 +169,7 @@ async function writeMetabaseMappings(
   };
   await project.fileStore.writeFile(
     'ktx.yaml',
-    serializeKtxProjectConfig(stripKtxSetupCompletedSteps(nextConfig)),
+    serializeKtxProjectConfig(nextConfig),
     'ktx',
     'ktx@example.com',
     message,

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readKtxSetupState } from '@ktx/context/project';
+import { readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -40,12 +40,6 @@ async function writeReadyProject(projectDir: string) {
       'setup:',
       '  database_connection_ids:',
       '    - warehouse',
-      '  completed_steps:',
-      '    - project',
-      '    - llm',
-      '    - embeddings',
-      '    - databases',
-      '    - sources',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -71,6 +65,9 @@ async function writeReadyProject(projectDir: string) {
     ].join('\n'),
     'utf-8',
   );
+  await writeKtxSetupState(projectDir, {
+    completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources'],
+  });
 }
 
 async function writeScanReport(

@@ -6,7 +6,6 @@ import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { withMenuOptionsSpacing, withMultiselectNavigation } from './prompt-navigation.js';
@@ -376,7 +375,7 @@ async function installTarget(input: {
 
 async function markAgentsComplete(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(project.config)), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(project.config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'agents');
 }
 

@@ -5,11 +5,9 @@ import { cancel, isCancel, select } from '@clack/prompts';
 import {
   type KtxLocalProject,
   loadKtxProject,
-  ktxSetupCompletedSteps,
   markKtxSetupStateStepComplete,
   readKtxSetupState,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
@@ -470,7 +468,7 @@ async function defaultVerifyContextReady(projectDir: string): Promise<KtxSetupCo
 
 async function markContextComplete(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  await writeFile(project.configPath, serializeKtxProjectConfig(stripKtxSetupCompletedSteps(project.config)), 'utf-8');
+  await writeFile(project.configPath, serializeKtxProjectConfig(project.config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'context');
 }
 
@@ -714,7 +712,7 @@ export async function runKtxSetupContextStep(
   try {
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const existingState = await readKtxSetupContextState(args.projectDir);
-    const completedSteps = ktxSetupCompletedSteps(project.config, await readKtxSetupState(args.projectDir));
+    const completedSteps = (await readKtxSetupState(args.projectDir)).completed_steps;
     if (completedSteps.includes('context') && existingState.status === 'completed') {
       return { status: 'ready', projectDir: args.projectDir, runId: existingState.runId ?? 'setup-context-completed' };
     }

@@ -32,7 +32,6 @@ import {
   loadKtxProject,
   parseMetabaseMappingBootstrap,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 
 import { createClackSpinner, type KtxCliSpinner } from '../clack.js';
@@ -723,7 +722,7 @@ export async function runKtxConnectionMetabaseSetup(
       };
       await project.fileStore.writeFile(
         'ktx.yaml',
-        serializeKtxProjectConfig(stripKtxSetupCompletedSteps(finalConfig)),
+        serializeKtxProjectConfig(finalConfig),
         'ktx',
         'ktx@example.com',
         `Setup Metabase connection ${connectionId}`,

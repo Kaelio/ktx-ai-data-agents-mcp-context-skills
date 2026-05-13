@@ -4,7 +4,6 @@ import { cancel, isCancel, select } from '@clack/prompts';
 import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
 import {
   ktxLocalStateDbPath,
-  ktxSetupCompletedSteps,
   loadKtxProject,
   readKtxSetupState,
   type KtxLocalProject,
@@ -297,7 +296,7 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
   };
   embeddings.ready = embeddingsReady(embeddings);
 
-  const completedSteps = ktxSetupCompletedSteps(project.config, await readKtxSetupState(resolvedProjectDir));
+  const completedSteps = (await readKtxSetupState(resolvedProjectDir)).completed_steps;
   const contextState = await readKtxSetupContextState(resolvedProjectDir);
   const setupContextStatus = setupContextStatusFromState(contextState, {
     completedStep: completedSteps.includes('context'),

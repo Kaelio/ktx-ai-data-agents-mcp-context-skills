@@ -8,7 +8,6 @@ import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
-  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -362,19 +361,17 @@ async function chooseModel(
 
 async function persistLlmConfig(projectDir: string, credentialRef: string, model: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = stripKtxSetupCompletedSteps(
-    {
-      ...project.config,
-      llm: buildProjectLlmConfig(project.config.llm, credentialRef, model),
-      scan: {
-        ...project.config.scan,
-        enrichment: {
+  const config = {
+    ...project.config,
+    llm: buildProjectLlmConfig(project.config.llm, credentialRef, model),
+    scan: {
+      ...project.config.scan,
+      enrichment: {
           ...project.config.scan.enrichment,
-          mode: 'llm',
+          mode: 'llm' as const,
         },
       },
-    },
-  );
+    };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'llm');
 }

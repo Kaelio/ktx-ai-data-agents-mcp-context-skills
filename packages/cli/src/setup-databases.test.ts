@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig, readKtxSetupState } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type KtxSetupDatabaseDriver,
@@ -548,12 +548,11 @@ describe('setup databases step', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - databases',
         '',
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({ multiselectValues: [['back']], selectValues: ['continue'] });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
@@ -590,12 +589,11 @@ describe('setup databases step', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - databases',
         '',
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const prompts = makePromptAdapter({
       selectValues: ['add', 'url', 'continue'],
       multiselectValues: [['mysql']],
@@ -706,12 +704,11 @@ describe('setup databases step', () => {
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
-        '  completed_steps:',
-        '    - databases',
         '',
       ].join('\n'),
       'utf-8',
     );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const io = makeIo();
     const prompts = makePromptAdapter({
       multiselectValues: [[]],
@@ -1211,7 +1208,7 @@ describe('setup databases step', () => {
     expect(scanConnection).toHaveBeenCalledTimes(2);
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup?.database_connection_ids).toEqual(['warehouse', 'analytics']);
-    expect(config.setup?.completed_steps).toBeUndefined();
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
 
@@ -1237,7 +1234,7 @@ describe('setup databases step', () => {
     expect(result.status).toBe('failed');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({ driver: 'postgres', url: 'env:DATABASE_URL' });
-    expect(config.setup?.completed_steps ?? []).not.toContain('databases');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect(io.stderr()).toContain('Structural scan failed for warehouse.');
   });
 
@@ -1542,7 +1539,6 @@ describe('setup databases step', () => {
 
     expect(result.status).toBe('skipped');
     expect(io.stdout()).toContain('KTX cannot work until you add a primary source.');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup?.completed_steps ?? []).not.toContain('databases');
+    expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 });
