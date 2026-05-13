@@ -113,7 +113,7 @@ my-project/
 │       └── local/
 ├── raw-sources/
 │   └── warehouse/
-│       └── live-database/        # Scan artifacts and reports
+│       └── <syncId>/             # Database ingest artifacts and reports
 └── .ktx/
     └── db.sqlite                 # Local state (git-ignored)
 ```
@@ -122,14 +122,13 @@ Semantic sources and wiki pages are committed to git. The `.ktx/` directory
 holds ephemeral state and is git-ignored — delete it and KTX rebuilds on the
 next run.
 
-### Scan the demo warehouse
+### Build demo warehouse context
 
-Scan artifacts are written under
-`raw-sources/warehouse/live-database/<syncId>/` in the project directory.
+Database ingest artifacts are written under `raw-sources/warehouse/<syncId>/`
+in the project directory.
 
 ```bash
-SCAN_OUTPUT="$(ktx scan warehouse --project-dir "$PROJECT_DIR")"
-printf '%s\n' "$SCAN_OUTPUT"
+ktx ingest warehouse --project-dir "$PROJECT_DIR" --fast
 ktx status --project-dir "$PROJECT_DIR"
 ```
 
@@ -218,9 +217,7 @@ KTX provider. Enable it with an environment flag when running an LLM-backed
 command:
 
 ```bash
-KTX_AI_DEVTOOLS_ENABLED=true ktx ingest run \
-  --connection-id warehouse \
-  --adapter metabase
+KTX_AI_DEVTOOLS_ENABLED=true ktx ingest warehouse --project-dir "$PROJECT_DIR" --deep
 ```
 
 Traces are written to `.devtools/generations.json` under the current working

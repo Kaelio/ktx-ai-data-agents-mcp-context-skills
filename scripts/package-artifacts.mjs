@@ -653,10 +653,6 @@ try {
       'scan:',
       '  enrichment:',
       '    mode: deterministic',
-      'ingest:',
-      '  adapters:',
-      '    - fake',
-      '    - live-database',
       '',
     ].join('\\n'),
     'utf-8',
@@ -819,30 +815,32 @@ try {
   requireOutput('ktx dev runtime stop', runtimeStop, /Stopped KTX Python daemon/);
   process.stdout.write('ktx dev runtime daemon lifecycle verified\\n');
 
-  const structuralScan = await run('pnpm', ['exec', 'ktx', 'scan', 'warehouse',
+  const structuralScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',
     '--project-dir',
     projectDir,
+    '--fast',
+    '--no-input',
   ]);
-  requireProjectStderr('ktx scan structural', structuralScan, projectDir);
-  requireOutput('ktx scan structural', structuralScan, /Status: done/);
-  requireOutput('ktx scan structural', structuralScan, /Mode: structural/);
-  requireOutput('ktx scan structural', structuralScan, /Needs attention\\s+None/);
+  requireProjectStderr('ktx ingest fast', structuralScan, projectDir);
+  requireOutput('ktx ingest fast', structuralScan, /Ingest finished/);
+  requireOutput('ktx ingest fast', structuralScan, /Database schema/);
+  requireOutput('ktx ingest fast', structuralScan, /warehouse\\s+done/);
   const structuralScanRunId = getRunId(structuralScan.stdout);
   await access(join(projectDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'));
-  process.stdout.write('ktx scan structural verified: ' + structuralScanRunId + '\\n');
+  process.stdout.write('ktx ingest fast verified: ' + structuralScanRunId + '\\n');
 
-  const enrichedScan = await run('pnpm', ['exec', 'ktx', 'scan', 'warehouse',
+  const enrichedScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',
     '--project-dir',
     projectDir,
-    '--mode',
-    'enriched',
+    '--deep',
+    '--no-input',
   ]);
-  requireProjectStderr('ktx scan enriched', enrichedScan, projectDir);
-  requireOutput('ktx scan enriched', enrichedScan, /Status: done/);
-  requireOutput('ktx scan enriched', enrichedScan, /Mode: enriched/);
-  requireOutput('ktx scan enriched', enrichedScan, /Enrichment artifacts:/);
+  requireProjectStderr('ktx ingest deep', enrichedScan, projectDir);
+  requireOutput('ktx ingest deep', enrichedScan, /Ingest finished/);
+  requireOutput('ktx ingest deep', enrichedScan, /Database schema/);
+  requireOutput('ktx ingest deep', enrichedScan, /warehouse\\s+done/);
   const enrichedScanRunId = getRunId(enrichedScan.stdout);
-  process.stdout.write('ktx scan enriched verified: ' + enrichedScanRunId + '\\n');
+  process.stdout.write('ktx ingest deep verified: ' + enrichedScanRunId + '\\n');
 
   await mkdir(join(sourceDir, 'orders'), { recursive: true });
   await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\\n', 'utf-8');

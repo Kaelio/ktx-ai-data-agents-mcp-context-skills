@@ -50,7 +50,7 @@ describe('installed live-database artifact smoke helpers', () => {
     );
   });
 
-  it('writes a live-database-only KTX project config with SQLite local state', () => {
+  it('writes a public database ingest KTX project config with SQLite local state', () => {
     assert.equal(
       buildKtxYaml('postgresql://ktx:postgres@127.0.0.1:15432/warehouse'), // pragma: allowlist secret
       [
@@ -63,9 +63,6 @@ describe('installed live-database artifact smoke helpers', () => {
         'storage:',
         '  state: sqlite',
         '  search: sqlite-fts5',
-        'ingest:',
-        '  adapters:',
-        '    - live-database',
         '',
       ].join('\n'),
     );
@@ -98,20 +95,16 @@ describe('installed live-database artifact smoke helpers', () => {
     ]);
   });
 
-  it('builds installed CLI live-database ingest and status commands', () => {
+  it('builds installed CLI public database ingest and status commands', () => {
     assert.deepEqual(buildLiveDatabaseIngestArgs('/tmp/project', 'http://127.0.0.1:8765'), [
       'exec',
       'ktx',
       'ingest',
-      'run',
+      'warehouse',
       '--project-dir',
       '/tmp/project',
-      '--connection-id',
-      'warehouse',
-      '--adapter',
-      'live-database',
-      '--database-introspection-url',
-      'http://127.0.0.1:8765',
+      '--fast',
+      '--no-input',
     ]);
 
     assert.deepEqual(buildLiveDatabaseStatusArgs('/tmp/project', 'local-run-1'), [

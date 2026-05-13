@@ -96,27 +96,20 @@ export function buildKtxYaml(postgresUrl) {
     'storage:',
     '  state: sqlite',
     '  search: sqlite-fts5',
-    'ingest:',
-    '  adapters:',
-    '    - live-database',
     '',
   ].join('\n');
 }
 
-export function buildLiveDatabaseIngestArgs(projectDir, databaseIntrospectionUrl) {
+export function buildLiveDatabaseIngestArgs(projectDir, _databaseIntrospectionUrl, connectionId = 'warehouse') {
   return [
     'exec',
     'ktx',
     'ingest',
-    'run',
+    connectionId,
     '--project-dir',
     projectDir,
-    '--connection-id',
-    'warehouse',
-    '--adapter',
-    'live-database',
-    '--database-introspection-url',
-    databaseIntrospectionUrl,
+    '--fast',
+    '--no-input',
   ];
 }
 
@@ -324,12 +317,9 @@ async function main() {
       env: managedRuntimeEnv(cleanInstallDir),
       timeout: 120_000,
     });
-    requireSuccess('ktx ingest run live-database', ingestRun);
-    requireOutput('ktx ingest run live-database', ingestRun, /Status: done/);
-    requireOutput('ktx ingest run live-database', ingestRun, /Adapter: live-database/);
-    requireOutput('ktx ingest run live-database', ingestRun, /Diff: \+4\/~0\/-0\/=0/);
-    requireOutput('ktx ingest run live-database', ingestRun, /Raw files: 4/);
-    requireOutput('ktx ingest run live-database', ingestRun, /Work units: 2/);
+    requireSuccess('ktx ingest warehouse --fast', ingestRun);
+    requireOutput('ktx ingest warehouse --fast', ingestRun, /Ingest finished/);
+    requireOutput('ktx ingest warehouse --fast', ingestRun, /Database schema/);
 
     const runId = getRunId(ingestRun.stdout);
     const ingestStatus = await run('pnpm', buildLiveDatabaseStatusArgs(projectDir, runId), {

@@ -223,18 +223,18 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);
   });
 
-  it('documents scan workflows in the docs site', async () => {
+  it('documents public context build workflows in the docs site', async () => {
     const rootReadme = await readText('README.md');
     const buildingContext = await readText('docs-site/content/docs/guides/building-context.mdx');
-    const scanReference = await readText('docs-site/content/docs/cli-reference/ktx-scan.mdx');
 
-    assert.match(buildingContext, /ktx scan <connection-id>/);
+    assert.match(buildingContext, /ktx ingest <connection-id>/);
+    assert.match(buildingContext, /ktx ingest --all/);
     assert.match(buildingContext, /ktx status/);
     assert.doesNotMatch(buildingContext, /ktx scan status <run-id>/);
     assert.doesNotMatch(buildingContext, /ktx scan report <run-id>/);
-    assert.match(scanReference, /ktx scan <connectionId> \[options\]/);
     assert.match(rootReadme, /raw-sources\//);
-    assert.match(rootReadme, /live-database\//);
+    assert.doesNotMatch(rootReadme, /live-database\//);
+    assert.doesNotMatch(rootReadme, /ktx scan/);
     assert.doesNotMatch(rootReadme, /Run a local ingest smoke test/);
     assert.doesNotMatch(rootReadme, /ktx ingest run --project-dir/);
     assert.doesNotMatch(rootReadme, /ktx ingest status --project-dir/);

@@ -464,7 +464,7 @@ describe('verification snippets', () => {
     assert.match(source, /node:sqlite/);
     assert.match(source, /driver: sqlite/);
     assert.match(source, /path: warehouse\.db/);
-    assert.match(source, /live-database/);
+    assert.doesNotMatch(source, /live-database/);
     assert.match(source, /'--execute'/);
     assert.match(source, /"mode": "compile_only"/);
     assert.match(source, /"mode": "executed"/);
@@ -488,11 +488,11 @@ describe('verification snippets', () => {
     assert.match(source, /ktx dev runtime stop/);
     assert.doesNotMatch(source, /ktx dev runtime prune/);
     assert.doesNotMatch(source, /staleRuntimeDir/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'scan',\s*'warehouse'/);
-    assert.match(source, /'--mode',\s*'enriched'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'ingest',\s*'warehouse'/);
+    assert.match(source, /'--deep'/);
     assert.doesNotMatch(source, /'--enrich'/);
-    assert.match(source, /ktx scan structural verified/);
-    assert.match(source, /ktx scan enriched verified/);
+    assert.match(source, /ktx ingest fast verified/);
+    assert.match(source, /ktx ingest deep verified/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
     assert.match(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
