@@ -171,7 +171,7 @@ describe('setup sources step', () => {
       source_dir: '/repo/dbt',
       project_name: 'analytics',
     });
-    expect(config.setup?.completed_steps).toEqual([]);
+    expect(config.setup?.completed_steps).toBeUndefined();
     expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(runInitialIngest).toHaveBeenCalledWith(projectDir, 'analytics_dbt', io.io, { inputMode: 'disabled' });
   });
@@ -190,7 +190,7 @@ describe('setup sources step', () => {
           source: 'metabase',
           sourceConnectionId: 'prod_metabase',
           sourceUrl: 'https://metabase.example.com',
-          sourceApiKeyRef: 'env:METABASE_API_KEY',
+          sourceApiKeyRef: 'env:METABASE_API_KEY', // pragma: allowlist secret
           sourceWarehouseConnectionId: 'warehouse',
           metabaseDatabaseId: 1,
           runInitialSourceIngest: false,
@@ -204,7 +204,7 @@ describe('setup sources step', () => {
     expect((await readConfig()).connections.prod_metabase).toMatchObject({
       driver: 'metabase',
       api_url: 'https://metabase.example.com',
-      api_key_ref: 'env:METABASE_API_KEY',
+      api_key_ref: 'env:METABASE_API_KEY', // pragma: allowlist secret
       mappings: {
         databaseMappings: { '1': 'warehouse' },
         syncEnabled: { '1': true },
@@ -225,7 +225,7 @@ describe('setup sources step', () => {
           inputMode: 'disabled',
           source: 'notion',
           sourceConnectionId: 'notion-main',
-          sourceApiKeyRef: 'env:NOTION_TOKEN',
+          sourceApiKeyRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
           notionCrawlMode: 'selected_roots',
           notionRootPageIds: ['page-1'],
           runInitialSourceIngest: false,
@@ -256,7 +256,7 @@ describe('setup sources step', () => {
           inputMode: 'disabled',
           source: 'notion',
           sourceConnectionId: 'notion-main',
-          sourceApiKeyRef: 'env:NOTION_TOKEN',
+          sourceApiKeyRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
           notionCrawlMode: 'all_accessible',
           notionRootPageIds: ['page-1'],
           runInitialSourceIngest: false,
@@ -766,7 +766,7 @@ describe('setup sources step', () => {
         connection: {
           driver: 'metabase',
           api_url: 'https://metabase.example.com',
-          api_key_ref: 'env:METABASE_API_KEY',
+          api_key_ref: 'env:METABASE_API_KEY', // pragma: allowlist secret
           mappings: {
             databaseMappings: { '1': 'warehouse' },
             syncEnabled: { '1': true },
@@ -786,7 +786,7 @@ describe('setup sources step', () => {
           driver: 'looker',
           base_url: 'https://looker.example.com',
           client_id: 'client-id',
-          client_secret_ref: 'env:LOOKER_CLIENT_SECRET',
+          client_secret_ref: 'env:LOOKER_CLIENT_SECRET', // pragma: allowlist secret
           mappings: { connectionMappings: { warehouse: 'warehouse' } },
         },
         deps: {

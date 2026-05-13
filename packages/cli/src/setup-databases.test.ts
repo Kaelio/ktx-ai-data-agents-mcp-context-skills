@@ -1124,7 +1124,6 @@ describe('setup databases step', () => {
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: [],
     });
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
     expect(io.stdout()).toContain('Primary source ready');
@@ -1163,7 +1162,6 @@ describe('setup databases step', () => {
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: [],
     });
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
@@ -1213,7 +1211,7 @@ describe('setup databases step', () => {
     expect(scanConnection).toHaveBeenCalledTimes(2);
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup?.database_connection_ids).toEqual(['warehouse', 'analytics']);
-    expect(config.setup?.completed_steps).toEqual([]);
+    expect(config.setup?.completed_steps).toBeUndefined();
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
 

@@ -16,7 +16,8 @@ import { localConnectionToWarehouseDescriptor } from '@ktx/context/connections';
 import {
   DEFAULT_METABASE_CLIENT_CONFIG,
   DefaultMetabaseConnectionClientFactory,
-  LocalMetabaseSourceStateReader,
+  KtxYamlMetabaseSourceStateReader,
+  LocalMetabaseDiscoveryCache,
   MetabaseClient,
   type MetabaseDatabase,
   type MetabaseRuntimeClient,
@@ -29,7 +30,9 @@ import {
   type KtxProjectConnectionConfig,
   ktxLocalStateDbPath,
   loadKtxProject,
+  parseMetabaseMappingBootstrap,
   serializeKtxProjectConfig,
+  stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 
 import { createClackSpinner, type KtxCliSpinner } from '../clack.js';
@@ -336,6 +339,33 @@ function noteMetabaseSetupSummary(options: {
     ].join('\n'),
     'Summary',
   );
+}
+
+function metabaseMappingsBlockForSetup(options: {
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+  mappings: MetabaseSetupMappingAssignment[];
+  syncEnabledDatabaseIds: number[];
+  syncMode: MetabaseSetupSyncMode;
+}): Record<string, unknown> {
+  const existing = parseMetabaseMappingBootstrap(options.connectionId, options.connection);
+  const databaseMappings = { ...existing.databaseMappings };
+  const syncEnabled = { ...existing.syncEnabled };
+  for (const mapping of options.mappings) {
+    const key = String(mapping.metabaseDatabaseId);
+    databaseMappings[key] = mapping.targetConnectionId;
+    syncEnabled[key] = false;
+  }
+  for (const metabaseDatabaseId of options.syncEnabledDatabaseIds) {
+    syncEnabled[String(metabaseDatabaseId)] = true;
+  }
+  return {
+    databaseMappings,
+    syncEnabled,
+    syncMode: options.syncMode,
+    selections: existing.selections,
+    defaultTagNames: existing.defaultTagNames,
+  };
 }
 
 export async function runKtxConnectionMetabaseSetup(
@@ -674,54 +704,37 @@ export async function runKtxConnectionMetabaseSetup(
         }
       }
 
+      const finalConnectionConfig: KtxProjectConnectionConfig = {
+        ...transientConnectionConfig,
+        mappings: metabaseMappingsBlockForSetup({
+          connectionId,
+          connection: transientConnectionConfig,
+          mappings: resolvedMappings,
+          syncEnabledDatabaseIds: resolvedSyncEnabledDatabaseIds,
+          syncMode: args.syncMode,
+        }),
+      };
+      const finalConfig = {
+        ...configWithTransient,
+        connections: {
+          ...configWithTransient.connections,
+          [connectionId]: finalConnectionConfig,
+        },
+      };
       await project.fileStore.writeFile(
         'ktx.yaml',
-        serializeKtxProjectConfig(configWithTransient),
+        serializeKtxProjectConfig(stripKtxSetupCompletedSteps(finalConfig)),
         'ktx',
         'ktx@example.com',
         `Setup Metabase connection ${connectionId}`,
       );
 
       const updatedProject = await loadKtxProject({ projectDir: args.projectDir });
-      const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(updatedProject) });
-
-      await store.refreshDiscoveredDatabases({ connectionId, discovered });
-
-      for (const mapping of resolvedMappings) {
-        await store.upsertDatabaseMapping({
-          connectionId,
-          metabaseDatabaseId: mapping.metabaseDatabaseId,
-          targetConnectionId: mapping.targetConnectionId,
-          syncEnabled: false,
-          source: 'cli',
-        });
-      }
-
-      for (const metabaseDatabaseId of resolvedSyncEnabledDatabaseIds) {
-        await store.setMappingSyncEnabled({
-          connectionId,
-          metabaseDatabaseId,
-          syncEnabled: true,
-        });
-      }
-
-      const existingSyncState = await store.getSourceState(connectionId);
-      await store.setSyncState({
+      const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(updatedProject) });
+      await discoveryCache.refreshDiscoveredDatabases({ connectionId, discovered });
+      const rows = await new KtxYamlMetabaseSourceStateReader(updatedProject, { discoveryCache }).listDatabaseMappings(
         connectionId,
-        syncMode: args.syncMode,
-        defaultTagNames: existingSyncState.defaultTagNames,
-        selections: existingSyncState.selections,
-      });
-
-      const unhydrated = await store.getUnhydratedSyncEnabledMappingIds(connectionId);
-      if (unhydrated.length > 0) {
-        io.stderr.write(
-          `Sync-enabled mappings are missing discovery metadata; run ktx connection mapping refresh ${connectionId} --auto-accept\n`,
-        );
-        return 1;
-      }
-
-      const rows = await store.listDatabaseMappings(connectionId);
+      );
       const physicalFailures = rows.flatMap((row) => {
         if (!row.targetConnectionId) {
           return [];

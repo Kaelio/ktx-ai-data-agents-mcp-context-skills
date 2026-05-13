@@ -505,13 +505,15 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
   return {
     project: project.trim(),
     ...(setup
-      ? {
-          setup: {
-            database_connection_ids: stringArray(setup.database_connection_ids, []),
-            completed_steps: stringArray(setup.completed_steps, []),
-          },
-        }
-      : {}),
+        ? {
+            setup: {
+              database_connection_ids: stringArray(setup.database_connection_ids, []),
+              ...(setup.completed_steps !== undefined
+                ? { completed_steps: stringArray(setup.completed_steps, []) }
+                : {}),
+            },
+          }
+        : {}),
     connections: isRecord(parsed.connections)
       ? (parsed.connections as Record<string, KtxProjectConnectionConfig>)
       : defaults.connections,

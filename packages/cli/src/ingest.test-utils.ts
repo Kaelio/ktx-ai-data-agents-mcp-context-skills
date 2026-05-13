@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { AgentRunnerService, type RunLoopParams } from '@ktx/context/agent';
 import {
   LocalLookerRuntimeStore,
-  LocalMetabaseSourceStateReader,
+  KtxYamlMetabaseSourceStateReader,
+  LocalMetabaseDiscoveryCache,
   MetabaseSourceAdapter,
   getLocalIngestStatus,
   type ChunkResult,
@@ -485,6 +486,23 @@ export async function runPublicMetabaseSyncModeCase(tempDir: string, input: Sync
       '    driver: metabase',
       '    api_url: https://metabase.example.test',
       '    api_key: literal-test-key',
+      '    mappings:',
+      '      databaseMappings:',
+      '        "1": warehouse_a',
+      '      syncEnabled:',
+      '        "1": true',
+      `      syncMode: ${input.syncMode}`,
+      '      selections:',
+      `        collections: [${input.selections
+        .filter((selection) => selection.selectionType === 'collection')
+        .map((selection) => selection.metabaseObjectId)
+        .join(', ')}]`,
+      `        items: [${input.selections
+        .filter((selection) => selection.selectionType === 'item')
+        .map((selection) => selection.metabaseObjectId)
+        .join(', ')}]`,
+      '      defaultTagNames:',
+      '        - sync-mode-smoke',
       '  warehouse_a:',
       '    driver: postgres',
       '    url: postgresql://readonly@db.example.test/warehouse_a',
@@ -499,29 +517,15 @@ export async function runPublicMetabaseSyncModeCase(tempDir: string, input: Sync
   );
 
   const project = await loadKtxProject({ projectDir });
-  const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
-  await store.replaceSourceState({
+  const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+  await discoveryCache.refreshDiscoveredDatabases({
     connectionId: 'prod-metabase',
-    syncMode: input.syncMode,
-    defaultTagNames: ['sync-mode-smoke'],
-    selections: input.selections,
-    mappings: [
-      {
-        metabaseDatabaseId: 1,
-        metabaseDatabaseName: 'Warehouse A',
-        metabaseEngine: 'postgres',
-        metabaseHost: 'db.example.test',
-        metabaseDbName: 'warehouse_a',
-        targetConnectionId: 'warehouse_a',
-        syncEnabled: true,
-        source: 'refresh',
-      },
-    ],
+    discovered: [{ id: 1, name: 'Warehouse A', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_a' }],
   });
 
   const adapter = new MetabaseSourceAdapter({
     clientFactory: new StaticMetabaseClientFactory(createSyncModeMetabaseClient()),
-    sourceStateReader: store,
+    sourceStateReader: new KtxYamlMetabaseSourceStateReader(project, { discoveryCache }),
   });
   const jobId = `metabase-sync-mode-${input.name}-child`;
   const io = makeIo();

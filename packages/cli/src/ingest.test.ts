@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   LocalLookerRuntimeStore,
-  LocalMetabaseSourceStateReader,
+  LocalMetabaseDiscoveryCache,
   getLocalIngestStatus,
   type LocalIngestResult,
   type LocalMetabaseFanoutProgress,
@@ -437,6 +437,16 @@ describe('runKtxIngest', () => {
         '    driver: metabase',
         '    api_url: https://metabase.example.test',
         '    api_key: literal-test-key',
+        '    mappings:',
+        '      databaseMappings:',
+        '        "1": warehouse_a',
+        '        "2": warehouse_b',
+        '      syncEnabled:',
+        '        "1": true',
+        '        "2": true',
+        '      syncMode: ALL',
+        '      defaultTagNames:',
+        '        - ktx',
         '  warehouse_a:',
         '    driver: postgres',
         '    url: postgresql://readonly@db.example.test/warehouse_a',
@@ -453,33 +463,12 @@ describe('runKtxIngest', () => {
       'utf-8',
     );
     const project = await loadKtxProject({ projectDir });
-    const store = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(project) });
-    await store.replaceSourceState({
+    const discoveryCache = new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(project) });
+    await discoveryCache.refreshDiscoveredDatabases({
       connectionId: 'prod-metabase',
-      syncMode: 'ALL',
-      defaultTagNames: ['ktx'],
-      selections: [],
-      mappings: [
-        {
-          metabaseDatabaseId: 1,
-          metabaseDatabaseName: 'Warehouse A',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'db.example.test',
-          metabaseDbName: 'warehouse_a',
-          targetConnectionId: 'warehouse_a',
-          syncEnabled: true,
-          source: 'refresh',
-        },
-        {
-          metabaseDatabaseId: 2,
-          metabaseDatabaseName: 'Warehouse B',
-          metabaseEngine: 'postgres',
-          metabaseHost: 'db.example.test',
-          metabaseDbName: 'warehouse_b',
-          targetConnectionId: 'warehouse_b',
-          syncEnabled: true,
-          source: 'refresh',
-        },
+      discovered: [
+        { id: 1, name: 'Warehouse A', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_a' },
+        { id: 2, name: 'Warehouse B', engine: 'postgres', host: 'db.example.test', dbName: 'warehouse_b' },
       ],
     });
     const adapter = new CliMetabaseSourceAdapter();

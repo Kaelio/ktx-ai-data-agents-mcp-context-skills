@@ -95,7 +95,6 @@ export function setKtxSetupDatabaseConnectionIds(
     ...config,
     setup: {
       database_connection_ids: uniqueConnectionIds,
-      ...(config.setup?.completed_steps ? { completed_steps: [...config.setup.completed_steps] } : {}),
     },
   };
 }

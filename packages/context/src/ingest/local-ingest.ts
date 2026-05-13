@@ -9,10 +9,9 @@ import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/index.js';
 import type { KtxQueryResult } from '../sl/index.js';
 import { planMetabaseFanoutChildren } from './adapters/metabase/fanout-planner.js';
-import { LocalMetabaseSourceStateReader } from './adapters/metabase/local-source-state-store.js';
+import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from './adapters/metabase/local-source-state-store.js';
 import { localPullConfigForAdapter, type DefaultLocalIngestAdaptersOptions } from './local-adapters.js';
 import { createLocalBundleIngestRuntime } from './local-bundle-runtime.js';
-import { seedLocalMappingStateFromKtxYaml } from './local-mapping-reconcile.js';
 import type { MemoryFlowEventSink } from './memory-flow/types.js';
 import { buildSyncId } from './raw-sources-paths.js';
 import type { IngestReportBody, IngestReportSnapshot } from './reports.js';
@@ -364,16 +363,10 @@ export async function runLocalMetabaseIngest(
 
   const metabaseConnectionId = safeSegment('metabase connection id', options.metabaseConnectionId);
   assertConfigured(options.project, 'metabase', metabaseConnectionId);
-  await seedLocalMappingStateFromKtxYaml(options.project, metabaseConnectionId);
   const adapter = findAdapter(options.adapters, 'metabase');
-  const sourceStateReader = new LocalMetabaseSourceStateReader({ dbPath: ktxLocalStateDbPath(options.project) });
-
-  const unhydrated = await sourceStateReader.getUnhydratedSyncEnabledMappingIds(metabaseConnectionId);
-  if (unhydrated.length > 0) {
-    throw new Error(
-      `Metabase mappings ${unhydrated.join(', ')} are not hydrated; run \`ktx connection mapping refresh ${metabaseConnectionId}\` before local Metabase ingest.`,
-    );
-  }
+  const sourceStateReader = new KtxYamlMetabaseSourceStateReader(options.project, {
+    discoveryCache: new LocalMetabaseDiscoveryCache({ dbPath: ktxLocalStateDbPath(options.project) }),
+  });
 
   const state = await sourceStateReader.getSourceState(metabaseConnectionId);
   const childPlans = planMetabaseFanoutChildren({

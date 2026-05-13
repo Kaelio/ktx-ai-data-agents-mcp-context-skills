@@ -94,7 +94,6 @@ describe('setup project step', () => {
     const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
-      completed_steps: [],
     });
     expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['llm', 'project'] });
   });
