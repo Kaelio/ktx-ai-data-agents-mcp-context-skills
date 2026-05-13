@@ -90,12 +90,12 @@ export type KtxSetupArgs =
       databaseConnectionId?: string;
       databaseUrl?: string;
       databaseSchemas: string[];
-      enableHistoricSql?: boolean;
-      disableHistoricSql?: boolean;
-      historicSqlWindowDays?: number;
-      historicSqlMinExecutions?: number;
-      historicSqlServiceAccountPatterns?: string[];
-      historicSqlRedactionPatterns?: string[];
+      enableQueryHistory?: boolean;
+      disableQueryHistory?: boolean;
+      queryHistoryWindowDays?: number;
+      queryHistoryMinExecutions?: number;
+      queryHistoryServiceAccountPatterns?: string[];
+      queryHistoryRedactionPatterns?: string[];
       skipDatabases: boolean;
       source?: KtxSetupSourceType;
       sourceConnectionId?: string;
@@ -624,17 +624,17 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.databaseConnectionId ? { databaseConnectionId: args.databaseConnectionId } : {}),
             ...(args.databaseUrl ? { databaseUrl: args.databaseUrl } : {}),
             databaseSchemas: args.databaseSchemas,
-            ...(args.enableHistoricSql !== undefined ? { enableHistoricSql: args.enableHistoricSql } : {}),
-            ...(args.disableHistoricSql !== undefined ? { disableHistoricSql: args.disableHistoricSql } : {}),
-            ...(args.historicSqlWindowDays !== undefined ? { historicSqlWindowDays: args.historicSqlWindowDays } : {}),
-            ...(args.historicSqlMinExecutions !== undefined
-              ? { historicSqlMinExecutions: args.historicSqlMinExecutions }
+            ...(args.enableQueryHistory !== undefined ? { enableQueryHistory: args.enableQueryHistory } : {}),
+            ...(args.disableQueryHistory !== undefined ? { disableQueryHistory: args.disableQueryHistory } : {}),
+            ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+            ...(args.queryHistoryMinExecutions !== undefined
+              ? { queryHistoryMinExecutions: args.queryHistoryMinExecutions }
               : {}),
-            ...(args.historicSqlServiceAccountPatterns
-              ? { historicSqlServiceAccountPatterns: args.historicSqlServiceAccountPatterns }
+            ...(args.queryHistoryServiceAccountPatterns
+              ? { queryHistoryServiceAccountPatterns: args.queryHistoryServiceAccountPatterns }
               : {}),
-            ...(args.historicSqlRedactionPatterns
-              ? { historicSqlRedactionPatterns: args.historicSqlRedactionPatterns }
+            ...(args.queryHistoryRedactionPatterns
+              ? { queryHistoryRedactionPatterns: args.queryHistoryRedactionPatterns }
               : {}),
             skipDatabases: args.skipDatabases || !shouldRunDatabases,
           },
