@@ -1,8 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { KtxEmbeddingConfig, KtxEmbeddingHealthCheckOptions, KtxEmbeddingHealthCheckResult } from '@ktx/llm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   formatDoctorReport,
   runKtxDoctor,
@@ -29,31 +28,6 @@ function makeIo() {
     stdout: () => stdout,
     stderr: () => stderr,
   };
-}
-
-type EmbeddingHealthCheck = (
-  config: KtxEmbeddingConfig,
-  options?: KtxEmbeddingHealthCheckOptions,
-) => Promise<KtxEmbeddingHealthCheckResult>;
-
-async function writeProjectConfig(projectDir: string, embeddingLines: string[]): Promise<void> {
-  await writeFile(
-    join(projectDir, 'ktx.yaml'),
-    [
-      'project: warehouse',
-      'connections:',
-      '  warehouse:',
-      '    driver: sqlite',
-      '    path: ./warehouse.db',
-      'ingest:',
-      '  adapters:',
-      '    - live-database',
-      '  embeddings:',
-      ...embeddingLines.map((line) => `    ${line}`),
-      '',
-    ].join('\n'),
-    'utf-8',
-  );
 }
 
 describe('formatDoctorReport', () => {
@@ -307,6 +281,7 @@ describe('runKtxDoctor', () => {
   });
 
   it('runs project checks against a valid ktx.yaml', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -315,222 +290,109 @@ describe('runKtxDoctor', () => {
         '  warehouse:',
         '    driver: sqlite',
         '    path: ./warehouse.db',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-5',
         'ingest:',
         '  adapters:',
         '    - live-database',
+        '  embeddings:',
+        '    backend: openai',
+        '    model: text-embedding-3-small',
+        '    dimensions: 1536',
         '',
       ].join('\n'),
       'utf-8',
     );
+    process.env.OPENAI_API_KEY = 'test-key';
     const testIo = makeIo();
 
     await expect(
       runKtxDoctor(
         { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
         testIo.io,
-        {
-          runSetupChecks: async () => [
-            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
-          ],
-        },
+        {},
       ),
     ).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('KTX status');
-    expect(testIo.stdout()).toContain('· warehouse');
-    expect(testIo.stdout()).toContain('✓ Project');
+    const out = testIo.stdout();
+    expect(out).toContain('KTX status');
+    expect(out).toContain('· warehouse');
+    expect(out).toContain('Connections (1)');
+    expect(out).toContain('LLM');
+    expect(out).toContain('anthropic');
+    expect(out).toContain('Embeddings');
+    expect(out).toContain('Ready.');
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
   });
 
-  it('includes Postgres historic-SQL readiness in project doctor output', async () => {
+  it('returns blocked verdict when LLM is not configured', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
         'project: warehouse',
         'connections:',
         '  warehouse:',
-        '    driver: postgres',
-        '    url: env:WAREHOUSE_DATABASE_URL',
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: postgres',
-        'ingest:',
-        '  adapters:',
-        '    - live-database',
-        '    - historic-sql',
+        '    driver: sqlite',
+        '    path: ./warehouse.db',
         '',
       ].join('\n'),
       'utf-8',
     );
     const testIo = makeIo();
-    const runHistoricSqlDoctorChecks = vi.fn(async () => [
-      {
-        id: 'historic-sql-postgres-warehouse',
-        label: 'Postgres Historic SQL (warehouse)',
-        status: 'pass' as const,
-        detail:
-          'pg_stat_statements ready (PostgreSQL 16.4); info: pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
-      },
-    ]);
 
     await expect(
       runKtxDoctor(
-        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled', verbose: true },
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
         testIo.io,
-        {
-          runSetupChecks: async () => [
-            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
-          ],
-          runHistoricSqlDoctorChecks,
-        },
+        {},
       ),
-    ).resolves.toBe(0);
+    ).resolves.toBe(1);
 
-    expect(runHistoricSqlDoctorChecks).toHaveBeenCalledTimes(1);
-    expect(testIo.stdout()).toContain('✓ Postgres Historic SQL (warehouse): pg_stat_statements ready');
-    expect(testIo.stdout()).toContain('info: pg_stat_statements.max is 1000');
-    expect(testIo.stdout()).not.toContain('→ Update the Postgres parameter group or config');
+    expect(testIo.stdout()).toContain('no LLM configured');
+    expect(testIo.stdout()).toContain('ktx setup');
   });
 
   it('warns when semantic-search embeddings are not configured', async () => {
-    await writeProjectConfig(tempDir, ['backend: deterministic', 'model: deterministic', 'dimensions: 8']);
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: sqlite',
+        '    path: ./warehouse.db',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        'ingest:',
+        '  adapters:',
+        '    - live-database',
+        '  embeddings:',
+        '    backend: deterministic',
+        '    model: deterministic',
+        '    dimensions: 8',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
     const testIo = makeIo();
 
     await expect(
       runKtxDoctor(
         { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
         testIo.io,
-        {
-          runSetupChecks: async () => [
-            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
-          ],
-        },
+        {},
       ),
     ).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('⚠ Semantic search');
-    expect(testIo.stdout()).toContain('ingest.embeddings.backend is deterministic.');
-    expect(testIo.stdout()).toContain(
-      'Semantic lane will be skipped; lexical, dictionary, and token lanes remain available.',
-    );
-    expect(testIo.stdout()).toContain(
-      `→ Run: ktx setup --project-dir ${tempDir} --no-input`,
-    );
-  });
-
-  it('probes configured semantic-search embeddings for project doctor', async () => {
-    await writeProjectConfig(tempDir, [
-      'backend: sentence-transformers',
-      'model: all-MiniLM-L6-v2',
-      'dimensions: 384',
-      'sentenceTransformers:',
-      '  base_url: http://127.0.0.1:8765',
-      "  pathPrefix: ''",
-    ]);
-    const healthCheck = vi.fn<EmbeddingHealthCheck>(async () => ({ ok: true }));
-    const testIo = makeIo();
-
-    await expect(
-      runKtxDoctor(
-        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled', verbose: true },
-        testIo.io,
-        {
-          runSetupChecks: async () => [
-            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
-          ],
-          embeddingHealthCheck: healthCheck,
-          embeddingProbeTimeoutMs: 1234,
-        },
-      ),
-    ).resolves.toBe(0);
-
-    expect(healthCheck).toHaveBeenCalledWith(
-      {
-        backend: 'sentence-transformers',
-        model: 'all-MiniLM-L6-v2',
-        dimensions: 384,
-        sentenceTransformers: { baseURL: 'http://127.0.0.1:8765', pathPrefix: '' },
-      },
-      { text: 'KTX semantic search doctor probe', timeoutMs: 1234 },
-    );
-    expect(testIo.stdout()).toContain(
-      '✓ Semantic search embeddings: sentence-transformers/all-MiniLM-L6-v2 (384d) probe succeeded',
-    );
-  });
-
-  it('allows local sentence-transformers semantic-search probes enough time for cold start', async () => {
-    await writeProjectConfig(tempDir, [
-      'backend: sentence-transformers',
-      'model: all-MiniLM-L6-v2',
-      'dimensions: 384',
-      'sentenceTransformers:',
-      '  base_url: http://127.0.0.1:8765',
-      "  pathPrefix: ''",
-    ]);
-    const healthCheck = vi.fn<EmbeddingHealthCheck>(async () => ({ ok: true }));
-    const testIo = makeIo();
-
-    await expect(
-      runKtxDoctor(
-        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
-        testIo.io,
-        {
-          runSetupChecks: async () => [
-            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
-          ],
-          embeddingHealthCheck: healthCheck,
-        },
-      ),
-    ).resolves.toBe(0);
-
-    expect(healthCheck).toHaveBeenCalledWith(
-      expect.objectContaining({
-        backend: 'sentence-transformers',
-        model: 'all-MiniLM-L6-v2',
-        dimensions: 384,
-      }),
-      { text: 'KTX semantic search doctor probe', timeoutMs: 120_000 },
-    );
-  });
-
-  it('reports unhealthy semantic-search embeddings as a warning in JSON output', async () => {
-    await writeProjectConfig(tempDir, [
-      'backend: sentence-transformers',
-      'model: all-MiniLM-L6-v2',
-      'dimensions: 384',
-      'sentenceTransformers:',
-      '  base_url: http://127.0.0.1:8765',
-      "  pathPrefix: ''",
-    ]);
-    const healthCheck = vi.fn<EmbeddingHealthCheck>(async () => ({
-      ok: false,
-      message: 'connect ECONNREFUSED 127.0.0.1:8765',
-    }));
-    const testIo = makeIo();
-
-    await expect(
-      runKtxDoctor(
-        { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
-        testIo.io,
-        {
-          runSetupChecks: async () => [
-            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
-          ],
-          embeddingHealthCheck: healthCheck,
-        },
-      ),
-    ).resolves.toBe(0);
-
-    const report = JSON.parse(testIo.stdout()) as {
-      checks: Array<{ id: string; label: string; status: string; detail: string; fix?: string }>;
-    };
-    expect(report.checks).toContainEqual({
-      id: 'semantic-search-embeddings',
-      label: 'Semantic search embeddings',
-      status: 'warn',
-      detail:
-        'sentence-transformers/all-MiniLM-L6-v2 (384d) probe failed: connect ECONNREFUSED 127.0.0.1:8765. Semantic lane will be skipped; lexical, dictionary, and token lanes remain available.',
-      fix: `Run: ktx setup --project-dir ${tempDir} --no-input`,
-      group: 'search',
-    });
+    expect(testIo.stdout()).toContain('Embeddings');
+    expect(testIo.stdout()).toContain('deterministic');
+    expect(testIo.stdout()).toContain('semantic search degraded');
+    delete process.env.ANTHROPIC_API_KEY;
   });
 });

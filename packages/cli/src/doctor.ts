@@ -4,9 +4,6 @@ import { access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import type { KtxLocalProject, KtxProjectEmbeddingConfig } from '@ktx/context/project';
-import type { KtxEmbeddingConfig, KtxEmbeddingHealthCheckOptions, KtxEmbeddingHealthCheckResult } from '@ktx/llm';
-import type { HistoricSqlDoctorDeps } from './historic-sql-doctor.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,20 +54,8 @@ interface SetupDoctorDeps {
   importBetterSqlite3?: () => Promise<unknown>;
 }
 
-type EmbeddingHealthCheck = (
-  config: KtxEmbeddingConfig,
-  options?: KtxEmbeddingHealthCheckOptions,
-) => Promise<KtxEmbeddingHealthCheckResult>;
-
-interface SemanticSearchDoctorDeps {
-  env?: NodeJS.ProcessEnv;
-  embeddingHealthCheck?: EmbeddingHealthCheck;
-  embeddingProbeTimeoutMs?: number;
-}
-
-interface KtxDoctorDeps extends SemanticSearchDoctorDeps, HistoricSqlDoctorDeps {
+interface KtxDoctorDeps {
   runSetupChecks?: () => Promise<DoctorCheck[]>;
-  runHistoricSqlDoctorChecks?: (project: KtxLocalProject, deps: HistoricSqlDoctorDeps) => Promise<DoctorCheck[]>;
 }
 
 function workspaceRootDir(): string {
@@ -129,99 +114,6 @@ function versionAtLeast(value: string, minimum: [number, number, number]): boole
 
 function check(status: DoctorStatus, id: string, label: string, detail: string, fix?: string): DoctorCheck {
   return fix ? { id, label, status, detail, fix } : { id, label, status, detail };
-}
-
-const SEMANTIC_SEARCH_HEALTH_TEXT = 'KTX semantic search doctor probe';
-const SEMANTIC_SEARCH_HEALTH_TIMEOUT_MS = 5_000;
-const SEMANTIC_SEARCH_LOCAL_HEALTH_TIMEOUT_MS = 120_000;
-
-function semanticEmbeddingSetupFix(projectDir: string, backend: KtxProjectEmbeddingConfig['backend']): string {
-  if (backend === 'openai') {
-    return `Set OPENAI_API_KEY or rerun: ktx setup --project-dir ${projectDir} --embedding-backend openai --no-input`;
-  }
-  return `Run: ktx setup --project-dir ${projectDir} --no-input`;
-}
-
-function embeddingConfigLabel(config: KtxProjectEmbeddingConfig | KtxEmbeddingConfig): string {
-  const model = config.model?.trim() || 'model not configured';
-  return `${config.backend}/${model} (${config.dimensions}d)`;
-}
-
-function semanticLaneFallbackDetail(reason: string): string {
-  return `${reason}. Semantic lane will be skipped; lexical, dictionary, and token lanes remain available.`;
-}
-
-async function defaultEmbeddingHealthCheck(
-  config: KtxEmbeddingConfig,
-  options?: KtxEmbeddingHealthCheckOptions,
-): Promise<KtxEmbeddingHealthCheckResult> {
-  const { runKtxEmbeddingHealthCheck } = await import('@ktx/llm');
-  return runKtxEmbeddingHealthCheck(config, options);
-}
-
-async function runSemanticSearchEmbeddingCheck(
-  config: KtxProjectEmbeddingConfig,
-  projectDir: string,
-  deps: SemanticSearchDoctorDeps = {},
-): Promise<DoctorCheck> {
-  if (config.backend === 'none' || config.backend === 'deterministic') {
-    return check(
-      'warn',
-      'semantic-search-embeddings',
-      'Semantic search embeddings',
-      semanticLaneFallbackDetail(`ingest.embeddings.backend is ${config.backend}`),
-      semanticEmbeddingSetupFix(projectDir, config.backend),
-    );
-  }
-
-  try {
-    const { resolveLocalKtxEmbeddingConfig } = await import('@ktx/context');
-    const resolved = resolveLocalKtxEmbeddingConfig(config, deps.env ?? process.env);
-    if (!resolved) {
-      return check(
-        'warn',
-        'semantic-search-embeddings',
-        'Semantic search embeddings',
-        semanticLaneFallbackDetail(`No runtime embedding config resolved for ${embeddingConfigLabel(config)}`),
-        semanticEmbeddingSetupFix(projectDir, config.backend),
-      );
-    }
-
-    const healthCheck = deps.embeddingHealthCheck ?? defaultEmbeddingHealthCheck;
-    const timeoutMs =
-      deps.embeddingProbeTimeoutMs ??
-      (resolved.backend === 'sentence-transformers'
-        ? SEMANTIC_SEARCH_LOCAL_HEALTH_TIMEOUT_MS
-        : SEMANTIC_SEARCH_HEALTH_TIMEOUT_MS);
-    const health = await healthCheck(resolved, {
-      text: SEMANTIC_SEARCH_HEALTH_TEXT,
-      timeoutMs,
-    });
-    if (health.ok) {
-      return check(
-        'pass',
-        'semantic-search-embeddings',
-        'Semantic search embeddings',
-        `${embeddingConfigLabel(resolved)} probe succeeded`,
-      );
-    }
-
-    return check(
-      'warn',
-      'semantic-search-embeddings',
-      'Semantic search embeddings',
-      semanticLaneFallbackDetail(`${embeddingConfigLabel(resolved)} probe failed: ${health.message}`),
-      semanticEmbeddingSetupFix(projectDir, config.backend),
-    );
-  } catch (error) {
-    return check(
-      'warn',
-      'semantic-search-embeddings',
-      'Semantic search embeddings',
-      semanticLaneFallbackDetail(`${embeddingConfigLabel(config)} probe failed: ${failureMessage(error)}`),
-      semanticEmbeddingSetupFix(projectDir, config.backend),
-    );
-  }
 }
 
 export async function runSetupDoctorChecks(deps: SetupDoctorDeps = {}): Promise<DoctorCheck[]> {
@@ -318,66 +210,6 @@ export async function runSetupDoctorChecks(deps: SetupDoctorDeps = {}): Promise<
   }
 
   return checks.map((entry) => ({ ...entry, group: 'toolchain' }));
-}
-
-interface ProjectChecksResult {
-  checks: DoctorCheck[];
-  projectName?: string;
-}
-
-async function runProjectChecks(projectDir: string, deps: KtxDoctorDeps = {}): Promise<ProjectChecksResult> {
-  const { loadKtxProject } = await import('@ktx/context/project');
-  const checks: DoctorCheck[] = [];
-  let projectName: string | undefined;
-  const tag = (entry: DoctorCheck, group: DoctorGroup): DoctorCheck => ({ ...entry, group });
-  try {
-    const project = await loadKtxProject({ projectDir });
-    projectName = project.config.project;
-    checks.push(tag(check('pass', 'project-config', 'Project config', project.config.project), 'project'));
-    const connectionCount = Object.keys(project.config.connections).length;
-    checks.push(
-      tag(
-        connectionCount > 0
-          ? check('pass', 'connections', 'Connections', `${connectionCount} configured`)
-          : check(
-              'warn',
-              'connections',
-              'Connections',
-              '0 configured',
-              'Add a connection to ktx.yaml or run `ktx setup`',
-            ),
-        'project',
-      ),
-    );
-    checks.push(
-      tag(
-        check('pass', 'storage', 'Storage', `${project.config.storage.state}/${project.config.storage.search}`),
-        'project',
-      ),
-    );
-    checks.push(tag(check('pass', 'llm-provider', 'LLM provider', project.config.llm.provider.backend), 'project'));
-    checks.push(tag(await runSemanticSearchEmbeddingCheck(project.config.ingest.embeddings, projectDir, deps), 'search'));
-    const runHistoricSqlDoctorChecks =
-      deps.runHistoricSqlDoctorChecks ?? (await import('./historic-sql-doctor.js')).runPostgresHistoricSqlDoctorChecks;
-    const historic = await runHistoricSqlDoctorChecks(project, deps);
-    for (const entry of historic) {
-      checks.push(tag(entry, 'history'));
-    }
-  } catch (error) {
-    checks.push(
-      tag(
-        check(
-          'fail',
-          'project-config',
-          'Project config',
-          failureMessage(error),
-          `Run: ktx init ${projectDir} --name <project-name>`,
-        ),
-        'project',
-      ),
-    );
-  }
-  return { checks, projectName };
 }
 
 const STATUS_SYMBOL: Record<DoctorStatus, string> = { pass: '✓', warn: '⚠', fail: '✗' };
@@ -625,28 +457,35 @@ export async function runKtxDoctor(
   const startedAt = Date.now();
   try {
     const runSetupChecks = deps.runSetupChecks ?? (() => runSetupDoctorChecks());
-    const setupChecks = await runSetupChecks();
-    let projectName: string | undefined;
-    let projectDir: string | undefined;
-    let report: DoctorReport;
-    if (args.command === 'setup') {
-      report = { title: 'KTX status', checks: setupChecks };
-    } else {
-      const projectResult = await runProjectChecks(args.projectDir, deps);
-      projectName = projectResult.projectName;
-      projectDir = args.projectDir;
-      report = {
-        title: 'KTX status',
-        checks: [...setupChecks, ...projectResult.checks],
-      };
+
+    if (args.command === 'project') {
+      const { loadKtxProject } = await import('@ktx/context/project');
+      const { buildProjectStatus, renderProjectStatus } = await import('./status-project.js');
+      const project = await loadKtxProject({ projectDir: args.projectDir });
+      const projectStatus = buildProjectStatus(project);
+      const verbose = args.verbose ?? false;
+      const toolchainChecks = verbose ? await runSetupChecks() : undefined;
+      if (args.outputMode === 'json') {
+        io.stdout.write(`${JSON.stringify(projectStatus, null, 2)}\n`);
+      } else {
+        io.stdout.write(
+          renderProjectStatus(projectStatus, {
+            verbose,
+            useColor: shouldUseColor(io),
+            durationMs: Date.now() - startedAt,
+            toolchainChecks,
+          }),
+        );
+      }
+      return projectStatus.verdict === 'blocked' ? 1 : 0;
     }
 
+    const setupChecks = await runSetupChecks();
+    const report: DoctorReport = { title: 'KTX status', checks: setupChecks };
     const renderOptions: RenderOptions = {
       verbose: args.verbose ?? false,
       useColor: shouldUseColor(io),
       durationMs: Date.now() - startedAt,
-      projectName,
-      projectDir,
       command: args.command,
     };
     writeReport(report, args.outputMode, io, renderOptions);
