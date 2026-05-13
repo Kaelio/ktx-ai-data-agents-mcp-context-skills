@@ -32,6 +32,7 @@
   "devDependencies": {
     "@types/node": "^25.7.0",
     "@types/pg": "^8.20.0",
+    "@vitest/coverage-v8": "^4.1.6",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
