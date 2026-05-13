@@ -378,6 +378,7 @@ function markTargetResult(
   target: KtxPublicIngestPlanTarget,
   status: 'done' | 'failed',
   failedOperation?: KtxPublicIngestStepName,
+  failureDetail?: string,
 ): KtxPublicIngestTargetResult {
   const selectedFailedOperation =
     failedOperation ?? (target.operation === 'database-ingest' ? 'database-schema' : 'source-ingest');
@@ -395,7 +396,7 @@ function markTargetResult(
         return {
           ...step,
           status: 'failed',
-          detail: `${target.connectionId} failed at ${selectedFailedOperation}.`,
+          detail: failureDetail ?? `${target.connectionId} failed at ${selectedFailedOperation}.`,
         };
       }
       return { ...step, status: 'not-run' };
@@ -454,6 +455,37 @@ function sourceIngestOutputMode(args: Extract<KtxPublicIngestArgs, { command: 'r
   return args.inputMode === 'auto' && io.stdout.isTTY === true && hasInteractiveInput(io) ? 'viz' : 'plain';
 }
 
+interface CapturedPublicIngestIo extends KtxCliIo {
+  capturedOutput(): string;
+}
+
+function createCapturedPublicIngestIo(): CapturedPublicIngestIo {
+  let output = '';
+  return {
+    stdout: {
+      isTTY: false,
+      write(chunk: string) {
+        output += chunk;
+      },
+    },
+    stderr: {
+      write(chunk: string) {
+        output += chunk;
+      },
+    },
+    capturedOutput() {
+      return output;
+    },
+  };
+}
+
+function firstCapturedFailureLine(output: string): string | undefined {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && !line.startsWith('KTX scan completed'));
+}
+
 export async function executePublicIngestTarget(
   target: KtxPublicIngestPlanTarget,
   args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
@@ -487,11 +519,18 @@ export async function executePublicIngestTarget(
       dryRun: false,
     };
     const runScan = deps.runScan ?? runKtxScan;
+    const capturedScanIo = deps.scanProgress ? null : createCapturedPublicIngestIo();
+    const scanIo = capturedScanIo ?? io;
     const scanExitCode = deps.scanProgress
-      ? await runScan(scanArgs, io, { progress: deps.scanProgress })
-      : await runScan(scanArgs, io);
+      ? await runScan(scanArgs, scanIo, { progress: deps.scanProgress })
+      : await runScan(scanArgs, scanIo);
     if (scanExitCode !== 0) {
-      return markTargetResult(target, 'failed', 'database-schema');
+      return markTargetResult(
+        target,
+        'failed',
+        'database-schema',
+        capturedScanIo ? firstCapturedFailureLine(capturedScanIo.capturedOutput()) : undefined,
+      );
     }
 
     if (target.queryHistory?.enabled === true) {

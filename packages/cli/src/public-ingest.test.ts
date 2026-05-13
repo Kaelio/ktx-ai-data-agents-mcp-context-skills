@@ -365,6 +365,40 @@ describe('runKtxPublicIngest', () => {
     );
   });
 
+  it('suppresses internal scan output for public database ingest summaries', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const runScan = vi.fn(async (_args, scanIo) => {
+      scanIo.stdout.write('KTX scan completed\n');
+      scanIo.stdout.write('Mode: structural\n');
+      scanIo.stdout.write('Report: raw-sources/warehouse/live-database/sync-1/scan-report.json\n');
+      scanIo.stdout.write('Raw sources: raw-sources/warehouse/live-database/sync-1\n');
+      return 0;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Ingest finished\n');
+    expect(io.stdout()).toContain('warehouse');
+    expect(io.stdout()).not.toContain('KTX scan completed');
+    expect(io.stdout()).not.toContain('Mode: structural');
+    expect(io.stdout()).not.toContain('Report: raw-sources');
+    expect(io.stdout()).not.toContain('live-database');
+  });
+
   it('runs all independent targets and reports partial failures', async () => {
     const io = makeIo();
     const project = projectWithConnections({
