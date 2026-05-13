@@ -1,62 +1,66 @@
 ---
 title: "ktx ingest"
-description: "Run and inspect local ingest memory-flow output."
+description: "Build, inspect, and replay KTX context ingest runs."
 ---
 
-`ktx ingest` runs adapter-level local ingest and renders stored ingest reports.
+`ktx ingest` builds or refreshes KTX context from configured connections.
+Database connections build schema context. Context-source connections ingest
+metadata from tools such as dbt, Looker, Metabase, MetricFlow, LookML, and
+Notion.
 
 ## Command signature
 
 ```bash
-ktx ingest <subcommand> [options]
+ktx ingest [options] [connectionId]
 ```
 
-## Subcommands
+Use a connection id to build one configured connection. Use `--all` to build
+every configured connection. Database connections run before context-source
+connections when you use `--all`.
 
-| Subcommand | Description |
-|-----------|-------------|
-| `run` | Run local ingest for one configured connection and source adapter |
-| `status [runId]` | Print status for the latest or selected stored local ingest run or report file |
-| `watch [runId]` | Open the latest or selected stored ingest visual report |
-| `replay <runId>` | Replay a stored ingest run or bundle report through memory-flow output |
-
-## `ingest run`
+## Build options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <connectionId>` | KTX connection id | Required |
-| `--adapter <adapter>` | Ingest source adapter name | Required |
-| `--source-dir <path>` | Directory containing source files | — |
-| `--database-introspection-url <url>` | Daemon URL for live-database introspection | — |
-| `--debug-llm-request-file <path>` | Write sanitized LLM request structure to a JSONL file | — |
+| `--all` | Build every configured connection | `false` |
+| `--fast` | Use deterministic database schema ingest | Stored connection default, or `fast` |
+| `--deep` | Use AI-enriched database ingest | Stored connection default, or `fast` |
+| `--query-history` | Include database query-history usage patterns | Stored connection default |
+| `--no-query-history` | Skip database query-history usage patterns for this run | Stored connection default |
+| `--query-history-window-days <days>` | Query-history lookback window for this run | Stored connection default |
 | `--plain` | Print plain text output | `true` |
 | `--json` | Print JSON output | `false` |
-| `--viz` | Render memory-flow TUI output | `false` |
-| `--yes` | Install the managed Python runtime without prompting when required | `false` |
-| `--no-input` | Disable interactive terminal input for visualization and runtime installation | — |
+| `--no-input` | Disable interactive terminal input | `false` |
 
-## `ingest status`, `watch`, and `replay`
+`--fast` and `--deep` are mutually exclusive. Depth flags apply only to
+database connections. Query-history flags apply only to database connections
+that support query history.
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--report-file <path>` | Bundle ingest report JSON file to render | — |
-| `--plain` | Print plain text output | `true` for `status` and `replay` |
-| `--json` | Print JSON output | `false` |
-| `--viz` | Render memory-flow TUI output | `true` for `watch` |
-| `--no-input` | Disable interactive terminal input for visualization | — |
+## Status and replay
+
+| Subcommand | Description |
+|------------|-------------|
+| `status [runId]` | Print status for the latest or selected stored ingest run or report file |
+| `replay <runId>` | Replay a stored ingest run or bundle report through memory-flow output |
+
+Both subcommands accept `--report-file <path>`, `--plain`, `--json`, `--viz`,
+and `--no-input`.
 
 ## Examples
 
 ```bash
-ktx ingest run --connection-id my-dbt-source --adapter dbt
-ktx ingest run --connection-id prod-metabase --adapter metabase --yes
+ktx ingest warehouse
+ktx ingest warehouse --fast
+ktx ingest warehouse --deep
+ktx ingest warehouse --deep --query-history
+ktx ingest warehouse --query-history-window-days 30
+ktx ingest notion
+ktx ingest --all
+ktx ingest --all --deep
 
 ktx ingest status
 ktx ingest status run-abc123
 ktx ingest status --json
-
-ktx ingest watch
-ktx ingest watch run-abc123
 
 ktx ingest replay run-abc123
 ktx ingest replay run-abc123 --viz
@@ -67,7 +71,8 @@ ktx ingest replay run-abc123 --report-file /tmp/ingest-report.json
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Ingest needs credentials | The source adapter requires API or git access | Configure the referenced environment variable or secret file |
-| Ingest run cannot find adapter | `--adapter` does not match a supported source adapter | Use a configured adapter such as `dbt`, `metabase`, `looker`, `lookml`, `notion`, or `live-database` |
-| Latest run not found | No ingest run has been started in this project | Run `ktx ingest run --connection-id <id> --adapter <adapter>` first |
-| Report watch fails in a non-interactive shell | Visual report needs a terminal | Use `ktx ingest status --json` for agent and CI workflows |
+| Connection not configured | The connection id is not present in `ktx.yaml` | Add the connection with `ktx setup` or update `ktx.yaml` |
+| Deep readiness is missing | `--deep` or query history needs model, embedding, and scan-enrichment configuration | Run `ktx setup` or rerun with `--fast` |
+| Query history is unsupported | The selected database driver does not support query history | Run schema ingest without query-history flags |
+| Latest run not found | No stored ingest report exists in this project | Run `ktx ingest <connectionId>` first |
+| Visual replay fails in a non-interactive shell | Visual report replay needs a terminal | Use `ktx ingest status --json` for agent and CI workflows |
