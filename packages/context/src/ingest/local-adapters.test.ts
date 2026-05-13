@@ -195,6 +195,7 @@ describe('local ingest adapters', () => {
       windowDays: 90,
       minExecutions: 7,
       concurrency: 12,
+      enabledTables: [],
       filters: {
         serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
         dropTrivialProbes: true,
