@@ -625,6 +625,37 @@ describe('runContextBuild', () => {
     expect(io.stdout()).not.toContain('historic-sql');
   });
 
+  it('renders database ingest progress without scan wording', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const executeTarget = vi.fn(async (target, _args, _targetIo, deps) => {
+      await deps.scanProgress?.update(0.05, 'Preparing scan');
+      await deps.scanProgress?.update(0.15, 'Inspecting database schema');
+      await deps.scanProgress?.update(0.7, 'Writing schema artifacts');
+      return successResult(target.connectionId, target.driver, target.operation);
+    });
+
+    await expect(
+      runContextBuild(
+        project,
+        {
+          projectDir: '/tmp/project',
+          inputMode: 'disabled',
+          targetConnectionId: 'warehouse',
+          all: false,
+        },
+        io.io,
+        { executeTarget, now: () => 1000, sourceProgressThrottleMs: 0 },
+      ),
+    ).resolves.toMatchObject({ exitCode: 0 });
+
+    expect(io.stdout()).toContain('Preparing database ingest');
+    expect(io.stdout()).toContain('Reading database schema');
+    expect(io.stdout()).toContain('Writing schema context');
+    expect(io.stdout()).not.toContain('Preparing scan');
+    expect(io.stdout()).not.toMatch(/\bscan\b/i);
+  });
+
   it('passes schema-first notices from the plan into foreground output', async () => {
     const io = makeIo();
     const project: KtxPublicIngestProject = {

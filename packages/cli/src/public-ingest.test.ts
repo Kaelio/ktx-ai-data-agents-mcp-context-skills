@@ -523,6 +523,38 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('live-database');
   });
 
+  it('sanitizes captured database scan failure details in direct public output', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({ warehouse: { driver: 'postgres', context: { depth: 'deep' } } });
+    const runScan = vi.fn(async (_args, scanIo) => {
+      scanIo.stdout.write('KTX scan enrichment failed after structural scan completed: embedding service timed out\n');
+      return 1;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          depth: 'deep',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stdout()).toContain(
+      'warehouse failed: Database enrichment failed after schema context completed: embedding service timed out.',
+    );
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep');
+    expect(io.stdout()).not.toContain('KTX scan enrichment failed');
+    expect(io.stdout()).not.toContain('structural scan');
+  });
+
   it('suppresses lower-level source report output during direct public source ingest', async () => {
     const io = makeIo();
     const project = projectWithConnections({

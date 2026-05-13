@@ -9,6 +9,7 @@ import {
   isDatabaseDriver,
   normalizeConnectionDriver,
 } from './ingest-depth.js';
+import { publicIngestOutputLine } from './public-ingest-copy.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
 
@@ -586,13 +587,6 @@ function createCapturedPublicIngestIo(): CapturedPublicIngestIo {
 
 const INTERNAL_STATUS_LINE_RE =
   /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Work units|Saved memory|Provenance rows):\s*/;
-
-function publicIngestOutputLine(line: string): string {
-  return line
-    .replace(/\blive-database\b/g, 'database schema')
-    .replace(/\bhistoric-sql\b/g, 'query history')
-    .replace(/\bhistoric SQL\b/gi, 'query history');
-}
 
 function firstCapturedFailureLine(output: string): string | undefined {
   return output

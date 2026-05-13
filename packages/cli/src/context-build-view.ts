@@ -1,6 +1,7 @@
 import type { KtxProgressPort, KtxProgressUpdateOptions } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestProgressUpdate } from './ingest.js';
+import { publicDatabaseIngestMessage, publicQueryHistoryMessage } from './public-ingest-copy.js';
 import type {
   KtxPublicIngestArgs,
   KtxPublicIngestDeps,
@@ -578,17 +579,14 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
 }
 
 function publicProgressMessage(message: string, target: KtxPublicIngestPlanTarget): string {
-  if (!target.steps.includes('query-history')) {
-    return message;
+  let current = message;
+  if (target.operation === 'database-ingest') {
+    current = publicDatabaseIngestMessage(current);
   }
-  return message
-    .replace(
-      new RegExp(`Fetching source files for ${target.connectionId}/historic-sql`, 'i'),
-      `Fetching query history for ${target.connectionId}`,
-    )
-    .replace(`${target.connectionId}/historic-sql`, `${target.connectionId} query history`)
-    .replace(/\bhistoric-sql\b/g, 'query history')
-    .replace(/\bhistoric SQL\b/gi, 'query history');
+  if (target.steps.includes('query-history')) {
+    current = publicQueryHistoryMessage(current, target.connectionId);
+  }
+  return current;
 }
 
 function formatProgressDetail(
