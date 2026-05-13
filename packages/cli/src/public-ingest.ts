@@ -2,6 +2,13 @@ import { type KtxLocalProject, type KtxProjectConnectionConfig, loadKtxProject }
 import type { KtxProgressPort } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
+import {
+  type KtxDatabaseContextDepth,
+  databaseContextDepth,
+  deepReadinessGaps,
+  isDatabaseDriver,
+  normalizeConnectionDriver,
+} from './ingest-depth.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
 
@@ -10,7 +17,7 @@ profileMark('module:public-ingest');
 type KtxPublicIngestStepName = 'database-schema' | 'query-history' | 'source-ingest' | 'memory-update';
 type KtxPublicIngestStepStatus = 'done' | 'skipped' | 'failed' | 'not-run';
 type KtxPublicIngestInputMode = 'auto' | 'disabled';
-type KtxPublicIngestDepth = 'fast' | 'deep';
+type KtxPublicIngestDepth = KtxDatabaseContextDepth;
 type KtxPublicIngestQueryHistoryFlag = 'default' | 'enabled' | 'disabled';
 type HistoricSqlDialect = 'postgres' | 'bigquery' | 'snowflake';
 
@@ -45,6 +52,8 @@ export interface KtxPublicIngestPlanTarget {
   debugCommand: string;
   steps: KtxPublicIngestStepName[];
   databaseDepth?: KtxPublicIngestDepth;
+  detectRelationships?: boolean;
+  preflightFailure?: string;
   queryHistory?: {
     enabled: boolean;
     dialect?: HistoricSqlDialect;
@@ -92,17 +101,6 @@ const sourceAdapterByDriver = new Map<string, string>([
   ['lookml', 'lookml'],
 ]);
 
-const warehouseDrivers = new Set([
-  'sqlite',
-  'postgres',
-  'postgresql',
-  'mysql',
-  'clickhouse',
-  'sqlserver',
-  'bigquery',
-  'snowflake',
-]);
-
 const queryHistoryDialectByDriver = new Map<string, HistoricSqlDialect>([
   ['postgres', 'postgres'],
   ['postgresql', 'postgres'],
@@ -110,24 +108,8 @@ const queryHistoryDialectByDriver = new Map<string, HistoricSqlDialect>([
   ['snowflake', 'snowflake'],
 ]);
 
-function normalizedDriver(connection: KtxProjectConnectionConfig): string {
-  return String(connection.driver ?? '')
-    .trim()
-    .toLowerCase();
-}
-
-function connectionContext(connection: KtxProjectConnectionConfig): Record<string, unknown> {
-  const value = connection.context;
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function storedDepth(connection: KtxProjectConnectionConfig): KtxPublicIngestDepth | undefined {
-  const value = connectionContext(connection).depth;
-  return value === 'fast' || value === 'deep' ? value : undefined;
-}
-
 function storedQueryHistory(connection: KtxProjectConnectionConfig): Record<string, unknown> {
-  const value = connectionContext(connection).queryHistory;
+  const value = connection.context?.queryHistory;
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
@@ -163,7 +145,8 @@ function resolveDatabaseTargetOptions(input: {
   const explicitQueryHistory = input.args.queryHistory ?? 'default';
   const storedEnabled = storedQh.enabled === true;
   const requestedQh = explicitQueryHistory === 'enabled' || (explicitQueryHistory === 'default' && storedEnabled);
-  let depth = input.args.depth ?? depthFromLegacyScanMode(input.args.scanMode) ?? storedDepth(input.connection) ?? 'fast';
+  let depth =
+    input.args.depth ?? depthFromLegacyScanMode(input.args.scanMode) ?? databaseContextDepth(input.connection) ?? 'fast';
   const queryHistory = {
     enabled: false,
     ...(input.args.queryHistoryWindowDays !== undefined
@@ -219,6 +202,7 @@ function resolveDatabaseTargetOptions(input: {
 function targetForConnection(
   connectionId: string,
   connection: KtxProjectConnectionConfig,
+  projectConfig: KtxPublicIngestProject['config'],
   args: {
     depth?: KtxPublicIngestDepth;
     queryHistory?: KtxPublicIngestQueryHistoryFlag;
@@ -227,7 +211,7 @@ function targetForConnection(
   },
   warnings: string[],
 ): KtxPublicIngestPlanTarget {
-  const driver = normalizedDriver(connection);
+  const driver = normalizeConnectionDriver(connection);
   const adapter = sourceAdapterByDriver.get(driver);
   const sourceDir = sourceDirForConnection(connection);
   if (adapter) {
@@ -248,13 +232,22 @@ function targetForConnection(
     };
   }
 
-  if (warehouseDrivers.has(driver)) {
+  if (isDatabaseDriver(driver)) {
     const options = resolveDatabaseTargetOptions({ connectionId, driver, connection, args, warnings });
+    const gaps = options.databaseDepth === 'deep' ? deepReadinessGaps(projectConfig) : [];
     return {
       connectionId,
       driver,
       operation: 'database-ingest',
       debugCommand: `ktx ingest ${connectionId} --debug`,
+      detectRelationships: options.databaseDepth === 'deep' && projectConfig.scan.relationships.enabled,
+      ...(gaps.length > 0
+        ? {
+            preflightFailure: `${connectionId} requires deep ingest readiness: ${gaps.join(
+              ', ',
+            )}. Run ktx setup or rerun with --fast.`,
+          }
+        : {}),
       ...options,
     };
   }
@@ -289,7 +282,9 @@ export function buildPublicIngestPlan(
   }
 
   const warnings: string[] = [];
-  const targets = selected.map(([connectionId, connection]) => targetForConnection(connectionId, connection, args, warnings));
+  const targets = selected.map(([connectionId, connection]) =>
+    targetForConnection(connectionId, connection, project.config, args, warnings),
+  );
   return {
     projectDir: args.projectDir,
     targets: [
@@ -411,6 +406,22 @@ export async function executePublicIngestTarget(
   io: KtxCliIo,
   deps: KtxPublicIngestDeps,
 ): Promise<KtxPublicIngestTargetResult> {
+  if (target.preflightFailure) {
+    return {
+      connectionId: target.connectionId,
+      driver: target.driver,
+      steps: defaultSteps(target).map((step) =>
+        step.operation === 'database-schema'
+          ? {
+              ...step,
+              status: 'failed',
+              detail: target.preflightFailure,
+            }
+          : step,
+      ),
+    };
+  }
+
   if (target.operation === 'database-ingest') {
     const { runKtxScan } = await import('./scan.js');
     const scanArgs: KtxScanArgs = {
@@ -418,7 +429,7 @@ export async function executePublicIngestTarget(
       projectDir: args.projectDir,
       connectionId: target.connectionId,
       mode: target.databaseDepth === 'deep' ? 'enriched' : 'structural',
-      detectRelationships: target.databaseDepth === 'deep' ? true : false,
+      detectRelationships: target.detectRelationships === true,
       dryRun: false,
     };
     const runScan = deps.runScan ?? runKtxScan;

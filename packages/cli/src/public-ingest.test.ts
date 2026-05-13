@@ -34,6 +34,40 @@ function projectWithConnections(connections: KtxProjectConfig['connections']): K
   };
 }
 
+function deepReadyProject(
+  connections: KtxProjectConfig['connections'],
+  relationshipsEnabled = true,
+): KtxPublicIngestProject {
+  const config = buildDefaultKtxProjectConfig('warehouse');
+  return {
+    projectDir: '/tmp/project',
+    config: {
+      ...config,
+      connections,
+      llm: {
+        ...config.llm,
+        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } },
+        models: { default: 'gpt-test' },
+      },
+      scan: {
+        ...config.scan,
+        enrichment: {
+          mode: 'llm',
+          embeddings: {
+            backend: 'openai',
+            model: 'text-embedding-3-small',
+            dimensions: 1536,
+          },
+        },
+        relationships: {
+          ...config.scan.relationships,
+          enabled: relationshipsEnabled,
+        },
+      },
+    },
+  };
+}
+
 describe('buildPublicIngestPlan', () => {
   it('plans warehouse connections as scan targets and source connections as source ingest targets', () => {
     const project = projectWithConnections({
@@ -52,6 +86,7 @@ describe('buildPublicIngestPlan', () => {
           debugCommand: 'ktx ingest warehouse --debug',
           steps: ['database-schema'],
           databaseDepth: 'fast',
+          detectRelationships: false,
           queryHistory: { enabled: false },
         },
         {
@@ -158,12 +193,50 @@ describe('buildPublicIngestPlan', () => {
     });
     expect(plan.warnings).toEqual(['--query-history is not supported for sqlite; running schema ingest for local.']);
   });
+
+  it('records a preflight failure for deep database ingest when readiness config is missing', () => {
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+
+    const plan = buildPublicIngestPlan(project, {
+      projectDir: '/tmp/project',
+      targetConnectionId: 'warehouse',
+      all: false,
+      queryHistory: 'default',
+    });
+
+    expect(plan.targets[0]).toMatchObject({
+      connectionId: 'warehouse',
+      databaseDepth: 'deep',
+      preflightFailure:
+        'warehouse requires deep ingest readiness: model configuration, scan enrichment mode, scan embeddings. Run ktx setup or rerun with --fast.',
+    });
+  });
+
+  it('honors scan.relationships.enabled when planning deep database ingest', () => {
+    const plan = buildPublicIngestPlan(
+      deepReadyProject({ warehouse: { driver: 'postgres', context: { depth: 'deep' } } }, false),
+      {
+        projectDir: '/tmp/project',
+        targetConnectionId: 'warehouse',
+        all: false,
+        queryHistory: 'default',
+      },
+    );
+
+    expect(plan.targets[0]).toMatchObject({
+      connectionId: 'warehouse',
+      databaseDepth: 'deep',
+      detectRelationships: false,
+    });
+  });
 });
 
 describe('runKtxPublicIngest', () => {
   it('maps fast and deep database targets to scan internals', async () => {
     const io = makeIo();
-    const project = projectWithConnections({
+    const project = deepReadyProject({
       fast: { driver: 'postgres' },
       deep: { driver: 'postgres', context: { depth: 'deep' } },
     });
@@ -191,7 +264,7 @@ describe('runKtxPublicIngest', () => {
 
   it('runs query history after schema ingest with current-run window override', async () => {
     const io = makeIo();
-    const project = projectWithConnections({
+    const project = deepReadyProject({
       warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true, windowDays: 90 } } },
     });
     const runScan = vi.fn(async () => 0);
@@ -278,9 +351,34 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain('Debug: ktx ingest warehouse --debug');
   });
 
+  it('fails deep-readiness targets before work starts while continuing independent --all targets', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      docs: { driver: 'notion' },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        { command: 'run', projectDir: '/tmp/project', all: true, json: false, inputMode: 'disabled' },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(1);
+
+    expect(runScan).not.toHaveBeenCalled();
+    expect(runIngest).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'run', connectionId: 'docs', adapter: 'notion' }),
+      expect.anything(),
+    );
+    expect(io.stdout()).toContain('warehouse requires deep ingest readiness');
+  });
+
   it('can request enriched relationship scans for setup-managed context builds', async () => {
     const io = makeIo();
-    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
     const runScan = vi.fn(async () => 0);
 
     await expect(
