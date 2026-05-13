@@ -486,7 +486,7 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
     options: [
       { value: 'continue', label: 'Continue to knowledge sources' },
       { value: 'edit', label: 'Edit an existing primary source' },
-      { value: 'add', label: 'Add more primary sources' },
+      { value: 'add', label: 'Add additional primary sources' },
     ],
   };
 }

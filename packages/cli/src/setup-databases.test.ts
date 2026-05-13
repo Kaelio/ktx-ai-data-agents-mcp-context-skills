@@ -566,7 +566,7 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add more primary sources' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
@@ -619,7 +619,7 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add more primary sources' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
     expect(testConnection).toHaveBeenCalledTimes(1);
@@ -658,7 +658,7 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add more primary sources' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -697,7 +697,7 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add more primary sources' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
   });
@@ -742,7 +742,7 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add more primary sources' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
   });
@@ -789,7 +789,7 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'edit', label: 'Edit an existing primary source' },
-        { value: 'add', label: 'Add more primary sources' },
+        { value: 'add', label: 'Add additional primary sources' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
