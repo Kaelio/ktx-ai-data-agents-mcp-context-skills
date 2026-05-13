@@ -344,7 +344,10 @@ function healthCheckStartText(backend: KtxSetupEmbeddingBackend, model: string, 
   return `Checking ${backend} embeddings (${model}, ${dimensions} dimensions).`;
 }
 
-function startHealthCheckProgress(spinner: KtxCliSpinner, message: string): { succeed(msg: string): void; fail(msg: string): void } {
+function startHealthCheckProgress(
+  spinner: KtxCliSpinner,
+  message: string,
+): { succeed(msg: string): void; fail(msg: string): void } {
   spinner.start(message);
   return {
     succeed(msg: string) {
