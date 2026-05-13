@@ -107,7 +107,6 @@ export function buildLiveDatabaseIngestArgs(projectDir, databaseIntrospectionUrl
   return [
     'exec',
     'ktx',
-    'dev',
     'ingest',
     'run',
     '--project-dir',
@@ -325,12 +324,12 @@ async function main() {
       env: managedRuntimeEnv(cleanInstallDir),
       timeout: 120_000,
     });
-    requireSuccess('ktx dev ingest run live-database', ingestRun);
-    requireOutput('ktx dev ingest run live-database', ingestRun, /Status: done/);
-    requireOutput('ktx dev ingest run live-database', ingestRun, /Adapter: live-database/);
-    requireOutput('ktx dev ingest run live-database', ingestRun, /Diff: \+4\/~0\/-0\/=0/);
-    requireOutput('ktx dev ingest run live-database', ingestRun, /Raw files: 4/);
-    requireOutput('ktx dev ingest run live-database', ingestRun, /Work units: 2/);
+    requireSuccess('ktx ingest run live-database', ingestRun);
+    requireOutput('ktx ingest run live-database', ingestRun, /Status: done/);
+    requireOutput('ktx ingest run live-database', ingestRun, /Adapter: live-database/);
+    requireOutput('ktx ingest run live-database', ingestRun, /Diff: \+4\/~0\/-0\/=0/);
+    requireOutput('ktx ingest run live-database', ingestRun, /Raw files: 4/);
+    requireOutput('ktx ingest run live-database', ingestRun, /Work units: 2/);
 
     const runId = getRunId(ingestRun.stdout);
     const ingestStatus = await run('pnpm', buildLiveDatabaseStatusArgs(projectDir, runId), {

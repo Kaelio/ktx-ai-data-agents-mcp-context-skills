@@ -743,7 +743,9 @@ export async function runKtxConnectionMetabaseSetup(
 
       io.stdout.write(`Connection: ${connectionId}\n`);
       io.stdout.write(`Discovered ${discovered.length} ${discovered.length === 1 ? 'database' : 'databases'}\n`);
-      io.stdout.write(`Next: ktx ingest ${connectionId} --project-dir ${args.projectDir}\n`);
+      io.stdout.write(
+        `Next: ktx ingest run --connection-id ${connectionId} --adapter metabase --project-dir ${args.projectDir}\n`,
+      );
 
       if (args.runIngest) {
         const ingestRunner = deps.runPublicIngest ?? runKtxPublicIngest;
@@ -759,7 +761,9 @@ export async function runKtxConnectionMetabaseSetup(
           io,
         );
         if (exitCode !== 0) {
-          io.stderr.write(`Ingest failed; re-run: ktx ingest ${connectionId} --project-dir ${args.projectDir}\n`);
+          io.stderr.write(
+            `Ingest failed; re-run: ktx ingest run --connection-id ${connectionId} --adapter metabase --project-dir ${args.projectDir}\n`,
+          );
           return 1;
         }
       }

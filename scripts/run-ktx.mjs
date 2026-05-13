@@ -83,10 +83,6 @@ async function isBuildStale(rootDir, binPath, fs) {
   return false;
 }
 
-function isShellCompletionRequest(argv) {
-  return argv[0] === '__complete' || (argv[0] === 'dev' && argv[1] === '__complete');
-}
-
 async function runBuffered(execFile, stdout, stderr, command, args, options) {
   try {
     const result = await execFile(command, args, { cwd: options.cwd, env: options.env, maxBuffer: 1024 * 1024 * 16 });
@@ -150,8 +146,7 @@ export async function runWorkspaceKtx(argv, options = {}) {
   const commandEnv = options.env;
 
   const binExists = await fileExists(binPath, access);
-  const skipStaleBuildCheck = binExists && isShellCompletionRequest(cliArgv);
-  const needsBuild = !binExists || (!skipStaleBuildCheck && (await isBuildStale(rootDir, binPath, fs)));
+  const needsBuild = !binExists || (await isBuildStale(rootDir, binPath, fs));
   if (needsBuild) {
     stderr.write(
       binExists

@@ -55,6 +55,7 @@ describe('createKtxLlmProvider', () => {
       },
       {
         createAnthropic: vi.fn(() => vi.fn(() => anthropicModel)),
+        devtoolsEnabled: false,
         wrapLanguageModel,
         devToolsMiddleware,
       } satisfies KtxLlmProviderFactoryDeps,
@@ -145,7 +146,7 @@ describe('createKtxLlmProvider', () => {
         modelSlots: { default: 'claude-sonnet-4-6' },
         promptCaching: { enabled: false },
       },
-      { createAnthropic },
+      { createAnthropic, devtoolsEnabled: false },
     );
 
     expect(provider.getModel('default')).toBe(anthropicModel);
@@ -171,7 +172,7 @@ describe('createKtxLlmProvider', () => {
         modelSlots: { default: 'claude-sonnet-4-6' },
         promptCaching: { enabled: false },
       },
-      { createVertexAnthropic },
+      { createVertexAnthropic, devtoolsEnabled: false },
     );
 
     expect(provider.getModel('default')).toBe(vertexModel);
@@ -191,7 +192,7 @@ describe('createKtxLlmProvider', () => {
         modelSlots: { default: 'anthropic/claude-sonnet-4-6' },
         promptCaching: { enabled: false },
       },
-      { createGateway },
+      { createGateway, devtoolsEnabled: false },
     );
 
     expect(provider.getModel('curator')).toBe(gatewayModel);

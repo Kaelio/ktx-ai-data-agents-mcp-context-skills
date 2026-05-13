@@ -57,7 +57,7 @@ describe('buildPublicIngestPlan', () => {
           driver: 'notion',
           operation: 'source-ingest',
           adapter: 'notion',
-          debugCommand: 'ktx dev ingest run --connection-id docs --adapter notion --debug',
+          debugCommand: 'ktx ingest run --connection-id docs --adapter notion --debug',
           steps: ['source-ingest', 'memory-update'],
         },
         {
@@ -65,7 +65,7 @@ describe('buildPublicIngestPlan', () => {
           driver: 'metabase',
           operation: 'source-ingest',
           adapter: 'metabase',
-          debugCommand: 'ktx dev ingest run --connection-id prod_metabase --adapter metabase --debug',
+          debugCommand: 'ktx ingest run --connection-id prod_metabase --adapter metabase --debug',
           steps: ['source-ingest', 'memory-update'],
         },
       ],
@@ -76,7 +76,7 @@ describe('buildPublicIngestPlan', () => {
     const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
 
     expect(() => buildPublicIngestPlan(project, { projectDir: '/tmp/project', all: false })).toThrow(
-      'ktx ingest requires <connectionId> or --all in this release',
+      'Context build requires a connection id or all targets',
     );
   });
 

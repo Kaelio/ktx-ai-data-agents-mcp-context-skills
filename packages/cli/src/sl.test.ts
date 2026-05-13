@@ -84,6 +84,71 @@ describe('runKtxSl', () => {
     expect(listIo.stdout()).toContain('warehouse\torders\tcolumns=1\tmeasures=0\tjoins=0');
   });
 
+  it('prints semantic-layer reads and searched lists as public JSON envelopes', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+
+    await expect(
+      runKtxSl(
+        {
+          command: 'write',
+          projectDir,
+          connectionId: 'warehouse',
+          sourceName: 'orders',
+          yaml: [
+            'name: orders',
+            'table: public.orders',
+            'description: Paid order facts',
+            'grain: [order_id]',
+            'columns:',
+            '  - name: order_id',
+            '    type: string',
+            '',
+          ].join('\n'),
+        },
+        makeIo().io,
+      ),
+    ).resolves.toBe(0);
+
+    const readIo = makeIo();
+    await expect(
+      runKtxSl(
+        { command: 'read', projectDir, connectionId: 'warehouse', sourceName: 'orders', json: true },
+        readIo.io,
+      ),
+    ).resolves.toBe(0);
+    expect(JSON.parse(readIo.stdout())).toMatchObject({
+      kind: 'sl.source',
+      data: {
+        connectionId: 'warehouse',
+        name: 'orders',
+        yaml: expect.stringContaining('name: orders'),
+      },
+    });
+
+    const listIo = makeIo();
+    await expect(
+      runKtxSl(
+        { command: 'list', projectDir, connectionId: 'warehouse', query: 'paid', json: true },
+        listIo.io,
+      ),
+    ).resolves.toBe(0);
+    expect(JSON.parse(listIo.stdout())).toMatchObject({
+      kind: 'list',
+      data: {
+        items: [
+          expect.objectContaining({
+            connectionId: 'warehouse',
+            name: 'orders',
+            score: expect.any(Number),
+            matchReasons: expect.arrayContaining(['token']),
+          }),
+        ],
+      },
+      meta: { command: 'sl list' },
+    });
+  });
+
   it('fails validation when a table-backed source declares columns absent from a matching warehouse manifest', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
@@ -188,6 +253,73 @@ joins: []
     ).resolves.toBe(0);
 
     expect(stdout.write).toHaveBeenCalledWith('select count(*) as order_count from public.orders\n');
+    expect(stderr.write).not.toHaveBeenCalled();
+  });
+
+  it('runs sl query from a JSON query file', async () => {
+    const projectDir = join(tempDir, 'project');
+    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = { driver: 'postgres', readonly: true };
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      `name: orders
+table: public.orders
+grain: [id]
+columns:
+  - name: id
+    type: number
+measures:
+  - name: order_count
+    expr: count(*)
+joins: []
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add orders source',
+    );
+    const queryFile = join(tempDir, 'query.json');
+    await writeFile(queryFile, '{"measures":["orders.order_count"],"dimensions":[]}', 'utf-8');
+
+    const stdout = { write: vi.fn() };
+    const stderr = { write: vi.fn() };
+    const query = vi.fn(async () => ({
+        sql: 'select count(*) as order_count from public.orders',
+        dialect: 'postgres',
+        columns: [{ name: 'orders.order_count' }],
+        plan: {},
+      }));
+    const createSemanticLayerCompute = vi.fn(() => ({
+      query,
+      validateSources: vi.fn(),
+      generateSources: vi.fn(),
+    }));
+
+    await expect(
+      runKtxSl(
+        {
+          command: 'query',
+          projectDir,
+          connectionId: 'warehouse',
+          queryFile,
+          format: 'json',
+          execute: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        { stdout, stderr },
+        { createSemanticLayerCompute },
+      ),
+    ).resolves.toBe(0);
+
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: { measures: ['orders.order_count'], dimensions: [] },
+      }),
+    );
+    expect(JSON.parse(String(stdout.write.mock.calls[0][0]))).toMatchObject({
+      sql: 'select count(*) as order_count from public.orders',
+      plan: { execution: { mode: 'compile_only' } },
+    });
     expect(stderr.write).not.toHaveBeenCalled();
   });
 

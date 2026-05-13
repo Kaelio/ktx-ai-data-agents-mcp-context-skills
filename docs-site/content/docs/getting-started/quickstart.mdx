@@ -211,7 +211,7 @@ KTX writes project state as plain files so agents can inspect and edit changes i
 | `semantic-layer/<connection-id>/*.yaml` | context build, ingestion, or `ktx sl write` | Semantic source definitions agents use for SQL generation |
 | `knowledge/global/*.md` | ingestion or `ktx wiki write --scope global` | Shared business context and metric definitions |
 | `knowledge/user/<user-id>/*.md` | `ktx wiki write --scope user` | User-scoped notes for one agent/user context |
-| `.claude/skills/ktx/SKILL.md`, `.agents/skills/ktx/SKILL.md` | CLI-mode agent integration setup | Agent instructions for calling `ktx agent` commands |
+| `.claude/skills/ktx/SKILL.md`, `.agents/skills/ktx/SKILL.md` | CLI-mode agent integration setup | Agent instructions for calling public `ktx` commands |
 
 ## Verify it worked
 
@@ -239,7 +239,7 @@ Agent integration ready: yes (claude-code:project)
 | `ktx: command not found` | The KTX package is not installed globally, or the shell cannot find the global binary | Run `npm install -g @kaelio/ktx` and open a new shell |
 | LLM health check fails | Missing, invalid, or unauthorized Anthropic API key | Export `ANTHROPIC_API_KEY` or rerun `ktx setup` and choose the file-backed secret option |
 | OpenAI embedding check fails | `OPENAI_API_KEY` is missing when OpenAI embeddings are selected | Export `OPENAI_API_KEY`, or rerun setup and choose local sentence-transformers embeddings |
-| Local embeddings hang or fail | The managed Python runtime cannot start or the local model runtime is unavailable | Install `uv`, run `ktx dev runtime doctor`, then run `ktx dev runtime install --feature local-embeddings --yes` and rerun setup |
+| Local embeddings hang or fail | The managed Python runtime cannot start or the local model runtime is unavailable | Install `uv`, run `ktx dev runtime status`, then run `ktx dev runtime install --feature local-embeddings --yes` and rerun setup |
 | Database connection test fails | Credentials, network access, warehouse, database, or schema value is wrong | Test the same URL with the database's native client, then rerun `ktx connection add ... --force` or rerun setup |
 | `KTX context built: no` in `ktx status` | Setup saved configuration but did not build context | Run `ktx setup` and choose to build context now |
 | Agent integration is incomplete | Setup skipped the agents step or the target was not installed | Run `ktx setup --agents --target codex --project` using the target you need |

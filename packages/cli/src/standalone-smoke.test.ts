@@ -50,14 +50,6 @@ async function runBuiltCli(args: string[], options: { env?: NodeJS.ProcessEnv } 
   }
 }
 
-function getRunId(stdout: string): string {
-  const match = stdout.match(/^Run: (.+)$/m);
-  if (!match) {
-    throw new Error(`Could not find run id in output:\n${stdout}`);
-  }
-  return match[1];
-}
-
 async function writeWarehouseConfig(projectDir: string): Promise<void> {
   await writeFile(
     join(projectDir, 'ktx.yaml'),
@@ -134,10 +126,6 @@ async function writeSqliteScanConfig(projectDir: string, dbPath: string, enrich 
   );
 }
 
-function parseJsonOutput<T>(stdout: string): T {
-  return JSON.parse(stdout) as T;
-}
-
 function expectProjectStderr(result: CliResult, projectDir: string): void {
   expect(result).toMatchObject({ code: 0, stderr: `Project: ${projectDir}\n` });
 }
@@ -181,7 +169,6 @@ describe('standalone built ktx CLI smoke', () => {
     await writeSourceFixture(sourceDir);
 
     const run = await runBuiltCli([
-      'dev',
       'ingest',
       'run',
       '--project-dir',
@@ -199,49 +186,21 @@ describe('standalone built ktx CLI smoke', () => {
     );
   });
 
-  it('prints guided JSON for agent semantic-layer search outside a project through the built binary', async () => {
-    const projectDir = join(tempDir, 'missing-search-project');
-    await mkdir(projectDir, { recursive: true });
-
-    const result = await runBuiltCli([
-      'agent',
-      'sl',
-      'list',
-      '--json',
-      '--query',
-      'revenue',
-      '--project-dir',
-      projectDir,
-    ]);
+  it('rejects the removed agent command through the built binary', async () => {
+    const result = await runBuiltCli(['agent']);
 
     expect(result.code).toBe(1);
     expect(result.stdout).toBe('');
-    const errorJson = parseJsonOutput<{
-      ok: false;
-      error: { code: string; message: string; nextSteps: string[] };
-    }>(result.stderr);
-    expect(errorJson).toEqual({
-      ok: false,
-      error: {
-        code: 'agent_sl_search_missing_project',
-        message: `Semantic-layer search needs an initialized KTX project at ${projectDir}.`,
-        nextSteps: [
-          `ktx setup --project-dir ${projectDir}`,
-          `ktx status --project-dir ${projectDir}`,
-          'ktx ingest <connection>',
-          `ktx agent sl list --json --query "revenue" --project-dir ${projectDir}`,
-        ],
-      },
-    });
+    expect(result.stderr).toContain("unknown command 'agent'");
   });
 
   it('runs doctor setup through the built binary', async () => {
     const result = await runBuiltCli(['status', '--no-input']);
 
-    expect(result.stdout).toContain('KTX setup doctor');
+    expect(result.stdout).toMatch(/KTX (setup|project) doctor/);
     expect(result.stdout).toContain('Node 22+');
     expect(result.stdout).toContain('Workspace-local CLI');
-    expect(result.stderr).toBe('');
+    expect(result.stderr === '' || result.stderr.startsWith('Project: ')).toBe(true);
     expect([0, 1]).toContain(result.code);
   });
 
@@ -260,31 +219,11 @@ describe('standalone built ktx CLI smoke', () => {
     expect(connectionTest.stdout).toContain('Driver: sqlite');
     expect(connectionTest.stdout).toContain('Tables: 2');
 
-    const structural = await runBuiltCli(['dev', 'scan', 'warehouse', '--project-dir', projectDir]);
+    const structural = await runBuiltCli(['scan', 'warehouse', '--project-dir', projectDir]);
     expectProjectStderr(structural, projectDir);
     expect(structural.stdout).toContain('Status: done');
     expect(structural.stdout).toContain('Mode: structural');
-    const structuralRunId = getRunId(structural.stdout);
-
-    const structuralReportResult = await runBuiltCli([
-      'dev',
-      'scan',
-      'report',
-      '--json',
-      '--project-dir',
-      projectDir,
-      structuralRunId,
-    ]);
-    expect(structuralReportResult).toMatchObject({ code: 0, stderr: '' });
-    const structuralReport = parseJsonOutput<{
-      mode: string;
-      artifactPaths: { manifestShards: string[]; enrichmentArtifacts: string[] };
-      manifestShardsWritten: number;
-    }>(structuralReportResult.stdout);
-    expect(structuralReport.mode).toBe('structural');
-    expect(structuralReport.artifactPaths.manifestShards).toEqual(['semantic-layer/warehouse/_schema/public.yaml']);
-    expect(structuralReport.artifactPaths.enrichmentArtifacts).toEqual([]);
-    expect(structuralReport.manifestShardsWritten).toBe(1);
+    expect(structural.stdout).toContain('Schema shards: 1');
 
     const structuralManifest = await readFile(
       join(projectDir, 'semantic-layer/warehouse/_schema/public.yaml'),
@@ -296,7 +235,6 @@ describe('standalone built ktx CLI smoke', () => {
     expect(structuralManifest).not.toContain('ai:');
 
     const providerlessEnriched = await runBuiltCli([
-      'dev',
       'scan',
       'warehouse',
       '--project-dir',
@@ -310,89 +248,11 @@ describe('standalone built ktx CLI smoke', () => {
     expect(providerlessEnriched.stdout).toContain('Accepted: 1');
     expect(providerlessEnriched.stdout).toContain('scan_enrichment_backend_not_configured');
     expect(providerlessEnriched.stdout).toContain('Enrichment artifacts: 3');
-    const providerlessRunId = getRunId(providerlessEnriched.stdout);
-
-    const providerlessReportResult = await runBuiltCli([
-      'dev',
-      'scan',
-      'report',
-      '--json',
-      '--project-dir',
-      projectDir,
-      providerlessRunId,
-    ]);
-    expect(providerlessReportResult).toMatchObject({ code: 0, stderr: '' });
-    const providerlessReport = parseJsonOutput<{
-      mode: string;
-      enrichment: {
-        tableDescriptions: string;
-        columnDescriptions: string;
-        embeddings: string;
-        deterministicRelationships: string;
-        statisticalValidation: string;
-      };
-      relationships: { accepted: number; review: number; rejected: number; skipped: number };
-      warnings: Array<{ code: string }>;
-      artifactPaths: { enrichmentArtifacts: string[]; manifestShards: string[] };
-    }>(providerlessReportResult.stdout);
-    expect(providerlessReport.mode).toBe('enriched');
-    expect(providerlessReport.enrichment).toMatchObject({
-      tableDescriptions: 'skipped',
-      columnDescriptions: 'skipped',
-      embeddings: 'skipped',
-      deterministicRelationships: 'completed',
-      statisticalValidation: 'completed',
-    });
-    expect(providerlessReport.relationships).toEqual({ accepted: 1, review: 0, rejected: 0, skipped: 0 });
-    expect(providerlessReport.warnings).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'scan_enrichment_backend_not_configured' })]),
-    );
-    expect(providerlessReport.artifactPaths.enrichmentArtifacts).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('/enrichment/relationships.json'),
-        expect.stringContaining('/enrichment/relationship-profile.json'),
-        expect.stringContaining('/enrichment/relationship-diagnostics.json'),
-      ]),
-    );
-    expect(providerlessReport.artifactPaths.manifestShards).toEqual(['semantic-layer/warehouse/_schema/public.yaml']);
-
     await writeSqliteScanConfig(projectDir, dbPath, true);
-    const enriched = await runBuiltCli(['dev', 'scan', 'warehouse', '--project-dir', projectDir, '--mode', 'enriched']);
+    const enriched = await runBuiltCli(['scan', 'warehouse', '--project-dir', projectDir, '--mode', 'enriched']);
     expectProjectStderr(enriched, projectDir);
     expect(enriched.stdout).toContain('Mode: enriched');
-    const enrichedRunId = getRunId(enriched.stdout);
-
-    const enrichedReportResult = await runBuiltCli([
-      'dev',
-      'scan',
-      'report',
-      '--json',
-      '--project-dir',
-      projectDir,
-      enrichedRunId,
-    ]);
-    expect(enrichedReportResult).toMatchObject({ code: 0, stderr: '' });
-    const enrichedReport = parseJsonOutput<{
-      mode: string;
-      enrichment: { tableDescriptions: string; columnDescriptions: string; embeddings: string };
-      artifactPaths: { enrichmentArtifacts: string[]; manifestShards: string[] };
-    }>(enrichedReportResult.stdout);
-    expect(enrichedReport.mode).toBe('enriched');
-    expect(enrichedReport.enrichment).toMatchObject({
-      tableDescriptions: 'completed',
-      columnDescriptions: 'completed',
-      embeddings: 'completed',
-    });
-    expect(enrichedReport.artifactPaths.enrichmentArtifacts).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('/enrichment/descriptions.json'),
-        expect.stringContaining('/enrichment/embeddings.json'),
-        expect.stringContaining('/enrichment/relationships.json'),
-        expect.stringContaining('/enrichment/relationship-profile.json'),
-        expect.stringContaining('/enrichment/relationship-diagnostics.json'),
-      ]),
-    );
-    expect(enrichedReport.artifactPaths.manifestShards).toEqual(['semantic-layer/warehouse/_schema/public.yaml']);
+    expect(enriched.stdout).toContain('Enrichment artifacts:');
 
     const enrichedManifest = await readFile(join(projectDir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8');
     expect(enrichedManifest).toContain('Deterministic description');

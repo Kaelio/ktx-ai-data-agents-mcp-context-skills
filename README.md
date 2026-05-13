@@ -130,9 +130,7 @@ Scan artifacts are written under
 ```bash
 SCAN_OUTPUT="$(ktx scan warehouse --project-dir "$PROJECT_DIR")"
 printf '%s\n' "$SCAN_OUTPUT"
-SCAN_RUN_ID="$(printf '%s\n' "$SCAN_OUTPUT" | awk '/^Run: / { print $2 }')"
-ktx scan status --project-dir "$PROJECT_DIR" "$SCAN_RUN_ID"
-ktx scan report --project-dir "$PROJECT_DIR" "$SCAN_RUN_ID"
+ktx status --project-dir "$PROJECT_DIR"
 ```
 
 For non-SQLite drivers, prefer credential references such as `--url env:NAME`
@@ -147,16 +145,13 @@ version, and is managed by `ktx dev runtime` commands.
 KTX requires `uv` on `PATH` to create the managed runtime. Install `uv` with
 your system package manager or the official installer before running Python-
 backed KTX commands. KTX doesn't download `uv` automatically; run
-`ktx dev runtime doctor` if runtime installation fails:
+`ktx dev runtime status` if runtime installation fails:
 
 ```bash
 ktx dev runtime install --yes
 ktx dev runtime status
-ktx dev runtime doctor
 ktx dev runtime start
 ktx dev runtime stop
-ktx dev runtime prune --dry-run
-ktx dev runtime prune --yes
 ```
 
 The release artifact manifest contains the public npm tarball and the bundled `kaelio-ktx`
@@ -223,7 +218,7 @@ KTX provider. Enable it with an environment flag when running an LLM-backed
 command:
 
 ```bash
-KTX_AI_DEVTOOLS_ENABLED=true ktx dev ingest run \
+KTX_AI_DEVTOOLS_ENABLED=true ktx ingest run \
   --connection-id warehouse \
   --adapter metabase
 ```

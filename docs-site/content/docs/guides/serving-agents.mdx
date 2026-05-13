@@ -3,37 +3,36 @@ title: Serving Agents
 description: Expose your context to Claude Code, Cursor, Codex, and other coding agents.
 ---
 
-Once you've built and refined your context, the final step is exposing it to
-coding agents. KTX provides machine-readable CLI commands for direct terminal
-access from Claude Code, Cursor, Codex, OpenCode, and custom agent workflows.
+Once you've built and refined your context, expose it to coding agents through
+the public KTX CLI. Claude Code, Cursor, Codex, OpenCode, and custom agent
+workflows can call the same commands you use at a terminal.
 
 ## CLI Commands
 
-KTX provides a set of machine-readable commands under `ktx agent`. These return
-JSON output designed for programmatic consumption.
+KTX public commands support JSON output for the context reads that agents use
+most often. Use `--project-dir` when the agent is not already running inside the
+KTX project directory.
 
 ### Available commands
 
 ```bash
-# List available tools and their descriptions
-ktx agent tools --json
-
-# Get project context for planning
-ktx agent context --json
+# Check setup and context readiness
+ktx status --json
 ```
 
 **Semantic layer:**
 
 ```bash
 # List sources
-ktx agent sl list --json
-ktx agent sl list --json --connection-id my-postgres
+ktx sl list --json
+ktx sl list --json --connection-id my-postgres
+ktx sl list --json --query "revenue"
 
 # Read a source
-ktx agent sl read orders --json --connection-id my-postgres
+ktx sl read orders --json --connection-id my-postgres
 
 # Run a query from a JSON file
-ktx agent sl query --json \
+ktx sl query --json \
   --connection-id my-postgres \
   --query-file query.json \
   --execute \
@@ -44,20 +43,10 @@ ktx agent sl query --json \
 
 ```bash
 # Search knowledge pages
-ktx agent wiki search "revenue recognition" --json --limit 10
+ktx wiki search "revenue recognition" --json --limit 10
 
 # Read a specific page
-ktx agent wiki read order-status-definitions --json
-```
-
-**SQL execution:**
-
-```bash
-# Execute read-only SQL with a row limit
-ktx agent sql execute --json \
-  --connection-id my-postgres \
-  --sql-file query.sql \
-  --max-rows 500
+ktx wiki read order-status-definitions --json
 ```
 
 ## Setting Up Your Agent

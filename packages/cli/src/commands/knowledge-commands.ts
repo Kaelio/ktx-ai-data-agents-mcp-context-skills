@@ -1,5 +1,10 @@
 import { type Command, Option } from '@commander-js/extra-typings';
-import { collectOption, type KtxCliCommandContext, resolveCommandProjectDir } from '../cli-program.js';
+import {
+  collectOption,
+  type KtxCliCommandContext,
+  parsePositiveIntegerOption,
+  resolveCommandProjectDir,
+} from '../cli-program.js';
 import { wikiWriteCommandSchema } from '../command-schemas.js';
 import type { KtxKnowledgeArgs } from '../knowledge.js';
 import { profileMark } from '../startup-profile.js';
@@ -24,12 +29,14 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
   wiki
     .command('list')
     .description('List local wiki pages')
+    .option('--json', 'Print JSON output', false)
     .option('--user-id <id>', 'Local user id', 'local')
-    .action(async (options: { userId: string }, command) => {
+    .action(async (options: { userId: string; json?: boolean }, command) => {
       await runKnowledgeArgs(context, {
         command: 'list',
         projectDir: resolveCommandProjectDir(command),
         userId: options.userId,
+        json: options.json,
       });
     });
 
@@ -37,13 +44,15 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
     .command('read')
     .description('Read one local wiki page')
     .argument('<key>', 'Wiki page key')
+    .option('--json', 'Print JSON output', false)
     .option('--user-id <id>', 'Local user id', 'local')
-    .action(async (key: string, options: { userId: string }, command) => {
+    .action(async (key: string, options: { userId: string; json?: boolean }, command) => {
       await runKnowledgeArgs(context, {
         command: 'read',
         projectDir: resolveCommandProjectDir(command),
         key,
         userId: options.userId,
+        json: options.json,
       });
     });
 
@@ -51,13 +60,17 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
     .command('search')
     .description('Search local wiki pages')
     .argument('<query>', 'Search query')
+    .option('--json', 'Print JSON output', false)
     .option('--user-id <id>', 'Local user id', 'local')
-    .action(async (query: string, options: { userId: string }, command) => {
+    .option('--limit <number>', 'Maximum search results', parsePositiveIntegerOption)
+    .action(async (query: string, options: { userId: string; json?: boolean; limit?: number }, command) => {
       await runKnowledgeArgs(context, {
         command: 'search',
         projectDir: resolveCommandProjectDir(command),
         query,
         userId: options.userId,
+        json: options.json,
+        ...(options.limit !== undefined ? { limit: options.limit } : {}),
       });
     });
 

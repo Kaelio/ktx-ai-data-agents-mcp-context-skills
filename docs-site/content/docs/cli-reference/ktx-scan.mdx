@@ -1,163 +1,39 @@
 ---
 title: "ktx scan"
-description: "Run or inspect database scans."
+description: "Run standalone database scans."
 ---
 
-Discover your database schema — tables, columns, types, constraints, and relationships. Scanning is the first step in building context: KTX needs to understand your warehouse structure before it can build semantic sources.
-
-Scan commands live under `ktx dev scan`. See also the [Building Context](/docs/guides/building-context) guide for a walkthrough.
+Discover a configured database connection's schema, including tables, columns, types, constraints, and optional relationship signals.
 
 ## Command signature
 
 ```bash
-ktx dev scan <connectionId> [options]
-ktx dev scan <subcommand> [options]
+ktx scan <connectionId> [options]
 ```
 
-## Subcommands
-
-| Subcommand | Description |
-|-----------|-------------|
-| `status <runId>` | Print status for a local scan run |
-| `report <runId>` | Print a local scan report |
-| `relationships <runId>` | Print relationship artifacts for a local scan run |
-| `relationship-apply <runId>` | Apply accepted relationship review decisions as manual manifest joins |
-| `relationship-feedback` | Export persisted relationship review decisions as calibration labels |
-| `relationship-calibration` | Summarize relationship feedback labels against current score thresholds |
-| `relationship-thresholds` | Evaluate relationship feedback labels for offline threshold advice |
-
 ## Options
-
-### `scan` (run)
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--mode <mode>` | Scan mode: `structural`, `enriched`, or `relationships` | `structural` |
 | `--dry-run` | Run without writing scan results | `false` |
 | `--database-introspection-url <url>` | Daemon URL for live-database introspection | — |
-
-### `scan report`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--json` | Print the raw scan report JSON | `false` |
-
-### `scan relationships`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--status <status>` | Filter by status: `accepted`, `review`, `rejected`, `skipped`, or `all` | `review` |
-| `--limit <count>` | Maximum relationships to print per status | `25` |
-| `--accept <candidateId>` | Record an accepted decision for a relationship candidate | — |
-| `--reject <candidateId>` | Record a rejected decision for a relationship candidate | — |
-| `--note <text>` | Attach a note when recording a relationship review decision | — |
-| `--reviewer <name>` | Reviewer name for a relationship review decision | — |
-| `--json` | Print relationship artifacts as JSON | `false` |
-
-### `scan relationship-apply`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--all-accepted` | Apply all accepted relationship review decisions for the scan run | `false` |
-| `--candidate <candidateId>` | Apply one accepted relationship review decision; repeatable | — |
-| `--dry-run` | Preview relationships that would be written without rewriting manifest shards | `false` |
-| `--json` | Print the apply result as JSON | `false` |
-
-### `scan relationship-feedback`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--connection <connectionId>` | Only export labels for one KTX connection | — |
-| `--decision <decision>` | Filter: `accepted`, `rejected`, or `all` | `all` |
-| `--json` | Print the export as JSON | `false` |
-| `--jsonl` | Print labels as newline-delimited JSON | `false` |
-
-### `scan relationship-calibration`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--connection <connectionId>` | Only calibrate labels for one KTX connection | — |
-| `--decision <decision>` | Filter: `accepted`, `rejected`, or `all` | `all` |
-| `--accept-threshold <value>` | Score threshold treated as predicted accepted (0–1) | `0.85` |
-| `--review-threshold <value>` | Score threshold treated as predicted review (0–1) | `0.55` |
-| `--json` | Print the calibration report as JSON | `false` |
-
-### `scan relationship-thresholds`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--connection <connectionId>` | Only evaluate labels for one KTX connection | — |
-| `--min-total-labels <count>` | Minimum scored labels before advice can be ready | `20` |
-| `--min-accepted-labels <count>` | Minimum accepted labels before advice can be ready | `5` |
-| `--min-rejected-labels <count>` | Minimum rejected labels before advice can be ready | `5` |
-| `--json` | Print the threshold advice report as JSON | `false` |
+| `--yes` | Install the managed Python runtime without prompting when required | `false` |
+| `--no-input` | Disable interactive managed runtime installation | — |
 
 ## Examples
 
 ```bash
-# Run a structural scan of a connection
-ktx dev scan my-warehouse
-
-# Run a scan with LLM enrichment
-ktx dev scan my-warehouse --mode enriched
-
-# Run a scan with relationship detection
-ktx dev scan my-warehouse --mode relationships
-
-# Dry-run a scan (don't write results)
-ktx dev scan my-warehouse --dry-run
-
-# Check the status of a scan run
-ktx dev scan status run-abc123
-
-# View the scan report
-ktx dev scan report run-abc123
-
-# View scan report as JSON
-ktx dev scan report run-abc123 --json
-
-# List relationship candidates pending review
-ktx dev scan relationships run-abc123
-
-# List all relationships regardless of status
-ktx dev scan relationships run-abc123 --status all
-
-# Accept a relationship candidate
-ktx dev scan relationships run-abc123 --accept candidate-xyz
-
-# Reject a relationship candidate with a note
-ktx dev scan relationships run-abc123 --reject candidate-xyz --note "false positive"
-
-# Apply all accepted relationships to the manifest
-ktx dev scan relationship-apply run-abc123 --all-accepted
-
-# Preview what would be applied
-ktx dev scan relationship-apply run-abc123 --all-accepted --dry-run
-
-# Export relationship feedback as calibration labels
-ktx dev scan relationship-feedback --json
-
-# Calibrate relationship detection thresholds
-ktx dev scan relationship-calibration --accept-threshold 0.9 --review-threshold 0.6
-
-# Get threshold advice based on review decisions
-ktx dev scan relationship-thresholds
+ktx scan my-warehouse
+ktx scan my-warehouse --mode enriched
+ktx scan my-warehouse --mode relationships
+ktx scan my-warehouse --dry-run
+ktx scan my-warehouse --database-introspection-url http://127.0.0.1:8765
 ```
 
 ## Output
 
-Scan commands write scan artifacts under the KTX project directory and print status or report summaries. Use `--json` on report and relationship commands when an agent needs structured output.
-
-```json
-{
-  "runId": "scan-local-abc123",
-  "status": "completed",
-  "mode": "structural",
-  "changes": {
-    "tablesAdded": 42
-  }
-}
-```
+`ktx scan` prints a human summary and writes scan artifacts under the KTX project directory unless `--dry-run` is set. Use `ktx status` after a scan to inspect project readiness and next setup work.
 
 ## Common errors
 
@@ -165,5 +41,4 @@ Scan commands write scan artifacts under the KTX project directory and print sta
 |-------|-------|----------|
 | Scan cannot connect | Connection credentials or network access are invalid | Run `ktx connection test <connectionId>` and update the connection before scanning |
 | Enriched scan cannot describe columns | LLM credentials are missing or invalid | Complete LLM setup with `ktx setup` before enriched scans |
-| Relationship apply writes nothing | No accepted candidates match the provided run id or candidate ids | Inspect `ktx dev scan relationships <runId> --status accepted` first |
-| Calibration is not ready | Too few reviewed relationship labels exist | Review and accept/reject more candidates, then rerun calibration |
+| Relationship scan has limited evidence | The connector cannot provide optional validation or statistics | Re-run with a connector that supports the missing capability, or treat relationship output as lower-confidence context |
