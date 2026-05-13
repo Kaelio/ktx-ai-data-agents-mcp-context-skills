@@ -80,11 +80,9 @@
     "**/*.generated.ts"
   ],
   "ignoreIssues": {
-    "packages/cli/src/agent-search-readiness.ts": ["types"],
     "packages/cli/src/clack.ts": ["exports"],
     "packages/cli/src/commands/connection-metabase-setup.ts": ["exports", "types"],
     "packages/cli/src/ingest.test-utils.ts": ["exports"],
-    "packages/cli/src/io/print-list.ts": ["exports", "types"],
     "packages/cli/src/io/symbols.ts": ["exports"],
     "packages/cli/src/managed-python-command.ts": ["types"],
     "packages/cli/src/managed-python-daemon.ts": ["types"],
