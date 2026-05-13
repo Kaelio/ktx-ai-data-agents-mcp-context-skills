@@ -87,7 +87,7 @@ Useful output flags:
 | `--json` | Output as JSON |
 | `--plain` | Plain text output |
 
-### Watching progress
+### Inspecting stored reports
 
 ```bash
 # Check status of the latest ingest
@@ -96,29 +96,29 @@ ktx ingest status
 # Check a specific run
 ktx ingest status <run-id>
 
-# Open the visual ingest report (TUI)
-ktx ingest watch
-
 # Replay a past ingest run
 ktx ingest replay <run-id>
 ```
 
-The `watch` command opens an interactive TUI that shows the memory-flow output — every tool call, LLM decision, and artifact written during the ingest.
+`ktx ingest replay` opens the stored memory-flow output for a completed run.
+Foreground context builds do not detach into background control sessions; if a
+run is interrupted, rerun `ktx ingest <connection-id>` or `ktx ingest --all`.
 
-### Available adapters
+### Supported context sources
 
-| Adapter | Source | What gets ingested |
-|---------|--------|--------------------|
+| Driver | Source | What gets ingested |
+|--------|--------|--------------------|
 | `dbt` | dbt project | Model definitions, column descriptions, tests, tags |
 | `metricflow` | MetricFlow semantic models | Metrics, dimensions, entities, semantic joins |
 | `lookml` | LookML files | Views, explores, dimensions, measures, joins |
 | `looker` | Looker API | Explores, looks, dashboard metadata |
 | `metabase` | Metabase API | Questions, dashboards, table metadata |
 | `notion` | Notion API | Database pages, knowledge articles |
-| `historic-sql` | Query history | Frequent queries, usage patterns, runtime stats |
-| `live-database` | Direct DB connection | Live schema introspection |
 
-See [Context Sources](/docs/integrations/context-sources) for adapter-specific setup and auth configuration.
+Query history is a database connection facet. Enable it with
+`connections.<id>.context.queryHistory` or pass `--query-history` for a current
+run. See [Context Sources](/docs/integrations/context-sources) for
+driver-specific setup and auth configuration.
 
 ### What gets generated
 
