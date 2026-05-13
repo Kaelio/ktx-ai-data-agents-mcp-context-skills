@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { PickerState } from './tree-picker-state.js';
+import type { TreePickerChrome, TreePickerResult, TreePickerTuiIo } from './tree-picker-tui.js';
 import {
   discoverNotionPickerPages,
   notionPickerPageFromSearchResult,
@@ -6,8 +8,6 @@ import {
   pickNotionRootPages,
   resolveNotionWorkspaceLabel,
   type NotionPickerApi,
-  type PickerRenderInput,
-  type PickerRenderResult,
 } from './notion-page-picker.js';
 
 function makeIo() {
@@ -162,20 +162,27 @@ describe('Notion page picker helpers', () => {
   });
 });
 
+type RenderPickerArgs = [TreePickerChrome, PickerState, TreePickerTuiIo];
+
 describe('pickNotionRootPages', () => {
   it('discovers visible pages, warns about stale roots, renders the TUI, and returns selected roots', async () => {
     const api = fakeNotionApi([
       notionPage(PAGE_IDS.engineering, 'Engineering'),
       notionPage(PAGE_IDS.architecture, 'Architecture', PAGE_IDS.engineering),
     ]);
-    const renderPicker = vi.fn(async (input: PickerRenderInput): Promise<PickerRenderResult> => {
-      expect(input.connectionId).toBe('notion-main');
-      expect(input.workspaceLabel).toBe('Design Workspace');
-      expect(input.currentCrawlMode).toBe('all_accessible');
-      expect(input.cappedAtCount).toBeNull();
-      expect(input.initialState.preLoadWarnings).toEqual(['1 stored root_page_ids no longer visible']);
-      return { kind: 'save', rootPageIds: [PAGE_IDS.engineering] };
-    });
+    const renderPicker = vi.fn(
+      async (chrome: TreePickerChrome, state: PickerState): Promise<TreePickerResult> => {
+        expect(chrome.title).toBe('Select Notion pages to ingest');
+        expect(chrome.subtitleLines).toEqual(['Workspace: Design Workspace']);
+        expect(chrome.warningLines ?? []).toEqual([]);
+        expect(chrome.confirmSaveMessage).toBeTypeOf('function');
+        expect(state.requireConfirmOnSave).toBe(true);
+        expect(state.preLoadWarnings).toEqual([
+          '1 stored root_page_ids no longer visible - they will be removed if you save',
+        ]);
+        return { kind: 'save', selectedIds: [PAGE_IDS.engineering] };
+      },
+    );
     const io = makeIo();
 
     await expect(
@@ -223,7 +230,7 @@ describe('pickNotionRootPages', () => {
         makeIo().io,
         {
           createNotionApi,
-          renderPicker: vi.fn(async (): Promise<PickerRenderResult> => ({ kind: 'quit' })),
+          renderPicker: vi.fn(async (): Promise<TreePickerResult> => ({ kind: 'quit' })),
         },
       ),
     ).resolves.toEqual({ kind: 'back' });
@@ -243,11 +250,13 @@ describe('pickNotionRootPages', () => {
         .mockRejectedValueOnce(new Error('rate limit after first page')),
       retrieveBotUser: vi.fn(async () => ({ name: 'Notion bot', bot: { workspace_name: 'Design Workspace' } })),
     };
-    let renderInput: PickerRenderInput | undefined;
-    const renderPicker = vi.fn(async (input: PickerRenderInput): Promise<PickerRenderResult> => {
-      renderInput = input;
-      return { kind: 'quit' };
-    });
+    let captured: RenderPickerArgs | undefined;
+    const renderPicker = vi.fn(
+      async (chrome: TreePickerChrome, state: PickerState, io: TreePickerTuiIo): Promise<TreePickerResult> => {
+        captured = [chrome, state, io];
+        return { kind: 'quit' };
+      },
+    );
     const io = makeIo();
 
     await expect(
@@ -271,11 +280,12 @@ describe('pickNotionRootPages', () => {
     ).resolves.toEqual({ kind: 'back' });
 
     expect(renderPicker).toHaveBeenCalledOnce();
-    if (!renderInput) {
+    if (!captured) {
       throw new Error('renderPicker was not called');
     }
-    expect(renderInput.initialState.preLoadWarnings).toEqual(['Notion search stopped early: rate limit after first page']);
-    expect(renderInput.initialState.tree.map((node) => node.title)).toEqual(['Engineering']);
+    const [, state] = captured;
+    expect(state.preLoadWarnings).toEqual(['Notion search stopped early: rate limit after first page']);
+    expect(state.tree.map((node) => node.title)).toEqual(['Engineering']);
     expect(io.stderr()).toContain('Notion search stopped early: rate limit after first page');
   });
 
@@ -300,7 +310,7 @@ describe('pickNotionRootPages', () => {
             }),
             retrieveBotUser: vi.fn(async () => ({ name: 'Notion bot' })),
           })),
-          renderPicker: vi.fn(async (): Promise<PickerRenderResult> => ({ kind: 'quit' })),
+          renderPicker: vi.fn(async (): Promise<TreePickerResult> => ({ kind: 'quit' })),
         },
       ),
     ).resolves.toEqual({ kind: 'unavailable', message: 'Notion API unavailable' });

@@ -12,8 +12,8 @@ import {
   selectNone,
   toggleChecked,
   visibleNodeIds,
-  type NotionPickerPageInput,
-} from './notion-page-picker-tree.js';
+  type TreePickerNodeInput,
+} from './tree-picker-state.js';
 
 const IDS = {
   engineering: '11111111-1111-1111-1111-111111111111',
@@ -27,7 +27,7 @@ const IDS = {
   cycleB: '99999999-9999-9999-9999-999999999999',
 };
 
-function pages(): NotionPickerPageInput[] {
+function pages(): TreePickerNodeInput[] {
   return [
     { id: IDS.marketing, title: 'Marketing', archived: false, parentId: null },
     { id: IDS.onboarding, title: 'Onboarding', archived: false, parentId: IDS.engineering },
@@ -43,7 +43,7 @@ function pages(): NotionPickerPageInput[] {
 }
 
 describe('buildPickerTree', () => {
-  it('deduplicates pages, sorts siblings, preserves archived flags, roots orphans, and breaks cycles', () => {
+  it('deduplicates nodes, sorts siblings, preserves archived flags, roots orphans, and breaks cycles', () => {
     const tree = buildPickerTree(pages());
     const byId = new Map(tree.map((node) => [node.id, node]));
 
@@ -89,8 +89,7 @@ describe('selection invariants', () => {
   it('checking a parent locks descendants and keeps checked ids minimal', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
-      existingRootPageIds: [],
-      currentCrawlMode: 'selected_roots',
+      existingSelectedIds: [],
     });
 
     const checkedParent = toggleChecked(state, IDS.engineering, 1000);
@@ -112,15 +111,11 @@ describe('selection invariants', () => {
     expect(canToggle(IDS.architecture, uncheckedParent)).toEqual({ ok: true });
   });
 
-  it('normalizes stored roots, reports stale roots, expands checked ancestors, and flattens descendants', () => {
+  it('reports stale stored ids via the caller-supplied warning, expands checked ancestors, and flattens descendants', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
-      existingRootPageIds: [
-        IDS.engineering.replaceAll('-', ''),
-        IDS.architecture,
-        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      ],
-      currentCrawlMode: 'selected_roots',
+      existingSelectedIds: [IDS.engineering, IDS.architecture, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+      staleWarning: (staleCount) => `${staleCount} stored root_page_ids no longer visible`,
     });
 
     expect([...state.checked]).toEqual([IDS.engineering]);
@@ -129,14 +124,21 @@ describe('selection invariants', () => {
     expect(state.preLoadWarnings).toEqual(['1 stored root_page_ids no longer visible']);
     expect(flattenSelection(new Set([IDS.engineering, IDS.architecture]), state.byId)).toEqual([IDS.engineering]);
   });
+
+  it('falls back to a generic stale warning when no warning factory is supplied', () => {
+    const state = buildInitialState({
+      tree: buildPickerTree(pages()),
+      existingSelectedIds: ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+    });
+    expect(state.preLoadWarnings).toEqual(['1 stored selections no longer visible']);
+  });
 });
 
 describe('search and cursor movement', () => {
   it('filters by title and path while deriving auto-expanded ancestors', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
-      existingRootPageIds: [],
-      currentCrawlMode: 'selected_roots',
+      existingSelectedIds: [],
     });
     const searching = {
       ...state,
@@ -153,8 +155,7 @@ describe('search and cursor movement', () => {
   it('moves the cursor through visible nodes and implements left/right tree semantics', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
-      existingRootPageIds: [],
-      currentCrawlMode: 'selected_roots',
+      existingSelectedIds: [],
     });
 
     const atEngineering = {
@@ -175,8 +176,7 @@ describe('bulk actions and reducer effects', () => {
   it('selects only matching visible roots under search and clears selection', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
-      existingRootPageIds: [IDS.marketing],
-      currentCrawlMode: 'selected_roots',
+      existingSelectedIds: [IDS.marketing],
     });
     const searching = {
       ...state,
@@ -188,36 +188,35 @@ describe('bulk actions and reducer effects', () => {
     expect([...selectNone(selected).checked]).toEqual([]);
   });
 
-  it('returns save immediately for selected_roots and requires confirmation for all_accessible', () => {
-    const selectedRoots = toggleChecked(
+  it('saves immediately when confirm is not required and prompts confirmation when requireConfirmOnSave is true', () => {
+    const noConfirm = toggleChecked(
       buildInitialState({
         tree: buildPickerTree(pages()),
-        existingRootPageIds: [],
-        currentCrawlMode: 'selected_roots',
+        existingSelectedIds: [],
       }),
       IDS.marketing,
       1000,
     );
-    expect(reducer(selectedRoots, 'save-request')).toEqual({
-      next: selectedRoots,
+    expect(reducer(noConfirm, 'save-request')).toEqual({
+      next: noConfirm,
       effect: 'save',
     });
 
-    const allAccessible = {
-      ...selectedRoots,
-      currentCrawlMode: 'all_accessible' as const,
+    const confirmRequired = {
+      ...noConfirm,
+      requireConfirmOnSave: true,
     };
-    const confirm = reducer(allAccessible, 'save-request');
+    const confirm = reducer(confirmRequired, 'save-request');
     expect(confirm).toEqual({
-      next: { ...allAccessible, pendingConfirm: 'mode-switch' },
+      next: { ...confirmRequired, pendingConfirm: 'save-confirm' },
       effect: null,
     });
     expect(reducer(confirm.next, 'save-cancel')).toEqual({
-      next: { ...allAccessible, pendingConfirm: null },
+      next: { ...confirmRequired, pendingConfirm: null },
       effect: null,
     });
     expect(reducer(confirm.next, 'save-confirm')).toEqual({
-      next: { ...allAccessible, pendingConfirm: null },
+      next: { ...confirmRequired, pendingConfirm: null },
       effect: 'save',
     });
   });
@@ -225,8 +224,7 @@ describe('bulk actions and reducer effects', () => {
   it('prompts skip-empty confirmation on empty save, updates search state, and quits without saving', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
-      existingRootPageIds: [],
-      currentCrawlMode: 'selected_roots',
+      existingSelectedIds: [],
     });
 
     const emptySave = reducer(state, 'save-request');
@@ -254,16 +252,33 @@ describe('bulk actions and reducer effects', () => {
     });
   });
 
+  it('treats skip-empty confirmation as a save with empty selection when skipEmptyAction is save-empty', () => {
+    const state = buildInitialState({
+      tree: buildPickerTree(pages()),
+      existingSelectedIds: [],
+      skipEmptyAction: 'save-empty',
+    });
+
+    const emptySave = reducer(state, 'save-request');
+    expect(emptySave).toEqual({
+      next: { ...state, pendingConfirm: 'skip-empty' },
+      effect: null,
+    });
+    expect(reducer(emptySave.next, 'save-confirm')).toEqual({
+      next: { ...state, pendingConfirm: null },
+      effect: 'save',
+    });
+  });
+
   it('clears transient hints only when their expiry time has passed', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
-      existingRootPageIds: [],
-      currentCrawlMode: 'selected_roots',
+      existingSelectedIds: [],
     });
     const withHint = {
       ...state,
       transientHint: {
-        text: 'Select at least one page or press esc to cancel',
+        text: 'Select at least one item or press esc to cancel',
         expiresAt: 11500,
       },
     };
