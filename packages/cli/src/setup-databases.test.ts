@@ -76,7 +76,7 @@ describe('setup databases step', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('shows every supported primary source in the interactive checklist', async () => {
+  it('shows every supported database in the interactive checklist', async () => {
     const prompts = makePromptAdapter({ multiselectValues: [['back']] });
 
     const result = await runKtxSetupDatabasesStep(
@@ -88,7 +88,7 @@ describe('setup databases step', () => {
     expect(result.status).toBe('back');
     expect(prompts.multiselect).toHaveBeenCalledWith({
       message:
-        'Which primary sources should KTX connect to?\n' +
+        'Which databases should KTX connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
       options: [
         { value: 'sqlite', label: 'SQLite' },
@@ -103,7 +103,7 @@ describe('setup databases step', () => {
     });
   });
 
-  it('requires choosing a primary source after an empty interactive selection', async () => {
+  it('requires choosing a database after an empty interactive selection', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({
       multiselectValues: [[], ['back']],
@@ -119,12 +119,12 @@ describe('setup databases step', () => {
     expect(result.status).toBe('back');
     expect(prompts.select).not.toHaveBeenCalled();
     expect(io.stdout()).toContain(
-      'KTX cannot work without at least one primary source. Select a source or press Escape to go back.',
+      'KTX cannot work without at least one database. Select a database or press Escape to go back.',
     );
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
   });
 
-  it('lets Back from connection method selection return to primary source selection when adding a new driver', async () => {
+  it('lets Back from connection method selection return to database selection when adding a new driver', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['back']],
       selectValues: ['back'],
@@ -147,12 +147,12 @@ describe('setup databases step', () => {
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
     expect(vi.mocked(prompts.multiselect).mock.calls[1]?.[0].message).toBe(
-      'Which primary sources should KTX connect to?\n' +
+      'Which databases should KTX connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
     );
   });
 
-  it('offers connection URL paste first for URL-capable primary sources', async () => {
+  it('offers connection URL paste first for URL-capable databases', async () => {
     const cases: Array<{ driver: KtxSetupDatabaseDriver; label: string }> = [
       { driver: 'postgres', label: 'PostgreSQL' },
       { driver: 'mysql', label: 'MySQL' },
@@ -505,7 +505,7 @@ describe('setup databases step', () => {
     }
   });
 
-  it('lets Back from connection method selection return to primary source selection', async () => {
+  it('lets Back from connection method selection return to database selection', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['back']],
       selectValues: ['back'],
@@ -542,7 +542,7 @@ describe('setup databases step', () => {
     expect(scanConnection).not.toHaveBeenCalled();
   });
 
-  it('shows a configured primary source menu instead of the type checklist when a primary source exists', async () => {
+  it('shows a configured database menu instead of the type checklist when a database exists', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -565,7 +565,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
       { prompts, testConnection, scanConnection },
     );
@@ -573,17 +579,17 @@ describe('setup databases step', () => {
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
     expect(prompts.multiselect).not.toHaveBeenCalled();
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
     expect(scanConnection).not.toHaveBeenCalled();
   });
 
-  it('preserves existing primary source ids when adding another source from the configured menu', async () => {
+  it('preserves existing database ids when adding another database from the configured menu', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -610,7 +616,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
       { prompts, testConnection, scanConnection },
     );
@@ -622,10 +634,10 @@ describe('setup databases step', () => {
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(1);
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
     expect(testConnection).toHaveBeenCalledTimes(1);
@@ -635,7 +647,7 @@ describe('setup databases step', () => {
     expect(config.setup?.database_connection_ids).toEqual(['warehouse', 'mysql-warehouse']);
   });
 
-  it('lets users add another primary source after completing the first one', async () => {
+  it('lets users add another database after completing the first one', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['mysql']],
       selectValues: ['url', 'add', 'url', 'continue'],
@@ -645,7 +657,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       makeIo().io,
       { prompts, testConnection, scanConnection },
     );
@@ -657,10 +675,10 @@ describe('setup databases step', () => {
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -678,7 +696,13 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
 
     const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
       io.io,
       { prompts, testConnection, scanConnection },
     );
@@ -689,12 +713,12 @@ describe('setup databases step', () => {
       connectionIds: ['postgres-warehouse'],
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
-    expect(io.stdout()).not.toContain('KTX cannot work without at least one primary source');
+    expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
-      message: 'Primary sources already configured: postgres-warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
   });
@@ -730,12 +754,12 @@ describe('setup databases step', () => {
     );
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
-    expect(io.stdout()).not.toContain('KTX cannot work without at least one primary source');
+    expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
-      message: 'Primary sources already configured: warehouse\nWhat would you like to do?',
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
-        { value: 'continue', label: 'Continue to knowledge sources' },
-        { value: 'add', label: 'Add another primary source' },
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'add', label: 'Add another database' },
       ],
     });
   });
@@ -755,6 +779,7 @@ describe('setup databases step', () => {
         databaseDrivers: ['postgres'],
         databaseSchemas: [],
         skipDatabases: false,
+        disableQueryHistory: true,
       },
       makeIo().io,
       { prompts, testConnection, scanConnection },
@@ -788,15 +813,15 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message:
         'Some PostgreSQL connection details are missing.\n' +
-        'Continue entering details, or go back to primary source selection.',
+        'Continue entering details, or go back to database selection.',
       options: [
         { value: 'retry', label: 'Continue entering PostgreSQL details' },
-        { value: 'back', label: 'Back to primary source selection' },
+        { value: 'back', label: 'Back to database selection' },
       ],
     });
   });
 
-  it('lets Escape from connection name return to primary source selection', async () => {
+  it('lets Escape from connection name return to database selection', async () => {
     const prompts = makePromptAdapter({
       multiselectValues: [['postgres'], ['back']],
       textValues: [undefined],
@@ -966,7 +991,8 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('│  Running fast database ingest…');
     expect(io.stdout()).toContain('◇  Schema context complete for postgres-warehouse');
     expect(io.stdout()).toContain('│  Changes: 2 new tables');
-    expect(io.stdout()).toContain('◇  Primary source ready');
+    expect(io.stdout()).toContain('◇  Database ready');
+    expect(io.stdout()).not.toContain(['Primary source', 'ready'].join(' '));
     expect(io.stdout()).toContain('│  postgres-warehouse · PostgreSQL · schema context complete');
     expect(io.stdout()).not.toContain('Scanning postgres-warehouse');
     expect(io.stdout()).not.toContain('Scan complete for postgres-warehouse');
@@ -1108,6 +1134,7 @@ describe('setup databases step', () => {
         databaseUrl: 'env:DATABASE_URL',
         databaseSchemas: ['public'],
         skipDatabases: false,
+        disableQueryHistory: true,
       },
       io.io,
       { testConnection, scanConnection, listSchemas },
@@ -1122,13 +1149,15 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       schemas: ['public'],
+      context: { queryHistory: { enabled: false } },
       readonly: true,
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
     });
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
-    expect(io.stdout()).toContain('Primary source ready');
+    expect(io.stdout()).toContain('Database ready');
+    expect(io.stdout()).not.toContain(['Primary source', 'ready'].join(' '));
     expect(io.stdout()).not.toContain('DATABASE_URL=');
   });
 
@@ -1813,7 +1842,7 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('"replay" is reserved for ktx ingest replay; choose a different connection id.');
   });
 
-  it('leaves setup incomplete when primary sources are skipped', async () => {
+  it('leaves setup incomplete when databases are skipped', async () => {
     const io = makeIo();
 
     const result = await runKtxSetupDatabasesStep(
@@ -1822,7 +1851,7 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('skipped');
-    expect(io.stdout()).toContain('KTX cannot work until you add a primary source.');
+    expect(io.stdout()).toContain('KTX cannot work until you add a database.');
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 });

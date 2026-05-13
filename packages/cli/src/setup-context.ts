@@ -570,7 +570,7 @@ function writeSuccess(
   io: KtxCliIo,
 ): void {
   io.stdout.write('\nKTX context is ready for agents.\n\n');
-  io.stdout.write('Primary sources:\n');
+  io.stdout.write('Databases:\n');
   if (targets.primarySourceConnectionIds.length === 0) {
     io.stdout.write('  none\n');
   } else {

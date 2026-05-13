@@ -37,7 +37,7 @@ describe('setup ready menu', () => {
       options: [
         { value: 'models', label: 'Models' },
         { value: 'embeddings', label: 'Embeddings' },
-        { value: 'databases', label: 'Primary sources' },
+        { value: 'databases', label: 'Databases' },
         { value: 'sources', label: 'Context sources' },
         { value: 'context', label: 'Rebuild KTX context' },
         { value: 'agents', label: 'Agent integration' },

@@ -371,7 +371,7 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
     `Embeddings ready: ${formatReady(status.embeddings.ready)}${
       status.embeddings.model ? ` (${status.embeddings.model})` : ''
     }`,
-    `Primary sources configured: ${formatConnectionList(status.databases.map((database) => database.connectionId))}`,
+    `Databases configured: ${formatConnectionList(status.databases.map((database) => database.connectionId))}`,
     `Context sources configured: ${formatConnectionList(status.sources.map((source) => source.connectionId))}`,
     `KTX context built: ${formatContextBuilt(status.context)}`,
     `Agent integration ready: ${formatReady(status.agents.some((agent) => agent.ready))}${

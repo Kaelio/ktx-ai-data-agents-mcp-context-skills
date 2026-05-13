@@ -197,7 +197,7 @@ function missingConnectionDetailsPrompt(
   label: string,
   canReturnToDriverSelection: boolean,
 ): { message: string; options: Array<{ value: string; label: string }> } {
-  const backDestination = canReturnToDriverSelection ? 'primary source selection' : 'the previous setup step';
+  const backDestination = canReturnToDriverSelection ? 'database selection' : 'the previous setup step';
   return {
     message:
       `Some ${label} connection details are missing.\n` +
@@ -509,10 +509,10 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
   options: Array<{ value: string; label: string }>;
 } {
   return {
-    message: `Primary sources already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
+    message: `Databases already configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
-      { value: 'continue', label: 'Continue to knowledge sources' },
-      { value: 'add', label: 'Add another primary source' },
+      { value: 'continue', label: 'Continue to context sources' },
+      { value: 'add', label: 'Add another database' },
     ],
   };
 }
@@ -1609,7 +1609,7 @@ async function validateAndScanConnection(input: {
     `Schema context complete for ${input.connectionId}`,
     [`Changes: ${summarizeScanChanges(scanOutput)}`],
   );
-  writeSetupSection(input.io, 'Primary source ready', [
+  writeSetupSection(input.io, 'Database ready', [
     `${input.connectionId} · ${driverDisplay} · schema context complete`,
   ]);
   return true;
@@ -1629,13 +1629,13 @@ async function chooseDrivers(
   }
   if (args.inputMode === 'disabled') {
     io.stderr.write(
-      'KTX cannot work without a primary source. Pass --database or --database-connection-id, or pass --skip-databases to leave setup incomplete.\n',
+      'KTX cannot work without a database. Pass --database or --database-connection-id, or pass --skip-databases to leave setup incomplete.\n',
     );
     return 'missing-input';
   }
   while (true) {
     const choices = await prompts.multiselect({
-      message: withMultiselectNavigation('Which primary sources should KTX connect to?'),
+      message: withMultiselectNavigation('Which databases should KTX connect to?'),
       options: [...DRIVER_OPTIONS],
       required: false,
     });
@@ -1650,7 +1650,7 @@ async function chooseDrivers(
       return 'back';
     }
 
-    io.stdout.write('│  KTX cannot work without at least one primary source. Select a source or press Escape to go back.\n');
+    io.stdout.write('│  KTX cannot work without at least one database. Select a database or press Escape to go back.\n');
   }
 }
 
@@ -1718,7 +1718,7 @@ export async function runKtxSetupDatabasesStep(
   deps: KtxSetupDatabasesDeps = {},
 ): Promise<KtxSetupDatabasesResult> {
   if (args.skipDatabases) {
-    io.stdout.write('│  Primary source setup skipped. KTX cannot work until you add a primary source.\n');
+    io.stdout.write('│  Database setup skipped. KTX cannot work until you add a database.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
@@ -1772,7 +1772,7 @@ export async function runKtxSetupDatabasesStep(
     if (drivers === 'missing-input') return { status: 'missing-input', projectDir: args.projectDir };
     if (drivers.length === 0) {
       await markDatabasesComplete(args.projectDir, []);
-      io.stdout.write('│  KTX cannot work without a primary source.\n');
+      io.stdout.write('│  KTX cannot work without a database.\n');
       return { status: 'skipped', projectDir: args.projectDir };
     }
 
@@ -1883,11 +1883,11 @@ export async function runKtxSetupDatabasesStep(
       ) {
         if (args.inputMode === 'disabled') return { status: 'failed', projectDir: args.projectDir };
         const action = await prompts.select({
-          message: `Primary source setup failed for ${connectionChoice.connectionId}`,
+          message: `Database setup failed for ${connectionChoice.connectionId}`,
           options: [
             { value: 'retry', label: 'Retry connection test' },
             { value: 're-enter', label: 'Re-enter connection details' },
-            { value: 'skip', label: 'Skip this primary source' },
+            { value: 'skip', label: 'Skip this database' },
             { value: 'back', label: 'Back' },
           ],
         });
@@ -1940,7 +1940,7 @@ export async function runKtxSetupDatabasesStep(
     }
 
     if (selectedConnectionIds.length === 0) {
-      io.stderr.write('No primary source connections completed setup.\n');
+      io.stderr.write('No database connections completed setup.\n');
       return { status: 'failed', projectDir: args.projectDir };
     }
 

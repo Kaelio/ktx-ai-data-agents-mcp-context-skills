@@ -65,7 +65,7 @@ KTX project: /home/user/analytics
 Project ready: yes
 LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
-Primary sources configured: yes (postgres-warehouse)
+Databases configured: yes (postgres-warehouse)
 Context sources configured: yes (dbt-main)
 KTX context built: yes
 Agent integration ready: yes (claude-code:project)

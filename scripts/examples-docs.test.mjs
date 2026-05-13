@@ -243,6 +243,7 @@ describe('standalone example docs', () => {
     const cliMeta = await readText('docs-site/content/docs/cli-reference/meta.json');
     const ingestReference = await readText('docs-site/content/docs/cli-reference/ktx-ingest.mdx');
     const devReference = await readText('docs-site/content/docs/cli-reference/ktx-dev.mdx');
+    const setupReference = await readText('docs-site/content/docs/cli-reference/ktx-setup.mdx');
     const buildingContext = await readText('docs-site/content/docs/guides/building-context.mdx');
     const contextSources = await readText('docs-site/content/docs/integrations/context-sources.mdx');
     const contextAsCode = await readText('docs-site/content/docs/concepts/context-as-code.mdx');
@@ -261,6 +262,13 @@ describe('standalone example docs', () => {
     assert.match(contextAsCode, /ktx ingest --all --no-input/);
     assert.match(quickstart, /schema context/);
     assert.match(primarySources, /context:\n      queryHistory:/);
+    assert.match(rootReadme, /Databases configured: yes \(postgres-warehouse\)/);
+    assert.match(quickstart, /Databases:\n  postgres-warehouse: deep context complete/);
+    assert.match(quickstart, /Databases configured: yes \(postgres-warehouse\)/);
+    assert.match(setupReference, /Databases configured: yes \(postgres-warehouse\)/);
+    assert.doesNotMatch(rootReadme, new RegExp(['Primary sources', 'configured'].join(' ')));
+    assert.doesNotMatch(quickstart, new RegExp(['Primary', 'sources'].join(' ')));
+    assert.doesNotMatch(setupReference, new RegExp(['Primary sources', 'configured'].join(' ')));
 
     assert.doesNotMatch(cliMeta, /ktx-scan/);
     assert.doesNotMatch(ingestReference, /ktx ingest run/);

@@ -293,6 +293,8 @@ describe('setup context build state', () => {
       artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
     });
     expect(io.stdout()).toContain('KTX context is ready for agents.');
+    expect(io.stdout()).toContain('Databases:');
+    expect(io.stdout()).not.toContain(['Primary sources', ':'].join(''));
   });
 
   it('records only failed sources as retryable when the context build fails', async () => {
@@ -375,6 +377,7 @@ describe('setup context build state', () => {
       contextSourceConnectionIds: ['docs'],
     });
     expect(io.stdout()).toContain('KTX context is ready for agents.');
+    expect(io.stdout()).not.toContain(['Primary sources', ':'].join(''));
   });
 
   it('does not mark context ready until primary scans have completed description enrichment', async () => {

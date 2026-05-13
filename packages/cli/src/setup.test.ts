@@ -379,6 +379,8 @@ describe('setup status', () => {
     expect(rendered).toContain(`KTX project: ${tempDir}`);
     expect(rendered).toContain('Project ready: yes');
     expect(rendered).toContain('LLM ready: no');
+    expect(rendered).toContain('Databases configured: no');
+    expect(rendered).not.toContain(['Primary sources', 'configured'].join(' '));
     expect(rendered).toContain('KTX context built: no');
     expect(rendered).not.toContain('No KTX project found.');
   });
@@ -1143,11 +1145,11 @@ describe('setup status', () => {
 
     expect(databasePrompts.select).not.toHaveBeenCalled();
     expect(testIo.stdout()).toContain(
-      'KTX cannot work without at least one primary source. Select a source or press Escape to go back.',
+      'KTX cannot work without at least one database. Select a database or press Escape to go back.',
     );
     expect(embeddings).toHaveBeenCalledTimes(2);
     expect(embeddings).toHaveBeenNthCalledWith(2, expect.objectContaining({ forcePrompt: true }), testIo.io);
-    expect(testIo.stderr()).not.toContain('No primary sources selected.');
+    expect(testIo.stderr()).not.toContain('No databases selected.');
   });
 
   it('lets Back from the first setup step return to the entry menu instead of exiting', async () => {
