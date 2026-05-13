@@ -1369,20 +1369,22 @@ describe('setup databases step', () => {
     expect(config.connections.snowflake).toMatchObject({
       driver: 'snowflake',
       authMethod: 'password',
-      historicSql: {
-        enabled: true,
-        dialect: 'snowflake',
-        windowDays: 30,
-        filters: {
-          dropTrivialProbes: true,
-          serviceAccounts: {
-            patterns: ['^svc_'],
-            mode: 'exclude',
+      context: {
+        queryHistory: {
+          enabled: true,
+          windowDays: 30,
+          filters: {
+            dropTrivialProbes: true,
+            serviceAccounts: {
+              patterns: ['^svc_'],
+              mode: 'exclude',
+            },
           },
+          redactionPatterns: ['(?i)secret'],
         },
-        redactionPatterns: ['(?i)secret'],
       },
     });
+    expect(config.connections.snowflake.historicSql).toBeUndefined();
     expect(configText).not.toContain('live-database');
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);
@@ -1421,21 +1423,23 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       schemas: ['public'],
-      historicSql: {
-        enabled: true,
-        dialect: 'postgres',
-        minExecutions: 12,
-        filters: {
-          dropTrivialProbes: true,
-          serviceAccounts: {
-            patterns: ['^svc_'],
-            mode: 'exclude',
+      context: {
+        queryHistory: {
+          enabled: true,
+          minExecutions: 12,
+          filters: {
+            dropTrivialProbes: true,
+            serviceAccounts: {
+              patterns: ['^svc_'],
+              mode: 'exclude',
+            },
           },
         },
       },
     });
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty('windowDays');
-    expect(config.connections.warehouse.historicSql).not.toHaveProperty('redactionPatterns');
+    expect(config.connections.warehouse.historicSql).toBeUndefined();
+    expect(config.connections.warehouse.context?.queryHistory).not.toHaveProperty('windowDays');
+    expect(config.connections.warehouse.context?.queryHistory).not.toHaveProperty('redactionPatterns');
     expect(configText).not.toContain('live-database');
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);
@@ -1483,16 +1487,18 @@ describe('setup databases step', () => {
     const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
     const config = parseKtxProjectConfig(configText);
     expect(config.connections.analytics).toMatchObject({
-      historicSql: {
-        enabled: true,
-        dialect: 'bigquery',
-        windowDays: 45,
-        filters: {
-          dropTrivialProbes: true,
+      context: {
+        queryHistory: {
+          enabled: true,
+          windowDays: 45,
+          filters: {
+            dropTrivialProbes: true,
+          },
+          redactionPatterns: [],
         },
-        redactionPatterns: [],
       },
     });
+    expect(config.connections.analytics.historicSql).toBeUndefined();
     expect(configText).not.toContain('live-database');
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);
@@ -1536,13 +1542,89 @@ describe('setup databases step', () => {
     expect(result.status).toBe('ready');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
-      historicSql: {
+      context: {
+        queryHistory: {
+          enabled: true,
+          minExecutions: 8,
+          filters: {
+            dropTrivialProbes: true,
+          },
+        },
+      },
+    });
+    expect(config.connections.warehouse.historicSql).toBeUndefined();
+  });
+
+  it('migrates legacy historicSql to context.queryHistory during database setup', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    readonly: true',
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: postgres',
+        '      windowDays: 45',
+        '      minExecutions: 9',
+        '      concurrency: 3',
+        '      staleArchiveAfterDays: 120',
+        '      filters:',
+        '        dropTrivialProbes: true',
+        '        serviceAccounts:',
+        '          mode: exclude',
+        '          patterns:',
+        "            - '^svc_'",
+        '        orchestrators:',
+        '          mode: exclude',
+        '          patterns:',
+        '            - airflow',
+        '        dropFailedBelow: 2',
+        '      redactionPatterns:',
+        "        - '(?i)secret'",
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupDatabasesStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          databaseConnectionIds: ['warehouse'],
+          databaseSchemas: [],
+          skipDatabases: false,
+        },
+        io.io,
+        {
+          testConnection: vi.fn(async () => 0),
+          scanConnection: vi.fn(async () => 0),
+          historicSqlProbe: vi.fn(async () => ({ ok: true, lines: [] })),
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse.historicSql).toBeUndefined();
+    expect(config.connections.warehouse.context).toMatchObject({
+      queryHistory: {
         enabled: true,
-        dialect: 'postgres',
-        minExecutions: 8,
+        windowDays: 45,
+        minExecutions: 9,
+        concurrency: 3,
+        staleArchiveAfterDays: 120,
         filters: {
           dropTrivialProbes: true,
+          serviceAccounts: { mode: 'exclude', patterns: ['^svc_'] },
+          orchestrators: { mode: 'exclude', patterns: ['airflow'] },
+          dropFailedBelow: 2,
         },
+        redactionPatterns: ['(?i)secret'],
       },
     });
   });
