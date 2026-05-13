@@ -19,6 +19,7 @@ import {
   type KtxSchemaTable,
   type KtxTableRef,
   type KtxTableSampleInput,
+  type KtxTableListEntry,
   type KtxTableSampleResult,
 } from '@ktx/context/scan';
 import * as snowflake from 'snowflake-sdk';
@@ -75,6 +76,7 @@ export interface KtxSnowflakeDriver {
   query(sql: string, params?: unknown): Promise<KtxQueryResult>;
   getSchemaMetadata(schemaName?: string): Promise<KtxSnowflakeRawTableMetadata[]>;
   listSchemas(): Promise<string[]>;
+  listTables(schemas?: string[]): Promise<KtxTableListEntry[]>;
   cleanup(): Promise<void>;
 }
 
@@ -344,6 +346,31 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
     return result.rows.map((row) => String(row[1])).filter((name) => name !== 'INFORMATION_SCHEMA');
   }
 
+  async listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
+    const filterSchemas = schemas ?? (await this.listSchemas());
+    if (filterSchemas.length === 0) return [];
+    const entries: KtxTableListEntry[] = [];
+    for (const schemaName of filterSchemas) {
+      const result = await this.query(
+        `
+        SELECT TABLE_NAME, TABLE_TYPE
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = ? AND TABLE_CATALOG = ?
+        ORDER BY TABLE_NAME
+        `,
+        [schemaName, this.resolved.database],
+      );
+      for (const row of result.rows) {
+        entries.push({
+          schema: schemaName,
+          name: String(row[0]),
+          kind: String(row[1]) === 'VIEW' ? 'view' : 'table',
+        });
+      }
+    }
+    return entries;
+  }
+
   async cleanup(): Promise<void> {
     const closers = this.closeSdkOptions;
     this.closeSdkOptions = [];
@@ -592,6 +619,10 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
 
   listSchemas(): Promise<string[]> {
     return this.getDriver().listSchemas();
+  }
+
+  listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
+    return this.getDriver().listTables(schemas);
   }
 
   async cleanup(): Promise<void> {

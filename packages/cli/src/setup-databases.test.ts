@@ -571,7 +571,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
@@ -622,7 +621,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
     expect(testConnection).toHaveBeenCalledTimes(1);
@@ -657,7 +655,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -692,7 +689,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
   });
@@ -735,7 +731,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
   });

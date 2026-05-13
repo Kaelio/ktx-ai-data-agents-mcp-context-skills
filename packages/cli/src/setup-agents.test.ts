@@ -144,7 +144,7 @@ describe('setup agents', () => {
     await expect(readKtxAgentInstallManifest(tempDir)).resolves.toEqual(null);
   });
 
-  it('uses prompts in interactive mode and supports Back', async () => {
+  it('treats cancel as skip in interactive mode', async () => {
     const io = makeIo();
     const prompts = {
       select: vi.fn(async () => 'back'),
@@ -166,7 +166,7 @@ describe('setup agents', () => {
         io.io,
         { prompts },
       ),
-    ).resolves.toEqual({ status: 'back', projectDir: tempDir });
+    ).resolves.toEqual({ status: 'skipped', projectDir: tempDir });
   });
 
   it('explains how to select multiple agent targets in interactive mode', async () => {

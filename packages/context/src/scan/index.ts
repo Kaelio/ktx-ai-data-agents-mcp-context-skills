@@ -105,7 +105,7 @@ export type {
   LocalScanStatusResponse,
   RunLocalScanOptions,
 } from './local-scan.js';
-export { getLocalScanReport, getLocalScanStatus, runLocalScan } from './local-scan.js';
+export { filterSnapshotTables, getLocalScanReport, getLocalScanStatus, resolveEnabledTables, runLocalScan } from './local-scan.js';
 export type { ReadLocalScanStructuralSnapshotInput } from './local-structural-artifacts.js';
 export { readLocalScanStructuralSnapshot } from './local-structural-artifacts.js';
 export type {
@@ -393,6 +393,7 @@ export type {
   KtxSchemaTable,
   KtxSchemaTableKind,
   KtxStructuralSyncStats,
+  KtxTableListEntry,
   KtxTableRef,
   KtxTableSampleInput,
   KtxTableSampleResult,

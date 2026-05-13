@@ -402,10 +402,9 @@ export async function runKtxSetupAgentsStep(
           options: [
             { value: 'cli', label: 'CLI tools and skills' },
             { value: 'skip', label: 'Skip' },
-            { value: 'back', label: 'Back' },
           ],
         })) as KtxAgentInstallMode | 'skip' | 'back');
-  if (mode === 'back') return { status: 'back', projectDir: args.projectDir };
+  if (mode === 'back') return { status: 'skipped', projectDir: args.projectDir };
   if (mode === 'skip') return { status: 'skipped', projectDir: args.projectDir };
 
   const targets =

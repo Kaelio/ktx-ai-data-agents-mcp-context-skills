@@ -14,6 +14,7 @@ import {
   type KtxSchemaColumn,
   type KtxSchemaSnapshot,
   type KtxSchemaTable,
+  type KtxTableListEntry,
   type KtxTableRef,
   type KtxTableSampleInput,
   type KtxTableSampleResult,
@@ -63,6 +64,7 @@ export interface KtxBigQueryQueryJob {
 
 export interface KtxBigQueryTableRef {
   id?: string;
+  metadata?: { type?: string };
   get(): Promise<
     [
       {
@@ -367,6 +369,25 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
   async listDatasets(): Promise<string[]> {
     const [datasets] = await this.getClient().getDatasets();
     return datasets.map((dataset) => dataset.id).filter((id): id is string => Boolean(id));
+  }
+
+  async listTables(datasetIds?: string[]): Promise<KtxTableListEntry[]> {
+    const filterDatasets = datasetIds ?? (await this.listDatasets());
+    const entries: KtxTableListEntry[] = [];
+    for (const datasetId of filterDatasets) {
+      const dataset = this.getClient().dataset(datasetId);
+      const [tables] = await dataset.getTables();
+      for (const table of tables) {
+        if (!table.id) continue;
+        entries.push({
+          schema: datasetId,
+          name: table.id,
+          kind: table.metadata?.type === 'VIEW' ? 'view' : 'table',
+        });
+      }
+    }
+    entries.sort((a, b) => a.schema.localeCompare(b.schema) || a.name.localeCompare(b.name));
+    return entries;
   }
 
   async cleanup(): Promise<void> {

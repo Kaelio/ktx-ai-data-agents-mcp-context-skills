@@ -15,6 +15,7 @@ import {
   type KtxScanContext,
   type KtxScanInput,
   type KtxSchemaColumn,
+  type KtxTableListEntry,
   type KtxSchemaForeignKey,
   type KtxSchemaSnapshot,
   type KtxSchemaTable,
@@ -127,6 +128,12 @@ interface MysqlForeignKeyRow extends RowDataPacket {
 
 interface MysqlSchemaRow extends RowDataPacket {
   SCHEMA_NAME: string;
+}
+
+interface MysqlTableListRow extends RowDataPacket {
+  TABLE_SCHEMA: string;
+  TABLE_NAME: string;
+  TABLE_TYPE: string;
 }
 
 interface MysqlCountRow extends RowDataPacket {
@@ -464,6 +471,27 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
       ORDER BY SCHEMA_NAME
     `);
     return rows.map((row) => row.SCHEMA_NAME);
+  }
+
+  async listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
+    const filterSchemas = schemas ?? (await this.listSchemas());
+    if (filterSchemas.length === 0) return [];
+    const placeholders = filterSchemas.map(() => '?').join(', ');
+    const rows = await this.queryRaw<MysqlTableListRow>(
+      `
+      SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA IN (${placeholders})
+        AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+      ORDER BY TABLE_SCHEMA, TABLE_NAME
+      `,
+      filterSchemas,
+    );
+    return rows.map((row) => ({
+      schema: row.TABLE_SCHEMA,
+      name: row.TABLE_NAME,
+      kind: row.TABLE_TYPE === 'VIEW' ? ('view' as const) : ('table' as const),
+    }));
   }
 
   async cleanup(): Promise<void> {

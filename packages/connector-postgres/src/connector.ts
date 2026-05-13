@@ -17,6 +17,7 @@ import {
   type KtxSchemaForeignKey,
   type KtxSchemaSnapshot,
   type KtxSchemaTable,
+  type KtxTableListEntry,
   type KtxTableRef,
   type KtxTableSampleInput,
   type KtxTableSampleResult,
@@ -177,6 +178,12 @@ interface PostgresForeignKeyRow {
 
 interface PostgresSchemaRow {
   schema_name: string;
+}
+
+interface PostgresTableListRow {
+  schema_name: string;
+  table_name: string;
+  table_kind: string;
 }
 
 interface PostgresCountRow {
@@ -521,6 +528,27 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
       ORDER BY schema_name
     `);
     return rows.map((row) => row.schema_name);
+  }
+
+  async listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
+    const filterSchemas = schemas ?? (await this.listSchemas());
+    if (filterSchemas.length === 0) return [];
+    const rows = await this.queryRaw<PostgresTableListRow>(
+      `
+      SELECT n.nspname AS schema_name, c.relname AS table_name, c.relkind AS table_kind
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+      WHERE n.nspname = ANY($1)
+        AND c.relkind IN ('r', 'v')
+      ORDER BY n.nspname, c.relname
+      `,
+      [filterSchemas],
+    );
+    return rows.map((row) => ({
+      schema: row.schema_name,
+      name: row.table_name,
+      kind: row.table_kind === 'v' ? ('view' as const) : ('table' as const),
+    }));
   }
 
   async cleanup(): Promise<void> {

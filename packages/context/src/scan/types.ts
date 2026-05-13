@@ -277,6 +277,12 @@ export interface KtxQueryResult {
   rowCount: number | null;
 }
 
+export interface KtxTableListEntry {
+  schema: string;
+  name: string;
+  kind: 'table' | 'view';
+}
+
 export interface KtxScanConnector {
   id: string;
   driver: KtxConnectionDriver;

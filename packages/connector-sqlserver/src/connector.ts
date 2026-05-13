@@ -14,6 +14,7 @@ import {
   type KtxSchemaForeignKey,
   type KtxSchemaSnapshot,
   type KtxSchemaTable,
+  type KtxTableListEntry,
   type KtxTableRef,
   type KtxTableSampleInput,
   type KtxTableSampleResult,
@@ -439,6 +440,32 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
       ORDER BY s.name
     `);
     return rows.map((row) => row.schema_name);
+  }
+
+  async listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
+    const filterSchemas = schemas ?? (await this.listSchemas());
+    if (filterSchemas.length === 0) return [];
+    const params: Record<string, unknown> = {};
+    const placeholders = filterSchemas.map((s, i) => {
+      params[`schema${i}`] = s;
+      return `@schema${i}`;
+    });
+    const rows = await this.queryRaw<{ schema_name: string; table_name: string; table_type: string }>(
+      `
+      SELECT s.name AS schema_name, o.name AS table_name, o.type_desc AS table_type
+      FROM sys.objects o
+      JOIN sys.schemas s ON o.schema_id = s.schema_id
+      WHERE o.type IN ('U', 'V')
+        AND s.name IN (${placeholders.join(', ')})
+      ORDER BY s.name, o.name
+      `,
+      params,
+    );
+    return rows.map((row) => ({
+      schema: row.schema_name,
+      name: row.table_name,
+      kind: row.table_type === 'VIEW' ? ('view' as const) : ('table' as const),
+    }));
   }
 
   async cleanup(): Promise<void> {

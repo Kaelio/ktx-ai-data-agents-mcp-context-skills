@@ -29,10 +29,13 @@ import type {
   KtxConnectionDriver,
   KtxProgressPort,
   KtxScanConnector,
+  KtxScanContext,
   KtxScanEnrichmentStateSummary,
+  KtxScanInput,
   KtxScanMode,
   KtxScanReport,
   KtxScanTrigger,
+  KtxSchemaSnapshot,
 } from './types.js';
 
 export interface RunLocalScanOptions {
@@ -313,17 +316,45 @@ async function readScanReport(
   }
 }
 
+export function resolveEnabledTables(connection: Record<string, unknown> | undefined): Set<string> | null {
+  const raw = connection?.enabled_tables;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  return new Set(raw.filter((v): v is string => typeof v === 'string'));
+}
+
+export function filterSnapshotTables(snapshot: KtxSchemaSnapshot, enabledTables: Set<string>): KtxSchemaSnapshot {
+  return {
+    ...snapshot,
+    tables: snapshot.tables.filter((table) => {
+      const key = table.db ? `${table.db}.${table.name}` : table.name;
+      return enabledTables.has(key);
+    }),
+  };
+}
+
+function createFilteredConnector(connector: KtxScanConnector, enabledTables: Set<string>): KtxScanConnector {
+  return {
+    ...connector,
+    async introspect(input: KtxScanInput, ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
+      const snapshot = await connector.introspect(input, ctx);
+      return filterSnapshotTables(snapshot, enabledTables);
+    },
+  };
+}
+
 export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalScanRunResult> {
   const mode = options.mode ?? 'structural';
   assertSupportedMode(mode);
   await options.progress?.update(0.05, 'Preparing scan');
-  const connector = await resolveScanConnector(options, mode);
+  const rawConnector = await resolveScanConnector(options, mode);
 
   const connection = options.project.config.connections[options.connectionId];
   if (!connection) {
     throw new Error(`Connection "${options.connectionId}" is not configured in ktx.yaml`);
   }
   const driver = normalizeDriver(connection.driver);
+  const enabledTables = resolveEnabledTables(connection);
+  const connector = rawConnector && enabledTables ? createFilteredConnector(rawConnector, enabledTables) : rawConnector;
   const adapters =
     options.adapters ??
     createDefaultLocalIngestAdapters(options.project, { databaseIntrospectionUrl: options.databaseIntrospectionUrl });
@@ -372,13 +403,28 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
   let enrichmentState: KtxScanEnrichmentStateSummary = completedKtxScanEnrichmentStateSummary();
   if (!reusedExistingScanArtifacts && !report.dryRun && report.artifactPaths.rawSourcesDir) {
     await options.progress?.update(0.7, 'Writing schema artifacts');
-    const structuralSnapshot = await readLocalScanStructuralSnapshot({
+    const rawSnapshot = await readLocalScanStructuralSnapshot({
       project: options.project,
       connectionId: options.connectionId,
       driver,
       rawSourcesDir: report.artifactPaths.rawSourcesDir,
       extractedAtFallback: report.createdAt,
     });
+    const structuralSnapshot = enabledTables ? filterSnapshotTables(rawSnapshot, enabledTables) : rawSnapshot;
+    if (enabledTables && structuralSnapshot.tables.length < rawSnapshot.tables.length) {
+      const excluded = rawSnapshot.tables.length - structuralSnapshot.tables.length;
+      let remaining = excluded;
+      const ds = report.diffSummary;
+      const subFrom = (field: 'tablesAdded' | 'tablesUnchanged' | 'tablesModified') => {
+        const take = Math.min(remaining, ds[field]);
+        ds[field] -= take;
+        remaining -= take;
+      };
+      subFrom('tablesAdded');
+      subFrom('tablesUnchanged');
+      subFrom('tablesModified');
+      await options.progress?.update(0.6, scanChangeSummary(report.diffSummary));
+    }
     const manifestArtifacts = await writeLocalScanManifestShards({
       project: options.project,
       connectionId: options.connectionId,
