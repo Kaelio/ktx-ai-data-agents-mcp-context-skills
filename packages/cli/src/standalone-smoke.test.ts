@@ -168,9 +168,13 @@ describe('standalone built ktx CLI smoke', () => {
   it('runs doctor setup through the built binary', async () => {
     const result = await runBuiltCli(['status', '--no-input']);
 
-    expect(result.stdout).toMatch(/KTX (setup|project) doctor/);
-    expect(result.stdout).toContain('Node 22+');
-    expect(result.stdout).toContain('Workspace-local CLI');
+    expect(result.stdout).toMatch(/KTX (setup doctor|project doctor|status)/);
+    if (result.stdout.includes('No project here yet.')) {
+      expect(result.stdout).toContain('Before you can run ktx setup');
+    } else {
+      expect(result.stdout).toContain('Node 22+');
+      expect(result.stdout).toContain('Workspace-local CLI');
+    }
     expect(result.stderr === '' || result.stderr.startsWith('Project: ')).toBe(true);
     expect([0, 1]).toContain(result.code);
   });

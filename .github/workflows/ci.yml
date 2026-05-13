@@ -188,6 +188,70 @@ jobs:
       - name: Run Python checks
         run: uv run pytest
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: "pnpm-lock.yaml"
+
+      - name: Install TypeScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.11"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install Python dependencies
+        run: uv sync --all-packages --all-groups
+
+      - name: Generate TypeScript coverage
+        run: pnpm run test:coverage:ts
+
+      - name: Upload TypeScript coverage
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
+        with:
+          use_oidc: true
+          files: ./packages/cli/coverage/lcov.info,./packages/connector-bigquery/coverage/lcov.info,./packages/connector-clickhouse/coverage/lcov.info,./packages/connector-mysql/coverage/lcov.info,./packages/connector-postgres/coverage/lcov.info,./packages/connector-snowflake/coverage/lcov.info,./packages/connector-sqlite/coverage/lcov.info,./packages/connector-sqlserver/coverage/lcov.info,./packages/context/coverage/lcov.info,./packages/llm/coverage/lcov.info
+          flags: typescript
+          name: typescript
+          fail_ci_if_error: false
+
+      - name: Generate Python coverage
+        run: pnpm run test:coverage:py
+
+      - name: Upload Python coverage
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
+        with:
+          use_oidc: true
+          files: ./coverage/python.xml
+          flags: python
+          name: python
+          fail_ci_if_error: false
+
   artifact-checks:
     name: Artifact checks
     runs-on: ubuntu-latest
