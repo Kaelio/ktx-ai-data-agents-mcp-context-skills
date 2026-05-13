@@ -242,7 +242,7 @@ Agent integration ready: yes (claude-code:project)
 | Local embeddings hang or fail | The managed Python runtime cannot start or the local model runtime is unavailable | Install `uv`, run `ktx dev runtime status`, then run `ktx dev runtime install --feature local-embeddings --yes` and rerun setup |
 | Database connection test fails | Credentials, network access, warehouse, database, or schema value is wrong | Test the same URL with the database's native client, then rerun `ktx setup` and reconfigure the connection |
 | `KTX context built: no` in `ktx status` | Setup saved configuration but did not build context | Run `ktx setup` and choose to build context now |
-| Agent integration is incomplete | Setup skipped the agents step or the target was not installed | Run `ktx setup --agents --target codex --project` using the target you need |
+| Agent integration is incomplete | Setup skipped the agents step or the target was not installed | Run `ktx setup --agents --target codex` using the target you need |
 
 ## Next steps
 
