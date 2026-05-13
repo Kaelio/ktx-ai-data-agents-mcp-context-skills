@@ -43,7 +43,7 @@ function view(): MemoryFlowViewModel {
           unitKey: 'orders',
           target: 'wiki',
           action: 'created',
-          key: 'knowledge/orders.md',
+          key: 'wiki/orders.md',
           summary: 'order facts',
           rawFiles: ['orders.yml'],
           status: 'success',
@@ -53,7 +53,7 @@ function view(): MemoryFlowViewModel {
         {
           rawPath: 'orders.yml',
           artifactKind: 'wiki',
-          artifactKey: 'knowledge/orders.md',
+          artifactKey: 'wiki/orders.md',
           actionType: 'wiki_written',
         },
       ],
@@ -104,8 +104,8 @@ function view(): MemoryFlowViewModel {
         status: 'complete',
         headline: '2 candidates',
         counters: ['1 wiki', '1 SL'],
-        chips: [{ label: 'knowledge/orders.md', status: 'complete' }],
-        details: ['wiki created: knowledge/orders.md', 'sl updated: warehouse.orders'],
+        chips: [{ label: 'wiki/orders.md', status: 'complete' }],
+        details: ['wiki created: wiki/orders.md', 'sl updated: warehouse.orders'],
       },
       {
         id: 'gates',
@@ -173,7 +173,7 @@ describe('memory-flow interaction reducer', () => {
       shouldQuit: false,
     });
     expect(selectedMemoryFlowColumn(view(), selected).title).toBe('ACTIONS');
-    expect(selectedMemoryFlowDetails(view(), selected)).toContain('wiki created: knowledge/orders.md');
+    expect(selectedMemoryFlowDetails(view(), selected)).toContain('wiki created: wiki/orders.md');
   });
 
   it('selects and clamps a chip directly for mouse-driven renderers', () => {
@@ -226,7 +226,7 @@ describe('memory-flow interaction reducer', () => {
     state = reduceMemoryFlowInteractionState(state, 'tab', view());
     expect(state.pane).toBe('provenance');
     expect(selectedMemoryFlowDetails(view(), state)).toContain(
-      'orders.yml -> wiki:knowledge/orders.md (wiki_written)',
+      'orders.yml -> wiki:wiki/orders.md (wiki_written)',
     );
 
     state = reduceMemoryFlowInteractionState(state, 'tab', view());
@@ -241,7 +241,7 @@ describe('memory-flow interaction reducer', () => {
     state = reduceMemoryFlowInteractionState(state, 'provenance', view());
     expect(state.pane).toBe('provenance');
     expect(selectedMemoryFlowDetails(view(), state)).toContain(
-      'orders.yml -> wiki:knowledge/orders.md (wiki_written)',
+      'orders.yml -> wiki:wiki/orders.md (wiki_written)',
     );
 
     state = reduceMemoryFlowInteractionState(state, 'transcript', view());

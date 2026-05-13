@@ -37,7 +37,7 @@ describe('KTX local project runtime', () => {
     expect(gitignore).toContain('secrets/');
     expect(gitignore).toContain('setup/');
     expect(gitignore).toContain('agents/');
-    await expect(stat(join(projectDir, 'knowledge/global/.gitkeep'))).resolves.toBeDefined();
+    await expect(stat(join(projectDir, 'wiki/global/.gitkeep'))).resolves.toBeDefined();
     await expect(stat(join(projectDir, 'semantic-layer/.gitkeep'))).resolves.toBeDefined();
     await expect(stat(join(projectDir, '_schema/.gitkeep'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(stat(join(projectDir, 'raw-sources/.gitkeep'))).resolves.toBeDefined();
@@ -50,7 +50,7 @@ describe('KTX local project runtime', () => {
 
     const loaded = await loadKtxProject({ projectDir });
     await loaded.fileStore.writeFile(
-      'knowledge/global/revenue.md',
+      'wiki/global/revenue.md',
       '# Revenue\n',
       'Agent',
       'agent@example.com',
@@ -58,7 +58,7 @@ describe('KTX local project runtime', () => {
     );
 
     expect(loaded.config.project).toBe('warehouse');
-    await expect(loaded.fileStore.readFile('knowledge/global/revenue.md')).resolves.toMatchObject({
+    await expect(loaded.fileStore.readFile('wiki/global/revenue.md')).resolves.toMatchObject({
       content: '# Revenue\n',
     });
   });

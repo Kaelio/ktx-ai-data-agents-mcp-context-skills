@@ -35,7 +35,7 @@ describe('local knowledge helpers', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('writes, reads, lists, and searches global knowledge pages', async () => {
+  it('writes, reads, lists, and searches global wiki pages', async () => {
     const write = await writeLocalKnowledgePage(project, {
       key: 'metrics-revenue',
       scope: 'GLOBAL',
@@ -46,7 +46,7 @@ describe('local knowledge helpers', () => {
       slRefs: ['orders'],
     });
 
-    expect(write.path).toBe('knowledge/global/metrics-revenue.md');
+    expect(write.path).toBe('wiki/global/metrics-revenue.md');
     expect(write.operation).toBe('write');
 
     await expect(readLocalKnowledgePage(project, { key: 'metrics-revenue', userId: 'local' })).resolves.toMatchObject({
@@ -62,7 +62,7 @@ describe('local knowledge helpers', () => {
     await expect(listLocalKnowledgePages(project, { userId: 'local' })).resolves.toEqual([
       {
         key: 'metrics-revenue',
-        path: 'knowledge/global/metrics-revenue.md',
+        path: 'wiki/global/metrics-revenue.md',
         scope: 'GLOBAL',
         summary: 'Revenue metric definition',
       },
@@ -72,7 +72,7 @@ describe('local knowledge helpers', () => {
     expect(search).toEqual([
       expect.objectContaining({
         key: 'metrics-revenue',
-        path: 'knowledge/global/metrics-revenue.md',
+        path: 'wiki/global/metrics-revenue.md',
         scope: 'GLOBAL',
         score: expect.any(Number),
         matchReasons: expect.arrayContaining(['lexical']),
@@ -195,7 +195,7 @@ describe('local knowledge helpers', () => {
       fingerprints: ['fp_paid_orders'],
     });
 
-    const raw = await project.fileStore.readFile('knowledge/global/monthly-paid-orders.md');
+    const raw = await project.fileStore.readFile('wiki/global/monthly-paid-orders.md');
     expect(raw.content).toContain('source: historic-sql');
     expect(raw.content).toContain('intent: Monthly paid order count');
     expect(raw.content).toContain(['tables:', '  - analytics.orders'].join('\n'));
@@ -245,7 +245,7 @@ describe('local knowledge helpers', () => {
     ).rejects.toThrow('Invalid wiki key "orbit/company-overview". Wiki keys must be flat; use "orbit-company-overview".');
   });
 
-  it('ignores nested historic-SQL legacy paths when listing local knowledge pages', async () => {
+  it('ignores nested historic-SQL legacy paths when listing local wiki pages', async () => {
     await writeLocalKnowledgePage(project, {
       key: 'historic-sql-paid-orders',
       scope: 'GLOBAL',
@@ -254,7 +254,7 @@ describe('local knowledge helpers', () => {
       tags: ['historic-sql'],
     });
     await project.fileStore.writeFile(
-      'knowledge/global/historic-sql/paid-orders.md',
+      'wiki/global/historic-sql/paid-orders.md',
       '---\nsummary: Nested historic SQL page\nusage_mode: auto\n---\n\nNested body\n',
       'Test',
       'test@example.com',
@@ -264,7 +264,7 @@ describe('local knowledge helpers', () => {
     await expect(listLocalKnowledgePages(project, { userId: 'local' })).resolves.toEqual([
       {
         key: 'historic-sql-paid-orders',
-        path: 'knowledge/global/historic-sql-paid-orders.md',
+        path: 'wiki/global/historic-sql-paid-orders.md',
         scope: 'GLOBAL',
         summary: 'Flat historic SQL page',
       },

@@ -293,7 +293,7 @@ export class IngestBundleRunner {
       return '(empty)';
     }
 
-    return `## Knowledge Pages\n${pages.map((page) => `- ${page.page_key}: ${page.summary}`).join('\n')}`;
+    return `## Wiki Pages\n${pages.map((page) => `- ${page.page_key}: ${page.summary}`).join('\n')}`;
   }
 
   private async buildSlIndex(connectionIds: string[]): Promise<string> {
@@ -596,7 +596,7 @@ export class IngestBundleRunner {
 
       const baseFraming = await this.deps.promptService.loadPrompt('memory_agent_bundle_ingest_work_unit');
       const wuSkillNames = Array.from(
-        new Set<string>([...adapter.skillNames, 'ingest_triage', 'sl_capture', 'knowledge_capture']),
+        new Set<string>([...adapter.skillNames, 'ingest_triage', 'sl_capture', 'wiki_capture']),
       );
       const wuSkills = await this.deps.skillsRegistry.listSkills(wuSkillNames, 'memory_agent');
       const skillsPrompt = this.deps.skillsRegistry.buildSkillsPrompt(wuSkills, 'memory_agent');
@@ -973,7 +973,7 @@ export class IngestBundleRunner {
       const reconcileBaseFraming = await this.deps.promptService.loadPrompt('memory_agent_bundle_ingest_reconcile');
       const reconcileSkills = await this.deps.skillsRegistry.listSkills(
         Array.from(
-          new Set(['ingest_triage', 'sl_capture', 'knowledge_capture', ...(adapter.reconcileSkillNames ?? [])]),
+          new Set(['ingest_triage', 'sl_capture', 'wiki_capture', ...(adapter.reconcileSkillNames ?? [])]),
         ),
         'memory_agent',
       );

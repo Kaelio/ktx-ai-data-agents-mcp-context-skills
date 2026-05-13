@@ -91,7 +91,7 @@ export async function repairWikiSlRefs(input: {
       warnings: [...warnings, 'Skipped wiki sl_refs repair: config service cannot list wiki files.'],
     };
   }
-  const listed = await listFiles('knowledge', true);
+  const listed = await listFiles('wiki', true);
   const repairs: WikiSlRefRepair[] = [];
 
   for (const file of listed.files.sort()) {

@@ -159,7 +159,7 @@ export function bundleReportSnapshot(): IngestReportSnapshot {
           rawFiles: ['cards/1.json', 'cards/2.json'],
           status: 'success',
           actions: [
-            { target: 'wiki', type: 'created', key: 'knowledge/global/revenue.md', detail: 'Revenue overview' },
+            { target: 'wiki', type: 'created', key: 'wiki/global/revenue.md', detail: 'Revenue overview' },
             { target: 'sl', type: 'updated', key: 'warehouse.orders', detail: 'Added order amount measure' },
           ],
           touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'warehouse.orders' }],
@@ -178,7 +178,7 @@ export function bundleReportSnapshot(): IngestReportSnapshot {
         {
           rawPath: 'cards/1.json',
           artifactKind: 'wiki',
-          artifactKey: 'knowledge/global/revenue.md',
+          artifactKey: 'wiki/global/revenue.md',
           actionType: 'wiki_written',
         },
         {
@@ -194,7 +194,7 @@ export function bundleReportSnapshot(): IngestReportSnapshot {
           path: 'tool-transcripts/cards.jsonl',
           toolCallCount: 4,
           errorCount: 0,
-          toolNames: ['ingest_triage', 'knowledge_capture', 'sl_capture'],
+          toolNames: ['ingest_triage', 'wiki_capture', 'sl_capture'],
         },
       ],
     },

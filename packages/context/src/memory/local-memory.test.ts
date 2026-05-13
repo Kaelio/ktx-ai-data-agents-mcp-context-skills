@@ -40,7 +40,7 @@ describe('LocalMemoryRunStore', () => {
     await store.markDone('memory-run-1', {
       signalDetected: true,
       actions: [{ target: 'wiki', type: 'created', key: 'revenue', detail: 'Revenue definition' }],
-      skillsLoaded: ['knowledge_capture'],
+      skillsLoaded: ['wiki_capture'],
       commitHash: 'abc123',
     });
 
@@ -69,7 +69,7 @@ describe('LocalMemoryRunStore', () => {
       chatId: 'chat-1',
       outputSummary: {
         actions: [{ target: 'wiki', type: 'created', key: 'revenue', detail: 'Revenue definition' }],
-        skillsLoaded: ['knowledge_capture'],
+        skillsLoaded: ['wiki_capture'],
         signalDetected: true,
         commitHash: 'abc123',
       },
@@ -96,7 +96,7 @@ describe('createLocalProjectMemoryCapture', () => {
       }: {
         toolSet: Record<string, { execute: (input: unknown, options?: { toolCallId?: string }) => Promise<unknown> }>;
       }) => {
-        await toolSet.load_skill.execute({ name: 'knowledge_capture' });
+        await toolSet.load_skill.execute({ name: 'wiki_capture' });
         await toolSet.wiki_write.execute(
           {
             key: 'revenue',
@@ -134,11 +134,11 @@ describe('createLocalProjectMemoryCapture', () => {
       status: 'done',
       done: true,
       captured: { wiki: ['revenue'], sl: [], xrefs: [] },
-      skillsLoaded: ['knowledge_capture'],
+      skillsLoaded: ['wiki_capture'],
       signalDetected: true,
     });
 
-    await expect(readFile(join(project.projectDir, 'knowledge/global/revenue.md'), 'utf-8')).resolves.toContain(
+    await expect(readFile(join(project.projectDir, 'wiki/global/revenue.md'), 'utf-8')).resolves.toContain(
       'Revenue means paid order value net of refunds.',
     );
   });

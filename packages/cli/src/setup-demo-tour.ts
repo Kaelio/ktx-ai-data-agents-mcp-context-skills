@@ -229,7 +229,7 @@ function renderDemoContextCompletionSummary(): string {
     '',
     '  KTX created:',
     `    ${cyan('📊')} 46 semantic layer definitions`,
-    `    ${cyan('📝')} 28 knowledge pages`,
+    `    ${cyan('📝')} 28 wiki pages`,
     '',
     `  ${dim('Press Enter to continue, Escape to go back')}`,
     '',
@@ -354,7 +354,7 @@ export async function runDemoTour(
     if (step === 'databases') {
       direction = await renderDemoCard('Database connection', ['PostgreSQL — Orbit Analytics (56 tables, 2 schemas)'], io, undefined, waitNav, projectDir);
     } else if (step === 'sources') {
-      direction = await renderDemoCard('Context sources', ['dbt — 34 transformation models', 'Metabase — 80 dashboard cards', 'Notion — 9 knowledge pages'], io, undefined, waitNav, projectDir);
+      direction = await renderDemoCard('Context sources', ['dbt — 34 transformation models', 'Metabase — 80 dashboard cards', 'Notion — 9 wiki pages'], io, undefined, waitNav, projectDir);
     } else if (step === 'context') {
       io.stdout.write(renderDemoBanner(projectDir) + '\n\n');
       if (deps.skipReplayAnimation) {

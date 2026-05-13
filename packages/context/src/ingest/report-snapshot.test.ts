@@ -19,7 +19,7 @@ function validReportSnapshot() {
           rawFiles: ['cards/1.json', 'cards/2.json'],
           status: 'success',
           actions: [
-            { target: 'wiki', type: 'created', key: 'knowledge/global/revenue.md', detail: 'Revenue overview' },
+            { target: 'wiki', type: 'created', key: 'wiki/global/revenue.md', detail: 'Revenue overview' },
             { target: 'sl', type: 'updated', key: 'warehouse.orders', detail: 'Added order amount measure' },
           ],
           touchedSlSources: ['warehouse.orders'],
@@ -38,7 +38,7 @@ function validReportSnapshot() {
         {
           rawPath: 'cards/1.json',
           artifactKind: 'wiki',
-          artifactKey: 'knowledge/global/revenue.md',
+          artifactKey: 'wiki/global/revenue.md',
           actionType: 'wiki_written',
         },
       ],
@@ -48,7 +48,7 @@ function validReportSnapshot() {
           path: 'tool-transcripts/cards.jsonl',
           toolCallCount: 3,
           errorCount: 0,
-          toolNames: ['knowledge_capture'],
+          toolNames: ['wiki_capture'],
         },
       ],
       reconciliationActions: [],
@@ -90,7 +90,7 @@ describe('parseIngestReportSnapshot', () => {
       {
         target: 'wiki',
         type: 'created',
-        key: 'knowledge/global/revenue.md',
+        key: 'wiki/global/revenue.md',
         detail: 'Revenue overview',
         targetConnectionId: null,
       },

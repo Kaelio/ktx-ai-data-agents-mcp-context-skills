@@ -663,9 +663,9 @@ try {
   );
   await writeSqliteWarehouse(projectDir);
 
-  await mkdir(join(projectDir, 'knowledge', 'global'), { recursive: true });
+  await mkdir(join(projectDir, 'wiki', 'global'), { recursive: true });
   await writeFile(
-    join(projectDir, 'knowledge', 'global', 'revenue.md'),
+    join(projectDir, 'wiki', 'global', 'revenue.md'),
     [
       '---',
       'summary: Paid order value',
@@ -698,12 +698,12 @@ try {
   assert.equal(wikiSearchJson.kind, 'list');
   assert.equal(wikiSearchJson.data.items.length, 1);
   assert.equal(wikiSearchJson.data.items[0].key, 'revenue');
-  assert.equal(wikiSearchJson.data.items[0].path, 'knowledge/global/revenue.md');
+  assert.equal(wikiSearchJson.data.items[0].path, 'wiki/global/revenue.md');
   assert.equal(typeof wikiSearchJson.data.items[0].score, 'number');
   requireIncludes(wikiSearchJson.data.items[0].matchReasons, 'lexical', 'wiki search match reasons');
   process.stdout.write('ktx wiki search hybrid metadata verified\\n');
   await access(join(projectDir, '.ktx', 'db.sqlite'));
-  process.stdout.write('SQLite knowledge index: ' + join(projectDir, '.ktx', 'db.sqlite') + '\\n');
+  process.stdout.write('SQLite wiki index: ' + join(projectDir, '.ktx', 'db.sqlite') + '\\n');
 
   const slYaml = [
     'name: orders',

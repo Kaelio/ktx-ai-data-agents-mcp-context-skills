@@ -64,14 +64,14 @@ describe('SkillsRegistryService', () => {
 
     it('discovers valid skills and skips invalid ones', async () => {
       await writeSkill('sl', '---\nname: sl\ndescription: Semantic layer.\n---\n\n# SL');
-      await writeSkill('knowledge_capture', '---\nname: knowledge_capture\ndescription: Wiki capture.\n---\n\n# KC');
+      await writeSkill('wiki_capture', '---\nname: wiki_capture\ndescription: Wiki capture.\n---\n\n# KC');
       await writeSkill('broken', '# no frontmatter at all');
       await mkdir(join(tempDir, 'not_a_skill'), { recursive: true });
 
       const catalog = await service.discoverSkills(tempDir);
       expect(catalog.size).toBe(2);
       expect(catalog.get('sl')?.name).toBe('sl');
-      expect(catalog.get('knowledge_capture')?.description).toContain('Wiki capture');
+      expect(catalog.get('wiki_capture')?.description).toContain('Wiki capture');
       expect(catalog.has('broken')).toBe(false);
     });
   });
@@ -80,10 +80,10 @@ describe('SkillsRegistryService', () => {
     it('formats bullet list with name and description', () => {
       const output = service.buildSkillsPrompt([
         { name: 'sl', description: 'Semantic layer.', path: '/tmp/sl' },
-        { name: 'knowledge_capture', description: 'Wiki capture.', path: '/tmp/kc' },
+        { name: 'wiki_capture', description: 'Wiki capture.', path: '/tmp/kc' },
       ]);
       expect(output).toContain('- sl: Semantic layer.');
-      expect(output).toContain('- knowledge_capture: Wiki capture.');
+      expect(output).toContain('- wiki_capture: Wiki capture.');
       expect(output).toContain('Use the `load_skill` tool');
     });
 
@@ -144,8 +144,8 @@ describe('SkillsRegistryService', () => {
         '---\nname: sl_capture\ndescription: Memory-only capture skill.\ncallers: [memory_agent]\n---\n\n# Capture',
       );
       await writeSkill(
-        'knowledge_capture',
-        '---\nname: knowledge_capture\ndescription: Wiki capture.\ncallers: [memory_agent]\n---\n\n# KC',
+        'wiki_capture',
+        '---\nname: wiki_capture\ndescription: Wiki capture.\ncallers: [memory_agent]\n---\n\n# KC',
       );
       service = new SkillsRegistryService({ skillsDir: tempDir });
     });
@@ -157,7 +157,7 @@ describe('SkillsRegistryService', () => {
 
     it('memory_agent caller sees memory-only and open skills', async () => {
       const skills = await service.listSkills('memory_agent');
-      expect(skills.map((skill) => skill.name).sort()).toEqual(['knowledge_capture', 'sl', 'sl_capture']);
+      expect(skills.map((skill) => skill.name).sort()).toEqual(['wiki_capture', 'sl', 'sl_capture']);
     });
 
     it('listSkills with names and caller intersects both filters', async () => {
@@ -185,26 +185,26 @@ describe('SkillsRegistryService', () => {
   it('discovers skills from additional directories when the primary directory misses', async () => {
     const extraDir = await mkdtemp(join(tmpdir(), 'skills-registry-extra-'));
     try {
-      await mkdir(join(extraDir, 'knowledge_capture'), { recursive: true });
+      await mkdir(join(extraDir, 'wiki_capture'), { recursive: true });
       await writeFile(
-        join(extraDir, 'knowledge_capture', 'SKILL.md'),
+        join(extraDir, 'wiki_capture', 'SKILL.md'),
         [
           '---',
-          'name: knowledge_capture',
+          'name: wiki_capture',
           'description: Packaged knowledge capture skill.',
           'callers: [memory_agent]',
           '---',
           '',
-          '# Knowledge Capture',
+          '# Wiki Capture',
         ].join('\n'),
         'utf-8',
       );
       service = new SkillsRegistryService({ skillsDir: tempDir, additionalSkillDirs: [extraDir] });
 
-      const skills = await service.listSkills(['knowledge_capture'], 'memory_agent');
+      const skills = await service.listSkills(['wiki_capture'], 'memory_agent');
 
-      expect(skills.map((skill) => skill.name)).toEqual(['knowledge_capture']);
-      expect(skills[0]?.path).toBe(join(extraDir, 'knowledge_capture'));
+      expect(skills.map((skill) => skill.name)).toEqual(['wiki_capture']);
+      expect(skills[0]?.path).toBe(join(extraDir, 'wiki_capture'));
     } finally {
       await rm(extraDir, { recursive: true, force: true });
     }

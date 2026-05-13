@@ -10,7 +10,7 @@ A single artifact typically produces multiple actions: one SL source per table/v
 
 <workflow>
 1. Review the wiki and SL indexes in the prompt. Prefer updating existing entries over creating duplicates.
-2. Load the `sl` skill for SL-writes and `knowledge_capture` for wiki-writes. Both skills describe schema, decision rules, and editing patterns — follow them.
+2. Load the `sl` skill for SL-writes and `wiki_capture` for wiki-writes. Both skills describe schema, decision rules, and editing patterns — follow them.
 3. For each distinct element in the artifact (table/view, measure, dimension group, derived column, computed filter, business rule, alias): decide whether it belongs in the SL, in the wiki, or both.
 4. Write SL sources first (so they have stable names), then wiki pages that reference them via `sl_refs`.
 5. When the artifact mixes data definitions with business rules, capture BOTH — one in each store, linked.

@@ -106,7 +106,7 @@ describe('projectHistoricSqlEvidence', () => {
     await writeJson(workdir, 'raw-sources/warehouse/historic-sql/sync-1/tables/public.customers.json', { table: 'public.customers' });
     await writeText(
       workdir,
-      'knowledge/global/historic-sql-old-order-lifecycle.md',
+      'wiki/global/historic-sql-old-order-lifecycle.md',
       [
         '---',
         YAML.stringify({
@@ -127,7 +127,7 @@ describe('projectHistoricSqlEvidence', () => {
     );
     await writeText(
       workdir,
-      'knowledge/global/historic-sql-retired-pattern.md',
+      'wiki/global/historic-sql-retired-pattern.md',
       [
         '---',
         YAML.stringify({
@@ -164,10 +164,10 @@ describe('projectHistoricSqlEvidence', () => {
     const result = await projectHistoricSqlEvidence({ workdir, connectionId: 'warehouse', syncId: 'sync-1', runId: 'run-1' });
 
     expect(result.patternPagesWritten).toBe(1);
-    await expect(readFile(join(workdir, 'knowledge/global/historic-sql-old-order-lifecycle.md'), 'utf-8')).resolves.toContain(
+    await expect(readFile(join(workdir, 'wiki/global/historic-sql-old-order-lifecycle.md'), 'utf-8')).resolves.toContain(
       'Order Lifecycle Analysis',
     );
-    await expect(readFile(join(workdir, 'knowledge/global/historic-sql-retired-pattern.md'), 'utf-8')).resolves.toContain(
+    await expect(readFile(join(workdir, 'wiki/global/historic-sql-retired-pattern.md'), 'utf-8')).resolves.toContain(
       'stale_since: "2026-05-11T00:00:00.000Z"',
     );
   });
@@ -192,7 +192,7 @@ describe('projectHistoricSqlEvidence', () => {
     await writeJson(workdir, 'raw-sources/warehouse/historic-sql/sync-1/tables/public.customers.json', { table: 'public.customers' });
     await writeText(
       workdir,
-      'knowledge/global/historic-sql-order-lifecycle-analysis.md',
+      'wiki/global/historic-sql-order-lifecycle-analysis.md',
       [
         '---',
         YAML.stringify({
@@ -230,7 +230,7 @@ describe('projectHistoricSqlEvidence', () => {
     const result = await projectHistoricSqlEvidence({ workdir, connectionId: 'warehouse', syncId: 'sync-1', runId: 'run-1' });
 
     expect(result.patternPagesWritten).toBe(1);
-    const page = await readFile(join(workdir, 'knowledge/global/historic-sql-order-lifecycle-analysis.md'), 'utf-8');
+    const page = await readFile(join(workdir, 'wiki/global/historic-sql-order-lifecycle-analysis.md'), 'utf-8');
     expect(page).toContain('Analysts compare order status with customer segment again.');
     expect(page).not.toContain('Archived body');
     expect(page).not.toContain('archived');
@@ -254,7 +254,7 @@ describe('projectHistoricSqlEvidence', () => {
     });
     await writeText(
       workdir,
-      'knowledge/global/historic-sql-retired-pattern.md',
+      'wiki/global/historic-sql-retired-pattern.md',
       [
         '---',
         YAML.stringify({
@@ -279,7 +279,7 @@ describe('projectHistoricSqlEvidence', () => {
 
     expect(result.archivedPatternPages).toBe(0);
     expect(result.stalePatternPagesMarked).toBe(0);
-    await expect(readFile(join(workdir, 'knowledge/global/historic-sql-retired-pattern.md'), 'utf-8')).resolves.toContain(
+    await expect(readFile(join(workdir, 'wiki/global/historic-sql-retired-pattern.md'), 'utf-8')).resolves.toContain(
       'Archived retired body',
     );
   });
@@ -322,7 +322,7 @@ describe('projectHistoricSqlEvidence', () => {
     });
     await writeText(
       workdir,
-      'knowledge/global/historic-sql-legacy-template.md',
+      'wiki/global/historic-sql-legacy-template.md',
       [
         '---',
         YAML.stringify({
@@ -357,7 +357,7 @@ describe('projectHistoricSqlEvidence', () => {
       commonJoins: [],
       staleSince: '2026-05-11T00:00:00.000Z',
     });
-    await expect(readFile(join(workdir, 'knowledge/global/historic-sql-legacy-template.md'), 'utf-8')).rejects.toMatchObject({
+    await expect(readFile(join(workdir, 'wiki/global/historic-sql-legacy-template.md'), 'utf-8')).rejects.toMatchObject({
       code: 'ENOENT',
     });
   });

@@ -51,7 +51,7 @@ describe('runKtxKnowledge', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('writes, reads, lists, and searches knowledge pages', async () => {
+  it('writes, reads, lists, and searches wiki pages', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
 
@@ -73,7 +73,7 @@ describe('runKtxKnowledge', () => {
         writeIo.io,
       ),
     ).resolves.toBe(0);
-    expect(writeIo.stdout()).toContain('Wrote knowledge/global/metrics-revenue.md');
+    expect(writeIo.stdout()).toContain('Wrote wiki/global/metrics-revenue.md');
 
     const readIo = makeIo();
     await expect(

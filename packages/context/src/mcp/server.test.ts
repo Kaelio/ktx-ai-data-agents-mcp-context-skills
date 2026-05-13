@@ -76,7 +76,7 @@ describe('createKtxMcpServer', () => {
         captured: { wiki: ['revenue'], sl: [], xrefs: [] },
         error: null,
         commitHash: 'abc123',
-        skillsLoaded: ['knowledge_capture'],
+        skillsLoaded: ['wiki_capture'],
         signalDetected: true,
       }),
     };
@@ -123,7 +123,7 @@ describe('createKtxMcpServer', () => {
               captured: { wiki: ['revenue'], sl: [], xrefs: [] },
               error: null,
               commitHash: 'abc123',
-              skillsLoaded: ['knowledge_capture'],
+              skillsLoaded: ['wiki_capture'],
               signalDetected: true,
             },
             null,
@@ -139,7 +139,7 @@ describe('createKtxMcpServer', () => {
         captured: { wiki: ['revenue'], sl: [], xrefs: [] },
         error: null,
         commitHash: 'abc123',
-        skillsLoaded: ['knowledge_capture'],
+        skillsLoaded: ['wiki_capture'],
         signalDetected: true,
       },
     });
@@ -175,7 +175,7 @@ describe('createKtxMcpServer', () => {
         }: {
           toolSet: Record<string, { execute: (input: unknown, options?: { toolCallId?: string }) => Promise<unknown> }>;
         }) => {
-          await toolSet.load_skill.execute({ name: 'knowledge_capture' });
+          await toolSet.load_skill.execute({ name: 'wiki_capture' });
           await toolSet.wiki_write.execute(
             {
               key: 'arr',
@@ -220,7 +220,7 @@ describe('createKtxMcpServer', () => {
       });
       await expect(access(join(project.projectDir, '.ktx/db.sqlite'))).resolves.toBeUndefined();
       await expect(access(join(project.projectDir, '.ktx/memory-runs/memory-run-mcp.json'))).rejects.toThrow();
-      await expect(readFile(join(project.projectDir, 'knowledge/global/arr.md'), 'utf-8')).resolves.toContain(
+      await expect(readFile(join(project.projectDir, 'wiki/global/arr.md'), 'utf-8')).resolves.toContain(
         'ARR means annual recurring revenue.',
       );
     } finally {
@@ -257,7 +257,7 @@ describe('createKtxMcpServer', () => {
           results: [
             {
               key: 'revenue',
-              path: 'knowledge/global/revenue.md',
+              path: 'wiki/global/revenue.md',
               scope: 'GLOBAL',
               summary: 'Paid order value',
               score: 0.42,
@@ -519,9 +519,6 @@ describe('createKtxMcpServer', () => {
       'ingest_report',
       'ingest_status',
       'ingest_trigger',
-      'knowledge_read',
-      'knowledge_search',
-      'knowledge_write',
       'memory_capture',
       'memory_capture_status',
       'scan_list_artifacts',
@@ -534,6 +531,9 @@ describe('createKtxMcpServer', () => {
       'sl_read_source',
       'sl_validate',
       'sl_write_source',
+      'wiki_read',
+      'wiki_search',
+      'wiki_write',
     ]);
 
     await expect(getTool(fake.tools, 'connection_list').handler({})).resolves.toEqual({
@@ -595,20 +595,20 @@ describe('createKtxMcpServer', () => {
     });
     expect(contextTools.connections?.test).toHaveBeenCalledWith({ connectionId: 'warehouse' });
 
-    await getTool(fake.tools, 'knowledge_search').handler({ query: 'revenue', limit: 5 });
+    await getTool(fake.tools, 'wiki_search').handler({ query: 'revenue', limit: 5 });
     expect(contextTools.knowledge?.search).toHaveBeenCalledWith({
       userId: 'mcp-user',
       query: 'revenue',
       limit: 5,
     });
 
-    await getTool(fake.tools, 'knowledge_read').handler({ key: 'revenue' });
+    await getTool(fake.tools, 'wiki_read').handler({ key: 'revenue' });
     expect(contextTools.knowledge?.read).toHaveBeenCalledWith({
       userId: 'mcp-user',
       key: 'revenue',
     });
 
-    await getTool(fake.tools, 'knowledge_write').handler({
+    await getTool(fake.tools, 'wiki_write').handler({
       key: 'revenue',
       summary: 'Paid order value',
       content: '# Revenue',

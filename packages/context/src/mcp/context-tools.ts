@@ -208,10 +208,10 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
     const knowledge = ports.knowledge;
     registerParsedTool(
       server,
-      'knowledge_search',
+      'wiki_search',
       {
-        title: 'Knowledge Search',
-        description: 'Search KTX knowledge pages and return ranked summaries.',
+        title: 'Wiki Search',
+        description: 'Search KTX wiki pages and return ranked summaries.',
         inputSchema: knowledgeSearchSchema.shape,
       },
       knowledgeSearchSchema,
@@ -227,25 +227,25 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
 
     registerParsedTool(
       server,
-      'knowledge_read',
+      'wiki_read',
       {
-        title: 'Knowledge Read',
-        description: 'Read a KTX knowledge page by key.',
+        title: 'Wiki Read',
+        description: 'Read a KTX wiki page by key.',
         inputSchema: knowledgeReadSchema.shape,
       },
       knowledgeReadSchema,
       async (input) => {
         const page = await knowledge.read({ userId: userContext.userId, key: input.key });
-        return page ? jsonToolResult(page) : jsonErrorToolResult(`Knowledge page "${input.key}" was not found.`);
+        return page ? jsonToolResult(page) : jsonErrorToolResult(`Wiki page "${input.key}" was not found.`);
       },
     );
 
     registerParsedTool(
       server,
-      'knowledge_write',
+      'wiki_write',
       {
-        title: 'Knowledge Write',
-        description: 'Create or replace a KTX knowledge page and its SL references.',
+        title: 'Wiki Write',
+        description: 'Create or replace a KTX wiki page and its SL references.',
         inputSchema: knowledgeWriteSchema.shape,
       },
       knowledgeWriteSchema,

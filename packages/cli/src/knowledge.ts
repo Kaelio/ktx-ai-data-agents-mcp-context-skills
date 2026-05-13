@@ -78,7 +78,7 @@ export async function runKtxKnowledge(
     if (args.command === 'read') {
       const page = await readLocalKnowledgePage(project, { key: args.key, userId: args.userId });
       if (!page) {
-        throw new Error(`Knowledge page "${args.key}" was not found`);
+        throw new Error(`Wiki page "${args.key}" was not found`);
       }
       if (args.json) {
         writeJsonResult(io, {

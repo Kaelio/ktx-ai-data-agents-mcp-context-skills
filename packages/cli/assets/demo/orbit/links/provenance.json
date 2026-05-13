@@ -2,7 +2,7 @@
   {
     "id": "link-001",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/arr-contract-first.md",
+    "artifactKey": "wiki/global/arr-contract-first.md",
     "sourceKind": "warehouse",
     "sourcePath": "contracts",
     "relationship": "describes",
@@ -11,7 +11,7 @@
   {
     "id": "link-002",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/arr-contract-first.md",
+    "artifactKey": "wiki/global/arr-contract-first.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/arr-and-contract-reporting-notes.md",
     "relationship": "derived_from",
@@ -20,7 +20,7 @@
   {
     "id": "link-003",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/revenue-gross-to-net.md",
+    "artifactKey": "wiki/global/revenue-gross-to-net.md",
     "sourceKind": "warehouse",
     "sourcePath": "invoices",
     "relationship": "describes",
@@ -29,7 +29,7 @@
   {
     "id": "link-004",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/revenue-gross-to-net.md",
+    "artifactKey": "wiki/global/revenue-gross-to-net.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/revenue-reporting-policy.md",
     "relationship": "derived_from",
@@ -38,7 +38,7 @@
   {
     "id": "link-005",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/discount-expiration.md",
+    "artifactKey": "wiki/global/discount-expiration.md",
     "sourceKind": "warehouse",
     "sourcePath": "arr_movements",
     "relationship": "describes",
@@ -47,7 +47,7 @@
   {
     "id": "link-006",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/nrr-retention.md",
+    "artifactKey": "wiki/global/nrr-retention.md",
     "sourceKind": "warehouse",
     "sourcePath": "arr_movements",
     "relationship": "describes",
@@ -56,7 +56,7 @@
   {
     "id": "link-007",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/nrr-retention.md",
+    "artifactKey": "wiki/global/nrr-retention.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/retention-and-nrr-definition-notes.md",
     "relationship": "derived_from",
@@ -65,7 +65,7 @@
   {
     "id": "link-008",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/nrr-retention.md",
+    "artifactKey": "wiki/global/nrr-retention.md",
     "sourceKind": "bi",
     "sourcePath": "raw-sources/bi/account_retention.view.lkml",
     "relationship": "derived_from",
@@ -74,7 +74,7 @@
   {
     "id": "link-009",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/segment-classification.md",
+    "artifactKey": "wiki/global/segment-classification.md",
     "sourceKind": "warehouse",
     "sourcePath": "plans",
     "relationship": "describes",
@@ -83,7 +83,7 @@
   {
     "id": "link-010",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/segment-classification.md",
+    "artifactKey": "wiki/global/segment-classification.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/sales-ops-segmentation-guide.md",
     "relationship": "derived_from",
@@ -92,7 +92,7 @@
   {
     "id": "link-011",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/activation-policy.md",
+    "artifactKey": "wiki/global/activation-policy.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/activation-policy-decision-record.md",
     "relationship": "derived_from",
@@ -101,7 +101,7 @@
   {
     "id": "link-012",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/procurement-workflows.md",
+    "artifactKey": "wiki/global/procurement-workflows.md",
     "sourceKind": "warehouse",
     "sourcePath": "purchase_requests",
     "relationship": "describes",
@@ -110,7 +110,7 @@
   {
     "id": "link-013",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/customer-health-scoring.md",
+    "artifactKey": "wiki/global/customer-health-scoring.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/customer-health-playbook.md",
     "relationship": "derived_from",
@@ -119,7 +119,7 @@
   {
     "id": "link-014",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/customer-health-scoring.md",
+    "artifactKey": "wiki/global/customer-health-scoring.md",
     "sourceKind": "warehouse",
     "sourcePath": "support_tickets",
     "relationship": "describes",
@@ -128,7 +128,7 @@
   {
     "id": "link-015",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/support-escalation.md",
+    "artifactKey": "wiki/global/support-escalation.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/support-escalation-runbook.md",
     "relationship": "derived_from",
@@ -137,7 +137,7 @@
   {
     "id": "link-016",
     "artifactKind": "wiki",
-    "artifactKey": "knowledge/global/internal-test-exclusion.md",
+    "artifactKey": "wiki/global/internal-test-exclusion.md",
     "sourceKind": "notion",
     "sourcePath": "raw-sources/notion/analyst-onboarding.md",
     "relationship": "derived_from",

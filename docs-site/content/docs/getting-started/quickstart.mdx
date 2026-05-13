@@ -146,7 +146,7 @@ This is where KTX does the heavy lifting. It runs an enriched scan of your datab
 │  ○ Leave context unbuilt and exit setup
 ```
 
-The build scans each primary source with LLM enrichment, detects table relationships, and runs ingestion agents that reconcile metadata from your context sources into semantic-layer YAML files and knowledge pages.
+The build scans each primary source with LLM enrichment, detects table relationships, and runs ingestion agents that reconcile metadata from your context sources into semantic-layer YAML files and wiki pages.
 
 For a small database (under 50 tables), this takes a few minutes. Larger warehouses can take longer. You can press <kbd>d</kbd> to detach and let it run in the background:
 
@@ -209,8 +209,8 @@ KTX writes project state as plain files so agents can inspect and edit changes i
 | `ktx.yaml` | `ktx setup` | Main project configuration: connections, LLM settings, embeddings, and context sources |
 | `.ktx/secrets/*` | `ktx setup` when file-backed secrets are selected | Local secret files referenced from `ktx.yaml`; do not commit these |
 | `semantic-layer/<connection-id>/*.yaml` | context build, ingestion, or `ktx sl write` | Semantic source definitions agents use for SQL generation |
-| `knowledge/global/*.md` | ingestion or `ktx wiki write --scope global` | Shared business context and metric definitions |
-| `knowledge/user/<user-id>/*.md` | `ktx wiki write --scope user` | User-scoped notes for one agent/user context |
+| `wiki/global/*.md` | ingestion or `ktx wiki write --scope global` | Shared business context and metric definitions |
+| `wiki/user/<user-id>/*.md` | `ktx wiki write --scope user` | User-scoped notes for one agent/user context |
 | `.claude/skills/ktx/SKILL.md`, `.agents/skills/ktx/SKILL.md` | CLI-mode agent integration setup | Agent instructions for calling public `ktx` commands |
 
 ## Verify it worked
@@ -247,6 +247,6 @@ Agent integration ready: yes (claude-code:project)
 ## Next steps
 
 - **Build more context** — learn about [scanning](/docs/guides/building-context), relationship detection, and ingestion workflows in the Building Context guide.
-- **Refine your semantic layer** — the [Writing Context](/docs/guides/writing-context) guide covers source YAML, measures, joins, and knowledge pages.
+- **Refine your semantic layer** — the [Writing Context](/docs/guides/writing-context) guide covers source YAML, measures, joins, and wiki pages.
 - **Understand the architecture** — read [The Context Layer](/docs/concepts/the-context-layer) to learn why a context layer is more than a semantic layer.
 - **Connect more agents** — see the [Agent Clients](/docs/integrations/agent-clients) integration page for per-tool setup details.

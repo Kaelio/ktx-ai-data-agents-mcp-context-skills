@@ -9,7 +9,7 @@ const LOOKML_STRUCTURAL_PATTERN = /^\s*(view|explore|model|include)\s*:\s*[\w"`]
 const LOOKML_FIELDS_PATTERN =
   /^\s*(measure|dimension|dimension_group|sql_table_name|derived_table|sql_always_where|drill_fields|join)\s*:/m;
 
-export const DEFAULT_SKILL_NAMES = ['sl', 'sl_capture', 'knowledge_capture'] as const;
+export const DEFAULT_SKILL_NAMES = ['sl', 'sl_capture', 'wiki_capture'] as const;
 
 export function detectCaptureSignals(input: MemoryAgentInput): CaptureSignals {
   const userMessage = input.userMessage?.trim() ?? '';
@@ -56,7 +56,7 @@ export function buildRequiredSkillsBlock(signals: CaptureSignals): string {
     const reason =
       signals.reasons.find((r) => r.includes('definition keyword') || r.includes('definition table')) ??
       'wiki signal detected';
-    required.push({ name: 'knowledge_capture', reason });
+    required.push({ name: 'wiki_capture', reason });
   }
   if (signals.sl) {
     const reason =

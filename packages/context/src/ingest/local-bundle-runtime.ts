@@ -314,7 +314,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
     scope: string,
     scopeId: string | null,
   ): Promise<Map<string, { searchText: string; hasEmbedding: boolean }>> {
-    const prefix = scope === 'GLOBAL' ? 'knowledge/global/' : `knowledge/user/${scopeId}/`;
+    const prefix = scope === 'GLOBAL' ? 'wiki/global/' : `wiki/user/${scopeId}/`;
     const result = new Map<string, { searchText: string; hasEmbedding: boolean }>();
     for (const [path, page] of this.sqlite.getExistingPages()) {
       if (!path.startsWith(prefix)) {
@@ -341,7 +341,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   }
 
   async findPageByKey(scope: string, scopeId: string | null, pageKey: string) {
-    const path = scope === 'GLOBAL' ? `knowledge/global/${pageKey}.md` : `knowledge/user/${scopeId}/${pageKey}.md`;
+    const path = scope === 'GLOBAL' ? `wiki/global/${pageKey}.md` : `wiki/user/${scopeId}/${pageKey}.md`;
     try {
       await this.project.fileStore.readFile(path);
       return { page_key: pageKey };
@@ -355,12 +355,12 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   ): Promise<KnowledgeIndexPageListing[]> {
     const pages: KnowledgeIndexPageListing[] = [];
     for (const scope of [
-      { scope: 'GLOBAL', scopeId: null, dir: 'knowledge/global' },
-      { scope: 'USER', scopeId: userId, dir: `knowledge/user/${userId}` },
+      { scope: 'GLOBAL', scopeId: null, dir: 'wiki/global' },
+      { scope: 'USER', scopeId: userId, dir: `wiki/user/${userId}` },
     ]) {
       const listed = await this.project.fileStore.listFiles(scope.dir, true);
       for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
-        const parsedPath = parseKnowledgeIndexPath(file.startsWith('global/') || file.startsWith('user/') ? file : `${scope.dir.replace('knowledge/', '')}/${file}`);
+        const parsedPath = parseKnowledgeIndexPath(file.startsWith('global/') || file.startsWith('user/') ? file : `${scope.dir.replace('wiki/', '')}/${file}`);
         if (!parsedPath || parsedPath.scope !== scope.scope) {
           continue;
         }
@@ -404,7 +404,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
   }
 
   private async syncAllPagesFromDisk(): Promise<void> {
-    const listed = await this.project.fileStore.listFiles('knowledge', true);
+    const listed = await this.project.fileStore.listFiles('wiki', true);
     const existingPages = this.sqlite.getExistingPages();
     const pages: SqliteKnowledgeIndexPage[] = [];
     for (const file of listed.files.filter((entry) => entry.endsWith('.md'))) {
@@ -412,7 +412,7 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
       if (!parsedPath) {
         continue;
       }
-      const path = `knowledge/${file}`;
+      const path = `wiki/${file}`;
       const raw = await this.project.fileStore.readFile(path);
       const parsed = parseWiki(raw.content);
       const tags = parseWikiTags(raw.content);

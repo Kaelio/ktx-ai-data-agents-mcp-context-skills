@@ -15,7 +15,7 @@ Agents should configure and ingest context sources in this order:
 2. Store tokens as `env:NAME` or `file:/path/to/secret`.
 3. Run `ktx ingest run --connection-id <connectionId> --adapter <adapter>` for one source or `ktx ingest run --connection-id <id> --adapter <adapter>`.
 4. Check progress with `ktx ingest status --json`.
-5. Review generated `semantic-layer/` YAML and `knowledge/` Markdown files in git.
+5. Review generated `semantic-layer/` YAML and `wiki/` Markdown files in git.
 6. Validate changed semantic sources with `ktx sl validate`.
 
 ## Shared source fields
@@ -233,7 +233,7 @@ Generate an API key in Metabase: **Admin > Settings > Authentication > API Keys*
 ### What gets ingested
 
 - Semantic sources generated from SQL queries in questions
-- Knowledge pages for dashboards (purpose, key metrics, relationships)
+- Wiki pages for dashboards (purpose, key metrics, relationships)
 - Work units per dashboard and per question
 
 ### Warehouse mapping
@@ -290,7 +290,7 @@ Generate API credentials in Looker: **Admin > Users > Edit > API Keys**.
 ### What gets ingested
 
 - Semantic sources from explore field definitions
-- Knowledge pages for dashboards (purpose, audience, key metrics)
+- Wiki pages for dashboards (purpose, audience, key metrics)
 - Triage signals for automated content classification
 - Work units per explore and per dashboard
 
@@ -310,11 +310,11 @@ Find Looker connection names in **Admin > Database > Connections**.
 
 ## Notion
 
-Ingests pages and databases from a Notion workspace as knowledge pages. Useful for capturing business definitions, data dictionaries, and team documentation that agents need for context.
+Ingests pages and databases from a Notion workspace as wiki pages. Useful for capturing business definitions, data dictionaries, and team documentation that agents need for context.
 
 ### What it provides
 
-- Knowledge pages synthesized from Notion content
+- Wiki pages synthesized from Notion content
 - Page hierarchy and relationships
 - Database schemas (when Notion databases describe data sources)
 - Semantic clustering for organized ingestion
@@ -364,7 +364,7 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 
 ### What gets ingested
 
-- Knowledge pages synthesized from Notion content (not raw copies)
+- Wiki pages synthesized from Notion content (not raw copies)
 - Domain context extracted and organized by topic
 - Triage signals for classifying page relevance
 - Work units clustered by semantic similarity for efficient processing
@@ -381,6 +381,6 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 |------------------|--------------|----------|
 | Adapter cannot read source files | `source_dir`, `repo_url`, `branch`, or `path` is wrong | Verify the path locally or clone the repo manually with the same credentials |
 | Private repo/API authentication fails | Token env var or secret file is missing | Export the env var or update `auth_token_ref` to a readable file |
-| Ingest creates duplicate context | Existing source names or knowledge pages do not match imported terminology | Review the diff, rename duplicates, and add knowledge pages with canonical names |
+| Ingest creates duplicate context | Existing source names or wiki pages do not match imported terminology | Review the diff, rename duplicates, and add wiki pages with canonical names |
 | Notion ingest skips pages | Integration lacks access or root ids are missing | Share pages with the Notion integration and set `root_page_ids` or use `all_accessible` carefully |
 | Generated semantic sources fail validation | Tool metadata does not match the live warehouse schema | Map BI/source databases to primary warehouse connections and rerun validation |

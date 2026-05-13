@@ -423,7 +423,7 @@ export function buildDefaultKtxProjectConfig(projectName = 'ktx-project'): KtxPr
       run_research: {
         enabled: false,
         max_iterations: 20,
-        default_toolset: ['sl_query', 'knowledge_search', 'sl_read_source'],
+        default_toolset: ['sl_query', 'wiki_search', 'sl_read_source'],
       },
     },
     memory: {

@@ -32,7 +32,7 @@ describe('LocalGitFileStore', () => {
 
   it('writes, commits, and reads a project file', async () => {
     const write = await store.writeFile(
-      'knowledge/global/revenue.md',
+      'wiki/global/revenue.md',
       '# Revenue\n',
       'Agent',
       'agent@example.com',
@@ -40,20 +40,20 @@ describe('LocalGitFileStore', () => {
     );
 
     expect(write.commitHash).toMatch(/^[0-9a-f]{40}$/);
-    await expect(readFile(join(tempDir, 'knowledge/global/revenue.md'), 'utf-8')).resolves.toBe('# Revenue\n');
-    await expect(store.readFile('knowledge/global/revenue.md')).resolves.toMatchObject({
+    await expect(readFile(join(tempDir, 'wiki/global/revenue.md'), 'utf-8')).resolves.toBe('# Revenue\n');
+    await expect(store.readFile('wiki/global/revenue.md')).resolves.toMatchObject({
       content: '# Revenue\n',
     });
   });
 
   it('lists files recursively and can strip the requested prefix', async () => {
-    await store.writeFile('knowledge/global/a.md', 'a', 'Agent', 'agent@example.com', 'Add a');
-    await store.writeFile('knowledge/global/nested/b.md', 'b', 'Agent', 'agent@example.com', 'Add b');
+    await store.writeFile('wiki/global/a.md', 'a', 'Agent', 'agent@example.com', 'Add a');
+    await store.writeFile('wiki/global/nested/b.md', 'b', 'Agent', 'agent@example.com', 'Add b');
 
-    await expect(store.listFiles('knowledge')).resolves.toEqual({
-      files: ['knowledge/global/a.md', 'knowledge/global/nested/b.md'],
+    await expect(store.listFiles('wiki')).resolves.toEqual({
+      files: ['wiki/global/a.md', 'wiki/global/nested/b.md'],
     });
-    await expect(store.listFiles('knowledge/global', true)).resolves.toEqual({
+    await expect(store.listFiles('wiki/global', true)).resolves.toEqual({
       files: ['a.md', 'nested/b.md'],
     });
   });
@@ -77,10 +77,10 @@ describe('LocalGitFileStore', () => {
   });
 
   it('exposes Git history for a file', async () => {
-    await store.writeFile('knowledge/global/history.md', 'v1', 'Agent', 'agent@example.com', 'Add history');
-    await store.writeFile('knowledge/global/history.md', 'v2', 'Agent', 'agent@example.com', 'Update history');
+    await store.writeFile('wiki/global/history.md', 'v1', 'Agent', 'agent@example.com', 'Add history');
+    await store.writeFile('wiki/global/history.md', 'v2', 'Agent', 'agent@example.com', 'Update history');
 
-    const history = await store.getFileHistory('knowledge/global/history.md');
+    const history = await store.getFileHistory('wiki/global/history.md');
 
     expect(Array.isArray(history)).toBe(true);
     expect(history[0]).toMatchObject({ message: 'Update history' });

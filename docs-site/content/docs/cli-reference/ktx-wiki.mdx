@@ -1,9 +1,9 @@
 ---
 title: "ktx wiki"
-description: "List, read, search, or write knowledge pages."
+description: "List, read, search, or write wiki pages."
 ---
 
-Manage knowledge pages in your KTX project. Knowledge pages are Markdown documents that capture business definitions, rules, and gotchas. Agents search them for context when answering questions about your data.
+Manage wiki pages in your KTX project. Wiki pages are Markdown documents that capture business definitions, rules, and gotchas. Agents search them for context when answering questions about your data.
 
 ## Command signature
 
@@ -77,12 +77,12 @@ ktx wiki search "monthly recurring revenue"
 # Search wiki pages as JSON
 ktx wiki search "monthly recurring revenue" --json --limit 10
 
-# Write a global knowledge page
+# Write a global wiki page
 ktx wiki write revenue-definitions \
   --summary "Canonical revenue metric definitions" \
   --content "## MRR\nMonthly Recurring Revenue is calculated as..."
 
-# Write a user-scoped knowledge page
+# Write a user-scoped wiki page
 ktx wiki write my-notes \
   --scope user \
   --summary "Personal analysis notes" \
@@ -106,7 +106,7 @@ ktx wiki write data-freshness \
 
 ## Output
 
-Wiki commands print local knowledge pages and search results. Agents should search first, then read the most relevant page by key.
+Wiki commands print local wiki pages and search results. Agents should search first, then read the most relevant page by key.
 
 ```json
 {

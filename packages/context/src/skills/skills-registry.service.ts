@@ -223,7 +223,7 @@ export class SkillsRegistryService {
     const list = skills.map((skill) => `- ${skill.name}: ${skill.description}`).join('\n');
     const captureNote =
       caller === 'research'
-        ? '\n\nKnowledge pages and semantic-layer sources are captured automatically by a post-turn memory agent. Focus on answering, not on saving. Use `knowledge_read`/`knowledge_search` and `sl_read_source` to consult what already exists; the memory agent will write any new conventions or measures the turn surfaces.'
+        ? '\n\nWiki pages and semantic-layer sources are captured automatically by a post-turn memory agent. Focus on answering, not on saving. Use `wiki_read`/`wiki_search` and `sl_read_source` to consult what already exists; the memory agent will write any new conventions or measures the turn surfaces.'
         : '';
     return `\n## Skills\n\nUse the \`load_skill\` tool to load a skill when the task benefits from specialized instructions.${captureNote}\n\nAvailable skills:\n${list}\n`;
   }

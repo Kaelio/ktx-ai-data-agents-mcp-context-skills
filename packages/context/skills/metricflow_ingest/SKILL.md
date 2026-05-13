@@ -140,7 +140,7 @@ metrics:
 ```
 
 Do NOT emit SL for this. Instead:
-- Write a wiki page at `knowledge/global/<metric_name>-intent.md` quoting the full YAML body and a one-line explanation of the intended semantics (base event → conversion event within window).
+- Write a wiki page at `wiki/global/<metric_name>-intent.md` quoting the full YAML body and a one-line explanation of the intended semantics (base event → conversion event within window).
 - Call `emit_unmapped_fallback` with `rawPath` set to the MetricFlow file path, `reason: "conversion_metric_unsupported"`, and `fallback: "flagged"`.
 
 When KTX SL gains conversion primitives, re-ingesting will find the prior wiki note (via `priorProvenance`) and replace it with an SL source.
@@ -288,7 +288,7 @@ measures:
   - {name: margin, expr: "sum(revenue_cents) - sum(cost_cents)"}
 ```
 
-Also write a wiki page at `knowledge/global/margin-metric.md` explaining the cross-source origin.
+Also write a wiki page at `wiki/global/margin-metric.md` explaining the cross-source origin.
 
 ## Example 4 — filtered metric creates a new measure
 

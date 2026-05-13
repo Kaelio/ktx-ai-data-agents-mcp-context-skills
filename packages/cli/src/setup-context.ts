@@ -441,7 +441,7 @@ async function defaultVerifyContextReady(projectDir: string): Promise<KtxSetupCo
       ignoredDirectoryNames: new Set(['_schema']),
     },
   );
-  const wikiReady = await hasFileWithExtension(join(projectDir, 'knowledge'), new Set(['.md']));
+  const wikiReady = await hasFileWithExtension(join(projectDir, 'wiki'), new Set(['.md']));
   const contextSourceReady =
     targets.contextSourceConnectionIds.length === 0 || semanticLayerContextReady || wikiReady;
   const ready = primarySourceScans.ready && contextSourceReady;

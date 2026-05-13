@@ -36,7 +36,7 @@ export class WikiRemoveTool extends BaseTool<typeof wikiRemoveInputSchema> {
   }
 
   get description(): string {
-    return `<purpose>Remove a knowledge page that is no longer relevant.</purpose>`;
+    return `<purpose>Remove a wiki page that is no longer relevant.</purpose>`;
   }
 
   get inputSchema() {

@@ -17,13 +17,13 @@ const adapterSkillNames = [
   'historic_sql_table_digest',
   'historic_sql_patterns',
   'ingest_triage',
-  'knowledge_capture',
+  'wiki_capture',
   'sl_capture',
 ] as const;
 
 const adapterReconcileSkillNames = [
   'ingest_triage',
-  'knowledge_capture',
+  'wiki_capture',
   'sl_capture',
 ] as const;
 

@@ -10,7 +10,7 @@ const promptsDir = fileURLToPath(new URL('../../prompts', import.meta.url));
 const skillsDir = fileURLToPath(new URL('../../skills', import.meta.url));
 const memorySourceTypes: MemoryAgentSourceType[] = ['research', 'external_ingest', 'backfill'];
 const expectedSkillHeadings: Record<string, string> = {
-  knowledge_capture: '# Knowledge Capture',
+  wiki_capture: '# Wiki Capture',
   sl: '# Semantic Layer',
   sl_capture: '# Semantic Layer',
 };
@@ -33,7 +33,7 @@ const verificationWriterSkills = [
   'live_database_ingest',
   'historic_sql_table_digest',
   'historic_sql_patterns',
-  'knowledge_capture',
+  'wiki_capture',
   'sl_capture',
 ] as const;
 
@@ -77,7 +77,7 @@ describe('memory runtime assets', () => {
     const registry = new SkillsRegistryService({ skillsDir });
     const skills = await registry.listSkills([...DEFAULT_SKILL_NAMES], 'memory_agent');
 
-    expect(skills.map((skill) => skill.name).sort()).toEqual(['knowledge_capture', 'sl', 'sl_capture']);
+    expect(skills.map((skill) => skill.name).sort()).toEqual(['wiki_capture', 'sl', 'sl_capture']);
 
     for (const skill of skills) {
       const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');

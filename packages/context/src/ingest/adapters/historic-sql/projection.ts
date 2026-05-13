@@ -283,7 +283,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
     }
   }
 
-  const wikiRoot = join(input.workdir, 'knowledge/global');
+  const wikiRoot = join(input.workdir, 'wiki/global');
   await mkdir(wikiRoot, { recursive: true });
   const allPages = await loadPatternPages(wikiRoot);
   const activePages = allPages.filter((page) => !isArchivedPatternPage(page));

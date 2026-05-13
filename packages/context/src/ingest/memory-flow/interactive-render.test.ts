@@ -36,7 +36,7 @@ function view(): MemoryFlowViewModel {
           unitKey: 'orders',
           target: 'wiki',
           action: 'created',
-          key: 'knowledge/orders.md',
+          key: 'wiki/orders.md',
           summary: 'order facts',
           rawFiles: ['orders.yml'],
           status: 'success',
@@ -46,7 +46,7 @@ function view(): MemoryFlowViewModel {
         {
           rawPath: 'orders.yml',
           artifactKind: 'wiki',
-          artifactKey: 'knowledge/orders.md',
+          artifactKey: 'wiki/orders.md',
           actionType: 'wiki_written',
         },
       ],
@@ -97,8 +97,8 @@ function view(): MemoryFlowViewModel {
         status: 'complete',
         headline: '2 candidates',
         counters: ['1 wiki', '1 SL'],
-        chips: [{ label: 'knowledge/orders.md', status: 'complete' }],
-        details: ['wiki created: knowledge/orders.md', 'sl updated: warehouse.orders'],
+        chips: [{ label: 'wiki/orders.md', status: 'complete' }],
+        details: ['wiki created: wiki/orders.md', 'sl updated: warehouse.orders'],
       },
       {
         id: 'gates',

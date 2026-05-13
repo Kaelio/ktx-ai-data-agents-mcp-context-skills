@@ -7,7 +7,7 @@ Parsimonious. Stage 3 WUs already loaded `ingest_triage` and handled conflicts t
 </stance>
 
 <workflow>
-1. Load `ingest_triage`, then `sl_capture` + `knowledge_capture`.
+1. Load `ingest_triage`, then `sl_capture` + `wiki_capture`.
 2. Call `stage_list()` for the full index of this job's writes. If it is empty AND you have no evictions, exit — the runner short-circuits this case but the skill still teaches you to bail fast.
 3. If the system prompt includes `<canonical_pins>`, apply those pins before flagging a same-name or near-duplicate conflict. A pinned `canonicalArtifactKey` keeps the contested name when it is present in the Stage Index; competing variants keep or receive disambiguated names.
 4. Sweep both exact-key conflicts and near-duplicate writes. Compare WUs that wrote overlapping SL source names, overlapping wiki keys, the same `tables:` or `sl_refs:` action details, or obviously equivalent topic titles under different wiki keys. Call `stage_diff` to see the actual difference, and use `wiki_read`/`sl_read_source` when two different keys appear to describe the same table, metric, or source-of-truth mapping. If they're the same content, leave one canonical artifact and record the duplicate as subsumed. If they differ per `ingest_triage` rules, apply the correct resolution (rename + capture; election of canonical; silent replace for expression-only re-ingest change; or pinned canonical), then call `emit_conflict_resolution` with the artifact key and decision.

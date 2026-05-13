@@ -41,7 +41,7 @@ const TRACKED_SCAFFOLD_FILES: Array<{ path: string; content: string }> = [
   },
   { path: '.ktx/prompts/.gitkeep', content: '' },
   { path: '.ktx/skills/.gitkeep', content: '' },
-  { path: 'knowledge/global/.gitkeep', content: '' },
+  { path: 'wiki/global/.gitkeep', content: '' },
   { path: 'semantic-layer/.gitkeep', content: '' },
   { path: 'raw-sources/.gitkeep', content: '' },
 ];

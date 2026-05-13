@@ -75,13 +75,13 @@ function stringArray(value: unknown): string[] {
 function knowledgePath(scope: LocalKnowledgeScope, userId: string | undefined, key: string): string {
   const safeKey = assertFlatWikiKey(key);
   if (scope === 'GLOBAL') {
-    return `knowledge/global/${safeKey}.md`;
+    return `wiki/global/${safeKey}.md`;
   }
-  return `knowledge/user/${assertSafePathToken('user id', userId ?? 'local')}/${safeKey}.md`;
+  return `wiki/user/${assertSafePathToken('user id', userId ?? 'local')}/${safeKey}.md`;
 }
 
 function keyFromKnowledgePath(path: string, scope: LocalKnowledgeScope, userId: string): string | null {
-  const prefix = scope === 'GLOBAL' ? 'knowledge/global/' : `knowledge/user/${assertSafePathToken('user id', userId)}/`;
+  const prefix = scope === 'GLOBAL' ? 'wiki/global/' : `wiki/user/${assertSafePathToken('user id', userId)}/`;
   const key = path.slice(prefix.length).replace(/\.md$/, '');
   if (isFlatWikiKey(key)) {
     return key;
@@ -158,7 +158,7 @@ export async function writeLocalKnowledgePage(
     serializeKnowledgePage(input),
     LOCAL_AUTHOR,
     LOCAL_AUTHOR_EMAIL,
-    `Write knowledge page: ${input.key}`,
+    `Write wiki page: ${input.key}`,
   );
 }
 
@@ -181,7 +181,7 @@ export async function listLocalKnowledgePages(
   const userId = input.userId ?? 'local';
   const pages: LocalKnowledgeSummary[] = [];
   for (const scope of ['GLOBAL', 'USER'] as const) {
-    const root = scope === 'GLOBAL' ? 'knowledge/global' : `knowledge/user/${assertSafePathToken('user id', userId)}`;
+    const root = scope === 'GLOBAL' ? 'wiki/global' : `wiki/user/${assertSafePathToken('user id', userId)}`;
     const listed = await project.fileStore.listFiles(root);
     for (const path of listed.files.filter((file) => file.endsWith('.md')).sort()) {
       const key = keyFromKnowledgePath(path, scope, userId);
