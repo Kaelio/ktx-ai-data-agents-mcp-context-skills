@@ -9,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { CodeBlock } from "@/components/code-block";
 import { DocsPageActions } from "@/components/docs-page-actions";
+import { readDocsPageMarkdown } from "@/lib/docs-markdown";
 
 const docsIndexPath = "/docs/getting-started/introduction";
 const docsIndexSlug = ["getting-started", "introduction"] as const;
@@ -33,6 +34,7 @@ export default async function Page(props: {
   if (!page) notFound();
 
   const MDX = page.data.body;
+  const mdxSource = await readDocsPageMarkdown(page.slugs);
 
   const hero = isHeroPage(params.slug);
 
@@ -44,7 +46,7 @@ export default async function Page(props: {
             <DocsTitle>{page.data.title}</DocsTitle>
             <DocsPageActions
               markdownUrl={`${page.url}.md`}
-              mdxSource={page.data.content}
+              mdxSource={mdxSource}
             />
           </div>
           <DocsDescription>{page.data.description}</DocsDescription>

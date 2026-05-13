@@ -17,6 +17,7 @@
       "!**/dist/**",
       "!**/coverage/**",
       "!**/.next/**",
+      "!**/.source/**",
       "!**/node_modules/**",
       "!**/*.gen.ts",
       "!**/*.generated.ts"

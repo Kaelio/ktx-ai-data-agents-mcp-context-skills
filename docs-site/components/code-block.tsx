@@ -1,18 +1,16 @@
 "use client";
 
 import {
+  type ComponentPropsWithoutRef,
   type ReactNode,
   type ReactElement,
   isValidElement,
 } from "react";
 import { CopyButton } from "./copy-button";
 
-type Props = {
-  children?: ReactNode;
-  className?: string;
+type Props = ComponentPropsWithoutRef<"pre"> & {
   title?: string;
-  // rehype-pretty-code adds data attributes such as data-language; capture them via index signature
-  [key: string]: unknown;
+  "data-language"?: string;
 };
 
 const TERMINAL_LANGS = new Set(["bash", "sh", "shell", "zsh"]);

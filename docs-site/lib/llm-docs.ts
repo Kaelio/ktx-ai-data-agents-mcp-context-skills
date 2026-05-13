@@ -1,4 +1,5 @@
 import { source } from "@/lib/source";
+import { readDocsPageMarkdown } from "@/lib/docs-markdown";
 
 const siteOrigin = "https://docs.kaelio.com/ktx";
 
@@ -102,7 +103,7 @@ function toLlmDocsPage(page: ReturnType<typeof source.getPages>[number]) {
     url: page.url,
     markdownUrl: `${page.url}.md`,
     slug: page.slugs,
-    getMarkdown: async () => normalizeMarkdown(page.data.content),
+    getMarkdown: async () => normalizeMarkdown(await readDocsPageMarkdown(page.slugs)),
   } satisfies LlmDocsPage;
 }
 
