@@ -492,7 +492,7 @@ describe('verification snippets', () => {
     assert.match(source, /'--deep'/);
     assert.doesNotMatch(source, /'--enrich'/);
     assert.match(source, /ktx ingest fast verified/);
-    assert.match(source, /ktx ingest deep verified/);
+    assert.match(source, /ktx ingest deep readiness guard verified/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
     assert.doesNotMatch(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
@@ -511,6 +511,8 @@ describe('verification snippets', () => {
       assert.match(source, /Usage: ktx setup/);
       assert.doesNotMatch(source, new RegExp(["'demo'", "'--mode'", "'deterministic'"].join(', ')));
       assert.match(source, /'status', '--no-input'/);
+      assert.match(source, /KTX status/);
+      assert.match(source, /No project here yet/);
       assert.doesNotMatch(source, /function requireProjectStderr/);
       assert.match(source, /Object\.keys\(packageJson\.dependencies\)/);
       assert.match(source, /'@kaelio\/ktx'/);

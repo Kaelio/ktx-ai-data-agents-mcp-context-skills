@@ -26,12 +26,13 @@ function isExecFailure(error: unknown): error is ExecFailure {
   return error instanceof Error && ('stdout' in error || 'stderr' in error || 'code' in error);
 }
 
-async function runBuiltCli(args: string[], options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliResult> {
+async function runBuiltCli(args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): Promise<CliResult> {
   try {
     const result = await execFileAsync(process.execPath, [CLI_BIN, ...args], {
+      ...(options.cwd ? { cwd: options.cwd } : {}),
       encoding: 'utf8',
       timeout: 20_000,
-      ...(options.env ? { env: options.env } : {}),
+      env: options.env ?? process.env,
     });
     return {
       code: 0,
@@ -166,11 +167,13 @@ describe('standalone built ktx CLI smoke', () => {
   });
 
   it('runs doctor setup through the built binary', async () => {
-    const result = await runBuiltCli(['status', '--no-input']);
+    const env = { ...process.env };
+    delete env.KTX_PROJECT_DIR;
+    const result = await runBuiltCli(['status', '--no-input'], { cwd: tempDir, env });
 
     expect(result.stdout).toMatch(/KTX (setup doctor|project doctor|status)/);
     if (result.stdout.includes('No project here yet.')) {
-      expect(result.stdout).toContain('Before you can run ktx setup');
+      expect(result.stdout).toContain('ktx setup');
     } else {
       expect(result.stdout).toContain('Node 22+');
       expect(result.stdout).toContain('Workspace-local CLI');

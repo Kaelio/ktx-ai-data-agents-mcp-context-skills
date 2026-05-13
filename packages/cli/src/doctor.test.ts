@@ -330,8 +330,8 @@ describe('runKtxDoctor', () => {
   });
 
   it('includes Postgres query-history readiness in project doctor output', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test-key';
-    process.env.OPENAI_API_KEY = 'test-key';
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
+    process.env.OPENAI_API_KEY = 'test-key'; // pragma: allowlist secret
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [

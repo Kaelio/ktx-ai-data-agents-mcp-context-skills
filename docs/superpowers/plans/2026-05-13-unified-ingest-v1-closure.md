@@ -124,7 +124,7 @@ function deepReadyProject(connections: KtxProjectConfig['connections'], relation
       connections,
       llm: {
         ...config.llm,
-        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } },
+        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
         models: { default: 'gpt-test' },
       },
       scan: {
@@ -785,7 +785,7 @@ Add these tests near the existing setup context build tests:
     await writeReadyProject(tempDir, {
       connections: { warehouse: { driver: 'postgres', readonly: true } },
       llm: {
-        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } },
+        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
         models: { default: 'gpt-test' },
       },
       scan: {

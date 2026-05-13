@@ -911,7 +911,7 @@ describe('runContextBuild', () => {
           warehouse: { driver: 'postgres', context: { depth: 'deep' } },
         },
         llm: {
-          provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } },
+          provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
           models: { default: 'gpt-test' },
         },
         scan: {

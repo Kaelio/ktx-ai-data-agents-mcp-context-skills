@@ -110,7 +110,7 @@ describe('standalone local warehouse example', () => {
       'fake',
     ]);
     expect(ingest).toMatchObject({ code: 1, stdout: '' });
-    expect(ingest.stderr).toContain("unknown command 'run'");
+    expect(ingest.stderr).toContain("unknown option '--connection-id'");
   }, 30_000);
 
 });
