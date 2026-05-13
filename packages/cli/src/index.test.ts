@@ -123,7 +123,7 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('Usage: ktx [options] [command]');
-    expect(testIo.stdout()).toContain('Kaelio data agent context layer CLI');
+    expect(testIo.stdout()).toContain('KTX data agent context layer CLI');
     for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'scan']) {
       expect(testIo.stdout()).toContain(`${command}`);
     }

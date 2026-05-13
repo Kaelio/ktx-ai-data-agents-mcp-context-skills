@@ -216,7 +216,7 @@ export function resolveCommandProjectDirOverride(command: CommandWithGlobalOptio
 function createBaseProgram(info: KtxCliPackageInfo, io: KtxCliIo): Command {
   return new Command()
     .name('ktx')
-    .description('Kaelio data agent context layer CLI')
+    .description('KTX data agent context layer CLI')
     .option('--project-dir <path>', 'KTX project directory (default: KTX_PROJECT_DIR, nearest ktx.yaml, or cwd)')
     .option('--debug', 'Enable diagnostic logging to stderr')
     .version(`${info.name} ${info.version}`, '-v, --version', 'Show CLI version')
