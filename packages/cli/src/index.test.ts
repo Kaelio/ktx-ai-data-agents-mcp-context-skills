@@ -955,7 +955,7 @@ describe('runKtxCli', () => {
 
     expect(setup).not.toHaveBeenCalled();
     expect(doctor).toHaveBeenCalledWith(
-      { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
+      { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled', verbose: false },
       statusIo.io,
     );
     expect(statusIo.stderr()).toBe('');
@@ -978,7 +978,7 @@ describe('runKtxCli', () => {
       await expect(runKtxCli(['status', '--json', '--no-input'], statusIo.io, { doctor })).resolves.toBe(0);
 
       expect(doctor).toHaveBeenCalledWith(
-        { command: 'setup', outputMode: 'json', inputMode: 'disabled' },
+        { command: 'setup', outputMode: 'json', inputMode: 'disabled', verbose: false },
         statusIo.io,
       );
       expect(statusIo.stderr()).toBe('');
