@@ -197,10 +197,10 @@ describe('standalone built ktx CLI smoke', () => {
     expect(result.stderr).toContain("unknown command 'agent'");
   });
 
-  it('runs doctor setup through the built binary', async () => {
-    const result = await runBuiltCli(['status', '--no-input']);
+  it('runs status setup checks through the built binary', async () => {
+    const result = await runBuiltCli(['status', '--verbose', '--no-input']);
 
-    expect(result.stdout).toMatch(/KTX (setup|project) doctor/);
+    expect(result.stdout).toMatch(/KTX status/);
     expect(result.stdout).toContain('Node 22+');
     expect(result.stdout).toContain('Workspace-local CLI');
     expect(result.stderr === '' || result.stderr.startsWith('Project: ')).toBe(true);

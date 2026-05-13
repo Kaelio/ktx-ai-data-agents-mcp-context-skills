@@ -281,7 +281,7 @@ describe('runKtxDoctor', () => {
   });
 
   it('runs project checks against a valid ktx.yaml', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -306,7 +306,7 @@ describe('runKtxDoctor', () => {
       ].join('\n'),
       'utf-8',
     );
-    process.env.OPENAI_API_KEY = 'test-key';
+    process.env.OPENAI_API_KEY = 'test-key'; // pragma: allowlist secret
     const testIo = makeIo();
 
     await expect(
@@ -357,7 +357,7 @@ describe('runKtxDoctor', () => {
   });
 
   it('warns about stale and unsupported per-driver connection fields', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     process.env.WAREHOUSE_DATABASE_URL = 'postgresql://reader@example.test/warehouse';
     process.env.NOTION_TOKEN = 'notion-secret';
     await writeFile(
@@ -415,7 +415,7 @@ describe('runKtxDoctor', () => {
   });
 
   it('warns when semantic-search embeddings are not configured', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
