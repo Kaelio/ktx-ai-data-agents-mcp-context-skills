@@ -92,7 +92,7 @@ describe('MetabaseClient retry exhaustion', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
 
     const client = new MetabaseClient(
-      { apiUrl: 'https://metabase.example.test', apiKey: 'key' },
+      { apiUrl: 'https://metabase.example.test', apiKey: 'key' }, // pragma: allowlist secret
       {
         ...DEFAULT_METABASE_CLIENT_CONFIG,
         baseDelayMs: 0,

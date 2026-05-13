@@ -37,27 +37,27 @@ This plan does not rewrite the historic-SQL adapter, readers, skills, projection
 
 Modify:
 
-- `packages/context/src/sl/sl-search.service.ts`  
+- `packages/context/src/sl/sl-search.service.ts`
   Adds usage narrative, frequency, filters, group-bys, joins, and stale marker to the canonical SL search text. Preserves snippets returned by repository search for direct `SlSearchService.search()` callers.
-- `packages/context/src/sl/sl-search.service.test.ts`  
+- `packages/context/src/sl/sl-search.service.test.ts`
   Tests usage search-text content and direct service snippet pass-through.
-- `packages/context/src/sl/ports.ts`  
+- `packages/context/src/sl/ports.ts`
   Extends `SlSourcesIndexPort.search()` rows with optional `snippet`.
-- `packages/context/src/sl/sqlite-sl-sources-index.ts`  
+- `packages/context/src/sl/sqlite-sl-sources-index.ts`
   Adds FTS5 `snippet()` selection to lexical candidate search and direct index search.
-- `packages/context/src/sl/sqlite-sl-sources-index.test.ts`  
+- `packages/context/src/sl/sqlite-sl-sources-index.test.ts`
   Locks snippet behavior for both direct search and lexical lane candidates.
-- `packages/context/src/sl/local-sl.ts`  
+- `packages/context/src/sl/local-sl.ts`
   Adds `frequencyTier` and `snippet` to query-mode `LocalSlSourceSearchResult`; collects snippets from the lexical lane and hydrates frequency from `SemanticLayerSource.usage`.
-- `packages/context/src/sl/local-sl.test.ts`  
+- `packages/context/src/sl/local-sl.test.ts`
   Tests that usage-only terms can find a source and that results include `frequencyTier` and FTS snippet.
-- `packages/context/src/sl/pglite-sl-search-prototype.ts`  
+- `packages/context/src/sl/pglite-sl-search-prototype.ts`
   Propagates `frequencyTier` for the prototype backend so the shared result type stays truthful.
-- `packages/context/src/mcp/types.ts`  
+- `packages/context/src/mcp/types.ts`
   Adds `frequencyTier` and `snippet` to `KtxSemanticLayerSourceSummary`.
-- `packages/context/src/mcp/local-project-ports.ts`  
+- `packages/context/src/mcp/local-project-ports.ts`
   Includes `frequencyTier` and `snippet` in `semanticLayer.listSources()` output.
-- `packages/context/src/mcp/local-project-ports.test.ts`  
+- `packages/context/src/mcp/local-project-ports.test.ts`
   Tests the agent/MCP-facing list response.
 
 ## Task 1: Index Historic SQL Usage In SL Search Text

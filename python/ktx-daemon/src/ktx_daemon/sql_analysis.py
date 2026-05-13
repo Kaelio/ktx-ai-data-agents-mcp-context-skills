@@ -130,7 +130,9 @@ def _analyze_one(
     )
 
 
-def _analyze_payload(payload: tuple[str, str, str]) -> tuple[str, AnalyzeSqlBatchResult]:
+def _analyze_payload(
+    payload: tuple[str, str, str],
+) -> tuple[str, AnalyzeSqlBatchResult]:
     item_id, sql, dialect = payload
     return _analyze_one(item_id, sql, dialect)
 

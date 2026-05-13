@@ -17,13 +17,13 @@ describe('KTX embedding health check', () => {
           backend: 'openai',
           model: 'text-embedding-3-small',
           dimensions: 3,
-          openai: { apiKey: 'sk-openai-test' },
+          openai: { apiKey: 'sk-openai-test' }, // pragma: allowlist secret
         },
         { deps: { createOpenAIClient } },
       ),
     ).resolves.toEqual({ ok: true });
 
-    expect(createOpenAIClient).toHaveBeenCalledWith({ apiKey: 'sk-openai-test', baseURL: undefined });
+    expect(createOpenAIClient).toHaveBeenCalledWith({ apiKey: 'sk-openai-test', baseURL: undefined }); // pragma: allowlist secret
   });
 
   it('returns failed when the provider returns the wrong dimensions', async () => {
@@ -41,7 +41,7 @@ describe('KTX embedding health check', () => {
           backend: 'openai',
           model: 'text-embedding-3-small',
           dimensions: 3,
-          openai: { apiKey: 'sk-openai-test' },
+          openai: { apiKey: 'sk-openai-test' }, // pragma: allowlist secret
         },
         { deps: { createOpenAIClient } },
       ),
@@ -66,7 +66,7 @@ describe('KTX embedding health check', () => {
           backend: 'openai',
           model: 'text-embedding-3-small',
           dimensions: 3,
-          openai: { apiKey: 'sk-openai-secret' },
+          openai: { apiKey: 'sk-openai-secret' }, // pragma: allowlist secret
         },
         { deps: { createOpenAIClient } },
       ),
@@ -94,7 +94,7 @@ describe('KTX embedding health check', () => {
           backend: 'openai',
           model: 'text-embedding-3-small',
           dimensions: 3,
-          openai: { apiKey: 'sk-openai-test' },
+          openai: { apiKey: 'sk-openai-test' }, // pragma: allowlist secret
         },
         { timeoutMs: 1, deps: { createOpenAIClient } },
       ),

@@ -14,7 +14,7 @@ describe('KTX LLM health check', () => {
       runKtxLlmHealthCheck(
         {
           backend: 'anthropic',
-          anthropic: { apiKey: 'sk-ant-test' },
+          anthropic: { apiKey: 'sk-ant-test' }, // pragma: allowlist secret
           modelSlots: { default: 'claude-sonnet-4-6' },
         },
         { deps: { createAnthropic, generateText, devtoolsEnabled: true, wrapLanguageModel } },
@@ -23,7 +23,7 @@ describe('KTX LLM health check', () => {
 
     expect(createAnthropic).toHaveBeenCalledWith(
       expect.objectContaining({
-        apiKey: 'sk-ant-test',
+        apiKey: 'sk-ant-test', // pragma: allowlist secret
       }),
     );
     expect(generateText).toHaveBeenCalledWith(
@@ -46,7 +46,7 @@ describe('KTX LLM health check', () => {
       runKtxLlmHealthCheck(
         {
           backend: 'anthropic',
-          anthropic: { apiKey: 'sk-ant-secret' },
+          anthropic: { apiKey: 'sk-ant-secret' }, // pragma: allowlist secret
           modelSlots: { default: 'claude-sonnet-4-6' },
         },
         {

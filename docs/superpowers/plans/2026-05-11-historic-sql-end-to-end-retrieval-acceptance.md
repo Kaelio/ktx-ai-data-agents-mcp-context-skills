@@ -44,7 +44,7 @@ Remaining acceptance gap this plan covers:
 
 Create:
 
-- `packages/context/src/ingest/adapters/historic-sql/local-ingest-acceptance.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/local-ingest-acceptance.test.ts`
   Owns the end-to-end local regression for the redesigned historic-SQL pipeline. It uses the real adapter and local ingest runner, with fake deterministic reader/analysis/agent components so the test does not need a live database or LLM provider.
 
 ## Task 1: Add Real-Adapter Local Ingest Acceptance Coverage

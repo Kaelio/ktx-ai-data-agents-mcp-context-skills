@@ -319,14 +319,14 @@ describe('setup embeddings step', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         embeddingBackend: 'openai',
-        embeddingApiKeyEnv: 'OPENAI_API_KEY',
+        embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
         cliVersion: '0.2.0',
         runtimeInstallPolicy: 'auto',
         skipEmbeddings: false,
       },
       io.io,
       {
-        env: { OPENAI_API_KEY: 'sk-openai-test' },
+        env: { OPENAI_API_KEY: 'sk-openai-test' }, // pragma: allowlist secret
         healthCheck,
       },
     );
@@ -336,14 +336,14 @@ describe('setup embeddings step', () => {
       backend: 'openai',
       model: 'text-embedding-3-small',
       dimensions: 1536,
-      openai: { apiKey: 'sk-openai-test' },
+      openai: { apiKey: 'sk-openai-test' }, // pragma: allowlist secret
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.ingest.embeddings).toMatchObject({
       backend: 'openai',
       model: 'text-embedding-3-small',
       dimensions: 1536,
-      openai: { api_key: 'env:OPENAI_API_KEY' },
+      openai: { api_key: 'env:OPENAI_API_KEY' }, // pragma: allowlist secret
     });
     expect(io.stdout()).not.toContain('sk-openai-test');
   });
@@ -367,7 +367,7 @@ describe('setup embeddings step', () => {
       io.io,
       {
         prompts,
-        env: { OPENAI_API_KEY: 'sk-openai-test' },
+        env: { OPENAI_API_KEY: 'sk-openai-test' }, // pragma: allowlist secret
         healthCheck,
         ensureLocalEmbeddings: vi.fn(async () => managedDaemon()),
       },
@@ -384,7 +384,7 @@ describe('setup embeddings step', () => {
       backend: 'openai',
       model: 'text-embedding-3-small',
       dimensions: 1536,
-      openai: { apiKey: 'sk-openai-test' },
+      openai: { apiKey: 'sk-openai-test' }, // pragma: allowlist secret
     });
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -478,7 +478,7 @@ describe('setup embeddings step', () => {
         },
         makeIo().io,
         {
-          env: { OPENAI_API_KEY: 'sk-openai-test' },
+          env: { OPENAI_API_KEY: 'sk-openai-test' }, // pragma: allowlist secret
           healthCheck,
         },
       ),
