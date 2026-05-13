@@ -103,13 +103,36 @@ function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
   return report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
 }
 
+const REPORT_SOURCE_LABELS = new Map<string, string>([
+  ['live-database', 'Database schema'],
+  ['historic-sql', 'Query history'],
+  ['dbt', 'dbt'],
+  ['metricflow', 'MetricFlow'],
+  ['lookml', 'LookML'],
+  ['looker', 'Looker'],
+  ['metabase', 'Metabase'],
+  ['notion', 'Notion'],
+]);
+
+function reportSourceLabel(sourceKey: string): string {
+  const label = REPORT_SOURCE_LABELS.get(sourceKey);
+  if (label) {
+    return label;
+  }
+  return sourceKey
+    .split(/[-_]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+    .join(' ');
+}
+
 function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void {
   const counts = savedMemoryCountsForReport(report);
   io.stdout.write(`Report: ${report.id}\n`);
   io.stdout.write(`Run: ${report.runId}\n`);
   io.stdout.write(`Job: ${report.jobId}\n`);
   io.stdout.write(`Status: ${reportStatus(report)}\n`);
-  io.stdout.write(`Adapter: ${report.sourceKey}\n`);
+  io.stdout.write(`Source: ${reportSourceLabel(report.sourceKey)}\n`);
   io.stdout.write(`Connection: ${report.connectionId}\n`);
   io.stdout.write(`Sync: ${report.body.syncId}\n`);
   io.stdout.write(

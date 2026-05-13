@@ -103,6 +103,70 @@ describe('runKtxIngest', () => {
     expect(statusIo.stderr()).toBe('');
   });
 
+  it('labels internal database reports without adapter names in plain status output', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const report = localFakeBundleReport('scan-job-1', {
+      id: 'report-scan-1',
+      runId: 'run-scan-1',
+      connectionId: 'warehouse',
+      sourceKey: 'live-database',
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'status',
+          projectDir,
+          reportFile: '/tmp/scan-report.json',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          readReportFile: vi.fn(async () => report),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Source: Database schema\n');
+    expect(io.stdout()).not.toContain('Adapter:');
+    expect(io.stdout()).not.toContain('live-database');
+    expect(io.stderr()).toBe('');
+  });
+
+  it('labels internal query-history reports without adapter names in plain status output', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const report = localFakeBundleReport('query-history-job-1', {
+      id: 'report-query-history-1',
+      runId: 'run-query-history-1',
+      connectionId: 'warehouse',
+      sourceKey: 'historic-sql',
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'status',
+          projectDir,
+          reportFile: '/tmp/query-history-report.json',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          readReportFile: vi.fn(async () => report),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Source: Query history\n');
+    expect(io.stdout()).not.toContain('Adapter:');
+    expect(io.stdout()).not.toContain('historic-sql');
+    expect(io.stderr()).toBe('');
+  });
+
   it('emits structured progress for non-TTY local ingest runs', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);
@@ -654,7 +718,7 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
     expect(statusIo.stdout()).toContain('Job: metabase-child-1');
-    expect(statusIo.stdout()).toContain('Adapter: metabase');
+    expect(statusIo.stdout()).toContain('Source: Metabase');
     expect(statusIo.stdout()).toContain('Connection: warehouse_a');
     expect(statusIo.stderr()).toBe('');
   });
@@ -879,7 +943,7 @@ describe('runKtxIngest', () => {
     ).resolves.toBe(0);
 
     expect(io.stderr()).toBe('');
-    expect(io.stdout()).toContain('Adapter: historic-sql\n');
+    expect(io.stdout()).toContain('Source: Query history\n');
     expect(io.stdout()).toContain('Saved memory: 35 wiki, 57 SL\n');
   });
 
@@ -1594,7 +1658,7 @@ describe('runKtxIngest', () => {
 
     expect(io.stderr()).toBe('');
     expect(io.stdout()).toContain('Job: cli-looker-job');
-    expect(io.stdout()).toContain('Adapter: looker');
+    expect(io.stdout()).toContain('Source: Looker');
     expect(io.stdout()).toContain('Connection: prod-looker');
     expect(io.stdout()).toContain('Status: done');
     expect(io.stdout()).toContain('Saved memory: 0 wiki, 1 SL');
@@ -1617,7 +1681,7 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
     expect(statusIo.stdout()).toContain('Job: cli-looker-job');
-    expect(statusIo.stdout()).toContain('Adapter: looker');
+    expect(statusIo.stdout()).toContain('Source: Looker');
     expect(statusIo.stderr()).toBe('');
   });
 
