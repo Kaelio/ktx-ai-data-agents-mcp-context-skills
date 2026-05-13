@@ -2,11 +2,19 @@ import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '@ktx/contex
 import { describe, expect, it, vi } from 'vitest';
 import { buildPublicIngestPlan, type KtxPublicIngestProject, runKtxPublicIngest } from './public-ingest.js';
 
-function makeIo(options: { isTTY?: boolean } = {}) {
+function makeIo(options: { isTTY?: boolean; interactive?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
   return {
     io: {
+      ...(options.interactive
+        ? {
+            stdin: {
+              isTTY: true,
+              setRawMode: vi.fn(),
+            },
+          }
+        : {}),
       stdout: {
         isTTY: options.isTTY,
         write: (chunk: string) => {
@@ -397,6 +405,43 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('Mode: structural');
     expect(io.stdout()).not.toContain('Report: raw-sources');
     expect(io.stdout()).not.toContain('live-database');
+  });
+
+  it('delegates interactive TTY public ingest to the foreground context-build view', async () => {
+    const io = makeIo({ isTTY: true, interactive: true });
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const runContextBuild = vi.fn(async () => ({ exitCode: 0 }));
+    const runScan = vi.fn(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'auto',
+          depth: 'fast',
+          queryHistory: 'default',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runContextBuild, runScan },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runContextBuild).toHaveBeenCalledWith(
+      project,
+      expect.objectContaining({
+        projectDir: '/tmp/project',
+        targetConnectionId: 'warehouse',
+        all: false,
+        depth: 'fast',
+        queryHistory: 'default',
+      }),
+      io.io,
+    );
+    expect(runScan).not.toHaveBeenCalled();
   });
 
   it('runs all independent targets and reports partial failures', async () => {

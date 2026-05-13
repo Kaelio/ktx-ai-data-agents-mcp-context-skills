@@ -39,6 +39,11 @@ export interface ContextBuildViewState {
 export interface ContextBuildArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
+  targetConnectionId?: string;
+  all?: boolean;
+  depth?: Extract<KtxPublicIngestArgs, { command: 'run' }>['depth'];
+  queryHistory?: Extract<KtxPublicIngestArgs, { command: 'run' }>['queryHistory'];
+  queryHistoryWindowDays?: number;
   scanMode?: 'structural' | 'enriched';
   detectRelationships?: boolean;
 }
@@ -565,7 +570,15 @@ export async function runContextBuild(
   io: KtxCliIo,
   deps: ContextBuildDeps = {},
 ): Promise<ContextBuildResult> {
-  const plan = buildPublicIngestPlan(project, { projectDir: args.projectDir, all: true });
+  const plan = buildPublicIngestPlan(project, {
+    projectDir: args.projectDir,
+    ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
+    all: args.all ?? true,
+    ...(args.depth ? { depth: args.depth } : {}),
+    ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
+    ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+    ...(args.scanMode ? { scanMode: args.scanMode } : {}),
+  });
   const state = initViewState(plan.targets);
   const isTTY = io.stdout.isTTY === true;
   const nowFn = deps.now ?? (() => Date.now());
@@ -614,11 +627,15 @@ export async function runContextBuild(
   const runArgs: Extract<KtxPublicIngestArgs, { command: 'run' }> = {
     command: 'run',
     projectDir: args.projectDir,
-    all: true,
+    ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
+    all: args.all ?? true,
     json: false,
     inputMode: args.inputMode,
-    scanMode: args.scanMode,
-    detectRelationships: args.detectRelationships,
+    ...(args.depth ? { depth: args.depth } : {}),
+    ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
+    ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+    ...(args.scanMode ? { scanMode: args.scanMode } : {}),
+    ...(args.detectRelationships !== undefined ? { detectRelationships: args.detectRelationships } : {}),
   };
 
   let hasFailure = false;

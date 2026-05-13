@@ -428,6 +428,43 @@ describe('runContextBuild', () => {
     expect(callOrder).toEqual(['warehouse', 'dbt_main']);
   });
 
+  it('runs only the requested connection when foreground build receives a target', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+      docs: { driver: 'notion' },
+    });
+    const executeTarget = vi.fn(async (target) =>
+      successResult(target.connectionId, target.driver, target.operation),
+    );
+
+    await expect(
+      runContextBuild(
+        project,
+        {
+          projectDir: '/tmp/project',
+          inputMode: 'disabled',
+          targetConnectionId: 'warehouse',
+          all: false,
+          depth: 'fast',
+          queryHistory: 'default',
+        },
+        io.io,
+        { executeTarget, now: () => 1000 },
+      ),
+    ).resolves.toMatchObject({ exitCode: 0 });
+
+    expect(executeTarget).toHaveBeenCalledTimes(1);
+    expect(executeTarget.mock.calls[0]?.[0]).toMatchObject({
+      connectionId: 'warehouse',
+      operation: 'database-ingest',
+      databaseDepth: 'fast',
+    });
+    expect(io.stdout()).toContain('Databases:');
+    expect(io.stdout()).toContain('warehouse');
+    expect(io.stdout()).not.toContain('docs');
+  });
+
   it('returns exit code 1 when any target fails', async () => {
     const io = makeIo();
     const project = projectWithConnections({

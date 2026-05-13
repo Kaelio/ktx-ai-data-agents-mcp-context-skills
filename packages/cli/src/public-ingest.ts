@@ -86,8 +86,25 @@ export interface KtxPublicIngestDeps {
   loadProject?: (options: Parameters<typeof loadKtxProject>[0]) => Promise<KtxPublicIngestProject>;
   runScan?: (args: KtxScanArgs, io: KtxCliIo, deps?: KtxScanDeps) => Promise<number>;
   runIngest?: (args: KtxIngestArgs, io: KtxCliIo, deps?: KtxIngestDeps) => Promise<number>;
+  runContextBuild?: (
+    project: KtxPublicIngestProject,
+    args: KtxPublicContextBuildArgs,
+    io: KtxCliIo,
+  ) => Promise<{ exitCode: number }>;
   scanProgress?: KtxProgressPort;
   ingestProgress?: (update: KtxIngestProgressUpdate) => void;
+}
+
+interface KtxPublicContextBuildArgs {
+  projectDir: string;
+  inputMode: 'auto' | 'disabled';
+  targetConnectionId?: string;
+  all?: boolean;
+  depth?: KtxPublicIngestDepth;
+  queryHistory?: KtxPublicIngestQueryHistoryFlag;
+  queryHistoryWindowDays?: number;
+  scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
+  detectRelationships?: boolean;
 }
 
 const sourceAdapterByDriver = new Map<string, string>([
@@ -455,6 +472,13 @@ function sourceIngestOutputMode(args: Extract<KtxPublicIngestArgs, { command: 'r
   return args.inputMode === 'auto' && io.stdout.isTTY === true && hasInteractiveInput(io) ? 'viz' : 'plain';
 }
 
+function shouldUseForegroundContextBuildView(
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
+  io: KtxCliIo,
+): boolean {
+  return args.inputMode === 'auto' && args.json !== true && io.stdout.isTTY === true && hasInteractiveInput(io);
+}
+
 interface CapturedPublicIngestIo extends KtxCliIo {
   capturedOutput(): string;
 }
@@ -597,6 +621,27 @@ export async function runKtxPublicIngest(
 
   const loadProject = deps.loadProject ?? loadKtxProject;
   const project = await loadProject({ projectDir: args.projectDir });
+  if (shouldUseForegroundContextBuildView(args, io)) {
+    const { runContextBuild } = await import('./context-build-view.js');
+    const contextBuild = deps.runContextBuild ?? runContextBuild;
+    const result = await contextBuild(
+      project,
+      {
+        projectDir: args.projectDir,
+        ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
+        all: args.all,
+        inputMode: args.inputMode,
+        ...(args.depth ? { depth: args.depth } : {}),
+        ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
+        ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+        ...(args.scanMode ? { scanMode: args.scanMode } : {}),
+        ...(args.detectRelationships !== undefined ? { detectRelationships: args.detectRelationships } : {}),
+      },
+      io,
+    );
+    return result.exitCode;
+  }
+
   const plan = buildPublicIngestPlan(project, args);
   const results: KtxPublicIngestTargetResult[] = [];
 
