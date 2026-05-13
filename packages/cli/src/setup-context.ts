@@ -446,7 +446,21 @@ async function readLatestScanReport(projectDir: string, connectionId: string): P
   return reports.at(-1)?.report ?? null;
 }
 
-function scanReportHasCompletedDescriptionEnrichment(report: unknown, connectionId: string): boolean {
+function scanReportHasSchemaManifest(report: unknown, connectionId: string): boolean {
+  if (!isRecord(report)) {
+    return false;
+  }
+  if (report.connectionId !== connectionId || report.dryRun === true) {
+    return false;
+  }
+  return stringArrayValue(isRecord(report.artifactPaths) ? report.artifactPaths.manifestShards : undefined).length > 0;
+}
+
+function scanReportHasCompletedDeepEnrichment(
+  report: unknown,
+  connectionId: string,
+  relationshipsRequired: boolean,
+): boolean {
   if (!isRecord(report)) {
     return false;
   }
@@ -463,39 +477,39 @@ function scanReportHasCompletedDescriptionEnrichment(report: unknown, connection
     report.enrichment.embeddings === 'completed' &&
     completedStages.includes('descriptions') &&
     completedStages.includes('embeddings') &&
+    (!relationshipsRequired || completedStages.includes('relationships')) &&
     stringArrayValue(report.artifactPaths.manifestShards).length > 0
   );
 }
 
-function scanReportHasCompletedSchemaManifest(report: unknown, connectionId: string): boolean {
-  if (!isRecord(report)) {
-    return false;
+function scanReportSatisfiesDepth(input: {
+  report: unknown;
+  connectionId: string;
+  depth: KtxDatabaseContextDepth;
+  relationshipsRequired: boolean;
+}): boolean {
+  if (input.depth === 'fast') {
+    return scanReportHasSchemaManifest(input.report, input.connectionId);
   }
-  if (report.connectionId !== connectionId || report.dryRun === true) {
-    return false;
-  }
-  if (!isRecord(report.artifactPaths)) {
-    return false;
-  }
-  return stringArrayValue(report.artifactPaths.manifestShards).length > 0;
+  return scanReportHasCompletedDeepEnrichment(input.report, input.connectionId, input.relationshipsRequired);
 }
 
 async function verifyPrimarySourceScans(
   project: KtxLocalProject,
-  projectDir: string,
   connectionIds: string[],
 ): Promise<{ ready: boolean; details: string[] }> {
   const details: string[] = [];
+  const relationshipsRequired = project.config.scan.relationships.enabled;
   for (const connectionId of connectionIds) {
     const connection = project.config.connections[connectionId];
     const depth = connection ? (databaseContextDepth(connection) ?? 'fast') : 'fast';
-    const report = await readLatestScanReport(projectDir, connectionId);
-    const ready =
-      depth === 'fast'
-        ? scanReportHasCompletedSchemaManifest(report, connectionId)
-        : scanReportHasCompletedDescriptionEnrichment(report, connectionId);
-    if (!ready) {
-      details.push(`${connectionId}: enriched database scan with AI descriptions has not completed.`);
+    const report = await readLatestScanReport(project.projectDir, connectionId);
+    if (!scanReportSatisfiesDepth({ report, connectionId, depth, relationshipsRequired })) {
+      details.push(
+        depth === 'fast'
+          ? `${connectionId}: schema context has not completed.`
+          : `${connectionId}: deep database context has not completed.`,
+      );
     }
   }
   return { ready: details.length === 0, details };
@@ -504,7 +518,7 @@ async function verifyPrimarySourceScans(
 async function defaultVerifyContextReady(projectDir: string): Promise<KtxSetupContextReadiness> {
   const project = await loadKtxProject({ projectDir });
   const targets = listContextTargets(project);
-  const primarySourceScans = await verifyPrimarySourceScans(project, projectDir, targets.primarySourceConnectionIds);
+  const primarySourceScans = await verifyPrimarySourceScans(project, targets.primarySourceConnectionIds);
   const semanticLayerContextReady = await hasFileWithExtension(
     join(projectDir, 'semantic-layer'),
     new Set(['.yaml', '.yml']),
@@ -560,14 +574,21 @@ function writeSkippedContext(projectDir: string, io: KtxCliIo): void {
   io.stdout.write(`Check status:\n  ktx status --project-dir ${resolve(projectDir)}\n`);
 }
 
-function writeSuccess(readiness: KtxSetupContextReadiness, targets: KtxSetupContextTargets, io: KtxCliIo): void {
+function writeSuccess(
+  project: KtxLocalProject,
+  readiness: KtxSetupContextReadiness,
+  targets: KtxSetupContextTargets,
+  io: KtxCliIo,
+): void {
   io.stdout.write('\nKTX context is ready for agents.\n\n');
   io.stdout.write('Primary sources:\n');
   if (targets.primarySourceConnectionIds.length === 0) {
     io.stdout.write('  none\n');
   } else {
     for (const connectionId of targets.primarySourceConnectionIds) {
-      io.stdout.write(`  ${connectionId}: enriched scan complete\n`);
+      const connection = project.config.connections[connectionId];
+      const depth = connection ? (databaseContextDepth(connection) ?? 'fast') : 'fast';
+      io.stdout.write(`  ${connectionId}: ${depth === 'deep' ? 'deep context complete' : 'schema context complete'}\n`);
     }
   }
   io.stdout.write('\nContext sources:\n');
@@ -727,7 +748,7 @@ async function runBuild(
     retryableFailedTargets: [],
     ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
   });
-  writeSuccess(readiness, targets, io);
+  writeSuccess(project, readiness, targets, io);
   return { status: 'ready', projectDir: args.projectDir, runId };
 }
 

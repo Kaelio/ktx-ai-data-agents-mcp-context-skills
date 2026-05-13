@@ -45,7 +45,7 @@ async function writeReadyProject(projectDir: string, overrides: Partial<KtxProje
     ...defaults,
     setup: { database_connection_ids: ['warehouse'] },
     connections: {
-      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL', context: { depth: 'deep' } },
       docs: { driver: 'notion', auth_token_ref: 'env:NOTION_TOKEN', crawl_mode: 'all_accessible' },
     },
     llm: {
@@ -117,6 +117,8 @@ async function writeScanReport(
     columnDescriptions: string;
     embeddings: string;
     manifestShards?: string[];
+    completedStages?: string[];
+    relationships?: { accepted: number; review: number; rejected: number; skipped: number };
   },
 ) {
   const reportDir = join(projectDir, 'raw-sources', 'warehouse', 'live-database', syncId);
@@ -139,9 +141,11 @@ async function writeScanReport(
           tableDescriptions: report.tableDescriptions,
           columnDescriptions: report.columnDescriptions,
           embeddings: report.embeddings,
+          ...(report.relationships ? { relationships: report.relationships } : {}),
         },
         enrichmentState: {
-          completedStages: report.tableDescriptions === 'completed' ? ['descriptions', 'embeddings'] : [],
+          completedStages:
+            report.completedStages ?? (report.tableDescriptions === 'completed' ? ['descriptions', 'embeddings'] : []),
           failedStages: report.tableDescriptions === 'failed' ? ['descriptions'] : [],
         },
         createdAt: syncId,
@@ -152,12 +156,19 @@ async function writeScanReport(
   );
 }
 
-async function writeReadyEnrichedScanReport(projectDir: string, syncId = '2026-05-09T10:00:00.000Z') {
+async function writeReadyEnrichedScanReport(
+  projectDir: string,
+  syncId = '2026-05-09T10:00:00.000Z',
+  overrides: Partial<Parameters<typeof writeScanReport>[2]> = {},
+) {
   await writeScanReport(projectDir, syncId, {
     mode: 'enriched',
     tableDescriptions: 'completed',
     columnDescriptions: 'completed',
     embeddings: 'completed',
+    completedStages: ['descriptions', 'embeddings', 'relationships'],
+    relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+    ...overrides,
   });
 }
 
@@ -502,6 +513,65 @@ describe('setup context build state', () => {
     );
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse.context).toMatchObject({ depth: 'deep' });
+  });
+
+  it('requires completed relationships for deep context when relationship discovery is enabled', async () => {
+    await writeReadyProject(tempDir, {
+      connections: {
+        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'deep' } },
+      },
+      scan: { relationships: { enabled: true } },
+    });
+    await mkdir(join(tempDir, 'semantic-layer', 'dbt-main'), { recursive: true });
+    await writeFile(join(tempDir, 'semantic-layer', 'dbt-main', 'mart_revenue_daily.yaml'), 'name: mart_revenue_daily\n');
+    await writeReadyEnrichedScanReport(tempDir, '2026-05-09T10:00:00.000Z', {
+      completedStages: ['descriptions', 'embeddings'],
+      relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => {
+      await writeReadyEnrichedScanReport(tempDir, '2026-05-09T10:01:00.000Z', {
+        completedStages: ['descriptions', 'embeddings', 'relationships'],
+        relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+      });
+      return { exitCode: 0 };
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        { runContextBuild: runContextBuildMock },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(runContextBuildMock).toHaveBeenCalledOnce();
+  });
+
+  it('does not require relationships for deep context when relationship discovery is disabled', async () => {
+    await writeReadyProject(tempDir, {
+      connections: {
+        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'deep' } },
+      },
+      scan: { relationships: { enabled: false } },
+    });
+    await mkdir(join(tempDir, 'semantic-layer', 'dbt-main'), { recursive: true });
+    await writeFile(join(tempDir, 'semantic-layer', 'dbt-main', 'mart_revenue_daily.yaml'), 'name: mart_revenue_daily\n');
+    await writeReadyEnrichedScanReport(tempDir, '2026-05-09T10:00:00.000Z', {
+      completedStages: ['descriptions', 'embeddings'],
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        { runContextBuild: runContextBuildMock },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(runContextBuildMock).not.toHaveBeenCalled();
   });
 
   it('refuses empty setup context builds', async () => {
