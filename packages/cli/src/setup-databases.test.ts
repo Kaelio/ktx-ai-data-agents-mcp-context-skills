@@ -1075,7 +1075,7 @@ describe('setup databases step', () => {
       initialValues: ['orbit_analytics', 'orbit_raw'],
       required: true,
     });
-    expect(String(prompts.multiselect.mock.calls[0]?.[0].message)).not.toContain('to scan');
+    expect(String(vi.mocked(prompts.multiselect).mock.calls[0]?.[0].message)).not.toContain('to scan');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections['postgres-warehouse']).toMatchObject({
       schemas: ['orbit_analytics', 'orbit_raw'],
