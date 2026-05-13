@@ -36,7 +36,7 @@ Use this when you need to understand how a source is built — e.g., before edit
 
 <when_not_to_use>
 - To discover what sources/measures/dimensions are available for querying — use sl_discover instead
-- To query data — use semantic_query or create_widget with slQuery
+- To query data — use the semantic-layer query surface (\`sl_query\` in MCP)
 </when_not_to_use>`;
   }
 

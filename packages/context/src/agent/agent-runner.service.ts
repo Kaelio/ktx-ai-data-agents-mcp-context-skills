@@ -73,6 +73,9 @@ export class AgentRunnerService {
         temperature: 0,
         stopWhen: stepCountIs(params.stepBudget),
         experimental_telemetry: this.deps.telemetry?.createTelemetry(params.telemetryTags),
+        experimental_repairToolCall: this.deps.llmProvider.repairToolCallHandler({
+          source: params.telemetryTags.operationName ?? 'ktx-agent-runner',
+        }),
         messages: built.messages,
         tools: built.tools as Record<string, Tool>,
         onStepFinish: async () => {

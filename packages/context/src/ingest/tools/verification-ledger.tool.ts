@@ -28,7 +28,7 @@ const WRITE_TOOL_NAMES = new Set([
 ]);
 
 export const VERIFICATION_LEDGER_PROMPT = `<pre_write_verification>
-Before any write-capable tool call (wiki_write, wiki_remove, sl_write_source, sl_edit_source, emit_unmapped_fallback), call record_verification_ledger.
+Before any durable wiki, semantic-layer, or unmapped-fallback write (wiki_write, wiki_remove, sl_write_source, sl_edit_source, emit_unmapped_fallback), call record_verification_ledger.
 The ledger is a model-authored checkpoint, not a deterministic parser gate. Summarize the verification protocol from the loaded skill, list identifiers verified with discover_data/entity_details/sql_execution, and list anything intentionally left unverified. If the write contains no warehouse identifiers, say that explicitly.
 If a write tool returns verification_ledger_required, complete the ledger and retry the write.
 </pre_write_verification>`;
