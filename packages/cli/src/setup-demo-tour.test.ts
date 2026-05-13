@@ -209,7 +209,7 @@ describe('runDemoTour', () => {
       },
     );
     expect(result).toBe(0);
-    // Navigation called once for databases step, then exits
+    // Navigation called once for intro, then exits on back
     expect(navigation).toHaveBeenCalledTimes(1);
   });
 
@@ -218,10 +218,11 @@ describe('runDemoTour', () => {
     let callCount = 0;
     const navigation = vi.fn().mockImplementation(() => {
       callCount++;
-      // First call (databases): forward
-      // Second call (sources): back
-      // Third call (databases again): back (exit)
-      if (callCount === 1) return Promise.resolve('forward');
+      // First call (intro): forward
+      // Second call (databases): forward
+      // Third call (sources): back
+      // Fourth call (databases again): back (exit)
+      if (callCount <= 2) return Promise.resolve('forward');
       return Promise.resolve('back');
     });
 
@@ -235,7 +236,7 @@ describe('runDemoTour', () => {
       },
     );
     expect(result).toBe(0);
-    expect(navigation).toHaveBeenCalledTimes(3);
+    expect(navigation).toHaveBeenCalledTimes(4);
   });
 
   it('handles agent step returning back', async () => {
@@ -243,10 +244,10 @@ describe('runDemoTour', () => {
     let navCount = 0;
     const navigation = vi.fn().mockImplementation(() => {
       navCount++;
-      // Forward through databases, sources, context
+      // Forward through intro, databases, sources, context
       // Then back from context (after agents returns back)
       // Then back from sources, then back from databases (exit)
-      if (navCount <= 3) return Promise.resolve('forward');
+      if (navCount <= 4) return Promise.resolve('forward');
       return Promise.resolve('back');
     });
 

@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cancel, isCancel, multiselect, select } from '@clack/prompts';
+import { cancel, confirm, isCancel, multiselect, select } from '@clack/prompts';
 import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
@@ -277,12 +277,23 @@ function createPromptAdapter(): KtxSetupAgentsPromptAdapter {
       return String(value);
     },
     async multiselect(options) {
-      const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return ['back'];
+      while (true) {
+        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
+        if (isCancel(value)) {
+          cancel('Setup cancelled.');
+          return ['back'];
+        }
+        const selected = [...value] as string[];
+        if (selected.length === 0 && !options.required) {
+          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
+          if (isCancel(skipConfirmed)) {
+            cancel('Setup cancelled.');
+            return ['back'];
+          }
+          if (!skipConfirmed) continue;
+        }
+        return selected;
       }
-      return [...value] as string[];
     },
     cancel(message) {
       cancel(message);
@@ -375,7 +386,7 @@ export async function runKtxSetupAgentsStep(
   deps: KtxSetupAgentsDeps = {},
 ): Promise<KtxSetupAgentsResult> {
   if (args.skipAgents) {
-    io.stdout.write('Agent integration skipped.\n');
+    io.stdout.write('│  Agent integration skipped.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
   if (!args.agents && args.inputMode === 'disabled') {
@@ -391,10 +402,9 @@ export async function runKtxSetupAgentsStep(
           options: [
             { value: 'cli', label: 'CLI tools and skills' },
             { value: 'skip', label: 'Skip' },
-            { value: 'back', label: 'Back' },
           ],
         })) as KtxAgentInstallMode | 'skip' | 'back');
-  if (mode === 'back') return { status: 'back', projectDir: args.projectDir };
+  if (mode === 'back') return { status: 'skipped', projectDir: args.projectDir };
   if (mode === 'skip') return { status: 'skipped', projectDir: args.projectDir };
 
   const targets =

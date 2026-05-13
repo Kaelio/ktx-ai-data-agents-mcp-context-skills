@@ -312,7 +312,7 @@ describe('setup Anthropic model step', () => {
     expect(result.status).toBe('ready');
     expect(prompts.select).not.toHaveBeenCalledWith(expect.objectContaining({ message: 'Paste Anthropic API key now?' }));
     expect(prompts.password).toHaveBeenCalledWith({
-      message: 'Anthropic API key\nPress Escape to go back.\n',
+      message: 'Anthropic API key\n│  Press Escape to go back.\n│',
     });
   });
 
@@ -464,7 +464,7 @@ describe('setup Anthropic model step', () => {
     );
     expect(prompts.text).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Anthropic model ID\nPress Escape to go back.\n',
+        message: 'Anthropic model ID\n│  Press Escape to go back.\n│',
         placeholder: 'claude-sonnet-4-6',
       }),
     );
@@ -629,7 +629,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('ready');
     expect(prompts.password).toHaveBeenCalledWith({
-      message: 'Anthropic API key\nPress Escape to go back.\n',
+      message: 'Anthropic API key\n│  Press Escape to go back.\n│',
     });
     await expect(readFile(join(tempDir, '.ktx/secrets/anthropic-api-key'), 'utf-8')).rejects.toMatchObject({
       code: 'ENOENT',

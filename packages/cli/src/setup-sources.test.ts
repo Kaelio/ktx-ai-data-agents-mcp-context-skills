@@ -66,10 +66,10 @@ function connectionNamePrompt(label: string): string {
 function textInputPrompt(message: string): string {
   const normalized = message.replace(/\n+$/, '');
   if (!normalized.includes('\n')) {
-    return `${normalized}\nPress Escape to go back.\n`;
+    return `${normalized}\n│  Press Escape to go back.\n│`;
   }
   const [title, ...bodyLines] = normalized.split('\n');
-  return `${title}\n\n${bodyLines.join('\n')}\nPress Escape to go back.\n`;
+  return `${title}\n│\n│  ${bodyLines.join('\n│  ')}\n│  Press Escape to go back.\n│`;
 }
 
 describe('setup sources step', () => {
@@ -664,7 +664,7 @@ describe('setup sources step', () => {
     expect(runInitialIngest).toHaveBeenCalledTimes(1);
     expect((await readConfig()).connections['dbt-main']).toMatchObject({ driver: 'dbt', source_dir: '/repo/dbt' });
     expect(io.stdout()).toContain('Context source saved without a completed context build for dbt-main.');
-    expect(io.stdout()).toContain('Run later: ktx ingest dbt-main');
+    expect(io.stdout()).toContain('Run later: ktx ingest run --connection-id dbt-main --adapter <adapter>');
   });
 
   it('retries initial source ingest from the failure menu', async () => {

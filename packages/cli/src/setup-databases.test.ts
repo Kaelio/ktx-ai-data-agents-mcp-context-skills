@@ -58,10 +58,10 @@ function connectionNamePrompt(label: string): string {
 function textInputPrompt(message: string): string {
   const normalized = message.replace(/\n+$/, '');
   if (!normalized.includes('\n')) {
-    return `${normalized}\nPress Escape to go back.\n`;
+    return `${normalized}\n│  Press Escape to go back.\n│`;
   }
   const [title, ...bodyLines] = normalized.split('\n');
-  return `${title}\n\n${bodyLines.join('\n')}\nPress Escape to go back.\n`;
+  return `${title}\n│\n│  ${bodyLines.join('\n│  ')}\n│  Press Escape to go back.\n│`;
 }
 
 const legacyHistoricSqlServiceAccountPatternsKey = ['serviceAccount', 'UserPatterns'].join('');
@@ -142,8 +142,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'How do you want to connect to PostgreSQL?',
       options: [
-        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'url', label: 'Paste a connection URL' },
+        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -152,6 +152,43 @@ describe('setup databases step', () => {
       'Which primary sources should KTX connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
     );
+  });
+
+  it('offers connection URL paste first for URL-capable primary sources', async () => {
+    const cases: Array<{ driver: KtxSetupDatabaseDriver; label: string }> = [
+      { driver: 'postgres', label: 'PostgreSQL' },
+      { driver: 'mysql', label: 'MySQL' },
+      { driver: 'clickhouse', label: 'ClickHouse' },
+      { driver: 'sqlserver', label: 'SQL Server' },
+    ];
+
+    for (const testCase of cases) {
+      const prompts = makePromptAdapter({
+        selectValues: ['back'],
+      });
+
+      const result = await runKtxSetupDatabasesStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'auto',
+          databaseDrivers: [testCase.driver],
+          skipDatabases: false,
+          databaseSchemas: [],
+        },
+        makeIo().io,
+        { prompts },
+      );
+
+      expect(result.status).toBe('back');
+      expect(prompts.select).toHaveBeenCalledWith({
+        message: `How do you want to connect to ${testCase.label}?`,
+        options: [
+          { value: 'url', label: 'Paste a connection URL' },
+          { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
+          { value: 'back', label: 'Back' },
+        ],
+      });
+    }
   });
 
   it('lets Back leave database setup when the driver came from flags', async () => {
@@ -488,8 +525,8 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(1, {
       message: 'How do you want to connect to PostgreSQL?',
       options: [
-        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'url', label: 'Paste a connection URL' },
+        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -534,7 +571,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
     expect(testConnection).not.toHaveBeenCalled();
@@ -585,7 +621,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
     expect(testConnection).toHaveBeenCalledTimes(1);
@@ -620,7 +655,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -655,7 +689,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
   });
@@ -698,7 +731,6 @@ describe('setup databases step', () => {
       options: [
         { value: 'continue', label: 'Continue to knowledge sources' },
         { value: 'add', label: 'Add another primary source' },
-        { value: 'back', label: 'Back' },
       ],
     });
   });
@@ -918,10 +950,11 @@ describe('setup databases step', () => {
       [
         '◇  Testing postgres-warehouse',
         '│  ✓ Connection test passed',
-        '│  Driver: PostgreSQL · Tables: 2',
+        '│  Driver: PostgreSQL',
         '│',
       ].join('\n'),
     );
+    expect(io.stdout()).not.toContain('Tables: 2');
     expect(io.stdout()).toContain(
       [
         '◇  Scanning postgres-warehouse',

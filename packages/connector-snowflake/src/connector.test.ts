@@ -60,6 +60,10 @@ function fakeDriverFactory(): KtxSnowflakeDriverFactory {
       },
     ]),
     listSchemas: vi.fn(async () => ['PUBLIC', 'MART']),
+    listTables: vi.fn(async () => [
+      { schema: 'PUBLIC', name: 'ORDERS', kind: 'table' as const },
+      { schema: 'PUBLIC', name: 'ORDER_SUMMARY', kind: 'view' as const },
+    ]),
     cleanup: vi.fn(async () => undefined),
   };
   return { createDriver: vi.fn(() => driver) };

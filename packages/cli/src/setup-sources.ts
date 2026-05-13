@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cancel, isCancel, log, multiselect, password, select, text } from '@clack/prompts';
+import { cancel, confirm, isCancel, log, multiselect, password, select, text } from '@clack/prompts';
 import { localConnectionTypeForConfig, resolveNotionAuthToken } from '@ktx/context/connections';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
@@ -136,12 +136,23 @@ const PRIMARY_SOURCE_DRIVERS = new Set([
 function createPromptAdapter(): KtxSetupSourcesPromptAdapter {
   return {
     async multiselect(options) {
-      const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return ['back'];
+      while (true) {
+        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
+        if (isCancel(value)) {
+          cancel('Setup cancelled.');
+          return ['back'];
+        }
+        const selected = [...value] as string[];
+        if (selected.length === 0 && !options.required) {
+          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
+          if (isCancel(skipConfirmed)) {
+            cancel('Setup cancelled.');
+            return ['back'];
+          }
+          if (!skipConfirmed) continue;
+        }
+        return selected;
       }
-      return [...value] as string[];
     },
     async select(options) {
       const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
@@ -699,7 +710,7 @@ async function runInitialSourceIngestWithRecovery(input: {
   deps: KtxSetupSourcesDeps;
 }): Promise<'ready' | 'continue' | 'back' | 'failed'> {
   while (true) {
-    input.io.stdout.write(`Building context from ${input.connectionId}. Large sources can take a while.\n`);
+    input.io.stdout.write(`│  Building context from ${input.connectionId}. Large sources can take a while.\n`);
     const ingestCode = await (input.deps.runInitialIngest ?? defaultRunInitialIngest)(
       input.args.projectDir,
       input.connectionId,
@@ -727,8 +738,8 @@ async function runInitialSourceIngestWithRecovery(input: {
       continue;
     }
     if (action === 'continue') {
-      input.io.stdout.write(`Context source saved without a completed context build for ${input.connectionId}.\n`);
-      input.io.stdout.write(`Run later: ktx ingest run --connection-id ${input.connectionId} --adapter <adapter>\n`);
+      input.io.stdout.write(`│  Context source saved without a completed context build for ${input.connectionId}.\n`);
+      input.io.stdout.write(`│  Run later: ktx ingest run --connection-id ${input.connectionId} --adapter <adapter>\n`);
       return 'continue';
     }
     return 'back';
@@ -1355,7 +1366,7 @@ export async function runKtxSetupSourcesStep(
   try {
     if (args.skipSources) {
       await markSourcesComplete(args.projectDir);
-      io.stdout.write('Context source setup skipped.\n');
+      io.stdout.write('│  Context source setup skipped.\n');
       return { status: 'skipped', projectDir: args.projectDir };
     }
 
@@ -1368,7 +1379,7 @@ export async function runKtxSetupSourcesStep(
         return { status: 'failed', projectDir: args.projectDir };
       }
       if (args.inputMode !== 'disabled') {
-        io.stdout.write(`${message}\n`);
+        io.stdout.write(`│  ${message}\n`);
         return { status: 'skipped', projectDir: args.projectDir };
       }
     }
@@ -1392,7 +1403,7 @@ export async function runKtxSetupSourcesStep(
           return { status: 'missing-input', projectDir: args.projectDir };
         }
         await markSourcesComplete(args.projectDir);
-        io.stdout.write('No context sources selected.\n');
+        io.stdout.write('│  No context sources selected.\n');
         return { status: 'skipped', projectDir: args.projectDir };
       }
 
@@ -1465,7 +1476,7 @@ export async function runKtxSetupSourcesStep(
             break;
           }
         } else {
-          io.stdout.write(`Context source ${connectionId} saved. It will be built during the context build step.\n`);
+          io.stdout.write(`│  Context source ${connectionId} saved. It will be built during the context build step.\n`);
         }
         readyConnectionIds.push(connectionId);
       }

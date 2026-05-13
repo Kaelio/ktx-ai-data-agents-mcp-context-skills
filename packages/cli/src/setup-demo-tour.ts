@@ -62,12 +62,15 @@ function createTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTarge
 // Pure rendering functions
 // ---------------------------------------------------------------------------
 
-export function renderDemoBanner(): string {
+export function renderDemoBanner(projectDir?: string): string {
   const lines = [
     '',
     `┌  ${cyan('Demo mode')} — data has been pre-processed and KTX context is already built.`,
     '│  This walkthrough illustrates the setup steps. Selections are pre-filled and read-only.',
   ];
+  if (projectDir) {
+    lines.push(`│  Project directory: ${dim(projectDir)}`);
+  }
   return lines.join('\n');
 }
 
@@ -144,16 +147,15 @@ export async function waitForDemoNavigation(
     };
 
     const onData = (data: Buffer) => {
-      const char = data.toString();
-      if (char === '\r' || char === '\n') {
-        cleanup();
-        resolve('forward');
-      } else if (char === '\x1b') {
-        cleanup();
-        resolve('back');
-      } else if (char === '\x03') {
+      if (data[0] === 0x03) {
         cleanup();
         reject(new KtxSetupExitError());
+      } else if (data[0] === 0x0d || data[0] === 0x0a) {
+        cleanup();
+        resolve('forward');
+      } else if (data[0] === 0x1b) {
+        cleanup();
+        resolve('back');
       }
     };
 
@@ -171,8 +173,9 @@ export async function renderDemoCard(
   io: KtxCliIo,
   stdin?: NodeJS.ReadStream,
   waitNav: (stdin?: NodeJS.ReadStream) => Promise<'forward' | 'back'> = waitForDemoNavigation,
+  projectDir?: string,
 ): Promise<'forward' | 'back'> {
-  io.stdout.write(renderDemoBanner() + '\n\n');
+  io.stdout.write(renderDemoBanner(projectDir) + '\n\n');
   io.stdout.write(renderDemoCardContent(title, selections) + '\n');
   return waitNav(stdin);
 }
@@ -337,6 +340,11 @@ export async function runDemoTour(
   const projectDir = defaultDemoProjectDir();
   await ensureProject({ projectDir, force: false });
 
+  io.stdout.write(renderDemoBanner(projectDir) + '\n');
+  io.stdout.write(`\n│  ${dim('Press Enter to continue, Escape to go back')}\n└\n`);
+  const introDirection = await waitNav();
+  if (introDirection === 'back') return 0;
+
   let stepIndex = 0;
 
   while (stepIndex < DEMO_STEPS.length) {
@@ -344,11 +352,11 @@ export async function runDemoTour(
     let direction: 'forward' | 'back';
 
     if (step === 'databases') {
-      direction = await renderDemoCard('Database connection', ['PostgreSQL — Orbit Analytics (56 tables, 2 schemas)'], io, undefined, waitNav);
+      direction = await renderDemoCard('Database connection', ['PostgreSQL — Orbit Analytics (56 tables, 2 schemas)'], io, undefined, waitNav, projectDir);
     } else if (step === 'sources') {
-      direction = await renderDemoCard('Context sources', ['dbt — 34 transformation models', 'Metabase — 80 dashboard cards', 'Notion — 9 knowledge pages'], io, undefined, waitNav);
+      direction = await renderDemoCard('Context sources', ['dbt — 34 transformation models', 'Metabase — 80 dashboard cards', 'Notion — 9 knowledge pages'], io, undefined, waitNav, projectDir);
     } else if (step === 'context') {
-      io.stdout.write(renderDemoBanner() + '\n\n');
+      io.stdout.write(renderDemoBanner(projectDir) + '\n\n');
       if (deps.skipReplayAnimation) {
         direction = await waitNav();
       } else {

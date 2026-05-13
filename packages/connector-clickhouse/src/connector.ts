@@ -16,6 +16,7 @@ import {
   type KtxSchemaTable,
   type KtxTableRef,
   type KtxTableSampleInput,
+  type KtxTableListEntry,
   type KtxTableSampleResult,
 } from '@ktx/context/scan';
 import { readFileSync } from 'node:fs';
@@ -126,6 +127,12 @@ interface ClickHouseRowCountRow {
 
 interface ClickHouseDatabaseRow {
   name: string;
+}
+
+interface ClickHouseTableListRow {
+  database: string;
+  name: string;
+  engine: string;
 }
 
 interface ClickHouseCompactResponse {
@@ -415,6 +422,25 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
       `,
     );
     return rows.map((row) => row.name);
+  }
+
+  async listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
+    const filterSchemas = schemas ?? (await this.listSchemas());
+    if (filterSchemas.length === 0) return [];
+    const rows = await this.queryEachRow<ClickHouseTableListRow>(
+      `
+      SELECT database, name, engine
+      FROM system.tables
+      WHERE database IN ({schemas:Array(String)})
+      ORDER BY database, name
+      `,
+      { schemas: filterSchemas },
+    );
+    return rows.map((row) => ({
+      schema: row.database,
+      name: row.name,
+      kind: row.engine === 'View' || row.engine === 'MaterializedView' ? ('view' as const) : ('table' as const),
+    }));
   }
 
   async cleanup(): Promise<void> {

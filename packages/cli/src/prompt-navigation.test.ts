@@ -28,12 +28,12 @@ describe('prompt navigation helpers', () => {
         'Name this PostgreSQL connection\nKTX will use this short name in commands and config. You can rename it now.',
       ),
     ).toBe(
-      'Name this PostgreSQL connection\n\nKTX will use this short name in commands and config. You can rename it now.\nPress Escape to go back.\n',
+      'Name this PostgreSQL connection\n│\n│  KTX will use this short name in commands and config. You can rename it now.\n│  Press Escape to go back.\n│',
     );
   });
 
   it('adds a blank separator before compact text input values', () => {
-    expect(withTextInputNavigation('Project folder path')).toBe('Project folder path\nPress Escape to go back.\n');
+    expect(withTextInputNavigation('Project folder path')).toBe('Project folder path\n│  Press Escape to go back.\n│');
   });
 
   it('normalizes already hinted text input prompts without duplicating the hint', () => {
@@ -42,7 +42,19 @@ describe('prompt navigation helpers', () => {
         'Name this PostgreSQL connection\nKTX will use this short name in commands and config. You can rename it now.\nPress Escape to go back.',
       ),
     ).toBe(
-      'Name this PostgreSQL connection\n\nKTX will use this short name in commands and config. You can rename it now.\nPress Escape to go back.\n',
+      'Name this PostgreSQL connection\n│\n│  KTX will use this short name in commands and config. You can rename it now.\n│  Press Escape to go back.\n│',
     );
+  });
+
+  it('is idempotent when text input navigation is applied twice', () => {
+    const once = withTextInputNavigation('Project folder path');
+    expect(withTextInputNavigation(once)).toBe(once);
+  });
+
+  it('is idempotent when text input navigation with body is applied twice', () => {
+    const once = withTextInputNavigation(
+      'Name this PostgreSQL connection\nKTX will use this short name in commands and config.',
+    );
+    expect(withTextInputNavigation(once)).toBe(once);
   });
 });

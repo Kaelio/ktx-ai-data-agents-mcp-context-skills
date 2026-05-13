@@ -142,10 +142,11 @@ describe('setup project step', () => {
     expect(result.projectDir).toBe(projectDir);
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Which KTX project should setup use?',
+        message: 'Where should KTX create the project?',
         options: [
-          expect.objectContaining({ value: 'current', label: 'Use current directory' }),
-          expect.objectContaining({ value: 'new', label: 'Create a new project folder' }),
+          expect.objectContaining({ value: 'current', label: 'Current directory' }),
+          expect.objectContaining({ value: 'new-default', label: 'New subfolder (./ktx-project)' }),
+          expect.objectContaining({ value: 'new-custom', label: 'Custom path' }),
           expect.objectContaining({ value: 'exit', label: 'Exit' }),
         ],
       }),
@@ -159,7 +160,7 @@ describe('setup project step', () => {
   it('offers an absolute default destination for a new project folder', async () => {
     const startDir = join(tempDir, 'start');
     const projectDir = join(startDir, 'ktx-project');
-    const prompts = makePromptAdapter({ choices: ['new', 'default', 'create'] });
+    const prompts = makePromptAdapter({ choices: ['new-default', 'create'] });
     const testIo = makeIo({ stdoutIsTty: true });
 
     const result = await runKtxSetupProjectStep(
@@ -171,33 +172,28 @@ describe('setup project step', () => {
     expect(result.status).toBe('ready');
     expect(result.projectDir).toBe(projectDir);
     expect(prompts.select).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         message: 'Where should KTX create the project?',
-        options: [
-          expect.objectContaining({
-            value: 'default',
-            label: `Create the default project folder: ${projectDir}`,
-          }),
-          expect.objectContaining({ value: 'custom', label: 'Enter a custom path' }),
-          expect.objectContaining({ value: 'back', label: 'Back' }),
-        ],
+        options: expect.arrayContaining([
+          expect.objectContaining({ value: 'new-default', label: 'New subfolder (./ktx-project)' }),
+        ]),
       }),
     );
     expect(prompts.select).toHaveBeenNthCalledWith(
-      3,
+      2,
       expect.objectContaining({ message: `Create KTX project at ${projectDir}?` }),
     );
     expect(prompts.text).not.toHaveBeenCalled();
     expect(result.status === 'ready' ? result.project.config.project : '').toBe('ktx-project');
-    expect(testIo.stdout()).toContain(`KTX will create:\n  ${projectDir}`);
+    expect(testIo.stdout()).toContain(`│  KTX will create:\n│    ${projectDir}`);
     await expect(stat(join(projectDir, 'ktx.yaml'))).resolves.toBeDefined();
   });
 
   it('prompts for a custom path and resolves it inside the current setup directory', async () => {
     const startDir = join(tempDir, 'start');
     const projectDir = join(startDir, 'analytics-ktx');
-    const prompts = makePromptAdapter({ choices: ['new', 'custom', 'create'], textValue: 'analytics-ktx' });
+    const prompts = makePromptAdapter({ choices: ['new-custom', 'create'], textValue: 'analytics-ktx' });
 
     const result = await runKtxSetupProjectStep(
       { projectDir: startDir, mode: 'auto', inputMode: 'auto', yes: false },
@@ -209,7 +205,7 @@ describe('setup project step', () => {
     expect(result.projectDir).toBe(projectDir);
     expect(prompts.text).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Project folder path\nPress Escape to go back.\n',
+        message: 'Project folder path\n│  Press Escape to go back.\n│',
         placeholder: './analytics-ktx, ~/analytics-ktx, or /Users/you/projects/analytics-ktx',
       }),
     );
@@ -220,7 +216,7 @@ describe('setup project step', () => {
     const startDir = join(tempDir, 'start');
     const homeDir = join(tempDir, 'home');
     const projectDir = join(homeDir, 'analytics-ktx');
-    const prompts = makePromptAdapter({ choices: ['new', 'custom', 'create'], textValue: '~/analytics-ktx' });
+    const prompts = makePromptAdapter({ choices: ['new-custom', 'create'], textValue: '~/analytics-ktx' });
 
     const result = await runKtxSetupProjectStep(
       { projectDir: startDir, mode: 'auto', inputMode: 'auto', yes: false },
@@ -238,7 +234,7 @@ describe('setup project step', () => {
     const homeDir = join(tempDir, 'home');
     const customProjectDir = join(homeDir, 'analytics-ktx');
     const prompts = makePromptAdapter({
-      choices: ['new', 'custom', 'back', 'exit'],
+      choices: ['new-custom', 'back', 'exit'],
       textValue: '~/analytics-ktx',
     });
 
@@ -251,7 +247,7 @@ describe('setup project step', () => {
     expect(result.status).toBe('cancelled');
     expect(result.projectDir).toBe(startDir);
     expect(prompts.select).toHaveBeenNthCalledWith(
-      3,
+      2,
       expect.objectContaining({
         message: `Create KTX project at ${customProjectDir}?`,
         options: [
@@ -262,15 +258,15 @@ describe('setup project step', () => {
       }),
     );
     expect(prompts.select).toHaveBeenNthCalledWith(
-      4,
-      expect.objectContaining({ message: 'Which KTX project should setup use?' }),
+      3,
+      expect.objectContaining({ message: 'Where should KTX create the project?' }),
     );
     await expect(stat(join(customProjectDir, 'ktx.yaml'))).rejects.toThrow();
   });
 
   it('rejects an empty new folder path without creating a project in the process cwd', async () => {
     const startDir = join(tempDir, 'start');
-    const prompts = makePromptAdapter({ choices: ['new', 'custom'], textValue: '   ' });
+    const prompts = makePromptAdapter({ choices: ['new-custom'], textValue: '   ' });
     const initProject = vi.fn(async () => {
       throw new Error('initProject should not run for an empty path');
     });
@@ -295,7 +291,7 @@ describe('setup project step', () => {
     const projectDir = join(startDir, 'analytics-ktx');
     await mkdir(projectDir, { recursive: true });
     await writeFile(join(projectDir, 'README.md'), 'Existing project notes\n', 'utf-8');
-    const prompts = makePromptAdapter({ choices: ['new', 'custom', 'use-existing'], textValue: 'analytics-ktx' });
+    const prompts = makePromptAdapter({ choices: ['new-custom', 'use-existing'], textValue: 'analytics-ktx' });
 
     const result = await runKtxSetupProjectStep(
       { projectDir: startDir, mode: 'auto', inputMode: 'auto', yes: false },
@@ -306,7 +302,7 @@ describe('setup project step', () => {
     expect(result.status).toBe('ready');
     expect(result.projectDir).toBe(projectDir);
     expect(prompts.select).toHaveBeenNthCalledWith(
-      3,
+      2,
       expect.objectContaining({
         message: `That folder already exists and is not empty: ${projectDir}`,
         options: expect.arrayContaining([
