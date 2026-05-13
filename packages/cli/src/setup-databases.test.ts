@@ -1032,7 +1032,7 @@ describe('setup databases step', () => {
     expect(result.status).toBe('ready');
     expect(listSchemas).toHaveBeenCalledWith(tempDir, 'postgres-warehouse');
     expect(prompts.multiselect).toHaveBeenCalledWith({
-      message: expect.stringContaining('PostgreSQL schemas to scan'),
+      message: expect.stringContaining('PostgreSQL schemas to include'),
       options: [
         { value: 'orbit_analytics', label: 'orbit_analytics' },
         { value: 'orbit_raw', label: 'orbit_raw' },
@@ -1041,6 +1041,7 @@ describe('setup databases step', () => {
       initialValues: ['orbit_analytics', 'orbit_raw'],
       required: true,
     });
+    expect(String(prompts.multiselect.mock.calls[0]?.[0].message)).not.toContain('to scan');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections['postgres-warehouse']).toMatchObject({
       schemas: ['orbit_analytics', 'orbit_raw'],

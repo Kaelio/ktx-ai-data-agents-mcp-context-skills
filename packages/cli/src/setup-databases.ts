@@ -1248,7 +1248,7 @@ async function maybeConfigureSchemaScope(input: {
     const initialValues = preconfigured.length > 0 ? preconfigured : spec.defaultSelection(discovered);
     const choices = await input.prompts.multiselect({
       message: withMultiselectNavigation(
-        `${spec.promptLabel} to scan\n` +
+        `${spec.promptLabel} to include\n` +
           `KTX found multiple ${spec.nounPlural}. Select every ${spec.noun} agents should use.`,
       ),
       options: discovered.map((v) => ({ value: v, label: v })),
