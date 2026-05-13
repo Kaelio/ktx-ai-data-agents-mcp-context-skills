@@ -238,6 +238,7 @@ describe('runKtxIngest', () => {
           connectionId: 'warehouse',
           adapter: 'historic-sql',
           sourceDir,
+          allowImplicitAdapter: true,
           outputMode: 'plain',
         },
         runIo.io,

@@ -145,8 +145,8 @@ describe('DEMO_REPLAY_TARGETS', () => {
     expect(DEMO_REPLAY_TARGETS.contextSources).toHaveLength(3);
   });
 
-  it('primary source is a scan operation', () => {
-    expect(DEMO_REPLAY_TARGETS.primarySources[0].operation).toBe('scan');
+  it('primary source is a database-ingest operation', () => {
+    expect(DEMO_REPLAY_TARGETS.primarySources[0].operation).toBe('database-ingest');
   });
 
   it('context sources are source-ingest operations', () => {

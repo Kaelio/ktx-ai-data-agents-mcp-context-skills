@@ -145,7 +145,7 @@ describe('setup context build state', () => {
       sourceProgress: [
         {
           connectionId: 'warehouse',
-          operation: 'scan',
+          operation: 'database-ingest',
           status: 'running',
           percent: 42,
           message: 'Generating descriptions 4/10 tables',
@@ -168,7 +168,7 @@ describe('setup context build state', () => {
       sourceProgress: [
         {
           connectionId: 'warehouse',
-          operation: 'scan',
+          operation: 'database-ingest',
           status: 'running',
           percent: 42,
           message: 'Generating descriptions 4/10 tables',
@@ -238,7 +238,7 @@ describe('setup context build state', () => {
     const io = makeIo();
     const runContextBuildMock = vi.fn(async (_project, _args, _io, hooks) => {
       hooks.onSourceProgress?.([
-        { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 1000 },
+        { connectionId: 'warehouse', operation: 'database-ingest', status: 'done', elapsedMs: 1000 },
         { connectionId: 'docs', operation: 'source-ingest', status: 'failed', elapsedMs: 2000 },
       ]);
       return {
@@ -268,7 +268,7 @@ describe('setup context build state', () => {
       artifactPaths: ['raw-sources/docs/notion/sync-1/ingest-report.json'],
       retryableFailedTargets: ['docs'],
       sourceProgress: [
-        { connectionId: 'warehouse', operation: 'scan', status: 'done', elapsedMs: 1000 },
+        { connectionId: 'warehouse', operation: 'database-ingest', status: 'done', elapsedMs: 1000 },
         { connectionId: 'docs', operation: 'source-ingest', status: 'failed', elapsedMs: 2000 },
       ],
     });
@@ -520,7 +520,7 @@ describe('setup context build state', () => {
       retryableFailedTargets: [],
       commands: contextBuildCommands(tempDir, 'setup-context-local-progress'),
       sourceProgress: [
-        { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 30000 },
+        { connectionId: 'warehouse', operation: 'database-ingest' as const, status: 'done' as const, elapsedMs: 30000 },
         { connectionId: 'docs', operation: 'source-ingest' as const, status: 'running' as const, startedAtMs: Date.now() - 5000 },
       ],
     });
@@ -539,7 +539,7 @@ describe('setup context build state', () => {
         retryableFailedTargets: [],
         commands: contextBuildCommands(tempDir, 'setup-context-local-progress'),
         sourceProgress: [
-          { connectionId: 'warehouse', operation: 'scan' as const, status: 'done' as const, elapsedMs: 30000 },
+          { connectionId: 'warehouse', operation: 'database-ingest' as const, status: 'done' as const, elapsedMs: 30000 },
           { connectionId: 'docs', operation: 'source-ingest' as const, status: 'done' as const, elapsedMs: 60000 },
         ],
       });
@@ -560,7 +560,7 @@ describe('setup context build state', () => {
 
     const output = io.stdout();
     expect(output).toContain('Building KTX context');
-    expect(output).toContain('Primary sources:');
+    expect(output).toContain('Databases:');
     expect(output).toContain('warehouse');
     expect(output).toContain('Context sources:');
     expect(output).toContain('docs');
@@ -583,7 +583,7 @@ describe('setup context build state', () => {
       sourceProgress: [
         {
           connectionId: 'warehouse',
-          operation: 'scan' as const,
+          operation: 'database-ingest' as const,
           status: 'running' as const,
           startedAtMs: Date.now() - 5000,
           percent: 35,
@@ -611,7 +611,7 @@ describe('setup context build state', () => {
         sourceProgress: [
           {
             connectionId: 'warehouse',
-            operation: 'scan' as const,
+            operation: 'database-ingest' as const,
             status: polls === 1 ? ('running' as const) : ('done' as const),
             startedAtMs: Date.now() - 5000,
             elapsedMs: polls === 1 ? undefined : 6000,
@@ -654,7 +654,7 @@ describe('setup context build state', () => {
       retryableFailedTargets: [],
       commands: contextBuildCommands(tempDir, 'setup-context-local-detach'),
       sourceProgress: [
-        { connectionId: 'warehouse', operation: 'scan' as const, status: 'running' as const, startedAtMs: Date.now() },
+        { connectionId: 'warehouse', operation: 'database-ingest' as const, status: 'running' as const, startedAtMs: Date.now() },
       ],
     });
     const io = makeIo();

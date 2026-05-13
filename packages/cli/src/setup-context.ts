@@ -199,7 +199,7 @@ function normalizeState(projectDir: string, value: unknown): KtxSetupContextStat
   };
 }
 
-const VALID_SOURCE_OPERATIONS = new Set(['scan', 'source-ingest']);
+const VALID_SOURCE_OPERATIONS = new Set(['database-ingest', 'source-ingest']);
 const VALID_SOURCE_STATUSES = new Set(['queued', 'running', 'done', 'failed']);
 
 function normalizeSourceProgress(value: unknown): ContextBuildSourceProgressUpdate[] | undefined {
@@ -213,7 +213,7 @@ function normalizeSourceProgress(value: unknown): ContextBuildSourceProgressUpda
     if (!VALID_SOURCE_STATUSES.has(String(rec.status))) continue;
     entries.push({
       connectionId: rec.connectionId,
-      operation: rec.operation as 'scan' | 'source-ingest',
+      operation: rec.operation as 'database-ingest' | 'source-ingest',
       status: rec.status as 'queued' | 'running' | 'done' | 'failed',
       ...(typeof rec.startedAtMs === 'number' ? { startedAtMs: rec.startedAtMs } : {}),
       ...(typeof rec.elapsedMs === 'number' ? { elapsedMs: rec.elapsedMs } : {}),
@@ -289,7 +289,7 @@ function listContextTargets(project: KtxLocalProject): KtxSetupContextTargets {
   const plan = buildPublicIngestPlan(project, { projectDir: project.projectDir, all: true });
   return {
     primarySourceConnectionIds: plan.targets
-      .filter((target) => target.operation === 'scan')
+      .filter((target) => target.operation === 'database-ingest')
       .map((target) => target.connectionId),
     contextSourceConnectionIds: plan.targets
       .filter((target) => target.operation === 'source-ingest')

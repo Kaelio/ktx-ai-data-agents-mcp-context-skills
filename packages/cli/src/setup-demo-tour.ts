@@ -30,7 +30,7 @@ function dim(text: string): string {
 
 function createDemoTarget(
   connectionId: string,
-  operation: 'scan' | 'source-ingest',
+  operation: 'database-ingest' | 'source-ingest',
   driver: string,
 ): KtxPublicIngestPlanTarget {
   const adapter = operation === 'source-ingest' ? driver : undefined;
@@ -40,9 +40,9 @@ function createDemoTarget(
     operation,
     ...(adapter ? { adapter } : {}),
     debugCommand: `ktx setup --project-dir <project-dir>`,
-    steps: operation === 'scan'
-      ? ['scan', 'enrich', 'memory-update']
-      : ['source-ingest', 'enrich', 'memory-update'],
+    steps: operation === 'database-ingest'
+      ? ['database-schema']
+      : ['source-ingest', 'memory-update'],
   };
 }
 
@@ -195,7 +195,7 @@ export interface DemoReplayEvent {
 
 export const DEMO_REPLAY_TARGETS = {
   primarySources: [
-    createDemoTarget('postgres-warehouse', 'scan', 'postgres'),
+    createDemoTarget('postgres-warehouse', 'database-ingest', 'postgres'),
   ],
   contextSources: [
     createDemoTarget('dbt-main', 'source-ingest', 'dbt'),

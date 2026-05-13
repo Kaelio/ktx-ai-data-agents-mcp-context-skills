@@ -47,7 +47,7 @@ function inputMode(options: OutputModeOptions): Pick<KtxIngestArgs, 'inputMode'>
   return options.input === false ? { inputMode: 'disabled' } : {};
 }
 
-function resolvedOptions<T extends object>(command: Command, fallback: T): T {
+function resolvedOptions<T extends object>(command: { optsWithGlobals?: () => object }, fallback: T): T {
   return (command.optsWithGlobals ? command.optsWithGlobals() : fallback) as T;
 }
 
