@@ -274,6 +274,97 @@ describe('setup sources step', () => {
     });
   });
 
+  it('uses the rich Notion picker for interactive selected root setup', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=1' }));
+    const pickNotionRootPages = vi.fn(async (input: Parameters<NonNullable<KtxSetupSourcesDeps['pickNotionRootPages']>>[0]) => {
+      expect(input.connectionId).toBe('notion-main');
+      expect(input.connection).toMatchObject({
+        driver: 'notion',
+        auth_token_ref: 'env:NOTION_TOKEN',
+        crawl_mode: 'selected_roots',
+        root_page_ids: [],
+      });
+      return { kind: 'selected' as const, rootPageIds: ['11111111-2222-3333-4444-555555555555'] };
+    });
+    const testPrompts = prompts({
+      multiselect: [['notion']],
+      select: ['env', 'selected_roots', 'done'],
+      text: ['notion-main'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        { prompts: testPrompts, validateNotion, pickNotionRootPages },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect(pickNotionRootPages).toHaveBeenCalledOnce();
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['11111111-2222-3333-4444-555555555555'],
+    });
+  });
+
+  it('backs out of the Notion picker without writing selected_roots when the picker quits', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=0' }));
+    const pickNotionRootPages = vi.fn(async () => ({ kind: 'back' as const }));
+    const testPrompts = prompts({
+      multiselect: [['notion']],
+      select: ['env', 'selected_roots', 'all_accessible', 'done'],
+      text: ['notion-main'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        makeIo().io,
+        { prompts: testPrompts, validateNotion, pickNotionRootPages },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect(pickNotionRootPages).toHaveBeenCalledOnce();
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      crawl_mode: 'all_accessible',
+    });
+    expect((await readConfig()).connections['notion-main']?.root_page_ids).toBeUndefined();
+  });
+
+  it('surfaces Notion picker failures and returns to the page-mode step', async () => {
+    await addPrimarySource();
+    const validateNotion = vi.fn(async () => ({ ok: true as const, detail: 'roots=0' }));
+    const pickNotionRootPages = vi.fn(async () => ({
+      kind: 'unavailable' as const,
+      message: 'Notion picker requires a TTY',
+    }));
+    const testPrompts = prompts({
+      multiselect: [['notion']],
+      select: ['env', 'selected_roots', 'all_accessible', 'done'],
+      text: ['notion-main'],
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        { prompts: testPrompts, validateNotion, pickNotionRootPages },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
+
+    expect(io.stderr()).toContain('Notion picker requires a TTY');
+    expect((await readConfig()).connections['notion-main']).toMatchObject({
+      driver: 'notion',
+      crawl_mode: 'all_accessible',
+    });
+  });
+
   it('defaults interactive Metabase and Looker source setup to the only warehouse connection', async () => {
     await addPrimarySource();
     const cases: Array<{

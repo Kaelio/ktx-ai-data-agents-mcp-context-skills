@@ -203,7 +203,7 @@ describe('runLocalMetabaseIngest', () => {
         metabaseConnectionId: 'prod-metabase',
         agentRunner: new TestAgentRunner(),
       }),
-    ).rejects.toThrow('run `ktx connection mapping refresh prod-metabase`');
+    ).rejects.toThrow('run `ktx setup` and reconfigure prod-metabase');
   });
 
   it('seeds yaml-only Metabase mappings before the unhydrated fan-out preflight', async () => {
@@ -230,7 +230,7 @@ describe('runLocalMetabaseIngest', () => {
         adapters: [new FakeMetabaseSourceAdapter()],
         metabaseConnectionId: 'prod-metabase',
       }),
-    ).rejects.toThrow('run `ktx connection mapping refresh prod-metabase`');
+    ).rejects.toThrow('run `ktx setup` and reconfigure prod-metabase');
   });
 
   it('rejects source-dir uploads through the Metabase fan-out runner', async () => {

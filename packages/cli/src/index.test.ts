@@ -1250,16 +1250,9 @@ describe('runKtxCli', () => {
       runKtxCli(['--project-dir', tempDir, 'connection', 'list'], makeIo().io, { connection }),
     ).resolves.toBe(0);
 
-    const removeIo = makeIo();
+    const testIo = makeIo();
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'connection', 'remove', 'warehouse', '--force', '--no-input'], removeIo.io, {
-        connection,
-      }),
-    ).resolves.toBe(0);
-
-    const mapIo = makeIo();
-    await expect(
-      runKtxCli(['--project-dir', tempDir, 'connection', 'map', 'prod-metabase', '--json'], mapIo.io, {
+      runKtxCli(['--project-dir', tempDir, 'connection', 'test', 'warehouse'], testIo.io, {
         connection,
       }),
     ).resolves.toBe(0);
@@ -1268,21 +1261,9 @@ describe('runKtxCli', () => {
     expect(connection).toHaveBeenNthCalledWith(
       2,
       {
-        command: 'remove',
+        command: 'test',
         projectDir: tempDir,
         connectionId: 'warehouse',
-        force: true,
-        inputMode: 'disabled',
-      },
-      expect.anything(),
-    );
-    expect(connection).toHaveBeenNthCalledWith(
-      3,
-      {
-        command: 'map',
-        projectDir: tempDir,
-        sourceConnectionId: 'prod-metabase',
-        json: true,
       },
       expect.anything(),
     );
@@ -1290,168 +1271,35 @@ describe('runKtxCli', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('prints help for connection metabase setup', async () => {
+  it('prints only list and test in connection help', async () => {
     const helpIo = makeIo();
 
-    await expect(runKtxCli(['connection', 'metabase', 'setup', '--help'], helpIo.io)).resolves.toBe(0);
+    await expect(runKtxCli(['connection', '--help'], helpIo.io)).resolves.toBe(0);
 
-    expect(helpIo.stdout()).toContain('Usage: ktx connection metabase setup');
-    for (const option of [
-      '--id <connectionId>',
-      '--url <url>',
-      '--api-key <key>',
-      '--username <email>',
-      '--password <password>',
-      '--mint-api-key',
-      '--map <metabaseDatabaseId=targetConnectionId>',
-      '--sync <metabaseDatabaseId>',
-      '--sync-mode <mode>',
-      '--run-ingest',
-      '--yes',
-      '--no-input',
-    ]) {
-      expect(helpIo.stdout()).toContain(option);
-    }
-    expect(helpIo.stdout()).toContain('Guided equivalent of:');
-    for (const line of [
-      'ktx connection mapping refresh <connectionId> --auto-accept',
-      'ktx connection mapping set <connectionId> databaseMappings <id>=<target>',
-      'ktx connection mapping set-sync-enabled <connectionId> <id> --enabled true',
-      'ktx ingest run --connection-id <connectionId> --adapter metabase',
-    ]) {
-      expect(helpIo.stdout()).toContain(line);
+    expect(helpIo.stdout()).toContain('Usage: ktx connection');
+    expect(helpIo.stdout()).toContain('list');
+    expect(helpIo.stdout()).toContain('test <connectionId>');
+    for (const removed of ['add', 'remove', 'map', 'mapping', 'metabase', 'notion']) {
+      expect(helpIo.stdout()).not.toMatch(new RegExp(`\\b${removed}\\b`));
     }
     expect(helpIo.stderr()).toBe('');
   });
 
-  it('dispatches connection metabase setup through Commander', async () => {
-    const connectionMetabaseSetup = vi.fn(async () => 0);
-    const fakeMetabaseCredential = 'mb_example';
-    const setupIo = makeIo();
-
-    await expect(
-      runKtxCli(
-        [
-          'connection',
-          'metabase',
-          'setup',
-          '--project-dir',
-          tempDir,
-          '--id',
-          'metabase',
-          '--url',
-          'http://metabase.example.test:3000',
-          '--api-key',
-          'mb_example',
-          '--map',
-          '2=orbit',
-          '--sync',
-          '2',
-          '--yes',
-          '--no-input',
-        ],
-        setupIo.io,
-        { connectionMetabaseSetup },
-      ),
-    ).resolves.toBe(0);
-
-    expect(connectionMetabaseSetup).toHaveBeenCalledWith(
-      {
-        command: 'setup',
-        projectDir: tempDir,
-        connectionId: 'metabase',
-        url: 'http://metabase.example.test:3000',
-        apiKey: fakeMetabaseCredential,
-        mintApiKey: false,
-        mappings: [{ metabaseDatabaseId: 2, targetConnectionId: 'orbit' }],
-        syncEnabledDatabaseIds: [2],
-        syncMode: 'ALL',
-        runIngest: false,
-        yes: true,
-        inputMode: 'disabled',
-      },
-      expect.anything(),
-    );
-    expect(setupIo.stderr()).toBe(`Project: ${tempDir}\n`);
-  });
-
-  it('validates connection metabase setup option values before runner dispatch', async () => {
-    const connectionMetabaseSetup = vi.fn(async () => 0);
-
+  it('rejects removed connection subcommands', async () => {
     for (const argv of [
-      [
-        'connection',
-        'metabase',
-        'setup',
-        '--project-dir',
-        tempDir,
-        '--url',
-        'http://metabase.example.test:3000',
-        '--api-key',
-        'mb_example',
-        '--map',
-        'nope=orbit',
-      ],
-      [
-        'connection',
-        'metabase',
-        'setup',
-        '--project-dir',
-        tempDir,
-        '--url',
-        'http://metabase.example.test:3000',
-        '--api-key',
-        'mb_example',
-        '--map',
-        '2=../orbit',
-      ],
-      [
-        'connection',
-        'metabase',
-        'setup',
-        '--project-dir',
-        tempDir,
-        '--url',
-        'http://metabase.example.test:3000',
-        '--api-key',
-        'mb_example',
-        '--sync',
-        'nope',
-      ],
-      [
-        'connection',
-        'metabase',
-        'setup',
-        '--project-dir',
-        tempDir,
-        '--url',
-        'http://metabase.example.test:3000',
-        '--api-key',
-        'mb_example',
-        '--sync-mode',
-        'BAD',
-      ],
-      [
-        'connection',
-        'metabase',
-        'setup',
-        '--project-dir',
-        tempDir,
-        '--url',
-        'http://metabase.example.test:3000',
-        '--api-key',
-        'mb_example',
-        '--mint-api-key',
-        '--api-key',
-        'also_bad',
-      ],
+      ['connection', 'add', 'postgres', 'warehouse'],
+      ['connection', 'remove', 'warehouse'],
+      ['connection', 'map', 'prod-metabase'],
+      ['connection', 'mapping'],
+      ['connection', 'metabase'],
+      ['connection', 'notion'],
     ]) {
       const testIo = makeIo();
-      await expect(runKtxCli(argv, testIo.io, { connectionMetabaseSetup })).resolves.toBe(1);
-      expect(testIo.stderr()).toMatch(/map|sync|sync-mode|conflict|cannot be used|invalid|integer|choices/i);
-    }
 
-    expect(connectionMetabaseSetup).not.toHaveBeenCalled();
+      await expect(runKtxCli(argv, testIo.io)).resolves.toBe(1);
+
+      expect(testIo.stderr()).toMatch(/unknown command|error:/);
+    }
   });
 
   it('rejects commands removed from the May 6 root surface', async () => {
@@ -1467,153 +1315,6 @@ describe('runKtxCli', () => {
 
       expect(testIo.stderr()).toMatch(/unknown command|error:/);
     }
-  });
-
-  it('dispatches connection add options through Commander', async () => {
-    const testIo = makeIo();
-    const connection = vi.fn(async () => 0);
-
-    await expect(
-      runKtxCli(
-        [
-          'connection',
-          'add',
-          'notion',
-          'notion-main',
-          '--project-dir',
-          tempDir,
-          '--token-env',
-          'NOTION_TOKEN',
-          '--crawl-mode',
-          'selected_roots',
-          '--root-page-id',
-          'page-1',
-          '--root-database-id',
-          'database-1',
-          '--max-pages',
-          '80',
-        ],
-        testIo.io,
-        { connection },
-      ),
-    ).resolves.toBe(0);
-
-    expect(connection).toHaveBeenCalledWith(
-      {
-        command: 'add',
-        projectDir: tempDir,
-        driver: 'notion',
-        connectionId: 'notion-main',
-        url: undefined,
-        schemas: [],
-        readonly: false,
-        force: false,
-        allowLiteralCredentials: false,
-        notion: {
-          authTokenRef: 'env:NOTION_TOKEN',
-          crawlMode: 'selected_roots',
-          rootPageIds: ['page-1'],
-          rootDatabaseIds: ['database-1'],
-          rootDataSourceIds: [],
-          maxPagesPerRun: 80,
-          maxKnowledgeCreatesPerRun: undefined,
-          maxKnowledgeUpdatesPerRun: undefined,
-        },
-      },
-      testIo.io,
-    );
-    expect(testIo.stderr()).toBe(`Project: ${tempDir}\n`);
-  });
-
-  it('prints generated connection notion pick help without invoking execution', async () => {
-    const helpCases = [
-      ['connection', 'notion', '--help'],
-      ['connection', 'notion', 'pick', '--help'],
-      ['connection', 'notion', 'pick', 'notion-main', '--help'],
-    ];
-
-    for (const argv of helpCases) {
-      const testIo = makeIo();
-      const connectionNotion = vi.fn(async () => 0);
-
-      await expect(runKtxCli(argv, testIo.io, { connectionNotion })).resolves.toBe(0);
-
-      expect(testIo.stdout()).toContain('Usage: ktx connection notion');
-      expect(testIo.stdout()).toContain('pick');
-      expect(testIo.stderr()).toBe('');
-      expect(connectionNotion).not.toHaveBeenCalled();
-    }
-  });
-
-  it('dispatches connection notion pick through Commander', async () => {
-    const testIo = makeIo();
-    const connectionNotion = vi.fn(async () => 0);
-
-    await expect(
-      runKtxCli(
-        [
-          '--project-dir',
-          tempDir,
-          'connection',
-          'notion',
-          'pick',
-          'notion-main',
-          '--no-input',
-          '--root-page-id',
-          '11111111222233334444555555555555',
-          '--root-page-id',
-          '11111111-2222-3333-4444-555555555555',
-        ],
-        testIo.io,
-        { connectionNotion },
-      ),
-    ).resolves.toBe(0);
-
-    expect(connectionNotion).toHaveBeenCalledWith(
-      {
-        command: 'pick',
-        projectDir: tempDir,
-        connectionId: 'notion-main',
-        mode: 'non-interactive',
-        rootPageIds: ['11111111-2222-3333-4444-555555555555'],
-      },
-      testIo.io,
-    );
-    expect(testIo.stderr()).toBe(`Project: ${tempDir}\n`);
-  });
-
-  it('ignores connection notion pick root page flags in interactive mode', async () => {
-    const testIo = makeIo();
-    const connectionNotion = vi.fn(async () => 0);
-
-    await expect(
-      runKtxCli(['connection', 'notion', 'pick', 'notion-main', '--root-page-id', 'not-a-uuid'], testIo.io, {
-        connectionNotion,
-      }),
-    ).resolves.toBe(0);
-
-    expect(connectionNotion).toHaveBeenCalledWith(
-      {
-        command: 'pick',
-        projectDir: expect.any(String),
-        connectionId: 'notion-main',
-        mode: 'interactive',
-      },
-      testIo.io,
-    );
-    expect(testIo.stderr()).toBe('');
-  });
-
-  it('rejects connection notion pick no-input mode without root page ids', async () => {
-    const testIo = makeIo();
-    const connectionNotion = vi.fn(async () => 0);
-
-    await expect(
-      runKtxCli(['connection', 'notion', 'pick', 'notion-main', '--no-input'], testIo.io, { connectionNotion }),
-    ).resolves.toBe(1);
-
-    expect(connectionNotion).not.toHaveBeenCalled();
-    expect(testIo.stderr()).toContain('connection notion pick --no-input requires at least one --root-page-id');
   });
 
   it('writes basic debug dispatch information when --debug is set', async () => {
@@ -1774,51 +1475,6 @@ describe('runKtxCli', () => {
     }
 
     expect(ingest).not.toHaveBeenCalled();
-  });
-
-  it('rejects mutually exclusive credential and scan mode options before invoking runners', async () => {
-    const connection = vi.fn(async () => 0);
-    const scan = vi.fn(async () => 0);
-
-    const tokenIo = makeIo();
-    await expect(
-      runKtxCli(
-        [
-          'connection',
-          'add',
-          'notion',
-          'notion-main',
-          '--token-env',
-          'NOTION_TOKEN',
-          '--token-file',
-          '/tmp/notion-token',
-          '--root-page-id',
-          '11111111111111111111111111111111',
-        ],
-        tokenIo.io,
-        { connection },
-      ),
-    ).resolves.toBe(1);
-    expect(tokenIo.stderr()).toMatch(/conflict|cannot be used/i);
-
-    expect(connection).not.toHaveBeenCalled();
-    expect(scan).not.toHaveBeenCalled();
-  });
-
-  it('validates connection mapping set syntax before runner domain validation', async () => {
-    const badFieldIo = makeIo();
-    await expect(
-      runKtxCli(['connection', 'mapping', 'set', 'prod-metabase', 'invalidMappings', '1=warehouse'], badFieldIo.io),
-    ).resolves.toBe(1);
-    expect(badFieldIo.stderr()).toContain('databaseMappings or connectionMappings');
-
-    for (const assignment of ['missing-equals', '=warehouse', '1=']) {
-      const testIo = makeIo();
-      await expect(
-        runKtxCli(['connection', 'mapping', 'set', 'prod-metabase', 'databaseMappings', assignment], testIo.io),
-      ).resolves.toBe(1);
-      expect(testIo.stderr()).toContain('non-empty <key>=<value>');
-    }
   });
 
   it('does not expose root init after setup owns project creation', async () => {

@@ -14,7 +14,7 @@ import {
   TRANSIENT_HINT_DURATION_MS,
   visibleNodeIds,
   type NotionPickerPageInput,
-} from './connection-notion-tree.js';
+} from './notion-page-picker-tree.js';
 
 const IDS = {
   engineering: '11111111-1111-1111-1111-111111111111',

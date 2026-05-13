@@ -28,8 +28,8 @@ import {
   stripKtxSetupCompletedSteps,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
-import { runKtxConnectionMapping } from './commands/connection-mapping.js';
-import { runKtxConnection } from './connection.js';
+import { pickNotionRootPages } from './notion-page-picker.js';
+import { runKtxSourceMapping } from './source-mapping.js';
 import { withMenuOptionsSpacing, withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxPublicIngest } from './public-ingest.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
@@ -95,6 +95,7 @@ export interface KtxSetupSourcesDeps {
   validateLooker?: (projectDir: string, connectionId: string) => Promise<SourceValidationResult>;
   validateLookml?: (connection: KtxProjectConnectionConfig) => Promise<SourceValidationResult>;
   validateNotion?: (connection: KtxProjectConnectionConfig) => Promise<SourceValidationResult>;
+  pickNotionRootPages?: typeof pickNotionRootPages;
   discoverMetabaseDatabases?: (args: {
     sourceUrl: string;
     sourceApiKeyRef: string;
@@ -528,7 +529,7 @@ function buildNotionConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionC
     driver: 'notion',
     auth_token_ref: credentialRef(args.sourceApiKeyRef, 'Notion token ref'),
     crawl_mode: crawlMode,
-    root_page_ids: rootPageIds,
+    ...(rootPageIds.length > 0 ? { root_page_ids: rootPageIds } : {}),
     root_database_ids: [],
     root_data_source_ids: [],
     max_pages_per_run: 1000,
@@ -614,7 +615,7 @@ async function defaultValidateMetricflow(connection: KtxProjectConnectionConfig)
 }
 
 async function defaultValidateLooker(projectDir: string, connectionId: string): Promise<SourceValidationResult> {
-  const code = await runKtxConnectionMapping(
+  const code = await runKtxSourceMapping(
     { command: 'refresh', projectDir, connectionId, autoAccept: true },
     { stdout: { write() {} }, stderr: { write() {} } },
   );
@@ -657,6 +658,22 @@ interface MappingJsonOutput {
   mappings: unknown[];
 }
 
+function splitOutputLines(output: string): string[] {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function parseMappingListJson(output: string): unknown[] {
+  const trimmed = output.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const parsed = JSON.parse(trimmed) as unknown;
+  return Array.isArray(parsed) ? parsed : [];
+}
+
 function summarizeMappingResult(parsed: MappingJsonOutput): string {
   const mappingCount = parsed.mappings.length;
   const mappingNoun = mappingCount === 1 ? 'mapping' : 'mappings';
@@ -664,22 +681,51 @@ function summarizeMappingResult(parsed: MappingJsonOutput): string {
 }
 
 async function defaultRunMapping(projectDir: string, connectionId: string, io: KtxCliIo): Promise<number> {
-  let captured = '';
-  const captureIo: KtxCliIo = {
-    stdout: { write(chunk: string) { captured += chunk; } },
-    stderr: io.stderr,
+  const outputs = {
+    refresh: '',
+    validation: '',
+    list: '',
   };
-  const code = await runKtxConnection(
-    { command: 'map', projectDir, sourceConnectionId: connectionId, json: true },
-    captureIo,
+  const refreshCode = await runKtxSourceMapping(
+    { command: 'refresh', projectDir, connectionId, autoAccept: true },
+    {
+      stdout: { write(chunk: string) { outputs.refresh += chunk; } },
+      stderr: io.stderr,
+    },
   );
-  if (code !== 0) return code;
-  try {
-    const parsed = JSON.parse(captured.trim()) as MappingJsonOutput;
-    io.stdout.write(`${summarizeMappingResult(parsed)}\n`);
-  } catch {
-    io.stdout.write(captured);
+  if (refreshCode !== 0) {
+    return refreshCode;
   }
+
+  const validationCode = await runKtxSourceMapping(
+    { command: 'validate', projectDir, connectionId },
+    {
+      stdout: { write(chunk: string) { outputs.validation += chunk; } },
+      stderr: io.stderr,
+    },
+  );
+  if (validationCode !== 0) {
+    return validationCode;
+  }
+
+  const listCode = await runKtxSourceMapping(
+    { command: 'list', projectDir, connectionId, json: true },
+    {
+      stdout: { write(chunk: string) { outputs.list += chunk; } },
+      stderr: io.stderr,
+    },
+  );
+  if (listCode !== 0) {
+    return listCode;
+  }
+
+  const parsed: MappingJsonOutput = {
+    connectionId,
+    refresh: { ok: true, output: splitOutputLines(outputs.refresh) },
+    validation: { ok: true, output: splitOutputLines(outputs.validation) },
+    mappings: parseMappingListJson(outputs.list),
+  };
+  io.stdout.write(`${summarizeMappingResult(parsed)}\n`);
   return 0;
 }
 
@@ -927,6 +973,8 @@ async function promptForInteractiveSource(
   args: KtxSetupSourcesArgs,
   source: KtxSetupSourceType,
   prompts: KtxSetupSourcesPromptAdapter,
+  io: KtxCliIo,
+  deps: KtxSetupSourcesDeps,
   defaultConnectionId = `${source}-main`,
   testGitRepo: KtxSetupSourcesDeps['testGitRepo'] = testRepoConnection,
   discoverMetabaseDatabaseList?: KtxSetupSourcesDeps['discoverMetabaseDatabases'],
@@ -1213,15 +1261,29 @@ async function promptForInteractiveSource(
     ...(state.notionCrawlMode === 'selected_roots'
       ? [
           async (currentState: SourcePromptState) => {
-            const roots = await promptText(prompts, {
-              message: 'Notion page IDs to ingest (each page includes all its subpages)',
-              placeholder: 'page-id-1, page-id-2',
-            });
-            if (roots === undefined) return 'back';
-            currentState.notionRootPageIds = roots
-              .split(',')
-              .map((root) => root.trim())
-              .filter(Boolean);
+            const connectionId = currentState.sourceConnectionId ?? 'notion-main';
+            const result = await (deps.pickNotionRootPages ?? pickNotionRootPages)(
+              {
+                connectionId,
+                connection: {
+                  driver: 'notion',
+                  auth_token_ref: credentialRef(currentState.sourceApiKeyRef, 'Notion token ref'),
+                  crawl_mode: 'selected_roots',
+                  root_page_ids: currentState.notionRootPageIds ?? [],
+                  root_database_ids: [],
+                  root_data_source_ids: [],
+                },
+              },
+              io,
+            );
+            if (result.kind === 'back') {
+              return 'back';
+            }
+            if (result.kind === 'unavailable') {
+              io.stderr.write(`${result.message}\n`);
+              return 'back';
+            }
+            currentState.notionRootPageIds = result.rootPageIds;
             return 'next';
           },
         ]
@@ -1259,7 +1321,9 @@ async function chooseInteractiveSourceConnection(input: {
   source: KtxSetupSourceType;
   connections: Record<string, KtxProjectConnectionConfig>;
   prompts: KtxSetupSourcesPromptAdapter;
+  io: KtxCliIo;
   testGitRepo?: KtxSetupSourcesDeps['testGitRepo'];
+  pickNotionRootPages?: KtxSetupSourcesDeps['pickNotionRootPages'];
   discoverMetabaseDatabases?: KtxSetupSourcesDeps['discoverMetabaseDatabases'];
 }): Promise<InteractiveSourceConnectionChoice> {
   const existingIds = existingConnectionIdsBySource(input.connections, input.source);
@@ -1271,6 +1335,11 @@ async function chooseInteractiveSourceConnection(input: {
       input.args,
       input.source,
       input.prompts,
+      input.io,
+      {
+        pickNotionRootPages: input.pickNotionRootPages,
+        discoverMetabaseDatabases: input.discoverMetabaseDatabases,
+      },
       defaultConnectionId,
       input.testGitRepo,
       input.discoverMetabaseDatabases,
@@ -1303,6 +1372,11 @@ async function chooseInteractiveSourceConnection(input: {
       input.args,
       input.source,
       input.prompts,
+      input.io,
+      {
+        pickNotionRootPages: input.pickNotionRootPages,
+        discoverMetabaseDatabases: input.discoverMetabaseDatabases,
+      },
       defaultConnectionId,
       input.testGitRepo,
       input.discoverMetabaseDatabases,
@@ -1417,7 +1491,9 @@ export async function runKtxSetupSourcesStep(
               source,
               connections: (await loadKtxProject({ projectDir: args.projectDir })).config.connections,
               prompts,
+              io,
               testGitRepo: deps.testGitRepo,
+              pickNotionRootPages: deps.pickNotionRootPages,
               discoverMetabaseDatabases: deps.discoverMetabaseDatabases,
             });
         if (sourceChoice === 'back') {

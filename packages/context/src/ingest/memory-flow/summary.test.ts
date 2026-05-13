@@ -85,7 +85,7 @@ describe('formatMemoryFlowFinalSummary', () => {
       '- Refresh the Notion token referenced by auth_token_ref for notion-main. If it uses env:NAME, export a fresh token in that variable; if it uses file:/path, replace that file.',
     );
     expect(summary).toContain(
-      '- Run ktx connection notion pick notion-main to confirm Notion access, then rerun ktx ingest notion-main.',
+      '- Run ktx setup and reconfigure the Notion source to confirm page access, then rerun ktx ingest notion-main.',
     );
     expect(summary).not.toContain('error_uri');
   });

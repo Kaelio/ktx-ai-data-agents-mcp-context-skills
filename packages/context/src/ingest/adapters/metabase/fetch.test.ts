@@ -276,7 +276,7 @@ describe('fetchMetabaseBundle', () => {
         clientFactory,
         sourceStateReader,
       }),
-    ).rejects.toThrow(/unhydrated.*ktx connection mapping refresh/);
+    ).rejects.toThrow(/unhydrated.*ktx setup/);
   });
 
   it('skips cards whose getResolvedSql returns null and records them in unresolved-cards.json', async () => {

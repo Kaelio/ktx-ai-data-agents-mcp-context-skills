@@ -178,9 +178,6 @@ function shouldSuppressProjectDirLine(path: string[], options: Record<string, un
   if (commandPathKey === 'ktx ingest watch') {
     return options.json !== true && options.plain !== true;
   }
-  if (commandPathKey === 'ktx connection notion pick') {
-    return options.input !== false;
-  }
   const demoIndex = path.indexOf('demo');
   if (demoIndex >= 0) {
     const demoCommand = path[demoIndex + 1];

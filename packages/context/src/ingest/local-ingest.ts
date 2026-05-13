@@ -371,7 +371,7 @@ export async function runLocalMetabaseIngest(
   const unhydrated = await sourceStateReader.getUnhydratedSyncEnabledMappingIds(metabaseConnectionId);
   if (unhydrated.length > 0) {
     throw new Error(
-      `Metabase mappings ${unhydrated.join(', ')} are not hydrated; run \`ktx connection mapping refresh ${metabaseConnectionId}\` before local Metabase ingest.`,
+      `Metabase mappings ${unhydrated.join(', ')} are not hydrated; run \`ktx setup\` and reconfigure ${metabaseConnectionId} before local Metabase ingest.`,
     );
   }
 

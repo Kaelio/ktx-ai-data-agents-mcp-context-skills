@@ -99,7 +99,7 @@ export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Pr
   }
   if (mapping.metabaseDatabaseName === null) {
     throw new IngestInputError(
-      `mapping for database ${pullConfig.metabaseDatabaseId} on Metabase connection ${pullConfig.metabaseConnectionId} is unhydrated; run \`ktx connection mapping refresh ${pullConfig.metabaseConnectionId}\` to populate metabaseDatabaseName before ingest.`,
+      `mapping for database ${pullConfig.metabaseDatabaseId} on Metabase connection ${pullConfig.metabaseConnectionId} is unhydrated; run \`ktx setup\` and reconfigure the Metabase source to populate metabaseDatabaseName before ingest.`,
     );
   }
   const mappingDatabaseName: string = mapping.metabaseDatabaseName;
