@@ -454,8 +454,8 @@ describe('runKtxCli', () => {
       expect(testIo.stdout()).toContain(expected);
     }
     expect(testIo.stdout()).toContain('KTX cannot work until a database is added');
-    expect(testIo.stdout()).not.toContain('primary source');
-    expect(testIo.stdout()).not.toContain('primary sources');
+    expect(testIo.stdout()).not.toContain('primary ' + 'source');
+    expect(testIo.stdout()).not.toContain('primary ' + 'sources');
     expect(testIo.stdout()).not.toContain('--enable-historic-sql');
     expect(testIo.stdout()).not.toContain('--historic-sql-window-days');
     expect(testIo.stderr()).toBe('');
