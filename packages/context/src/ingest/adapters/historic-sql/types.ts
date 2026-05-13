@@ -8,26 +8,7 @@ export type HistoricSqlDialect = z.infer<typeof historicSqlDialectSchema>;
 
 const filterModeSchema = z.enum(['exclude', 'include', 'mark-only']);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export const historicSqlUnifiedPullConfigSchema = z.preprocess((value) => {
-  if (!isRecord(value)) {
-    return value;
-  }
-  const next: Record<string, unknown> = { ...value };
-  if (next.minExecutions === undefined && typeof next.minCalls === 'number') {
-    next.minExecutions = next.minCalls;
-  }
-  if (!next.filters && Array.isArray(next.serviceAccountUserPatterns)) {
-    next.filters = {
-      serviceAccounts: { patterns: next.serviceAccountUserPatterns, mode: 'exclude' },
-      dropTrivialProbes: true,
-    };
-  }
-  return next;
-}, z.object({
+export const historicSqlUnifiedPullConfigSchema = z.object({
   dialect: historicSqlDialectSchema,
   windowDays: z.number().int().positive().default(90),
   minExecutions: z.number().int().nonnegative().default(5),
@@ -48,7 +29,7 @@ export const historicSqlUnifiedPullConfigSchema = z.preprocess((value) => {
   }).default({ dropTrivialProbes: true }),
   redactionPatterns: z.array(z.string()).default([]),
   staleArchiveAfterDays: z.number().int().positive().default(90),
-}));
+});
 
 export type HistoricSqlUnifiedPullConfig = z.infer<typeof historicSqlUnifiedPullConfigSchema>;
 
@@ -157,6 +138,5 @@ export interface HistoricSqlSourceAdapterDeps {
   sqlAnalysis: SqlAnalysisPort;
   reader: HistoricSqlReader;
   queryClient: unknown;
-  legacyPostgresBaselineRootDir?: string;
   now?: () => Date;
 }

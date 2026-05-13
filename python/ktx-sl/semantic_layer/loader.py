@@ -59,9 +59,7 @@ class SourceLoader:
                             f"Duplicate source name '{name}' in manifest shard {path}"
                         )
                     sources[name] = project_manifest_entry(name, entry)
-                    description_sources[name] = _description_sources(
-                        entry.descriptions, entry.description, entry.db_description
-                    )
+                    description_sources[name] = _description_sources(entry.descriptions)
 
         # 2. Load files outside _schema/
         for path in sorted(self.sources_dir.rglob("*.yaml")):
@@ -138,11 +136,6 @@ class SourceLoader:
         source = deepcopy(base)
         description_sources = dict(base_description_sources or {})
 
-        # Overlay description semantics match the server: `description` writes the
-        # `user` source key, and `descriptions` merges keyed sources before a single
-        # visible description is resolved from the full map.
-        if overlay.get("description"):
-            description_sources["user"] = overlay["description"]
         if overlay.get("descriptions"):
             description_sources.update(
                 {
@@ -151,7 +144,7 @@ class SourceLoader:
                     if text
                 }
             )
-        if overlay.get("description") or overlay.get("descriptions"):
+        if overlay.get("descriptions"):
             source.description = _resolve_description(
                 description_sources or None,
             )

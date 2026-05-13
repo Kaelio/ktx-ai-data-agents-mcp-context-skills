@@ -117,7 +117,7 @@ interface MetabaseNativeStage {
 }
 
 interface MetabaseLegacyNativeQuery {
-  query: string;
+  query?: string;
   'template-tags'?: Record<string, MetabaseTemplateTag>;
 }
 

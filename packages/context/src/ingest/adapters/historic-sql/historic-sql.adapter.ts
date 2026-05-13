@@ -1,5 +1,3 @@
-import { rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { ChunkResult, DiffSet, FetchContext, ScopeDescriptor, SourceAdapter } from '../../types.js';
 import { chunkHistoricSqlUnifiedStagedDir, describeHistoricSqlUnifiedScope } from './chunk-unified.js';
 import { detectHistoricSqlStagedDir } from './detect.js';
@@ -28,11 +26,6 @@ export class HistoricSqlSourceAdapter implements SourceAdapter {
       pullConfig,
       now: this.deps.now?.(),
     });
-    if (this.deps.legacyPostgresBaselineRootDir) {
-      await rm(join(this.deps.legacyPostgresBaselineRootDir, ctx.connectionId, ['pgss', 'baseline.json'].join('-')), {
-        force: true,
-      });
-    }
   }
 
   chunk(stagedDir: string, diffSet?: DiffSet): Promise<ChunkResult> {

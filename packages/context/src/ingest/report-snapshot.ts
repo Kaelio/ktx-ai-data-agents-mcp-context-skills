@@ -1,5 +1,4 @@
 import * as z from 'zod';
-import type { TouchedSlSource } from '../tools/index.js';
 import { memoryFlowReplayInputSchema } from './memory-flow/schema.js';
 import type { IngestReportSnapshot } from './reports.js';
 
@@ -24,8 +23,6 @@ const touchedSlSourceSchema = z.object({
   sourceName: z.string().min(1),
 });
 
-const touchedSlSourceInputSchema = z.union([z.string(), touchedSlSourceSchema]);
-
 const conflictResolvedSchema = z
   .object({
     unitKey: z.string().optional(),
@@ -42,7 +39,7 @@ const evictionAppliedSchema = z
     rawPath: z.string(),
     artifactKind: z.enum(['sl', 'wiki']),
     artifactKey: z.string(),
-    action: z.enum(['removed', 'retained_deprecated']),
+    action: z.literal('removed'),
     reason: z.string(),
   })
   .passthrough();
@@ -147,7 +144,7 @@ export const ingestReportSnapshotSchema = z
             status: z.enum(['success', 'failed']),
             reason: z.string().optional(),
             actions: z.array(ingestActionSchema),
-            touchedSlSources: z.array(touchedSlSourceInputSchema),
+            touchedSlSources: z.array(touchedSlSourceSchema),
             slDisallowed: z.boolean().optional(),
             slDisallowedReason: z.enum(['lookml_connection_mismatch']).optional(),
           }),
@@ -171,26 +168,10 @@ export const ingestReportSnapshotSchema = z
   })
   .passthrough();
 
-function normalizeTouchedSlSources(connectionId: string, value: Array<string | TouchedSlSource>): TouchedSlSource[] {
-  return value.map((entry) =>
-    typeof entry === 'string'
-      ? { connectionId, sourceName: entry }
-      : { connectionId: entry.connectionId, sourceName: entry.sourceName },
-  );
-}
-
 export function parseIngestReportSnapshot(value: unknown): IngestReportSnapshot {
   const result = ingestReportSnapshotSchema.safeParse(value);
   if (!result.success) {
     throw new Error(`Invalid ingest report snapshot: ${z.prettifyError(result.error)}`);
   }
-  const snapshot = result.data as IngestReportSnapshot;
-  snapshot.body.workUnits = snapshot.body.workUnits.map((workUnit) => ({
-    ...workUnit,
-    touchedSlSources: normalizeTouchedSlSources(
-      snapshot.connectionId,
-      workUnit.touchedSlSources as Array<string | TouchedSlSource>,
-    ),
-  }));
-  return snapshot;
+  return result.data as IngestReportSnapshot;
 }

@@ -141,7 +141,7 @@ describe('relationship diagnostics artifacts', () => {
     );
   });
 
-  it('adapts legacy relationship updates into the richer artifact shape', () => {
+  it('adapts relationship updates into the artifact shape', () => {
     const artifacts = buildKtxRelationshipArtifacts({
       connectionId: 'warehouse',
       relationshipUpdate: {

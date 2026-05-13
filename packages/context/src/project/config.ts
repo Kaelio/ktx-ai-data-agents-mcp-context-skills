@@ -211,7 +211,7 @@ function scanEnrichmentMode(value: unknown, fallback: KtxScanEnrichmentMode): Kt
   throw new Error(`Unsupported scan.enrichment.mode: ${String(value)}`);
 }
 
-function rejectLegacyProvider(section: string, value: unknown): void {
+function rejectUnsupportedProvider(section: string, value: unknown): void {
   if (value !== undefined) {
     throw new Error(`Unsupported ${section}.provider: use ${section}.backend`);
   }
@@ -276,7 +276,7 @@ function parseProjectLlmProviderConfig(
   defaults: KtxProjectLlmProviderConfig,
   section: string,
 ): KtxProjectLlmProviderConfig {
-  rejectLegacyProvider(section, raw.provider);
+  rejectUnsupportedProvider(section, raw.provider);
 
   const vertex = isRecord(raw.vertex)
     ? {
@@ -309,7 +309,7 @@ function parseProjectEmbeddingConfig(
   defaults: KtxProjectEmbeddingConfig,
   section: string,
 ): KtxProjectEmbeddingConfig {
-  rejectLegacyProvider(section, raw.provider);
+  rejectUnsupportedProvider(section, raw.provider);
 
   const openai = optionalProviderConfig(raw.openai);
   const sentenceTransformers = isRecord(raw.sentenceTransformers)
@@ -339,36 +339,21 @@ function parseScanRelationshipConfig(
   raw: Record<string, unknown>,
   defaults: KtxScanRelationshipConfig,
 ): KtxScanRelationshipConfig {
-  const validationBudget = validationBudgetConfigValue(
-    raw.validation_budget ?? raw.validationBudget,
-    defaults.validationBudget,
-  );
+  const validationBudget = validationBudgetConfigValue(raw.validationBudget, defaults.validationBudget);
 
   return {
     enabled: booleanValue(raw.enabled, defaults.enabled),
-    llmProposals: booleanValue(raw.llm_proposals ?? raw.llmProposals, defaults.llmProposals),
+    llmProposals: booleanValue(raw.llmProposals, defaults.llmProposals),
     validationRequiredForManifest: booleanValue(
-      raw.validation_required_for_manifest ?? raw.validationRequiredForManifest,
+      raw.validationRequiredForManifest,
       defaults.validationRequiredForManifest,
     ),
-    acceptThreshold: ratioConfigValue(raw.accept_threshold ?? raw.acceptThreshold, defaults.acceptThreshold),
-    reviewThreshold: ratioConfigValue(raw.review_threshold ?? raw.reviewThreshold, defaults.reviewThreshold),
-    maxLlmTablesPerBatch: positiveIntegerConfigValue(
-      raw.max_llm_tables_per_batch ?? raw.maxLlmTablesPerBatch,
-      defaults.maxLlmTablesPerBatch,
-    ),
-    maxCandidatesPerColumn: positiveIntegerConfigValue(
-      raw.max_candidates_per_column ?? raw.maxCandidatesPerColumn,
-      defaults.maxCandidatesPerColumn,
-    ),
-    profileSampleRows: positiveIntegerConfigValue(
-      raw.profile_sample_rows ?? raw.profileSampleRows,
-      defaults.profileSampleRows,
-    ),
-    validationConcurrency: positiveIntegerConfigValue(
-      raw.validation_concurrency ?? raw.validationConcurrency,
-      defaults.validationConcurrency,
-    ),
+    acceptThreshold: ratioConfigValue(raw.acceptThreshold, defaults.acceptThreshold),
+    reviewThreshold: ratioConfigValue(raw.reviewThreshold, defaults.reviewThreshold),
+    maxLlmTablesPerBatch: positiveIntegerConfigValue(raw.maxLlmTablesPerBatch, defaults.maxLlmTablesPerBatch),
+    maxCandidatesPerColumn: positiveIntegerConfigValue(raw.maxCandidatesPerColumn, defaults.maxCandidatesPerColumn),
+    profileSampleRows: positiveIntegerConfigValue(raw.profileSampleRows, defaults.profileSampleRows),
+    validationConcurrency: positiveIntegerConfigValue(raw.validationConcurrency, defaults.validationConcurrency),
     ...(validationBudget !== undefined ? { validationBudget } : {}),
   };
 }

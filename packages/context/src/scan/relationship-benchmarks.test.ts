@@ -33,7 +33,7 @@ const EXPECTED_LINKS: KtxRelationshipBenchmarkExpectedLinks = {
 };
 
 const CHECKED_IN_FIXTURE_ORIGINS = {
-  abbreviated_legacy_no_declared_constraints: 'synthetic',
+  abbreviated_old_no_declared_constraints: 'synthetic',
   adventureworks_oltp_with_declared_metadata: 'public',
   adventureworkslt_with_declared_metadata: 'public',
   analytical_warehouse_no_naming_convention: 'synthetic',
@@ -606,7 +606,7 @@ describe('relationship benchmarks', () => {
     const byId = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
     const adversarialIds = [
       'non_english_naming_no_declared_constraints',
-      'abbreviated_legacy_no_declared_constraints',
+      'abbreviated_old_no_declared_constraints',
       'analytical_warehouse_no_naming_convention',
       'mixed_case_within_schema_no_declared_constraints',
       'polymorphic_partial_overlap_no_declared_constraints',

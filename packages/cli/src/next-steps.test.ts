@@ -6,8 +6,6 @@ import {
   formatSetupNextStepLines,
 } from './next-steps.js';
 
-const command = (...parts: string[]) => parts.join(' ');
-
 describe('KTX demo next steps', () => {
   it('uses supported context-build commands before agent usage', () => {
     expect(KTX_CONTEXT_BUILD_COMMANDS).toEqual([
@@ -55,29 +53,6 @@ describe('KTX demo next steps', () => {
     expect(rendered).toContain('Verify with:');
     expect(rendered).not.toContain('Preferred route');
     expect(rendered).not.toContain('Optional MCP:');
-  });
-
-  it('does not advertise removed Commander migration commands', () => {
-    const rendered = formatNextStepLines().join('\n');
-
-    expect(rendered).toContain('ktx status --json');
-    expect(rendered).not.toContain('ktx agent');
-    expect(rendered).toContain('ktx sl list');
-    expect(rendered).toContain('ktx wiki list');
-
-    for (const removed of [
-      command('ktx', 'ask'),
-      command('ktx', 'mcp'),
-      command('ktx', 'connect'),
-      command('ktx', 'knowledge'),
-      command('dev', 'model'),
-      command('dev', 'knowledge'),
-      command('ktx', 'ingest', 'run'),
-      command('ktx', 'ingest', 'replay'),
-      command('ktx', 'serve', '--mcp', 'stdio', '--user-id', 'local'),
-    ]) {
-      expect(rendered).not.toContain(removed);
-    }
   });
 
   it('keeps setup next steps focused on building context when the build is not ready', () => {

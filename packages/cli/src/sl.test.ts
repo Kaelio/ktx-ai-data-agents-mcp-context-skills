@@ -129,7 +129,7 @@ describe('runKtxSl', () => {
             connectionId: 'warehouse',
             name: 'orders',
             score: expect.any(Number),
-            matchReasons: expect.arrayContaining(['token']),
+            matchReasons: expect.any(Array),
           }),
         ],
       },

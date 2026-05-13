@@ -22,7 +22,7 @@ function validReportSnapshot() {
             { target: 'wiki', type: 'created', key: 'wiki/global/revenue.md', detail: 'Revenue overview' },
             { target: 'sl', type: 'updated', key: 'warehouse.orders', detail: 'Added order amount measure' },
           ],
-          touchedSlSources: ['warehouse.orders'],
+          touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
         },
       ],
       failedWorkUnits: [],
@@ -106,7 +106,7 @@ describe('parseIngestReportSnapshot', () => {
     expect(snapshot.body.toolTranscripts).toHaveLength(1);
   });
 
-  it('parses target-aware actions and normalizes legacy touched source strings', () => {
+  it('parses target-aware actions and touched source objects', () => {
     const report = validReportSnapshot();
     report.body.workUnits[0] = {
       ...report.body.workUnits[0],
@@ -119,8 +119,7 @@ describe('parseIngestReportSnapshot', () => {
           targetConnectionId: 'warehouse-1',
         },
       ],
-      // Legacy report shape: bare strings are normalized to the report connection ID.
-      touchedSlSources: ['looker__b2b__sales_pipeline'],
+      touchedSlSources: [{ connectionId: 'warehouse-1', sourceName: 'looker__b2b__sales_pipeline' }],
     } as never;
 
     const snapshot = parseIngestReportSnapshot(report);
@@ -135,7 +134,7 @@ describe('parseIngestReportSnapshot', () => {
       },
     ]);
     expect(snapshot.body.workUnits[0]?.touchedSlSources).toEqual([
-      { connectionId: 'warehouse', sourceName: 'looker__b2b__sales_pipeline' },
+      { connectionId: 'warehouse-1', sourceName: 'looker__b2b__sales_pipeline' },
     ]);
   });
 

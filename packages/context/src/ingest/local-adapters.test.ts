@@ -105,7 +105,6 @@ describe('local ingest adapters', () => {
             return { headers: [], rows: [] };
           },
         },
-        postgresBaselineRootDir: join(project.projectDir, '.ktx/cache/historic-sql'),
       },
     });
 
@@ -181,9 +180,12 @@ describe('local ingest adapters', () => {
         historicSql: {
           enabled: true,
           dialect: 'postgres',
-          minCalls: 7,
+          minExecutions: 7,
           maxTemplatesPerRun: 123,
-          serviceAccountUserPatterns: ['^svc_'],
+          filters: {
+            serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
+            dropTrivialProbes: true,
+          },
         },
       },
     });
@@ -385,7 +387,7 @@ describe('local ingest adapters', () => {
         connections: {
           'prod-lookml': {
             driver: 'lookml',
-            repo_url: 'https://github.com/acme/looker.git',
+            repoUrl: 'https://github.com/acme/looker.git',
             branch: 'main',
             path: 'models',
             auth_token_ref: 'env:GITHUB_TOKEN',
@@ -410,7 +412,7 @@ describe('local ingest adapters', () => {
     });
   });
 
-  it('rejects local LookML scheduled pulls when repo_url is missing', async () => {
+  it('rejects local LookML scheduled pulls when repoUrl is missing', async () => {
     const lookmlProject = {
       projectDir: tempDir,
       config: { connections: { 'prod-lookml': { driver: 'lookml' } } },

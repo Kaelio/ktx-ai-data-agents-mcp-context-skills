@@ -576,7 +576,8 @@ describe('createLocalProjectMcpContextPorts', () => {
       sourceName: 'orders',
       yaml: [
         'name: orders',
-        'description: Revenue facts',
+        'descriptions:',
+        '  user: Revenue facts',
         'table: public.orders',
         'grain:',
         '  - order_id',

@@ -80,14 +80,13 @@ const joinDeclarationSchema = z.object({
 
 const sourceColumnSchema = z.object({
   name: unqualifiedNameSchema,
-  // type/description optional on standalone sources: compose-time enrichment fills them
+  // type/descriptions optional on standalone sources: compose-time enrichment fills them
   // from the manifest entry named in `inherits_columns_from`. If the agent does not set
   // `inherits_columns_from`, or the column is not in the manifest, type must be present
   // — surfaced by sl_validate.
   type: z.enum(columnTypeValues).optional(),
   role: z.enum(columnRoleValues).optional(),
   visibility: z.enum(columnVisibilityValues).optional(),
-  description: z.string().optional(),
   descriptions: descriptionsSchema.optional(),
   expr: z.string().optional(),
   constraints: sourceKeyedColumnConstraintsSchema.optional(),
@@ -102,7 +101,6 @@ const overlayColumnSchema = z
     type: z.enum(columnTypeValues).optional(),
     role: z.enum(columnRoleValues).optional(),
     visibility: z.enum(columnVisibilityValues).optional(),
-    description: z.string().optional(),
     descriptions: descriptionsSchema.optional(),
     expr: z.string().optional(),
   })
@@ -114,7 +112,6 @@ const overlayColumnSchema = z
 export const sourceDefinitionSchema = z
   .object({
     name: z.string().min(1),
-    description: z.string().optional(),
     descriptions: descriptionsSchema.optional(),
     // Accepted for documentation parity with the Python spec; behavior is driven
     // by the `table` / `sql` fields, not by this discriminator.
@@ -150,7 +147,6 @@ export const sourceDefinitionSchema = z
 export const sourceOverlaySchema = z
   .object({
     name: z.string().min(1),
-    description: z.string().optional(),
     descriptions: z.record(z.string(), z.string()).optional(),
     grain: z.array(unqualifiedNameSchema).optional(),
     columns: z.array(overlayColumnSchema).optional(),

@@ -1,7 +1,8 @@
 name: churn_risk
-description: |
-  Customer churn risk score combining tenure,
-  usage trends, and support burden.
+descriptions:
+  user: |
+    Customer churn risk score combining tenure,
+    usage trends, and support burden.
 sql: |
   SELECT
     c.id AS customer_id,

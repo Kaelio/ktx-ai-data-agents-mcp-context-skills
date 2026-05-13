@@ -204,6 +204,7 @@ export function renderContextBuildView(
     '',
     header,
     separator,
+    ...(options.projectDir ? [`  Project: ${options.projectDir}`] : []),
     ...renderTargetGroup('Primary sources', state.primarySources, state.frame, styled, width),
     ...renderTargetGroup('Context sources', state.contextSources, state.frame, styled, width),
     '',
@@ -684,7 +685,7 @@ export async function runContextBuild(
   }
 
   if (!repainter) {
-    io.stdout.write(renderContextBuildView(state, { styled: false }));
+    io.stdout.write(renderContextBuildView(state, { ...viewOpts, styled: false }));
   } else {
     paint(false);
   }

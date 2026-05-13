@@ -168,6 +168,15 @@ describe('renderContextBuildView', () => {
     expect(output).toContain('(0/1 · 1m05s)');
   });
 
+  it('renders project directory when provided', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
+    ]);
+
+    const output = renderContextBuildView(state, { styled: false, projectDir: '/tmp/project' });
+    expect(output).toContain('Project: /tmp/project');
+  });
+
   it('renders dynamic separator matching header width', () => {
     const state = initViewState([
       { connectionId: 'warehouse', driver: 'postgres', operation: 'scan', debugCommand: '', steps: ['scan'] },
@@ -448,6 +457,7 @@ describe('runContextBuild', () => {
 
     const output = io.stdout();
     expect(output).toContain('Building KTX context');
+    expect(output).toContain('Project: /tmp/project');
     expect(output).toContain('Primary sources:');
     expect(output).toContain('warehouse');
     expect(output).toContain('Context sources:');

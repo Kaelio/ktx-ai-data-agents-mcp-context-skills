@@ -318,7 +318,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       `  Writing standalone would drop the manifest's columns and joins, leaving only what you list here.`,
       `To add measures/segments on top of the manifest, rewrite this YAML as an overlay:`,
       `  - Remove "sql:", "table:", "grain:", "columns:", and "joins:".`,
-      `  - Keep only "name:", plus "measures:", "segments:", and/or "description:".`,
+      `  - Keep only "name:", plus "measures:", "segments:", and/or "descriptions:".`,
       `  - The manifest's schema is inherited automatically.`,
       `If you really need a different base table, use a different source name.`,
     ].join('\n');

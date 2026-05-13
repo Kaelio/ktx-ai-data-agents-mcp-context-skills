@@ -27,7 +27,7 @@ Sales Ops must complete the handoff **before the first implementation call**. Cu
 
 | Field | Notes |
 |---|---|
-| Current plan | Starter / Growth / Enterprise — use canonical plan name, not legacy aliases |
+| Current plan | Starter / Growth / Enterprise — use canonical plan name |
 | Account segment | self_serve / commercial / enterprise (see `orbit-plan-segment-normalization`) |
 | Contract shape | Term, ARR, any discounts or custom terms |
 | Renewal contact | Named person on the customer side responsible for renewal |

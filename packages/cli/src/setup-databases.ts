@@ -1,4 +1,8 @@
-import { writeFile } from 'node:fs/promises';
+import { execFile as execFileCallback } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { delimiter, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { cancel, confirm, isCancel, multiselect, password, select, text } from '@clack/prompts';
 import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
@@ -17,6 +21,7 @@ import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
 
 const HISTORIC_SQL_WORK_UNIT_MAX_CONCURRENCY = 6;
+const execFileAsync = promisify(execFileCallback);
 
 export type KtxSetupDatabaseDriver =
   | 'sqlite'
@@ -39,7 +44,6 @@ export interface KtxSetupDatabasesArgs {
   disableHistoricSql?: boolean;
   historicSqlWindowDays?: number;
   historicSqlMinExecutions?: number;
-  historicSqlMinCalls?: number;
   historicSqlServiceAccountPatterns?: string[];
   historicSqlRedactionPatterns?: string[];
   skipDatabases: boolean;
@@ -82,6 +86,7 @@ export interface KtxSetupDatabasesDeps {
   prompts?: KtxSetupDatabasesPromptAdapter;
   testConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
   scanConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
+  rebuildNativeSqlite?: (io: KtxCliIo) => Promise<number>;
   listSchemas?: (projectDir: string, connectionId: string) => Promise<string[]>;
   listTables?: (projectDir: string, connectionId: string) => Promise<KtxTableListEntry[]>;
   historicSqlProbe?: KtxSetupHistoricSqlProbe;
@@ -856,14 +861,13 @@ async function maybeApplyHistoricSqlConfig(input: {
     dialect,
     filters: historicSqlFiltersForSetup(input.args.historicSqlServiceAccountPatterns),
   };
-  delete common[['serviceAccount', 'UserPatterns'].join('')];
 
   if (dialect === 'postgres') {
     return {
       ...input.connection,
       historicSql: {
         ...common,
-        minExecutions: input.args.historicSqlMinExecutions ?? input.args.historicSqlMinCalls ?? 5,
+        minExecutions: input.args.historicSqlMinExecutions ?? 5,
       },
     };
   }
@@ -956,6 +960,81 @@ function writePrefixedLines(write: (chunk: string) => void, output: string): voi
     if (line.length > 0) {
       write(`│  ${line}\n`);
     }
+  }
+}
+
+function envWithCurrentNodeFirst(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    PATH: `${dirname(process.execPath)}${delimiter}${env.PATH ?? ''}`,
+  };
+}
+
+function errorTextProperty(error: unknown, property: 'stderr' | 'stdout'): string {
+  if (typeof error !== 'object' || error === null || !(property in error)) {
+    return '';
+  }
+  const value = (error as Record<typeof property, unknown>)[property];
+  return typeof value === 'string' ? value : '';
+}
+
+function commandFailureOutput(error: unknown): string {
+  const stderr = errorTextProperty(error, 'stderr');
+  const stdout = errorTextProperty(error, 'stdout');
+  const message = error instanceof Error ? error.message : String(error);
+  return [stderr.trim(), stdout.trim(), message.trim()].filter((line) => line.length > 0).join('\n');
+}
+
+type PackageJsonScriptStatus = 'has-script' | 'exists' | 'missing';
+
+async function packageJsonScriptStatus(
+  packageJsonPath: string,
+  scriptName: string,
+): Promise<PackageJsonScriptStatus> {
+  try {
+    const parsed = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || !('scripts' in parsed)) {
+      return 'exists';
+    }
+    const scripts = (parsed as { scripts?: unknown }).scripts;
+    return typeof scripts === 'object' && scripts !== null && scriptName in scripts ? 'has-script' : 'exists';
+  } catch {
+    return 'missing';
+  }
+}
+
+async function nativeSqliteRebuildCommand(): Promise<{ cwd: string; args: string[] }> {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  let packageRoot: string | undefined;
+  while (true) {
+    const status = await packageJsonScriptStatus(join(dir, 'package.json'), 'native:rebuild');
+    if (status === 'has-script') {
+      return { cwd: dir, args: ['run', 'native:rebuild'] };
+    }
+    if (status === 'exists') {
+      packageRoot ??= dir;
+    }
+
+    const parent = dirname(dir);
+    if (parent === dir) {
+      return { cwd: packageRoot ?? process.cwd(), args: ['rebuild', 'better-sqlite3'] };
+    }
+    dir = parent;
+  }
+}
+
+async function defaultRebuildNativeSqlite(io: KtxCliIo): Promise<number> {
+  const command = await nativeSqliteRebuildCommand();
+  try {
+    await execFileAsync('pnpm', command.args, {
+      cwd: command.cwd,
+      env: envWithCurrentNodeFirst(),
+      maxBuffer: 1024 * 1024 * 16,
+    });
+    return 0;
+  } catch (error) {
+    writePrefixedLines((chunk) => io.stderr.write(chunk), commandFailureOutput(error));
+    return typeof (error as { code?: unknown })?.code === 'number' ? (error as { code: number }).code : 1;
   }
 }
 
@@ -1472,8 +1551,8 @@ async function validateAndScanConnection(input: {
   writeSetupSection(input.io, `Scanning ${input.connectionId}`, [
     'Running structural scan…',
   ]);
-  const scanIo = createBufferedCommandIo();
-  const scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
+  let scanIo = createBufferedCommandIo();
+  let scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
   if (scanCode !== 0) {
     const nativeSqliteDetail = nativeSqliteAbiMismatchDetail(`${scanIo.stderrText()}\n${scanIo.stdoutText()}`);
     if (nativeSqliteDetail) {
@@ -1483,10 +1562,32 @@ async function validateAndScanConnection(input: {
           `Structural scan failed for ${input.connectionId}.`,
           'Native SQLite is built for a different Node.js ABI.',
           `Detail: ${nativeSqliteDetail}`,
-          'Fix: pnpm run native:rebuild',
-          `Retry: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+          'Rebuilding Native SQLite with pnpm run native:rebuild…',
         ].join('\n'),
       );
+      const rebuildNativeSqlite = input.deps.rebuildNativeSqlite ?? defaultRebuildNativeSqlite;
+      const rebuildCode = await rebuildNativeSqlite(input.io);
+      if (rebuildCode === 0) {
+        writePrefixedLines(
+          (chunk) => input.io.stderr.write(chunk),
+          'Native SQLite rebuild complete. Retrying structural scan…',
+        );
+        const retryScanIo = createBufferedCommandIo();
+        scanCode = await scanConnection(input.projectDir, input.connectionId, retryScanIo);
+        scanIo = retryScanIo;
+      }
+      if (scanCode !== 0) {
+        writePrefixedLines(
+          (chunk) => input.io.stderr.write(chunk),
+          [
+            rebuildCode === 0
+              ? `Structural scan still failed for ${input.connectionId} after rebuilding Native SQLite.`
+              : `Native SQLite rebuild failed for ${input.connectionId}.`,
+            'Fix: pnpm run native:rebuild',
+            `Retry: ktx scan --project-dir ${input.projectDir} ${input.connectionId}`,
+          ].join('\n'),
+        );
+      }
     } else {
       flushPrefixedBufferedCommandOutput(input.io, scanIo);
       writePrefixedLines(
@@ -1497,7 +1598,9 @@ async function validateAndScanConnection(input: {
         ].join('\n'),
       );
     }
-    return false;
+    if (scanCode !== 0) {
+      return false;
+    }
   }
   const scanOutput = scanIo.stdoutText();
   const reportPath = readOutputValue(scanOutput, 'Report');

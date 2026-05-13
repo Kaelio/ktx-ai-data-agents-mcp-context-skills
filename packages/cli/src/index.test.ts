@@ -123,12 +123,12 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('Usage: ktx [options] [command]');
+    expect(testIo.stdout()).toContain('KTX data agent context layer CLI');
     for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'scan']) {
       expect(testIo.stdout()).toContain(`${command}`);
     }
     for (const removed of ['demo', 'init', 'connect', 'ask', 'knowledge', 'agent', 'completion', 'serve']) {
-      expect(testIo.stdout()).not.toContain(`${removed} [`);
-      expect(testIo.stdout()).not.toContain(`${removed} `);
+      expect(testIo.stdout()).not.toMatch(new RegExp(`^\\s+${removed}(?:\\s|\\[|$)`, 'm'));
     }
     expect(testIo.stdout()).toContain('--project-dir <path>');
     expect(testIo.stdout()).toContain('KTX_PROJECT_DIR');

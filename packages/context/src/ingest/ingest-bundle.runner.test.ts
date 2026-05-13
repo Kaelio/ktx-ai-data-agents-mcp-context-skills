@@ -1518,7 +1518,6 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           patternPagesWritten: 3,
           stalePatternPagesMarked: 1,
           archivedPatternPages: 1,
-          legacyPagesDeleted: 1,
         },
         warnings: [],
         errors: [],
@@ -1551,7 +1550,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(memoryFlow.snapshot().events).toContainEqual(
       expect.objectContaining({
         type: 'saved',
-        wikiCount: 6,
+        wikiCount: 5,
         slCount: 3,
       }),
     );

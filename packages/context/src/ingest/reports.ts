@@ -111,8 +111,7 @@ export function postProcessorSavedMemoryCounts(
     wikiCount:
       numericResultField(record, 'patternPagesWritten') +
       numericResultField(record, 'stalePatternPagesMarked') +
-      numericResultField(record, 'archivedPatternPages') +
-      numericResultField(record, 'legacyPagesDeleted'),
+      numericResultField(record, 'archivedPatternPages'),
     slCount: numericResultField(record, 'tableUsageMerged') + numericResultField(record, 'staleTablesMarked'),
   };
 }

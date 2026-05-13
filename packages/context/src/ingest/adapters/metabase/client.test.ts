@@ -32,10 +32,22 @@ function nativeCard(query: string, templateTags: Record<string, MetabaseTemplate
     dataset_query: {
       type: 'native',
       database: 6,
-      native: {
-        query,
-        'template-tags': templateTags,
-      },
+      stages: [{ 'lib/type': 'mbql.stage/native', native: query, 'template-tags': templateTags }],
+    },
+  };
+}
+
+function legacyNativeCard(query: string, templateTags: Record<string, MetabaseTemplateTag> = {}): MetabaseCard {
+  return {
+    id: 1,
+    name: 'Legacy native card',
+    type: 'model',
+    query_type: 'native',
+    database_id: 6,
+    dataset_query: {
+      type: 'native',
+      database: 6,
+      native: { query, 'template-tags': templateTags },
     },
   };
 }
@@ -277,6 +289,25 @@ describe('getDummyValueForWidgetType', () => {
   });
 });
 
+describe('MetabaseClient legacy native dataset query support', () => {
+  it('reads SQL and template tags from dataset_query.native', async () => {
+    const client = new MetabaseClient(runtime, fastRetryConfig);
+    const card = legacyNativeCard('SELECT * FROM orders WHERE status = {{ status }}', {
+      status: {
+        name: 'status',
+        type: 'text',
+        default: 'paid',
+      },
+    });
+
+    expect(client.getNativeSql(card)).toBe('SELECT * FROM orders WHERE status = {{ status }}');
+    expect(client.getTemplateTags(card)).toEqual({
+      status: expect.objectContaining({ name: 'status', type: 'text' }),
+    });
+    await expect(client.getCardSql(card)).resolves.toBe('SELECT * FROM orders WHERE status = {{ status }}');
+  });
+});
+
 describe('MetabaseClient.getResolvedSql', () => {
   function makeClient(setup?: (client: MetabaseClient) => void): MetabaseClient {
     const client = new MetabaseClient({ apiUrl: 'http://test', apiKey: 'k' });
@@ -318,7 +349,7 @@ describe('MetabaseClient.getResolvedSql', () => {
       dataset_query: {
         type: 'native',
         database: 6,
-        native: { query: 'SELECT a, b FROM base' },
+        stages: [{ 'lib/type': 'mbql.stage/native', native: 'SELECT a, b FROM base' }],
       },
     });
     const client = makeClient((client) => {

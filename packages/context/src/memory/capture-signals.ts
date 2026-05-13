@@ -114,7 +114,6 @@ export function stepBudgetFor(sourceType: MemoryAgentSourceType): number {
     case 'external_ingest':
       return 30;
     case 'backfill':
-    case 'sql-review-migration':
       return 25;
   }
 }
@@ -122,7 +121,7 @@ export function stepBudgetFor(sourceType: MemoryAgentSourceType): number {
 export function promptNameFor(sourceType: MemoryAgentSourceType): string {
   return sourceType === 'external_ingest'
     ? 'memory_agent_external_ingest'
-    : sourceType === 'backfill' || sourceType === 'sql-review-migration'
+    : sourceType === 'backfill'
       ? 'memory_agent_backfill'
       : 'memory_agent_research';
 }
