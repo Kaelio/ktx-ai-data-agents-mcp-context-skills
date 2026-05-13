@@ -307,7 +307,7 @@ describe('standalone built ktx CLI smoke', () => {
     });
   });
 
-  it('adds a redacted Notion connection through the built binary', async () => {
+  it('rejects the removed connection add command through the built binary', async () => {
     const projectDir = join(tempDir, 'notion-project');
     const init = await runSetupNewProject(projectDir);
     expectProjectStderr(init, projectDir);
@@ -327,23 +327,17 @@ describe('standalone built ktx CLI smoke', () => {
       '5',
     ]);
 
-    expectProjectStderr(add, projectDir);
-    expect(add.stdout).toContain('Connection: notion-main');
-    expect(add.stdout).toContain('Driver: notion');
+    expect(add.code).toBe(1);
+    expect(add.stdout).toBe('');
+    expect(add.stderr).toContain("unknown command 'add'");
 
     const yaml = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
-    expect(yaml).toContain('driver: notion');
-    expect(yaml).toContain('auth_token_ref: env:NOTION_TOKEN');
-    expect(yaml).toContain('crawl_mode: all_accessible');
-    expect(yaml).toContain('max_pages_per_run: 5');
+    expect(yaml).not.toContain('driver: notion');
+    expect(yaml).not.toContain('auth_token_ref: env:NOTION_TOKEN');
     expect(yaml).not.toContain('ntn_');
 
     const parsed = parseKtxProjectConfig(yaml);
-    expect(parsed.connections['notion-main']).toMatchObject({
-      driver: 'notion',
-      auth_token_ref: 'env:NOTION_TOKEN',
-      crawl_mode: 'all_accessible',
-    });
+    expect(parsed.connections['notion-main']).toBeUndefined();
   });
 
 });
