@@ -53,45 +53,43 @@ describe('KtxSqliteScanConnector', () => {
     writeFileSync(pointerPath, dbPath, 'utf-8');
 
     try {
-      expect(isKtxSqliteConnectionConfig({ driver: 'sqlite', path: 'warehouse.db', readonly: true })).toBe(true);
-      expect(isKtxSqliteConnectionConfig({ driver: 'postgres', url: 'env:DATABASE_URL', readonly: true })).toBe(
-        false,
-      );
+      expect(isKtxSqliteConnectionConfig({ driver: 'sqlite', path: 'warehouse.db' })).toBe(true);
+      expect(isKtxSqliteConnectionConfig({ driver: 'postgres', url: 'env:DATABASE_URL' })).toBe(false);
       expect(
         sqliteDatabasePathFromConfig({
           connectionId: 'warehouse',
           projectDir: tempDir,
-          connection: { driver: 'sqlite', path: 'warehouse.db', readonly: true },
+          connection: { driver: 'sqlite', path: 'warehouse.db' },
         }),
       ).toBe(dbPath);
       expect(
         sqliteDatabasePathFromConfig({
           connectionId: 'warehouse',
           projectDir: tempDir,
-          connection: { driver: 'sqlite', url: 'env:KTX_SQLITE_TEST_URL', readonly: true },
+          connection: { driver: 'sqlite', url: 'env:KTX_SQLITE_TEST_URL' },
         }),
       ).toBe(dbPath);
       expect(
         sqliteDatabasePathFromConfig({
           connectionId: 'warehouse',
           projectDir: tempDir,
-          connection: { driver: 'sqlite', url: `file://${dbPath}`, readonly: true },
+          connection: { driver: 'sqlite', url: `file://${dbPath}` },
         }),
       ).toBe(dbPath);
       expect(
         sqliteDatabasePathFromConfig({
           connectionId: 'warehouse',
           projectDir: tempDir,
-          connection: { driver: 'sqlite', path: `file:${pointerPath}`, readonly: true },
+          connection: { driver: 'sqlite', path: `file:${pointerPath}` },
         }),
       ).toBe(dbPath);
-      expect(() =>
+      expect(
         sqliteDatabasePathFromConfig({
           connectionId: 'warehouse',
           projectDir: tempDir,
-          connection: { driver: 'sqlite', path: 'warehouse.db', readonly: false },
+          connection: { driver: 'sqlite', path: 'warehouse.db' },
         }),
-      ).toThrow('Native SQLite connector requires connections.warehouse.readonly: true');
+      ).toBe(dbPath);
     } finally {
       if (originalDatabaseUrl === undefined) {
         delete process.env.KTX_SQLITE_TEST_URL;
@@ -104,7 +102,7 @@ describe('KtxSqliteScanConnector', () => {
   it('introspects schema, primary keys, row counts, views, and foreign keys', async () => {
     const connector = new KtxSqliteScanConnector({
       connectionId: 'warehouse',
-      connection: { driver: 'sqlite', path: dbPath, readonly: true },
+      connection: { driver: 'sqlite', path: dbPath },
       now: () => new Date('2026-04-29T10:00:00.000Z'),
     });
 
@@ -151,7 +149,7 @@ describe('KtxSqliteScanConnector', () => {
   it('runs samples, distinct values, statistics, and read-only SQL', async () => {
     const connector = new KtxSqliteScanConnector({
       connectionId: 'warehouse',
-      connection: { driver: 'sqlite', path: dbPath, readonly: true },
+      connection: { driver: 'sqlite', path: dbPath },
     });
 
     await expect(
@@ -199,7 +197,7 @@ describe('KtxSqliteScanConnector', () => {
     const introspection = createSqliteLiveDatabaseIntrospection({
       projectDir: tempDir,
       connections: {
-        warehouse: { driver: 'sqlite', path: 'warehouse.db', readonly: true },
+        warehouse: { driver: 'sqlite', path: 'warehouse.db' },
       },
       now: () => new Date('2026-04-29T10:00:00.000Z'),
     });

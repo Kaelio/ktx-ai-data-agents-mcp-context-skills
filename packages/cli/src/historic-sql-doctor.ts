@@ -86,8 +86,9 @@ async function defaultPostgresHistoricSqlProbe(
   const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
     await Promise.all([import('@ktx/context/ingest'), import('@ktx/connector-postgres')]);
 
+  const inputDriver = input.connection.driver ?? 'unknown';
   if (!isKtxPostgresConnectionConfig(input.connection)) {
-    throw new Error(`Native PostgreSQL connector cannot run driver "${input.connection.driver ?? 'unknown'}"`);
+    throw new Error(`Native PostgreSQL connector cannot run driver "${inputDriver}"`);
   }
 
   const client = new KtxPostgresHistoricSqlQueryClient({

@@ -57,7 +57,6 @@ function demoConfig(databasePath: string): string {
     `  ${DEMO_CONNECTION_ID}:`,
     '    driver: sqlite',
     `    path: ${JSON.stringify(databasePath)}`,
-    '    readonly: true',
     'storage:',
     '  state: sqlite',
     '  search: sqlite-fts5',

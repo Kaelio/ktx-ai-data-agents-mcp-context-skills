@@ -106,7 +106,6 @@ async function writeSqliteScanConfig(projectDir: string, dbPath: string, enrich 
       '  warehouse:',
       '    driver: sqlite',
       `    path: ${JSON.stringify(dbPath)}`,
-      '    readonly: true',
       'ingest:',
       '  adapters:',
       '    - live-database',

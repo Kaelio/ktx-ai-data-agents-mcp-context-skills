@@ -28,7 +28,6 @@ async function createProject(projectDir: string): Promise<void> {
       '  warehouse:',
       '    driver: sqlite',
       '    path: warehouse.db',
-      '    readonly: true',
       'ingest:',
       '  adapters:',
       '    - live-database',

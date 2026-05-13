@@ -94,7 +94,7 @@ describe('runKtxConnection', () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     await writeConnections(projectDir, {
-      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL', readonly: true },
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
       docs: { driver: 'notion', auth_token_ref: 'env:NOTION_TOKEN', crawl_mode: 'all_accessible' },
     });
     const io = makeIo();
@@ -123,7 +123,7 @@ describe('runKtxConnection', () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     await writeConnections(projectDir, {
-      warehouse: { driver: 'sqlite', readonly: true },
+      warehouse: { driver: 'sqlite' },
     });
     const { connector, introspect, cleanup } = nativeConnector('sqlite', ['customers', 'orders']);
     const createScanConnector = vi.fn(async () => connector);
@@ -202,7 +202,7 @@ describe('runKtxConnection', () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     await writeConnections(projectDir, {
-      warehouse: { driver: 'sqlite', readonly: true },
+      warehouse: { driver: 'sqlite' },
     });
     const cleanup = vi.fn(async () => undefined);
     const connector: KtxScanConnector = {

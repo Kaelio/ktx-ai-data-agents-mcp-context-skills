@@ -593,7 +593,6 @@ async function buildFieldsConnectionConfig(input: {
     username,
     ...(passwordRef ? { password: passwordRef } : {}),
     ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
-    readonly: true,
   };
 }
 
@@ -615,7 +614,6 @@ async function buildPastedUrlConnectionConfig(input: {
       driver: input.driver,
       url,
       ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
-      readonly: true,
     };
   }
 
@@ -629,7 +627,6 @@ async function buildPastedUrlConnectionConfig(input: {
       driver: input.driver,
       url: ref,
       ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
-      readonly: true,
     };
   }
 
@@ -637,7 +634,6 @@ async function buildPastedUrlConnectionConfig(input: {
     driver: input.driver,
     url,
     ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
-    readonly: true,
   };
 }
 
@@ -661,14 +657,12 @@ async function buildUrlConnectionConfig(input: {
         driver: input.driver,
         url: ref,
         ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
-        readonly: true,
       };
     }
     return {
       driver: input.driver,
       url,
       ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
-      readonly: true,
     };
   }
 
@@ -706,7 +700,7 @@ async function buildConnectionConfig(input: {
         'SQLite database file\nEnter a relative or absolute path, for example ./warehouse.sqlite.',
       ));
     if (path === undefined) return 'back';
-    return path ? { driver: 'sqlite', path, readonly: true } : null;
+    return path ? { driver: 'sqlite', path } : null;
   }
   if (driver === 'postgres' || driver === 'mysql' || driver === 'clickhouse' || driver === 'sqlserver') {
     return await buildUrlConnectionConfig({ driver, connectionId: input.connectionId, args, prompts });
@@ -728,7 +722,6 @@ async function buildConnectionConfig(input: {
       dataset_id: datasetId,
       credentials_json: normalizeFileReference(credentialsPath),
       ...(location ? { location } : {}),
-      readonly: true,
     };
   }
   if (driver === 'snowflake') {
@@ -767,7 +760,6 @@ async function buildConnectionConfig(input: {
       username,
       password: passwordRef,
       ...(role ? { role } : {}),
-      readonly: true,
     };
   }
   throw new Error(`Unsupported database driver: ${driver}`);

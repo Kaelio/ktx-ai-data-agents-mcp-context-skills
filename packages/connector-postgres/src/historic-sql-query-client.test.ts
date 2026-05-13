@@ -30,7 +30,6 @@ describe('KtxPostgresHistoricSqlQueryClient', () => {
       connectionId: 'warehouse',
       connection: {
         driver: 'postgres',
-        readonly: true,
         url: 'postgresql://readonly:secret@pg.example.test/warehouse', // pragma: allowlist secret
       },
       poolFactory,

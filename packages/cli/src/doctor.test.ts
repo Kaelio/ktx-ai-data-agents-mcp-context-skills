@@ -275,7 +275,6 @@ describe('runKtxDoctor', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:WAREHOUSE_DATABASE_URL',
-        '    readonly: true',
         '    historicSql:',
         '      enabled: true',
         '      dialect: postgres',

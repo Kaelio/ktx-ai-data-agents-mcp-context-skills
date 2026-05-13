@@ -145,7 +145,6 @@ describe('KtxSqlServerScanConnector', () => {
         driver: 'sqlserver',
         host: 'localhost',
         database: 'analytics',
-        readonly: true,
       }),
     ).toBe(true);
     expect(isKtxSqlServerConnectionConfig({ driver: 'mysql', host: 'localhost', database: 'analytics' })).toBe(false);
@@ -159,7 +158,6 @@ describe('KtxSqlServerScanConnector', () => {
           database: 'analytics',
           username: 'reader',
           trustServerCertificate: false,
-          readonly: true,
         },
       }),
     ).toMatchObject({
@@ -169,12 +167,6 @@ describe('KtxSqlServerScanConnector', () => {
       user: 'reader',
       options: { encrypt: true, trustServerCertificate: false },
     });
-    expect(() =>
-      sqlServerConnectionPoolConfigFromConfig({
-        connectionId: 'warehouse',
-        connection: { driver: 'sqlserver', host: 'db.example.test', database: 'analytics', readonly: false },
-      }),
-    ).toThrow('Native SQL Server connector requires connections.warehouse.readonly: true');
   });
 
   it('introspects schema, primary keys, comments, row counts, views, and foreign keys', async () => {
@@ -186,7 +178,6 @@ describe('KtxSqlServerScanConnector', () => {
         database: 'analytics',
         username: 'reader',
         schema: 'dbo',
-        readonly: true,
       },
       poolFactory: fakePoolFactory(),
       now: () => new Date('2026-04-29T16:00:00.000Z'),
@@ -246,7 +237,6 @@ describe('KtxSqlServerScanConnector', () => {
         database: 'analytics',
         username: 'reader',
         schema: 'dbo',
-        readonly: true,
       },
       poolFactory,
     });
@@ -315,7 +305,6 @@ describe('KtxSqlServerScanConnector', () => {
           database: 'analytics',
           username: 'reader',
           schema: 'dbo',
-          readonly: true,
         },
       },
       poolFactory: fakePoolFactory(),

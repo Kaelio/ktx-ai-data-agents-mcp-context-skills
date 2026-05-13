@@ -21,7 +21,6 @@ Agents should prefer environment or file references over literal secrets.
 | `url` | One of the connection methods | URL-style connectors | Database URL, `env:NAME`, or `file:/path/to/secret` |
 | `host`, `port`, `database`, `username`, `password` | One of the connection methods | PostgreSQL, MySQL, ClickHouse, SQL Server | Field-by-field connection values |
 | `schema` or `schemas` | No | schema-aware warehouses | Single schema or list of schemas to scan |
-| `readonly` | Strongly recommended | all primary sources | Marks the connection as read-only in KTX config |
 | `historicSql` | No | supported warehouses | Enables query-history ingestion when the warehouse supports it |
 | `path` | Yes for path-style SQLite | SQLite | Local SQLite database path or `env:NAME` reference |
 
@@ -37,7 +36,6 @@ connections:
     driver: postgres
     url: env:DATABASE_URL
     schema: public
-    readonly: true
 ```
 
 Or with individual fields:
@@ -55,7 +53,6 @@ connections:
       - public
       - analytics
     ssl: true
-    readonly: true
 ```
 
 ### Authentication
@@ -123,7 +120,6 @@ connections:
     username: KTX_SERVICE
     password: env:SNOWFLAKE_PASSWORD
     role: ANALYST
-    readonly: true
 ```
 
 For multiple schemas:
@@ -196,7 +192,6 @@ connections:
     credentials_json: file:~/.config/gcloud/bq-service-account.json
     dataset_id: analytics
     location: US
-    readonly: true
 ```
 
 For multiple datasets:
@@ -269,7 +264,6 @@ connections:
   my-clickhouse:
     driver: clickhouse
     url: http://localhost:8123/analytics
-    readonly: true
 ```
 
 Or with individual fields:
@@ -284,7 +278,6 @@ connections:
     username: default
     password: env:CH_PASSWORD
     ssl: false
-    readonly: true
 ```
 
 ### Authentication
@@ -328,7 +321,6 @@ connections:
   my-mysql:
     driver: mysql
     url: env:MYSQL_DATABASE_URL
-    readonly: true
 ```
 
 Or with individual fields:
@@ -343,7 +335,6 @@ connections:
     username: ktx_reader
     password: env:MYSQL_PASSWORD
     ssl: true
-    readonly: true
 ```
 
 ### Authentication
@@ -387,7 +378,6 @@ connections:
   my-sqlserver:
     driver: sqlserver
     url: env:SQLSERVER_DATABASE_URL
-    readonly: true
 ```
 
 Or with individual fields:
@@ -403,7 +393,6 @@ connections:
     password: env:MSSQL_PASSWORD
     schema: dbo
     trustServerCertificate: true
-    readonly: true
 ```
 
 For multiple schemas:
@@ -455,7 +444,6 @@ connections:
   my-sqlite:
     driver: sqlite
     path: ./data/warehouse.sqlite
-    readonly: true
 ```
 
 Path supports multiple formats:

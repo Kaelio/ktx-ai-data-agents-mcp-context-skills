@@ -734,12 +734,71 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).toContain('Usage: ktx ingest [options] [command]');
     expect(testIo.stdout()).toContain('Run or inspect local ingest memory-flow output');
     expect(testIo.stdout()).toContain('run');
+    expect(testIo.stdout()).toContain('text');
     expect(testIo.stdout()).toContain('status');
     expect(testIo.stdout()).toContain('watch');
     expect(testIo.stdout()).toContain('replay');
+    expect(testIo.stdout()).not.toContain('--manifest');
     expect(testIo.stdout()).not.toContain('--all');
     expect(testIo.stderr()).toBe('');
     expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it('routes text memory ingest through Commander without exposing chat ids', async () => {
+    const textIngest = vi.fn(async () => 0);
+    const testIo = makeIo();
+
+    await expect(
+      runKtxCli(
+        [
+          '--project-dir',
+          tempDir,
+          'ingest',
+          'text',
+          '--text',
+          'Revenue means gross receipts.',
+          '--text',
+          'Orders are completed purchases.',
+          '--connection-id',
+          'warehouse',
+          '--user-id',
+          'agent',
+          '--json',
+          '--fail-fast',
+        ],
+        testIo.io,
+        { textIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(textIngest).toHaveBeenCalledWith(
+      {
+        projectDir: tempDir,
+        texts: ['Revenue means gross receipts.', 'Orders are completed purchases.'],
+        files: [],
+        connectionId: 'warehouse',
+        userId: 'agent',
+        json: true,
+        failFast: true,
+      },
+      testIo.io,
+    );
+    expect(testIo.stderr()).toBe('');
+  });
+
+  it('documents text ingest inputs without a manifest option', async () => {
+    const textIngest = vi.fn(async () => 0);
+    const testIo = makeIo();
+
+    await expect(runKtxCli(['ingest', 'text', '--help'], testIo.io, { textIngest })).resolves.toBe(0);
+
+    expect(testIo.stdout()).toContain('Usage: ktx ingest text [options] [files...]');
+    expect(testIo.stdout()).toContain('--text <content>');
+    expect(testIo.stdout()).toContain('--connection-id <connectionId>');
+    expect(testIo.stdout()).toContain('--user-id <id>');
+    expect(testIo.stdout()).toContain('--fail-fast');
+    expect(testIo.stdout()).not.toContain('--manifest');
+    expect(textIngest).not.toHaveBeenCalled();
   });
 
   it('routes ingest run at the top level and rejects removed dev ingest', async () => {

@@ -38,7 +38,6 @@ export interface KtxSnowflakeConnectionConfig {
   privateKey?: string;
   passphrase?: string;
   role?: string;
-  readonly?: boolean;
   [key: string]: unknown;
 }
 
@@ -191,7 +190,9 @@ function toSnowflakeBinds(params: unknown[] | undefined): snowflake.Binds | unde
   return params?.map((value) => toSnowflakeBind(value));
 }
 
-export function isKtxSnowflakeConnectionConfig(connection: KtxSnowflakeConnectionConfig | undefined): boolean {
+export function isKtxSnowflakeConnectionConfig(
+  connection: KtxSnowflakeConnectionConfig | undefined,
+): connection is KtxSnowflakeConnectionConfig {
   return String(connection?.driver ?? '').toLowerCase() === 'snowflake';
 }
 
@@ -200,11 +201,9 @@ export function snowflakeConnectionConfigFromConfig(input: {
   connection: KtxSnowflakeConnectionConfig | undefined;
   env?: NodeJS.ProcessEnv;
 }): KtxSnowflakeResolvedConnectionConfig {
+  const inputDriver = input.connection?.driver ?? 'unknown';
   if (!isKtxSnowflakeConnectionConfig(input.connection)) {
-    throw new Error(`Native Snowflake connector cannot run driver "${input.connection?.driver ?? 'unknown'}"`);
-  }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Native Snowflake connector requires connections.${input.connectionId}.readonly: true`);
+    throw new Error(`Native Snowflake connector cannot run driver "${inputDriver}"`);
   }
   const env = input.env ?? process.env;
   const authMethod = input.connection?.authMethod ?? 'password';
@@ -395,7 +394,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   private async createConnection(): Promise<snowflake.Connection> {
     const patch = await this.sdkOptionsProvider?.resolve({
       account: this.resolved.account,
-      connection: { ...this.resolved, driver: 'snowflake', readonly: true },
+      connection: { ...this.resolved, driver: 'snowflake' },
     });
     if (patch?.close) {
       this.closeSdkOptions.push(patch.close);

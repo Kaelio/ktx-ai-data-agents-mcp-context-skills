@@ -78,7 +78,6 @@ describe('KtxSnowflakeScanConnector', () => {
         warehouse: 'WH',
         database: 'ANALYTICS',
         username: 'reader',
-        readonly: true,
       }),
     ).toBe(true);
     expect(isKtxSnowflakeConnectionConfig({ driver: 'bigquery' })).toBe(false);
@@ -94,7 +93,6 @@ describe('KtxSnowflakeScanConnector', () => {
           schema_name: 'PUBLIC',
           username: 'reader',
           password: 'fixture-pass', // pragma: allowlist secret
-          readonly: true,
         },
       }),
     ).toMatchObject({
@@ -105,12 +103,6 @@ describe('KtxSnowflakeScanConnector', () => {
       username: 'reader',
       authMethod: 'password',
     });
-    expect(() =>
-      snowflakeConnectionConfigFromConfig({
-        connectionId: 'warehouse',
-        connection: { driver: 'snowflake', account: 'acct', readonly: false },
-      }),
-    ).toThrow('Native Snowflake connector requires connections.warehouse.readonly: true');
   });
 
   it('introspects schema, primary keys, comments, row counts, and dimensions', async () => {
@@ -125,7 +117,6 @@ describe('KtxSnowflakeScanConnector', () => {
         schema_name: 'PUBLIC',
         username: 'reader',
         password: 'fixture-pass', // pragma: allowlist secret
-        readonly: true,
       },
       driverFactory: fakeDriverFactory(),
       now: () => new Date('2026-04-29T18:00:00.000Z'),
@@ -185,7 +176,6 @@ describe('KtxSnowflakeScanConnector', () => {
         schema_name: 'PUBLIC',
         username: 'reader',
         password: 'fixture-pass', // pragma: allowlist secret
-        readonly: true,
       },
       driverFactory,
     });
@@ -243,7 +233,6 @@ describe('KtxSnowflakeScanConnector', () => {
           schema_name: 'PUBLIC',
           username: 'reader',
           password: 'fixture-pass', // pragma: allowlist secret
-          readonly: true,
         },
       },
       driverFactory: fakeDriverFactory(),

@@ -59,7 +59,6 @@ describe('installed live-database artifact smoke helpers', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: "postgresql://ktx:postgres@127.0.0.1:15432/warehouse"', // pragma: allowlist secret
-        '    readonly: true',
         'storage:',
         '  state: sqlite',
         '  search: sqlite-fts5',

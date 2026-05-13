@@ -98,7 +98,7 @@ describe('setup sources step', () => {
         ...config,
         connections: {
           ...config.connections,
-          warehouse: { driver: 'postgres', url: 'env:DATABASE_URL', readonly: true },
+          warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
         },
         setup: {
           ...config.setup,
@@ -455,7 +455,6 @@ describe('setup sources step', () => {
       driver: 'snowflake',
       account: 'acme',
       database: 'analytics',
-      readonly: true,
     });
 
     const cases: Array<{

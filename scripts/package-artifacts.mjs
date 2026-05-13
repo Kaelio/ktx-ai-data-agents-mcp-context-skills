@@ -646,7 +646,6 @@ try {
       '  warehouse:',
       '    driver: sqlite',
       '    path: warehouse.db',
-      '    readonly: true',
       'storage:',
       '  state: sqlite',
       '  search: sqlite-fts5',

@@ -316,6 +316,10 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   registerIngestCommands(program, context, {
     runIngestWithProgress: async (ingestArgs, ingestIo, ingestDeps, defaultRunIngest) =>
       await (ingestDeps.ingest ?? defaultRunIngest)(ingestArgs, ingestIo),
+    runTextIngest: async (textIngestArgs, ingestIo, ingestDeps) => {
+      const { runKtxTextIngest } = await import('./text-ingest.js');
+      return await (ingestDeps.textIngest ?? runKtxTextIngest)(textIngestArgs, ingestIo);
+    },
   });
   registerScanCommands(program, context);
   registerWikiCommands(program, context);

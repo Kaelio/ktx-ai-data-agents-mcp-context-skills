@@ -54,9 +54,6 @@ export function sqliteDatabasePathFromConnection(input: KtxSqlQueryExecutionInpu
   if (driver !== 'sqlite' && driver !== 'sqlite3') {
     throw new Error(`Local SQLite execution cannot run driver "${input.connection?.driver ?? 'unknown'}".`);
   }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Local query execution requires connections.${input.connectionId}.readonly: true.`);
-  }
 
   const pathValue = stringConfigValue(input.connection, 'path');
   const urlValue = stringConfigValue(input.connection, 'url');

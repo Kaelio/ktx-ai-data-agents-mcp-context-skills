@@ -102,7 +102,7 @@ function metadataResults(): Map<string, FakeQueryResult> {
 
 describe('KtxPostgresScanConnector', () => {
   it('resolves configuration safely', () => {
-    expect(isKtxPostgresConnectionConfig({ driver: 'postgres', url: 'env:DATABASE_URL', readonly: true })).toBe(true);
+    expect(isKtxPostgresConnectionConfig({ driver: 'postgres', url: 'env:DATABASE_URL' })).toBe(true);
     expect(isKtxPostgresConnectionConfig({ driver: 'postgresql', host: 'db', database: 'analytics' })).toBe(true);
     expect(isKtxPostgresConnectionConfig({ driver: 'mysql', host: 'db' })).toBe(false);
     expect(
@@ -115,7 +115,6 @@ describe('KtxPostgresScanConnector', () => {
           username: 'reader',
           password: 'test-password', // pragma: allowlist secret
           schemas: ['analytics', 'public'],
-          readonly: true,
           ssl: true,
           rejectUnauthorized: false,
         },
@@ -134,7 +133,6 @@ describe('KtxPostgresScanConnector', () => {
       connection: {
         driver: 'postgres',
         url: 'env:DEMO_DATABASE_URL',
-        readonly: true,
       },
       env: {
         DEMO_DATABASE_URL: 'postgresql://reader@demo.example.test:5432/demo?sslmode=prefer',
@@ -148,12 +146,16 @@ describe('KtxPostgresScanConnector', () => {
     });
     expect(libpqPreferConfig).not.toHaveProperty('connectionString');
     expect(libpqPreferConfig).not.toHaveProperty('ssl');
-    expect(() =>
+    expect(
       postgresPoolConfigFromConfig({
         connectionId: 'warehouse',
         connection: { driver: 'postgres', host: 'db.example.test', database: 'analytics', username: 'reader' },
       }),
-    ).toThrow('Native PostgreSQL connector requires connections.warehouse.readonly: true');
+    ).toMatchObject({
+      host: 'db.example.test',
+      database: 'analytics',
+      user: 'reader',
+    });
   });
 
   it('introspects schemas, tables, views, primary keys, comments, row counts, and foreign keys', async () => {
@@ -166,7 +168,6 @@ describe('KtxPostgresScanConnector', () => {
         username: 'reader',
         password: 'test-password', // pragma: allowlist secret
         schema: 'public',
-        readonly: true,
       },
       poolFactory: fakePoolFactory(metadataResults()),
       now: () => new Date('2026-04-29T10:00:00.000Z'),
@@ -225,7 +226,6 @@ describe('KtxPostgresScanConnector', () => {
         username: 'reader',
         password: 'test-password', // pragma: allowlist secret
         schema: 'public',
-        readonly: true,
       },
       poolFactory: fakePoolFactory(metadataResults()),
     });
@@ -274,7 +274,6 @@ describe('KtxPostgresScanConnector', () => {
           username: 'reader',
           password: 'test-password', // pragma: allowlist secret
           schema: 'public',
-          readonly: true,
         },
       },
       poolFactory: fakePoolFactory(metadataResults()),
@@ -347,7 +346,6 @@ describe('KtxPostgresScanConnector', () => {
           username: 'reader',
           password: 'test-password', // pragma: allowlist secret
           schema: 'public',
-          readonly: true,
         },
       },
       poolFactory: endAwarePoolFactory,
@@ -383,7 +381,6 @@ describe('KtxPostgresScanConnector', () => {
         database: 'analytics',
         username: 'reader',
         password: 'test-password', // pragma: allowlist secret
-        readonly: true,
       },
       poolFactory,
     });

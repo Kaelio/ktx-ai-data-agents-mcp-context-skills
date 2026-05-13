@@ -162,9 +162,6 @@ function requirePostgresConnection(
   if (driver !== 'postgres') {
     throw new Error(`Local live-database ingest cannot run driver "${connection?.driver ?? 'unknown'}".`);
   }
-  if (connection?.readonly !== true) {
-    throw new Error(`Local live-database ingest requires connections.${connectionId}.readonly: true.`);
-  }
   if (typeof connection.url !== 'string' || connection.url.trim().length === 0) {
     throw new Error(`Local live-database ingest requires connections.${connectionId}.url.`);
   }
