@@ -24,7 +24,12 @@ import {
   runKtxSetupDatabasesStep,
 } from './setup-databases.js';
 import { type KtxSetupEmbeddingsDeps, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
-import { type KtxSetupModelDeps, isKtxSetupLlmConfigReady, runKtxSetupAnthropicModelStep } from './setup-models.js';
+import {
+  type KtxSetupLlmBackend,
+  type KtxSetupModelDeps,
+  isKtxSetupLlmConfigReady,
+  runKtxSetupAnthropicModelStep,
+} from './setup-models.js';
 import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
 import {
   isKtxPreAgentSetupReady,
@@ -65,9 +70,12 @@ export type KtxSetupArgs =
       inputMode: 'auto' | 'disabled';
       yes: boolean;
       cliVersion: string;
+      llmBackend?: KtxSetupLlmBackend;
       anthropicApiKeyEnv?: string;
       anthropicApiKeyFile?: string;
       anthropicModel?: string;
+      vertexProject?: string;
+      vertexLocation?: string;
       skipLlm: boolean;
       embeddingBackend?: 'openai' | 'sentence-transformers';
       embeddingApiKeyEnv?: string;
@@ -578,9 +586,12 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
           {
             projectDir: projectResult.projectDir,
             inputMode: args.inputMode,
+            ...(args.llmBackend ? { llmBackend: args.llmBackend } : {}),
             ...(args.anthropicApiKeyEnv ? { anthropicApiKeyEnv: args.anthropicApiKeyEnv } : {}),
             ...(args.anthropicApiKeyFile ? { anthropicApiKeyFile: args.anthropicApiKeyFile } : {}),
             ...(args.anthropicModel ? { anthropicModel: args.anthropicModel } : {}),
+            ...(args.vertexProject ? { vertexProject: args.vertexProject } : {}),
+            ...(args.vertexLocation ? { vertexLocation: args.vertexLocation } : {}),
             forcePrompt: forcePromptSteps.has('models') || runOnly === 'models',
             showPromptInstructions,
             skipLlm: args.skipLlm || !shouldRunModels,

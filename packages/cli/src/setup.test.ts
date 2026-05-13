@@ -73,7 +73,7 @@ describe('setup status', () => {
         '  provider:',
         '    backend: anthropic',
         '    anthropic:',
-        '      api_key: env:ANTHROPIC_API_KEY',
+        '      api_key: env:ANTHROPIC_API_KEY', // pragma: allowlist secret
         '  models:',
         '    default: claude-sonnet-4-6',
         'ingest:',
@@ -144,7 +144,7 @@ describe('setup status', () => {
         '    model: text-embedding-3-small',
         '    dimensions: 1536',
         '    openai:',
-        '      api_key: env:OPENAI_API_KEY',
+        '      api_key: env:OPENAI_API_KEY', // pragma: allowlist secret
       ].join('\n'),
       'utf-8',
     );
@@ -908,7 +908,7 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: false,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: true,
@@ -925,7 +925,51 @@ describe('setup status', () => {
       expect.objectContaining({
         projectDir: tempDir,
         inputMode: 'disabled',
-        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
+        anthropicModel: 'claude-sonnet-4-6',
+        skipLlm: false,
+      }),
+      testIo.io,
+    );
+  });
+
+  it('passes Vertex AI model setup args after project selection succeeds', async () => {
+    const testIo = makeIo();
+    const model = vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir }));
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'new',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: false,
+          cliVersion: '0.2.0',
+          llmBackend: 'vertex',
+          vertexProject: 'local-gcp-project',
+          vertexLocation: 'us-east5',
+          anthropicModel: 'claude-sonnet-4-6',
+          skipLlm: false,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        { model },
+      ),
+    ).resolves.toBe(0);
+
+    expect(model).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'vertex',
+        vertexProject: 'local-gcp-project',
+        vertexLocation: 'us-east5',
         anthropicModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
@@ -949,11 +993,11 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: true,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
-          embeddingApiKeyEnv: 'OPENAI_API_KEY',
+          embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
           skipEmbeddings: false,
           databaseSchemas: [],
           skipDatabases: true,
@@ -971,7 +1015,7 @@ describe('setup status', () => {
         cliVersion: '0.2.0',
         runtimeInstallPolicy: 'auto',
         embeddingBackend: 'openai',
-        embeddingApiKeyEnv: 'OPENAI_API_KEY',
+        embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
         skipEmbeddings: false,
       }),
       testIo.io,
@@ -1169,11 +1213,11 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: false,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
-          embeddingApiKeyEnv: 'OPENAI_API_KEY',
+          embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
           skipEmbeddings: false,
           databaseDrivers: ['postgres'],
           databaseConnectionId: 'warehouse',
@@ -2020,7 +2064,7 @@ describe('setup status', () => {
           inputMode: 'disabled',
           yes: false,
           cliVersion: '0.2.0',
-          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY',
+          anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
           anthropicModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: false,

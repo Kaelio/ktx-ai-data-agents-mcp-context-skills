@@ -2,6 +2,7 @@ import { type Command, InvalidArgumentError, Option } from '@commander-js/extra-
 import type { KtxCliCommandContext } from '../cli-program.js';
 import { resolveCommandProjectDir } from '../cli-program.js';
 import type { KtxSetupDatabaseDriver } from '../setup-databases.js';
+import type { KtxSetupLlmBackend } from '../setup-models.js';
 import type { KtxSetupSourceType } from '../setup-sources.js';
 
 async function runSetupArgs(
@@ -22,6 +23,13 @@ function positiveInteger(value: string): number {
 
 function embeddingBackend(value: string): 'openai' | 'sentence-transformers' {
   if (value === 'openai' || value === 'sentence-transformers') {
+    return value;
+  }
+  throw new InvalidArgumentError(`invalid choice '${value}'`);
+}
+
+function llmBackend(value: string): KtxSetupLlmBackend {
+  if (value === 'anthropic' || value === 'vertex') {
     return value;
   }
   throw new InvalidArgumentError(`invalid choice '${value}'`);
@@ -93,9 +101,12 @@ function shouldShowSetupEntryMenu(
     skipAgents?: boolean;
     yes?: boolean;
     input?: boolean;
+    llmBackend?: KtxSetupLlmBackend;
     anthropicApiKeyEnv?: string;
     anthropicApiKeyFile?: string;
     anthropicModel?: string;
+    vertexProject?: string;
+    vertexLocation?: string;
     skipLlm?: boolean;
     embeddingBackend?: string;
     embeddingApiKeyEnv?: string;
@@ -166,9 +177,12 @@ function shouldShowSetupEntryMenu(
     'skipAgents',
     'yes',
     'input',
+    'llmBackend',
     'anthropicApiKeyEnv',
     'anthropicApiKeyFile',
     'anthropicModel',
+    'vertexProject',
+    'vertexLocation',
     'skipLlm',
     'embeddingBackend',
     'embeddingApiKeyEnv',
@@ -227,9 +241,12 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .option('--skip-agents', 'Leave agent integration incomplete for now', false)
     .option('--yes', 'Accept safe defaults in non-interactive setup', false)
     .option('--no-input', 'Disable interactive terminal input')
+    .addOption(new Option('--llm-backend <backend>', 'LLM backend').argParser(llmBackend))
     .option('--anthropic-api-key-env <name>', 'Environment variable containing the Anthropic API key')
     .option('--anthropic-api-key-file <path>', 'File containing the Anthropic API key')
     .option('--anthropic-model <model>', 'Anthropic model ID to validate and save')
+    .option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path')
+    .option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path')
     .addOption(new Option('--skip-llm', 'Leave LLM setup incomplete for now').hideHelp().default(false))
     .addOption(new Option('--embedding-backend <backend>', 'Embedding backend').argParser(embeddingBackend))
     .option('--embedding-api-key-env <name>', 'Environment variable containing the embedding provider API key')
@@ -325,6 +342,16 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       context.setExitCode(1);
       return;
     }
+    if (options.llmBackend === 'vertex' && (options.anthropicApiKeyEnv || options.anthropicApiKeyFile)) {
+      context.io.stderr.write('Anthropic API key flags are only valid with --llm-backend anthropic.\n');
+      context.setExitCode(1);
+      return;
+    }
+    if (options.llmBackend === 'anthropic' && (options.vertexProject || options.vertexLocation)) {
+      context.io.stderr.write('Vertex AI flags are only valid with --llm-backend vertex.\n');
+      context.setExitCode(1);
+      return;
+    }
     if (options.embeddingApiKeyEnv && options.embeddingApiKeyFile) {
       context.io.stderr.write(
         'Choose only one embedding credential source: --embedding-api-key-env or --embedding-api-key-file.\n',
@@ -364,9 +391,12 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       inputMode: options.input === false ? 'disabled' : 'auto',
       yes: options.yes === true,
       cliVersion: context.packageInfo.version,
+      ...(options.llmBackend ? { llmBackend: options.llmBackend } : {}),
       ...(options.anthropicApiKeyEnv ? { anthropicApiKeyEnv: options.anthropicApiKeyEnv } : {}),
       ...(options.anthropicApiKeyFile ? { anthropicApiKeyFile: options.anthropicApiKeyFile } : {}),
       ...(options.anthropicModel ? { anthropicModel: options.anthropicModel } : {}),
+      ...(options.vertexProject ? { vertexProject: options.vertexProject } : {}),
+      ...(options.vertexLocation ? { vertexLocation: options.vertexLocation } : {}),
       skipLlm: options.skipLlm === true,
       ...(options.embeddingBackend ? { embeddingBackend: options.embeddingBackend } : {}),
       ...(options.embeddingApiKeyEnv ? { embeddingApiKeyEnv: options.embeddingApiKeyEnv } : {}),
