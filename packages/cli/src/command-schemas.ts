@@ -71,20 +71,3 @@ export const slQueryCommandSchema = z.object({
   runtimeInstallPolicy: z.enum(['prompt', 'auto', 'never']),
   maxRows: z.number().int().positive().optional(),
 });
-
-export const publicIngestRunCommandSchema = z.object({
-  command: z.literal('run'),
-  projectDir: projectDirSchema,
-  targetConnectionId: safeConnectionIdSchema.optional(),
-  all: z.boolean(),
-  json: z.boolean(),
-  inputMode: z.enum(['auto', 'disabled']),
-});
-
-export const publicIngestReadCommandSchema = z.object({
-  command: z.enum(['status', 'watch']),
-  projectDir: projectDirSchema,
-  runId: z.string().min(1).optional(),
-  json: z.boolean(),
-  inputMode: z.enum(['auto', 'disabled']),
-});

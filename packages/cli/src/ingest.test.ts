@@ -107,7 +107,7 @@ describe('runKtxIngest', () => {
     expect(statusIo.stderr()).toBe('');
   });
 
-  it('prints provider setup guidance when a skip-llm setup project runs dev ingest', async () => {
+  it('prints provider setup guidance when a skip-llm setup project runs ingest', async () => {
     const projectDir = join(tempDir, 'project');
     const setupIo = makeIo();
     await expect(
@@ -168,7 +168,7 @@ describe('runKtxIngest', () => {
 
     expect(runIo.stdout()).toBe('');
     expect(runIo.stderr()).toContain(
-      'ktx dev ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+      'ktx ingest run requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
     );
     expect(runIo.stderr()).toContain(
       `ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
@@ -663,7 +663,7 @@ describe('runKtxIngest', () => {
     ).resolves.toBe(1);
 
     expect(io.stderr()).toContain('source-dir uploads are not supported for the Metabase fan-out adapter');
-    expect(io.stderr()).not.toContain('ktx dev ingest run requires llm.provider.backend');
+    expect(io.stderr()).not.toContain('ktx ingest run requires llm.provider.backend');
     expect(io.stdout()).toBe('');
   });
 

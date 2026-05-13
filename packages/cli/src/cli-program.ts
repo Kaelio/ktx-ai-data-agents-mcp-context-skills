@@ -1,8 +1,9 @@
 import { Command, InvalidArgumentError } from '@commander-js/extra-typings';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
+import { registerIngestCommands } from './commands/ingest-commands.js';
 import { registerWikiCommands } from './commands/knowledge-commands.js';
-import { registerPublicIngestCommands } from './commands/public-ingest-commands.js';
+import { registerScanCommands } from './commands/scan-commands.js';
 import { registerSetupCommands } from './commands/setup-commands.js';
 import { registerSlCommands } from './commands/sl-commands.js';
 import { registerStatusCommands } from './commands/status-commands.js';
@@ -52,7 +53,7 @@ type CommandPathNode = CommandWithGlobalOptions & {
   parent?: CommandPathNode | null;
 };
 
-const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status']);
+const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'scan']);
 
 export interface CommandWithGlobalOptions {
   opts: () => object;
@@ -150,7 +151,7 @@ function isProjectAwareCommand(path: string[]): boolean {
 
   const rootCommand = path[1];
   if (rootCommand === 'dev') {
-    return path[2] !== undefined && path[2] !== 'completion' && path[2] !== 'runtime';
+    return path[2] !== undefined && path[2] !== 'runtime';
   }
   return rootCommand !== undefined && PROJECT_AWARE_ROOT_COMMANDS.has(rootCommand);
 }
@@ -175,9 +176,6 @@ function shouldSuppressProjectDirLine(path: string[], options: Record<string, un
   }
 
   if (commandPathKey === 'ktx ingest watch') {
-    return options.json !== true;
-  }
-  if (commandPathKey === 'ktx dev ingest watch') {
     return options.json !== true && options.plain !== true;
   }
   if (commandPathKey === 'ktx connection notion pick') {
@@ -229,7 +227,7 @@ function createBaseProgram(info: KtxCliPackageInfo, io: KtxCliIo): Command {
     .configureHelp({ showGlobalOptions: true })
     .addHelpText(
       'after',
-      '\nAdvanced:\n  ktx dev        Low-level diagnostics, scans, adapter commands, and mapping tools.\n',
+      '\nAdvanced:\n  ktx dev        Low-level project initialization and runtime management.\n',
     )
     .showHelpAfterError()
     .exitOverride()
@@ -314,7 +312,11 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
 
   registerSetupCommands(program, context);
   registerConnectionCommands(program, context);
-  registerPublicIngestCommands(program, context);
+  registerIngestCommands(program, context, {
+    runIngestWithProgress: async (ingestArgs, ingestIo, ingestDeps, defaultRunIngest) =>
+      await (ingestDeps.ingest ?? defaultRunIngest)(ingestArgs, ingestIo),
+  });
+  registerScanCommands(program, context);
   registerWikiCommands(program, context);
   registerSlCommands(program, context);
   registerStatusCommands(program, context);

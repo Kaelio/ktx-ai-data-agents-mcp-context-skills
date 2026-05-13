@@ -484,8 +484,8 @@ describe('verification snippets', () => {
     assert.match(source, /ktx dev runtime status ready/);
     assert.match(source, /runtimeStatusAfter\.kind, 'ready'/);
     assert.match(source, /runtimeStatusAfter\.manifest\.features/);
-    assert.match(source, /ktx dev runtime doctor/);
-    assert.match(source, /PASS Managed Python runtime/);
+    assert.match(source, /ktx dev runtime status/);
+    assert.match(source, /status: ready/);
     assert.match(source, /ktx dev runtime start/);
     assert.match(source, /ktx dev runtime start reuse/);
     assert.match(source, /Using existing KTX Python daemon/);
@@ -497,20 +497,18 @@ describe('verification snippets', () => {
     assert.match(source, /ktx dev runtime prune confirmed/);
     assert.match(source, /Removed stale KTX Python runtimes/);
     assert.match(source, /assert\.rejects\(\(\) => access\(staleRuntimeDir\)\)/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'dev',\s*'scan',\s*'warehouse'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'scan',\s*'warehouse'/);
     assert.match(source, /'--mode',\s*'enriched'/);
     assert.doesNotMatch(source, /'--enrich'/);
     assert.match(source, /ktx scan structural verified/);
     assert.match(source, /ktx scan enriched verified/);
-    assert.match(source, /scanReportJson\.artifactPaths\.manifestShards/);
-    assert.match(source, /scanReportJson\.artifactPaths\.enrichmentArtifacts/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
-    assert.match(source, /run\('pnpm', \['exec', 'ktx', 'dev', 'ingest', 'run'/);
+    assert.match(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
     assert.match(source, /access\(join\(projectDir, '\.ktx', 'db\.sqlite'\)\)/);
     assert.match(source, /SQLite knowledge index/);
-    assert.match(source, /ktx dev ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
-    assert.match(source, /ktx dev ingest provider guard verified/);
+    assert.match(source, /ktx ingest run requires llm\\.provider\\.backend: anthropic, vertex, or gateway/);
+    assert.match(source, /ktx ingest provider guard verified/);
   });
 
   describe('npmCliSmokeSource', () => {

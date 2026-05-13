@@ -105,53 +105,6 @@ test('runWorkspaceKtx drops a leading npm argument separator', async () => {
   ]);
 });
 
-test('runWorkspaceKtx skips stale-build checks for shell completion when dist exists', async () => {
-  const calls = [];
-  let statCalls = 0;
-
-  const exitCode = await runWorkspaceKtx(['dev', '__complete', '--shell', 'zsh', '--position', '2', '--', 'ktx', ''], {
-    rootDir: '/workspace/ktx',
-    access: async () => undefined,
-    stat: async (path) => {
-      statCalls += 1;
-      return {
-        mtimeMs: path.endsWith('/packages/cli/dist/bin.js') ? 2000 : 3000,
-        isDirectory: () => path.endsWith('/src') || path.endsWith('/packages'),
-      };
-    },
-    readdir: async () => {
-      throw new Error('completion should not scan source directories');
-    },
-    execFile: async (command, args, options) => {
-      calls.push({ command, args, cwd: options.cwd });
-      return { stdout: 'connect:Add, list, test, and map data sources\n', stderr: '' };
-    },
-    stdout: { write: () => undefined },
-    stderr: { write: () => undefined },
-  });
-
-  assert.equal(exitCode, 0);
-  assert.equal(statCalls, 0);
-  assert.deepEqual(calls, [
-    {
-      command: process.execPath,
-      args: [
-        '/workspace/ktx/packages/cli/dist/bin.js',
-        'dev',
-        '__complete',
-        '--shell',
-        'zsh',
-        '--position',
-        '2',
-        '--',
-        'ktx',
-        '',
-      ],
-      cwd: '/workspace/ktx',
-    },
-  ]);
-});
-
 test('runWorkspaceKtx builds the workspace CLI before running it when dist is missing', async () => {
   const calls = [];
   const logs = [];
@@ -199,7 +152,7 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
   const logs = [];
   let sourceMtimeMs = 3000;
 
-  const exitCode = await runWorkspaceKtx(['dev', 'scan', 'orbit', '--enrich'], {
+  const exitCode = await runWorkspaceKtx(['scan', 'orbit', '--mode', 'relationships'], {
     rootDir: '/workspace/ktx',
     access: async () => undefined,
     stat: async (path) => ({
@@ -232,7 +185,7 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
     calls.map((call) => [call.command, call.args]),
     [
       ['pnpm', ['run', 'build']],
-      [process.execPath, ['/workspace/ktx/packages/cli/dist/bin.js', 'dev', 'scan', 'orbit', '--enrich']],
+      [process.execPath, ['/workspace/ktx/packages/cli/dist/bin.js', 'scan', 'orbit', '--mode', 'relationships']],
     ],
   );
   assert.deepEqual(logs, [

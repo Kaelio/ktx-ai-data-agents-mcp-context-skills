@@ -95,7 +95,7 @@ note, not a warning.
 Run local historic-SQL ingest:
 
 ```bash
-pnpm run ktx -- dev ingest run --project-dir /tmp/ktx-postgres-historic \
+pnpm run ktx -- ingest run --project-dir /tmp/ktx-postgres-historic \
   --connection-id warehouse \
   --adapter historic-sql \
   --plain \
@@ -103,7 +103,7 @@ pnpm run ktx -- dev ingest run --project-dir /tmp/ktx-postgres-historic \
   --no-input
 ```
 
-The full `dev ingest run` path also runs curation WorkUnits, so it requires a
+The full `ingest run` path also runs curation WorkUnits, so it requires a
 configured LLM provider.
 
 Inspect the latest manifest:
@@ -127,6 +127,6 @@ table.
 - Missing grants: confirm `GRANT pg_read_all_stats TO ktx_reader;`.
 - Empty snapshot: rerun `scripts/generate-workload.sh base` and keep
   `--historic-sql-min-executions 2` for the smoke.
-- SQL-analysis failures: run `pnpm run ktx -- dev runtime doctor` from the KTX
+- SQL-analysis failures: run `pnpm run ktx -- dev runtime status` from the KTX
   repository root and confirm `uv`, the bundled Python wheel, and the managed
   runtime all pass.

@@ -12,7 +12,7 @@ Scanning connects to your database and extracts structural metadata. KTX stores 
 ### Running a scan
 
 ```bash
-ktx dev scan <connection-id>
+ktx scan <connection-id>
 ```
 
 This runs a structural scan by default. You can control what the scan does with the `--mode` flag:
@@ -25,25 +25,18 @@ This runs a structural scan by default. You can control what the scan does with 
 
 ```bash
 # Scan with relationship detection
-ktx dev scan my-postgres --mode relationships
+ktx scan my-postgres --mode relationships
 
 # Preview without writing results
-ktx dev scan my-postgres --dry-run
+ktx scan my-postgres --dry-run
 ```
 
-### Checking scan status
+### Checking scan results
 
-Every scan produces a run ID. Use it to check progress or review results:
+Every scan prints a summary and writes local artifacts. Use `ktx status` after a scan to review project readiness and follow-up setup work:
 
 ```bash
-# Check status of a scan run
-ktx dev scan status <run-id>
-
-# Print the full scan report
-ktx dev scan report <run-id>
-
-# Get the report as JSON for scripting
-ktx dev scan report <run-id> --json
+ktx status
 ```
 
 ### Relationship detection
@@ -56,49 +49,7 @@ Many databases lack declared foreign keys. KTX infers relationships by scoring c
 | 0.55 &ndash; 0.84 | `review` | Plausible — needs human review |
 | &lt; 0.55 | `rejected` | Low confidence — not applied |
 
-After a relationship scan, review the candidates:
-
-```bash
-# Show candidates pending review (default)
-ktx dev scan relationships <run-id>
-
-# Show all candidates regardless of status
-ktx dev scan relationships <run-id> --status all
-
-# Accept a specific candidate
-ktx dev scan relationships <run-id> --accept <candidate-id>
-
-# Reject a candidate with a note
-ktx dev scan relationships <run-id> --reject <candidate-id> --note "These columns share a name but are unrelated"
-```
-
-Once you've reviewed candidates, apply the accepted ones as joins in your semantic layer:
-
-```bash
-# Apply all accepted relationships
-ktx dev scan relationship-apply <run-id> --all-accepted
-
-# Preview what would be applied
-ktx dev scan relationship-apply <run-id> --all-accepted --dry-run
-
-# Apply a specific candidate
-ktx dev scan relationship-apply <run-id> --candidate <candidate-id>
-```
-
-### Calibrating thresholds
-
-As you review more relationships, KTX can evaluate whether the default thresholds (0.85 accept, 0.55 review) are optimal for your schema:
-
-```bash
-# See how your feedback aligns with current thresholds
-ktx dev scan relationship-calibration --connection my-postgres
-
-# Get threshold recommendations (needs 20+ labels, 5+ accepted, 5+ rejected)
-ktx dev scan relationship-thresholds --connection my-postgres
-
-# Export your review decisions as calibration labels
-ktx dev scan relationship-feedback --connection my-postgres
-```
+Relationship scans run with `ktx scan <connection-id> --mode relationships`. This command only executes the scan; relationship review and calibration subcommands are not part of the current CLI surface.
 
 ## Ingestion
 
@@ -115,19 +66,7 @@ Each ingest run follows this flow:
 ### Running an ingest
 
 ```bash
-# Ingest one configured context source
-ktx ingest my-dbt-source
-
-# Ingest every configured context source
-ktx ingest --all
-```
-
-The public `ktx ingest` command uses the source configuration in `ktx.yaml`, including the source `driver` and any adapter-specific paths or credentials.
-
-For adapter-level debugging, use the low-level `ktx dev ingest run` command:
-
-```bash
-ktx dev ingest run --connection-id my-dbt-source --adapter dbt
+ktx ingest run --connection-id my-dbt-source --adapter dbt
 ```
 
 Useful low-level flags:
@@ -152,7 +91,7 @@ ktx ingest status <run-id>
 ktx ingest watch
 
 # Replay a past ingest run
-ktx dev ingest replay <run-id>
+ktx ingest replay <run-id>
 ```
 
 The `watch` command opens an interactive TUI that shows the memory-flow output — every tool call, LLM decision, and artifact written during the ingest.
@@ -235,7 +174,7 @@ Orders in "pending" status for more than 48 hours are flagged for review.
 Every ingest session records a full transcript — tool calls, LLM responses, and write decisions. You can replay any session to debug why a source was written a certain way:
 
 ```bash
-ktx dev ingest replay <run-id> --viz
+ktx ingest replay <run-id> --viz
 ```
 
 This opens the same TUI view as the original run, letting you step through the agent's reasoning.

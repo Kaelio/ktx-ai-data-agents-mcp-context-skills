@@ -88,7 +88,7 @@ export function registerConnectionMetabaseCommands(connection: Command, context:
         '  ktx connection mapping refresh <connectionId> --auto-accept\n' +
         '  ktx connection mapping set <connectionId> databaseMappings <id>=<target>\n' +
         '  ktx connection mapping set-sync-enabled <connectionId> <id> --enabled true\n' +
-        '  ktx ingest <connectionId>\n',
+        '  ktx ingest run --connection-id <connectionId> --adapter metabase\n',
     )
     .option(
       '--map <metabaseDatabaseId=targetConnectionId>',

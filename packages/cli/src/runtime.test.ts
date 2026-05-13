@@ -5,7 +5,6 @@ import type {
   ManagedPythonDaemonStopResult,
 } from './managed-python-daemon.js';
 import type {
-  ManagedPythonRuntimeDoctorCheck,
   ManagedPythonRuntimeInstallResult,
   ManagedPythonRuntimeStatus,
 } from './managed-python-runtime.js';
@@ -288,28 +287,6 @@ describe('runKtxRuntime', () => {
       detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
       layout: { runtimeRoot: '/runtime' },
     });
-  });
-
-  it('returns failure for doctor when any check fails', async () => {
-    const io = makeIo();
-    const deps: KtxRuntimeDeps = {
-      doctorRuntime: vi.fn(async (): Promise<ManagedPythonRuntimeDoctorCheck[]> => [
-        { id: 'uv', label: 'uv', status: 'pass', detail: 'uv 0.9.5' },
-        {
-          id: 'runtime',
-          label: 'Managed Python runtime',
-          status: 'fail',
-          detail: 'No runtime manifest',
-          fix: 'Run: ktx dev runtime install --yes',
-        },
-      ]),
-    };
-
-    await expect(runKtxRuntime({ command: 'doctor', cliVersion: '0.2.0', json: false }, io.io, deps)).resolves.toBe(1);
-
-    expect(io.stdout()).toContain('PASS uv: uv 0.9.5');
-    expect(io.stdout()).toContain('FAIL Managed Python runtime: No runtime manifest');
-    expect(io.stdout()).toContain('Fix: Run: ktx dev runtime install --yes');
   });
 
   it('requires --yes before pruning stale runtime directories', async () => {

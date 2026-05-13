@@ -1,11 +1,7 @@
 import { resolve } from 'node:path';
 import type { Command } from '@commander-js/extra-typings';
 import { type CommandWithGlobalOptions, type KtxCliCommandContext, resolveCommandProjectDir } from './cli-program.js';
-import { registerCompletionCommands } from './commands/completion-commands.js';
-import { registerConnectionMappingCommands } from './commands/connection-commands.js';
-import { registerIngestCommands } from './commands/ingest-commands.js';
 import { registerRuntimeCommands } from './commands/runtime-commands.js';
-import { registerScanCommands } from './commands/scan-commands.js';
 import { profileMark } from './startup-profile.js';
 
 profileMark('module:dev');
@@ -13,7 +9,7 @@ profileMark('module:dev');
 export function registerDevCommands(program: Command, context: KtxCliCommandContext): void {
   const dev = program
     .command('dev', { hidden: true })
-    .description('Low-level diagnostics, scans, adapter commands, and mapping tools')
+    .description('Low-level project initialization and runtime management')
     .showHelpAfterError();
 
   dev.hook('preAction', (_thisCommand, actionCommand) => {
@@ -51,11 +47,4 @@ export function registerDevCommands(program: Command, context: KtxCliCommandCont
     );
 
   registerRuntimeCommands(dev, context);
-  registerScanCommands(dev, context);
-  registerIngestCommands(dev, context, {
-    runIngestWithProgress: async (ingestArgs, ingestIo, ingestDeps, defaultRunIngest) =>
-      await (ingestDeps.ingest ?? defaultRunIngest)(ingestArgs, ingestIo),
-  });
-  registerConnectionMappingCommands(dev, context);
-  registerCompletionCommands(dev, context, program);
 }

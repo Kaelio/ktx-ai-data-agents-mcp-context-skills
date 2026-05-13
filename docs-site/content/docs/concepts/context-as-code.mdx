@@ -59,7 +59,7 @@ dbt / Looker / Metabase / Notion
 
 A typical branch shows a semantic diff: "this ingest added 3 new sources from dbt, updated 2 join definitions based on schema changes, and created 1 knowledge page from a Notion doc." Analytics engineers review the diff, verify that the new sources look correct, and merge.
 
-Teams usually run this on demand while setting up a source, then schedule it once the source is stable. A cron job or CI schedule can run `ktx ingest --all --no-input` overnight on an ingest branch so the latest dbt manifests, BI metadata, and documentation updates are ready for review each morning.
+Teams usually run this on demand while setting up a source, then schedule it once the source is stable. A cron job or CI schedule can run `ktx ingest run --connection-id <id> --adapter <adapter> --no-input` overnight on an ingest branch so the latest dbt manifests, BI metadata, and documentation updates are ready for review each morning.
 
 Once merged, agents querying through the KTX CLI see the updated context immediately. No deployment step, no cache invalidation, no restart. The files are the source of truth, and agents read them on every request.
 
