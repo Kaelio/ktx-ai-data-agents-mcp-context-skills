@@ -57,27 +57,64 @@ async function writeProjectConfig(projectDir: string, embeddingLines: string[]):
 }
 
 describe('formatDoctorReport', () => {
-  it('prints exact fixes for failing setup checks', () => {
+  it('shows the failing check and its fix in plain output', () => {
     const checks: DoctorCheck[] = [
-      { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' },
+      { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127', group: 'toolchain' },
       {
         id: 'native-sqlite',
         label: 'Native SQLite',
         status: 'fail',
         detail: 'Cannot load better-sqlite3',
         fix: 'Run: pnpm run native:rebuild',
+        group: 'toolchain',
       },
     ];
 
-    expect(formatDoctorReport({ title: 'KTX setup doctor', checks })).toBe(
-      [
-        'KTX setup doctor',
-        'PASS Node 22+: v22.16.0 ABI 127',
-        'FAIL Native SQLite: Cannot load better-sqlite3',
-        '     Fix: Run: pnpm run native:rebuild',
-        '',
-      ].join('\n'),
-    );
+    const output = formatDoctorReport({ title: 'KTX status', checks });
+    expect(output).toContain('KTX status');
+    expect(output).toContain('✗ Environment');
+    expect(output).toContain('1 of 2 need attention');
+    expect(output).toContain('✗ Native SQLite: Cannot load better-sqlite3');
+    expect(output).toContain('→ Run: pnpm run native:rebuild');
+    expect(output).toContain('1 issue to fix.');
+  });
+
+  it('lists what was checked when a group has all passing checks', () => {
+    const checks: DoctorCheck[] = [
+      { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0', group: 'toolchain' },
+      { id: 'pnpm', label: 'pnpm 10.20+', status: 'pass', detail: '10.28.0', group: 'toolchain' },
+    ];
+
+    const output = formatDoctorReport({ title: 'KTX status', checks });
+    expect(output).toContain('✓ Environment');
+    expect(output).toContain('Node 22+ · pnpm 10.20+');
+    expect(output).not.toContain('v22.16.0');
+    expect(output).toContain('Everything ready.');
+  });
+
+  it('shows the underlying detail for a single-check group on the group line', () => {
+    const checks: DoctorCheck[] = [
+      {
+        id: 'semantic-search-embeddings',
+        label: 'Semantic search embeddings',
+        status: 'pass',
+        detail: 'openai/text-embedding-3-small (1536d) probe succeeded',
+        group: 'search',
+      },
+    ];
+
+    const output = formatDoctorReport({ title: 'KTX status', checks });
+    expect(output).toContain('✓ Semantic search');
+    expect(output).toContain('openai/text-embedding-3-small (1536d) probe succeeded');
+  });
+
+  it('lists every check in verbose mode', () => {
+    const checks: DoctorCheck[] = [
+      { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0', group: 'toolchain' },
+    ];
+
+    const output = formatDoctorReport({ title: 'KTX status', checks }, { verbose: true });
+    expect(output).toContain('✓ Node 22+: v22.16.0');
   });
 });
 
@@ -127,6 +164,7 @@ describe('runSetupDoctorChecks', () => {
       status: 'fail',
       detail: 'pnpm not found',
       fix: 'Run: corepack enable && corepack prepare pnpm@10.28.0 --activate',
+      group: 'toolchain',
     });
     expect(checks).toContainEqual({
       id: 'package-build',
@@ -134,6 +172,7 @@ describe('runSetupDoctorChecks', () => {
       status: 'fail',
       detail: 'Missing packages/cli/dist/bin.js',
       fix: 'Run: pnpm run build',
+      group: 'toolchain',
     });
   });
 
@@ -154,9 +193,11 @@ describe('runSetupDoctorChecks', () => {
     const testIo = makeIo();
 
     await expect(
-      runKtxDoctor({ command: 'setup', outputMode: 'plain', inputMode: 'disabled' }, testIo.io, {
-        runSetupChecks: async () => checks,
-      }),
+      runKtxDoctor(
+        { command: 'setup', outputMode: 'plain', inputMode: 'disabled', verbose: true },
+        testIo.io,
+        { runSetupChecks: async () => checks },
+      ),
     ).resolves.toBe(0);
 
     expect(checks).toContainEqual({
@@ -165,8 +206,9 @@ describe('runSetupDoctorChecks', () => {
       status: 'warn',
       detail: 'spawn corepack ENOENT',
       fix: 'Run: corepack enable',
+      group: 'toolchain',
     });
-    expect(testIo.stdout()).toContain('WARN Corepack: spawn corepack ENOENT');
+    expect(testIo.stdout()).toContain('⚠ Corepack: spawn corepack ENOENT');
     expect(testIo.stderr()).toBe('');
   });
 });
@@ -204,10 +246,43 @@ describe('runKtxDoctor', () => {
       ),
     ).resolves.toBe(1);
 
-    expect(testIo.stdout()).toContain('KTX setup doctor');
-    expect(testIo.stdout()).toContain('FAIL TypeScript package build: Missing packages/cli/dist/bin.js');
-    expect(testIo.stdout()).toContain('Fix: Run: pnpm run build');
+    expect(testIo.stdout()).toContain('KTX status');
+    expect(testIo.stdout()).toContain('No project here yet.');
+    expect(testIo.stdout()).toContain('Before you can run');
+    expect(testIo.stdout()).toContain('✗ TypeScript package build: Missing packages/cli/dist/bin.js');
+    expect(testIo.stdout()).toContain('→ Run: pnpm run build');
     expect(testIo.stderr()).toBe('');
+  });
+
+  it('leads with `ktx setup` and hides toolchain warnings when no project exists', async () => {
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'setup', outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {
+          runSetupChecks: async () => [
+            { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0', group: 'toolchain' },
+            {
+              id: 'corepack',
+              label: 'Corepack',
+              status: 'warn',
+              detail: 'spawn corepack ENOENT',
+              fix: 'Run: corepack enable',
+              group: 'toolchain',
+            },
+          ],
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const out = testIo.stdout();
+    expect(out).toContain('No project here yet.');
+    expect(out).toContain('Run');
+    expect(out).toContain('ktx setup');
+    expect(out).not.toContain('Corepack');
+    expect(out).not.toContain('Node 22+');
   });
 
   it('prints JSON setup report', async () => {
@@ -226,7 +301,7 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     expect(JSON.parse(testIo.stdout())).toEqual({
-      title: 'KTX setup doctor',
+      title: 'KTX status',
       checks: [{ id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' }],
     });
   });
@@ -261,9 +336,9 @@ describe('runKtxDoctor', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('KTX project doctor');
-    expect(testIo.stdout()).toContain('PASS Project config: warehouse');
-    expect(testIo.stdout()).toContain('PASS Connections: 1 configured');
+    expect(testIo.stdout()).toContain('KTX status');
+    expect(testIo.stdout()).toContain('· warehouse');
+    expect(testIo.stdout()).toContain('✓ Project');
   });
 
   it('includes Postgres historic-SQL readiness in project doctor output', async () => {
@@ -299,7 +374,7 @@ describe('runKtxDoctor', () => {
 
     await expect(
       runKtxDoctor(
-        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled', verbose: true },
         testIo.io,
         {
           runSetupChecks: async () => [
@@ -311,9 +386,9 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     expect(runHistoricSqlDoctorChecks).toHaveBeenCalledTimes(1);
-    expect(testIo.stdout()).toContain('PASS Postgres Historic SQL (warehouse): pg_stat_statements ready');
+    expect(testIo.stdout()).toContain('✓ Postgres Historic SQL (warehouse): pg_stat_statements ready');
     expect(testIo.stdout()).toContain('info: pg_stat_statements.max is 1000');
-    expect(testIo.stdout()).not.toContain('Fix: Update the Postgres parameter group or config');
+    expect(testIo.stdout()).not.toContain('→ Update the Postgres parameter group or config');
   });
 
   it('warns when semantic-search embeddings are not configured', async () => {
@@ -332,12 +407,13 @@ describe('runKtxDoctor', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('WARN Semantic search embeddings: ingest.embeddings.backend is deterministic.');
+    expect(testIo.stdout()).toContain('⚠ Semantic search');
+    expect(testIo.stdout()).toContain('ingest.embeddings.backend is deterministic.');
     expect(testIo.stdout()).toContain(
       'Semantic lane will be skipped; lexical, dictionary, and token lanes remain available.',
     );
     expect(testIo.stdout()).toContain(
-      `Fix: Run: ktx setup --project-dir ${tempDir} --no-input`,
+      `→ Run: ktx setup --project-dir ${tempDir} --no-input`,
     );
   });
 
@@ -355,7 +431,7 @@ describe('runKtxDoctor', () => {
 
     await expect(
       runKtxDoctor(
-        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled', verbose: true },
         testIo.io,
         {
           runSetupChecks: async () => [
@@ -377,7 +453,7 @@ describe('runKtxDoctor', () => {
       { text: 'KTX semantic search doctor probe', timeoutMs: 1234 },
     );
     expect(testIo.stdout()).toContain(
-      'PASS Semantic search embeddings: sentence-transformers/all-MiniLM-L6-v2 (384d) probe succeeded',
+      '✓ Semantic search embeddings: sentence-transformers/all-MiniLM-L6-v2 (384d) probe succeeded',
     );
   });
 
@@ -454,6 +530,7 @@ describe('runKtxDoctor', () => {
       detail:
         'sentence-transformers/all-MiniLM-L6-v2 (384d) probe failed: connect ECONNREFUSED 127.0.0.1:8765. Semantic lane will be skipped; lexical, dictionary, and token lanes remain available.',
       fix: `Run: ktx setup --project-dir ${tempDir} --no-input`,
+      group: 'search',
     });
   });
 });
