@@ -1,15 +1,17 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cancel, confirm, isCancel, multiselect, select } from '@clack/prompts';
 import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
 } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
-import { withMenuOptionsSpacing, withMultiselectNavigation } from './prompt-navigation.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { withMultiselectNavigation } from './prompt-navigation.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 export type KtxAgentTarget = 'claude-code' | 'codex' | 'cursor' | 'opencode' | 'universal';
 export type KtxAgentScope = 'project' | 'global';
@@ -238,10 +240,10 @@ export async function removeKtxAgentInstall(projectDir: string, io: KtxCliIo): P
 }
 
 export interface KtxSetupAgentsPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   multiselect(options: {
     message: string;
-    options: Array<{ value: string; label: string }>;
+    options: KtxSetupPromptOption[];
     required?: boolean;
   }): Promise<string[]>;
   cancel(message: string): void;
@@ -252,38 +254,11 @@ export interface KtxSetupAgentsDeps {
 }
 
 function createPromptAdapter(): KtxSetupAgentsPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
-      }
-      return String(value);
-    },
-    async multiselect(options) {
-      while (true) {
-        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-        if (isCancel(value)) {
-          cancel('Setup cancelled.');
-          return ['back'];
-        }
-        const selected = [...value] as string[];
-        if (selected.length === 0 && !options.required) {
-          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
-          if (isCancel(skipConfirmed)) {
-            cancel('Setup cancelled.');
-            return ['back'];
-          }
-          if (!skipConfirmed) continue;
-        }
-        return selected;
-      }
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({
+    selectCancelValue: 'back',
+    multiselectCancelValue: 'back',
+    confirmEmptyOptionalMultiselect: true,
+  });
 }
 
 const targetDisplayNames: Record<KtxAgentTarget, string> = {

@@ -26,9 +26,10 @@ export interface KtxScanArgs {
   runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
 }
 
-interface KtxScanDeps {
+export interface KtxScanDeps {
   runLocalScan?: typeof runLocalScan;
   createLocalIngestAdapters?: typeof createKtxCliLocalIngestAdapters;
+  progress?: KtxProgressPort;
 }
 
 function shouldUseStyledOutput(io: KtxCliIo): boolean {
@@ -257,7 +258,8 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
       args.mode !== 'structural' || args.detectRelationships
         ? await createKtxCliScanConnector(project, args.connectionId)
         : undefined;
-    const progress = createCliScanProgress(io);
+    const cliProgress = deps.progress ? null : createCliScanProgress(io);
+    const progress = deps.progress ?? cliProgress;
     try {
       const result = await (deps.runLocalScan ?? runLocalScan)({
         project,
@@ -272,12 +274,12 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
           ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
           ...(managedDaemon ? { managedDaemon } : {}),
         }),
-        progress,
+        ...(progress ? { progress } : {}),
       });
-      progress.flush();
+      cliProgress?.flush();
       writeRunSummary(result.report, args.projectDir, io);
     } finally {
-      progress.flush();
+      cliProgress?.flush();
     }
     return 0;
   } catch (error) {

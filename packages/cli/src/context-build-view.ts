@@ -1,9 +1,12 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, openSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { KtxProgressPort, KtxProgressUpdateOptions } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
+import type { KtxIngestProgressUpdate } from './ingest.js';
 import type {
   KtxPublicIngestArgs,
+  KtxPublicIngestDeps,
   KtxPublicIngestPlanTarget,
   KtxPublicIngestProject,
   KtxPublicIngestTargetResult,
@@ -25,6 +28,7 @@ export interface ContextBuildTargetState {
   failureText: string | null;
   startedAt: number | null;
   elapsedMs: number;
+  progressUpdatedAtMs: number | null;
 }
 
 export interface ContextBuildViewState {
@@ -55,6 +59,9 @@ export interface ContextBuildSourceProgressUpdate {
   status: 'queued' | 'running' | 'done' | 'failed';
   startedAtMs?: number;
   elapsedMs?: number;
+  percent?: number;
+  message?: string;
+  updatedAtMs?: number;
   summaryText?: string;
 }
 
@@ -64,6 +71,7 @@ export interface ContextBuildDeps {
   setupKeystroke?: (onDetach: () => void, onCtrlC: () => void) => (() => void) | null;
   onDetach?: () => void;
   onSourceProgress?: (sources: ContextBuildSourceProgressUpdate[]) => void;
+  sourceProgressThrottleMs?: number;
 }
 
 // --- Rendering ---
@@ -118,12 +126,26 @@ function extractPercent(detailLine: string | null): number | null {
 const BAR_WIDTH = 12;
 const BAR_FILLED = '█';
 const BAR_EMPTY = '░';
+const STALE_PROGRESS_UPDATE_MS = 30_000;
 
 function renderProgressBar(percent: number, styled: boolean): string {
   const filled = Math.round((percent / 100) * BAR_WIDTH);
   const empty = BAR_WIDTH - filled;
   const bar = `${BAR_FILLED.repeat(filled)}${BAR_EMPTY.repeat(empty)}`;
   return styled ? cyan(bar) : bar;
+}
+
+function staleProgressText(target: ContextBuildTargetState, styled: boolean): string | null {
+  if (target.startedAt === null || target.progressUpdatedAtMs === null || target.elapsedMs <= 0) {
+    return null;
+  }
+  const currentTimeMs = target.startedAt + target.elapsedMs;
+  const staleMs = currentTimeMs - target.progressUpdatedAtMs;
+  if (staleMs < STALE_PROGRESS_UPDATE_MS) {
+    return null;
+  }
+  const text = `last update ${formatDuration(staleMs)} ago`;
+  return styled ? dim(text) : text;
 }
 
 function targetDetail(target: ContextBuildTargetState, styled: boolean): string {
@@ -147,6 +169,8 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean): string 
       parts.push(`${renderProgressBar(percent, styled)} ${percent}%`);
     }
     parts.push(progressText);
+    const stale = staleProgressText(target, styled);
+    if (stale) parts.push(stale);
     if (elapsed) parts.push(styled ? dim(elapsed) : elapsed);
     return parts.join('  ');
   }
@@ -309,15 +333,42 @@ function createCaptureIo(onProgress: (message: string) => void, isTTY: boolean):
 
 // --- Source progress helpers ---
 
+function progressFieldsFromDetailLine(
+  detailLine: string | null,
+  updatedAtMs: number | null,
+): Pick<ContextBuildSourceProgressUpdate, 'percent' | 'message' | 'updatedAtMs'> {
+  if (!detailLine) return {};
+  const percent = extractPercent(detailLine);
+  const message = detailLine.replace(/^\[\d+%\]\s*/, '');
+  return {
+    ...(percent !== null ? { percent } : {}),
+    ...(message ? { message } : {}),
+    ...(updatedAtMs !== null ? { updatedAtMs } : {}),
+  };
+}
+
+function detailLineFromProgressSource(source: ContextBuildSourceProgressUpdate): string | null {
+  if (!source.message) return null;
+  if (typeof source.percent === 'number' && Number.isFinite(source.percent)) {
+    const percent = Math.max(0, Math.min(100, Math.round(source.percent)));
+    return `[${percent}%] ${source.message}`;
+  }
+  return source.message;
+}
+
 function collectSourceProgress(targets: ContextBuildTargetState[]): ContextBuildSourceProgressUpdate[] {
-  return targets.map((t) => ({
-    connectionId: t.target.connectionId,
-    operation: t.target.operation,
-    status: t.status,
-    ...(t.startedAt !== null ? { startedAtMs: t.startedAt } : {}),
-    ...(t.elapsedMs > 0 ? { elapsedMs: t.elapsedMs } : {}),
-    ...(t.summaryText ? { summaryText: t.summaryText } : {}),
-  }));
+  return targets.map((t) => {
+    const progressFields = progressFieldsFromDetailLine(t.detailLine, t.progressUpdatedAtMs);
+    return {
+      connectionId: t.target.connectionId,
+      operation: t.target.operation,
+      status: t.status,
+      ...(t.startedAt !== null ? { startedAtMs: t.startedAt } : {}),
+      ...(t.elapsedMs > 0 ? { elapsedMs: t.elapsedMs } : {}),
+      ...progressFields,
+      ...(t.summaryText ? { summaryText: t.summaryText } : {}),
+    };
+  });
 }
 
 export function viewStateFromSourceProgress(
@@ -328,11 +379,12 @@ export function viewStateFromSourceProgress(
   const makeTarget = (s: ContextBuildSourceProgressUpdate): ContextBuildTargetState => ({
     target: { connectionId: s.connectionId, driver: '', operation: s.operation, debugCommand: '', steps: [] },
     status: s.status,
-    detailLine: null,
+    detailLine: detailLineFromProgressSource(s),
     summaryText: s.summaryText ?? null,
     failureText: null,
     startedAt: s.startedAtMs ?? null,
     elapsedMs: s.status === 'running' && s.startedAtMs ? now - s.startedAtMs : (s.elapsedMs ?? 0),
+    progressUpdatedAtMs: s.updatedAtMs ?? null,
   });
 
   return {
@@ -453,6 +505,7 @@ function makeTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTargetS
     failureText: null,
     startedAt: null,
     elapsedMs: 0,
+    progressUpdatedAtMs: null,
   };
 }
 
@@ -534,6 +587,34 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
   };
 }
 
+function formatProgressDetail(update: Pick<KtxIngestProgressUpdate, 'percent' | 'message'>): string {
+  const percent = Math.max(0, Math.min(100, Math.round(update.percent)));
+  return `[${percent}%] ${update.message}`;
+}
+
+function createContextBuildProgressPort(
+  onProgress: (update: KtxIngestProgressUpdate) => void,
+  state: { progress: number } = { progress: 0 },
+  start = 0,
+  weight = 1,
+): KtxProgressPort {
+  return {
+    async update(value: number, message?: string, options?: KtxProgressUpdateOptions): Promise<void> {
+      const absoluteValue = start + Math.max(0, Math.min(1, value)) * weight;
+      state.progress = Math.max(state.progress, Math.min(1, absoluteValue));
+      if (!message) return;
+      onProgress({
+        percent: Math.max(0, Math.min(100, Math.round(state.progress * 100))),
+        message,
+        ...(options?.transient !== undefined ? { transient: options.transient } : {}),
+      });
+    },
+    startPhase(phaseWeight: number): KtxProgressPort {
+      return createContextBuildProgressPort(onProgress, state, state.progress, weight * phaseWeight);
+    },
+  };
+}
+
 export async function runContextBuild(
   project: KtxPublicIngestProject,
   args: ContextBuildArgs,
@@ -572,6 +653,19 @@ export async function runContextBuild(
   const execTarget = deps.executeTarget ?? executePublicIngestTarget;
   const reportIds = new Set<string>();
   const artifactPaths = new Set<string>();
+  const sourceProgressThrottleMs = deps.sourceProgressThrottleMs ?? 750;
+  let lastSourceProgressPublishedAt = Number.NEGATIVE_INFINITY;
+
+  const publishSourceProgress = (force = false): boolean => {
+    if (!deps.onSourceProgress) return false;
+    const now = nowFn();
+    if (!force && now - lastSourceProgressPublishedAt < sourceProgressThrottleMs) {
+      return false;
+    }
+    lastSourceProgressPublishedAt = now;
+    deps.onSourceProgress(collectSourceProgress(orderedTargets));
+    return true;
+  };
 
   let detached = false;
   let exiting = false;
@@ -623,25 +717,43 @@ export async function runContextBuild(
       targetState.status = 'running';
       targetState.startedAt = nowFn();
       paint(true);
-      deps.onSourceProgress?.(collectSourceProgress(orderedTargets));
+      publishSourceProgress(true);
+      let hasPendingProgressPublish = false;
+
+      const updateTargetProgress = (update: KtxIngestProgressUpdate) => {
+        targetState.detailLine = formatProgressDetail(update);
+        targetState.progressUpdatedAtMs = nowFn();
+        paint(true);
+        hasPendingProgressPublish = !publishSourceProgress(false);
+      };
 
       const capture = createCaptureIo(
         (message) => {
           targetState.detailLine = message;
+          targetState.progressUpdatedAtMs = nowFn();
           paint(true);
+          hasPendingProgressPublish = !publishSourceProgress(false);
         },
         false,
       );
+      const progressDeps: KtxPublicIngestDeps = {
+        scanProgress: createContextBuildProgressPort(updateTargetProgress),
+        ingestProgress: updateTargetProgress,
+      };
 
       let result: KtxPublicIngestTargetResult | null = null;
       let thrownError: unknown = null;
       try {
-        result = await execTarget(targetState.target, runArgs, capture.io, {});
+        result = await execTarget(targetState.target, runArgs, capture.io, progressDeps);
       } catch (error) {
         if (exiting) {
           throw error;
         }
         thrownError = error;
+      }
+
+      if (hasPendingProgressPublish) {
+        publishSourceProgress(true);
       }
 
       targetState.elapsedMs = nowFn() - (targetState.startedAt ?? nowFn());
@@ -669,7 +781,7 @@ export async function runContextBuild(
       if (failed) hasFailure = true;
 
       paint(true);
-      deps.onSourceProgress?.(collectSourceProgress(orderedTargets));
+      publishSourceProgress(true);
     }
   } finally {
     if (spinnerInterval) clearInterval(spinnerInterval);

@@ -90,7 +90,7 @@ describe('setup embeddings step', () => {
       message: EMBEDDING_OPTION_PROMPT_MESSAGE,
       options: [
         { value: 'sentence-transformers', label: 'Local sentence-transformers embeddings' },
-        { value: 'openai', label: 'OpenAI embeddings (recommended)' },
+        { value: 'openai', label: 'OpenAI embeddings', hint: 'recommended' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -136,6 +136,7 @@ describe('setup embeddings step', () => {
     const spinnerEvents: string[] = [];
     const spinner = vi.fn(() => ({
       start: (msg: string) => spinnerEvents.push(`start:${msg}`),
+      message: (msg: string) => spinnerEvents.push(`message:${msg}`),
       stop: (msg: string) => spinnerEvents.push(`stop:${msg}`),
       error: (msg: string) => spinnerEvents.push(`error:${msg}`),
     }));
@@ -193,6 +194,7 @@ describe('setup embeddings step', () => {
     const spinnerEvents: string[] = [];
     const spinner = vi.fn(() => ({
       start: (msg: string) => spinnerEvents.push(`start:${msg}`),
+      message: (msg: string) => spinnerEvents.push(`message:${msg}`),
       stop: (msg: string) => spinnerEvents.push(`stop:${msg}`),
       error: (msg: string) => spinnerEvents.push(`error:${msg}`),
     }));

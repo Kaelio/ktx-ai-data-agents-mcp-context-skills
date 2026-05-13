@@ -103,6 +103,88 @@ describe('runKtxIngest', () => {
     expect(statusIo.stderr()).toBe('');
   });
 
+  it('emits structured progress for non-TTY local ingest runs', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const progressEvents: Array<{ percent: number; message: string; transient?: boolean }> = [];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> => {
+      input.memoryFlow?.emit({ type: 'source_acquired', adapter: 'fake', trigger: 'manual_resync', fileCount: 2 });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 });
+      input.memoryFlow?.emit({ type: 'work_unit_started', unitKey: 'orders', skills: [], stepBudget: 4 });
+      input.memoryFlow?.emit({ type: 'work_unit_step', unitKey: 'orders', stepIndex: 2, stepBudget: 4 });
+      return completedLocalBundleRun(input, 'cli-local-progress-1');
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'cli-local-progress-1',
+          progress: (event) => progressEvents.push(event),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toEqual(
+      expect.arrayContaining([
+        { percent: 5, message: 'Fetching source files for warehouse/fake' },
+        { percent: 15, message: 'Fetched 2 source files from fake' },
+        { percent: 45, message: 'Planned 2 work units' },
+        expect.objectContaining({
+          message: 'Processing work units: 0/2 complete, 1 active; latest orders step 2/4',
+          transient: true,
+        }),
+      ]),
+    );
+    expect(io.stderr()).not.toContain('[15%] Fetched 2 source files from fake');
+  });
+
+  it('describes zero-work-unit ingest progress as finalizing instead of appearing half-planned', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const progressEvents: Array<{ percent: number; message: string; transient?: boolean }> = [];
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> => {
+      input.memoryFlow?.emit({ type: 'source_acquired', adapter: 'fake', trigger: 'manual_resync', fileCount: 2 });
+      input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 0, workUnitCount: 0, evictionCount: 0 });
+      return completedLocalBundleRun(input, 'cli-local-zero-progress-1');
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'cli-local-zero-progress-1',
+          progress: (event) => progressEvents.push(event),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toEqual(
+      expect.arrayContaining([
+        { percent: 80, message: 'No work units to process; finalizing ingest' },
+      ]),
+    );
+    expect(progressEvents).not.toContainEqual({ percent: 45, message: 'Planned 0 work units' });
+  });
+
   it('prints provider setup guidance when a skip-llm setup project runs ingest', async () => {
     const projectDir = join(tempDir, 'project');
     const setupIo = makeIo();
@@ -419,6 +501,65 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).toContain('status=running job=metabase-child-1');
     expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
     expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
+  });
+
+  it('emits structured progress for Metabase fan-out without writing progress to JSON output', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo();
+    const progressEvents: Array<{ percent: number; message: string }> = [];
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          progress: (event) => progressEvents.push(event),
+          runLocalMetabaseIngest: async (input) => {
+            input.progress?.onMetabaseFanoutPlanned?.({
+              metabaseConnectionId: 'prod-metabase',
+              children: [{ metabaseDatabaseId: 1, targetConnectionId: 'warehouse_a' }],
+            });
+            input.progress?.onMetabaseChildStarted?.({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+            });
+            input.progress?.onMetabaseChildCompleted?.({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+              status: 'done',
+            });
+            return {
+              metabaseConnectionId: 'prod-metabase',
+              status: 'all_succeeded',
+              totals: { workUnits: 0, failedWorkUnits: 0 },
+              children: [],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toEqual(
+      expect.arrayContaining([
+        { percent: 5, message: 'Checking Metabase mappings for prod-metabase' },
+        { percent: 10, message: 'Metabase prod-metabase: 1 mapped database' },
+        { percent: 25, message: 'Metabase database 1 -> warehouse_a running' },
+        { percent: 90, message: 'Metabase database 1 -> warehouse_a done' },
+      ]),
+    );
+    expect(io.stdout()).toContain('"status": "all_succeeded"');
+    expect(io.stderr()).not.toContain('Metabase ingest: prod-metabase');
   });
 
   it('runs Metabase scheduled ingest through the public CLI command path with real fan-out', async () => {

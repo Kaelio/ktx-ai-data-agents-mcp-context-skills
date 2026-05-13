@@ -1,7 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { cancel, isCancel, password, select, text } from '@clack/prompts';
 import { resolveLocalKtxLlmConfig } from '@ktx/context';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
@@ -13,9 +12,12 @@ import {
 } from '@ktx/context/project';
 import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
-import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
-import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+import { withTextInputNavigation } from './prompt-navigation.js';
 import { envCredentialReference, writeProjectLocalSecretReference } from './setup-secrets.js';
+import {
+  createKtxSetupPromptAdapter,
+  type KtxSetupPromptOption,
+} from './setup-prompts.js';
 
 export interface KtxSetupModelArgs {
   projectDir: string;
@@ -47,7 +49,7 @@ export interface AnthropicModelChoice {
 export type KtxSetupLlmBackend = 'anthropic' | 'vertex';
 
 export interface KtxSetupModelPromptAdapter {
-  select(options: { message: string; options: Array<{ value: string; label: string }> }): Promise<string>;
+  select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -145,31 +147,7 @@ interface GcloudProjectChoice {
 type GcloudCommandRunner = (args: string[], io: KtxCliIo) => Promise<GcloudAuthResult>;
 
 function createPromptAdapter(): KtxSetupModelPromptAdapter {
-  return {
-    async select(options) {
-      const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return 'back';
-      }
-      return value;
-    },
-    async text(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        text({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : value;
-    },
-    async password(options) {
-      const value = await withSetupInterruptConfirmation(() =>
-        password({ ...options, message: withTextInputNavigation(options.message) }),
-      );
-      return isCancel(value) ? undefined : value;
-    },
-    cancel(message) {
-      cancel(message);
-    },
-  };
+  return createKtxSetupPromptAdapter({ selectCancelValue: 'back' });
 }
 
 function createIndentedCommandIo(io: KtxCliIo): KtxCliIo {
@@ -786,7 +764,8 @@ async function chooseModel(
   const modelOptions = [
     ...selectableModels.map((model) => ({
       value: model.id,
-      label: `${model.label || model.id}${model.recommended ? ' (recommended)' : ''}`,
+      label: model.label || model.id,
+      ...(model.recommended ? { hint: 'recommended' } : {}),
     })),
     { value: 'manual', label: 'Enter a model ID manually' },
     { value: 'back', label: 'Back' },
@@ -827,7 +806,8 @@ async function chooseVertexModel(args: KtxSetupModelArgs, io: KtxCliIo, deps: Kt
     options: [
       ...selectableModels.map((model) => ({
         value: model.id,
-        label: `${model.label || model.id}${model.recommended ? ' (recommended)' : ''}`,
+        label: model.label || model.id,
+        ...(model.recommended ? { hint: 'recommended' } : {}),
       })),
       { value: 'manual', label: 'Enter a model ID manually' },
       { value: 'back', label: 'Back' },

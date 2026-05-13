@@ -570,6 +570,59 @@ describe('runKtxScan', () => {
     expect(io.stdout()).toContain('[55%] Semantic layer comparison found 5 changes across 18 tables');
   });
 
+  it('uses injected structured progress without requiring TTY progress output', async () => {
+    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    const progressEvents: Array<{ progress: number; message?: string; transient?: boolean }> = [];
+    const structuredProgress = {
+      async update(progress: number, message?: string, options?: { transient?: boolean }) {
+        progressEvents.push({
+          progress,
+          ...(message !== undefined ? { message } : {}),
+          ...(options?.transient !== undefined ? { transient: options.transient } : {}),
+        });
+      },
+      startPhase() {
+        return structuredProgress;
+      },
+    };
+    const runLocalScan = vi.fn(async (input: RunLocalScanOptions): Promise<LocalScanRunResult> => {
+      await input.progress?.update(0.42, 'Generating descriptions 4/10 tables', { transient: true });
+      return {
+        runId: 'scan-run-1',
+        status: 'done',
+        done: true,
+        connectionId: 'warehouse',
+        mode: 'structural',
+        dryRun: false,
+        syncId: 'sync-1',
+        report,
+      };
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxScan(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          connectionId: 'warehouse',
+          mode: 'structural',
+          detectRelationships: false,
+          dryRun: false,
+        },
+        io.io,
+        { runLocalScan, createLocalIngestAdapters: noLocalIngestAdapters, progress: structuredProgress },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toContainEqual({
+      progress: 0.42,
+      message: 'Generating descriptions 4/10 tables',
+      transient: true,
+    });
+    expect(io.stdout()).not.toContain('[42%] Generating descriptions 4/10 tables');
+  });
+
   it('updates transient TTY progress messages in place', async () => {
     const io = makeIo({ isTTY: true });
     const previousCi = process.env.CI;

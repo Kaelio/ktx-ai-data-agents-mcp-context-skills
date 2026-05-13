@@ -142,6 +142,16 @@ describe('setup context build state', () => {
       artifactPaths: [],
       retryableFailedTargets: [],
       commands: contextBuildCommands(tempDir, 'setup-context-local-abc123'),
+      sourceProgress: [
+        {
+          connectionId: 'warehouse',
+          operation: 'scan',
+          status: 'running',
+          percent: 42,
+          message: 'Generating descriptions 4/10 tables',
+          updatedAtMs: 1000,
+        },
+      ],
     });
 
     const state = await readKtxSetupContextState(tempDir);
@@ -155,6 +165,16 @@ describe('setup context build state', () => {
         status: `ktx status --project-dir ${tempDir}`,
         resume: `ktx setup --project-dir ${tempDir}`,
       },
+      sourceProgress: [
+        {
+          connectionId: 'warehouse',
+          operation: 'scan',
+          status: 'running',
+          percent: 42,
+          message: 'Generating descriptions 4/10 tables',
+          updatedAtMs: 1000,
+        },
+      ],
     });
     expect(JSON.stringify(state)).not.toContain('DATABASE_URL');
     expect(JSON.stringify(state)).not.toContain('NOTION_TOKEN');
@@ -545,6 +565,79 @@ describe('setup context build state', () => {
     expect(output).toContain('Context sources:');
     expect(output).toContain('docs');
     expect(output).not.toContain('KTX context built: detached');
+  });
+
+  it('re-renders the compact progress view when watched source messages change', async () => {
+    await writeReadyProject(tempDir);
+    await writeKtxSetupContextState(tempDir, {
+      runId: 'setup-context-local-progress-message',
+      status: 'detached',
+      startedAt: '2026-05-09T10:00:00.000Z',
+      updatedAt: '2026-05-09T10:00:00.000Z',
+      primarySourceConnectionIds: ['warehouse'],
+      contextSourceConnectionIds: [],
+      reportIds: [],
+      artifactPaths: [],
+      retryableFailedTargets: [],
+      commands: contextBuildCommands(tempDir, 'setup-context-local-progress-message'),
+      sourceProgress: [
+        {
+          connectionId: 'warehouse',
+          operation: 'scan' as const,
+          status: 'running' as const,
+          startedAtMs: Date.now() - 5000,
+          percent: 35,
+          message: 'Inspecting database schema',
+          updatedAtMs: 1000,
+        },
+      ],
+    });
+    const io = makeIo();
+    let polls = 0;
+    const updateRun = async () => {
+      polls++;
+      await writeKtxSetupContextState(tempDir, {
+        runId: 'setup-context-local-progress-message',
+        status: polls === 1 ? 'detached' : 'completed',
+        startedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: polls === 1 ? '2026-05-09T10:00:01.000Z' : '2026-05-09T10:00:02.000Z',
+        ...(polls === 1 ? {} : { completedAt: '2026-05-09T10:00:02.000Z' }),
+        primarySourceConnectionIds: ['warehouse'],
+        contextSourceConnectionIds: [],
+        reportIds: [],
+        artifactPaths: [],
+        retryableFailedTargets: [],
+        commands: contextBuildCommands(tempDir, 'setup-context-local-progress-message'),
+        sourceProgress: [
+          {
+            connectionId: 'warehouse',
+            operation: 'scan' as const,
+            status: polls === 1 ? ('running' as const) : ('done' as const),
+            startedAtMs: Date.now() - 5000,
+            elapsedMs: polls === 1 ? undefined : 6000,
+            percent: polls === 1 ? 76 : undefined,
+            message: polls === 1 ? 'Building embeddings 3/4 batches' : undefined,
+            updatedAtMs: polls === 1 ? 2000 : undefined,
+            summaryText: polls === 1 ? undefined : '42 tables',
+          },
+        ],
+      });
+    };
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto', autoWatch: true },
+        io.io,
+        {
+          sleep: updateRun,
+          watchIntervalMs: 1,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-progress-message' });
+
+    expect(io.stdout()).toContain('Inspecting database schema');
+    expect(io.stdout()).toContain('Building embeddings 3/4 batches');
+    expect(io.stdout()).toContain('warehouse');
   });
 
   it('supports d to detach from the progress watch view', async () => {
