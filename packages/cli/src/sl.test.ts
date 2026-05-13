@@ -98,7 +98,8 @@ describe('runKtxSl', () => {
           yaml: [
             'name: orders',
             'table: public.orders',
-            'description: Paid order facts',
+            'descriptions:',
+            '  user: Paid order facts',
             'grain: [order_id]',
             'columns:',
             '  - name: order_id',
