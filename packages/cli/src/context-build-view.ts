@@ -55,7 +55,7 @@ export interface ContextBuildResult {
 
 export interface ContextBuildSourceProgressUpdate {
   connectionId: string;
-  operation: 'scan' | 'source-ingest';
+  operation: 'database-ingest' | 'source-ingest';
   status: 'queued' | 'running' | 'done' | 'failed';
   startedAtMs?: number;
   elapsedMs?: number;
@@ -161,8 +161,9 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean): string 
   }
   if (target.status === 'running') {
     const percent = extractPercent(target.detailLine);
-    const progressText = target.detailLine?.replace(/^\[\d+%\]\s*/, '')
-      ?? (target.target.operation === 'scan' ? 'scanning...' : 'ingesting...');
+    const progressText =
+      target.detailLine?.replace(/^\[\d+%\]\s*/, '') ??
+      (target.target.operation === 'database-ingest' ? 'reading schema' : 'ingesting...');
     const elapsed = target.elapsedMs > 0 ? `(${formatDuration(target.elapsedMs)})` : null;
     const parts: string[] = [];
     if (percent !== null) {
@@ -229,7 +230,7 @@ export function renderContextBuildView(
     header,
     separator,
     ...(options.projectDir ? [`  Project: ${options.projectDir}`] : []),
-    ...renderTargetGroup('Primary sources', state.primarySources, state.frame, styled, width),
+    ...renderTargetGroup('Databases', state.primarySources, state.frame, styled, width),
     ...renderTargetGroup('Context sources', state.contextSources, state.frame, styled, width),
     '',
   ];
@@ -286,7 +287,7 @@ function collectOutputMetadata(
     if (reportLine) {
       const value = reportLine[1].trim();
       if (value && value !== 'none') {
-        if (operation === 'scan') artifactPaths.add(value);
+        if (operation === 'database-ingest') artifactPaths.add(value);
         else reportIds.add(value);
       }
     }
@@ -388,7 +389,7 @@ export function viewStateFromSourceProgress(
   });
 
   return {
-    primarySources: sources.filter((s) => s.operation === 'scan').map(makeTarget),
+    primarySources: sources.filter((s) => s.operation === 'database-ingest').map(makeTarget),
     contextSources: sources.filter((s) => s.operation === 'source-ingest').map(makeTarget),
     frame: 0,
     startedAt: startedAtMs ?? null,
@@ -567,7 +568,7 @@ function failureTextForTarget(input: {
 }): string {
   const code = networkErrorCode(input.error, input.capturedOutput);
   if (code) {
-    const operation = input.target.operation === 'scan' ? 'scanning' : 'ingesting';
+    const operation = input.target.operation === 'database-ingest' ? 'reading schema for' : 'ingesting';
     return [
       `KTX lost its connection to ${friendlyDriverName(input.target.driver)} while ${operation} ${input.target.connectionId}.`,
       `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
@@ -579,7 +580,7 @@ function failureTextForTarget(input: {
 
 export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuildViewState {
   return {
-    primarySources: targets.filter((t) => t.operation === 'scan').map(makeTargetState),
+    primarySources: targets.filter((t) => t.operation === 'database-ingest').map(makeTargetState),
     contextSources: targets.filter((t) => t.operation === 'source-ingest').map(makeTargetState),
     frame: 0,
     startedAt: null,
@@ -766,7 +767,7 @@ export async function runContextBuild(
       for (const artifactPath of metadata.artifactPaths) artifactPaths.add(artifactPath);
       if (!failed) {
         targetState.summaryText =
-          targetState.target.operation === 'scan'
+          targetState.target.operation === 'database-ingest'
             ? parseScanSummary(capturedOutput)
             : parseIngestSummary(capturedOutput);
       } else {

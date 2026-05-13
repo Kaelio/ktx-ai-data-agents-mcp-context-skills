@@ -805,7 +805,9 @@ describe('setup sources step', () => {
     expect(runInitialIngest).toHaveBeenCalledTimes(1);
     expect((await readConfig()).connections['dbt-main']).toMatchObject({ driver: 'dbt', source_dir: '/repo/dbt' });
     expect(io.stdout()).toContain('Context source saved without a completed context build for dbt-main.');
-    expect(io.stdout()).toContain('Run later: ktx ingest run --connection-id dbt-main --adapter <adapter>');
+    expect(io.stdout()).toContain('Run later: ktx ingest dbt-main');
+    expect(io.stdout()).not.toContain('ktx ingest run --connection-id');
+    expect(io.stdout()).not.toContain('--adapter');
   });
 
   it('retries initial source ingest from the failure menu', async () => {

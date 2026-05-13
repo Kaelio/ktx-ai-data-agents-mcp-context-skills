@@ -770,7 +770,7 @@ async function runInitialSourceIngestWithRecovery(input: {
     }
     if (action === 'continue') {
       input.io.stdout.write(`│  Context source saved without a completed context build for ${input.connectionId}.\n`);
-      input.io.stdout.write(`│  Run later: ktx ingest run --connection-id ${input.connectionId} --adapter <adapter>\n`);
+      input.io.stdout.write(`│  Run later: ktx ingest ${input.connectionId}\n`);
       return 'continue';
     }
     return 'back';
