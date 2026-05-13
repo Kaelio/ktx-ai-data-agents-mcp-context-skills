@@ -627,7 +627,7 @@ describe('runContextBuild', () => {
 
   it('passes schema-first notices from the plan into foreground output', async () => {
     const io = makeIo();
-    const project = {
+    const project: KtxPublicIngestProject = {
       ...projectWithConnections({
         warehouse: { driver: 'postgres', context: { depth: 'deep' } },
       }),

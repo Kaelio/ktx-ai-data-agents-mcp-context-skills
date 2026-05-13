@@ -534,7 +534,7 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain('Ingest finished with partial failures');
     expect(io.stdout()).toContain('warehouse failed at database-schema.');
     expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --fast');
-    expect(io.stdout()).not.toContain('Debug: ktx ingest warehouse --debug');
+    expect(io.stdout()).not.toContain('Debug:');
   });
 
   it('prints query-history retry guidance for query-history facet failures', async () => {
