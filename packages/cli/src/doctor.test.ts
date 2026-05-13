@@ -281,7 +281,7 @@ describe('runKtxDoctor', () => {
         'ingest:',
         '  adapters:',
         '    - live-database',
-        '    - historic-sql',
+        '    - historic-sql', // pragma: allowlist secret
         '',
       ].join('\n'),
       'utf-8',
