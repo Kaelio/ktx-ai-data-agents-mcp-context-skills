@@ -75,7 +75,6 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.connections.warehouse = {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     };
     const ports = createLocalProjectMcpContextPorts(project);
 
@@ -89,7 +88,6 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.connections.warehouse = {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     };
     const connector = testConnector();
     const createConnector = vi.fn(async () => connector);
@@ -125,7 +123,6 @@ describe('createLocalProjectMcpContextPorts', () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     project.config.connections.warehouse = {
       driver: 'postgres',
-      readonly: true,
     };
     project.config.ingest.adapters = ['fake'];
     project.config.ingest.embeddings = {
@@ -633,7 +630,6 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.connections.warehouse = {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     };
     const shapeOnlyPorts = createLocalProjectMcpContextPorts(project);
     await shapeOnlyPorts.semanticLayer?.writeSource({
@@ -720,7 +716,6 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.connections.warehouse = {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     };
     const shapeOnlyPorts = createLocalProjectMcpContextPorts(project);
     await shapeOnlyPorts.semanticLayer?.writeSource({
@@ -958,7 +953,6 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.connections.warehouse = {
       driver: 'postgres',
       url: 'postgres://localhost:5432/warehouse',
-      readonly: true,
     };
     project.config.ingest.adapters = ['live-database'];
     project.config.llm = {
@@ -1034,7 +1028,6 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.connections.warehouse = {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     };
     project.config.ingest.adapters = ['live-database'];
     const ports = createLocalProjectMcpContextPorts(project, {

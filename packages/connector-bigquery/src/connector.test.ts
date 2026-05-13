@@ -100,7 +100,6 @@ const connection = {
   dataset_id: 'analytics',
   credentials_json: JSON.stringify({ project_id: 'project-1', client_email: 'reader@example.test' }),
   location: 'US',
-  readonly: true,
 };
 
 describe('KtxBigQueryScanConnector', () => {
@@ -112,12 +111,6 @@ describe('KtxBigQueryScanConnector', () => {
       datasetIds: ['analytics'],
       location: 'US',
     });
-    expect(() =>
-      bigQueryConnectionConfigFromConfig({
-        connectionId: 'warehouse',
-        connection: { ...connection, readonly: false },
-      }),
-    ).toThrow('Native BigQuery connector requires connections.warehouse.readonly: true');
   });
 
   it('introspects datasets, table metadata, primary keys, and normalized types', async () => {

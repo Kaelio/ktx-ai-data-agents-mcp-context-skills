@@ -92,7 +92,6 @@ export function buildKtxYaml(postgresUrl) {
     '  warehouse:',
     '    driver: postgres',
     `    url: "${postgresUrl}"`,
-    '    readonly: true',
     'storage:',
     '  state: sqlite',
     '  search: sqlite-fts5',

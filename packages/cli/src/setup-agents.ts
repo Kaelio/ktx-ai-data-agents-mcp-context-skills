@@ -82,7 +82,7 @@ export function plannedKtxAgentFiles(input: {
         { kind: 'file', path: join(codexHome, 'instructions/ktx.md'), role: 'rule' as const },
       ];
     }
-    throw new Error(`Global ${input.target} installation is not supported; use --project.`);
+    throw new Error(`Global ${input.target} installation is not supported; omit --global.`);
   }
 
   const root = resolve(input.projectDir);

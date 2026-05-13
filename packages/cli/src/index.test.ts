@@ -323,6 +323,22 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe(`Project: ${tempDir}\n`);
   });
 
+  it('does not print the command-level project directory line for setup', async () => {
+    const setup = vi.fn(async () => 0);
+    const testIo = makeIo();
+
+    await expect(runKtxCli(['--project-dir', tempDir, 'setup', '--no-input'], testIo.io, { setup })).resolves.toBe(0);
+
+    expect(setup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        projectDir: tempDir,
+      }),
+      testIo.io,
+    );
+    expect(testIo.stderr()).toBe('');
+  });
+
   it('skips the project directory line for JSON output mode', async () => {
     const publicIngest = vi.fn(async () => 0);
     const jsonIo = makeIo();
@@ -410,35 +426,62 @@ describe('runKtxCli', () => {
     expect(io.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
   });
 
-  it('documents setup as a bare command without subcommands', async () => {
+  it('documents setup with only the common interactive options visible', async () => {
     const testIo = makeIo();
 
     await expect(runKtxCli(['setup', '--help'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx setup [options]');
-    expect(testIo.stdout()).not.toContain('Commands:');
-    expect(testIo.stdout()).not.toContain('setup demo');
-    expect(testIo.stdout()).not.toContain('setup context');
-    expect(testIo.stdout()).not.toContain('--skip-llm');
-    expect(testIo.stdout()).not.toContain('--skip-embeddings');
-    expect(testIo.stdout()).not.toContain('--embedding-model');
-    expect(testIo.stdout()).not.toContain('--embedding-dimensions');
-    expect(testIo.stdout()).not.toContain('--embedding-base-url');
-    for (const expected of [
+    const stdout = testIo.stdout();
+    expect(stdout).toContain('Usage: ktx setup [options]');
+    expect(stdout).toContain('--agents');
+    expect(stdout).toContain('--target <target>');
+    expect(stdout).toContain('--global');
+    expect(stdout).toContain('--yes');
+    expect(stdout).toContain('--no-input');
+    expect(stdout).toContain('Global Options:');
+    expect(stdout.match(/--project-dir <path>/g)).toHaveLength(1);
+    expect(stdout).not.toContain('Commands:');
+    expect(stdout).not.toContain('setup demo');
+    expect(stdout).not.toContain('setup context');
+
+    for (const hiddenFlag of [
+      '--new',
+      '--existing',
+      '--agent-scope',
+      '--skip-agents',
+      '--llm-backend',
+      '--anthropic-api-key-env',
+      '--vertex-project',
+      '--embedding-backend',
+      '--database ',
+      '--database-connection-id',
+      '--new-database-connection-id',
+      '--enable-historic-sql',
+      '--historic-sql-min-executions',
       '--enable-query-history',
       '--disable-query-history',
       '--query-history-window-days',
       '--query-history-min-executions',
       '--query-history-service-account-pattern',
       '--query-history-redaction-pattern',
+      '--skip-databases',
+      '--source ',
+      '--source-connection-id',
+      '--metabase-database-id',
+      '--notion-root-page-id',
+      '--skip-initial-source-ingest',
+      '--skip-sources',
+      '--skip-llm',
+      '--skip-embeddings',
+      '--embedding-model',
+      '--embedding-dimensions',
+      '--embedding-base-url',
     ]) {
-      expect(testIo.stdout()).toContain(expected);
+      expect(stdout).not.toContain(hiddenFlag);
     }
-    expect(testIo.stdout()).toContain('KTX cannot work until a database is added');
-    expect(testIo.stdout()).not.toContain('primary ' + 'source');
-    expect(testIo.stdout()).not.toContain('primary ' + 'sources');
-    expect(testIo.stdout()).not.toContain('--enable-historic-sql');
-    expect(testIo.stdout()).not.toContain('--historic-sql-window-days');
+    expect(stdout).not.toMatch(/^  --project\s/m);
+    expect(stdout).not.toContain('primary ' + 'source');
+    expect(stdout).not.toContain('primary ' + 'sources');
     expect(testIo.stderr()).toBe('');
   });
 
@@ -737,13 +780,30 @@ describe('runKtxCli', () => {
     expect(setup).not.toHaveBeenCalled();
   });
 
+  it('rejects removed setup options', async () => {
+    const setup = vi.fn(async () => 0);
+    const cases = [
+      ['setup', '--project'],
+      ['setup', '--agent-scope', 'global'],
+      ['setup', '--skip-initial-source-ingest'],
+    ];
+
+    for (const args of cases) {
+      const testIo = makeIo();
+      await expect(runKtxCli(['--project-dir', tempDir, ...args], testIo.io, { setup })).resolves.toBe(1);
+      expect(testIo.stderr()).toMatch(/unknown option|error:/i);
+    }
+
+    expect(setup).not.toHaveBeenCalled();
+  });
+
   it('prints ingest help without invoking ingest execution', async () => {
     const testIo = makeIo();
     const publicIngest = vi.fn();
 
     await expect(runKtxCli(['ingest', '--help'], testIo.io, { publicIngest })).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx ingest [options] [connectionId]');
+    expect(testIo.stdout()).toContain('Usage: ktx ingest');
     expect(testIo.stdout()).toContain('Build or inspect KTX context');
     expect(testIo.stdout()).toContain('--all');
     expect(testIo.stdout()).toContain('--fast');
@@ -751,12 +811,71 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).toContain('--query-history');
     expect(testIo.stdout()).toContain('--no-query-history');
     expect(testIo.stdout()).toContain('--query-history-window-days <days>');
+    expect(testIo.stdout()).toContain('text');
     expect(testIo.stdout()).not.toMatch(/^  status\s/m);
     expect(testIo.stdout()).not.toMatch(/^  replay\s/m);
     expect(testIo.stdout()).not.toMatch(/^  run\s/m);
     expect(testIo.stdout()).not.toMatch(/^  watch\s/m);
+    expect(testIo.stdout()).not.toContain('--manifest');
     expect(testIo.stderr()).toBe('');
     expect(publicIngest).not.toHaveBeenCalled();
+  });
+
+  it('routes text memory ingest through Commander without exposing chat ids', async () => {
+    const textIngest = vi.fn(async () => 0);
+    const testIo = makeIo();
+
+    await expect(
+      runKtxCli(
+        [
+          '--project-dir',
+          tempDir,
+          'ingest',
+          'text',
+          '--text',
+          'Revenue means gross receipts.',
+          '--text',
+          'Orders are completed purchases.',
+          '--connection-id',
+          'warehouse',
+          '--user-id',
+          'agent',
+          '--json',
+          '--fail-fast',
+        ],
+        testIo.io,
+        { textIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(textIngest).toHaveBeenCalledWith(
+      {
+        projectDir: tempDir,
+        texts: ['Revenue means gross receipts.', 'Orders are completed purchases.'],
+        files: [],
+        connectionId: 'warehouse',
+        userId: 'agent',
+        json: true,
+        failFast: true,
+      },
+      testIo.io,
+    );
+    expect(testIo.stderr()).toBe('');
+  });
+
+  it('documents text ingest inputs without a manifest option', async () => {
+    const textIngest = vi.fn(async () => 0);
+    const testIo = makeIo();
+
+    await expect(runKtxCli(['ingest', 'text', '--help'], testIo.io, { textIngest })).resolves.toBe(0);
+
+    expect(testIo.stdout()).toContain('Usage: ktx ingest text [options] [files...]');
+    expect(testIo.stdout()).toContain('--text <content>');
+    expect(testIo.stdout()).toContain('--connection-id <connectionId>');
+    expect(testIo.stdout()).toContain('--user-id <id>');
+    expect(testIo.stdout()).toContain('--fail-fast');
+    expect(testIo.stdout()).not.toContain('--manifest');
+    expect(textIngest).not.toHaveBeenCalled();
   });
 
   it('rejects old adapter-backed ingest flags at the top level and under dev', async () => {
@@ -1142,7 +1261,6 @@ describe('runKtxCli', () => {
           '--agents',
           '--target',
           'codex',
-          '--project',
           '--no-input',
           '--yes',
         ],

@@ -178,6 +178,10 @@ function shouldSuppressProjectDirLine(path: string[], options: Record<string, un
     return true;
   }
 
+  if (commandPathKey === 'ktx setup') {
+    return true;
+  }
+
   if (
     commandPathKey === 'ktx status' &&
     typeof options.projectDir !== 'string' &&
@@ -357,7 +361,12 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
 
   registerSetupCommands(program, context);
   registerConnectionCommands(program, context);
-  registerIngestCommands(program, context);
+  registerIngestCommands(program, context, {
+    runTextIngest: async (textIngestArgs, ingestIo, ingestDeps) => {
+      const { runKtxTextIngest } = await import('./text-ingest.js');
+      return await (ingestDeps.textIngest ?? runKtxTextIngest)(textIngestArgs, ingestIo);
+    },
+  });
   registerWikiCommands(program, context);
   registerSlCommands(program, context);
   registerStatusCommands(program, context);

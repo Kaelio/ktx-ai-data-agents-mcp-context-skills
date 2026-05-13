@@ -2,7 +2,6 @@ project: local-warehouse
 connections:
   warehouse:
     driver: postgres
-    readonly: true
 storage:
   state: sqlite
   search: sqlite-fts5

@@ -11,7 +11,6 @@ import {
   selectAllVisible,
   selectNone,
   toggleChecked,
-  TRANSIENT_HINT_DURATION_MS,
   visibleNodeIds,
   type NotionPickerPageInput,
 } from './notion-page-picker-tree.js';
@@ -223,22 +222,24 @@ describe('bulk actions and reducer effects', () => {
     });
   });
 
-  it('blocks empty saves, updates search state, and quits without saving', () => {
+  it('prompts skip-empty confirmation on empty save, updates search state, and quits without saving', () => {
     const state = buildInitialState({
       tree: buildPickerTree(pages()),
       existingRootPageIds: [],
       currentCrawlMode: 'selected_roots',
     });
 
-    const blockedSave = reducer(state, 'save-request', 9000);
-    expect(blockedSave).toEqual({
-      next: {
-        ...state,
-        transientHint: {
-          text: 'Select at least one page or press q to quit',
-          expiresAt: 9000 + TRANSIENT_HINT_DURATION_MS,
-        },
-      },
+    const emptySave = reducer(state, 'save-request');
+    expect(emptySave).toEqual({
+      next: { ...state, pendingConfirm: 'skip-empty' },
+      effect: null,
+    });
+    expect(reducer(emptySave.next, 'save-confirm')).toEqual({
+      next: { ...state, pendingConfirm: null },
+      effect: 'quit-without-save',
+    });
+    expect(reducer(emptySave.next, 'save-cancel')).toEqual({
+      next: { ...state, pendingConfirm: null },
       effect: null,
     });
     expect(
@@ -262,7 +263,7 @@ describe('bulk actions and reducer effects', () => {
     const withHint = {
       ...state,
       transientHint: {
-        text: 'Select at least one page or press q to quit',
+        text: 'Select at least one page or press esc to cancel',
         expiresAt: 11500,
       },
     };

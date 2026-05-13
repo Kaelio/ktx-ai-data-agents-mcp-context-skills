@@ -69,7 +69,6 @@ export interface KtxProjectScanConfig {
 export interface KtxProjectConnectionConfig {
   driver: string;
   url?: string;
-  readonly?: boolean;
   [key: string]: unknown;
 }
 

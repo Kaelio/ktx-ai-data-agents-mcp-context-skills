@@ -38,7 +38,7 @@ describe('createSqliteQueryExecutor', () => {
     const result = await executor.execute({
       connectionId: 'warehouse',
       projectDir: tempDir,
-      connection: { driver: 'sqlite', path: 'warehouse.db', readonly: true },
+      connection: { driver: 'sqlite', path: 'warehouse.db' },
       sql: 'select status, count(*) as order_count from orders group by status order by status',
       maxRows: 10,
     });
@@ -60,7 +60,7 @@ describe('createSqliteQueryExecutor', () => {
       sqliteDatabasePathFromConnection({
         connectionId: 'warehouse',
         projectDir: tempDir,
-        connection: { driver: 'sqlite', url: `file://${dbPath}`, readonly: true },
+        connection: { driver: 'sqlite', url: `file://${dbPath}` },
         sql: 'select 1',
       }),
     ).toBe(dbPath);
@@ -74,7 +74,7 @@ describe('createSqliteQueryExecutor', () => {
       sqliteDatabasePathFromConnection({
         connectionId: 'warehouse',
         projectDir: tempDir,
-        connection: { driver: 'sqlite', path: `file:${pointerPath}`, readonly: true },
+        connection: { driver: 'sqlite', path: `file:${pointerPath}` },
         sql: 'select 1',
       }),
     ).toBe(dbPath);
@@ -89,7 +89,7 @@ describe('createSqliteQueryExecutor', () => {
         sqliteDatabasePathFromConnection({
           connectionId: 'warehouse',
           projectDir: tempDir,
-          connection: { driver: 'sqlite', url: 'env:KTX_SQLITE_TEST_URL', readonly: true },
+          connection: { driver: 'sqlite', url: 'env:KTX_SQLITE_TEST_URL' },
           sql: 'select 1',
         }),
       ).toBe(dbPath);
@@ -109,20 +109,20 @@ describe('createSqliteQueryExecutor', () => {
       executor.execute({
         connectionId: 'warehouse',
         projectDir: tempDir,
-        connection: { driver: 'sqlite', path: 'warehouse.db', readonly: true },
+        connection: { driver: 'sqlite', path: 'warehouse.db' },
         sql: 'delete from orders',
       }),
     ).rejects.toThrow('Only read-only SELECT/WITH queries can be executed locally');
   });
 
-  it('requires a SQLite driver, read-only config, and a database path', async () => {
+  it('requires a SQLite driver and a database path', async () => {
     const executor = createSqliteQueryExecutor();
 
     await expect(
       executor.execute({
         connectionId: 'warehouse',
         projectDir: tempDir,
-        connection: { driver: 'postgres', path: 'warehouse.db', readonly: true },
+        connection: { driver: 'postgres', path: 'warehouse.db' },
         sql: 'select 1',
       }),
     ).rejects.toThrow('Local SQLite execution cannot run driver "postgres"');
@@ -131,16 +131,7 @@ describe('createSqliteQueryExecutor', () => {
       executor.execute({
         connectionId: 'warehouse',
         projectDir: tempDir,
-        connection: { driver: 'sqlite', path: 'warehouse.db', readonly: false },
-        sql: 'select 1',
-      }),
-    ).rejects.toThrow('Local query execution requires connections.warehouse.readonly: true');
-
-    await expect(
-      executor.execute({
-        connectionId: 'warehouse',
-        projectDir: tempDir,
-        connection: { driver: 'sqlite', readonly: true },
+        connection: { driver: 'sqlite' },
         sql: 'select 1',
       }),
     ).rejects.toThrow('Local SQLite execution requires connections.warehouse.path or connections.warehouse.url');

@@ -58,7 +58,7 @@ describe('project directory defaults', () => {
         argv: ['setup', '--no-input'],
         spy: setup,
         expected: { command: 'run', projectDir: '/tmp/ktx-env-project' },
-        expectedStderr: 'Project: /tmp/ktx-env-project\n',
+        expectedStderr: '',
       },
       {
         argv: ['ingest', 'warehouse', '--no-input'],

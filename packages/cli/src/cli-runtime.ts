@@ -8,6 +8,7 @@ import type { KtxRuntimeArgs } from './runtime.js';
 import type { KtxSetupArgs } from './setup.js';
 import type { KtxSlArgs } from './sl.js';
 import { profileMark, profileSpan } from './startup-profile.js';
+import type { KtxTextIngestArgs } from './text-ingest.js';
 
 profileMark('module:cli-runtime');
 
@@ -29,6 +30,7 @@ export interface KtxCliDeps {
   connection?: (args: KtxConnectionArgs, io: KtxCliIo) => Promise<number>;
   doctor?: (args: KtxDoctorArgs, io: KtxCliIo) => Promise<number>;
   publicIngest?: (args: KtxPublicIngestArgs, io: KtxCliIo) => Promise<number>;
+  textIngest?: (args: KtxTextIngestArgs, io: KtxCliIo) => Promise<number>;
   runtime?: (args: KtxRuntimeArgs, io: KtxCliIo) => Promise<number>;
   knowledge?: (args: KtxKnowledgeArgs, io: KtxCliIo) => Promise<number>;
   sl?: (args: KtxSlArgs, io: KtxCliIo) => Promise<number>;

@@ -64,13 +64,6 @@ function sourceType(value: string): KtxSetupSourceType {
   throw new InvalidArgumentError(`invalid choice '${value}'`);
 }
 
-function agentScope(value: string): 'project' | 'global' {
-  if (value === 'project' || value === 'global') {
-    return value;
-  }
-  throw new InvalidArgumentError(`invalid choice '${value}'`);
-}
-
 function positiveNumber(value: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -97,7 +90,6 @@ function shouldShowSetupEntryMenu(
     agents?: boolean;
     target?: string;
     global?: boolean;
-    project?: boolean;
     skipAgents?: boolean;
     yes?: boolean;
     input?: boolean;
@@ -142,7 +134,6 @@ function shouldShowSetupEntryMenu(
     metabaseDatabaseId?: number;
     notionCrawlMode?: string;
     notionRootPageId?: string[];
-    skipInitialSourceIngest?: boolean;
     skipSources?: boolean;
   },
   command: Command,
@@ -172,7 +163,6 @@ function shouldShowSetupEntryMenu(
     'agents',
     'target',
     'global',
-    'project',
     'skipAgents',
     'yes',
     'input',
@@ -211,7 +201,6 @@ function shouldShowSetupEntryMenu(
     'sourceTarget',
     'metabaseDatabaseId',
     'notionCrawlMode',
-    'skipInitialSourceIngest',
     'skipSources',
   ].some((optionName) => optionWasSpecified(command, optionName));
 }
@@ -220,9 +209,9 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
   const setup = program
     .command('setup')
     .description('Set up or resume a local KTX project')
-    .option('--project-dir <path>', 'KTX project directory')
-    .option('--new', 'Create a new KTX project before setup', false)
-    .option('--existing', 'Use an existing KTX project', false)
+    .addOption(new Option('--project-dir <path>', 'KTX project directory').hideHelp())
+    .addOption(new Option('--new', 'Create a new KTX project before setup').hideHelp().default(false))
+    .addOption(new Option('--existing', 'Use an existing KTX project').hideHelp().default(false))
     .option('--agents', 'Install agent integration only', false)
     .addOption(
       new Option('--target <target>', 'Agent target').choices([
@@ -233,94 +222,128 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
         'universal',
       ]),
     )
-    .addOption(new Option('--agent-scope <scope>', 'Agent install scope').argParser(agentScope).default('project'))
-    .option('--project', 'Install agent integration into the project scope', false)
     .option('--global', 'Install agent integration into the global target scope', false)
-    .option('--skip-agents', 'Leave agent integration incomplete for now', false)
+    .addOption(new Option('--skip-agents', 'Leave agent integration incomplete for now').hideHelp().default(false))
     .option('--yes', 'Accept safe defaults in non-interactive setup', false)
     .option('--no-input', 'Disable interactive terminal input')
-    .addOption(new Option('--llm-backend <backend>', 'LLM backend').argParser(llmBackend))
-    .option('--anthropic-api-key-env <name>', 'Environment variable containing the Anthropic API key')
-    .option('--anthropic-api-key-file <path>', 'File containing the Anthropic API key')
-    .option('--anthropic-model <model>', 'Anthropic model ID to validate and save')
-    .option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path')
-    .option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path')
-    .addOption(new Option('--skip-llm', 'Leave LLM setup incomplete for now').hideHelp().default(false))
-    .addOption(new Option('--embedding-backend <backend>', 'Embedding backend').argParser(embeddingBackend))
-    .option('--embedding-api-key-env <name>', 'Environment variable containing the embedding provider API key')
-    .option('--embedding-api-key-file <path>', 'File containing the embedding provider API key')
-    .addOption(new Option('--skip-embeddings', 'Leave embedding setup incomplete for now').hideHelp().default(false))
-    .option(
-      '--database <driver>',
-      'Database driver to configure; repeatable',
-      (value, previous: KtxSetupDatabaseDriver[]) => {
-        return [...previous, databaseDriver(value)];
-      },
-      [] as KtxSetupDatabaseDriver[],
-    )
-    .option(
-      '--database-connection-id <id>',
-      'Existing selected connection id or new connection id',
-      (value, previous: string[]) => [...previous, value],
-      [],
-    )
-    .option('--new-database-connection-id <id>', 'Connection id for one new database connection', (value) => {
-      if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value)) {
-        throw new InvalidArgumentError(`Unsafe connection id: ${value}`);
-      }
-      return value;
-    })
-    .option('--database-url <url>', 'URL, env:NAME, or file:/path for one new URL-style database connection')
-    .option(
-      '--database-schema <schema>',
-      'Database schema to include; repeatable',
-      (value, previous: string[]) => [...previous, value],
-      [],
-    )
-    .option('--enable-query-history', 'Enable query history when the selected database supports it', false)
-    .option('--disable-query-history', 'Disable query history for the selected database', false)
-    .option('--query-history-window-days <number>', 'Query-history lookback window', positiveInteger)
-    .option('--query-history-min-executions <number>', 'Minimum executions for a query-history template', positiveInteger)
-    .option(
-      '--query-history-service-account-pattern <pattern>',
-      'Query-history service-account regex; repeatable',
-      (value, previous: string[]) => [...previous, value],
-      [],
-    )
-    .option(
-      '--query-history-redaction-pattern <pattern>',
-      'Query-history SQL-literal redaction regex; repeatable',
-      (value, previous: string[]) => [...previous, value],
-      [],
-    )
-    .option('--skip-databases', 'Leave database setup incomplete; KTX cannot work until a database is added', false)
-    .addOption(new Option('--source <type>', 'Source connector type').argParser(sourceType))
-    .option('--source-connection-id <id>', 'Connection id for source setup')
-    .option('--source-path <path>', 'Local source path for dbt, MetricFlow, or LookML')
-    .option('--source-git-url <url>', 'Git URL for dbt, MetricFlow, or LookML')
-    .option('--source-branch <branch>', 'Git branch for source setup')
-    .option('--source-subpath <path>', 'Repo subpath for source setup')
-    .option('--source-auth-token-ref <ref>', 'env: or file: credential ref for source repo auth')
-    .option('--source-url <url>', 'Source service URL for Metabase or Looker')
-    .option('--source-api-key-ref <ref>', 'env: or file: API key ref for Metabase or Notion')
-    .option('--source-client-id <id>', 'Looker client id')
-    .option('--source-client-secret-ref <ref>', 'env: or file: Looker client secret ref')
-    .option('--source-warehouse-connection-id <id>', 'Mapped warehouse connection id')
-    .option('--source-project-name <name>', 'dbt project name override')
-    .option('--source-profiles-path <path>', 'dbt profiles path')
-    .option('--source-target <target>', 'dbt target or source-specific mapping target')
-    .option('--metabase-database-id <id>', 'Metabase database id to map', positiveNumber)
+    .addOption(new Option('--llm-backend <backend>', 'LLM backend').argParser(llmBackend).hideHelp())
     .addOption(
-      new Option('--notion-crawl-mode <mode>', 'Notion crawl mode').choices(['all_accessible', 'selected_roots']),
+      new Option('--anthropic-api-key-env <name>', 'Environment variable containing the Anthropic API key').hideHelp(),
     )
-    .option(
-      '--notion-root-page-id <id>',
-      'Notion root page id; repeatable',
-      (value, previous: string[]) => [...previous, value],
-      [],
+    .addOption(
+      new Option('--anthropic-api-key-file <path>', 'File containing the Anthropic API key').hideHelp(),
     )
-    .option('--skip-initial-source-ingest', 'Validate source setup without building source context during setup', false)
-    .option('--skip-sources', 'Mark optional source setup complete with no sources', false)
+    .addOption(new Option('--anthropic-model <model>', 'Anthropic model ID to validate and save').hideHelp())
+    .addOption(new Option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path').hideHelp())
+    .addOption(new Option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path').hideHelp())
+    .addOption(new Option('--skip-llm', 'Leave LLM setup incomplete for now').hideHelp().default(false))
+    .addOption(new Option('--embedding-backend <backend>', 'Embedding backend').argParser(embeddingBackend).hideHelp())
+    .addOption(
+      new Option(
+        '--embedding-api-key-env <name>',
+        'Environment variable containing the embedding provider API key',
+      ).hideHelp(),
+    )
+    .addOption(
+      new Option('--embedding-api-key-file <path>', 'File containing the embedding provider API key').hideHelp(),
+    )
+    .addOption(new Option('--skip-embeddings', 'Leave embedding setup incomplete for now').hideHelp().default(false))
+    .addOption(
+      new Option('--database <driver>', 'Database driver to configure; repeatable')
+        .argParser((value, previous: KtxSetupDatabaseDriver[]) => {
+          return [...previous, databaseDriver(value)];
+        })
+        .default([] as KtxSetupDatabaseDriver[])
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--database-connection-id <id>', 'Existing selected connection id or new connection id')
+        .argParser((value, previous: string[]) => [...previous, value])
+        .default([] as string[])
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--new-database-connection-id <id>', 'Connection id for one new database connection')
+        .argParser((value) => {
+          if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value)) {
+            throw new InvalidArgumentError(`Unsafe connection id: ${value}`);
+          }
+          return value;
+        })
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--database-url <url>', 'URL, env:NAME, or file:/path for one new URL-style database connection').hideHelp(),
+    )
+    .addOption(
+      new Option('--database-schema <schema>', 'Database schema to include; repeatable')
+        .argParser((value, previous: string[]) => [...previous, value])
+        .default([] as string[])
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--enable-query-history', 'Enable query history when the selected database supports it')
+        .hideHelp()
+        .default(false),
+    )
+    .addOption(
+      new Option('--disable-query-history', 'Disable query history for the selected database').hideHelp().default(false),
+    )
+    .addOption(
+      new Option('--query-history-window-days <number>', 'Query-history lookback window')
+        .argParser(positiveInteger)
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--query-history-min-executions <number>', 'Minimum executions for a query-history template')
+        .argParser(positiveInteger)
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--query-history-service-account-pattern <pattern>', 'Query-history service-account regex; repeatable')
+        .argParser((value, previous: string[]) => [...previous, value])
+        .default([] as string[])
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--query-history-redaction-pattern <pattern>', 'Query-history SQL-literal redaction regex; repeatable')
+        .argParser((value, previous: string[]) => [...previous, value])
+        .default([] as string[])
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--skip-databases', 'Leave database setup incomplete; KTX cannot work until a database is added')
+        .hideHelp()
+        .default(false),
+    )
+    .addOption(new Option('--source <type>', 'Source connector type').argParser(sourceType).hideHelp())
+    .addOption(new Option('--source-connection-id <id>', 'Connection id for source setup').hideHelp())
+    .addOption(new Option('--source-path <path>', 'Local source path for dbt, MetricFlow, or LookML').hideHelp())
+    .addOption(new Option('--source-git-url <url>', 'Git URL for dbt, MetricFlow, or LookML').hideHelp())
+    .addOption(new Option('--source-branch <branch>', 'Git branch for source setup').hideHelp())
+    .addOption(new Option('--source-subpath <path>', 'Repo subpath for source setup').hideHelp())
+    .addOption(new Option('--source-auth-token-ref <ref>', 'env: or file: credential ref for source repo auth').hideHelp())
+    .addOption(new Option('--source-url <url>', 'Source service URL for Metabase or Looker').hideHelp())
+    .addOption(new Option('--source-api-key-ref <ref>', 'env: or file: API key ref for Metabase or Notion').hideHelp())
+    .addOption(new Option('--source-client-id <id>', 'Looker client id').hideHelp())
+    .addOption(new Option('--source-client-secret-ref <ref>', 'env: or file: Looker client secret ref').hideHelp())
+    .addOption(new Option('--source-warehouse-connection-id <id>', 'Mapped warehouse connection id').hideHelp())
+    .addOption(new Option('--source-project-name <name>', 'dbt project name override').hideHelp())
+    .addOption(new Option('--source-profiles-path <path>', 'dbt profiles path').hideHelp())
+    .addOption(new Option('--source-target <target>', 'dbt target or source-specific mapping target').hideHelp())
+    .addOption(new Option('--metabase-database-id <id>', 'Metabase database id to map').argParser(positiveNumber).hideHelp())
+    .addOption(
+      new Option('--notion-crawl-mode <mode>', 'Notion crawl mode')
+        .choices(['all_accessible', 'selected_roots'])
+        .hideHelp(),
+    )
+    .addOption(
+      new Option('--notion-root-page-id <id>', 'Notion root page id; repeatable')
+        .argParser((value, previous: string[]) => [...previous, value])
+        .default([] as string[])
+        .hideHelp(),
+    )
+    .addOption(new Option('--skip-sources', 'Mark optional source setup complete with no sources').hideHelp().default(false))
     .showHelpAfterError();
 
   setup.hook('preAction', (_thisCommand, actionCommand) => {
@@ -371,7 +394,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     }
 
     const mode = options.new ? 'new' : options.existing ? 'existing' : 'auto';
-    const resolvedAgentScope = options.global ? 'global' : options.agentScope;
+    const resolvedAgentScope = options.global ? 'global' : 'project';
     await runSetupArgs(context, {
       command: 'run',
       projectDir: resolveCommandProjectDir(command),

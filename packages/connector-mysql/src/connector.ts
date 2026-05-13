@@ -35,7 +35,6 @@ export interface KtxMysqlConnectionConfig {
   password?: string;
   url?: string;
   ssl?: boolean | { rejectUnauthorized?: boolean };
-  readonly?: boolean;
   [key: string]: unknown;
 }
 
@@ -232,7 +231,9 @@ function queryParams(params: Record<string, unknown> | unknown[] | undefined): u
   return Array.isArray(params) ? params : Object.values(params);
 }
 
-export function isKtxMysqlConnectionConfig(connection: KtxMysqlConnectionConfig | undefined): boolean {
+export function isKtxMysqlConnectionConfig(
+  connection: KtxMysqlConnectionConfig | undefined,
+): connection is KtxMysqlConnectionConfig {
   return String(connection?.driver ?? '').toLowerCase() === 'mysql';
 }
 
@@ -241,11 +242,9 @@ export function mysqlConnectionPoolConfigFromConfig(input: {
   connection: KtxMysqlConnectionConfig | undefined;
   env?: NodeJS.ProcessEnv;
 }): KtxMysqlPoolConfig {
+  const inputDriver = input.connection?.driver ?? 'unknown';
   if (!isKtxMysqlConnectionConfig(input.connection)) {
-    throw new Error(`Native MySQL connector cannot run driver "${input.connection?.driver ?? 'unknown'}"`);
-  }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Native MySQL connector requires connections.${input.connectionId}.readonly: true`);
+    throw new Error(`Native MySQL connector cannot run driver "${inputDriver}"`);
   }
 
   const env = input.env ?? process.env;

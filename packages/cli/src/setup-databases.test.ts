@@ -226,7 +226,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',
@@ -249,8 +248,9 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Configure PostgreSQL',
       options: [
-        { value: 'existing:warehouse', label: 'Use existing PostgreSQL connection: warehouse' },
-        { value: 'new', label: 'Add new PostgreSQL connection' },
+        { value: 'existing:warehouse', label: 'Keep existing PostgreSQL connection: warehouse' },
+        { value: 'edit:warehouse', label: 'Edit PostgreSQL connection: warehouse' },
+        { value: 'new', label: 'Add another PostgreSQL connection' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -290,7 +290,6 @@ describe('setup databases step', () => {
     expect(config.connections['postgres-warehouse']).toEqual({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
       context: { depth: 'fast' },
     });
   });
@@ -560,7 +559,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -591,6 +589,7 @@ describe('setup databases step', () => {
       message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
     });
@@ -607,7 +606,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -642,10 +640,15 @@ describe('setup databases step', () => {
       connectionIds: ['warehouse', 'mysql-warehouse'],
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(1);
+    expect(prompts.multiselect).toHaveBeenCalledWith(expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
     });
@@ -683,10 +686,15 @@ describe('setup databases step', () => {
       connectionIds: ['postgres-warehouse', 'mysql-warehouse'],
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
+    expect(prompts.multiselect).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
     });
@@ -722,11 +730,16 @@ describe('setup databases step', () => {
       connectionIds: ['postgres-warehouse'],
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
+    expect(prompts.multiselect).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(3, {
       message: 'Databases already configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
     });
@@ -741,7 +754,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -763,13 +775,391 @@ describe('setup databases step', () => {
     );
 
     expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(prompts.multiselect).toHaveBeenCalledWith(expect.objectContaining({
+      initialValues: ['postgres'],
+      required: true,
+    }));
     expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Databases already configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
+    });
+  });
+
+  it('returns from database edit selection back to the configured source menu', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      selectValues: ['edit', 'back', 'continue'],
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      { prompts, testConnection, scanConnection },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(prompts.select).toHaveBeenNthCalledWith(2, {
+      message: 'Database to edit',
+      options: [
+        { value: 'warehouse', label: 'warehouse (PostgreSQL)' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    expect(prompts.select).toHaveBeenNthCalledWith(3, {
+      message: 'Databases already configured: warehouse\nWhat would you like to do?',
+      options: [
+        { value: 'continue', label: 'Continue to context sources' },
+        { value: 'edit', label: 'Edit an existing database' },
+        { value: 'add', label: 'Add another database' },
+      ],
+    });
+    expect(testConnection).not.toHaveBeenCalled();
+    expect(scanConnection).not.toHaveBeenCalled();
+  });
+
+  it('reruns table selection after editing schema scope so stale enabled tables are removed', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+      multiselectValues: [['analytics']],
+    });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Database to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
+      return 'back';
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['analytics', 'public']);
+    const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'customers', kind: 'table' as const }]);
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      { prompts, testConnection, scanConnection, listSchemas, listTables },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(prompts.text).toHaveBeenCalledWith({
+      message: textInputPrompt('PostgreSQL connection URL'),
+      placeholder: 'env:DATABASE_URL',
+      initialValue: 'env:DATABASE_URL',
+    });
+    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse');
+    expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    expect(scanConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      schemas: ['analytics'],
+      enabled_tables: ['analytics.customers'],
+    });
+  });
+
+  it('preselects existing schema and table choices when editing a database', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.customers',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+      multiselectValues: [['public'], ['public.customers', 'public.orders']],
+    });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Database to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
+      if (options.message.startsWith('Tables found in selected schemas')) return 'customize';
+      return 'back';
+    });
+    const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
+    const listTables = vi.fn(async () => [
+      { schema: 'public', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+      { schema: 'public', name: 'products', kind: 'table' as const },
+    ]);
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        listSchemas,
+        listTables,
+      },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(prompts.multiselect).toHaveBeenNthCalledWith(1, {
+      message: expect.stringContaining('PostgreSQL schemas to include'),
+      options: [
+        { value: 'orbit_analytics', label: 'orbit_analytics' },
+        { value: 'orbit_raw', label: 'orbit_raw' },
+        { value: 'public', label: 'public' },
+      ],
+      initialValues: ['public'],
+      required: true,
+    });
+    expect(prompts.multiselect).toHaveBeenNthCalledWith(2, {
+      message: expect.stringContaining('Tables to enable for warehouse'),
+      options: [
+        { value: 'public.customers', label: 'public.customers' },
+        { value: 'public.orders', label: 'public.orders' },
+        { value: 'public.products', label: 'public.products' },
+      ],
+      initialValues: ['public.customers', 'public.orders'],
+      required: true,
+    });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      schemas: ['public'],
+      enabled_tables: ['public.customers', 'public.orders'],
+    });
+  });
+
+  it('returns to the configured primary menu when backing out of schema review during edit', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+      multiselectValues: [['back']],
+    });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Database to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
+      return 'back';
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['analytics', 'public']);
+    const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'customers', kind: 'table' as const }]);
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      { prompts, testConnection, scanConnection, listSchemas, listTables },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(primaryMenuCount).toBe(2);
+    expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    expect(scanConnection).not.toHaveBeenCalled();
+    expect(listTables).not.toHaveBeenCalled();
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      url: 'env:DATABASE_URL',
+      schemas: ['public'],
+      enabled_tables: ['public.orders'],
+    });
+  });
+
+  it('returns to the configured primary menu when backing out of table review during edit', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({ textValues: ['env:DATABASE_URL'] });
+    let primaryMenuCount = 0;
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
+      if (options.message === 'Database to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
+      if (options.message.startsWith('Tables found in selected schemas')) return 'back';
+      return 'back';
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['public']);
+    const listTables = vi.fn(async () => [
+      { schema: 'public', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+    ]);
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      { prompts, testConnection, scanConnection, listSchemas, listTables },
+    );
+
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
+    expect(primaryMenuCount).toBe(2);
+    expect(listTables).toHaveBeenCalledWith(tempDir, 'warehouse');
+    expect(scanConnection).not.toHaveBeenCalled();
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      url: 'env:DATABASE_URL',
+      schemas: ['public'],
+      enabled_tables: ['public.orders'],
+    });
+  });
+
+  it('restores an existing database edit when the follow-up scan fails', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        '      - public',
+        '    enabled_tables:',
+        '      - public.orders',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({
+      textValues: ['env:DATABASE_URL'],
+      multiselectValues: [['public']],
+    });
+    vi.mocked(prompts.select).mockImplementation(async (options) => {
+      if (options.message === 'Databases already configured: warehouse\nWhat would you like to do?') return 'edit';
+      if (options.message === 'Database to edit') return 'warehouse';
+      if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
+      if (options.message.startsWith('Enable query-history ingest')) return 'no';
+      if (options.message.startsWith('Tables found in selected schemas')) return 'all';
+      return 'back';
+    });
+    const listTables = vi.fn(async () => [
+      { schema: 'public', name: 'customers', kind: 'table' as const },
+      { schema: 'public', name: 'orders', kind: 'table' as const },
+    ]);
+
+    const result = await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 1),
+        listTables,
+      },
+    );
+
+    expect(result).toEqual({ status: 'failed', projectDir: tempDir });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      enabled_tables: ['public.orders'],
     });
   });
 
@@ -887,7 +1277,6 @@ describe('setup databases step', () => {
       port: 5432,
       database: 'analytics',
       username: 'readonly',
-      readonly: true,
     });
     expect(connection.password).toMatch(/^file:/);
     const secretPath = join(tempDir, '.ktx/secrets/postgres-warehouse-password');
@@ -941,7 +1330,7 @@ describe('setup databases step', () => {
       return 0;
     });
     const scanConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
-      commandIo.stdout.write('Scanning postgres-warehouse for context. Large primary sources can take a while.\n');
+      commandIo.stdout.write('Scanning postgres-warehouse for context. Large databases can take a while.\n');
       commandIo.stdout.write('[5%] Preparing scan\n');
       commandIo.stdout.write('[15%] Inspecting database schema\n');
       commandIo.stdout.write('[55%] Semantic layer comparison found 2 changes across 2 tables\n');
@@ -1038,7 +1427,6 @@ describe('setup databases step', () => {
     expect(config.connections['postgres-warehouse']).toMatchObject({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     });
   });
 
@@ -1158,7 +1546,6 @@ describe('setup databases step', () => {
       url: 'env:DATABASE_URL',
       schemas: ['public'],
       context: { queryHistory: { enabled: false }, depth: 'fast' },
-      readonly: true,
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
@@ -1197,7 +1584,6 @@ describe('setup databases step', () => {
     expect(config.connections.warehouse).toEqual({
       driver: 'sqlite',
       path: './warehouse.sqlite',
-      readonly: true,
       context: { depth: 'fast' },
     });
     expect(config.setup).toEqual({
@@ -1215,7 +1601,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         '  analytics:',
         '    driver: snowflake',
         '    authMethod: password',
@@ -1225,7 +1610,6 @@ describe('setup databases step', () => {
         '    schema_name: PUBLIC',
         '    username: reader',
         '    password: env:SNOWFLAKE_PASSWORD',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',
@@ -1591,7 +1975,6 @@ describe('setup databases step', () => {
         '    driver: bigquery',
         '    dataset_id: analytics',
         '    credentials_json: env:BIGQUERY_CREDENTIALS_JSON',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',
@@ -1646,7 +2029,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',

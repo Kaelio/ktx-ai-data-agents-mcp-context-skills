@@ -41,50 +41,50 @@ The next plan after this one should cover search enrichment from spec §6.2.3-§
 
 Create:
 
-- `packages/context/src/ingest/adapters/historic-sql/skill-schemas.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/skill-schemas.ts`
   Owns the shared zod schemas for historic-SQL LLM outputs.
-- `packages/context/src/ingest/adapters/historic-sql/skill-schemas.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/skill-schemas.test.ts`
   Locks schema acceptance, JSON schema generation, and future-key tolerance.
-- `python/ktx-daemon/src/ktx_daemon/sql_analysis.py`  
+- `python/ktx-daemon/src/ktx_daemon/sql_analysis.py`
   Implements batch sqlglot parsing for table and clause-level column extraction.
-- `python/ktx-daemon/tests/test_sql_analysis.py`  
+- `python/ktx-daemon/tests/test_sql_analysis.py`
   Tests batch parser behavior without FastAPI.
 
 Modify:
 
-- `packages/context/src/ingest/index.ts`  
+- `packages/context/src/ingest/index.ts`
   Exports the new historic-SQL skill schemas.
-- `packages/context/src/sl/types.ts`  
+- `packages/context/src/sl/types.ts`
   Adds `usage?: TableUsageOutput` to `SemanticLayerSource`.
-- `packages/context/src/sl/schemas.ts`  
+- `packages/context/src/sl/schemas.ts`
   Accepts `usage` in standalone and overlay semantic-layer source validation.
-- `packages/context/src/sl/semantic-layer.service.ts`  
+- `packages/context/src/sl/semantic-layer.service.ts`
   Projects manifest `usage` onto `SemanticLayerSource` and composes overlay usage intentionally.
-- `packages/context/src/sl/semantic-layer.service.test.ts`  
+- `packages/context/src/sl/semantic-layer.service.test.ts`
   Tests source schema acceptance, manifest projection, and overlay composition.
-- `packages/context/src/ingest/adapters/live-database/manifest.ts`  
+- `packages/context/src/ingest/adapters/live-database/manifest.ts`
   Adds `LiveDatabaseManifestTableEntry.usage`, existing-usage inputs, and `mergeUsagePreservingExternal()`.
-- `packages/context/src/ingest/adapters/live-database/manifest.test.ts`  
+- `packages/context/src/ingest/adapters/live-database/manifest.test.ts`
   Tests scan-managed usage replacement while preserving external keys.
-- `packages/context/src/scan/local-enrichment-artifacts.ts`  
+- `packages/context/src/scan/local-enrichment-artifacts.ts`
   Loads existing manifest usage and passes it through scan manifest rebuilds.
-- `packages/context/src/scan/local-enrichment-artifacts.test.ts`  
+- `packages/context/src/scan/local-enrichment-artifacts.test.ts`
   Tests that structural scan rewrites preserve existing usage.
-- `python/ktx-daemon/src/ktx_daemon/app.py`  
+- `python/ktx-daemon/src/ktx_daemon/app.py`
   Registers `/sql/analyze-batch`.
-- `python/ktx-daemon/tests/test_app.py`  
+- `python/ktx-daemon/tests/test_app.py`
   Tests the FastAPI endpoint.
-- `packages/context/src/sql-analysis/ports.ts`  
+- `packages/context/src/sql-analysis/ports.ts`
   Adds batch analysis types and `SqlAnalysisPort.analyzeBatch()`.
-- `packages/context/src/sql-analysis/index.ts`  
+- `packages/context/src/sql-analysis/index.ts`
   Exports the new batch analysis types.
-- `packages/context/src/sql-analysis/http-sql-analysis-port.ts`  
+- `packages/context/src/sql-analysis/http-sql-analysis-port.ts`
   Maps `/sql/analyze-batch` request and response payloads.
-- `packages/context/src/sql-analysis/http-sql-analysis-port.test.ts`  
+- `packages/context/src/sql-analysis/http-sql-analysis-port.test.ts`
   Tests HTTP mapping and malformed response rejection.
-- `packages/cli/src/managed-python-http.test.ts`  
+- `packages/cli/src/managed-python-http.test.ts`
   Verifies the managed daemon wrapper routes `analyzeBatch()`.
-- Existing test files with `SqlAnalysisPort` object literals  
+- Existing test files with `SqlAnalysisPort` object literals
   Add a no-op `analyzeBatch: async () => new Map()` while legacy paths still use `analyzeForFingerprint()`.
 
 ## Task 1: Add Historic SQL Skill Schemas

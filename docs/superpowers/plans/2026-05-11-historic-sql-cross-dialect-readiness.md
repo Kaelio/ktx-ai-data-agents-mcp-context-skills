@@ -40,37 +40,37 @@ This plan does not update `examples/postgres-historic/README.md` or `examples/po
 
 Modify:
 
-- `packages/context/src/ingest/adapters/historic-sql/types.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/types.ts`
   Adds optional probe `info` notes and lets injected historic-SQL dependencies use any reader/query client pair while preserving the existing Postgres-specific option.
-- `packages/context/src/ingest/adapters/historic-sql/postgres-pgss-reader.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/postgres-pgss-reader.ts`
   Moves low `pg_stat_statements.max` from `warnings` to `info`.
-- `packages/context/src/ingest/adapters/historic-sql/postgres-pgss-reader.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/postgres-pgss-reader.test.ts`
   Locks `track = none` as warning and low `max` as info.
-- `packages/context/src/ingest/adapters/historic-sql/bigquery-query-history-reader.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/bigquery-query-history-reader.ts`
   Returns `{ warnings: [], info: [] }` from `probe()`.
-- `packages/context/src/ingest/adapters/historic-sql/bigquery-query-history-reader.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/bigquery-query-history-reader.test.ts`
   Locks the BigQuery probe return object.
-- `packages/context/src/ingest/adapters/historic-sql/snowflake-query-history-reader.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/snowflake-query-history-reader.ts`
   Returns `{ warnings: [], info: [] }` from `probe()`.
-- `packages/context/src/ingest/adapters/historic-sql/snowflake-query-history-reader.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/snowflake-query-history-reader.test.ts`
   Locks the Snowflake probe return object.
-- `packages/context/src/ingest/adapters/historic-sql/stage-unified.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/stage-unified.test.ts`
   Updates test readers to return the normalized probe shape.
-- `packages/context/src/ingest/adapters/historic-sql/historic-sql.adapter.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/historic-sql.adapter.test.ts`
   Updates test readers to return the normalized probe shape.
-- `packages/context/src/ingest/local-adapters.ts`  
+- `packages/context/src/ingest/local-adapters.ts`
   Accepts generic historic-SQL reader/query-client dependencies while keeping `postgresQueryClient` as the compatibility input used by current callers.
-- `packages/context/src/ingest/local-adapters.test.ts`  
+- `packages/context/src/ingest/local-adapters.test.ts`
   Verifies generic reader/query-client injection and the existing Postgres compatibility path.
-- `packages/cli/src/local-adapters.ts`  
+- `packages/cli/src/local-adapters.ts`
   Chooses Postgres, BigQuery, or Snowflake historic-SQL readers/query clients from the configured connection.
-- `packages/cli/src/local-adapters.test.ts`  
+- `packages/cli/src/local-adapters.test.ts`
   Adds direct tests for CLI local adapter registration for Postgres, BigQuery, and Snowflake.
-- `packages/cli/src/historic-sql-doctor.ts`  
+- `packages/cli/src/historic-sql-doctor.ts`
   Treats info-only Postgres probe notes as a passing doctor check, and warnings as warnings.
-- `packages/cli/src/historic-sql-doctor.test.ts`  
+- `packages/cli/src/historic-sql-doctor.test.ts`
   Verifies low `pg_stat_statements.max` is pass/detail, while `track = none` remains warn.
-- `packages/cli/src/doctor.test.ts`  
+- `packages/cli/src/doctor.test.ts`
   Updates the project doctor integration expectation for the new info-only behavior.
 
 ## Task 1: Normalize Historic-SQL Probe Results

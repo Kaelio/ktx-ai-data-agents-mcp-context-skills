@@ -37,7 +37,7 @@ describe('createPostgresQueryExecutor', () => {
 
     const result = await executor.execute({
       connectionId: 'warehouse',
-      connection: { driver: 'postgres', url: 'postgres://example/db', readonly: true },
+      connection: { driver: 'postgres', url: 'postgres://example/db' },
       sql: 'select status, count(*) as order_count from public.orders group by status',
       maxRows: 50,
     });
@@ -80,7 +80,7 @@ describe('createPostgresQueryExecutor', () => {
     await expect(
       executor.execute({
         connectionId: 'warehouse',
-        connection: { driver: 'postgres', url: 'postgres://example/db', readonly: true },
+        connection: { driver: 'postgres', url: 'postgres://example/db' },
         sql: 'select * from broken',
         maxRows: 10,
       }),
@@ -89,23 +89,15 @@ describe('createPostgresQueryExecutor', () => {
     expect(client.end).toHaveBeenCalledTimes(1);
   });
 
-  it('requires a Postgres url and read-only connection config', async () => {
+  it('requires a Postgres url', async () => {
     const executor = createPostgresQueryExecutor({ clientFactory: vi.fn() });
 
     await expect(
       executor.execute({
         connectionId: 'warehouse',
-        connection: { driver: 'postgres', readonly: true },
+        connection: { driver: 'postgres' },
         sql: 'select 1',
       }),
     ).rejects.toThrow('Local Postgres execution requires connections.warehouse.url');
-
-    await expect(
-      executor.execute({
-        connectionId: 'warehouse',
-        connection: { driver: 'postgres', url: 'postgres://example/db', readonly: false },
-        sql: 'select 1',
-      }),
-    ).rejects.toThrow('Local query execution requires connections.warehouse.readonly: true');
   });
 });

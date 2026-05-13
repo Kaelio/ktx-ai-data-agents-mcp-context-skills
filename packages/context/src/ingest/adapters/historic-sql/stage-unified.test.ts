@@ -169,7 +169,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
   it('redacts configured SQL substrings in staged artifacts while analyzing original SQL', async () => {
     const stagedDir = await tempDir();
     const originalSql =
-      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'";
+      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'"; // pragma: allowlist secret
     const reader: HistoricSqlReader = {
       async probe() {
         return { warnings: [], info: [] };

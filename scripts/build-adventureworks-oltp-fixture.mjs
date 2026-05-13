@@ -231,7 +231,6 @@ async function main() {
       driver: 'sqlserver',
       url,
       schemas: ['dbo', 'HumanResources', 'Person', 'Production', 'Purchasing', 'Sales'],
-      readonly: true,
       trustServerCertificate: true,
     },
     now: () => new Date('2026-05-07T00:00:00.000Z'),

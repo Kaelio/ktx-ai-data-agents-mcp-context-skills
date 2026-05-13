@@ -115,6 +115,26 @@ export interface ContextBuildSourceProgressUpdate {
   summaryText?: string;
 }
 
+interface CompletedItemName {
+  singular: string;
+  plural: string;
+}
+
+interface ContextBuildRenderOptions {
+  styled?: boolean;
+  showHint?: boolean;
+  hintText?: string;
+  projectDir?: string;
+  title?: string;
+  primaryGroupLabel?: string;
+  contextGroupLabel?: string;
+  scanRunningText?: string;
+  sourceIngestRunningText?: string;
+  completedItemName?: CompletedItemName;
+  notices?: string[];
+  warnings?: string[];
+}
+
 export interface ContextBuildDeps {
   executeTarget?: typeof executePublicIngestTarget;
   now?: () => number;
@@ -224,7 +244,7 @@ function staleProgressText(target: ContextBuildTargetState, styled: boolean): st
   return styled ? dim(text) : text;
 }
 
-function targetDetail(target: ContextBuildTargetState, styled: boolean): string {
+function targetDetail(target: ContextBuildTargetState, styled: boolean, options: ContextBuildRenderOptions): string {
   if (target.status === 'done') {
     const parts: string[] = [];
     if (target.summaryText) parts.push(target.summaryText);
@@ -239,7 +259,9 @@ function targetDetail(target: ContextBuildTargetState, styled: boolean): string 
     const percent = extractPercent(target.detailLine);
     const progressText =
       target.detailLine?.replace(/^\[\d+%\]\s*/, '') ??
-      (target.target.operation === 'database-ingest' ? 'reading schema' : 'ingesting...');
+      (target.target.operation === 'database-ingest'
+        ? (options.scanRunningText ?? 'reading schema')
+        : (options.sourceIngestRunningText ?? 'ingesting...'));
     const elapsed = target.elapsedMs > 0 ? `(${formatDuration(target.elapsedMs)})` : null;
     const parts: string[] = [];
     if (percent !== null) {
@@ -308,7 +330,13 @@ function columnWidth(state: ContextBuildViewState): number {
   return Math.max(12, ...all.map((t) => t.target.connectionId.length)) + 2;
 }
 
-function renderTargetRows(target: ContextBuildTargetState, frame: number, styled: boolean, width: number): string[] {
+function renderTargetRows(
+  target: ContextBuildTargetState,
+  frame: number,
+  styled: boolean,
+  width: number,
+  options: ContextBuildRenderOptions,
+): string[] {
   const icon = statusIcon(target.status, frame, styled);
   const name = target.target.connectionId.padEnd(width);
   const anyPhaseStarted = target.phases.some((p) => p.status !== 'queued');
@@ -317,7 +345,7 @@ function renderTargetRows(target: ContextBuildTargetState, frame: number, styled
     const headerLine = `    ${icon} ${name} ${headerDetail}`.trimEnd();
     return [headerLine, ...target.phases.map((phase) => renderPhaseRow(phase, frame, styled))];
   }
-  return [`    ${icon} ${name} ${targetDetail(target, styled)}`];
+  return [`    ${icon} ${name} ${targetDetail(target, styled, options)}`];
 }
 
 function renderTargetGroup(
@@ -326,9 +354,10 @@ function renderTargetGroup(
   frame: number,
   styled: boolean,
   width: number,
+  options: ContextBuildRenderOptions,
 ): string[] {
   if (targets.length === 0) return [];
-  return ['', `  ${label}:`, ...targets.flatMap((t) => renderTargetRows(t, frame, styled, width))];
+  return ['', `  ${label}:`, ...targets.flatMap((t) => renderTargetRows(t, frame, styled, width, options))];
 }
 
 function renderMessageGroup(label: string, messages: string[], styled: boolean): string[] {
@@ -360,14 +389,7 @@ function retryCommand(input: {
 
 export function renderContextBuildView(
   state: ContextBuildViewState,
-  options: {
-    styled?: boolean;
-    showHint?: boolean;
-    hintText?: string;
-    projectDir?: string;
-    notices?: string[];
-    warnings?: string[];
-  } = {},
+  options: ContextBuildRenderOptions = {},
 ): string {
   const styled = options.styled ?? true;
   const width = columnWidth(state);
@@ -377,7 +399,7 @@ export function renderContextBuildView(
   const hasActive = allTargets.some((t) => t.status === 'running' || t.status === 'queued');
   const allDone = totalCount > 0 && !hasActive;
 
-  const headerParts = ['Building KTX context'];
+  const headerParts = [options.title ?? 'Building KTX context'];
   if (totalCount > 0) {
     const progressParts: string[] = [`${doneCount}/${totalCount}`];
     if (state.totalElapsedMs > 0) progressParts.push(formatDuration(state.totalElapsedMs));
@@ -393,15 +415,16 @@ export function renderContextBuildView(
     header,
     separator,
     ...(options.projectDir ? [`  Project: ${options.projectDir}`] : []),
-    ...renderTargetGroup('Databases', state.primarySources, state.frame, styled, width),
-    ...renderTargetGroup('Context sources', state.contextSources, state.frame, styled, width),
+    ...renderTargetGroup(options.primaryGroupLabel ?? 'Databases', state.primarySources, state.frame, styled, width, options),
+    ...renderTargetGroup(options.contextGroupLabel ?? 'Context sources', state.contextSources, state.frame, styled, width, options),
     ...renderMessageGroup('Notices', options.notices ?? [], styled),
     ...renderMessageGroup('Warnings', options.warnings ?? [], styled),
     '',
   ];
 
   if (allDone && state.totalElapsedMs > 0) {
-    const sourcesLabel = totalCount === 1 ? '1 source' : `${totalCount} sources`;
+    const itemName = options.completedItemName ?? { singular: 'source', plural: 'sources' };
+    const sourcesLabel = totalCount === 1 ? `1 ${itemName.singular}` : `${totalCount} ${itemName.plural}`;
     const summary = `  Done in ${formatDuration(state.totalElapsedMs)} · ${sourcesLabel} processed`;
     lines.push(styled ? green(summary) : summary);
     lines.push('');

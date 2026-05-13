@@ -52,58 +52,58 @@ Still not implemented:
 
 Create:
 
-- `packages/context/src/ingest/adapters/historic-sql/evidence.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/evidence.ts`
   Owns typed evidence envelopes, ignored evidence path helpers, and load/write helpers for table usage and pattern evidence.
-- `packages/context/src/ingest/adapters/historic-sql/evidence.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/evidence.test.ts`
   Tests evidence schema validation, path normalization, and loader rejection of malformed evidence.
-- `packages/context/src/ingest/adapters/historic-sql/evidence-tool.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/evidence-tool.ts`
   Adds `emit_historic_sql_evidence`, the only write tool the two new historic-SQL skills use.
-- `packages/context/src/ingest/adapters/historic-sql/evidence-tool.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/evidence-tool.test.ts`
   Tests the tool writes ignored run-local JSON with `skipLock: true` and rejects non-historic ingest sessions.
-- `packages/context/src/ingest/adapters/historic-sql/projection.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/projection.ts`
   Projects table usage evidence into manifest shards, writes pattern wiki pages, marks stale usage/pages, and deletes legacy query pages.
-- `packages/context/src/ingest/adapters/historic-sql/projection.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/projection.test.ts`
   Tests `_schema` merge, stale usage, pattern slug reuse, stale page tagging, archive movement, and legacy page cleanup.
-- `packages/context/src/ingest/adapters/historic-sql/post-processor.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/post-processor.ts`
   Implements `IngestBundlePostProcessorPort` for the deterministic projection phase.
-- `packages/context/src/ingest/adapters/historic-sql/post-processor.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/post-processor.test.ts`
   Tests post-processor path resolution from `workdir`, `connectionId`, `sourceKey`, and `syncId`.
-- `packages/context/skills/historic_sql_table_digest/SKILL.md`  
+- `packages/context/skills/historic_sql_table_digest/SKILL.md`
   Skill for one changed `tables/*.json` WorkUnit; emits one table usage evidence object.
-- `packages/context/skills/historic_sql_patterns/SKILL.md`  
+- `packages/context/skills/historic_sql_patterns/SKILL.md`
   Skill for `patterns-input.json`; emits one pattern evidence object per recurring cross-table intent.
 
 Modify:
 
-- `packages/context/src/ingest/adapters/historic-sql/types.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/types.ts`
   Keep only unified config/staged schemas and reader contracts; extend config preprocessing for existing `serviceAccountUserPatterns` and `minCalls` aliases.
-- `packages/context/src/ingest/adapters/historic-sql/stage-unified.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/stage-unified.ts`
   Add `staleArchiveAfterDays` to `manifest.json` so projection can archive stale pattern pages deterministically.
-- `packages/context/src/ingest/adapters/historic-sql/chunk-unified.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/chunk-unified.ts`
   Keep the same WorkUnits, but mention `emit_historic_sql_evidence` in `notes`.
-- `packages/context/src/ingest/adapters/historic-sql/historic-sql.adapter.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/historic-sql.adapter.ts`
   Switch production fetch/chunk/scope to the unified hot path, replace skills, remove legacy triage support, and run legacy PGSS baseline cache cleanup.
-- `packages/context/src/ingest/adapters/historic-sql/historic-sql.adapter.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/historic-sql.adapter.test.ts`
   Rewrite around unified staging and new skills.
-- `packages/context/src/ingest/adapters/historic-sql/postgres-pgss-reader.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/postgres-pgss-reader.ts`
   Inline the PGSS probe logic so `postgres-pgss-query-history-reader.ts` can be deleted.
-- `packages/context/src/ingest/local-adapters.ts`  
+- `packages/context/src/ingest/local-adapters.ts`
   Use `PostgresPgssReader` for local Postgres historic SQL and return unified pull config.
-- `packages/context/src/ingest/local-bundle-runtime.ts`  
+- `packages/context/src/ingest/local-bundle-runtime.ts`
   Add the source-specific evidence tool to historic-SQL WorkUnits and register the historic-SQL post-processor.
-- `packages/context/src/ingest/ingest-runtime-assets.test.ts`  
+- `packages/context/src/ingest/ingest-runtime-assets.test.ts`
   Replace old skill asset assertions with the two new skills.
-- `packages/context/src/memory/memory-runtime-assets.test.ts`  
+- `packages/context/src/memory/memory-runtime-assets.test.ts`
   Replace old historic-SQL skill heading with the two new skill headings.
-- `packages/context/src/package-exports.test.ts`  
+- `packages/context/src/package-exports.test.ts`
   Remove legacy export assertions and add evidence/projection export assertions.
-- `packages/context/src/ingest/index.ts`  
+- `packages/context/src/ingest/index.ts`
   Export new evidence/projection/post-processor helpers and remove legacy historic-SQL exports.
-- `packages/cli/src/setup-databases.ts` and `packages/cli/src/historic-sql-doctor.ts`  
+- `packages/cli/src/setup-databases.ts` and `packages/cli/src/historic-sql-doctor.ts`
   Import `PostgresPgssReader` instead of `PostgresPgssQueryHistoryReader`.
-- `packages/cli/src/commands/setup-commands.ts`, `packages/cli/src/index.test.ts`, `packages/cli/src/setup-databases.test.ts`  
+- `packages/cli/src/commands/setup-commands.ts`, `packages/cli/src/index.test.ts`, `packages/cli/src/setup-databases.test.ts`
   Rename generated config to `minExecutions` while accepting the old `--historic-sql-min-calls` flag for one release.
-- `packages/context/prompts/skills/page_triage_classifier.md`, `packages/context/src/ingest/page-triage/page-triage.service.test.ts`, `packages/context/src/ingest/ingest-prompts.test.ts`  
+- `packages/context/prompts/skills/page_triage_classifier.md`, `packages/context/src/ingest/page-triage/page-triage.service.test.ts`, `packages/context/src/ingest/ingest-prompts.test.ts`
   Remove historic-SQL template triage examples because the new adapter no longer uses page triage.
 
 Delete:

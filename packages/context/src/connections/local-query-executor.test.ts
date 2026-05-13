@@ -26,14 +26,14 @@ describe('createDefaultLocalQueryExecutor', () => {
     await expect(
       executor.execute({
         connectionId: 'pg',
-        connection: { driver: 'postgres', readonly: true },
+        connection: { driver: 'postgres' },
         sql: 'select 1',
       }),
     ).resolves.toMatchObject({ headers: ['pg'] });
     await expect(
       executor.execute({
         connectionId: 'local',
-        connection: { driver: 'sqlite', readonly: true },
+        connection: { driver: 'sqlite' },
         sql: 'select 1',
       }),
     ).resolves.toMatchObject({ headers: ['sqlite'] });
@@ -51,7 +51,7 @@ describe('createDefaultLocalQueryExecutor', () => {
     await expect(
       executor.execute({
         connectionId: 'warehouse',
-        connection: { driver: 'snowflake', readonly: true },
+        connection: { driver: 'snowflake' },
         sql: 'select 1',
       }),
     ).rejects.toThrow('No local query executor is configured for driver "snowflake".');

@@ -37,18 +37,16 @@ export function createPostgresQueryExecutor(options: PostgresQueryExecutorOption
   return {
     async execute(input: KtxSqlQueryExecutionInput): Promise<KtxSqlQueryExecutionResult> {
       const driver = connectionDriver(input);
+      const connection = input.connection;
       if (driver !== 'postgres' && driver !== 'postgresql') {
-        throw new Error(`Local Postgres execution cannot run driver "${input.connection?.driver ?? 'unknown'}".`);
+        throw new Error(`Local Postgres execution cannot run driver "${connection?.driver ?? 'unknown'}".`);
       }
-      if (input.connection?.readonly !== true) {
-        throw new Error(`Local query execution requires connections.${input.connectionId}.readonly: true.`);
-      }
-      if (typeof input.connection.url !== 'string' || input.connection.url.trim().length === 0) {
+      if (typeof connection?.url !== 'string' || connection.url.trim().length === 0) {
         throw new Error(`Local Postgres execution requires connections.${input.connectionId}.url.`);
       }
 
       const client = clientFactory({
-        connectionString: input.connection.url,
+        connectionString: connection.url,
         statement_timeout: options.statementTimeoutMs ?? 30_000,
         query_timeout: options.queryTimeoutMs ?? 35_000,
         connectionTimeoutMillis: options.connectionTimeoutMs ?? 5_000,

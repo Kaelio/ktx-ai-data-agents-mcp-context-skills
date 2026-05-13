@@ -617,7 +617,7 @@ try {
     '--skip-sources',
     '--skip-agents',
   ]);
-  requireProjectStderr('ktx setup', init, projectDir);
+  requireSuccess('ktx setup', init);
   requireOutput('ktx setup', init, /Project: /);
 
   const emptyProjectDir = join(root, 'empty-project');
@@ -636,7 +636,7 @@ try {
     '--skip-sources',
     '--skip-agents',
   ]);
-  requireProjectStderr('ktx setup empty project', emptyInit, emptyProjectDir);
+  requireSuccess('ktx setup empty project', emptyInit);
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
@@ -645,7 +645,6 @@ try {
       '  warehouse:',
       '    driver: sqlite',
       '    path: warehouse.db',
-      '    readonly: true',
       'storage:',
       '  state: sqlite',
       '  search: sqlite-fts5',

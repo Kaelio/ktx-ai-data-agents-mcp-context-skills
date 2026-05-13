@@ -50,7 +50,6 @@ describe('standalone example docs', () => {
       config,
       /path: \.\.\/\.\.\/packages\/context\/test\/fixtures\/relationship-benchmarks\/orbit_style_product_no_declared_constraints\/data\.sqlite/,
     );
-    assert.match(config, /readonly: true/);
     assert.match(config, /llm_proposals: false/);
     assert.match(config, /validation_required_for_manifest: true/);
   });

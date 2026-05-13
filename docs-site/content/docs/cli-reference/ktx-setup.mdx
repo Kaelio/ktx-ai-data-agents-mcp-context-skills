@@ -18,8 +18,6 @@ ktx setup [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--project-dir <path>` | KTX project directory | `KTX_PROJECT_DIR`, nearest `ktx.yaml`, or cwd |
-| `--new` | Create a new KTX project before setup | `false` |
-| `--existing` | Use an existing KTX project | `false` |
 | `--yes` | Accept safe defaults in non-interactive setup | `false` |
 | `--no-input` | Disable interactive terminal input | — |
 
@@ -29,75 +27,11 @@ ktx setup [options]
 |------|-------------|---------|
 | `--agents` | Install agent integration only | `false` |
 | `--target <target>` | Agent target (`claude-code`, `codex`, `cursor`, `opencode`, `universal`) | — |
-| `--agent-scope <scope>` | Agent install scope (`project` or `global`) | `project` |
-| `--project` | Install agent integration into the project scope | `false` |
 | `--global` | Install agent integration into the global target scope (Claude Code and Codex only) | `false` |
-| `--skip-agents` | Leave agent integration incomplete for now | `false` |
 
-### LLM Configuration
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key | — |
-| `--anthropic-api-key-file <path>` | File containing the Anthropic API key | — |
-| `--anthropic-model <model>` | Anthropic model ID to validate and save | — |
-| `--skip-llm` | Leave LLM setup incomplete for now | `false` |
-
-### Embedding Configuration
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--embedding-backend <backend>` | Embedding backend (`openai` or `sentence-transformers`) | — |
-| `--embedding-api-key-env <name>` | Environment variable containing the embedding provider API key | — |
-| `--embedding-api-key-file <path>` | File containing the embedding provider API key | — |
-| `--skip-embeddings` | Leave embedding setup incomplete for now | `false` |
-
-### Database Configuration
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--database <driver>` | Database driver to configure; repeatable (`sqlite`, `postgres`, `mysql`, `clickhouse`, `sqlserver`, `bigquery`, `snowflake`) | — |
-| `--database-connection-id <id>` | Existing or new connection id; repeatable | — |
-| `--new-database-connection-id <id>` | Connection id for one new database connection | — |
-| `--database-url <url>` | URL, `env:NAME`, or `file:/path` for one new URL-style database connection | — |
-| `--database-schema <schema>` | Database schema to include; repeatable | — |
-| `--skip-databases` | Leave database setup incomplete | `false` |
-
-### Query history
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--enable-query-history` | Enable query history when the selected database supports it | `false` |
-| `--disable-query-history` | Disable query history for the selected database | `false` |
-| `--query-history-window-days <number>` | Query-history lookback window in days | — |
-| `--query-history-min-executions <number>` | Minimum executions for a query-history template | — |
-| `--query-history-service-account-pattern <pattern>` | Query-history service-account regex; repeatable | — |
-| `--query-history-redaction-pattern <pattern>` | Query-history SQL-literal redaction regex; repeatable | — |
-
-### Context Source Configuration
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--source <type>` | Source connector type (`dbt`, `metricflow`, `metabase`, `looker`, `lookml`, `notion`) | — |
-| `--source-connection-id <id>` | Connection id for source setup | — |
-| `--source-path <path>` | Local source path for dbt, MetricFlow, or LookML | — |
-| `--source-git-url <url>` | Git URL for dbt, MetricFlow, or LookML | — |
-| `--source-branch <branch>` | Git branch for source setup | — |
-| `--source-subpath <path>` | Repo subpath for source setup | — |
-| `--source-auth-token-ref <ref>` | `env:` or `file:` credential ref for source repo auth | — |
-| `--source-url <url>` | Source service URL for Metabase or Looker | — |
-| `--source-api-key-ref <ref>` | `env:` or `file:` API key ref for Metabase or Notion | — |
-| `--source-client-id <id>` | Looker client id | — |
-| `--source-client-secret-ref <ref>` | `env:` or `file:` Looker client secret ref | — |
-| `--source-warehouse-connection-id <id>` | Mapped warehouse connection id | — |
-| `--source-project-name <name>` | dbt project name override | — |
-| `--source-profiles-path <path>` | dbt profiles path | — |
-| `--source-target <target>` | dbt target or source-specific mapping target | — |
-| `--metabase-database-id <id>` | Metabase database id to map | — |
-| `--notion-crawl-mode <mode>` | Notion crawl mode (`all_accessible` or `selected_roots`) | — |
-| `--notion-root-page-id <id>` | Notion root page id; repeatable | — |
-| `--skip-initial-source-ingest` | Validate source setup without building source context during setup | `false` |
-| `--skip-sources` | Mark optional source setup complete with no sources | `false` |
+The setup wizard is the public configuration interface. It prompts for LLM
+credentials, embeddings, database connections, context sources, query history,
+and agent integration when those values are needed.
 
 ## Examples
 
@@ -105,29 +39,14 @@ ktx setup [options]
 # Run the interactive setup wizard
 ktx setup
 
-# Create a new project and run setup
-ktx setup --new
-
-# Resume setup in an existing project
-ktx setup --existing
-
-# Non-interactive setup with Anthropic key from environment
-ktx setup --yes --anthropic-api-key-env ANTHROPIC_API_KEY
-
-# Set up a Postgres connection
-ktx setup --database postgres --database-url "env:DATABASE_URL"
+# Run setup for a specific project directory
+ktx setup --project-dir ./analytics
 
 # Install agent integration for Claude Code only
 ktx setup --agents --target claude-code
 
 # Install agent integration globally for Codex
 ktx setup --agents --target codex --global
-
-# Add a dbt source from a local path
-ktx setup --source dbt --source-path ./my-dbt-project
-
-# Skip optional steps for a minimal setup
-ktx setup --skip-sources --skip-agents
 
 # Check setup readiness
 ktx status
@@ -155,5 +74,5 @@ Agent integration ready: yes (codex:project)
 |-------|-------|----------|
 | Setup resumes an unexpected project | `KTX_PROJECT_DIR` or nearest `ktx.yaml` points to another directory | Pass `--project-dir <path>` explicitly |
 | Health check for model fails | Provider key or model id is invalid | Set the correct environment variable or secret file and rerun setup |
-| Setup cannot run in CI | Interactive prompts need a TTY | Use `--yes --no-input` with explicit flags for required values |
+| Setup cannot run in CI | Interactive prompts need a TTY | Run setup interactively before CI, or provide a fixture `ktx.yaml` for automated tests |
 | Agent integration missing | Setup skipped the agents step | Run `ktx setup --agents --target <target>` |

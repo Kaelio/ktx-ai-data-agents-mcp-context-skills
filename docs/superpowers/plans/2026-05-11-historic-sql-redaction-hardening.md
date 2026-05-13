@@ -55,16 +55,16 @@ Remaining spec gap this plan covers:
 
 Create:
 
-- `packages/context/src/ingest/adapters/historic-sql/redaction.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/redaction.ts`
   Owns compilation and application of historic-SQL SQL-text redaction patterns. Supports JavaScript regex strings and the documented `(?i)` case-insensitive prefix used by setup tests/docs.
-- `packages/context/src/ingest/adapters/historic-sql/redaction.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/redaction.test.ts`
   Tests raw regex replacement, `(?i)` compatibility, empty config behavior, and invalid-pattern diagnostics.
 
 Modify:
 
-- `packages/context/src/ingest/adapters/historic-sql/stage-unified.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/stage-unified.ts`
   Compiles `config.redactionPatterns` once per fetch. Keeps original SQL for filtering and `SqlAnalysisPort.analyzeBatch()`, then stores redacted SQL in `ParsedTemplate.template.canonicalSql` before `toStagedTable()` and `toPatternsInput()` serialize files.
-- `packages/context/src/ingest/adapters/historic-sql/stage-unified.test.ts`  
+- `packages/context/src/ingest/adapters/historic-sql/stage-unified.test.ts`
   Adds a regression proving raw secrets are absent from staged artifacts while `analyzeBatch()` still receives the original SQL.
 
 ## Task 1: Add Historic SQL Redaction Helper
@@ -89,7 +89,7 @@ describe('historic-SQL redaction', () => {
     ]);
 
     const sql =
-      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'";
+      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'"; // pragma: allowlist secret
 
     expect(redactHistoricSqlText(sql, redactors)).toBe(
       "select * from public.api_events where api_key = '[REDACTED]' and note = '[REDACTED]'",
@@ -202,7 +202,7 @@ Append this test inside the existing `describe('stageHistoricSqlAggregatedSnapsh
   it('redacts configured SQL substrings in staged artifacts while analyzing original SQL', async () => {
     const stagedDir = await tempDir();
     const originalSql =
-      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'";
+      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'"; // pragma: allowlist secret
     const reader: HistoricSqlReader = {
       async probe() {
         return { warnings: [], info: [] };

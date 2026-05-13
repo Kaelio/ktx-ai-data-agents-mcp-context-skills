@@ -37,7 +37,6 @@ export interface KtxSqlServerConnectionConfig {
   schema?: string;
   schemas?: string[];
   trustServerCertificate?: boolean;
-  readonly?: boolean;
   [key: string]: unknown;
 }
 
@@ -234,7 +233,9 @@ function limitSqlForSqlServerExecution(sqlText: string, maxRows: number | undefi
   return `SELECT TOP ${maxRows} * FROM (${trimmed}) AS ktx_query_result`;
 }
 
-export function isKtxSqlServerConnectionConfig(connection: KtxSqlServerConnectionConfig | undefined): boolean {
+export function isKtxSqlServerConnectionConfig(
+  connection: KtxSqlServerConnectionConfig | undefined,
+): connection is KtxSqlServerConnectionConfig {
   return String(connection?.driver ?? '').toLowerCase() === 'sqlserver';
 }
 
@@ -243,11 +244,9 @@ export function sqlServerConnectionPoolConfigFromConfig(input: {
   connection: KtxSqlServerConnectionConfig | undefined;
   env?: NodeJS.ProcessEnv;
 }): KtxSqlServerPoolConfig {
+  const inputDriver = input.connection?.driver ?? 'unknown';
   if (!isKtxSqlServerConnectionConfig(input.connection)) {
-    throw new Error(`Native SQL Server connector cannot run driver "${input.connection?.driver ?? 'unknown'}"`);
-  }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Native SQL Server connector requires connections.${input.connectionId}.readonly: true`);
+    throw new Error(`Native SQL Server connector cannot run driver "${inputDriver}"`);
   }
 
   const env = input.env ?? process.env;
