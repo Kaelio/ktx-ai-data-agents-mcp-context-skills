@@ -90,7 +90,7 @@ describe('setup agents', () => {
       projectDir: tempDir,
       installs: [{ target: 'universal', scope: 'project', mode: 'cli' }],
     });
-    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('agents');
+    expect(await readKtxSetupState(tempDir)).toEqual({ completed_steps: ['agents'] });
     expect(io.stderr()).toBe('');
   });
 

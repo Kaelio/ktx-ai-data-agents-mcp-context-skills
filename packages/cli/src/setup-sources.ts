@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cancel, isCancel, log, multiselect, password, select, text } from '@clack/prompts';
+import { cancel, confirm, isCancel, log, multiselect, password, select, text } from '@clack/prompts';
 import { localConnectionTypeForConfig, resolveNotionAuthToken } from '@ktx/context/connections';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
@@ -136,12 +136,23 @@ const PRIMARY_SOURCE_DRIVERS = new Set([
 function createPromptAdapter(): KtxSetupSourcesPromptAdapter {
   return {
     async multiselect(options) {
-      const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return ['back'];
+      while (true) {
+        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
+        if (isCancel(value)) {
+          cancel('Setup cancelled.');
+          return ['back'];
+        }
+        const selected = [...value] as string[];
+        if (selected.length === 0 && !options.required) {
+          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
+          if (isCancel(skipConfirmed)) {
+            cancel('Setup cancelled.');
+            return ['back'];
+          }
+          if (!skipConfirmed) continue;
+        }
+        return selected;
       }
-      return [...value] as string[];
     },
     async select(options) {
       const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));

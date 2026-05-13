@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises';
-import { cancel, isCancel, multiselect, password, select, text } from '@clack/prompts';
+import { cancel, confirm, isCancel, multiselect, password, select, text } from '@clack/prompts';
 import type { HistoricSqlDialect } from '@ktx/context/ingest';
 import {
   type KtxProjectConnectionConfig,
@@ -205,12 +205,23 @@ function missingConnectionDetailsPrompt(
 function createPromptAdapter(): KtxSetupDatabasesPromptAdapter {
   return {
     async multiselect(options) {
-      const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
-      if (isCancel(value)) {
-        cancel('Setup cancelled.');
-        return ['back'];
+      while (true) {
+        const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(options)));
+        if (isCancel(value)) {
+          cancel('Setup cancelled.');
+          return ['back'];
+        }
+        const selected = [...value] as string[];
+        if (selected.length === 0 && !options.required) {
+          const skipConfirmed = await confirm({ message: 'Nothing selected. Skip this step?', initialValue: false });
+          if (isCancel(skipConfirmed)) {
+            cancel('Setup cancelled.');
+            return ['back'];
+          }
+          if (!skipConfirmed) continue;
+        }
+        return selected;
       }
-      return [...value] as string[];
     },
     async select(options) {
       const value = await withSetupInterruptConfirmation(() => select(withMenuOptionsSpacing(options)));
@@ -699,8 +710,8 @@ async function buildUrlConnectionConfig(input: {
     const choice = await input.prompts.select({
       message: `How do you want to connect to ${label}?`,
       options: [
-        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'url', label: 'Paste a connection URL' },
+        { value: 'fields', label: 'Enter connection details (host, port, database, user)' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -1408,9 +1419,7 @@ async function validateAndScanConnection(input: {
   const testOutput = testIo.stdoutText();
   const outputDriver = normalizeDriver(readOutputValue(testOutput, 'Driver'));
   const driverDisplay = outputDriver ? driverLabel(outputDriver) : (configuredDriverLabel ?? 'Unknown driver');
-  const tableCount = Number(readOutputValue(testOutput, 'Tables') ?? NaN);
-  const testLines = ['✓ Connection test passed'];
-  testLines.push(`Driver: ${driverDisplay}${Number.isFinite(tableCount) ? ` · Tables: ${tableCount}` : ''}`);
+  const testLines = ['✓ Connection test passed', `Driver: ${driverDisplay}`];
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
 
   while (true) {
