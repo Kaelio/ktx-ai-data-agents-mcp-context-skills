@@ -417,7 +417,7 @@ describe('runKtxPublicIngest', () => {
       },
     });
     const runScan = vi.fn(async () => 0);
-    const runIngest = vi.fn(async () => 0);
+    const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async () => 0);
 
     await expect(
       runKtxPublicIngest(
@@ -436,7 +436,9 @@ describe('runKtxPublicIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    const ingestArgs = runIngest.mock.calls[0]?.[0];
+    const ingestArgs = runIngest.mock.calls[0]?.[0] as
+      | Extract<Parameters<NonNullable<KtxPublicIngestDeps['runIngest']>>[0], { command: 'run' }>
+      | undefined;
     expect(ingestArgs).toMatchObject({
       command: 'run',
       connectionId: 'warehouse',
