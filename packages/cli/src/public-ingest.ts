@@ -412,8 +412,43 @@ function defaultSteps(target: KtxPublicIngestPlanTarget): KtxPublicIngestTargetR
   ];
 }
 
+function retryCommandForTarget(
+  target: KtxPublicIngestPlanTarget,
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
+): string {
+  const projectPart = ` --project-dir ${args.projectDir}`;
+  const depthPart = target.databaseDepth ? ` --${target.databaseDepth}` : '';
+  const queryHistoryPart = target.queryHistory?.enabled === true ? ' --query-history' : '';
+  const windowPart =
+    target.queryHistory?.enabled === true && target.queryHistory.windowDays !== undefined
+      ? ` --query-history-window-days ${target.queryHistory.windowDays}`
+      : '';
+  return `ktx ingest ${target.connectionId}${projectPart}${depthPart}${queryHistoryPart}${windowPart}`;
+}
+
+function trimTrailingPeriod(value: string): string {
+  return value.endsWith('.') ? value.slice(0, -1) : value;
+}
+
+function failureDetailWithRetry(input: {
+  target: KtxPublicIngestPlanTarget;
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>;
+  failedOperation: KtxPublicIngestStepName;
+  failureDetail?: string;
+}): string {
+  const detail = input.failureDetail?.trim();
+  const base =
+    detail && detail.startsWith(`${input.target.connectionId} `)
+      ? detail
+      : detail
+        ? `${input.target.connectionId} failed: ${detail}`
+        : `${input.target.connectionId} failed at ${input.failedOperation}.`;
+  return `${trimTrailingPeriod(base)}. Retry: ${retryCommandForTarget(input.target, input.args)}`;
+}
+
 function markTargetResult(
   target: KtxPublicIngestPlanTarget,
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
   status: 'done' | 'failed',
   failedOperation?: KtxPublicIngestStepName,
   failureDetail?: string,
@@ -434,7 +469,12 @@ function markTargetResult(
         return {
           ...step,
           status: 'failed',
-          detail: failureDetail ?? `${target.connectionId} failed at ${selectedFailedOperation}.`,
+          detail: failureDetailWithRetry({
+            target,
+            args,
+            failedOperation: selectedFailedOperation,
+            failureDetail,
+          }),
         };
       }
       return { ...step, status: 'not-run' };
@@ -478,9 +518,6 @@ function renderPlainResults(results: KtxPublicIngestTargetResult[], io: KtxCliIo
       continue;
     }
     io.stdout.write(`  ${failedStep.detail ?? `${result.connectionId} failed.`}\n`);
-    if (failedStep.debugCommand) {
-      io.stdout.write(`  Debug: ${failedStep.debugCommand}\n`);
-    }
   }
 }
 
@@ -572,6 +609,7 @@ export async function executePublicIngestTarget(
     if (scanExitCode !== 0) {
       return markTargetResult(
         target,
+        args,
         'failed',
         'database-schema',
         capturedScanIo ? firstCapturedFailureLine(capturedScanIo.capturedOutput()) : undefined,
@@ -596,11 +634,11 @@ export async function executePublicIngestTarget(
       };
       const qhExitCode = await runIngest(ingestArgs, io);
       if (qhExitCode !== 0) {
-        return markTargetResult(target, 'failed', 'query-history');
+        return markTargetResult(target, args, 'failed', 'query-history');
       }
     }
 
-    return markTargetResult(target, 'done');
+    return markTargetResult(target, args, 'done');
   }
 
   const { runKtxIngest } = await import('./ingest.js');
@@ -618,7 +656,7 @@ export async function executePublicIngestTarget(
   const exitCode = deps.ingestProgress
     ? await runIngest(ingestArgs, io, { progress: deps.ingestProgress })
     : await runIngest(ingestArgs, io);
-  return markTargetResult(target, exitCode === 0 ? 'done' : 'failed');
+  return markTargetResult(target, args, exitCode === 0 ? 'done' : 'failed');
 }
 
 export async function runKtxPublicIngest(

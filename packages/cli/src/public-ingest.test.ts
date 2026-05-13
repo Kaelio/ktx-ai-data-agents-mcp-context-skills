@@ -533,7 +533,37 @@ describe('runKtxPublicIngest', () => {
     );
     expect(io.stdout()).toContain('Ingest finished with partial failures');
     expect(io.stdout()).toContain('warehouse failed at database-schema.');
-    expect(io.stdout()).toContain('Debug: ktx ingest warehouse --debug');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --fast');
+    expect(io.stdout()).not.toContain('Debug: ktx ingest warehouse --debug');
+  });
+
+  it('prints query-history retry guidance for query-history facet failures', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async () => 1);
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stdout()).toContain('warehouse failed at query-history.');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).not.toContain('historic-sql');
   });
 
   it('fails deep-readiness targets before work starts while continuing independent --all targets', async () => {
