@@ -238,15 +238,50 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);
   });
 
-  it('documents public context build workflows in the docs site', async () => {
+  it('documents unified public ingest workflows in the docs site', async () => {
     const rootReadme = await readText('README.md');
+    const cliMeta = await readText('docs-site/content/docs/cli-reference/meta.json');
+    const ingestReference = await readText('docs-site/content/docs/cli-reference/ktx-ingest.mdx');
+    const devReference = await readText('docs-site/content/docs/cli-reference/ktx-dev.mdx');
     const buildingContext = await readText('docs-site/content/docs/guides/building-context.mdx');
+    const contextSources = await readText('docs-site/content/docs/integrations/context-sources.mdx');
+    const contextAsCode = await readText('docs-site/content/docs/concepts/context-as-code.mdx');
+    const quickstart = await readText('docs-site/content/docs/getting-started/quickstart.mdx');
+    const primarySources = await readText('docs-site/content/docs/integrations/primary-sources.mdx');
+    const examplesIndex = await readText('examples/README.md');
+    const localWarehouseReadme = await readText('examples/local-warehouse/README.md');
 
+    assert.match(ingestReference, /ktx ingest <connectionId>/);
+    assert.match(ingestReference, /ktx ingest --all --deep/);
+    assert.match(ingestReference, /--query-history-window-days <days>/);
     assert.match(buildingContext, /ktx ingest <connection-id>/);
     assert.match(buildingContext, /ktx ingest --all/);
-    assert.match(buildingContext, /ktx status/);
-    assert.doesNotMatch(buildingContext, /ktx scan status <run-id>/);
-    assert.doesNotMatch(buildingContext, /ktx scan report <run-id>/);
+    assert.match(buildingContext, /ktx ingest replay <run-id>/);
+    assert.match(contextSources, /ktx ingest <connectionId>/);
+    assert.match(contextAsCode, /ktx ingest --all --no-input/);
+    assert.match(quickstart, /schema context/);
+    assert.match(primarySources, /context:\n      queryHistory:/);
+
+    assert.doesNotMatch(cliMeta, /ktx-scan/);
+    assert.doesNotMatch(ingestReference, /ktx ingest run/);
+    assert.doesNotMatch(ingestReference, /--adapter/);
+    assert.doesNotMatch(ingestReference, /ktx ingest watch/);
+    assert.doesNotMatch(ingestReference, /live-database/);
+    assert.doesNotMatch(devReference, /ktx scan/);
+    assert.doesNotMatch(buildingContext, /ktx ingest watch/);
+    assert.doesNotMatch(buildingContext, /historic-sql/);
+    assert.doesNotMatch(buildingContext, /live-database/);
+    assert.doesNotMatch(contextSources, /ktx ingest run --connection-id/);
+    assert.doesNotMatch(contextSources, /--adapter <adapter>/);
+    assert.doesNotMatch(contextAsCode, /ktx ingest run --connection-id/);
+    assert.doesNotMatch(quickstart, /Historic SQL/);
+    assert.doesNotMatch(quickstart, /--enable-historic-sql/);
+    assert.doesNotMatch(quickstart, /press <kbd>d<\/kbd> to detach/);
+    assert.doesNotMatch(primarySources, /historicSql/);
+    assert.doesNotMatch(primarySources, /Historic SQL/);
+    assert.doesNotMatch(examplesIndex, /ktx ingest run --project-dir/);
+    assert.doesNotMatch(localWarehouseReadme, /ktx ingest run --project-dir/);
+
     assert.match(rootReadme, /raw-sources\//);
     assert.doesNotMatch(rootReadme, new RegExp(`${['live', 'database'].join('-')}/`));
     assert.doesNotMatch(rootReadme, /ktx scan/);
