@@ -63,17 +63,16 @@ ktx setup [options]
 | `--database-schema <schema>` | Database schema to include; repeatable | — |
 | `--skip-databases` | Leave database setup incomplete | `false` |
 
-### Historic SQL
+### Query history
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--enable-historic-sql` | Enable Historic SQL when the selected database supports it | `false` |
-| `--disable-historic-sql` | Disable Historic SQL for the selected database | `false` |
-| `--historic-sql-window-days <number>` | Historic SQL query-history window in days | — |
-| `--historic-sql-min-executions <number>` | Minimum executions for a Historic SQL template | — |
-| `--historic-sql-min-calls <number>` | Alias for `--historic-sql-min-executions` for one release | — |
-| `--historic-sql-service-account-pattern <pattern>` | Historic SQL service-account regex; repeatable | — |
-| `--historic-sql-redaction-pattern <pattern>` | Historic SQL SQL-literal redaction regex; repeatable | — |
+| `--enable-query-history` | Enable query history when the selected database supports it | `false` |
+| `--disable-query-history` | Disable query history for the selected database | `false` |
+| `--query-history-window-days <number>` | Query-history lookback window in days | — |
+| `--query-history-min-executions <number>` | Minimum executions for a query-history template | — |
+| `--query-history-service-account-pattern <pattern>` | Query-history service-account regex; repeatable | — |
+| `--query-history-redaction-pattern <pattern>` | Query-history SQL-literal redaction regex; repeatable | — |
 
 ### Context Source Configuration
 
