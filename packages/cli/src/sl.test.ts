@@ -190,7 +190,7 @@ joins: []
   it('runs sl query and prints SQL output', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
-    project.config.connections.warehouse = { driver: 'postgres', readonly: true };
+    project.config.connections.warehouse = { driver: 'postgres' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
       `name: orders
@@ -247,7 +247,7 @@ joins: []
   it('runs sl query from a JSON query file', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
-    project.config.connections.warehouse = { driver: 'postgres', readonly: true };
+    project.config.connections.warehouse = { driver: 'postgres' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
       `name: orders
@@ -314,7 +314,7 @@ joins: []
   it('creates default sl query compute through the managed runtime helper', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
-    project.config.connections.warehouse = { driver: 'postgres', readonly: true };
+    project.config.connections.warehouse = { driver: 'postgres' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
       `name: orders
@@ -375,7 +375,7 @@ joins: []
   it('executes sl query through the injected query executor', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
-    project.config.connections.warehouse = { driver: 'postgres', url: 'postgres://example/db', readonly: true };
+    project.config.connections.warehouse = { driver: 'postgres', url: 'postgres://example/db' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
       `name: orders
@@ -471,7 +471,7 @@ joins: []
     `);
     db.close();
 
-    project.config.connections.warehouse = { driver: 'sqlite', path: 'warehouse.db', readonly: true };
+    project.config.connections.warehouse = { driver: 'sqlite', path: 'warehouse.db' };
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
@@ -480,7 +480,6 @@ joins: []
         '  warehouse:',
         '    driver: sqlite',
         '    path: warehouse.db',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',

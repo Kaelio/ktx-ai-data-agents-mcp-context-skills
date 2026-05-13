@@ -29,7 +29,6 @@ export interface KtxSqliteConnectionConfig {
   path?: string;
   url?: string;
   file_path?: string;
-  readonly?: boolean;
   [key: string]: unknown;
 }
 
@@ -135,17 +134,17 @@ function stripLeadingSqlComments(sql: string): string {
   return sql.slice(index);
 }
 
-export function isKtxSqliteConnectionConfig(connection: KtxSqliteConnectionConfig | undefined): boolean {
+export function isKtxSqliteConnectionConfig(
+  connection: KtxSqliteConnectionConfig | undefined,
+): connection is KtxSqliteConnectionConfig {
   const driver = String(connection?.driver ?? '').toLowerCase();
   return driver === 'sqlite' || driver === 'sqlite3';
 }
 
 export function sqliteDatabasePathFromConfig(input: SqliteDatabasePathInput): string {
+  const inputDriver = input.connection?.driver ?? 'unknown';
   if (!isKtxSqliteConnectionConfig(input.connection)) {
-    throw new Error(`Native SQLite connector cannot run driver "${input.connection?.driver ?? 'unknown'}"`);
-  }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Native SQLite connector requires connections.${input.connectionId}.readonly: true`);
+    throw new Error(`Native SQLite connector cannot run driver "${inputDriver}"`);
   }
   const configuredPath =
     stringConfigValue(input.connection, 'path') ??

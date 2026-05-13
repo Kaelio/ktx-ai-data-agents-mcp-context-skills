@@ -218,7 +218,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',
@@ -281,7 +280,6 @@ describe('setup databases step', () => {
     expect(config.connections['postgres-warehouse']).toEqual({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     });
   });
 
@@ -542,7 +540,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -583,7 +580,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -698,7 +694,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -843,7 +838,6 @@ describe('setup databases step', () => {
       port: 5432,
       database: 'analytics',
       username: 'readonly',
-      readonly: true,
     });
     expect(connection.password).toMatch(/^file:/);
     const secretPath = join(tempDir, '.ktx/secrets/postgres-warehouse-password');
@@ -998,7 +992,6 @@ describe('setup databases step', () => {
     expect(config.connections['postgres-warehouse']).toMatchObject({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      readonly: true,
     });
   });
 
@@ -1115,7 +1108,6 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       schemas: ['public'],
-      readonly: true,
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
@@ -1153,7 +1145,6 @@ describe('setup databases step', () => {
     expect(config.connections.warehouse).toEqual({
       driver: 'sqlite',
       path: './warehouse.sqlite',
-      readonly: true,
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
@@ -1170,7 +1161,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         '  analytics:',
         '    driver: snowflake',
         '    authMethod: password',
@@ -1180,7 +1170,6 @@ describe('setup databases step', () => {
         '    schema_name: PUBLIC',
         '    username: reader',
         '    password: env:SNOWFLAKE_PASSWORD',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',
@@ -1443,7 +1432,6 @@ describe('setup databases step', () => {
         '    driver: bigquery',
         '    dataset_id: analytics',
         '    credentials_json: env:BIGQUERY_CREDENTIALS_JSON',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',
@@ -1492,7 +1480,6 @@ describe('setup databases step', () => {
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
-        '    readonly: true',
         '',
       ].join('\n'),
       'utf-8',

@@ -25,7 +25,7 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
   it('passes when no Postgres historic-SQL connections are enabled', async () => {
     const checks = await runPostgresHistoricSqlDoctorChecks(
       projectWithConnections({
-        warehouse: { driver: 'sqlite', path: './warehouse.db', readonly: true },
+        warehouse: { driver: 'sqlite', path: './warehouse.db' },
       }),
       {
         postgresHistoricSqlProbe: vi.fn<PostgresHistoricSqlDoctorProbe>(),
@@ -53,7 +53,6 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         warehouse: {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
-          readonly: true,
           historicSql: { enabled: true, dialect: 'postgres' },
         },
       }),
@@ -66,7 +65,6 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
       connection: {
         driver: 'postgres',
         url: 'env:WAREHOUSE_DATABASE_URL',
-        readonly: true,
         historicSql: { enabled: true, dialect: 'postgres' },
       },
       env: process.env,
@@ -87,7 +85,6 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         warehouse: {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
-          readonly: true,
           historicSql: { enabled: true, dialect: 'postgres' },
         },
       }),
@@ -119,7 +116,6 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         warehouse: {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
-          readonly: true,
           historicSql: { enabled: true, dialect: 'postgres' },
         },
       }),
@@ -154,7 +150,6 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         warehouse: {
           driver: 'mysql',
           url: 'env:WAREHOUSE_DATABASE_URL',
-          readonly: true,
           historicSql: { enabled: true, dialect: 'postgres' },
         },
       }),
@@ -180,7 +175,6 @@ describe('runPostgresHistoricSqlDoctorChecks', () => {
         warehouse: {
           driver: 'postgres',
           url: 'env:WAREHOUSE_DATABASE_URL',
-          readonly: true,
           historicSql: { enabled: true, dialect: 'postgres' },
         },
       }),

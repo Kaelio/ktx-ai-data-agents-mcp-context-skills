@@ -145,7 +145,7 @@ describe('createLocalProjectMemoryCapture', () => {
 
   it('captures a semantic-layer source for a named local connection id', async () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
-    project.config.connections.warehouse = { driver: 'postgres', readonly: true };
+    project.config.connections.warehouse = { driver: 'postgres' };
     const agentRunner = {
       runLoop: async ({
         toolSet,

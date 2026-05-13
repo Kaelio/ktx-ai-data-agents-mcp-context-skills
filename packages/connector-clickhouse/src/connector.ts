@@ -35,7 +35,6 @@ export interface KtxClickHouseConnectionConfig {
   password?: string;
   url?: string;
   ssl?: boolean;
-  readonly?: boolean;
   [key: string]: unknown;
 }
 
@@ -193,7 +192,9 @@ function isNullableClickHouseType(type: string): boolean {
   return type.startsWith('Nullable(') || type.startsWith('LowCardinality(Nullable(');
 }
 
-export function isKtxClickHouseConnectionConfig(connection: KtxClickHouseConnectionConfig | undefined): boolean {
+export function isKtxClickHouseConnectionConfig(
+  connection: KtxClickHouseConnectionConfig | undefined,
+): connection is KtxClickHouseConnectionConfig {
   return String(connection?.driver ?? '').toLowerCase() === 'clickhouse';
 }
 
@@ -202,11 +203,9 @@ export function clickHouseClientConfigFromConfig(input: {
   connection: KtxClickHouseConnectionConfig | undefined;
   env?: NodeJS.ProcessEnv;
 }): KtxClickHouseResolvedClientConfig {
+  const inputDriver = input.connection?.driver ?? 'unknown';
   if (!isKtxClickHouseConnectionConfig(input.connection)) {
-    throw new Error(`Native ClickHouse connector cannot run driver "${input.connection?.driver ?? 'unknown'}"`);
-  }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Native ClickHouse connector requires connections.${input.connectionId}.readonly: true`);
+    throw new Error(`Native ClickHouse connector cannot run driver "${inputDriver}"`);
   }
 
   const env = input.env ?? process.env;

@@ -14,7 +14,7 @@ describe('compileLocalSlQuery', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-query-'));
     project = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
-    project.config.connections.warehouse = { driver: 'postgres', readonly: true };
+    project.config.connections.warehouse = { driver: 'postgres' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
       `name: orders
@@ -222,7 +222,7 @@ grain: []
     expect(queryExecutor.execute).toHaveBeenCalledWith({
       connectionId: 'warehouse',
       projectDir: project.projectDir,
-      connection: { driver: 'postgres', readonly: true },
+      connection: { driver: 'postgres' },
       sql: 'select status, count(*) as order_count from public.orders group by status',
       maxRows: 10,
     });
@@ -248,7 +248,7 @@ grain: []
   });
 
   it('requires connectionId when multiple connections are configured', async () => {
-    project.config.connections.analytics = { driver: 'bigquery', readonly: true };
+    project.config.connections.analytics = { driver: 'bigquery' };
 
     await expect(
       compileLocalSlQuery(project, {

@@ -45,7 +45,6 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
         warehouse: {
           driver: 'postgres',
           url: 'postgres://localhost:5432/warehouse',
-          readonly: true,
         },
       },
       schemas: ['public'],
@@ -157,7 +156,6 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
           warehouse: {
             driver: 'postgresql',
             url: 'postgres://localhost:5432/warehouse',
-            readonly: true,
           },
         },
         baseUrl: `http://127.0.0.1:${address.port}`,
@@ -186,20 +184,18 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
     }
   });
 
-  it('requires a configured read-only postgres connection with a url', async () => {
+  it('requires a configured postgres connection with a url', async () => {
     const introspection = createDaemonLiveDatabaseIntrospection({
       connections: {
         warehouse: {
           driver: 'postgres',
-          url: 'postgres://localhost:5432/warehouse',
-          readonly: false,
         },
       },
       runJson: vi.fn(async () => daemonResponse),
     });
 
     await expect(introspection.extractSchema('warehouse')).rejects.toThrow(
-      'Local live-database ingest requires connections.warehouse.readonly: true.',
+      'Local live-database ingest requires connections.warehouse.url.',
     );
   });
 
@@ -210,7 +206,6 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
         warehouse: {
           driver: 'snowflake',
           url: 'snowflake://example',
-          readonly: true,
         },
       },
       runJson,

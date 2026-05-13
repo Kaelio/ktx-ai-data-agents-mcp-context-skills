@@ -39,7 +39,6 @@ async function writeLiveDatabaseConfig(projectDir: string): Promise<void> {
       '  warehouse:',
       '    driver: postgres',
       '    url: postgres://localhost:5432/warehouse',
-      '    readonly: true',
       'ingest:',
       '  adapters:',
       '    - live-database',

@@ -92,7 +92,7 @@ function fakePoolFactory(): KtxMysqlPoolFactory {
 
 describe('KtxMysqlScanConnector', () => {
   it('resolves MySQL connection configuration safely', () => {
-    expect(isKtxMysqlConnectionConfig({ driver: 'mysql', host: 'localhost', database: 'analytics', readonly: true })).toBe(true);
+    expect(isKtxMysqlConnectionConfig({ driver: 'mysql', host: 'localhost', database: 'analytics' })).toBe(true);
     expect(isKtxMysqlConnectionConfig({ driver: 'postgres', host: 'localhost', database: 'analytics' })).toBe(false);
     expect(
       mysqlConnectionPoolConfigFromConfig({
@@ -105,7 +105,6 @@ describe('KtxMysqlScanConnector', () => {
           username: 'reader',
           password: 'secret', // pragma: allowlist secret
           ssl: true,
-          readonly: true,
         },
       }),
     ).toMatchObject({
@@ -116,12 +115,6 @@ describe('KtxMysqlScanConnector', () => {
       password: 'secret', // pragma: allowlist secret
       ssl: { rejectUnauthorized: false },
     });
-    expect(() =>
-      mysqlConnectionPoolConfigFromConfig({
-        connectionId: 'warehouse',
-        connection: { driver: 'mysql', host: 'db.example.test', database: 'analytics', readonly: false },
-      }),
-    ).toThrow('Native MySQL connector requires connections.warehouse.readonly: true');
   });
 
   it('introspects schema, primary keys, comments, row counts, views, and foreign keys', async () => {
@@ -133,7 +126,6 @@ describe('KtxMysqlScanConnector', () => {
         database: 'analytics',
         username: 'reader',
         password: 'secret', // pragma: allowlist secret
-        readonly: true,
       },
       poolFactory: fakePoolFactory(),
       now: () => new Date('2026-04-29T12:00:00.000Z'),
@@ -192,7 +184,6 @@ describe('KtxMysqlScanConnector', () => {
         database: 'analytics',
         username: 'reader',
         password: 'secret', // pragma: allowlist secret
-        readonly: true,
       },
       poolFactory,
     });
@@ -249,7 +240,6 @@ describe('KtxMysqlScanConnector', () => {
           database: 'analytics',
           username: 'reader',
           password: 'secret', // pragma: allowlist secret
-          readonly: true,
         },
       },
       poolFactory: fakePoolFactory(),

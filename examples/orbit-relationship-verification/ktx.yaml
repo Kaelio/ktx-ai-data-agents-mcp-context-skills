@@ -3,7 +3,6 @@ connections:
   orbit:
     driver: sqlite
     path: ../../packages/context/test/fixtures/relationship-benchmarks/orbit_style_product_no_declared_constraints/data.sqlite
-    readonly: true
 storage:
   state: sqlite
   search: sqlite-fts5

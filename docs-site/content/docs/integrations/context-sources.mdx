@@ -23,7 +23,6 @@ Agents should configure and ingest context sources in this order:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `driver` | Yes | Source adapter: `dbt`, `metricflow`, `lookml`, `metabase`, `looker`, or `notion` |
-| `readonly` | Strongly recommended | Marks the source as read-only for KTX |
 | `source_dir` | For local file sources | Absolute or project-relative source directory |
 | `repo_url` | For Git-hosted sources | Git repository URL |
 | `branch` | No | Git branch to read |
@@ -49,7 +48,6 @@ connections:
   my-dbt:
     driver: dbt
     source_dir: /path/to/dbt/project
-    readonly: true
 ```
 
 For a Git-hosted project:
@@ -62,7 +60,6 @@ connections:
     branch: main
     path: analytics/dbt          # For monorepos
     auth_token_ref: env:GITHUB_TOKEN
-    readonly: true
 ```
 
 ### Authentication
@@ -110,7 +107,6 @@ connections:
       branch: main
       path: dbt_metrics           # Subdirectory for monorepos
       auth_token_ref: env:GITHUB_TOKEN
-    readonly: true
 ```
 
 For a local path:
@@ -157,7 +153,6 @@ connections:
     branch: main
     path: analytics                # Subdirectory for monorepos
     auth_token_ref: env:GITHUB_TOKEN
-    readonly: true
 ```
 
 For a local path:
@@ -219,7 +214,6 @@ connections:
       syncEnabled:
         "3": true
       syncMode: ONLY               # Only ingest mapped databases
-    readonly: true
 ```
 
 ### Authentication
@@ -276,7 +270,6 @@ connections:
     mappings:
       connectionMappings:
         postgres_connection: postgres-main   # Looker conn → KTX conn
-    readonly: true
 ```
 
 ### Authentication
@@ -329,7 +322,6 @@ connections:
     crawl_mode: selected_roots
     root_page_ids:
       - "abc123def456..."
-    readonly: true
 ```
 
 For crawling all accessible pages:
@@ -340,7 +332,6 @@ connections:
     driver: notion
     auth_token_ref: env:NOTION_TOKEN
     crawl_mode: all_accessible
-    readonly: true
 ```
 
 ### Authentication

@@ -30,7 +30,6 @@ export interface KtxBigQueryConnectionConfig {
   dataset_ids?: string[];
   credentials_json?: string;
   location?: string;
-  readonly?: boolean;
   [key: string]: unknown;
 }
 
@@ -194,7 +193,9 @@ function normalizeValue(value: unknown): unknown {
   return value;
 }
 
-export function isKtxBigQueryConnectionConfig(connection: KtxBigQueryConnectionConfig | undefined): boolean {
+export function isKtxBigQueryConnectionConfig(
+  connection: KtxBigQueryConnectionConfig | undefined,
+): connection is KtxBigQueryConnectionConfig {
   return String(connection?.driver ?? '').toLowerCase() === 'bigquery';
 }
 
@@ -203,11 +204,9 @@ export function bigQueryConnectionConfigFromConfig(input: {
   connection: KtxBigQueryConnectionConfig | undefined;
   env?: NodeJS.ProcessEnv;
 }): KtxBigQueryResolvedConnectionConfig {
+  const inputDriver = input.connection?.driver ?? 'unknown';
   if (!isKtxBigQueryConnectionConfig(input.connection)) {
-    throw new Error(`Native BigQuery connector cannot run driver "${input.connection?.driver ?? 'unknown'}"`);
-  }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Native BigQuery connector requires connections.${input.connectionId}.readonly: true`);
+    throw new Error(`Native BigQuery connector cannot run driver "${inputDriver}"`);
   }
 
   const env = input.env ?? process.env;

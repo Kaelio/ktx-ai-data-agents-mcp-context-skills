@@ -112,7 +112,6 @@ describe('KtxClickHouseScanConnector', () => {
           username: 'reader',
           password: 'test-pass', // pragma: allowlist secret
           ssl: true,
-          readonly: true,
         },
       }),
     ).toMatchObject({
@@ -123,12 +122,6 @@ describe('KtxClickHouseScanConnector', () => {
       password: 'test-pass', // pragma: allowlist secret
       ssl: true,
     });
-    expect(() =>
-      clickHouseClientConfigFromConfig({
-        connectionId: 'warehouse',
-        connection: { driver: 'clickhouse', host: 'ch.example.test', database: 'analytics', readonly: false },
-      }),
-    ).toThrow('Native ClickHouse connector requires connections.warehouse.readonly: true');
   });
 
   it('introspects schema, primary keys, comments, row counts, and views', async () => {
@@ -140,7 +133,6 @@ describe('KtxClickHouseScanConnector', () => {
         database: 'analytics',
         username: 'reader',
         password: 'test-pass', // pragma: allowlist secret
-        readonly: true,
       },
       clientFactory: fakeClientFactory(),
       now: () => new Date('2026-04-29T14:00:00.000Z'),
@@ -189,7 +181,6 @@ describe('KtxClickHouseScanConnector', () => {
         database: 'analytics',
         username: 'reader',
         password: 'test-pass', // pragma: allowlist secret
-        readonly: true,
       },
       clientFactory,
     });
@@ -253,7 +244,6 @@ describe('KtxClickHouseScanConnector', () => {
           database: 'analytics',
           username: 'reader',
           password: 'test-pass', // pragma: allowlist secret
-          readonly: true,
         },
       },
       clientFactory: fakeClientFactory(),

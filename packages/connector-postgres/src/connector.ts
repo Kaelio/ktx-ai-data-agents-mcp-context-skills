@@ -61,7 +61,6 @@ export interface KtxPostgresConnectionConfig {
   sslmode?: string;
   sslMode?: string;
   rejectUnauthorized?: boolean;
-  readonly?: boolean;
   [key: string]: unknown;
 }
 
@@ -291,7 +290,9 @@ function searchPathSchemasFromConnection(connection: KtxPostgresConnectionConfig
   return schemas.includes('public') ? schemas : [...schemas, 'public'];
 }
 
-export function isKtxPostgresConnectionConfig(connection: KtxPostgresConnectionConfig | undefined): boolean {
+export function isKtxPostgresConnectionConfig(
+  connection: KtxPostgresConnectionConfig | undefined,
+): connection is KtxPostgresConnectionConfig {
   const driver = String(connection?.driver ?? '').toLowerCase();
   return driver === 'postgres' || driver === 'postgresql';
 }
@@ -301,11 +302,9 @@ export function postgresPoolConfigFromConfig(input: {
   connection: KtxPostgresConnectionConfig | undefined;
   env?: NodeJS.ProcessEnv;
 }): KtxPostgresPoolConfig {
+  const inputDriver = input.connection?.driver ?? 'unknown';
   if (!isKtxPostgresConnectionConfig(input.connection)) {
-    throw new Error(`Native PostgreSQL connector cannot run driver "${input.connection?.driver ?? 'unknown'}"`);
-  }
-  if (input.connection?.readonly !== true) {
-    throw new Error(`Native PostgreSQL connector requires connections.${input.connectionId}.readonly: true`);
+    throw new Error(`Native PostgreSQL connector cannot run driver "${inputDriver}"`);
   }
 
   const env = input.env ?? process.env;
