@@ -371,7 +371,7 @@ export class KtxDescriptionGenerator {
         connectorId: input.connector.id,
         table: input.table.name,
       });
-      return 'Table not found';
+      return null;
     }
 
     try {
@@ -397,7 +397,7 @@ export class KtxDescriptionGenerator {
       return description;
     } catch (error) {
       this.logger?.error(`Error generating table description: ${errorMessage(error)}`);
-      return 'Table not found';
+      return null;
     }
   }
 

@@ -88,8 +88,9 @@ export async function validateSingleSource(
       errors.push(
         `${sourceName}.yaml: standalone source shadows an existing manifest entry — ` +
           `writing it as-is drops the manifest's columns and joins. ` +
-          `Remove "sql:", "table:", "grain:", "columns:", and "joins:" and keep only ` +
-          `"name:" plus "measures:"/"segments:"/"descriptions:" to write an overlay ` +
+          `Remove "sql:", "table:", "grain:", and base-table "columns:" and keep only ` +
+          `"name:" plus overlay fields such as "measures:", "segments:", "descriptions:", ` +
+          `"joins:", "column_overrides:", or computed-only "columns:" to write an overlay ` +
           `that inherits the manifest schema. Call sl_read_source to inspect the existing source first.`,
       );
       return { errors, warnings };
@@ -108,7 +109,7 @@ export async function validateSingleSource(
     }
     if (errorPaths.has('columns')) {
       warnings.push(
-        `${sourceName}.yaml: hint — overlay columns must be computed: {name, expr, type}. Do NOT include base table columns.`,
+        `${sourceName}.yaml: hint — overlay columns must be computed: {name, expr, type}. Use column_overrides for manifest column descriptions or metadata.`,
       );
     }
     if (errorPaths.has('measures')) {
@@ -240,7 +241,8 @@ async function probeOverlayMeasures(
       }
     | undefined;
   try {
-    const all = await deps.semanticLayerService.loadAllSources(connectionId);
+    const { sources: all, loadErrors } = await deps.semanticLayerService.loadAllSources(connectionId);
+    errors.push(...loadErrors);
     composed = all.find((s) => s.name === sourceName);
   } catch (e) {
     errors.push(

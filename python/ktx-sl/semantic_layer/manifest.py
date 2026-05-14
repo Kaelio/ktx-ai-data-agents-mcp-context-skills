@@ -143,7 +143,9 @@ class Manifest(BaseModel):
 # ── Projection ──────────────────────────────────────────────────────
 
 
-def validate_overlay(data: dict) -> list[str]:
+def validate_overlay(
+    data: dict, manifest_column_names: set[str] | None = None
+) -> list[str]:
     """Validate that overlay data doesn't contain structural fields.
 
     Returns a list of error messages (empty if valid).
@@ -162,11 +164,26 @@ def validate_overlay(data: dict) -> list[str]:
             errors.append(
                 f"Overlay column '{col.get('name', '?')}' must use 'descriptions'"
             )
-        if "type" in col and "expr" not in col:
+        if "expr" not in col:
             errors.append(
-                f"Overlay column '{col.get('name', '?')}' specifies 'type' without 'expr' "
-                f"(structural types are inherited from manifest — only computed columns may specify a type)"
+                f"Overlay column '{col.get('name', '?')}' in 'columns' must define "
+                f"'expr' and 'type' (use 'column_overrides' to patch manifest columns)"
             )
+        if "type" not in col:
+            errors.append(
+                f"Overlay column '{col.get('name', '?')}' in 'columns' must define "
+                f"'type' and 'expr' (use 'column_overrides' to patch manifest columns)"
+            )
+    for col in data.get("column_overrides", []):
+        name = col.get("name", "?")
+        if "description" in col:
+            errors.append(f"Column override '{name}' must use 'descriptions'")
+        if "type" in col:
+            errors.append(f"Column override '{name}' must not contain 'type'")
+        if "expr" in col:
+            errors.append(f"Column override '{name}' must not contain 'expr'")
+        if manifest_column_names is not None and name not in manifest_column_names:
+            errors.append(f"Column override '{name}' does not match a manifest column")
     return errors
 
 

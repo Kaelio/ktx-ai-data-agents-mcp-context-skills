@@ -8,7 +8,7 @@ function makeDeps(opts: { sourceYaml: string; executeQuery: ReturnType<typeof vi
       isManifestBacked: vi.fn().mockResolvedValue(false),
       listManifestSourceNames: vi.fn().mockResolvedValue([]),
       loadSource: vi.fn().mockResolvedValue(null),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       validatePhysicalTableReferences: vi.fn().mockResolvedValue([]),
     } as never,
     connections: {

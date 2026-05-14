@@ -23,7 +23,9 @@ const slWriteSourceInputSchema = z.object({
     .describe('Name of the source to create, edit, or delete'),
   source: sourceInputSchema
     .optional()
-    .describe('Source definition (standalone with table/sql) or overlay (measures, computed columns, etc.)'),
+    .describe(
+      'Source definition (standalone with table/sql) or overlay (measures, column_overrides, computed columns, etc.)',
+    ),
   delete: z.boolean().optional().describe('Set to true to delete this source entirely'),
   rawPaths: z
     .array(z.string().min(1))
@@ -73,7 +75,8 @@ If the source already exists, this tool will overwrite it with the new definitio
 - table: For physical table/view sources (e.g., "public.orders"). Mutually exclusive with sql.
 - sql: For SQL-based sources (the SQL query). Mutually exclusive with table.
 - grain: What one row represents (e.g., ["id"], ["customer_id", "product_id"])
-- columns: All columns with type (string/number/time/boolean) and optional descriptions
+- columns: All columns with type (string/number/time/boolean) and optional descriptions. On overlays, columns are computed-only and require expr + type.
+- column_overrides: Overlay-only metadata patches for existing manifest columns (descriptions, role, visibility, constraints, enum_values, tests). Do not include type or expr.
 - joins: Relationships to other sources (to, on, relationship: many_to_one/one_to_many/one_to_one)
 - measures: Pre-defined aggregations (name, expr like "sum(amount)", optional filter, optional segments — bare names of segments defined on the same source, optional description)
 - segments: Named, reusable boolean predicates scoped to this source (name, expr — a SQL boolean over this source's columns, optional description). A measure references one with \`segments: [name]\`; a query references one with the dotted form \`source.segment_name\`. Use when the same predicate appears on 3+ measures — e.g. extract \`is_paid = true and is_refunded = '0'\` as \`segments: [{name: paid_non_refunded, expr: "..."}]\` and have each measure use \`segments: [paid_non_refunded]\` instead of re-typing the predicate inside \`sum(case when ... then x end)\`. Segments are predicates only — they cannot be selected as dimensions or grouped by; if you need to group by the predicate, add a \`columns[]\` entry instead.
@@ -113,7 +116,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       try {
         await semanticLayerService.deleteSource(connectionId, sourceName, author, authorEmail);
         if (!skipIndex) {
-          const allSources = await semanticLayerService.loadAllSources(connectionId);
+          const { sources: allSources } = await semanticLayerService.loadAllSources(connectionId);
           await this.slSearchService.indexSources(connectionId, allSources).catch(() => {});
         }
         if (context.session) {
@@ -210,7 +213,7 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       );
 
       if (!skipIndex) {
-        const allSources = await semanticLayerService.loadAllSources(connectionId);
+        const { sources: allSources } = await semanticLayerService.loadAllSources(connectionId);
         await this.slSearchService.indexSources(connectionId, allSources).catch(() => {});
       }
 
@@ -317,8 +320,9 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       `Error: cannot write "${sourceName}" as a standalone source — a manifest entry with that name already exists.`,
       `  Writing standalone would drop the manifest's columns and joins, leaving only what you list here.`,
       `To add measures/segments on top of the manifest, rewrite this YAML as an overlay:`,
-      `  - Remove "sql:", "table:", "grain:", "columns:", and "joins:".`,
-      `  - Keep only "name:", plus "measures:", "segments:", and/or "descriptions:".`,
+      `  - Remove "sql:", "table:", "grain:", and base-table "columns:".`,
+      `  - Keep "name:" plus "measures:", "segments:", "descriptions:", "joins:", "disable_joins:",`,
+      `    "exclude_columns:", "column_overrides:", and/or computed-only "columns:" entries with expr + type.`,
       `  - The manifest's schema is inherited automatically.`,
       `If you really need a different base table, use a different source name.`,
     ].join('\n');

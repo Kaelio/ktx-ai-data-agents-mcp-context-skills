@@ -7,7 +7,7 @@ import { SlDiscoverTool } from './sl-discover.tool.js';
 function makeTool() {
   const semanticLayerService = {
     listConnectionIdsWithNames: vi.fn(async () => [] as Array<{ id: string; name: string; connectionType: string }>),
-    loadAllSources: vi.fn(async () => [] as SemanticLayerSource[]),
+    loadAllSources: vi.fn(async () => ({ sources: [] as SemanticLayerSource[], loadErrors: [] })),
   };
   const slSearchService = {
     search: vi.fn(async () => []),
@@ -53,7 +53,8 @@ describe('SlDiscoverTool - session-scoped reads', () => {
       listConnectionIdsWithNames: vi.fn().mockResolvedValue([
         { id: 'warehouse', name: 'warehouse', connectionType: 'postgres' },
       ]),
-      loadAllSources: vi.fn().mockResolvedValue([
+      loadAllSources: vi.fn().mockResolvedValue({
+        sources: [
         {
           name: 'orders',
           table: 'public.orders',
@@ -62,7 +63,9 @@ describe('SlDiscoverTool - session-scoped reads', () => {
           measures: [],
           joins: [],
         },
-      ]),
+        ],
+        loadErrors: [],
+      }),
     };
 
     const result = await tool.call({}, makeContext({ session: makeSession(sessionSemanticLayerService) }));

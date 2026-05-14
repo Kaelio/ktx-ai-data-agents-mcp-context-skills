@@ -12,7 +12,7 @@ LookML views map to SL sources, `measure:` to measures, `explore: { join: }` to 
 
 | LookML | KTX form | Notes |
 |---|---|---|
-| `view: X { sql_table_name: …; measure:/dimension:/join: }` | **Overlay** at `<connId>/X.yaml` with `measures`, `columns` (computed), `joins`, `segments` | Manifest-backed; inherit grain/columns |
+| `view: X { sql_table_name: …; measure:/dimension:/join: }` | **Overlay** at `<connId>/X.yaml` with `measures`, computed-only `columns`, `column_overrides`, `joins`, `segments` | Manifest-backed; inherit grain/columns |
 | `view: X { derived_table: { sql: … } }` | **Standalone** with top-level `sql:`, explicit `grain:` + `columns:` | No manifest entry exists |
 | `view: X { sql_always_where: <p> }` | **Standalone** with `sql: SELECT * FROM <base> WHERE <p>` | Enforcement, not opt-in |
 | `explore: { join: Y { sql_on: …; relationship: … } }` | `joins:` entry `{ to: Y, on: "<local> = Y.<col>", relationship: … }` | On the overlay or standalone |
@@ -136,7 +136,8 @@ KTX overlay at `<connId>/fct_labs.yaml`:
 
 ```yaml
 name: fct_labs
-description: "Lab-order fact table. One row per lab order event."
+descriptions:
+  user: "Lab-order fact table. One row per lab order event."
 columns:
   - name: is_byol
     type: boolean

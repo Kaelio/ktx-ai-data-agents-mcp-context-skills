@@ -187,7 +187,10 @@ const makeDeps = () => {
     loadAllSources: vi
       .fn()
       .mockImplementation((connectionId: string) =>
-        Promise.resolve(connectionId === 'warehouse-2' ? [{ name: 'looker__orders' }] : []),
+        Promise.resolve({
+          sources: connectionId === 'warehouse-2' ? [{ name: 'looker__orders' }] : [],
+          loadErrors: [],
+        }),
       ),
   };
   const slSearchService = {
@@ -1347,7 +1350,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       frontmatter: { sl_refs: ['looker__b2b__sales_pipeline.arr'] },
     });
     deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
-      Promise.resolve([{ name: `${connectionId}_source` }]),
+      Promise.resolve({ sources: [{ name: `${connectionId}_source` }], loadErrors: [] }),
     );
     deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
       if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
@@ -1447,7 +1450,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       parseArtifacts: { semanticModels: [{ name: 'orders' }] },
     });
     deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
-      Promise.resolve([{ name: `${connectionId}_source` }]),
+      Promise.resolve({ sources: [{ name: `${connectionId}_source` }], loadErrors: [] }),
     );
     const postProcessor = {
       run: vi.fn().mockResolvedValue({
@@ -1631,7 +1634,10 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     const deps = makeDeps();
     deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['postgres-warehouse']);
     deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
-      Promise.resolve(connectionId === 'postgres-warehouse' ? [{ name: 'stg_accounts' }] : []),
+      Promise.resolve({
+        sources: connectionId === 'postgres-warehouse' ? [{ name: 'stg_accounts' }] : [],
+        loadErrors: [],
+      }),
     );
 
     const runner = buildRunner(deps);
@@ -1659,7 +1665,10 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
 
   it('does not resolve qualified fallback table refs by source name alone', async () => {
     const deps = makeDeps();
-    deps.semanticLayerService.loadAllSources.mockResolvedValue([{ name: 'orders', table: 'sales.orders' }]);
+    deps.semanticLayerService.loadAllSources.mockResolvedValue({
+      sources: [{ name: 'orders', table: 'sales.orders' }],
+      loadErrors: [],
+    });
     const runner = buildRunner(deps);
 
     await expect(

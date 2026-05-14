@@ -100,7 +100,33 @@ measures:
 
 **Extract repeated filter bundles into named segments.** If the same predicate appears on multiple measures of the same source, lift it to a `segments[]` entry and have each measure reference it. One edit updates every measure that depends on it.
 
-**Never write a standalone file on a manifest-backed name.** If `sl_discover({ query: "<table-or-source-name>" })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+**Never write a standalone file on a manifest-backed name.** If `sl_discover({ query: "<table-or-source-name>" })` finds an existing schema for that name, you MUST write an overlay. A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+
+Overlay before/after examples:
+
+```yaml
+# Wrong: patches an inherited manifest column through columns:
+name: fct_orders
+columns:
+  - name: status
+    descriptions:
+      user: "Order lifecycle status."
+```
+
+```yaml
+# Right: patch inherited columns with column_overrides:
+name: fct_orders
+column_overrides:
+  - name: status
+    descriptions:
+      user: "Order lifecycle status."
+columns:
+  - name: is_large_order
+    type: boolean
+    expr: "amount > 1000"
+```
+
+Overlay YAML may include `measures:`, `segments:`, `descriptions:`, `joins:`, `disable_joins:`, `exclude_columns:`, `column_overrides:`, and computed-only `columns:` entries with `expr` and `type`. Do not include `sql:`, `table:`, `grain:`, or base-table `columns:`.
 
 **Prefer overlay decomposition over standalone SQL sources.** Before reaching for `source_type: sql`, check whether the metric decomposes into measures on existing overlays (including cross-source derived measures). Use `source_type: sql` only when:
 - The metric requires per-user/per-entity derivation that cannot be expressed as a single `expr` (e.g., `EXISTS` over a time-windowed subset), OR

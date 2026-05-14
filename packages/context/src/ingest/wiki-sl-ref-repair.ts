@@ -56,7 +56,8 @@ async function loadVisibleSlRefs(
   const warnings: string[] = [];
   for (const connectionId of connectionIds) {
     try {
-      for (const source of await semanticLayerService.loadAllSources(connectionId)) {
+      const { sources } = await semanticLayerService.loadAllSources(connectionId);
+      for (const source of sources) {
         for (const ref of entityRefsForSource(source)) {
           refs.add(ref);
         }

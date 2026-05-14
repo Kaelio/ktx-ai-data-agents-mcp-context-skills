@@ -78,6 +78,8 @@ const joinDeclarationSchema = z.object({
   alias: z.string().optional(),
 });
 
+const resolvedJoinDeclarationSchema = joinDeclarationSchema.strict();
+
 const sourceColumnSchema = z.object({
   name: unqualifiedNameSchema,
   // type/descriptions optional on standalone sources: compose-time enrichment fills them
@@ -89,24 +91,39 @@ const sourceColumnSchema = z.object({
   visibility: z.enum(columnVisibilityValues).optional(),
   descriptions: descriptionsSchema.optional(),
   expr: z.string().optional(),
+  natural_granularity: z.string().optional(),
   constraints: sourceKeyedColumnConstraintsSchema.optional(),
   enum_values: sourceKeyedStringArraySchema.optional(),
   tests: dbtColumnTestsSchema.optional(),
 });
 
-/** Overlay column: type requires expr (structural types are inherited from manifest). */
+const resolvedSourceColumnSchema = sourceColumnSchema.extend({
+  type: z.enum(columnTypeValues),
+}).strict();
+
+/** Overlay column: computed columns only. Structural columns live in the manifest. */
 const overlayColumnSchema = z
   .object({
     name: unqualifiedNameSchema,
-    type: z.enum(columnTypeValues).optional(),
+    type: z.enum(columnTypeValues),
     role: z.enum(columnRoleValues).optional(),
     visibility: z.enum(columnVisibilityValues).optional(),
     descriptions: descriptionsSchema.optional(),
-    expr: z.string().optional(),
+    expr: z.string().min(1),
   })
-  .refine((col) => !col.type || col.expr, {
-    message: "Overlay column with 'type' must also have 'expr' (only computed columns may specify a type)",
-  });
+  .strict();
+
+const columnOverrideSchema = z
+  .object({
+    name: unqualifiedNameSchema,
+    role: z.enum(columnRoleValues).optional(),
+    visibility: z.enum(columnVisibilityValues).optional(),
+    descriptions: descriptionsSchema.optional(),
+    constraints: sourceKeyedColumnConstraintsSchema.optional(),
+    enum_values: sourceKeyedStringArraySchema.optional(),
+    tests: dbtColumnTestsSchema.optional(),
+  })
+  .strict();
 
 /** Standalone source: has `table` or `sql`, requires grain + columns. */
 export const sourceDefinitionSchema = z
@@ -143,6 +160,26 @@ export const sourceDefinitionSchema = z
     message: "Standalone source must have exactly one of 'table' or 'sql' (not both)",
   });
 
+export const resolvedSourceSchema = z
+  .object({
+    name: z.string().min(1),
+    descriptions: descriptionsSchema.optional(),
+    table: z.string().optional(),
+    sql: z.string().optional(),
+    grain: z.array(unqualifiedNameSchema).min(1),
+    columns: z.array(resolvedSourceColumnSchema).min(1),
+    joins: z.array(resolvedJoinDeclarationSchema).default([]),
+    measures: z.array(slMeasureDefinitionSchema).default([]),
+    segments: z.array(segmentDefinitionSchema).optional(),
+    default_time_dimension: defaultTimeDimensionDbtSchema.optional(),
+    tags: sourceKeyedStringArraySchema.optional(),
+    freshness: sourceFreshnessSchema.optional(),
+  })
+  .strict()
+  .refine((s) => (s.table || s.sql) && !(s.table && s.sql), {
+    message: "Resolved source must have exactly one of 'table' or 'sql' (not both)",
+  });
+
 /** Overlay source: no table/sql, all fields optional except name. */
 export const sourceOverlaySchema = z
   .object({
@@ -150,6 +187,7 @@ export const sourceOverlaySchema = z
     descriptions: z.record(z.string(), z.string()).optional(),
     grain: z.array(unqualifiedNameSchema).optional(),
     columns: z.array(overlayColumnSchema).optional(),
+    column_overrides: z.array(columnOverrideSchema).optional(),
     joins: z.array(joinDeclarationSchema).optional(),
     measures: z.array(slMeasureDefinitionSchema).optional(),
     segments: z.array(segmentDefinitionSchema).optional(),

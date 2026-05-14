@@ -89,7 +89,7 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
     embeddingService: { computeEmbedding: vi.fn() },
     semanticLayerService: {
       forWorktree: vi.fn().mockReturnThis(),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       readSourceFile: vi.fn(),
     },
     slSearchService: { indexSources: vi.fn(), buildSearchText: vi.fn() },
