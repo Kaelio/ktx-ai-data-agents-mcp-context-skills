@@ -312,10 +312,22 @@ export interface KtxScanMcpPort {
   readArtifact?(input: { runId: string; path: string }): Promise<KtxScanArtifactReadResponse | null>;
 }
 
+export interface KtxSqlExecutionResponse {
+  headers: string[];
+  headerTypes?: string[];
+  rows: unknown[][];
+  rowCount: number;
+}
+
+export interface KtxSqlExecutionMcpPort {
+  execute(input: { connectionId: string; sql: string; maxRows: number }): Promise<KtxSqlExecutionResponse>;
+}
+
 export interface KtxMcpContextPorts {
   connections?: KtxConnectionsMcpPort;
   knowledge?: KtxKnowledgeMcpPort;
   semanticLayer?: KtxSemanticLayerMcpPort;
+  sqlExecution?: KtxSqlExecutionMcpPort;
   ingest?: KtxIngestMcpPort;
   scan?: KtxScanMcpPort;
 }

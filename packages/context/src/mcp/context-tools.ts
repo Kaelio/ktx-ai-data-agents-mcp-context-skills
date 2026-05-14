@@ -143,6 +143,12 @@ const scanArtifactReadSchema = z.object({
   path: z.string().min(1),
 });
 
+const sqlExecutionSchema = z.object({
+  connectionId: connectionIdSchema,
+  sql: z.string().min(1),
+  maxRows: z.number().int().min(1).max(10_000).default(1000).optional(),
+});
+
 export function jsonToolResult<T extends object>(structuredContent: T): KtxMcpToolResult<T> {
   return {
     content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
@@ -358,6 +364,34 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
             },
           }),
         ),
+    );
+  }
+
+  if (ports.sqlExecution) {
+    const sqlExecution = ports.sqlExecution;
+    registerParsedTool(
+      server,
+      'sql_execution',
+      {
+        title: 'SQL Execution',
+        description:
+          'Execute one parser-validated read-only SQL query against a configured KTX connection and return structured rows.',
+        inputSchema: sqlExecutionSchema.shape,
+      },
+      sqlExecutionSchema,
+      async (input) => {
+        try {
+          return jsonToolResult(
+            await sqlExecution.execute({
+              connectionId: input.connectionId,
+              sql: input.sql,
+              maxRows: input.maxRows ?? 1000,
+            }),
+          );
+        } catch (error) {
+          return jsonErrorToolResult(error instanceof Error ? error.message : String(error));
+        }
+      },
     );
   }
 

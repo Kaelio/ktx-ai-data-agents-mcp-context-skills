@@ -11,6 +11,8 @@ import type {
   KtxMcpContextPorts,
   KtxScanMcpPort,
   KtxSemanticLayerMcpPort,
+  KtxSqlExecutionMcpPort,
+  KtxSqlExecutionResponse,
   MemoryCapturePort,
 } from './types.js';
 
@@ -61,6 +63,63 @@ describe('createKtxMcpServer', () => {
       structuredContent: {
         connections: [{ id: 'warehouse', name: 'warehouse', connectionType: 'postgres' }],
       },
+    });
+  });
+
+  it('registers parser-gated sql_execution when the host provides a SQL execution port', async () => {
+    const fake = makeFakeServer();
+    const response: KtxSqlExecutionResponse = {
+      headers: ['status', 'count'],
+      headerTypes: ['text', 'bigint'],
+      rows: [['paid', 42]],
+      rowCount: 1,
+    };
+    const sqlExecution: KtxSqlExecutionMcpPort = {
+      execute: vi.fn<KtxSqlExecutionMcpPort['execute']>().mockResolvedValue(response),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: {
+        sqlExecution,
+      },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['sql_execution']);
+    await expect(
+      getTool(fake.tools, 'sql_execution').handler({
+        connectionId: 'warehouse',
+        sql: 'select status, count(*) from public.orders group by status',
+        maxRows: 50,
+      }),
+    ).resolves.toEqual({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              headers: ['status', 'count'],
+              headerTypes: ['text', 'bigint'],
+              rows: [['paid', 42]],
+              rowCount: 1,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+      structuredContent: {
+        headers: ['status', 'count'],
+        headerTypes: ['text', 'bigint'],
+        rows: [['paid', 42]],
+        rowCount: 1,
+      },
+    });
+    expect(sqlExecution.execute).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      sql: 'select status, count(*) from public.orders group by status',
+      maxRows: 50,
     });
   });
 
