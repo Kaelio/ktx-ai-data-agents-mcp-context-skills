@@ -96,7 +96,8 @@ KTX already ships ingest-side implementations of `sql_execution`,
 backed by `warehouse-catalog.service.ts`. Their contracts differ from the
 MCP shapes proposed below in three concrete ways:
 
-- They take `connectionName` (slug-shaped), not `connectionId`.
+- They currently take `connectionName` (slug-shaped); this spec renames
+  them to `connectionId` in the same change (see below).
 - They take `targets` (a discriminated `display` vs. `{catalog,db,name}`
   union) and `rowLimit`, not `entities` / `maxRows`.
 - They return `{ markdown, structured }` with scan availability, candidate
@@ -112,12 +113,15 @@ resolution and discovery, plus a shared read-only SQL executor that wraps
 MCP tools then become thin adapters around those services with their own
 input/output shapes appropriate to each surface.
 
-This spec preserves the MCP-surface names and the `connectionId` naming
-because that is the boundary external agents see (it matches `sl_query`,
-`sl_list_sources`, etc., which all use `connectionId`). The ingest tools
-keep `connectionName` for backward compatibility with the existing ingest
-session scoping. The two surfaces converge on a shared service layer, not a
-shared tool contract.
+KTX has no public users yet, so the same change that introduces the MCP
+tools renames the ingest-side `connectionName` parameter to `connectionId`
+across `warehouse-verification/*.tool.ts`, `warehouse-catalog.service.ts`,
+and any callers. `connectionId` matches the rest of the in-process MCP
+surface (`sl_query`, `sl_list_sources`, `scan_trigger`, etc.) and the new
+MCP tool inputs. The ingest tools and the new MCP tools then share both
+the service layer and the parameter name; only their input/output shapes
+differ (markdown+structured for the ingest surface, pure structured for
+the MCP surface).
 
 ### discover_data
 
@@ -146,8 +150,10 @@ or `entity_details` tools.
   kind: 'wiki' | 'sl_source' | 'sl_measure' | 'sl_dimension' | 'table' | 'column',
   id: string,                                  // stable id: wiki key, source name, or driver-qualified table/column display string
   score: number,                               // RRF fused score, 0-1 range
-  summary: string,                             // one-line description
-  snippet: string,                             // short context snippet, ≤200 chars
+  summary: string | null,                      // one-line description; null when no source field is populated
+  snippet: string | null,                      // short context snippet, ≤200 chars; null when nothing meaningful to show
+  matchedOn:                                   // why this result matched (powers the snippet for non-description kinds)
+    | 'name' | 'display' | 'description' | 'comment' | 'expr' | 'sample_value' | 'body',
   connectionId?: string,                       // present for non-wiki kinds
   tableRef?: {                                 // present for kind 'table' and 'column'
     catalog: string | null,
@@ -163,6 +169,32 @@ The structured `tableRef` mirrors the live `KtxSchemaTable` identity
 `entity_details` without losing `catalog`/`db` qualification on drivers
 that need it (BigQuery `project.dataset.table`, Snowflake/SQL Server
 `database.schema.table`).
+
+#### `summary` and `snippet` provenance per kind
+
+Both fields are derived from existing source data, never invented or
+LLM-generated. The resolver is pure and deterministic per kind. When no
+source field exists for a given kind, the field is `null`; agents must
+not assume a missing snippet means "no context" — they should dereference
+the ref via `wiki_read`, `sl_read_source`, or `entity_details` to get
+authoritative content.
+
+| Kind | `summary` source | `snippet` source |
+|---|---|---|
+| `wiki` | `WikiFrontmatter.summary` (`packages/context/src/wiki/types.ts:15`) — populated at write time | Up to 200 chars from the wiki body around the match position; falls back to first 200 chars of body when `matchedOn === 'name'`/`'display'` |
+| `sl_source` | `resolveDescription(source.descriptions, priority)` (`packages/context/src/sl/descriptions.ts:16-34`) over the `user|ai|dbt|db` priority chain (`packages/context/src/sl/types.ts:5`) | When `matchedOn === 'description'`/`'body'`: a window of the resolved description; otherwise the source's `name` + first 1–2 measure or dimension names as context |
+| `sl_measure` | `measure.description` (`packages/context/src/sl/types.ts:37`) | `measure.expr` truncated to 200 chars — the calculation is the most informative one-line context for a measure |
+| `sl_dimension` | `resolveDescription(column.descriptions, priority)` (same precedence as `sl_source`); when empty, fall back to `null` | `${column.name} (${column.type})` formatted exactly like the existing inline rendering in `sl-search.service.ts:29-41` |
+| `table` | `firstDescription(table.descriptions)` then `table.comment` (precedence already used by `warehouse-catalog.service.ts:286-287`); `null` when both are empty | When `matchedOn === 'description'`/`'comment'`: a window of that string; when `matchedOn === 'name'`/`'display'`: a comma-joined list of up to 5 of the table's column names |
+| `column` | `resolveDescription(column.descriptions)` then `column.comment` (`warehouse-catalog.service.ts:228-245`); `null` when both are empty | When `matchedOn === 'description'`/`'comment'`: that text; when `matchedOn === 'sample_value'`: `${column.nativeType} · samples: <up to 5 sampleValues>` formatted from `column.sampleValues` (`warehouse-catalog.service.ts:18-23`); otherwise `${column.nativeType}` |
+
+The `matchedOn` field is the same concept as the existing
+`RawSchemaHit.matchedOn` in `warehouse-catalog.service.ts:40-54`,
+extended to the wiki and SL kinds. Snippets always come from a single
+already-stored field; the resolver never concatenates across sources or
+invents bridging text. Length cap is enforced at the producer side (≤200
+chars after a single-pass slice; no ellipsis appended — clients render
+one if they want).
 
 **Implementation:** new module `packages/context/src/search/discover.ts`.
 Composes three sub-searches in parallel:
