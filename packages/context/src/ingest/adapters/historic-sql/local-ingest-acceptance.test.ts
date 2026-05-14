@@ -159,6 +159,7 @@ function acceptanceSqlAnalysis(): SqlAnalysisPort {
         );
       },
     ),
+    validateReadOnly: vi.fn(async () => ({ ok: true })),
   };
 }
 

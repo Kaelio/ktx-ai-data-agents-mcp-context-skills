@@ -18,6 +18,9 @@ const sqlAnalysis: SqlAnalysisPort = {
   async analyzeBatch() {
     return new Map();
   },
+  async validateReadOnly() {
+    return { ok: true };
+  },
 };
 
 const reader: HistoricSqlReader = {
@@ -78,6 +81,9 @@ describe('HistoricSqlSourceAdapter', () => {
             },
           ],
         ]);
+      },
+      async validateReadOnly() {
+        return { ok: true };
       },
     };
     const adapter = new HistoricSqlSourceAdapter({
