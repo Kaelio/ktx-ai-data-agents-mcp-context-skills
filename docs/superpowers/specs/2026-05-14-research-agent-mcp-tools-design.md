@@ -85,6 +85,37 @@ to host the MCP server.
 Four new MCP tools, registered in `packages/context/src/mcp/context-tools.ts`
 alongside the existing tools.
 
+### Relationship to existing warehouse-verification tools
+
+KTX already ships ingest-side implementations of `sql_execution`,
+`entity_details`, and `discover_data` at
+`packages/context/src/ingest/tools/warehouse-verification/{sql-execution,entity-details,discover-data}.tool.ts`,
+backed by `warehouse-catalog.service.ts`. Their contracts differ from the
+MCP shapes proposed below in three concrete ways:
+
+- They take `connectionName` (slug-shaped), not `connectionId`.
+- They take `targets` (a discriminated `display` vs. `{catalog,db,name}`
+  union) and `rowLimit`, not `entities` / `maxRows`.
+- They return `{ markdown, structured }` with scan availability, candidate
+  matches, and ingest-session-allowed-connection scoping, not the
+  MCP-shaped pure-structured outputs in this spec.
+
+To avoid two divergent contracts for the same primitives, the MCP tools
+**must be implemented by extracting the shared logic out of
+`warehouse-verification/*` and into reusable services**
+(e.g., `WarehouseCatalogService` as the source of truth for table/column
+resolution and discovery, plus a shared read-only SQL executor that wraps
+`assertReadOnlySql`/`limitSqlForExecution`). The ingest tools and the new
+MCP tools then become thin adapters around those services with their own
+input/output shapes appropriate to each surface.
+
+This spec preserves the MCP-surface names and the `connectionId` naming
+because that is the boundary external agents see (it matches `sl_query`,
+`sl_list_sources`, etc., which all use `connectionId`). The ingest tools
+keep `connectionName` for backward compatibility with the existing ingest
+session scoping. The two surfaces converge on a shared service layer, not a
+shared tool contract.
+
 ### discover_data
 
 Unified ranked search across wiki, semantic-layer sources/measures/dimensions,
@@ -255,13 +286,35 @@ result. The fallback path for questions the semantic layer does not cover.
 ```
 
 **Implementation:** delegates to `KtxScanConnector.executeReadOnly` on the
-matching connector, which already enforces `assertReadOnlySql` (rejects any
-DML/DDL via SQL parsing) and `limitSqlForExecution` (wraps the query in a
-row cap). The tool does not add new enforcement layers; it surfaces the
-existing one through MCP.
+matching connector. The connector calls `assertReadOnlySql` and
+`limitSqlForExecution` (`packages/context/src/connections/read-only-sql.ts`).
 
-Errors from `assertReadOnlySql` are returned as structured tool errors so
-the agent can correct the query and retry.
+**Read-only enforcement is lexical, not parser-backed.** The current guard
+inspects the first token with regex: it accepts queries whose first non-space
+token is `SELECT` or `WITH`, and rejects queries whose first non-space token
+matches a fixed mutating-verb list. Implications:
+
+- A CTE that nests a data-modifying statement (e.g., `WITH x AS (INSERT ...
+  RETURNING *) SELECT ...`, valid in Postgres) passes the first-token check
+  and would reach the connector.
+- Dialect-specific read/write constructs and procedure calls that do not
+  start with a listed verb are not caught.
+
+Because `sql_execution` exposes this boundary to external MCP clients, the
+tool **must not** be enabled until one of the following holds:
+
+1. The guard is upgraded to a sqlglot/AST-based read-only check that
+   inspects every statement and CTE node, with explicit tests for CTE-DML,
+   `CALL`, `DO`, vendor pragmas, and multi-statement payloads; or
+2. Connector-side execution forces a read-only transaction / session (e.g.,
+   `SET TRANSACTION READ ONLY` for Postgres, `READ ONLY` connection for
+   MySQL, equivalent for each connector), so the guard is defense-in-depth
+   rather than the sole boundary.
+
+The implementation plan that follows this spec is required to choose and
+land one of those before registering `sql_execution` in the MCP surface.
+Errors from `assertReadOnlySql` (whichever implementation) are returned as
+structured tool errors so the agent can correct the query and retry.
 
 ## Tool naming convention
 
@@ -346,18 +399,47 @@ explicit pattern established by the daemon model).
 ### Transport
 
 HTTP-only via `StreamableHTTPServerTransport` from
-`@modelcontextprotocol/sdk/server/streamableHttp.js`. Endpoint: `POST /mcp`.
+`@modelcontextprotocol/sdk/server/streamableHttp.js`.
+
+The `/mcp` endpoint must implement the full Streamable HTTP contract, not
+just `POST`:
+
+- `POST /mcp` — JSON-RPC requests (and the `initialize` handshake when no
+  session exists). On the first `initialize` post, the server allocates a
+  session id and returns it in the `Mcp-Session-Id` response header.
+- `GET /mcp` — opens an SSE stream for server-initiated messages on an
+  existing session. Requires a valid `Mcp-Session-Id` header.
+- `DELETE /mcp` — explicit session termination by the client. Requires a
+  valid `Mcp-Session-Id` header; the server must drop the session and any
+  associated SSE streams.
+
+**Session model.** v1 ships **stateful** sessions: the server generates a
+session id with `randomUUID()` on `initialize`, stores the transport in an
+in-memory map keyed by session id, reuses it on subsequent
+`POST`/`GET`/`DELETE` calls that carry the same `Mcp-Session-Id`, and
+removes it on `DELETE` or transport close. Requests that carry an unknown
+session id are rejected with HTTP 404 so the client knows to re-initialize.
 
 Health: `GET /health` returns `{ status: 'ok', projectDir, port }` for
-liveness checks.
+liveness checks. `/health` is separate from `/mcp` and is not subject to
+session-id requirements (but is subject to host/origin validation; see
+below).
 
 ### Security model
 
-- `127.0.0.1` binding is the default and requires no auth. Loopback only;
-  cannot reach the server from another host.
-- Non-loopback binding requires `--token <t>` or `KTX_MCP_TOKEN`. The server
-  checks `Authorization: Bearer <t>` on every `/mcp` request and rejects
-  with HTTP 401 otherwise.
+- `127.0.0.1` binding is the default and requires no token auth (loopback
+  only). Even on loopback, the server enforces **Host and Origin header
+  validation** on every `/mcp` and `/health` request to defend against
+  browser-driven DNS-rebinding attacks. The allowed-host list defaults to
+  `localhost`, `127.0.0.1`, and `[::1]`; the allowed-origin list rejects
+  any browser `Origin` header that is not in the same allow list.
+  Non-browser clients without an `Origin` header are accepted on loopback.
+- Non-loopback binding requires `--token <t>` or `KTX_MCP_TOKEN`. The
+  server checks `Authorization: Bearer <t>` on **every** `/mcp` method —
+  `POST`, `GET` (SSE), and `DELETE` — and rejects with HTTP 401 otherwise.
+  Token enforcement is independent of the session check; both must pass.
+  When `--host` is non-loopback, the allowed-host list expands to include
+  the bound host and any user-supplied `--allowed-host` values.
 - TLS is out of scope. For remote access, document running KTX behind a
   reverse proxy (Caddy, nginx) that terminates TLS.
 
@@ -365,37 +447,113 @@ liveness checks.
 
 `ktx setup-agents` extends its existing per-target file installation
 (`plannedKtxAgentFiles` in `packages/cli/src/setup-agents.ts:64`) to also
-write MCP server entries:
+write MCP server entries.
 
-| Target | Scope | MCP config path |
-|---|---|---|
-| claude-code | global | `~/.claude.json` (`mcpServers.ktx`) |
-| claude-code | project | `.mcp.json` (`mcpServers.ktx`) |
-| cursor | global | `~/.cursor/mcp.json` (`mcpServers.ktx`) |
-| cursor | project | `.cursor/mcp.json` (`mcpServers.ktx`) |
-| codex | global / project | print instructions; do not auto-write |
-| opencode | global / project | print instructions; do not auto-write |
+The per-client config matrix is **not uniform**. Each client has its own
+file location, scope semantics, and entry shape; `setup-agents` must
+produce the correct shape per target rather than emit one JSON blob.
 
-For codex and opencode, the exact MCP config conventions are still evolving;
-the command prints a copy-pasteable snippet rather than writing files. This
-keeps `setup-agents` from silently producing invalid configs.
+| Target | Scope | MCP config path | Writer behavior |
+|---|---|---|---|
+| claude-code | user (global) | `~/.claude.json` → root `mcpServers.ktx` | write JSON |
+| claude-code | local (per-project, private) | `~/.claude.json` → `projects[<absProjectPath>].mcpServers.ktx` | write JSON |
+| claude-code | project (shared, checked in) | `<projectDir>/.mcp.json` → `mcpServers.ktx` | write JSON |
+| cursor | global | `~/.cursor/mcp.json` → `mcpServers.ktx` | write JSON |
+| cursor | project | `<projectDir>/.cursor/mcp.json` → `mcpServers.ktx` | write JSON |
+| codex | user (global) | `~/.codex/config.toml` → `[mcp_servers.ktx]` (TOML) | print instructions; do not auto-write in v1 |
+| opencode | user (global) | `~/.config/opencode/opencode.json` → `mcp.ktx` | print instructions; do not auto-write in v1 |
+| opencode | project | `<projectDir>/opencode.json` → `mcp.ktx` | print instructions; do not auto-write in v1 |
 
-Entry shape (all writers):
+The shared global `~/.claude.json` and per-project `~/.claude.json` →
+`projects[...]` scope are both supported because Claude Code's "user" vs.
+"local" scopes write to different sub-trees of the same file; `setup-agents`
+must select the scope explicitly per invocation.
 
-```json
+Codex and opencode entries are **printed as copy-pasteable snippets** in v1
+because their config formats (TOML for codex, a different JSON wrapper for
+opencode) diverge enough from the JSON writers above that mixing them into
+the same writer codepath risks silently producing invalid files. This is a
+deliberate v1 scoping decision, not a permanent limitation.
+
+#### Entry shapes by target
+
+Claude Code (HTTP):
+
+```jsonc
 {
   "mcpServers": {
     "ktx": {
+      "type": "http",
       "url": "http://localhost:7878/mcp"
+      // when token auth is active:
+      // "headers": { "Authorization": "Bearer <token>" }
     }
   }
 }
 ```
 
+Cursor (HTTP, project `.cursor/mcp.json` or global `~/.cursor/mcp.json`):
+
+```jsonc
+{
+  "mcpServers": {
+    "ktx": {
+      "url": "http://localhost:7878/mcp"
+      // when token auth is active:
+      // "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+Codex (printed snippet, `~/.codex/config.toml`):
+
+```toml
+[mcp_servers.ktx]
+url = "http://localhost:7878/mcp"
+# Codex MCP config does not currently document a headers field; if token
+# auth is active, instruct the user to either run KTX on loopback without a
+# token or wait for codex header support before enabling.
+```
+
+opencode (printed snippet, `opencode.json`):
+
+```jsonc
+{
+  "mcp": {
+    "ktx": {
+      "type": "remote",
+      "url": "http://localhost:7878/mcp",
+      "enabled": true
+      // when token auth is active:
+      // "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+#### Token handling per client
+
+When `--token` / `KTX_MCP_TOKEN` is active, `setup-agents` must materialize
+the bearer token into the correct field per client. The matrix above lists
+the supported clients; before writing an entry, `setup-agents` must verify
+that the chosen client has documented support for `headers` in its MCP
+config:
+
+- claude-code: supported (`headers` on HTTP entries, including `Authorization`).
+- cursor: supported (`headers` on HTTP entries).
+- opencode: supported (`headers` on remote MCP entries).
+- codex: **not currently supported** in published config docs. When a token
+  is active and the user selects codex, `setup-agents` prints a warning and
+  skips the codex entry rather than writing an entry that codex will
+  silently ignore. The recommended workaround is to bind KTX to loopback
+  without a token for codex users.
+
 Port is read from `.ktx/mcp.json` if present, falling back to 7878. The
 install manifest (`agentInstallManifestPath`,
-`packages/cli/src/setup-agents.ts:60`) tracks each `json-key` entry so
-`ktx setup-agents --remove` can roll back cleanly.
+`packages/cli/src/setup-agents.ts:60`) tracks each `json-key` (and
+`toml-table` for the codex snippet case) entry so `ktx setup-agents
+--remove` can roll back cleanly.
 
 If the daemon is not running when `setup-agents` runs, the command prints a
 follow-up hint: "Run `ktx mcp start` to enable the configured KTX MCP
@@ -485,17 +643,21 @@ You have access to KTX MCP tools for investigating data. Follow this workflow.
 ### New
 
 - `packages/context/src/scan/entity-details.ts` — derives entity-detail
-  records from `KtxSchemaSnapshot`.
+  records from `KtxSchemaSnapshot`, sharing resolution logic with
+  `warehouse-verification/warehouse-catalog.service.ts` (refactored or
+  imported, not duplicated).
 - `packages/context/src/sl/dictionary-search.ts` — builds and queries the
   dictionary index over relationship-profiling artifacts.
 - `packages/context/src/search/discover.ts` — composes wiki, SL, and raw
-  schema searches; fuses results via `rrf.ts`.
+  schema searches; fuses results via `rrf.ts`. Reuses the same wiki/SL/raw
+  search building blocks as `warehouse-verification/discover-data.tool.ts`.
 - `packages/cli/src/commands/mcp-commands.ts` — `ktx mcp start|stop|status|logs`.
 - `packages/cli/src/managed-mcp-daemon.ts` — daemon lifecycle (spawn,
   pidfile, log management), mirroring `managed-python-daemon.ts`.
 - `packages/cli/src/skills/research/SKILL.md` — research workflow skill.
 - Tests for each new module following existing patterns
-  (`*.test.ts` siblings).
+  (`*.test.ts` siblings), including coverage of the per-client config
+  writer/printer matrix.
 
 ### Modified
 
