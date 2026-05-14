@@ -87,3 +87,54 @@ describe('connectionConfigSchema - context source drivers with mappings', () => 
     ).toThrow();
   });
 });
+
+describe('connectionConfigSchema - notion / dbt / metricflow', () => {
+  it('parses a notion connection with selected_roots crawl', () => {
+    const parsed = connectionConfigSchema.parse({
+      driver: 'notion',
+      auth_token_ref: 'env:NOTION_TOKEN',
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['abc', 'def'],
+      max_pages_per_run: 500,
+    });
+    expect(parsed).toMatchObject({
+      driver: 'notion',
+      crawl_mode: 'selected_roots',
+      root_page_ids: ['abc', 'def'],
+      max_pages_per_run: 500,
+    });
+  });
+
+  it('rejects notion with unknown crawl_mode', () => {
+    expect(() =>
+      connectionConfigSchema.parse({
+        driver: 'notion',
+        auth_token_ref: 'env:NOTION_TOKEN',
+        crawl_mode: 'everything',
+      }),
+    ).toThrow();
+  });
+
+  it('parses a dbt connection from a local source_dir', () => {
+    const parsed = connectionConfigSchema.parse({
+      driver: 'dbt',
+      source_dir: '/tmp/dbt-project',
+      target: 'dev',
+    });
+    expect(parsed).toMatchObject({ driver: 'dbt', source_dir: '/tmp/dbt-project', target: 'dev' });
+  });
+
+  it('parses a metricflow connection with nested config', () => {
+    const parsed = connectionConfigSchema.parse({
+      driver: 'metricflow',
+      metricflow: {
+        repoUrl: 'https://github.com/acme/sl.git',
+        branch: 'main',
+      },
+    });
+    expect(parsed).toMatchObject({
+      driver: 'metricflow',
+      metricflow: { repoUrl: 'https://github.com/acme/sl.git' },
+    });
+  });
+});

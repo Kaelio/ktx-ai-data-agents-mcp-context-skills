@@ -116,11 +116,90 @@ const lookmlConnectionSchema = z
   })
   .describe('LookML context-source connection.');
 
+const notionConnectionSchema = z
+  .looseObject({
+    driver: z.literal('notion'),
+    auth_token: z.string().min(1).optional().describe('Literal Notion integration token. Prefer auth_token_ref.'),
+    auth_token_ref: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Reference to Notion integration token (e.g. env:NOTION_TOKEN).'),
+    crawl_mode: z
+      .enum(['selected_roots', 'all_accessible'])
+      .optional()
+      .describe(
+        'Crawl scope. "selected_roots" requires at least one of root_page_ids, root_database_ids, root_data_source_ids.',
+      ),
+    root_page_ids: z.array(z.string().min(1)).optional().describe('Notion page IDs to crawl when crawl_mode is selected_roots.'),
+    root_database_ids: z
+      .array(z.string().min(1))
+      .optional()
+      .describe('Notion database IDs to crawl when crawl_mode is selected_roots.'),
+    root_data_source_ids: z
+      .array(z.string().min(1))
+      .optional()
+      .describe('Notion data source IDs to crawl when crawl_mode is selected_roots.'),
+    max_pages_per_run: z
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .optional()
+      .describe('Maximum Notion pages fetched in a single ingest run.'),
+    max_knowledge_creates_per_run: z
+      .number()
+      .int()
+      .min(0)
+      .max(25)
+      .optional()
+      .describe('Maximum new wiki pages created per run.'),
+    max_knowledge_updates_per_run: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe('Maximum existing wiki pages updated per run.'),
+  })
+  .describe('Notion context-source connection.');
+
+const dbtConnectionSchema = z
+  .looseObject({
+    driver: z.literal('dbt'),
+    source_dir: z.string().min(1).optional().describe('Absolute or project-relative path to a local dbt project.'),
+    repo_url: z.string().min(1).optional().describe('Git URL of the dbt project (https, ssh, or file:).'),
+    branch: z.string().min(1).optional().describe('Git branch when using repo_url.'),
+    path: z.string().optional().describe('Subdirectory within the repo when the dbt project lives in a monorepo.'),
+    auth_token_ref: z.string().min(1).optional().describe('Reference to Git auth token for private repos.'),
+    profiles_path: z.string().optional().describe('Override path to dbt profiles.yml.'),
+    target: z.string().min(1).optional().describe('dbt target name (e.g. dev, prod).'),
+    project_name: z.string().min(1).optional().describe('Override auto-detected dbt project name.'),
+  })
+  .describe('dbt context-source connection.');
+
+const metricflowConnectionSchema = z
+  .looseObject({
+    driver: z.literal('metricflow'),
+    metricflow: z
+      .looseObject({
+        repoUrl: z.string().min(1).describe('Git URL of the MetricFlow / SL project.'),
+        branch: z.string().min(1).optional().describe('Git branch (default "main").'),
+        path: z.string().optional().describe('Subdirectory within the repo when the SL config lives in a monorepo.'),
+        auth_token_ref: z.string().min(1).optional().describe('Reference to Git auth token for private repos.'),
+      })
+      .describe('Nested MetricFlow configuration block.'),
+  })
+  .describe('MetricFlow / SL context-source connection.');
+
 export const connectionConfigSchema = z.discriminatedUnion('driver', [
   ...warehouseConnectionSchemas,
   metabaseConnectionSchema,
   lookerConnectionSchema,
   lookmlConnectionSchema,
+  notionConnectionSchema,
+  dbtConnectionSchema,
+  metricflowConnectionSchema,
 ]);
 
 export type KtxConnectionConfig = z.infer<typeof connectionConfigSchema>;
