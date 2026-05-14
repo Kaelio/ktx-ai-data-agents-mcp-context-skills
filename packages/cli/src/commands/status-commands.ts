@@ -17,16 +17,51 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
     .description('Check current KTX setup and project readiness')
     .option('--json', 'Print JSON output', false)
     .option('-v, --verbose', 'Show every check, including passing ones', false)
+    .option('--validate', 'Only validate the ktx.yaml schema; skip readiness checks', false)
     .option('--no-input', 'Disable interactive terminal input')
-    .action(async (options: { json?: boolean; verbose?: boolean; input?: boolean }, command) => {
-      const runner = context.deps.doctor ?? (await import('../doctor.js')).runKtxDoctor;
-      const explicitOrEnvProjectDir = resolveCommandProjectDirOverride(command);
-      const nearestProjectDir = explicitOrEnvProjectDir ? undefined : findNearestKtxProjectDir(process.cwd());
-      if (!explicitOrEnvProjectDir && !nearestProjectDir) {
+    .action(
+      async (
+        options: { json?: boolean; verbose?: boolean; validate?: boolean; input?: boolean },
+        command,
+      ) => {
+        const runner = context.deps.doctor ?? (await import('../doctor.js')).runKtxDoctor;
+        const explicitOrEnvProjectDir = resolveCommandProjectDirOverride(command);
+        const nearestProjectDir = explicitOrEnvProjectDir ? undefined : findNearestKtxProjectDir(process.cwd());
+
+        if (options.validate === true) {
+          context.setExitCode(
+            await runner(
+              {
+                command: 'validate',
+                projectDir: resolveCommandProjectDir(command),
+                outputMode: outputMode(options),
+                ...inputMode(options),
+              },
+              context.io,
+            ),
+          );
+          return;
+        }
+
+        if (!explicitOrEnvProjectDir && !nearestProjectDir) {
+          context.setExitCode(
+            await runner(
+              {
+                command: 'setup',
+                outputMode: outputMode(options),
+                verbose: options.verbose === true,
+                ...inputMode(options),
+              },
+              context.io,
+            ),
+          );
+          return;
+        }
         context.setExitCode(
           await runner(
             {
-              command: 'setup',
+              command: 'project',
+              projectDir: resolveCommandProjectDir(command),
               outputMode: outputMode(options),
               verbose: options.verbose === true,
               ...inputMode(options),
@@ -34,19 +69,6 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
             context.io,
           ),
         );
-        return;
-      }
-      context.setExitCode(
-        await runner(
-          {
-            command: 'project',
-            projectDir: resolveCommandProjectDir(command),
-            outputMode: outputMode(options),
-            verbose: options.verbose === true,
-            ...inputMode(options),
-          },
-          context.io,
-        ),
-      );
-    });
+      },
+    );
 }

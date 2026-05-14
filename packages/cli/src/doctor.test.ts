@@ -654,4 +654,173 @@ describe('runKtxDoctor', () => {
     expect(testIo.stdout()).toContain('semantic search degraded');
     delete process.env.ANTHROPIC_API_KEY;
   });
+
+  describe('command: validate', () => {
+    it('prints a success line and exits 0 when ktx.yaml is schema-valid', async () => {
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        [
+          'project: warehouse',
+          'connections:',
+          '  warehouse:',
+          '    driver: sqlite',
+          '    path: ./warehouse.db',
+          'llm:',
+          '  provider:',
+          '    backend: anthropic',
+          '',
+        ].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(0);
+
+      const out = testIo.stdout();
+      expect(out).toContain('KTX status');
+      expect(out).toContain('Config');
+      expect(out).toContain('ktx.yaml schema valid');
+      expect(out).not.toContain('LLM');
+      expect(out).not.toContain('Connections');
+      expect(out).not.toContain('Pipeline');
+    });
+
+    it('emits {ok: true} JSON when ktx.yaml is schema-valid', async () => {
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        [
+          'project: warehouse',
+          'connections:',
+          '  warehouse:',
+          '    driver: sqlite',
+          '    path: ./warehouse.db',
+          'llm:',
+          '  provider:',
+          '    backend: anthropic',
+          '',
+        ].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(0);
+
+      expect(JSON.parse(testIo.stdout())).toEqual({ ok: true, projectDir: tempDir });
+    });
+
+    it('prints schema issues and exits 1 when ktx.yaml fails Zod validation', async () => {
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        [
+          'project: warehouse',
+          'storrage:',
+          '  state: sqlite',
+          'ingest:',
+          '  llm:',
+          '    backend: anthropic',
+          '',
+        ].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(1);
+
+      const out = testIo.stdout();
+      expect(out).toContain('Unsupported storrage: unknown field');
+      expect(out).toContain('Unsupported ingest.llm: use top-level llm.provider');
+    });
+
+    it('emits structured JSON issues when validation fails', async () => {
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        ['project: warehouse', 'storrage: {}', ''].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(1);
+
+      const parsed = JSON.parse(testIo.stdout()) as { error: string; issues: Array<{ path: string }> };
+      expect(parsed.error).toBe('invalid_config');
+      expect(parsed.issues.some((issue) => issue.path === 'storrage')).toBe(true);
+    });
+
+    it('prints the missing-project message and exits 1 when ktx.yaml is absent', async () => {
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(1);
+
+      expect(testIo.stdout()).toContain('No KTX project here yet.');
+    });
+
+    it('does not invoke the Postgres query-history probe in validate mode', async () => {
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        [
+          'project: warehouse',
+          'connections:',
+          '  warehouse:',
+          '    driver: postgres',
+          '    url: env:WAREHOUSE_DATABASE_URL',
+          '    context:',
+          '      queryHistory:',
+          '        enabled: true',
+          'llm:',
+          '  provider:',
+          '    backend: anthropic',
+          '',
+        ].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+      let probeCalls = 0;
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+          testIo.io,
+          {
+            postgresQueryHistoryProbe: async () => {
+              probeCalls += 1;
+              return { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] };
+            },
+          },
+        ),
+      ).resolves.toBe(0);
+
+      expect(probeCalls).toBe(0);
+      expect(testIo.stdout()).toContain('ktx.yaml schema valid');
+    });
+  });
 });

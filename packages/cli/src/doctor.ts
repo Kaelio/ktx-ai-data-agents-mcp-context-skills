@@ -41,6 +41,12 @@ export type KtxDoctorArgs =
       outputMode: KtxDoctorOutputMode;
       inputMode?: KtxDoctorInputMode;
       verbose?: boolean;
+    }
+  | {
+      command: 'validate';
+      projectDir: string;
+      outputMode: KtxDoctorOutputMode;
+      inputMode?: KtxDoctorInputMode;
     };
 
 interface KtxDoctorIo {
@@ -495,6 +501,40 @@ export function renderInvalidConfigMessage(
   io.stdout.write(lines.join('\n'));
 }
 
+export function renderValidConfigMessage(
+  projectDir: string,
+  outputMode: KtxDoctorOutputMode,
+  io: KtxDoctorIo,
+): void {
+  if (outputMode === 'json') {
+    io.stdout.write(
+      `${JSON.stringify(
+        {
+          ok: true,
+          projectDir,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+
+  const useColor = shouldUseColor(io);
+  const dim = (text: string) => styleDim(useColor, text);
+  const bold = (text: string) => styleBold(useColor, text);
+  const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
+  const abbreviated = abbreviateHome(projectDir) ?? projectDir;
+
+  const lines: string[] = [];
+  lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
+  lines.push('');
+  lines.push(`  ${status('pass', '✓')} ${bold('Config')}    ${dim('ktx.yaml schema valid')}`);
+  lines.push('');
+
+  io.stdout.write(lines.join('\n'));
+}
+
 export function renderMissingProjectMessage(
   projectDir: string,
   outputMode: KtxDoctorOutputMode,
@@ -545,6 +585,23 @@ export async function runKtxDoctor(
   const startedAt = Date.now();
   try {
     const runSetupChecks = deps.runSetupChecks ?? (() => runSetupDoctorChecks());
+
+    if (args.command === 'validate') {
+      const configPath = join(args.projectDir, 'ktx.yaml');
+      if (!(await defaultPathExists(configPath))) {
+        renderMissingProjectMessage(args.projectDir, args.outputMode, io);
+        return 1;
+      }
+      const { validateKtxProjectConfig } = await import('@ktx/context/project');
+      const rawConfig = await readFile(configPath, 'utf-8');
+      const validation = validateKtxProjectConfig(rawConfig);
+      if (!validation.ok) {
+        renderInvalidConfigMessage(args.projectDir, validation.issues, args.outputMode, io);
+        return 1;
+      }
+      renderValidConfigMessage(args.projectDir, args.outputMode, io);
+      return 0;
+    }
 
     if (args.command === 'project') {
       const configPath = join(args.projectDir, 'ktx.yaml');
