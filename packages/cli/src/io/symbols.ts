@@ -35,3 +35,11 @@ export function bold(text: string): string {
 export function gray(text: string): string {
   return styleText('gray', text);
 }
+
+export function green(text: string): string {
+  return styleText('green', text);
+}
+
+export function red(text: string): string {
+  return styleText('red', text);
+}

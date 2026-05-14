@@ -7,6 +7,10 @@ import type { KtxConnectionDriver, KtxScanConnector } from '@ktx/context/scan';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxConnection } from './connection.js';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\[[0-9;]*m/g, '');
+}
+
 function makeIo() {
   let stdout = '';
   let stderr = '';
@@ -414,6 +418,72 @@ describe('runKtxConnection', () => {
       authToken: null,
     });
     expect(io.stdout()).toContain('Driver: metricflow');
+  });
+
+  it('--all: prints a single coherent list with one row per connection', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      warehouse: { driver: 'sqlite' },
+      docs: { driver: 'notion', auth_token: 'secret_token', crawl_mode: 'all_accessible' }, // pragma: allowlist secret
+    });
+    const { connector } = nativeConnector('sqlite');
+    const createScanConnector = vi.fn(async () => connector);
+    const createNotionClient = vi.fn(async (): Promise<Pick<NotionClient, 'retrieveBotUser'>> => ({
+      retrieveBotUser: vi.fn(async () => ({ id: 'bot-1', name: 'Docs Bot' })),
+    }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test-all', projectDir }, io.io, { createScanConnector, createNotionClient }),
+    ).resolves.toBe(0);
+
+    const out = stripAnsi(io.stdout());
+    expect(out).toContain('connection test --all');
+    expect(out).toMatch(/docs\s+notion\s+✓ ok\s+Bot: Docs Bot/);
+    expect(out).toMatch(/warehouse\s+sqlite\s+✓ ok\s+Status: ok/);
+    expect(out).toContain('2 tested');
+    expect(out).toContain('2 passed');
+    expect(out).not.toContain('failed');
+    expect(io.stderr()).toBe('');
+  });
+
+  it('--all: marks failing connections, keeps passing ones, and returns non-zero', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      warehouse: { driver: 'sqlite' },
+      broken: { driver: 'sqlite' },
+    });
+    const okConnector = nativeConnector('sqlite').connector;
+    const failConnector = nativeConnector('sqlite', { success: false, error: 'database file is unreadable' }).connector;
+    const createScanConnector = vi.fn(async (_p, connectionId: string) =>
+      connectionId === 'broken' ? failConnector : okConnector,
+    );
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test-all', projectDir }, io.io, { createScanConnector }),
+    ).resolves.toBe(1);
+
+    const out = stripAnsi(io.stdout());
+    expect(out).toMatch(/broken\s+sqlite\s+✗ failed\s+database file is unreadable/);
+    expect(out).toMatch(/warehouse\s+sqlite\s+✓ ok\s+Status: ok/);
+    expect(out).toContain('1 passed');
+    expect(out).toContain('1 failed');
+    expect(io.stderr()).toBe('');
+  });
+
+  it('--all: shows an empty-state message when no connections are configured', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const io = makeIo();
+
+    await expect(runKtxConnection({ command: 'test-all', projectDir }, io.io)).resolves.toBe(0);
+
+    const out = stripAnsi(io.stdout());
+    expect(out).toContain('connection test --all');
+    expect(out).toContain('No connections configured. Run `ktx setup` to add one.');
   });
 
   it('rejects unknown drivers with a helpful error', async () => {

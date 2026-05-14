@@ -15,6 +15,7 @@ import { resolveKtxConfigReference } from '@ktx/context/core';
 import { type KtxLocalProject, loadKtxProject } from '@ktx/context/project';
 import type { KtxScanConnector } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
+import { bold, dim, green, red, SYMBOLS } from './io/symbols.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { profileMark } from './startup-profile.js';
 
@@ -22,7 +23,8 @@ profileMark('module:connection');
 
 export type KtxConnectionArgs =
   | { command: 'list'; projectDir: string }
-  | { command: 'test'; projectDir: string; connectionId: string };
+  | { command: 'test'; projectDir: string; connectionId: string }
+  | { command: 'test-all'; projectDir: string };
 
 type MetabaseTestPort = Pick<MetabaseRuntimeClient, 'testConnection' | 'getDatabases' | 'cleanup'>;
 type LookerTestPort = Pick<LookerClient, 'testConnection'>;
@@ -218,6 +220,164 @@ async function testGitRepoConnection(
   return { repoUrl };
 }
 
+interface DriverTestOutcome {
+  driver: string;
+  detailKey: string;
+  detailValue: string;
+}
+
+async function testConnectionByDriver(
+  project: KtxLocalProject,
+  connectionId: string,
+  deps: KtxConnectionDeps,
+): Promise<DriverTestOutcome> {
+  const driver = normalizedConnectionDriver(project, connectionId);
+  if (!driver) {
+    throw new Error(`Connection "${connectionId}" has no \`driver\` field in ktx.yaml`);
+  }
+
+  if (driver === 'metabase') {
+    const result = await testMetabaseConnection(
+      project,
+      connectionId,
+      deps.createMetabaseClient ?? createDefaultMetabaseClient,
+    );
+    return { driver, detailKey: 'Databases', detailValue: String(result.databaseCount) };
+  }
+
+  if (driver === 'looker') {
+    const result = await testLookerConnection(
+      project,
+      connectionId,
+      deps.createLookerClient ?? createDefaultLookerClient,
+    );
+    return { driver, detailKey: 'User', detailValue: result.user };
+  }
+
+  if (driver === 'notion') {
+    const result = await testNotionConnection(
+      project,
+      connectionId,
+      deps.createNotionClient ?? createDefaultNotionClient,
+    );
+    return { driver, detailKey: 'Bot', detailValue: result.bot };
+  }
+
+  if (driver === 'dbt' || driver === 'metricflow' || driver === 'lookml') {
+    const result = await testGitRepoConnection(
+      project,
+      connectionId,
+      driver,
+      deps.testRepoConnection ?? testRepoConnection,
+    );
+    return { driver, detailKey: 'Repo', detailValue: result.repoUrl };
+  }
+
+  if (
+    driver === 'sqlite' ||
+    driver === 'sqlite3' ||
+    driver === 'postgres' ||
+    driver === 'postgresql' ||
+    driver === 'mysql' ||
+    driver === 'clickhouse' ||
+    driver === 'sqlserver' ||
+    driver === 'bigquery' ||
+    driver === 'snowflake'
+  ) {
+    const result = await testNativeConnection(
+      project,
+      connectionId,
+      deps.createScanConnector ?? createKtxCliScanConnector,
+    );
+    return { driver: result.driver, detailKey: 'Status', detailValue: 'ok' };
+  }
+
+  throw new Error(
+    `Connection "${connectionId}" uses driver "${driver}", which has no test implementation in ktx. Supported: ${SUPPORTED_TEST_DRIVERS.join(', ')}.`,
+  );
+}
+
+interface ConnectionTestRow {
+  connectionId: string;
+  driver: string;
+  ok: boolean;
+  detail: string;
+}
+
+function visualWidth(text: string): number {
+  // styleText wraps content in ANSI escape sequences; strip them before measuring.
+  return text.replace(/\[[0-9;]*m/g, '').length;
+}
+
+function padVisual(text: string, width: number): string {
+  const pad = width - visualWidth(text);
+  return pad > 0 ? `${text}${' '.repeat(pad)}` : text;
+}
+
+function renderTestAll(io: KtxCliIo, rows: ReadonlyArray<ConnectionTestRow>): void {
+  io.stdout.write(`${SYMBOLS.barStart}  connection test --all\n`);
+  io.stdout.write(`${SYMBOLS.bar}\n`);
+
+  if (rows.length === 0) {
+    io.stdout.write(`${SYMBOLS.barEnd}  No connections configured. Run \`ktx setup\` to add one.\n`);
+    return;
+  }
+
+  const okLabel = green('✓ ok');
+  const failLabel = red('✗ failed');
+  const idWidth = Math.max(...rows.map((r) => r.connectionId.length));
+  const driverWidth = Math.max(...rows.map((r) => r.driver.length));
+  const statusWidth = Math.max(visualWidth(okLabel), visualWidth(failLabel));
+
+  for (const row of rows) {
+    const id = bold(padVisual(row.connectionId, idWidth));
+    const driver = dim(padVisual(row.driver, driverWidth));
+    const status = padVisual(row.ok ? okLabel : failLabel, statusWidth);
+    const detail = dim(row.detail);
+    io.stdout.write(`${SYMBOLS.bar}  ${SYMBOLS.item} ${id}  ${driver}  ${status}  ${detail}\n`);
+  }
+
+  const failed = rows.filter((r) => !r.ok).length;
+  const passed = rows.length - failed;
+  io.stdout.write(`${SYMBOLS.bar}\n`);
+  const summary =
+    failed === 0
+      ? `${rows.length} tested ${dim(SYMBOLS.middot)} ${green(`${passed} passed`)}`
+      : `${rows.length} tested ${dim(SYMBOLS.middot)} ${green(`${passed} passed`)} ${dim(SYMBOLS.middot)} ${red(`${failed} failed`)}`;
+  io.stdout.write(`${SYMBOLS.barEnd}  ${summary}\n`);
+}
+
+async function runTestAll(
+  project: KtxLocalProject,
+  io: KtxCliIo,
+  deps: KtxConnectionDeps,
+): Promise<number> {
+  const entries = Object.entries(project.config.connections).sort(([a], [b]) => a.localeCompare(b));
+  const rows = await Promise.all(
+    entries.map(async ([connectionId, connection]): Promise<ConnectionTestRow> => {
+      const declaredDriver = String(connection.driver ?? '').trim().toLowerCase() || 'unknown';
+      try {
+        const outcome = await testConnectionByDriver(project, connectionId, deps);
+        return {
+          connectionId,
+          driver: outcome.driver || declaredDriver,
+          ok: true,
+          detail: `${outcome.detailKey}: ${outcome.detailValue}`,
+        };
+      } catch (error) {
+        return {
+          connectionId,
+          driver: declaredDriver,
+          ok: false,
+          detail: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }),
+  );
+  renderTestAll(io, rows);
+  return rows.some((row) => !row.ok) ? 1 : 0;
+}
+
 export async function runKtxConnection(
   args: KtxConnectionArgs,
   io: KtxCliIo = process,
@@ -243,83 +403,15 @@ export async function runKtxConnection(
       return 0;
     }
 
-    const driver = normalizedConnectionDriver(project, args.connectionId);
-    if (!driver) {
-      throw new Error(`Connection "${args.connectionId}" has no \`driver\` field in ktx.yaml`);
+    if (args.command === 'test-all') {
+      return await runTestAll(project, io, deps);
     }
 
-    const writePassed = (detailKey: string, detailValue: string): void => {
-      io.stdout.write(`Connection test passed: ${args.connectionId}\n`);
-      io.stdout.write(`Driver: ${driver}\n`);
-      io.stdout.write(`${detailKey}: ${detailValue}\n`);
-    };
-
-    if (driver === 'metabase') {
-      const result = await testMetabaseConnection(
-        project,
-        args.connectionId,
-        deps.createMetabaseClient ?? createDefaultMetabaseClient,
-      );
-      writePassed('Databases', String(result.databaseCount));
-      return 0;
-    }
-
-    if (driver === 'looker') {
-      const result = await testLookerConnection(
-        project,
-        args.connectionId,
-        deps.createLookerClient ?? createDefaultLookerClient,
-      );
-      writePassed('User', result.user);
-      return 0;
-    }
-
-    if (driver === 'notion') {
-      const result = await testNotionConnection(
-        project,
-        args.connectionId,
-        deps.createNotionClient ?? createDefaultNotionClient,
-      );
-      writePassed('Bot', result.bot);
-      return 0;
-    }
-
-    if (driver === 'dbt' || driver === 'metricflow' || driver === 'lookml') {
-      const result = await testGitRepoConnection(
-        project,
-        args.connectionId,
-        driver,
-        deps.testRepoConnection ?? testRepoConnection,
-      );
-      writePassed('Repo', result.repoUrl);
-      return 0;
-    }
-
-    if (
-      driver === 'sqlite' ||
-      driver === 'sqlite3' ||
-      driver === 'postgres' ||
-      driver === 'postgresql' ||
-      driver === 'mysql' ||
-      driver === 'clickhouse' ||
-      driver === 'sqlserver' ||
-      driver === 'bigquery' ||
-      driver === 'snowflake'
-    ) {
-      const result = await testNativeConnection(
-        project,
-        args.connectionId,
-        deps.createScanConnector ?? createKtxCliScanConnector,
-      );
-      io.stdout.write(`Connection test passed: ${args.connectionId}\n`);
-      io.stdout.write(`Driver: ${result.driver}\n`);
-      io.stdout.write('Status: ok\n');
-      return 0;
-    }
-
-    throw new Error(
-      `Connection "${args.connectionId}" uses driver "${driver}", which has no test implementation in ktx. Supported: ${SUPPORTED_TEST_DRIVERS.join(', ')}.`,
-    );
+    const { driver, detailKey, detailValue } = await testConnectionByDriver(project, args.connectionId, deps);
+    io.stdout.write(`Connection test passed: ${args.connectionId}\n`);
+    io.stdout.write(`Driver: ${driver}\n`);
+    io.stdout.write(`${detailKey}: ${detailValue}\n`);
+    return 0;
   } catch (error) {
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;

@@ -1517,7 +1517,7 @@ describe('runKtxCli', () => {
 
     expect(helpIo.stdout()).toContain('Usage: ktx connection');
     expect(helpIo.stdout()).toContain('list');
-    expect(helpIo.stdout()).toContain('test <connectionId>');
+    expect(helpIo.stdout()).toContain('test [options] [connectionId]');
     for (const removed of ['add', 'remove', 'map', 'mapping', 'metabase', 'notion']) {
       expect(helpIo.stdout()).not.toMatch(new RegExp(`\\b${removed}\\b`));
     }

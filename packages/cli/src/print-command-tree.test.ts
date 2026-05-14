@@ -16,7 +16,7 @@ describe('renderKtxCommandTree', () => {
       expect(topLevel).toContain(expected);
     }
 
-    expect(output).toContain('│   └── test <connectionId>');
+    expect(output).toContain('│   └── test [connectionId]');
     expect(output).not.toContain('│   ├── add');
     expect(output).not.toContain('│   ├── remove');
     expect(output).not.toContain('│   ├── map');
