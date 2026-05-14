@@ -59,14 +59,10 @@ export function packageInfoFromJson(packageJson: unknown): KtxCliPackageInfo {
   };
 }
 
-async function runInit(
-  args: { projectDir: string; projectName?: string; force: boolean },
-  io: KtxCliIo,
-): Promise<number> {
+async function runInit(args: { projectDir: string; force: boolean }, io: KtxCliIo): Promise<number> {
   const { initKtxProject } = await import('@ktx/context/project');
   const result = await initKtxProject({
     projectDir: args.projectDir,
-    projectName: args.projectName,
     force: args.force,
   });
 
@@ -77,7 +73,7 @@ async function runInit(
 }
 
 export async function runInitForCommander(
-  args: { projectDir: string; projectName?: string; force: boolean },
+  args: { projectDir: string; force: boolean },
   io: KtxCliIo,
 ): Promise<number> {
   return await runInit(args, io);

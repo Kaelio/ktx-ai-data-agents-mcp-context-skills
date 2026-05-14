@@ -16,7 +16,7 @@ describe('local ingest adapters', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-adapters-'));
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     project = await loadKtxProject({ projectDir });
   });
 

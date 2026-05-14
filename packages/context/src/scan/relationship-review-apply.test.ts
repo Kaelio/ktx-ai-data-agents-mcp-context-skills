@@ -202,7 +202,6 @@ async function projectWithDecisions(
   const tempDir = await mkdtemp(join(tmpdir(), 'ktx-relationship-review-apply-'));
   const project = await initKtxProject({
     projectDir: join(tempDir, 'project'),
-    projectName: 'warehouse',
   });
   await project.fileStore.writeFile(
     'raw-sources/warehouse/live-database/sync-a/enrichment/relationship-review-decisions.json',

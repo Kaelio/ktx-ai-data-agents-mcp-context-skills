@@ -40,7 +40,7 @@ function projectWithConnections(connections: KtxProjectConfig['connections']): K
   return {
     projectDir: '/tmp/project',
     config: {
-      ...buildDefaultKtxProjectConfig('warehouse'),
+      ...buildDefaultKtxProjectConfig(),
       connections,
     },
   };

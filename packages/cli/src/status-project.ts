@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import type {
   KtxConfigIssue,
   KtxLocalProject,
@@ -650,7 +651,7 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
   const { verdict, reason, nextActions } = buildVerdict(llm, embeddings, connections, queryHistory, warnings);
 
   return {
-    projectName: config.project,
+    projectName: basename(project.projectDir) || project.projectDir,
     projectDir: project.projectDir,
     config: configStatus,
     llm,

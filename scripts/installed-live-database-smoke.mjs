@@ -87,7 +87,6 @@ export function buildSeedSql() {
 
 export function buildKtxYaml(postgresUrl) {
   return [
-    'project: artifact-live-database',
     'connections:',
     '  warehouse:',
     '    driver: postgres',

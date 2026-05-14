@@ -53,7 +53,7 @@ describe('runKtxKnowledge', () => {
 
   it('writes, reads, lists, and searches wiki pages', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
     const writeIo = makeIo();
     await expect(
@@ -95,7 +95,7 @@ describe('runKtxKnowledge', () => {
 
   it('prints wiki list, search, and read as public JSON envelopes', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
     await expect(
       runKtxKnowledge(
@@ -154,7 +154,7 @@ describe('runKtxKnowledge', () => {
 
   it('rejects slash-delimited write keys with a flat-key suggestion', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
     const writeIo = makeIo();
     await expect(
@@ -183,7 +183,7 @@ describe('runKtxKnowledge', () => {
 
   it('explains empty search results for a project without wiki pages', async () => {
     const projectDir = join(tempDir, 'empty-project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
     const searchIo = makeIo();
     await expect(
@@ -197,7 +197,7 @@ describe('runKtxKnowledge', () => {
 
   it('uses configured embeddings for semantic wiki search', async () => {
     const projectDir = join(tempDir, 'semantic-project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
     await expect(
       runKtxKnowledge(

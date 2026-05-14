@@ -21,7 +21,7 @@ describe('Metabase YAML source state and discovery cache', () => {
   function projectWithMetabaseMappings(mappings: Record<string, unknown>) {
     return {
       config: {
-        ...buildDefaultKtxProjectConfig('metabase-cache-test'),
+        ...buildDefaultKtxProjectConfig(),
         connections: {
           'prod-metabase': {
             driver: 'metabase',

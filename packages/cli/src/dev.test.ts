@@ -72,10 +72,10 @@ describe('dev Commander tree', () => {
     const testIo = makeIo();
 
     try {
-      await expect(runKtxCli(['dev', 'init', projectDir, '--name', 'warehouse'], testIo.io)).resolves.toBe(0);
+      await expect(runKtxCli(['dev', 'init', projectDir], testIo.io)).resolves.toBe(0);
 
       expect(testIo.stdout()).toContain(`Initialized KTX project at ${projectDir}`);
-      await expect(readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).resolves.toContain('project: warehouse');
+      await expect(readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).resolves.not.toContain('project:');
       expect(testIo.stderr()).toBe('');
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -92,7 +92,7 @@ describe('dev Commander tree', () => {
 
     try {
       await expect(
-        runKtxCli(['--project-dir', projectDir, 'dev', 'init', '--name', 'global-init'], testIo.io),
+        runKtxCli(['--project-dir', projectDir, 'dev', 'init'], testIo.io),
       ).resolves.toBe(0);
 
       expect(testIo.stdout()).toContain(`Initialized KTX project at ${projectDir}`);

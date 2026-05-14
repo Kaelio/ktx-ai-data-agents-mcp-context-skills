@@ -1,4 +1,3 @@
-project: local-warehouse
 connections:
   warehouse:
     driver: postgres

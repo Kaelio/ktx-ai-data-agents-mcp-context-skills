@@ -166,7 +166,6 @@ async function writeHistoricSqlProject(project: KtxLocalProject): Promise<KtxLoc
   await writeFile(
     join(project.projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -231,7 +230,7 @@ describe('historic-SQL local ingest retrieval acceptance', () => {
   });
 
   it('projects table and pattern evidence into semantic-layer and wiki retrieval surfaces', async () => {
-    const initialized = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
+    const initialized = await initKtxProject({ projectDir: join(tempDir, 'project') });
     const project = await writeHistoricSqlProject(initialized);
     const sqlAnalysis = acceptanceSqlAnalysis();
     const agentRunner = new HistoricSqlAcceptanceAgentRunner();

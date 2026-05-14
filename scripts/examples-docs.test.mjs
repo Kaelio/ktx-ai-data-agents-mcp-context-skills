@@ -43,7 +43,7 @@ describe('standalone example docs', () => {
     assert.match(readme, /Accepted: 9/);
     assert.match(readme, /Review: 0/);
     assert.match(readme, /Rejected: 0/);
-    assert.match(config, /project: orbit-relationship-verification/);
+    assert.doesNotMatch(config, /^project:/m);
     assert.match(config, /orbit:/);
     assert.match(config, /driver: sqlite/);
     assert.match(

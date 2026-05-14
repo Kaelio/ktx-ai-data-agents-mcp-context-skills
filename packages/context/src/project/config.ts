@@ -242,11 +242,6 @@ const memorySchema = z
 
 const ktxProjectConfigSchema = z
   .strictObject({
-    project: z
-      .string({ error: 'ktx.yaml field "project" is required' })
-      .trim()
-      .min(1, 'ktx.yaml field "project" is required')
-      .describe('Project identifier; used in logs, ktx state files, and as the default workspace name.'),
     setup: setupSchema.optional().describe('Setup-wizard state. Written by `ktx setup`; may be omitted.'),
     connections: z
       .record(z.string(), connectionSchema)
@@ -336,8 +331,8 @@ function formatZodError(error: z.ZodError, input: unknown): string {
     .join('\n');
 }
 
-export function buildDefaultKtxProjectConfig(projectName = 'ktx-project'): KtxProjectConfig {
-  return ktxProjectConfigSchema.parse({ project: projectName });
+export function buildDefaultKtxProjectConfig(): KtxProjectConfig {
+  return ktxProjectConfigSchema.parse({});
 }
 
 export function parseKtxProjectConfig(raw: string): KtxProjectConfig {

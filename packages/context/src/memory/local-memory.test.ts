@@ -89,7 +89,7 @@ describe('createLocalProjectMemoryCapture', () => {
   });
 
   it('captures a wiki page through the local memory agent and persists pollable status', async () => {
-    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir: tempDir });
     const agentRunner = {
       runLoop: async ({
         toolSet,
@@ -144,7 +144,7 @@ describe('createLocalProjectMemoryCapture', () => {
   });
 
   it('captures a semantic-layer source for a named local connection id', async () => {
-    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir: tempDir });
     project.config.connections.warehouse = { driver: 'postgres' };
     const agentRunner = {
       runLoop: async ({

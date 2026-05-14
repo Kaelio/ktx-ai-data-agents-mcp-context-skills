@@ -194,7 +194,7 @@ describe('local KTX embedding config', () => {
   it('constructs deterministic embeddings from the default project config', () => {
     const createKtxEmbeddingProvider = vi.fn(() => ({}) as never);
     const provider = createLocalKtxEmbeddingProviderFromConfig(
-      buildDefaultKtxProjectConfig('warehouse').ingest.embeddings,
+      buildDefaultKtxProjectConfig().ingest.embeddings,
       { createKtxEmbeddingProvider },
     );
 

@@ -24,11 +24,10 @@ describe('createLocalBundleIngestRuntime', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-bundle-runtime-'));
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -149,7 +148,6 @@ describe('createLocalBundleIngestRuntime', () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',

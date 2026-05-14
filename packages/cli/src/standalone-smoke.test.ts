@@ -80,7 +80,6 @@ async function writeSqliteScanConfig(projectDir: string, dbPath: string, enrich 
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: sqlite',
@@ -218,7 +217,6 @@ describe('standalone built ktx CLI smoke', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: gateway-smoke',
         'llm:',
         '  provider:',
         '    backend: gateway',

@@ -231,7 +231,6 @@ describe('writeLocalScanEnrichmentArtifacts', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-enrichment-artifacts-'));
     project = await initKtxProject({
       projectDir: join(tempDir, 'project'),
-      projectName: 'warehouse',
     });
   });
 

@@ -19,7 +19,6 @@ async function writeWarehouseConfig(projectDir: string): Promise<void> {
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: sqlite',
@@ -67,7 +66,7 @@ function liveDatabaseAdapter(): SourceAdapter {
 }
 
 async function createLiveDatabaseRun(projectDir: string, runId: string) {
-  await initKtxProject({ projectDir, projectName: 'warehouse' });
+  await initKtxProject({ projectDir });
   await writeWarehouseConfig(projectDir);
   const project = await loadKtxProject({ projectDir });
   await runLocalStageOnlyIngest({
@@ -283,7 +282,7 @@ describe('local scan relationship artifact reader', () => {
   it('returns null when the scan run has no report', async () => {
     const projectDir = await mkdtemp(join(tmpdir(), 'ktx-relationship-artifacts-missing-run-'));
     try {
-      await initKtxProject({ projectDir, projectName: 'warehouse' });
+      await initKtxProject({ projectDir });
       const project = await loadKtxProject({ projectDir });
 
       await expect(readLocalScanRelationshipArtifacts(project, 'missing-run')).resolves.toBeNull();

@@ -22,7 +22,6 @@ ktx dev <subcommand> [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--name <name>` | Project name written to `ktx.yaml` | — |
 | `--force` | Rewrite `ktx.yaml` and scaffold files in an existing project | `false` |
 
 ## `dev runtime`
@@ -40,7 +39,7 @@ ktx dev <subcommand> [options]
 
 ```bash
 ktx dev init
-ktx dev init ./my-project --name "Analytics Context"
+ktx dev init ./my-project
 ktx dev init --force
 
 ktx dev runtime install --yes

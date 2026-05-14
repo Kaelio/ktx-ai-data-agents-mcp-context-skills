@@ -52,7 +52,6 @@ export function defaultDemoProjectDir(): string {
 
 function demoConfig(databasePath: string): string {
   return [
-    'project: ktx-demo-orbit',
     'connections:',
     `  ${DEMO_CONNECTION_ID}:`,
     '    driver: sqlite',

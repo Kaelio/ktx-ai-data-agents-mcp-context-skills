@@ -314,11 +314,10 @@ describe('canonical local ingest', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-full-ingest-'));
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -443,7 +442,6 @@ describe('canonical local ingest', () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -521,11 +519,10 @@ describe('canonical local ingest', () => {
 
   it('runs historic-SQL evidence projection through the local bundle post-processor', async () => {
     const projectDir = join(tempDir, 'historic-sql-project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -605,11 +602,10 @@ describe('canonical local ingest', () => {
 
   it('rejects direct Metabase scheduled pulls before requiring a local ingest LLM provider', async () => {
     const projectDir = join(tempDir, 'metabase-project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -637,7 +633,7 @@ describe('canonical local ingest', () => {
 
   it('runs full MetricFlow local ingest from a dbt repo fixture through the canonical runner', async () => {
     const projectDir = join(tempDir, 'metricflow-run-project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
     const fixtureDir = join(tempDir, 'metricflow-fixture');
     await mkdir(join(fixtureDir, 'models'), { recursive: true });
@@ -685,7 +681,6 @@ describe('canonical local ingest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -767,7 +762,6 @@ describe('canonical local ingest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: local-mf',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -801,11 +795,10 @@ describe('canonical local ingest', () => {
 
   it('runs scheduled Looker ingest through the canonical local runner and records SL target evidence', async () => {
     const projectDir = join(tempDir, 'looker-project');
-    await initKtxProject({ projectDir, projectName: 'looker-runtime' });
+    await initKtxProject({ projectDir });
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: looker-runtime',
         'connections:',
         '  prod-looker:',
         '    driver: looker',
