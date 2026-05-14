@@ -1,5 +1,4 @@
 import * as z from 'zod';
-import type { KtxProjectConnectionConfig } from './config.js';
 
 const metabaseSyncModeSchema = z.enum(['ALL', 'ONLY', 'EXCEPT']);
 const positiveIntegerValueSchema = z.number().int().positive();
@@ -78,6 +77,11 @@ export type LookmlMappingBootstrap = {
 
 export type ConnectionMappingBootstrap = MetabaseMappingBootstrap | LookerMappingBootstrap | LookmlMappingBootstrap;
 
+type MappingConnectionInput = Record<string, unknown> & {
+  driver?: unknown;
+  mappings?: unknown;
+};
+
 function recordValue(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
@@ -90,13 +94,13 @@ function assertPositiveIntegerKeys(field: string, record: Record<string, unknown
   }
 }
 
-function driverOf(connection: KtxProjectConnectionConfig): string {
+function driverOf(connection: MappingConnectionInput): string {
   return String(connection.driver ?? '').toLowerCase();
 }
 
 export function parseMetabaseMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): MetabaseMappingBootstrap {
   const rawMappings = recordValue(connection.mappings);
   assertPositiveIntegerKeys('databaseMappings', recordValue(rawMappings.databaseMappings));
@@ -115,7 +119,7 @@ export function parseMetabaseMappingBootstrap(
 
 export function parseLookerMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): LookerMappingBootstrap {
   const parsed = lookerMappingsSchema.parse(recordValue(connection.mappings));
   return {
@@ -127,7 +131,7 @@ export function parseLookerMappingBootstrap(
 
 export function parseLookmlMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): LookmlMappingBootstrap {
   const parsed = lookmlMappingsSchema.parse(recordValue(connection.mappings));
   return {
@@ -139,7 +143,7 @@ export function parseLookmlMappingBootstrap(
 
 export function parseConnectionMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): ConnectionMappingBootstrap | null {
   if (!connection.mappings || typeof connection.mappings !== 'object' || Array.isArray(connection.mappings)) {
     return null;
