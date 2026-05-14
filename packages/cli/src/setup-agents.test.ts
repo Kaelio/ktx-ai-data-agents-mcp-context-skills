@@ -37,23 +37,28 @@ describe('setup agents', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('plans project-scoped CLI files for every target', () => {
+  it('plans project-scoped CLI and research files for every target', () => {
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'claude-code', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.claude/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(tempDir, '.claude/skills/ktx-research/SKILL.md'), role: 'research-skill' },
       { kind: 'file', path: join(tempDir, '.claude/rules/ktx.md'), role: 'rule' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'codex', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.agents/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(tempDir, '.agents/skills/ktx-research/SKILL.md'), role: 'research-skill' },
       { kind: 'file', path: join(tempDir, '.codex/instructions/ktx.md'), role: 'rule' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'cursor', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.cursor/rules/ktx.mdc') },
+      { kind: 'file', path: join(tempDir, '.cursor/rules/ktx-research.mdc'), role: 'research-skill' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'opencode', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.opencode/commands/ktx.md') },
+      { kind: 'file', path: join(tempDir, '.opencode/commands/ktx-research.md'), role: 'research-skill' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'universal', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.agents/skills/ktx/SKILL.md') },
+      { kind: 'file', path: join(tempDir, '.agents/skills/ktx-research/SKILL.md'), role: 'research-skill' },
     ]);
   });
 
@@ -95,6 +100,31 @@ describe('setup agents', () => {
     });
     expect(await readKtxSetupState(tempDir)).toEqual({ completed_steps: ['agents'] });
     expect(io.stderr()).toBe('');
+  });
+
+  it('installs the research skill from the runtime asset', async () => {
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: true,
+          agents: true,
+          target: 'universal',
+          scope: 'project',
+          mode: 'cli',
+          skipAgents: false,
+        },
+        io.io,
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const researchSkill = await readFile(join(tempDir, '.agents/skills/ktx-research/SKILL.md'), 'utf-8');
+    expect(researchSkill).toContain('name: ktx-research');
+    expect(researchSkill).toContain('Always run `discover_data` before writing SQL.');
+    expect(researchSkill).toContain('Treat a `dictionary_search` miss as non-authoritative.');
   });
 
   it('writes PATH-independent launcher commands for skills', async () => {

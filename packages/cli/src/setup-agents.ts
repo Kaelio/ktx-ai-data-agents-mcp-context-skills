@@ -45,7 +45,7 @@ export interface KtxAgentInstallManifest {
   installedAt: string;
   installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>;
   entries: Array<
-    | { kind: 'file'; path: string; role?: 'skill' | 'rule' }
+    | { kind: 'file'; path: string; role?: 'skill' | 'rule' | 'research-skill' }
     | { kind: 'json-key'; path: string; jsonPath: string[] }
   >;
 }
@@ -72,6 +72,7 @@ export function plannedKtxAgentFiles(input: {
       const home = process.env.HOME ?? '';
       return [
         { kind: 'file', path: join(home, '.claude/skills/ktx/SKILL.md'), role: 'skill' as const },
+        { kind: 'file', path: join(home, '.claude/skills/ktx-research/SKILL.md'), role: 'research-skill' as const },
         { kind: 'file', path: join(home, '.claude/rules/ktx.md'), role: 'rule' as const },
       ];
     }
@@ -79,25 +80,44 @@ export function plannedKtxAgentFiles(input: {
       const codexHome = process.env.CODEX_HOME ?? join(process.env.HOME ?? '', '.codex');
       return [
         { kind: 'file', path: join(codexHome, 'skills/ktx/SKILL.md'), role: 'skill' as const },
+        { kind: 'file', path: join(codexHome, 'skills/ktx-research/SKILL.md'), role: 'research-skill' as const },
         { kind: 'file', path: join(codexHome, 'instructions/ktx.md'), role: 'rule' as const },
       ];
+    }
+    if (input.target === 'cursor' || input.target === 'opencode') {
+      return [];
     }
     throw new Error(`Global ${input.target} installation is not supported; omit --global.`);
   }
 
   const root = resolve(input.projectDir);
-  const cliEntries: Partial<Record<KtxAgentTarget, InstallEntry>> = {
-    'claude-code': { kind: 'file', path: join(root, '.claude/skills/ktx/SKILL.md'), role: 'skill' },
-    codex: { kind: 'file', path: join(root, '.agents/skills/ktx/SKILL.md'), role: 'skill' },
-    cursor: { kind: 'file', path: join(root, '.cursor/rules/ktx.mdc') },
-    opencode: { kind: 'file', path: join(root, '.opencode/commands/ktx.md') },
-    universal: { kind: 'file', path: join(root, '.agents/skills/ktx/SKILL.md') },
+  const cliEntries: Partial<Record<KtxAgentTarget, InstallEntry[]>> = {
+    'claude-code': [
+      { kind: 'file', path: join(root, '.claude/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(root, '.claude/skills/ktx-research/SKILL.md'), role: 'research-skill' },
+    ],
+    codex: [
+      { kind: 'file', path: join(root, '.agents/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(root, '.agents/skills/ktx-research/SKILL.md'), role: 'research-skill' },
+    ],
+    cursor: [
+      { kind: 'file', path: join(root, '.cursor/rules/ktx.mdc') },
+      { kind: 'file', path: join(root, '.cursor/rules/ktx-research.mdc'), role: 'research-skill' },
+    ],
+    opencode: [
+      { kind: 'file', path: join(root, '.opencode/commands/ktx.md') },
+      { kind: 'file', path: join(root, '.opencode/commands/ktx-research.md'), role: 'research-skill' },
+    ],
+    universal: [
+      { kind: 'file', path: join(root, '.agents/skills/ktx/SKILL.md') },
+      { kind: 'file', path: join(root, '.agents/skills/ktx-research/SKILL.md'), role: 'research-skill' },
+    ],
   };
   const ruleEntries: Partial<Record<KtxAgentTarget, InstallEntry>> = {
     'claude-code': { kind: 'file', path: join(root, '.claude/rules/ktx.md'), role: 'rule' },
     codex: { kind: 'file', path: join(root, '.codex/instructions/ktx.md'), role: 'rule' },
   };
-  return [cliEntries[input.target], ruleEntries[input.target]].filter(
+  return [...(cliEntries[input.target] ?? []), ruleEntries[input.target]].filter(
     (entry): entry is InstallEntry => entry !== undefined,
   );
 }
@@ -107,6 +127,12 @@ function ktxCliLauncher(): KtxCliLauncher {
     command: process.execPath,
     args: [fileURLToPath(new URL('./bin.js', import.meta.url))],
   };
+}
+
+async function readResearchSkillContent(): Promise<string> {
+  const path = fileURLToPath(new URL('./skills/research/SKILL.md', import.meta.url));
+  const content = await readFile(path, 'utf-8');
+  return content.endsWith('\n') ? content : `${content}\n`;
 }
 
 function shellQuote(value: string): string {
@@ -327,6 +353,8 @@ async function installTarget(input: {
     const content =
       entry.role === 'rule'
         ? ruleInstructionContent({ projectDir: input.projectDir })
+        : entry.role === 'research-skill'
+          ? await readResearchSkillContent()
         : cliInstructionContent({ projectDir: input.projectDir, launcher });
     await mkdir(dirname(entry.path), { recursive: true });
     await writeFile(entry.path, content, 'utf-8');
