@@ -105,6 +105,9 @@ describe('managed MCP daemon lifecycle', () => {
     });
 
     expect(status.kind).toBe('running');
+    if (status.kind !== 'running') {
+      throw new Error(`Expected running status, received ${status.kind}`);
+    }
     expect(status.url).toBe('http://127.0.0.1:7878/mcp');
   });
 

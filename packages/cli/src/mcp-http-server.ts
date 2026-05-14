@@ -191,7 +191,7 @@ async function defaultMcpServerFactory(input: {
     },
   });
 
-  let memoryCapture;
+  let memoryCapture: ReturnType<typeof createLocalProjectMemoryCapture> | undefined;
   try {
     memoryCapture = createLocalProjectMemoryCapture(input.project, { semanticLayerCompute, queryExecutor });
   } catch (error) {

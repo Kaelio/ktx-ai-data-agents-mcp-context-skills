@@ -12,11 +12,12 @@ describe('renderKtxCommandTree', () => {
       .filter((line) => /^ {2}[├└]── \S/.test(line))
       .map((line) => line.replace(/^ {2}[├└]── /, '').trim().split(' ')[0]);
 
-    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'dev']) {
+    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'mcp', 'dev']) {
       expect(topLevel).toContain(expected);
     }
 
     expect(output).toContain('│   └── test <connectionId>');
+    expect(output).toContain('│   ├── status                          Show KTX MCP daemon status');
     expect(output).not.toContain('│   ├── add');
     expect(output).not.toContain('│   ├── remove');
     expect(output).not.toContain('│   ├── map');
@@ -24,7 +25,6 @@ describe('renderKtxCommandTree', () => {
     expect(output).not.toContain('│   ├── metabase');
     expect(output).not.toContain('│   ├── notion');
     expect(output).not.toContain('scan <connectionId>');
-    expect(output).not.toContain('│   ├── status');
     expect(output).not.toContain('│   ├── replay');
     expect(output).not.toContain('│   └── replay');
     expect(output).not.toContain('│   ├── run');
