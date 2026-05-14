@@ -7,7 +7,46 @@ KTX integrates with coding agents through CLI skills and command files. These
 files teach agents to call public `ktx` commands directly from the terminal for
 semantic-layer context and wiki knowledge.
 
-Run `ktx setup` and select your agent targets, or configure manually using the snippets below.
+Run `ktx setup` and select your agent targets, or configure manually using the
+snippets below. Setup pins generated skill files to the KTX CLI path that
+created them, so agents do not need `ktx` on `PATH`.
+
+## Install with setup
+
+```bash
+ktx setup --agents
+```
+
+Use `--target` for one target:
+
+```bash
+ktx setup --agents --target codex
+```
+
+Use `--global` only with `claude-code` or `codex`:
+
+```bash
+ktx setup --agents --target claude-code --global
+ktx setup --agents --target codex --global
+```
+
+KTX records installed files in `.ktx/agents/install-manifest.json`. That
+manifest lets status checks report agent readiness and lets future cleanup
+remove only files KTX installed.
+
+## Generated files
+
+| Target | Project-scoped files | Global files |
+|--------|----------------------|--------------|
+| Claude Code | `.claude/skills/ktx/SKILL.md`, `.claude/rules/ktx.md` | `~/.claude/skills/ktx/SKILL.md`, `~/.claude/rules/ktx.md` |
+| Codex | `.agents/skills/ktx/SKILL.md`, `.codex/instructions/ktx.md` | `$CODEX_HOME/skills/ktx/SKILL.md`, `$CODEX_HOME/instructions/ktx.md` |
+| Cursor | `.cursor/rules/ktx.mdc` | Not supported |
+| OpenCode | `.opencode/commands/ktx.md` | Not supported |
+| Universal `.agents` | `.agents/skills/ktx/SKILL.md` | Not supported |
+
+Skill files list pinned `ktx` commands. Rule files tell the agent when KTX is
+appropriate, such as data schemas, metrics, dimensions, database structure, and
+SQL questions.
 
 ## Claude Code
 
@@ -15,11 +54,12 @@ Run `ktx setup` and select your agent targets, or configure manually using the s
 
 During setup, select **Claude Code** from the agent targets. KTX writes:
 
-| Mode | File |
-|------|------|
-| CLI skills | `.claude/skills/ktx/SKILL.md` |
+| Scope | Files |
+|-------|-------|
+| Project | `.claude/skills/ktx/SKILL.md`, `.claude/rules/ktx.md` |
+| Global | `~/.claude/skills/ktx/SKILL.md`, `~/.claude/rules/ktx.md` |
 
-Both project-scoped and global installations are supported. Global installs write to `~/.claude/skills/ktx/SKILL.md`.
+Both project-scoped and global installations are supported.
 
 ### Manual CLI skills configuration
 
@@ -42,6 +82,7 @@ Available commands:
 ### Workflow tips
 
 - Claude Code discovers skills automatically from `.claude/skills/`.
+- Claude rules in `.claude/rules/` tell Claude when KTX should be used.
 - Global installation makes KTX available in all projects without per-project setup.
 - Keep generated skills committed only when your team wants project-local agent instructions in git.
 
@@ -76,11 +117,13 @@ Create `.cursor/rules/ktx.mdc` with the same content structure as the Claude Cod
 
 During setup, select **Codex** from the agent targets. KTX writes:
 
-| Mode | File |
-|------|------|
-| CLI skills | `.agents/skills/ktx/SKILL.md` |
+| Scope | Files |
+|-------|-------|
+| Project | `.agents/skills/ktx/SKILL.md`, `.codex/instructions/ktx.md` |
+| Global | `$CODEX_HOME/skills/ktx/SKILL.md`, `$CODEX_HOME/instructions/ktx.md` |
 
-Both project-scoped and global installations are supported. Global installs write to `$CODEX_HOME/skills/ktx/SKILL.md` (defaults to `~/.codex/skills/ktx/SKILL.md`).
+Both project-scoped and global installations are supported. `CODEX_HOME`
+defaults to `~/.codex`.
 
 ### Manual CLI skills configuration
 
@@ -90,6 +133,7 @@ Create `.agents/skills/ktx/SKILL.md` with the same content structure as Claude C
 
 - Set `CODEX_HOME` to customize the global installation directory.
 - Codex shares the `.agents/` directory structure with the universal format.
+- Codex instructions in `.codex/instructions/` tell Codex when KTX should be used.
 - Global installation makes KTX available across all Codex sessions.
 
 ---
@@ -143,4 +187,5 @@ All supported agent clients call the same KTX CLI commands:
 |---|---|---|---|---|
 | CLI skills | Yes | Yes (.mdc) | Yes | Yes |
 | Global install | Yes | No | Yes | No |
-| Config location | `.claude/skills/ktx/SKILL.md` | `.cursor/rules/ktx.mdc` | `.agents/skills/ktx/SKILL.md` | `.opencode/commands/ktx.md` |
+| Rule or instruction file | `.claude/rules/ktx.md` | `.cursor/rules/ktx.mdc` | `.codex/instructions/ktx.md` | `.opencode/commands/ktx.md` |
+| Skill file | `.claude/skills/ktx/SKILL.md` | Not separate | `.agents/skills/ktx/SKILL.md` | Not separate |
