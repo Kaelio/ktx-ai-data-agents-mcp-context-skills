@@ -3,7 +3,7 @@ title: "ktx sl"
 description: "List, search, validate, or query semantic-layer sources."
 ---
 
-Interact with your project's semantic layer. Semantic sources are YAML definitions that describe your tables, columns, measures, joins, and grain — the vocabulary agents use to generate correct SQL.
+Interact with your project's semantic layer. Semantic sources are YAML definitions that describe your tables, columns, measures, joins, and grain - the vocabulary agents use to generate correct SQL.
 
 ## Command signature
 
@@ -26,7 +26,7 @@ ktx sl <subcommand> [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | Filter by KTX connection id | — |
+| `--connection-id <id>` | Filter by KTX connection id | - |
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
@@ -34,8 +34,8 @@ ktx sl <subcommand> [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | Filter by KTX connection id | — |
-| `--limit <number>` | Maximum search results | — |
+| `--connection-id <id>` | Filter by KTX connection id | - |
+| `--limit <number>` | Maximum search results | - |
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
@@ -43,24 +43,24 @@ ktx sl <subcommand> [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | KTX connection id (required) | — |
+| `--connection-id <id>` | KTX connection id (required) | - |
 
 ### `sl query`
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | KTX connection id | — |
-| `--query-file <path>` | JSON semantic-layer query file | — |
-| `--measure <measure>` | Measure to query; repeatable (at least one required) | — |
-| `--dimension <dimension>` | Dimension to include; repeatable | — |
-| `--filter <filter>` | Filter expression; repeatable | — |
-| `--segment <segment>` | Segment to include; repeatable | — |
-| `--order-by <field[:direction]>` | Order field, optionally suffixed with `:asc` or `:desc`; repeatable | — |
-| `--limit <n>` | Query limit | — |
+| `--connection-id <id>` | KTX connection id | - |
+| `--query-file <path>` | JSON semantic-layer query file | - |
+| `--measure <measure>` | Measure to query; repeatable (at least one required) | - |
+| `--dimension <dimension>` | Dimension to include; repeatable | - |
+| `--filter <filter>` | Filter expression; repeatable | - |
+| `--segment <segment>` | Segment to include; repeatable | - |
+| `--order-by <field[:direction]>` | Order field, optionally suffixed with `:asc` or `:desc`; repeatable | - |
+| `--limit <n>` | Query limit | - |
 | `--include-empty` | Include empty rows | `false` |
 | `--format <format>` | Output format: `json` or `sql` | `json` |
 | `--execute` | Execute the compiled query against the database | `false` |
-| `--max-rows <n>` | Maximum rows to return when executing | — |
+| `--max-rows <n>` | Maximum rows to return when executing | - |
 
 ## Examples
 

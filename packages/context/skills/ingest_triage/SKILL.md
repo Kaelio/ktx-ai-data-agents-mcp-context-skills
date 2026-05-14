@@ -4,7 +4,7 @@ description: Classify and resolve conflicts detected during bundle ingest (struc
 callers: [memory_agent]
 ---
 
-# Ingest Triage — conflict classification and resolution
+# Ingest Triage - conflict classification and resolution
 
 This skill is loaded in two contexts:
 - By a Stage 3 WorkUnit agent when `sl_discover` reveals that a prior WU (or a prior sync) already wrote something that overlaps with what the current WU is about to write.
@@ -15,12 +15,12 @@ Apply the rules below before every write that could collide with an existing art
 ## Decision tree
 
 1. **Is this the same artifact I'm producing now, or a different one with the same name?**
-   Read both. If names match and content matches (modulo whitespace): no conflict — skip the write, the prior one stands.
+   Read both. If names match and content matches (modulo whitespace): no conflict - skip the write, the prior one stands.
 
 2. **If content differs, is it an expression-only change (e.g. a different `sql:` body for the same measure name, same grain, same columns)?**
    Re-ingest change (expression-only): silently replace via `sl_edit_source`. No flag.
 
-3. **If the difference is structural — grain, columns, filter, join shape — is the current bundle the re-ingest of a previously-ingested bundle (i.e. `priorProvenance` has a row for this raw file and artifact)?**
+3. **If the difference is structural - grain, columns, filter, join shape - is the current bundle the re-ingest of a previously-ingested bundle (i.e. `priorProvenance` has a row for this raw file and artifact)?**
    Re-ingest change (semantic break): replace + flag. Record in the IngestReport's `conflicts_resolved` list with `flagged_for_human: true`.
 
 4. **If there's no prior-sync row (both are from THIS job), check for same-ingest contradictions:**
@@ -37,11 +37,11 @@ Apply the rules below before every write that could collide with an existing art
 
 ## Why same-ingest vs re-ingest differs
 
-Within ONE bundle there's no user signal telling us which duplicate wins — we capture all variants and flag. Across bundles, re-uploading IS the signal that the new state is intended — we replace silently for expression changes and flag for semantic breaks.
+Within ONE bundle there's no user signal telling us which duplicate wins - we capture all variants and flag. Across bundles, re-uploading IS the signal that the new state is intended - we replace silently for expression changes and flag for semantic breaks.
 
 ## Naming disambiguation hints
 
-When you rename to disambiguate, prefer domain suffixes that match the containing view/table/collection name: `customers.churn_risk_score` → `customers.churn_risk_engagement_based` (if the `customer_churn` view computes it from engagement); `billing.churn_risk_score` → `billing.churn_risk_billing_based`. Avoid numeric suffixes (`churn_risk_1`, `churn_risk_2`) — they disclose nothing.
+When you rename to disambiguate, prefer domain suffixes that match the containing view/table/collection name: `customers.churn_risk_score` → `customers.churn_risk_engagement_based` (if the `customer_churn` view computes it from engagement); `billing.churn_risk_score` → `billing.churn_risk_billing_based`. Avoid numeric suffixes (`churn_risk_1`, `churn_risk_2`) - they disclose nothing.
 
 ## Applying canonical pins
 
@@ -62,7 +62,7 @@ When you perform rename + capture, also write one page named `<canonical-concept
 - One paragraph per variant: what it computes, where it came from (raw file + line range), when to use it.
 - A closing "Choosing between these" paragraph if the variants are legitimately domain-specific.
 
-Do not attempt to rank variants or pick a "best" — that's user-override territory.
+Do not attempt to rank variants or pick a "best" - that's user-override territory.
 
 ## Silence rules
 

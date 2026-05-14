@@ -6,13 +6,13 @@ callers: [memory_agent]
 
 # dbt → KTX (bundle ingest)
 
-Use this skill for **uploaded** dbt projects (`dbt_project.yml` at stage root, `models/**`, `sources/**`, `schema.yml`). There is **no** `fetch()` in v1 — scheduled `dbt parse` / `manifest.json` pulls are out of scope; host-provided dbt sync may still backfill structured test metadata into `_schema` on the next sync.
+Use this skill for **uploaded** dbt projects (`dbt_project.yml` at stage root, `models/**`, `sources/**`, `schema.yml`). There is **no** `fetch()` in v1 - scheduled `dbt parse` / `manifest.json` pulls are out of scope; host-provided dbt sync may still backfill structured test metadata into `_schema` on the next sync.
 
 ## Mapping (models / sources → SL)
 
 | dbt | KTX | Notes |
 |-----|--------|--------|
-| `models:` entry with `columns:` | **Overlay** on the manifest table with the same name (after `discover_data` / `entity_details`) | One SL source per physical table; model name may differ from DB name — resolve with `read_raw_file` + warehouse context. |
+| `models:` entry with `columns:` | **Overlay** on the manifest table with the same name (after `discover_data` / `entity_details`) | One SL source per physical table; model name may differ from DB name - resolve with `read_raw_file` + warehouse context. |
 | `sources:` → `tables:` | Same as models; use `identifier` when present instead of logical `name`. | Schema + name must match how the connection sees tables. |
 | Column `description` | `descriptions.user` or merged `descriptions` map on the column | Do not overwrite `dbt` description keys from sync. |
 | `data_tests: not_null` / `unique` | Short hint in column `descriptions` or notes: “dbt: not null”, “dbt: unique” | Full structured metadata lands in manifest via **sync**; the skill keeps bundle-time SL text useful for the agent. |
@@ -73,4 +73,4 @@ If the same bundle also has MetricFlow `semantic_models:` / `metrics:`, the **`m
 - Do not invent column names, grain keys, or measure expressions from dbt model names, descriptions, tests, or common naming patterns.
 - Do not write `columns:`, `grain:`, or `measures:` for a dbt model unless those exact column names are confirmed by dbt YAML columns or warehouse schema discovery.
 - Do not invent joins from `relationships` tests if the target model/table is not found in SL or the warehouse.
-- Do not read `peerFileIndex` paths — use `read_raw_file` only on `rawFiles` and `dependencyPaths` from the WorkUnit.
+- Do not read `peerFileIndex` paths - use `read_raw_file` only on `rawFiles` and `dependencyPaths` from the WorkUnit.

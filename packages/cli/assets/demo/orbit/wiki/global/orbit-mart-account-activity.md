@@ -33,8 +33,8 @@ tables:
 
 ## Key measures (SL: `mart_account_activity`)
 
-- `avg_pre_policy_activation_rate` — `avg(pre_policy_30_day_activation_rate)`
-- `avg_post_policy_activation_rate` — `avg(post_policy_30_day_activation_rate)`
+- `avg_pre_policy_activation_rate` - `avg(pre_policy_30_day_activation_rate)`
+- `avg_post_policy_activation_rate` - `avg(post_policy_30_day_activation_rate)`
 
 ## Common query patterns
 

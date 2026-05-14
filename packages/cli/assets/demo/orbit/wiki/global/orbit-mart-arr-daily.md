@@ -31,8 +31,8 @@ tables:
 
 ## Key measures (SL: `mart_arr_daily`)
 
-- `total_arr_cents` — `sum(arr_cents)`
-- `arr_millions` — `round(sum(arr_cents) / 100000000.0, 3)` — ARR in $M
+- `total_arr_cents` - `sum(arr_cents)`
+- `arr_millions` - `round(sum(arr_cents) / 100000000.0, 3)` - ARR in $M
 
 ## Common query patterns
 

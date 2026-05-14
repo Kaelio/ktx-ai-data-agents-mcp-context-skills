@@ -199,7 +199,7 @@ Modify the raw schema markdown in
           .slice(0, limit)
           .map(
             (hit) =>
-              `- ${hit.kind}: ${hit.display} [connectionName=${hit.connectionName}] (matched on ${hit.matchedOn}) — ` +
+              `- ${hit.kind}: ${hit.display} [connectionName=${hit.connectionName}] (matched on ${hit.matchedOn}) - ` +
               `follow up with \`entity_details({connectionName: "${hit.connectionName}", targets: [{display: "${hit.display}"}]})\``,
           )
           .join('\n'),

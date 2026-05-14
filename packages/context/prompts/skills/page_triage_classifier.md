@@ -12,11 +12,11 @@ Reusable templates and scripts are durable knowledge regardless of subject matte
 
 Analytics evidence (BI tools like Looker, Metabase, Tableau) is durable knowledge of *how the organization defines its metrics and segments*. The `signals.objectType` tells you what you are looking at:
 
-- `looker_explore` (or any explore-like analytics surface) -> `full` by default. Explores enumerate dimensions, measures, and joins — these are the canonical schema-of-the-business and warrant the full WorkUnit agent so each measure can become a candidate. Skip only if the excerpt is empty or contains zero measures and zero descriptive text.
+- `looker_explore` (or any explore-like analytics surface) -> `full` by default. Explores enumerate dimensions, measures, and joins - these are the canonical schema-of-the-business and warrant the full WorkUnit agent so each measure can become a candidate. Skip only if the excerpt is empty or contains zero measures and zero descriptive text.
 - `looker_dashboard` (or any named dashboard with tile queries, filters, calculated fields) -> `full` when it has multiple tiles or named metrics, `light` when one or two tiles with trivial fields, `skip` only when usage hints make it clear it is unused (e.g. `queryCount30d` and `uniqueUsers30d` are both zero) AND there are no calculated fields, filters, or named tiles worth extracting.
 - `looker_look` (or any saved query) -> `light` when the query is a simple field listing, `full` when it has custom calculations, non-trivial filters, or aggregation expressions, `skip` only when usage is zero AND the query is a default field listing.
 
-Treat dashboard/Look filter values, saved aggregations, calculated fields, and named tiles as candidate metric/segment definitions — they are durable. Do **not** mark BI evidence as `skip` solely because it is "configuration" or "tied to a data model"; that is exactly the durable knowledge we want to capture.
+Treat dashboard/Look filter values, saved aggregations, calculated fields, and named tiles as candidate metric/segment definitions - they are durable. Do **not** mark BI evidence as `skip` solely because it is "configuration" or "tied to a data model"; that is exactly the durable knowledge we want to capture.
 
 Examples:
 

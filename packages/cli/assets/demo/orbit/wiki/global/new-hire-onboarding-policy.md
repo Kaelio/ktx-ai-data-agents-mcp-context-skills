@@ -12,23 +12,23 @@ refs:
 
 ## New Hire Week-One Onboarding Policy
 
-**Source:** Notion — People & Operating Norms, last edited 2026-05-07
+**Source:** Notion - People & Operating Norms, last edited 2026-05-07
 **Owner:** Manager (not People Ops)
 
 ---
 
 ## Policy
 
-Every new hire must understand **four things by end of week one**. The manager — not People Ops — is responsible for supplying this context.
+Every new hire must understand **four things by end of week one**. The manager - not People Ops - is responsible for supplying this context.
 
 ## Required Week-One Knowledge
 
 | # | What the new hire must understand |
 |---|---|
-| 1 | **What Orbit sells** — the core procurement workflow product and value proposition |
-| 2 | **Why procurement workflow gets messy inside a customer** — the pain points that make Orbit necessary |
-| 3 | **Which team handles which part of the customer lifecycle** — team lanes and ownership boundaries |
-| 4 | **What their first useful project is** — a concrete, scoped piece of work they can contribute to immediately |
+| 1 | **What Orbit sells** - the core procurement workflow product and value proposition |
+| 2 | **Why procurement workflow gets messy inside a customer** - the pain points that make Orbit necessary |
+| 3 | **Which team handles which part of the customer lifecycle** - team lanes and ownership boundaries |
+| 4 | **What their first useful project is** - a concrete, scoped piece of work they can contribute to immediately |
 
 ## Ownership
 

@@ -19,14 +19,14 @@ KTX turns warehouse metadata, semantic definitions, and business knowledge into
 reviewable project files that agents can use while planning, querying, and
 updating analytics work.
 
-A KTX project is a directory of plain files — YAML semantic sources, Markdown
-wiki pages, and SQLite state — that you commit to git and review in PRs,
+A KTX project is a directory of plain files - YAML semantic sources, Markdown
+wiki pages, and SQLite state - that you commit to git and review in PRs,
 just like dbt models.
 
 ## Who KTX is for
 
 KTX is built for analytics engineers and data teams who want data agents to
-work on real analytics systems — not just generate one-off SQL.
+work on real analytics systems - not just generate one-off SQL.
 
 Use KTX when you want agents to:
 
@@ -120,7 +120,7 @@ my-project/
 ```
 
 Semantic sources and wiki pages are committed to git. The `.ktx/` directory
-holds ephemeral state and is git-ignored — delete it and KTX rebuilds on the
+holds ephemeral state and is git-ignored - delete it and KTX rebuilds on the
 next run.
 
 ### Build demo warehouse context
@@ -163,7 +163,7 @@ source packages for development, not public release artifacts.
 KTX integrates with coding agents through CLI skills. The setup wizard
 configures this automatically.
 
-**CLI skills** — the agent calls `ktx` commands directly through a skill file
+**CLI skills** - the agent calls `ktx` commands directly through a skill file
 installed in your agent's config (e.g., `.claude/skills/ktx/SKILL.md`):
 
 ```bash

@@ -12,7 +12,7 @@ sl_refs:
   - mart_account_activity
 ---
 
-# Activation Policy Change — January 2026
+# Activation Policy Change - January 2026
 
 **Governed metric key:** `activated_accounts`
 **Owner team:** growth
@@ -23,8 +23,8 @@ sl_refs:
 
 The activation workflow changed on **2026-01-15**. All activation events are tagged with `policy_version`:
 
-- `pre_2026_01_15` — events before the workflow update
-- `post_2026_01_15` — events after the workflow update
+- `pre_2026_01_15` - events before the workflow update
+- `post_2026_01_15` - events after the workflow update
 
 ## Activation Event Types
 

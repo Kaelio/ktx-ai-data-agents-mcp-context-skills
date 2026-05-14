@@ -654,11 +654,11 @@ In `docs/content/docs/cli-reference/ktx-setup.mdx`, replace the Historic SQL fla
 ```markdown
 | `--enable-historic-sql` | Enable Historic SQL when the selected database supports it | `false` |
 | `--disable-historic-sql` | Disable Historic SQL for the selected database | `false` |
-| `--historic-sql-window-days <number>` | Historic SQL query-history window in days | — |
-| `--historic-sql-min-executions <number>` | Minimum executions for a Historic SQL template | — |
-| `--historic-sql-min-calls <number>` | Alias for `--historic-sql-min-executions` for one release | — |
-| `--historic-sql-service-account-pattern <pattern>` | Historic SQL service-account regex; repeatable | — |
-| `--historic-sql-redaction-pattern <pattern>` | Historic SQL SQL-literal redaction regex; repeatable | — |
+| `--historic-sql-window-days <number>` | Historic SQL query-history window in days | - |
+| `--historic-sql-min-executions <number>` | Minimum executions for a Historic SQL template | - |
+| `--historic-sql-min-calls <number>` | Alias for `--historic-sql-min-executions` for one release | - |
+| `--historic-sql-service-account-pattern <pattern>` | Historic SQL service-account regex; repeatable | - |
+| `--historic-sql-redaction-pattern <pattern>` | Historic SQL SQL-literal redaction regex; repeatable | - |
 ```
 
 - [ ] **Step 4: Update primary source Historic SQL docs**

@@ -1,10 +1,10 @@
 ---
 name: sl_capture
-description: How to capture new reusable patterns into KTX's semantic layer — when a measure, segment, or join belongs in the catalog and how to write it generically so it stays small and useful over time. Loaded by the post-turn memory-agent only. The research agent does not write to the SL.
+description: How to capture new reusable patterns into KTX's semantic layer - when a measure, segment, or join belongs in the catalog and how to write it generically so it stays small and useful over time. Loaded by the post-turn memory-agent only. The research agent does not write to the SL.
 callers: [memory_agent]
 ---
 
-# Semantic Layer — Capture
+# Semantic Layer - Capture
 
 This skill covers **when** and **how** to capture new patterns into the semantic layer. For schema reference and query grammar, load the `sl` skill first.
 
@@ -13,8 +13,8 @@ When the current turn produces a reusable pattern (business metric, derived view
 ## SQL dialect
 
 The user-facing prompt includes a `Warehouse:` line under the SL Sources index
-(e.g. `Warehouse: BIGQUERY`). All `expr` strings — measure expressions, segment
-predicates, computed-column SQL — execute on that warehouse and must use its
+(e.g. `Warehouse: BIGQUERY`). All `expr` strings - measure expressions, segment
+predicates, computed-column SQL - execute on that warehouse and must use its
 syntax. Date arithmetic in particular varies by dialect:
 
 - **BigQuery**: `transaction_date >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)` (when the column is `TIMESTAMP`); `event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)` (when `DATE`).
@@ -22,7 +22,7 @@ syntax. Date arithmetic in particular varies by dialect:
 - **Snowflake**: `transaction_date >= dateadd(day, -90, current_timestamp())`.
 
 Match the column's manifest type (`type: time` → TIMESTAMP/DATETIME on the
-warehouse) — comparing TIMESTAMP to a DATE-arithmetic result fails on
+warehouse) - comparing TIMESTAMP to a DATE-arithmetic result fails on
 BigQuery. After every `sl_edit_source`/`sl_write_source`, the inline validator runs a
 `LIMIT 1` warehouse probe per measure and surfaces dialect mismatches; if
 you see an error trailer, fix the expression and retry rather than leaving
@@ -68,12 +68,12 @@ Callers filter `region = 'US'` at query time.
 **Bake constants in only when the filter has named business meaning that won't change** (`enterprise_arr` for a contractually defined tier), cannot be expressed via the source's dimensions, or comes from a regulated/fixed list.
 
 **Time anchors and value lists belong in callers' filters, not in measure expressions or source SQL.**
-- Anti-pattern (date anchor inlined): `expr: count(distinct case when transaction_date >= '2026-04-12' then customer_id end)` — the date will need editing every time the question shifts, and every reader has to discover it.
-- Anti-pattern (value list inlined in source SQL): `WHERE product_category_1 IN ('Testosterone', 'Weight Loss', …)` — locks the source to today's catalog and blocks callers from broadening or narrowing.
+- Anti-pattern (date anchor inlined): `expr: count(distinct case when transaction_date >= '2026-04-12' then customer_id end)` - the date will need editing every time the question shifts, and every reader has to discover it.
+- Anti-pattern (value list inlined in source SQL): `WHERE product_category_1 IN ('Testosterone', 'Weight Loss', …)` - locks the source to today's catalog and blocks callers from broadening or narrowing.
 - Preferred: a generic measure (`count(distinct customer_id)`) plus either a named segment that captures the *meaning* of the anchor (`gh_new_products_since_launch`) or a query-time filter. Callers compose; the source stays small.
 - A date is durable to bake in only when it represents a regulatory cutover, a contractually fixed boundary, or a one-time event that reshapes how the source itself is read.
 
-**If you create a segment whose expr matches a measure's filter, the measure MUST reference the segment via `segments: [segment_name]` rather than re-inlining the predicate.** This is the canonical pattern even with a single measure — duplicating the predicate inline defeats the purpose of naming it.
+**If you create a segment whose expr matches a measure's filter, the measure MUST reference the segment via `segments: [segment_name]` rather than re-inlining the predicate.** This is the canonical pattern even with a single measure - duplicating the predicate inline defeats the purpose of naming it.
 
 Anti-pattern:
 ```yaml
@@ -100,24 +100,24 @@ measures:
 
 **Extract repeated filter bundles into named segments.** If the same predicate appears on multiple measures of the same source, lift it to a `segments[]` entry and have each measure reference it. One edit updates every measure that depends on it.
 
-**Never write a standalone file on a manifest-backed name.** If `sl_discover({ query: "<table-or-source-name>" })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only — no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+**Never write a standalone file on a manifest-backed name.** If `sl_discover({ query: "<table-or-source-name>" })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only - no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
 
 **Prefer overlay decomposition over standalone SQL sources.** Before reaching for `source_type: sql`, check whether the metric decomposes into measures on existing overlays (including cross-source derived measures). Use `source_type: sql` only when:
 - The metric requires per-user/per-entity derivation that cannot be expressed as a single `expr` (e.g., `EXISTS` over a time-windowed subset), OR
 - The metric requires multi-step CTEs whose intermediate grain is not a column in any existing source.
 
-When an `sql` source is unavoidable, note in its `descriptions` map which SL gap forced the choice so it can be retired once the primitive ships. It must target a name NOT in the manifest — pick a distinct one (e.g. `mrr_waterfall_rollup`, not `fct_orders`).
+When an `sql` source is unavoidable, note in its `descriptions` map which SL gap forced the choice so it can be retired once the primitive ships. It must target a name NOT in the manifest - pick a distinct one (e.g. `mrr_waterfall_rollup`, not `fct_orders`).
 
 ## Slim standalone sources via `inherits_columns_from`
 
 When a standalone SQL source filters or projects from a single manifest-backed base table (the common pattern for derived views like `aav_consignments` over `MARTS.CONSIGNMENTS`), set `inherits_columns_from:` to the base table's manifest key and list only column **names** in `columns:`. Compose-time enrichment fills `type`, `descriptions`, and `role` from the matching manifest column.
 
-Discover the manifest key with `sl_discover` — pass the bare name (`CONSIGNMENTS`), the fully-qualified path (`ANALYTICS.MARTS.CONSIGNMENTS`), or any suffix; the tool resolves all forms and prints the canonical key in its output.
+Discover the manifest key with `sl_discover` - pass the bare name (`CONSIGNMENTS`), the fully-qualified path (`ANALYTICS.MARTS.CONSIGNMENTS`), or any suffix; the tool resolves all forms and prints the canonical key in its output.
 
 ```yaml
 name: aav_consignments
 descriptions:
-  user: AAV consignments — filtered view of MARTS.CONSIGNMENTS for the auto-auction-vaulting channel.
+  user: AAV consignments - filtered view of MARTS.CONSIGNMENTS for the auto-auction-vaulting channel.
 source_type: sql
 sql: |
   SELECT CONSIGNED_ITEM_ID, CASH_ADV_AMOUNT, ALT_VALUE_COMBINED, my_derived_flag
@@ -131,7 +131,7 @@ columns:
   - { name: CONSIGNED_ITEM_ID }      # type/descriptions inherited from manifest
   - { name: CASH_ADV_AMOUNT }
   - { name: ALT_VALUE_COMBINED }
-  - { name: my_derived_flag, type: boolean, expr: "CASH_ADV_AMOUNT > 0", descriptions: { user: "Computed locally — has any cash advance." } }
+  - { name: my_derived_flag, type: boolean, expr: "CASH_ADV_AMOUNT > 0", descriptions: { user: "Computed locally - has any cash advance." } }
 measures:
   - name: total_cash_advance
     expr: sum(CASH_ADV_AMOUNT)
@@ -139,12 +139,12 @@ measures:
 
 Rules:
 
-- Inheritance fills only **blank** fields. If you set a `description` locally, it wins — useful when the base description is misleading in the filtered view.
+- Inheritance fills only **blank** fields. If you set a `description` locally, it wins - useful when the base description is misleading in the filtered view.
 - A column not in the manifest (a derived/aliased column, or one from a different table in a `JOIN`) needs its own `type` and `description` declared.
-- If `inherits_columns_from` doesn't resolve, the source still loads, but every column without a type triggers a validator error on the warehouse probe — `sl_discover` first to confirm the key.
-- Don't use `inherits_columns_from` for sources backed by `table:` (those should be overlays — see the rule against shadowing the manifest above).
+- If `inherits_columns_from` doesn't resolve, the source still loads, but every column without a type triggers a validator error on the warehouse probe - `sl_discover` first to confirm the key.
+- Don't use `inherits_columns_from` for sources backed by `table:` (those should be overlays - see the rule against shadowing the manifest above).
 
-## Refinement — replace, don't append
+## Refinement - replace, don't append
 
 When the user corrects a prior answer, the existing measure is wrong by the user's own standard. Replace it, don't add a parallel measure.
 
@@ -208,14 +208,14 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 
 ## Tool sequence
 
-1. `sl_discover` — see what source files exist.
-2. `sl_discover({ query: "<table-or-source-name>" })` — **REQUIRED before the first write on any name**. Shows columns/joins/grain from the manifest. If the call returns a schema, you MUST write an overlay, not a standalone. Skipping this is the #1 cause of accidentally shadowing the manifest.
-3. `sl_read_source({ connectionId, sourceName })` — read the raw YAML before editing.
+1. `sl_discover` - see what source files exist.
+2. `sl_discover({ query: "<table-or-source-name>" })` - **REQUIRED before the first write on any name**. Shows columns/joins/grain from the manifest. If the call returns a schema, you MUST write an overlay, not a standalone. Skipping this is the #1 cause of accidentally shadowing the manifest.
+3. `sl_read_source({ connectionId, sourceName })` - read the raw YAML before editing.
 4. For modifications: `sl_edit_source({ connectionId, sourceName, yaml_edits: [{ oldText, newText, reason }] })` with exact-string replacements. `oldText` must match exactly and be unique in the file.
 5. For new sources or full rewrites: `sl_write_source({ connectionId, sourceName, source })` with the full structured source definition.
 6. For join discovery: use `sql_execution({connectionName: "warehouse", sql: "SELECT count(*) FROM public.orders o JOIN public.customers c ON c.id = o.customer_id LIMIT 20"})` with the target warehouse connection name and dialect-correct table names to verify the join key exists in both tables and assess cardinality before declaring the join.
-7. Cross-reference knowledge: author the edge once on the **wiki** side via `sl_refs: [source_name]` in the page's front-matter. The reverse edge (wiki pages that cite an SL source) is derived automatically by the reconciler — do not add a `knowledge_refs:` field to SL YAMLs.
-8. `sl_validate` — run after writing or editing to surface schema issues, duplicate measure names, and cross-source validation errors. Read-only; the writes are already committed (the squash-at-end flow will collapse them into one commit).
+7. Cross-reference knowledge: author the edge once on the **wiki** side via `sl_refs: [source_name]` in the page's front-matter. The reverse edge (wiki pages that cite an SL source) is derived automatically by the reconciler - do not add a `knowledge_refs:` field to SL YAMLs.
+8. `sl_validate` - run after writing or editing to surface schema issues, duplicate measure names, and cross-source validation errors. Read-only; the writes are already committed (the squash-at-end flow will collapse them into one commit).
 
 ## Editing patterns
 
@@ -224,13 +224,13 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 - Do NOT modify existing measures or their descriptions unless the current turn explicitly corrects them.
 - During bundle/external ingest, include `rawPaths` on every `sl_write_source`/`sl_edit_source` call with only the raw files that directly support the SL action.
 
-## Worked example — additive overlay
+## Worked example - additive overlay
 
 Conversation:
 - User: "What was the average order value last quarter?"
 - Assistant fell back to SQL: `SELECT AVG(amount) FROM orders WHERE order_date >= ...`
 
-Existing index: `orders [measures=0, joins=0] — candidate for enrichment`.
+Existing index: `orders [measures=0, joins=0] - candidate for enrichment`.
 
 ```
 sl_discover()
@@ -253,9 +253,9 @@ sl_validate({ connectionId: "warehouse" })
   → clean
 ```
 
-The overlay only contains `name` and `measures` — no columns, grain, or table. Those are inherited from the manifest.
+The overlay only contains `name` and `measures` - no columns, grain, or table. Those are inherited from the manifest.
 
-## Worked example — refinement (replace)
+## Worked example - refinement (replace)
 
 Prior turn:
 - [user] "How many active users do we have per region?"
@@ -281,7 +281,7 @@ sl_validate({ connectionId: "warehouse" })
 
 If you only added a new measure, the old incorrect `active_count` would stay and future queries would keep answering the wrong question.
 
-## Worked example — new join
+## Worked example - new join
 
 Prior turn: user asked to correlate LTV with protocol count; assistant joined `fct_orders` with `fct_mau_multiprotocol` on `admin_user_id` in raw SQL.
 
@@ -315,6 +315,6 @@ Always verify joins with `sql_execution` before adding them.
 - A measure whose filter matches a segment MUST reference the segment via `segments: [name]`.
 - Extract repeated predicates into named segments.
 - Use computed dimensions for derived categories.
-- When the user corrects a prior answer, replace — don't append.
+- When the user corrects a prior answer, replace - don't append.
 - Always run `sl_validate` after writing to surface issues.
 - If nothing is worth capturing, respond without calling any SL write tool.

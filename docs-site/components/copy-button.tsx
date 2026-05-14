@@ -16,7 +16,7 @@ export function CopyButton({ text, className = "" }: Props) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Older browsers or denied permission — fail silently
+      // Older browsers or denied permission - fail silently
     }
   };
 

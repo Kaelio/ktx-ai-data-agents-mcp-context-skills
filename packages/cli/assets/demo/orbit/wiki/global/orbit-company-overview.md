@@ -15,14 +15,14 @@ refs:
 
 # Orbit Company Overview
 
-**Source:** Notion — Orbit Demo Home / Company Overview + Orbit Demo Home (root), last edited 2026-05-07
+**Source:** Notion - Orbit Demo Home / Company Overview + Orbit Demo Home (root), last edited 2026-05-07
 
 ## What Orbit Sells
 
 Orbit sells procurement workflow and spend-control software. The core value proposition: route purchase requests, collect approvals, onboard suppliers, and issue purchase orders without turning every exception into a status hunt.
 
 **Primary buyers:** Finance, Procurement, Business Operations.
-**Daily users:** department admins, office managers, IT leads, legal ops partners — anyone who has to get a vendor through the building.
+**Daily users:** department admins, office managers, IT leads, legal ops partners - anyone who has to get a vendor through the building.
 
 ## Product Workflow
 

@@ -21,7 +21,7 @@ tables:
 # Activation KPI Glossary
 
 **Owner team:** Growth
-**Source:** Notion — Orbit Demo Home / Data Team - Onboarding / Activation KPI Glossary, last edited 2026-05-07
+**Source:** Notion - Orbit Demo Home / Data Team - Onboarding / Activation KPI Glossary, last edited 2026-05-07
 
 Use this when a question is about signup-to-habit behavior. Orbit uses activation language across Growth, Product, and CS conversations.
 
@@ -41,7 +41,7 @@ A customer is **activated** when **all three** of the following happen **within 
 | 2. Email Verified | `customer.email_verified_at` is not null | `orbit_analytics.customer` |
 | 3. First Project | At least one row in `orbit_analytics.project` for the customer | `orbit_analytics.project` |
 | 4. Team Invite | At least one row in `orbit_analytics.invite` for the customer | `orbit_analytics.invite` |
-| 5. Activated | All of (2), (3), and (4) within 14 days of (1) | — |
+| 5. Activated | All of (2), (3), and (4) within 14 days of (1) | - |
 
 ## Conversion-Rate KPIs
 
@@ -51,7 +51,7 @@ A customer is **activated** when **all three** of the following happen **within 
 | **D14 Activation Rate** | `activated_customers_within_14_days / signups_in_cohort` |
 | **Time-to-Activate** | `median(activated_at - created_at)` in hours |
 
-Growth conversations typically use D7 and D14 Activation Rate. Product and CS may ask about individual funnel steps — confirm whether they mean the full activation definition or only one stage.
+Growth conversations typically use D7 and D14 Activation Rate. Product and CS may ask about individual funnel steps - confirm whether they mean the full activation definition or only one stage.
 
 ## Source Notes
 
