@@ -1361,7 +1361,7 @@ describe('setup databases step', () => {
     const testConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
       commandIo.stdout.write('Connection test passed: postgres-warehouse\n');
       commandIo.stdout.write('Driver: postgres\n');
-      commandIo.stdout.write('Tables: 2\n');
+      commandIo.stdout.write('Status: ok\n');
       return 0;
     });
     const scanConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {

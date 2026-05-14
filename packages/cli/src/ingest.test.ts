@@ -278,7 +278,7 @@ describe('runKtxIngest', () => {
         {
           databasesDeps: {
             testConnection: async (_projectDir, _connectionId, io) => {
-              io.stdout.write('Driver: postgres\nTables: 1\n');
+              io.stdout.write('Driver: postgres\nStatus: ok\n');
               return 0;
             },
             scanConnection: async () => 0,

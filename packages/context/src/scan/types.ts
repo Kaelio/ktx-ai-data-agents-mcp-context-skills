@@ -283,12 +283,18 @@ export interface KtxTableListEntry {
   kind: 'table' | 'view';
 }
 
+export interface KtxConnectorTestResult {
+  success: boolean;
+  error?: string;
+}
+
 export interface KtxScanConnector {
   id: string;
   driver: KtxConnectionDriver;
   capabilities: KtxConnectorCapabilities;
   eventStreamDiscovery?: KtxEventStreamDiscoveryPort;
   introspect(input: KtxScanInput, ctx: KtxScanContext): Promise<KtxSchemaSnapshot>;
+  testConnection?(): Promise<KtxConnectorTestResult>;
   sampleColumn?(input: KtxColumnSampleInput, ctx: KtxScanContext): Promise<KtxColumnSampleResult>;
   sampleTable?(input: KtxTableSampleInput, ctx: KtxScanContext): Promise<KtxTableSampleResult>;
   columnStats?(input: KtxColumnStatsInput, ctx: KtxScanContext): Promise<KtxColumnStatsResult | null>;

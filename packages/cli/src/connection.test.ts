@@ -1,9 +1,9 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { MetabaseRuntimeClient } from '@ktx/context/ingest';
+import type { LookerClient, MetabaseRuntimeClient, NotionClient } from '@ktx/context/ingest';
 import { initKtxProject, parseKtxProjectConfig, serializeKtxProjectConfig } from '@ktx/context/project';
-import type { KtxConnectionDriver, KtxScanConnector, KtxSchemaSnapshot } from '@ktx/context/scan';
+import type { KtxConnectionDriver, KtxScanConnector } from '@ktx/context/scan';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxConnection } from './connection.js';
 
@@ -28,28 +28,11 @@ function makeIo() {
   };
 }
 
-function snapshotFor(driver: KtxConnectionDriver, tableNames: string[]): KtxSchemaSnapshot {
-  return {
-    connectionId: 'warehouse',
-    driver,
-    extractedAt: '2026-04-29T00:00:00.000Z',
-    scope: {},
-    metadata: {},
-    tables: tableNames.map((name) => ({
-      catalog: null,
-      db: null,
-      name,
-      kind: 'table',
-      comment: null,
-      estimatedRows: null,
-      columns: [],
-      foreignKeys: [],
-    })),
-  };
-}
-
-function nativeConnector(driver: KtxConnectionDriver, tableNames: string[]) {
-  const introspect = vi.fn(async () => snapshotFor(driver, tableNames));
+function nativeConnector(
+  driver: KtxConnectionDriver,
+  testResult: { success: true } | { success: false; error: string } = { success: true },
+) {
+  const testConnection = vi.fn(async () => testResult);
   const cleanup = vi.fn(async () => undefined);
   const connector: KtxScanConnector = {
     id: `${driver}:warehouse`,
@@ -65,10 +48,13 @@ function nativeConnector(driver: KtxConnectionDriver, tableNames: string[]) {
       formalForeignKeys: false,
       estimatedRowCounts: false,
     },
-    introspect,
+    introspect: vi.fn(async () => {
+      throw new Error('introspect should not be called from connection test');
+    }),
+    testConnection,
     cleanup,
   };
-  return { connector, introspect, cleanup };
+  return { connector, testConnection, cleanup };
 }
 
 describe('runKtxConnection', () => {
@@ -119,13 +105,13 @@ describe('runKtxConnection', () => {
     expect(io.stdout()).not.toContain('ktx connection add');
   });
 
-  it('tests a configured connection through the native scan connector', async () => {
+  it('tests a native connection by calling connector.testConnection (not introspect)', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     await writeConnections(projectDir, {
       warehouse: { driver: 'sqlite' },
     });
-    const { connector, introspect, cleanup } = nativeConnector('sqlite', ['customers', 'orders']);
+    const { connector, testConnection, cleanup } = nativeConnector('sqlite');
     const createScanConnector = vi.fn(async () => connector);
     const io = makeIo();
 
@@ -136,20 +122,31 @@ describe('runKtxConnection', () => {
     ).resolves.toBe(0);
 
     expect(createScanConnector).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), 'warehouse');
-    expect(introspect).toHaveBeenCalledWith(
-      {
-        connectionId: 'warehouse',
-        driver: 'sqlite',
-        mode: 'structural',
-        dryRun: true,
-        detectRelationships: false,
-      },
-      { runId: 'connection-test-warehouse' },
-    );
+    expect(testConnection).toHaveBeenCalledTimes(1);
+    expect(connector.introspect).not.toHaveBeenCalled();
     expect(cleanup).toHaveBeenCalledTimes(1);
     expect(io.stdout()).toContain('Connection test passed: warehouse');
     expect(io.stdout()).toContain('Driver: sqlite');
-    expect(io.stdout()).toContain('Tables: 2');
+    expect(io.stdout()).toContain('Status: ok');
+  });
+
+  it('reports the connector error and still cleans up when native testConnection fails', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      warehouse: { driver: 'sqlite' },
+    });
+    const { connector, cleanup } = nativeConnector('sqlite', { success: false, error: 'database file is unreadable' });
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
+        createScanConnector: vi.fn(async () => connector),
+      }),
+    ).resolves.toBe(1);
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(io.stderr()).toContain('database file is unreadable');
   });
 
   it('tests a configured Metabase connection through the Metabase runtime client', async () => {
@@ -198,41 +195,239 @@ describe('runKtxConnection', () => {
     expect(io.stderr()).toBe('');
   });
 
-  it('cleans up the native scan connector when connection testing fails', async () => {
+  it('tests a Looker connection through the Looker client', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
     await writeConnections(projectDir, {
-      warehouse: { driver: 'sqlite' },
-    });
-    const cleanup = vi.fn(async () => undefined);
-    const connector: KtxScanConnector = {
-      id: 'sqlite:warehouse',
-      driver: 'sqlite',
-      capabilities: {
-        structuralIntrospection: true,
-        tableSampling: false,
-        columnSampling: false,
-        columnStats: false,
-        readOnlySql: false,
-        nestedAnalysis: false,
-        eventStreamDiscovery: false,
-        formalForeignKeys: false,
-        estimatedRowCounts: false,
+      bi_looker: {
+        driver: 'looker',
+        base_url: 'https://looker.example.test',
+        client_id: 'cid',
+        client_secret: 'csecret', // pragma: allowlist secret
       },
-      introspect: vi.fn(async () => {
-        throw new Error('database file is unreadable');
-      }),
-      cleanup,
-    };
+    });
+    const testConnection = vi.fn(async () => ({
+      success: true as const,
+      metadata: { displayName: 'Alice Analyst', userId: '42' },
+    }));
+    const createLookerClient = vi.fn(async (): Promise<Pick<LookerClient, 'testConnection'>> => ({ testConnection }));
     const io = makeIo();
 
     await expect(
-      runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
-        createScanConnector: vi.fn(async () => connector),
-      }),
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'bi_looker' }, io.io, { createLookerClient }),
+    ).resolves.toBe(0);
+
+    expect(createLookerClient).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), 'bi_looker');
+    expect(testConnection).toHaveBeenCalledTimes(1);
+    expect(io.stdout()).toContain('Connection test passed: bi_looker');
+    expect(io.stdout()).toContain('Driver: looker');
+    expect(io.stdout()).toContain('User: Alice Analyst');
+  });
+
+  it('falls back to userId when Looker metadata has no display name', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      bi_looker: {
+        driver: 'looker',
+        base_url: 'https://looker.example.test',
+        client_id: 'cid',
+        client_secret: 'csecret', // pragma: allowlist secret
+      },
+    });
+    const createLookerClient = vi.fn(async (): Promise<Pick<LookerClient, 'testConnection'>> => ({
+      testConnection: vi.fn(async () => ({
+        success: true as const,
+        metadata: { displayName: null, userId: '42' },
+      })),
+    }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'bi_looker' }, io.io, { createLookerClient }),
+    ).resolves.toBe(0);
+    expect(io.stdout()).toContain('User: 42');
+  });
+
+  it('reports the Looker error when testConnection fails', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      bi_looker: {
+        driver: 'looker',
+        base_url: 'https://looker.example.test',
+        client_id: 'cid',
+        client_secret: 'csecret', // pragma: allowlist secret
+      },
+    });
+    const createLookerClient = vi.fn(async (): Promise<Pick<LookerClient, 'testConnection'>> => ({
+      testConnection: vi.fn(async () => ({ success: false as const, error: 'invalid client_id' })),
+    }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'bi_looker' }, io.io, { createLookerClient }),
+    ).resolves.toBe(1);
+    expect(io.stderr()).toContain('Looker connection test failed: invalid client_id');
+  });
+
+  it('tests a Notion connection by retrieving the bot user', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      docs: {
+        driver: 'notion',
+        auth_token: 'secret_token', // pragma: allowlist secret
+        crawl_mode: 'all_accessible',
+      },
+    });
+    const retrieveBotUser = vi.fn(async () => ({ id: 'bot-1', name: 'Analytics Bot' }));
+    const createNotionClient = vi.fn(async (): Promise<Pick<NotionClient, 'retrieveBotUser'>> => ({ retrieveBotUser }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'docs' }, io.io, { createNotionClient }),
+    ).resolves.toBe(0);
+
+    expect(createNotionClient).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), 'docs');
+    expect(retrieveBotUser).toHaveBeenCalledTimes(1);
+    expect(io.stdout()).toContain('Connection test passed: docs');
+    expect(io.stdout()).toContain('Driver: notion');
+    expect(io.stdout()).toContain('Bot: Analytics Bot');
+  });
+
+  it('falls back to bot id when Notion bot has no name', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      docs: {
+        driver: 'notion',
+        auth_token: 'secret_token', // pragma: allowlist secret
+        crawl_mode: 'all_accessible',
+      },
+    });
+    const createNotionClient = vi.fn(async (): Promise<Pick<NotionClient, 'retrieveBotUser'>> => ({
+      retrieveBotUser: vi.fn(async () => ({ id: 'bot-1', name: null })),
+    }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'docs' }, io.io, { createNotionClient }),
+    ).resolves.toBe(0);
+    expect(io.stdout()).toContain('Bot: bot-1');
+  });
+
+  it('tests a dbt connection via testRepoConnection (success)', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    process.env.DBT_TOKEN = 'gh_token_abc'; // pragma: allowlist secret
+    await writeConnections(projectDir, {
+      'dbt-main': {
+        driver: 'dbt',
+        repo_url: 'https://github.com/example/dbt-project',
+        auth_token_ref: 'env:DBT_TOKEN',
+      },
+    });
+    const testRepoConnection = vi.fn(async () => ({ ok: true as const }));
+    const io = makeIo();
+
+    try {
+      await expect(
+        runKtxConnection({ command: 'test', projectDir, connectionId: 'dbt-main' }, io.io, { testRepoConnection }),
+      ).resolves.toBe(0);
+
+      expect(testRepoConnection).toHaveBeenCalledWith({
+        repoUrl: 'https://github.com/example/dbt-project',
+        authToken: 'gh_token_abc',
+      });
+      expect(io.stdout()).toContain('Connection test passed: dbt-main');
+      expect(io.stdout()).toContain('Driver: dbt');
+      expect(io.stdout()).toContain('Repo: https://github.com/example/dbt-project');
+    } finally {
+      delete process.env.DBT_TOKEN;
+    }
+  });
+
+  it('reports the git error when testRepoConnection fails for dbt', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      'dbt-main': {
+        driver: 'dbt',
+        repo_url: 'https://github.com/example/dbt-project',
+      },
+    });
+    const testRepoConnection = vi.fn(async () => ({ ok: false as const, error: 'fatal: auth failed' }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'dbt-main' }, io.io, { testRepoConnection }),
     ).resolves.toBe(1);
 
-    expect(cleanup).toHaveBeenCalledTimes(1);
-    expect(io.stderr()).toContain('database file is unreadable');
+    expect(testRepoConnection).toHaveBeenCalledWith({
+      repoUrl: 'https://github.com/example/dbt-project',
+      authToken: null,
+    });
+    expect(io.stderr()).toContain('dbt repository check failed: fatal: auth failed');
+  });
+
+  it('tests a LookML connection via testRepoConnection with camelCase repoUrl', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      lookml_main: {
+        driver: 'lookml',
+        repoUrl: 'https://github.com/example/lookml',
+      },
+    });
+    const testRepoConnection = vi.fn(async () => ({ ok: true as const }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'lookml_main' }, io.io, { testRepoConnection }),
+    ).resolves.toBe(0);
+    expect(testRepoConnection).toHaveBeenCalledWith({
+      repoUrl: 'https://github.com/example/lookml',
+      authToken: null,
+    });
+    expect(io.stdout()).toContain('Driver: lookml');
+    expect(io.stdout()).toContain('Repo: https://github.com/example/lookml');
+  });
+
+  it('tests a MetricFlow connection via the nested metricflow block', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      mf_main: {
+        driver: 'metricflow',
+        metricflow: { repoUrl: 'https://github.com/example/metricflow' },
+      },
+    });
+    const testRepoConnection = vi.fn(async () => ({ ok: true as const }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'mf_main' }, io.io, { testRepoConnection }),
+    ).resolves.toBe(0);
+    expect(testRepoConnection).toHaveBeenCalledWith({
+      repoUrl: 'https://github.com/example/metricflow',
+      authToken: null,
+    });
+    expect(io.stdout()).toContain('Driver: metricflow');
+  });
+
+  it('rejects unknown drivers with a helpful error', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await writeConnections(projectDir, {
+      mystery: { driver: 'duckdb' },
+    });
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'mystery' }, io.io),
+    ).resolves.toBe(1);
+    expect(io.stderr()).toContain('uses driver "duckdb"');
+    expect(io.stderr()).toContain('Supported:');
   });
 });

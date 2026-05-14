@@ -370,6 +370,7 @@ export type {
   KtxQueryResult,
   KtxReadOnlyQueryInput,
   KtxResolvedCredentialEnvelope,
+  KtxConnectorTestResult,
   KtxScanArtifactPaths,
   KtxScanConnector,
   KtxScanContext,

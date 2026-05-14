@@ -195,7 +195,7 @@ describe('standalone built ktx CLI smoke', () => {
     expectProjectStderr(connectionTest, projectDir);
     expect(connectionTest.stdout).toContain('Connection test passed: warehouse');
     expect(connectionTest.stdout).toContain('Driver: sqlite');
-    expect(connectionTest.stdout).toContain('Tables: 2');
+    expect(connectionTest.stdout).toContain('Status: ok');
 
     const ingest = await runBuiltCli(['ingest', 'warehouse', '--project-dir', projectDir, '--fast', '--no-input']);
     expectProjectStderr(ingest, projectDir);
