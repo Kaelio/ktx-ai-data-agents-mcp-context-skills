@@ -172,10 +172,12 @@ export class PageTriageService {
 
     try {
       const signals = await this.getSignals(args, document, warnings);
-      const classifierPrompt = await this.buildClassifierPrompt(document, signals);
+      const classifierSystem = await this.buildClassifierSystem();
+      const classifierUser = this.buildClassifierUser(document, signals);
       const modelText = await this.callModel({
         operationName: 'page-triage',
-        prompt: classifierPrompt,
+        system: classifierSystem,
+        prompt: classifierUser,
         sourceKey: args.sourceKey,
         jobId: args.jobId,
         unitKey: document.markdownRawPath,
@@ -242,10 +244,12 @@ export class PageTriageService {
       throw new Error('no indexed chunks available for light extraction');
     }
 
-    const prompt = await this.buildLightExtractionPrompt(document, chunks);
+    const system = await this.buildLightExtractionSystem();
+    const user = this.buildLightExtractionUser(document, chunks);
     const text = await this.callModel({
       operationName: 'light-extraction',
-      prompt,
+      system,
+      prompt: user,
       sourceKey: args.sourceKey,
       jobId: args.jobId,
       unitKey: document.markdownRawPath,
@@ -329,6 +333,7 @@ export class PageTriageService {
 
   private async callModel(params: {
     operationName: 'page-triage' | 'light-extraction';
+    system: string;
     prompt: string;
     sourceKey: string;
     jobId: string;
@@ -336,6 +341,7 @@ export class PageTriageService {
   }): Promise<string> {
     const model = this.deps.llmProvider.getModel('triage');
     const built = new KtxMessageBuilder(this.deps.llmProvider).wrapSimple({
+      system: params.system,
       messages: [{ role: 'user', content: params.prompt }],
       tools: {},
       model,
@@ -349,13 +355,12 @@ export class PageTriageService {
     return result.text;
   }
 
-  private async buildClassifierPrompt(
-    document: StagedTriageDocument,
-    signals: TriageSignals | undefined,
-  ): Promise<string> {
-    const base = await this.deps.promptService.loadPrompt('skills/page_triage_classifier');
+  private async buildClassifierSystem(): Promise<string> {
+    return this.deps.promptService.loadPrompt('skills/page_triage_classifier');
+  }
+
+  private buildClassifierUser(document: StagedTriageDocument, signals: TriageSignals | undefined): string {
     return [
-      base,
       '<page>',
       `externalId: ${document.externalId}`,
       `title: ${document.title}`,
@@ -371,14 +376,13 @@ export class PageTriageService {
     ].join('\n');
   }
 
-  private async buildLightExtractionPrompt(
-    document: StagedTriageDocument,
-    chunks: PageTriageEvidenceChunk[],
-  ): Promise<string> {
+  private async buildLightExtractionSystem(): Promise<string> {
     const base = await this.deps.promptService.loadPrompt('skills/light_extraction');
+    return `${base}\n\nMaximum candidates: ${this.deps.settings.lightExtractionMaxCandidates}`;
+  }
+
+  private buildLightExtractionUser(document: StagedTriageDocument, chunks: PageTriageEvidenceChunk[]): string {
     return [
-      base,
-      `Maximum candidates: ${this.deps.settings.lightExtractionMaxCandidates}`,
       '<page>',
       `externalId: ${document.externalId}`,
       `title: ${document.title}`,

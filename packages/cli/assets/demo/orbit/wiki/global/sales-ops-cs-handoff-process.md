@@ -14,7 +14,7 @@ refs:
 
 ## Sales Ops → Customer Success Implementation Handoff
 
-**Source:** Notion — People & Operating Norms, last edited 2026-05-07
+**Source:** Notion - People & Operating Norms, last edited 2026-05-07
 **Owner:** Sales Ops (sender), Customer Success (receiver)
 
 ---
@@ -27,7 +27,7 @@ Sales Ops must complete the handoff **before the first implementation call**. Cu
 
 | Field | Notes |
 |---|---|
-| Current plan | Starter / Growth / Enterprise — use canonical plan name |
+| Current plan | Starter / Growth / Enterprise - use canonical plan name |
 | Account segment | self_serve / commercial / enterprise (see `orbit-plan-segment-normalization`) |
 | Contract shape | Term, ARR, any discounts or custom terms |
 | Renewal contact | Named person on the customer side responsible for renewal |
@@ -38,7 +38,7 @@ Sales Ops must complete the handoff **before the first implementation call**. Cu
 
 - **Sales Ops** is responsible for populating and delivering the handoff before the first implementation call.
 - **Customer Success** is responsible for flagging missing fields to Sales Ops before the call, not during or after.
-- If a field is unknown at handoff time, Sales Ops must note it explicitly as "unknown — to be resolved by [date]" rather than leaving it blank.
+- If a field is unknown at handoff time, Sales Ops must note it explicitly as "unknown - to be resolved by [date]" rather than leaving it blank.
 
 ## Common Failure Mode
 
@@ -51,7 +51,7 @@ Handoffs that omit contract shape or renewal contact force CS to re-engage Sales
 - Enterprise accounts with parent/child account structures require extra care during handoff.
 - Small assumptions made during handoff in these accounts tend to produce large downstream problems (billing mismatches, approval routing failures, supplier onboarding gaps).
 - When the account has parent/child complexity, Sales Ops must explicitly flag it in the handoff and document the account hierarchy before the first implementation call.
-- CS should treat any undocumented parent/child relationship as a blocker — do not proceed with implementation setup until the structure is confirmed.
+- CS should treat any undocumented parent/child relationship as a blocker - do not proceed with implementation setup until the structure is confirmed.
 
 ---
 

@@ -1,4 +1,3 @@
-project: orbit-relationship-verification
 connections:
   orbit:
     driver: sqlite
@@ -13,14 +12,14 @@ ingest:
   adapters: []
 scan:
   enrichment:
-    backend: none
+    mode: none
   relationships:
     enabled: true
-    llm_proposals: false
-    validation_required_for_manifest: true
-    accept_threshold: 0.85
-    review_threshold: 0.55
-    max_llm_tables_per_batch: 40
-    max_candidates_per_column: 25
-    profile_sample_rows: 10000
-    validation_concurrency: 4
+    llmProposals: false
+    validationRequiredForManifest: true
+    acceptThreshold: 0.85
+    reviewThreshold: 0.55
+    maxLlmTablesPerBatch: 40
+    maxCandidatesPerColumn: 25
+    profileSampleRows: 10000
+    validationConcurrency: 4

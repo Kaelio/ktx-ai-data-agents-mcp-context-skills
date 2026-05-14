@@ -13,7 +13,7 @@ refs:
 
 ## Orbit Product Design Principles
 
-**Source:** Notion — Product & Customers, last edited 2026-05-07
+**Source:** Notion - Product & Customers, last edited 2026-05-07
 
 ---
 

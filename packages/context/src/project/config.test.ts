@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { buildDefaultKtxProjectConfig, parseKtxProjectConfig, serializeKtxProjectConfig } from './config.js';
+import {
+  buildDefaultKtxProjectConfig,
+  generateKtxProjectConfigJsonSchema,
+  parseKtxProjectConfig,
+  serializeKtxProjectConfig,
+  validateKtxProjectConfig,
+} from './config.js';
 
 describe('KTX project config', () => {
   it.each(['status', 'replay', 'run', 'watch'])('accepts former ingest subcommand name "%s" as a connection id', (connectionId) => {
     expect(
       parseKtxProjectConfig(`
-project: reserved-test
 connections:
   ${connectionId}:
     driver: postgres
@@ -18,8 +23,7 @@ connections:
   });
 
   it('builds the default standalone project config', () => {
-    expect(buildDefaultKtxProjectConfig('warehouse')).toEqual({
-      project: 'warehouse',
+    expect(buildDefaultKtxProjectConfig()).toEqual({
       connections: {},
       storage: {
         state: 'sqlite',
@@ -78,15 +82,14 @@ connections:
   });
 
   it('round-trips through YAML with stable defaults', () => {
-    const serialized = serializeKtxProjectConfig(buildDefaultKtxProjectConfig('warehouse'));
+    const serialized = serializeKtxProjectConfig(buildDefaultKtxProjectConfig());
     const parsed = parseKtxProjectConfig(serialized);
 
-    expect(serialized).toContain('project: warehouse');
+    expect(serialized).not.toContain('project:');
     expect(serialized).not.toContain('live-database');
     expect(serialized).toContain(
       '  embeddings:\n    backend: deterministic\n    model: deterministic\n    dimensions: 8',
     );
-    expect(parsed.project).toBe('warehouse');
     expect(parsed.ingest.adapters).toEqual([]);
     expect(parsed.ingest.embeddings).toEqual({
       backend: 'deterministic',
@@ -97,7 +100,6 @@ connections:
 
   it('parses and serializes setup warehouse metadata without setup progress', () => {
     const config = parseKtxProjectConfig(`
-project: revenue
 setup:
   database_connection_ids:
     - warehouse
@@ -120,7 +122,6 @@ connections:
 
   it('parses global direct Anthropic LLM config', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 llm:
   provider:
     backend: anthropic
@@ -160,7 +161,6 @@ ingest:
 
   it('parses global Vertex LLM config', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 llm:
   provider:
     backend: vertex
@@ -182,7 +182,6 @@ llm:
 
   it('parses gateway LLM, OpenAI scan embeddings, and sentence-transformers ingest embeddings', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 llm:
   provider:
     backend: gateway
@@ -226,7 +225,6 @@ scan:
 
   it('parses scan relationship settings', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 scan:
   relationships:
     enabled: false
@@ -267,7 +265,6 @@ scan:
 
   it('parses the scan relationship validation budget sentinel', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 scan:
   relationships:
     validationBudget: all
@@ -277,9 +274,8 @@ scan:
     expect(serializeKtxProjectConfig(config)).toContain('validationBudget: all');
   });
 
-  it('falls back to safe scan relationship defaults for invalid numeric settings', () => {
-    const config = parseKtxProjectConfig(`
-project: demo
+  it('rejects out-of-range scan relationship numeric settings', () => {
+    const yaml = `
 scan:
   relationships:
     acceptThreshold: 2
@@ -289,34 +285,37 @@ scan:
     profileSampleRows: 0
     validationConcurrency: 0
     validationBudget: 1.5
-`);
+`;
+    expect(() => parseKtxProjectConfig(yaml)).toThrow(/scan\.relationships\.acceptThreshold/);
 
-    expect(config.scan.relationships).toMatchObject({
-      acceptThreshold: 0.85,
-      reviewThreshold: 0.55,
-      maxLlmTablesPerBatch: 40,
-      maxCandidatesPerColumn: 25,
-      profileSampleRows: 10000,
-      validationConcurrency: 4,
-    });
-    expect(config.scan.relationships).not.toHaveProperty('validationBudget');
+    const validation = validateKtxProjectConfig(yaml);
+    expect(validation.ok).toBe(false);
+    const paths = validation.issues.map((issue) => issue.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        'scan.relationships.acceptThreshold',
+        'scan.relationships.reviewThreshold',
+        'scan.relationships.maxLlmTablesPerBatch',
+        'scan.relationships.maxCandidatesPerColumn',
+        'scan.relationships.profileSampleRows',
+        'scan.relationships.validationConcurrency',
+        'scan.relationships.validationBudget',
+      ]),
+    );
   });
 
-  it('falls back for invalid scan relationship validation budget strings', () => {
-    const config = parseKtxProjectConfig(`
-project: demo
+  it('rejects invalid scan relationship validation budget strings', () => {
+    const yaml = `
 scan:
   relationships:
     validationBudget: infinite
-`);
-
-    expect(config.scan.relationships).not.toHaveProperty('validationBudget');
+`;
+    expect(() => parseKtxProjectConfig(yaml)).toThrow(/scan\.relationships\.validationBudget/);
   });
 
   it('rejects unsupported local LLM and embedding fields', () => {
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 ingest:
   llm:
     backend: anthropic
@@ -325,7 +324,6 @@ ingest:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 scan:
   enrichment:
     backend: gateway
@@ -334,7 +332,6 @@ scan:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 scan:
   enrichment:
     mode: llm
@@ -345,7 +342,6 @@ scan:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 ingest:
   embeddings:
     provider: gateway
@@ -357,7 +353,6 @@ ingest:
   it('rejects gateway embedding configs', () => {
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 ingest:
   embeddings:
     backend: gateway
@@ -368,7 +363,6 @@ ingest:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 scan:
   enrichment:
     mode: llm
@@ -381,9 +375,9 @@ scan:
   });
 
   it('fills optional sections when a minimal config is loaded', () => {
-    const config = parseKtxProjectConfig('project: local\n');
+    const config = parseKtxProjectConfig('{}\n');
 
-    expect(config).toEqual(buildDefaultKtxProjectConfig('local'));
+    expect(config).toEqual(buildDefaultKtxProjectConfig());
     expect(config.ingest.embeddings).toEqual({
       backend: 'deterministic',
       model: 'deterministic',
@@ -395,7 +389,124 @@ scan:
     expect(() => parseKtxProjectConfig('- nope\n')).toThrow('ktx.yaml must contain a YAML object');
   });
 
-  it('rejects configs with a missing project name', () => {
-    expect(() => parseKtxProjectConfig('connections: {}\n')).toThrow('ktx.yaml field "project" is required');
+  it('accepts configs without a project name', () => {
+    expect(parseKtxProjectConfig('connections: {}\n')).toMatchObject({
+      connections: {},
+    });
+  });
+
+  it('rejects unknown top-level fields under strict mode', () => {
+    expect(() =>
+      parseKtxProjectConfig(`
+storrage:
+  state: sqlite
+`),
+    ).toThrow(/Unsupported storrage/);
+  });
+});
+
+describe('validateKtxProjectConfig', () => {
+  it('returns ok: true with no issues for a valid config', () => {
+    const result = validateKtxProjectConfig('connections: {}\n');
+    expect(result).toEqual({ ok: true, issues: [] });
+  });
+
+  it('collects every schema issue without throwing', () => {
+    const result = validateKtxProjectConfig(`
+storage:
+  search: not-a-real-backend
+scan:
+  relationships:
+    acceptThreshold: 1.7
+`);
+
+    expect(result.ok).toBe(false);
+    const paths = result.issues.map((issue) => issue.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        'storage.search',
+        'scan.relationships.acceptThreshold',
+      ]),
+    );
+  });
+
+  it('attaches migration hints for known deprecated keys', () => {
+    const result = validateKtxProjectConfig(`
+ingest:
+  llm:
+    backend: anthropic
+scan:
+  enrichment:
+    backend: none
+`);
+
+    expect(result.ok).toBe(false);
+    const findIssue = (path: string) => result.issues.find((issue) => issue.path === path);
+    expect(findIssue('ingest.llm')).toMatchObject({
+      message: 'Unsupported ingest.llm: use top-level llm.provider, llm.models, and ingest.workUnits',
+      fix: 'use top-level llm.provider, llm.models, and ingest.workUnits',
+    });
+    expect(findIssue('scan.enrichment.backend')).toMatchObject({
+      message: 'Unsupported scan.enrichment.backend: use scan.enrichment.mode',
+      fix: 'use scan.enrichment.mode',
+    });
+  });
+
+  it('reports YAML parse errors as a root-level issue', () => {
+    const result = validateKtxProjectConfig(': not valid yaml :\n');
+    expect(result.ok).toBe(false);
+    expect(result.issues[0]?.path).toBe('');
+    expect(result.issues[0]?.message).toMatch(/ktx\.yaml parse error/);
+  });
+
+  it('reports a YAML scalar root as a single issue', () => {
+    const result = validateKtxProjectConfig('- nope\n');
+    expect(result).toEqual({
+      ok: false,
+      issues: [{ path: '', message: 'ktx.yaml must contain a YAML object' }],
+    });
+  });
+});
+
+describe('generateKtxProjectConfigJsonSchema', () => {
+  const schema = generateKtxProjectConfigJsonSchema();
+
+  it('emits draft-07 metadata', () => {
+    expect(schema.$schema).toBe('http://json-schema.org/draft-07/schema#');
+    expect(schema.$id).toBe('https://ktx.dev/schemas/ktx-project-config.json');
+    expect(schema.title).toBe('ktx.yaml');
+    expect(schema.type).toBe('object');
+  });
+
+  it('exposes every top-level ktx.yaml section under properties', () => {
+    const properties = schema.properties as Record<string, unknown>;
+    expect(Object.keys(properties).sort()).toEqual(['agent', 'connections', 'ingest', 'llm', 'memory', 'scan', 'setup', 'storage'].sort());
+  });
+
+  it('does not require any top-level fields', () => {
+    expect(schema.required).toBeUndefined();
+  });
+
+  it('carries .describe() text on top-level fields', () => {
+    const properties = schema.properties as Record<string, { description?: string }>;
+    expect(properties.llm?.description).toMatch(/LLM/);
+    expect(properties.scan?.description).toMatch(/Schema-scan/);
+  });
+
+  it('propagates enum values through to nested fields', () => {
+    const llm = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).llm;
+    const provider = llm?.properties?.provider as { properties?: Record<string, unknown> };
+    const backend = provider?.properties?.backend as { enum?: readonly string[] };
+    expect(backend?.enum).toEqual(['none', 'anthropic', 'vertex', 'gateway']);
+
+    const storage = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).storage;
+    const state = storage?.properties?.state as { enum?: readonly string[] };
+    expect(state?.enum).toEqual(['sqlite', 'postgres']);
+  });
+
+  it('carries descriptions on deeply nested leaves', () => {
+    const scan = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).scan;
+    const relationships = scan?.properties?.relationships as { properties?: Record<string, { description?: string }> };
+    expect(relationships?.properties?.acceptThreshold?.description).toMatch(/auto-accepted/);
   });
 });

@@ -36,12 +36,12 @@ tables:
 
 ## Key measures (SL: `mart_revenue_daily`)
 
-- `total_gross_revenue_cents` — `sum(gross_revenue_cents)`
-- `total_credits_cents` — `sum(credits_cents)`
-- `total_refunds_cents` — `sum(refunds_cents)`
-- `total_net_revenue_cents` — `sum(net_revenue_cents)`
-- `net_revenue_millions` — `round(sum(net_revenue_cents) / 100000000.0, 3)`
-- `gross_revenue_millions` — `round(sum(gross_revenue_cents) / 100000000.0, 3)`
+- `total_gross_revenue_cents` - `sum(gross_revenue_cents)`
+- `total_credits_cents` - `sum(credits_cents)`
+- `total_refunds_cents` - `sum(refunds_cents)`
+- `total_net_revenue_cents` - `sum(net_revenue_cents)`
+- `net_revenue_millions` - `round(sum(net_revenue_cents) / 100000000.0, 3)`
+- `gross_revenue_millions` - `round(sum(gross_revenue_cents) / 100000000.0, 3)`
 
 ## Common query patterns
 

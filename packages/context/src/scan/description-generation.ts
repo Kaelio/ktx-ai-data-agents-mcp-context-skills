@@ -169,20 +169,43 @@ async function runWithConcurrency<TInput, TOutput>(
   return results;
 }
 
-export function appendKtxWordLimitInstruction(prompt: string, maxWords: number): string {
-  return `${prompt}\n\nPlease provide a concise description in ${maxWords} words or less.`;
+export interface KtxDescriptionPrompt {
+  system: string;
+  user: string;
 }
 
-export function buildKtxColumnDescriptionPrompt(input: KtxColumnDescriptionPromptInput): string {
+function wordLimitLine(maxWords: number): string {
+  return `Please provide a concise description in ${maxWords} words or less.`;
+}
+
+export function buildKtxColumnDescriptionPrompt(
+  input: KtxColumnDescriptionPromptInput & { maxWords?: number },
+): KtxDescriptionPrompt {
   const sampleValues = input.columnValues.slice(0, 5);
   const valuesStr = sampleValues
     .filter((value) => value !== null && value !== undefined)
     .map((value) => String(value))
     .join(', ');
 
-  let prompt = `Analyze this database column and provide a concise description:
+  const systemParts: string[] = [
+    `Analyze database columns and provide a concise description.
 
-<table_context> ${input.tableContext} </table_context>
+Provide a brief description of what the column contains without repeating the column name.
+Focus on the data's meaning and business purpose. Start directly with the content description.
+Example:
+"first names of individuals, likely employees or contacts" instead of "The column contains first names..."
+"Job titles or roles of individuals..." instead of "This column contains job titles..."`,
+  ];
+  if (input.dataSourceType === 'BIGQUERY' && input.supportsNestedAnalysis) {
+    systemParts.push(
+      'If the sampled values indicate nested/structured data (JSON, STRUCT, or ARRAY), describe its general business purpose and data organization.',
+    );
+  }
+  if (input.maxWords !== undefined) {
+    systemParts.push(wordLimitLine(input.maxWords));
+  }
+
+  let user = `<table_context> ${input.tableContext} </table_context>
 
 <column_name> ${input.columnName} </column_name>
 
@@ -191,37 +214,20 @@ export function buildKtxColumnDescriptionPrompt(input: KtxColumnDescriptionPromp
 
   const sources = descriptionSources(input.rawDescriptions);
   if (sources.length > 0) {
-    prompt += '\nExisting descriptions from other sources:\n';
+    user += '\nExisting descriptions from other sources:\n';
     for (const [source, text] of sources) {
-      prompt += `<${source}_documentation> ${text} </${source}_documentation>\n`;
+      user += `<${source}_documentation> ${text} </${source}_documentation>\n`;
     }
-    prompt +=
+    user +=
       '\nSynthesize a description that captures the most important information from all sources. Prioritize the sources as authoritative context.\n';
   }
 
-  prompt += `
-Provide a brief description of what this column contains without repeating the column name.
-Focus on the data's meaning and business purpose. Start directly with the content description.
-Example:
-"first names of individuals, likely employees or contacts" instead of "The column contains first names..."
-"Job titles or roles of individuals..." instead of "This column contains job titles..."
-`;
-
-  if (input.dataSourceType === 'BIGQUERY' && input.supportsNestedAnalysis) {
-    const hasNestedData = sampleValues.some((value) => {
-      const text = String(value);
-      return text.includes('nested') || text.includes('{') || text.includes('[');
-    });
-    if (hasNestedData) {
-      prompt +=
-        '\nNote: This column contains nested/structured data (JSON, STRUCT, or ARRAY) - describe its general business purpose and data organization.';
-    }
-  }
-
-  return prompt.trim();
+  return { system: systemParts.join('\n\n'), user: user.trim() };
 }
 
-export function buildKtxTableDescriptionPrompt(input: KtxTableDescriptionPromptInput): string {
+export function buildKtxTableDescriptionPrompt(
+  input: KtxTableDescriptionPromptInput & { maxWords?: number },
+): KtxDescriptionPrompt {
   const columnInfo: string[] = [];
   for (let index = 0; index < Math.min(input.sampleData.headers.length, 10); index += 1) {
     const header = input.sampleData.headers[index];
@@ -232,43 +238,45 @@ export function buildKtxTableDescriptionPrompt(input: KtxTableDescriptionPromptI
     columnInfo.push(`${header}: ${sampleValues.map((value) => String(value)).join(', ')}`);
   }
 
-  let prompt = `
-        Analyze this database table and provide a concise description:
+  const systemParts: string[] = [
+    `Analyze database tables and provide a concise description.
 
-        Table: ${input.tableName}
-        Columns and sample data: ${columnInfo.join(' | ')}
-        Total rows in sample: ${input.sampleData.rows.length}
-        Data source type: ${input.dataSourceType}
-        `;
+Provide a brief description of what the table represents and its business purpose.
+Do NOT list or describe individual columns or fields.
+Start directly with the content description without mentioning the table name.
+Focus on the data's meaning and business purpose.
+Example: "Information about healthcare professionals used for workforce management" instead of "The blahblah table contains information about healthcare professionals including their names, titles..."`,
+  ];
+  if (input.dataSourceType === 'BIGQUERY') {
+    systemParts.push(
+      "Note (don't include in the final answer): BigQuery tables may contain nested structures, arrays, or other complex data types.",
+    );
+  }
+  if (input.maxWords !== undefined) {
+    systemParts.push(wordLimitLine(input.maxWords));
+  }
+
+  let user = `Table: ${input.tableName}
+Columns and sample data: ${columnInfo.join(' | ')}
+Total rows in sample: ${input.sampleData.rows.length}
+Data source type: ${input.dataSourceType}`;
 
   const sources = descriptionSources(input.rawDescriptions);
   if (sources.length > 0) {
-    prompt += '\n        Existing descriptions from other sources:\n';
+    user += '\n\nExisting descriptions from other sources:\n';
     for (const [source, text] of sources) {
-      prompt += `        ${source}: ${text}\n`;
+      user += `${source}: ${text}\n`;
     }
-    prompt +=
-      '\n        Synthesize a description that captures the most important information from all sources. Prioritize the sources as authoritative context.\n';
+    user +=
+      '\nSynthesize a description that captures the most important information from all sources. Prioritize the sources as authoritative context.';
   }
 
-  if (input.dataSourceType === 'BIGQUERY') {
-    prompt +=
-      "\nNote (Don't include this note in the final answer.): This is a BigQuery table which may contain nested structures, arrays, or other complex data types.";
-  }
-
-  prompt += `
-
-        Provide a brief description of what this table represents and its business purpose.
-        Do NOT list or describe individual columns or fields.
-        Start directly with the content description without mentioning the table name.
-        Focus on the data's meaning and business purpose.
-        Example: "Information about healthcare professionals used for workforce management" instead of "The blahblah table contains information about healthcare professionals including their names, titles..."
-        `;
-
-  return prompt.trim();
+  return { system: systemParts.join('\n\n'), user: user.trim() };
 }
 
-export function buildKtxDataSourceDescriptionPrompt(input: KtxDataSourceDescriptionPromptInput): string {
+export function buildKtxDataSourceDescriptionPrompt(
+  input: KtxDataSourceDescriptionPromptInput & { maxWords?: number },
+): KtxDescriptionPrompt {
   const tablesText = input.tableSamples
     .map(
       ([tableName, sampleData]) =>
@@ -276,29 +284,29 @@ export function buildKtxDataSourceDescriptionPrompt(input: KtxDataSourceDescript
     )
     .join(' | ');
 
-  let prompt = `
-        Analyze this database and provide a concise description:
+  const systemParts: string[] = [
+    `Analyze databases and provide a concise description.
 
-        Tables: ${tablesText}
-        Total tables analyzed: ${input.tableSamples.length}
-        Data source type: ${input.dataSourceType}
-        `;
-
+Provide a direct, concise description of what the database represents and its business purpose.
+Do NOT start with phrases like "This database appears to represent" or "This BigQuery dataset".
+Start directly with the domain or business area description.
+Focus on the overall data model and its intended use.
+Example: "Healthcare-related database with a focus on patient management..." instead of "This database appears to represent a healthcare-related system..."`,
+  ];
   if (input.dataSourceType === 'BIGQUERY') {
-    prompt +=
-      "\nNote (Don't include this note in the final answer): This is a BigQuery dataset which may contain large-scale analytics data, nested structures, and complex data types.";
+    systemParts.push(
+      "Note (don't include in the final answer): BigQuery datasets may contain large-scale analytics data, nested structures, and complex data types.",
+    );
+  }
+  if (input.maxWords !== undefined) {
+    systemParts.push(wordLimitLine(input.maxWords));
   }
 
-  prompt += `
+  const user = `Tables: ${tablesText}
+Total tables analyzed: ${input.tableSamples.length}
+Data source type: ${input.dataSourceType}`;
 
-        Provide a direct, concise description of what this database represents and its business purpose.
-        Do NOT start with phrases like "This database appears to represent" or "This BigQuery dataset".
-        Start directly with the domain or business area description.
-        Focus on the overall data model and its intended use.
-        Example: "Healthcare-related database with a focus on patient management..." instead of "This database appears to represent a healthcare-related system..."
-        `;
-
-  return prompt.trim();
+  return { system: systemParts.join('\n\n'), user };
 }
 
 export class KtxDescriptionGenerator {
@@ -380,12 +388,9 @@ export class KtxDescriptionGenerator {
         sampleData,
         dataSourceType: input.dataSourceType,
         rawDescriptions: input.table.rawDescriptions,
+        maxWords: this.settings.tableMaxWords,
       });
-      const description = await this.generateAiDescription(
-        prompt,
-        this.settings.tableMaxWords,
-        'ktx-table-description',
-      );
+      const description = await this.generateAiDescription(prompt, 'ktx-table-description');
       if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
       }
@@ -445,12 +450,9 @@ export class KtxDescriptionGenerator {
       const prompt = buildKtxDataSourceDescriptionPrompt({
         tableSamples: accessibleSamples,
         dataSourceType: input.dataSourceType,
+        maxWords: this.settings.dataSourceMaxWords,
       });
-      const description = await this.generateAiDescription(
-        prompt,
-        this.settings.dataSourceMaxWords,
-        'ktx-data-source-description',
-      );
+      const description = await this.generateAiDescription(prompt, 'ktx-data-source-description');
       if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
       }
@@ -536,12 +538,9 @@ export class KtxDescriptionGenerator {
         dataSourceType: input.dataSourceType,
         supportsNestedAnalysis: input.supportsNestedAnalysis,
         rawDescriptions: column.rawDescriptions,
+        maxWords: this.settings.columnMaxWords,
       });
-      const description = await this.generateAiDescription(
-        prompt,
-        this.settings.columnMaxWords,
-        'ktx-column-description',
-      );
+      const description = await this.generateAiDescription(prompt, 'ktx-column-description');
 
       if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
@@ -564,12 +563,13 @@ export class KtxDescriptionGenerator {
     }
   }
 
-  private async generateAiDescription(prompt: string, maxWords: number, _operationName: string): Promise<string | null> {
+  private async generateAiDescription(prompt: KtxDescriptionPrompt, _operationName: string): Promise<string | null> {
     try {
       const text = await generateKtxText({
         llmProvider: this.llmProvider,
         role: 'candidateExtraction',
-        prompt: appendKtxWordLimitInstruction(prompt, maxWords),
+        system: prompt.system,
+        prompt: prompt.user,
         temperature: this.settings.temperature,
       });
       const description = text.trim();

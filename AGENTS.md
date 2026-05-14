@@ -234,14 +234,36 @@ use `PascalCase` without the suffix.
 
 ## Documentation and Specs
 
-- Keep public documentation in `README.md`, package READMEs, and example
-  READMEs unless the repository intentionally adds a public docs tree.
+- Keep public documentation in `README.md`, package READMEs, example READMEs,
+  and the `docs-site/` Fumadocs tree.
 - Prefer concrete commands, file paths, and acceptance criteria over broad
   prose.
 - When documenting examples, ensure referenced files and commands exist in the
   standalone KTX tree.
 - Remove or rewrite stale external app references unless the doc is explicitly
   historical.
+
+### Updating `docs-site/` After Code Changes
+
+Before finishing a task, decide whether `docs-site/content/docs/` needs an
+update. Update it when your change affects user-visible behavior, including:
+
+- New, renamed, or removed CLI commands, flags, or subcommands
+  (`docs-site/content/docs/cli-reference/`)
+- Changes to `ktx.yaml`, environment variables, or other configuration users
+  edit
+- New or changed connectors, integrations, or supported drivers
+  (`docs-site/content/docs/integrations/`)
+- Changes to setup, install, or getting-started flows
+  (`docs-site/content/docs/getting-started/`)
+- New concepts, agent capabilities, or workflows users should know about
+  (`docs-site/content/docs/concepts/`, `docs-site/content/docs/guides/`)
+
+Skip docs updates for purely internal refactors, test-only changes, or fixes
+that do not change user-facing behavior. When you do update docs, follow the
+`fumadocs-mdx-structure` skill and keep examples copy-pasteable. If a change
+warrants docs but you are out of scope, call it out in your final summary
+rather than silently skipping it.
 
 ## LLM and Prompt Development
 

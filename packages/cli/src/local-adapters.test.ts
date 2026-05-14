@@ -43,7 +43,6 @@ describe('CLI local ingest adapters', () => {
     await writeProject(
       tempDir,
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -74,7 +73,6 @@ describe('CLI local ingest adapters', () => {
     await writeProject(
       tempDir,
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -106,7 +104,6 @@ describe('CLI local ingest adapters', () => {
     await writeProject(
       tempDir,
       [
-        'project: warehouse',
         'connections:',
         '  bq:',
         '    driver: bigquery',
@@ -139,7 +136,6 @@ describe('CLI local ingest adapters', () => {
     await writeProject(
       tempDir,
       [
-        'project: warehouse',
         'connections:',
         '  sf:',
         '    driver: snowflake',
@@ -175,7 +171,6 @@ describe('CLI local ingest adapters', () => {
     await writeProject(
       tempDir,
       [
-        'project: warehouse',
         'connections:',
         '  bq:',
         '    driver: bigquery',

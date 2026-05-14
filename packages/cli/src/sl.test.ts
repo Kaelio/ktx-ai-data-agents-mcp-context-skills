@@ -44,7 +44,7 @@ async function seedSlSource(input: {
   sourceName?: string;
   yaml?: string;
 }): Promise<void> {
-  const project = await initKtxProject({ projectDir: input.projectDir, projectName: 'warehouse' });
+  const project = await initKtxProject({ projectDir: input.projectDir });
   await project.fileStore.writeFile(
     `semantic-layer/${input.connectionId ?? 'warehouse'}/${input.sourceName ?? 'orders'}.yaml`,
     input.yaml ?? ORDERS_YAML,
@@ -139,7 +139,7 @@ describe('runKtxSl', () => {
 
   it('fails validation when a table-backed source declares columns absent from a matching warehouse manifest', async () => {
     const projectDir = join(tempDir, 'project');
-    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir });
     await project.fileStore.writeFile(
       'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml',
       `tables:
@@ -189,7 +189,7 @@ joins: []
 
   it('runs sl query and prints SQL output', async () => {
     const projectDir = join(tempDir, 'project');
-    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir });
     project.config.connections.warehouse = { driver: 'postgres' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
@@ -246,7 +246,7 @@ joins: []
 
   it('runs sl query from a JSON query file', async () => {
     const projectDir = join(tempDir, 'project');
-    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir });
     project.config.connections.warehouse = { driver: 'postgres' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
@@ -313,7 +313,7 @@ joins: []
 
   it('creates default sl query compute through the managed runtime helper', async () => {
     const projectDir = join(tempDir, 'project');
-    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir });
     project.config.connections.warehouse = { driver: 'postgres' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
@@ -374,7 +374,7 @@ joins: []
 
   it('executes sl query through the injected query executor', async () => {
     const projectDir = join(tempDir, 'project');
-    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir });
     project.config.connections.warehouse = { driver: 'postgres', url: 'postgres://example/db' };
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
@@ -459,7 +459,7 @@ joins: []
 
   it('executes sl query against a local SQLite connection through the default executor', async () => {
     const projectDir = join(tempDir, 'project');
-    const project = await initKtxProject({ projectDir, projectName: 'warehouse' });
+    const project = await initKtxProject({ projectDir });
     const dbPath = join(projectDir, 'warehouse.db');
     const db = new Database(dbPath);
     db.exec(`
@@ -475,7 +475,6 @@ joins: []
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',

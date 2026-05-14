@@ -43,15 +43,15 @@ describe('standalone example docs', () => {
     assert.match(readme, /Accepted: 9/);
     assert.match(readme, /Review: 0/);
     assert.match(readme, /Rejected: 0/);
-    assert.match(config, /project: orbit-relationship-verification/);
+    assert.doesNotMatch(config, /^project:/m);
     assert.match(config, /orbit:/);
     assert.match(config, /driver: sqlite/);
     assert.match(
       config,
       /path: \.\.\/\.\.\/packages\/context\/test\/fixtures\/relationship-benchmarks\/orbit_style_product_no_declared_constraints\/data\.sqlite/,
     );
-    assert.match(config, /llm_proposals: false/);
-    assert.match(config, /validation_required_for_manifest: true/);
+    assert.match(config, /llmProposals: false/);
+    assert.match(config, /validationRequiredForManifest: true/);
   });
 
   it('documents the Postgres historic SQL smoke example', async () => {
@@ -181,8 +181,9 @@ describe('standalone example docs', () => {
 
     assert.match(connectionReference, /ktx connection list/);
     assert.match(connectionReference, /ktx connection test my-warehouse/);
+    assert.match(connectionReference, /ktx connection test --all/);
     assert.match(quickstart, /Connection test passed/);
-    assert.match(quickstart, /Driver: PostgreSQL .* Tables: 42/);
+    assert.match(quickstart, /Driver: PostgreSQL .* Status: ok/);
   });
 
   it('documents public npm and managed runtime usage', async () => {

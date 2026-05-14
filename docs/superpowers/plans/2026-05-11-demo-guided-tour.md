@@ -36,7 +36,7 @@ describe('renderDemoBanner', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm --filter @ktx/cli run test -- --testPathPattern setup-demo-tour`
-Expected: FAIL — module not found
+Expected: FAIL - module not found
 
 - [ ] **Step 3: Implement `renderDemoBanner` and `waitForDemoNavigation`**
 
@@ -58,7 +58,7 @@ function dim(text: string): string {
 export function renderDemoBanner(): string {
   const lines = [
     '',
-    `┌  ${cyan('Demo mode')} — data has been pre-processed and KTX context is already built.`,
+    `┌  ${cyan('Demo mode')} - data has been pre-processed and KTX context is already built.`,
     `│  This walkthrough illustrates the setup steps. Selections are pre-filled and read-only.`,
     '',
   ];
@@ -145,7 +145,7 @@ describe('renderDemoCardContent', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm --filter @ktx/cli run test -- --testPathPattern setup-demo-tour`
-Expected: FAIL — `renderDemoCardContent` not exported
+Expected: FAIL - `renderDemoCardContent` not exported
 
 - [ ] **Step 3: Implement `renderDemoCardContent` and `renderDemoCard`**
 
@@ -243,7 +243,7 @@ describe('DEMO_REPLAY_TARGETS', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm --filter @ktx/cli run test -- --testPathPattern setup-demo-tour`
-Expected: FAIL — exports not found
+Expected: FAIL - exports not found
 
 - [ ] **Step 3: Implement replay timeline and target definitions**
 
@@ -388,7 +388,7 @@ function renderDemoContextCompletionSummary(): string {
     '',
     `${cyan('★')} KTX finished ingesting demo data`,
     '',
-    '  Placeholder — final counts will come from pre-packaged demo results.',
+    '  Placeholder - final counts will come from pre-packaged demo results.',
     '',
     `  ${dim('Press Enter to continue, Escape to go back')}`,
     '',
@@ -459,7 +459,7 @@ describe('renderDemoCompletionSummary', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm --filter @ktx/cli run test -- --testPathPattern setup-demo-tour`
-Expected: FAIL — exports not found
+Expected: FAIL - exports not found
 
 - [ ] **Step 3: Implement transition and completion rendering**
 
@@ -469,7 +469,7 @@ Add to `setup-demo-tour.ts`:
 export function renderDemoAgentTransition(): string {
   const lines = [
     '',
-    `┌  Demo project is ready — let's connect your agent`,
+    `┌  Demo project is ready - let's connect your agent`,
     '│',
     '│  Your KTX context has been built with demo data.',
     '│  Select an agent to start using it.',
@@ -583,7 +583,7 @@ describe('runDemoTour', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm --filter @ktx/cli run test -- --testPathPattern setup-demo-tour`
-Expected: FAIL — `runDemoTour` not exported or wrong signature
+Expected: FAIL - `runDemoTour` not exported or wrong signature
 
 - [ ] **Step 3: Implement `runDemoTour`**
 
@@ -677,7 +677,7 @@ Expected: PASS
 - [ ] **Step 5: Run type-check**
 
 Run: `pnpm --filter @ktx/cli run type-check`
-Expected: PASS — all types align with existing interfaces
+Expected: PASS - all types align with existing interfaces
 
 - [ ] **Step 6: Commit**
 
@@ -736,7 +736,7 @@ async function runKtxSetupDemoFromEntryMenu(
 }
 ```
 
-- [ ] **Step 3: Update imports — remove unused `defaultDemoProjectDir` import if no longer needed elsewhere in setup.ts**
+- [ ] **Step 3: Update imports - remove unused `defaultDemoProjectDir` import if no longer needed elsewhere in setup.ts**
 
 Check if `defaultDemoProjectDir` is used elsewhere in `setup.ts`. If it's only used
 in `runKtxSetupDemoFromEntryMenu`, remove the import. If used elsewhere, keep it.
@@ -749,7 +749,7 @@ called from the entry menu path.
 - [ ] **Step 4: Run type-check and tests**
 
 Run: `pnpm --filter @ktx/cli run type-check && pnpm --filter @ktx/cli run test`
-Expected: PASS — existing tests continue to work, demo tour is now wired in
+Expected: PASS - existing tests continue to work, demo tour is now wired in
 
 - [ ] **Step 5: Commit**
 
@@ -807,7 +807,7 @@ git commit -m "fix(cli): demo tour adjustments from smoke test"
 
 When the user provides the real pre-packaged demo results, update these locations:
 
-1. **`renderDemoContextCompletionSummary()`** in `setup-demo-tour.ts` — replace placeholder text with actual counts (business areas, query definitions, knowledge pages) from the demo data
-2. **`buildDemoReplayTimeline()`** in `setup-demo-tour.ts` — adjust timing and progress details to match the real ingestion profile
-3. **`demo-assets.ts`** — update `REQUIRED_SEEDED_ASSET_PATHS` and `demoConfig()` if the demo dataset changes from SQLite/Orbit to Postgres/dbt/Metabase/Notion
-4. **Pre-packaged asset files** in `packages/cli/assets/demo/` — replace with the new demo dataset
+1. **`renderDemoContextCompletionSummary()`** in `setup-demo-tour.ts` - replace placeholder text with actual counts (business areas, query definitions, knowledge pages) from the demo data
+2. **`buildDemoReplayTimeline()`** in `setup-demo-tour.ts` - adjust timing and progress details to match the real ingestion profile
+3. **`demo-assets.ts`** - update `REQUIRED_SEEDED_ASSET_PATHS` and `demoConfig()` if the demo dataset changes from SQLite/Orbit to Postgres/dbt/Metabase/Notion
+4. **Pre-packaged asset files** in `packages/cli/assets/demo/` - replace with the new demo dataset

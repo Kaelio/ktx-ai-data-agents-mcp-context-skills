@@ -11,7 +11,7 @@ describe('WarehouseCatalogService', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-warehouse-catalog-'));
-    project = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
+    project = await initKtxProject({ projectDir: join(tempDir, 'project') });
   });
 
   afterEach(async () => {

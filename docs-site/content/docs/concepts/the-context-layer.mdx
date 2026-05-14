@@ -5,7 +5,7 @@ description: What a context layer is, why agents need one, and how KTX compares 
 
 ## The problem
 
-Give an agent access to your database and it will generate SQL. It might even produce a decent chart. But ask it a real analytics question — "what's our net revenue trend by segment?" — and things fall apart.
+Give an agent access to your database and it will generate SQL. It might even produce a decent chart. But ask it a real analytics question - "what's our net revenue trend by segment?" - and things fall apart.
 
 The agent doesn't know that `orders.amount` includes refunds and needs a status filter. It doesn't know that `customers` should join to `orders` on `customer_id`, not `id`. It doesn't know that your team stopped using `legacy_segments` six months ago, or that "enterprise" means contracts over $100k, not just big logos. It sees column names and types. It doesn't see your business.
 
@@ -17,15 +17,15 @@ Analytics engineers already know this pain. It's the same reason you write dbt t
 
 The industry has moved through three distinct approaches to getting AI and data to work together.
 
-**Wave one: database access.** Connect an LLM to a database, let it generate SQL. This works for simple lookups — "how many orders last week?" — but breaks on anything that requires business knowledge. The agent guesses at joins, invents metrics, and hallucinates table relationships. Every query is a coin flip.
+**Wave one: database access.** Connect an LLM to a database, let it generate SQL. This works for simple lookups - "how many orders last week?" - but breaks on anything that requires business knowledge. The agent guesses at joins, invents metrics, and hallucinates table relationships. Every query is a coin flip.
 
-**Wave two: semantic layers and text-to-SQL.** Add structure. Define metrics in MetricFlow or Cube, expose schemas, build text-to-SQL pipelines. This is better — the agent knows that `revenue` means `sum(amount) where status != 'refunded'` — but building and maintaining that structure by hand is manual, time-consuming, and still limited. Semantic layers define what to calculate, not why, when, or how to interpret the result. The agent can compute net revenue but doesn't know about the February refund anomaly, the segment reclassification, or the fact that `enterprise` changed definition last quarter.
+**Wave two: semantic layers and text-to-SQL.** Add structure. Define metrics in MetricFlow or Cube, expose schemas, build text-to-SQL pipelines. This is better - the agent knows that `revenue` means `sum(amount) where status != 'refunded'` - but building and maintaining that structure by hand is manual, time-consuming, and still limited. Semantic layers define what to calculate, not why, when, or how to interpret the result. The agent can compute net revenue but doesn't know about the February refund anomaly, the segment reclassification, or the fact that `enterprise` changed definition last quarter.
 
-**Wave three: agentic context.** AI is no longer just answering questions — it's generating dashboards, writing semantic definitions, proposing dbt models, creating tests and documentation. For that to work, agents need more than metric definitions. They need the full picture: business rules, known data quality issues, relationship maps, historical context, and the institutional knowledge that lives in your team's heads. They need a context layer.
+**Wave three: agentic context.** AI is no longer just answering questions - it's generating dashboards, writing semantic definitions, proposing dbt models, creating tests and documentation. For that to work, agents need more than metric definitions. They need the full picture: business rules, known data quality issues, relationship maps, historical context, and the institutional knowledge that lives in your team's heads. They need a context layer.
 
 ## What a context layer is
 
-A context layer is the infrastructure that gives agents the business knowledge they need to produce correct analytics artifacts. It includes a semantic layer — that's a critical component — but it's not the whole thing.
+A context layer is the infrastructure that gives agents the business knowledge they need to produce correct analytics artifacts. It includes a semantic layer - that's a critical component - but it's not the whole thing.
 
 KTX organizes context into four pillars:
 
@@ -67,7 +67,7 @@ measures:
     expr: count(id)
 ```
 
-**Wiki pages** are Markdown documents that capture business definitions, rules, and operating context — the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
+**Wiki pages** are Markdown documents that capture business definitions, rules, and operating context - the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
 
 ```markdown
 ---
@@ -91,9 +91,9 @@ canonical revenue reporting.
 
 **Scan artifacts** are the raw output of KTX's database scanner: table and column metadata, inferred foreign key relationships (even without declared constraints), column statistics, and enrichment reports. They form the foundation that semantic sources are built on.
 
-**Provenance** is the record of how context was created and changed. Every ingestion session records a full transcript — which adapter ran, what the LLM decided, which sources were created or updated, and why. This is what makes the system auditable: you can trace any semantic source back to the ingestion decision that created it.
+**Provenance** is the record of how context was created and changed. Every ingestion session records a full transcript - which adapter ran, what the LLM decided, which sources were created or updated, and why. This is what makes the system auditable: you can trace any semantic source back to the ingestion decision that created it.
 
-Together, these four pillars give agents enough context to produce analytics artifacts that match what your team would produce — not just syntactically valid SQL, but the right query for the question.
+Together, these four pillars give agents enough context to produce analytics artifacts that match what your team would produce - not just syntactically valid SQL, but the right query for the question.
 
 ## How KTX compares
 
@@ -115,7 +115,7 @@ If you do not have a semantic layer, KTX can build an agent-native one from your
 
 ## The plain-files philosophy
 
-A KTX project is a directory of plain files. No server to run, no database to manage, no proprietary store to back up. Everything is YAML, Markdown, and SQLite — formats you can read, diff, and version-control with tools you already use.
+A KTX project is a directory of plain files. No server to run, no database to manage, no proprietary store to back up. Everything is YAML, Markdown, and SQLite - formats you can read, diff, and version-control with tools you already use.
 
 ```
 my-project/
@@ -140,7 +140,7 @@ my-project/
     └── cache/                    # Runtime cache (git-ignored)
 ```
 
-Semantic sources and wiki pages are committed to git. The SQLite database holds ephemeral state — schema ingest results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
+Semantic sources and wiki pages are committed to git. The SQLite database holds ephemeral state - schema ingest results, embedding indexes, session logs - and is git-ignored. If you delete it, KTX rebuilds it on the next run.
 
 This means your analytics context travels with your code. You can fork it, branch it, review it in a PR, and merge it with the same tools you use for dbt models. There's no sync problem between a remote server and your local state. There's no migration to run. The files are the source of truth.
 

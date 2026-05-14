@@ -13,7 +13,6 @@ describe('readLocalScanStructuralSnapshot', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-structural-artifacts-'));
     project = await initKtxProject({
       projectDir: join(tempDir, 'project'),
-      projectName: 'warehouse',
     });
   });
 

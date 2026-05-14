@@ -12,7 +12,7 @@ refs:
 
 ## How We Work
 
-**Source:** Notion — Orbit Demo Home / How We Work, last edited 2026-05-07
+**Source:** Notion - Orbit Demo Home / How We Work, last edited 2026-05-07
 
 ---
 
@@ -30,7 +30,7 @@ refs:
 |---|---|
 | **Monday** | Commitments and dependency checks |
 | **Tuesday – Thursday** | Customer calls, product work, implementation, and building |
-| **Friday** | Closing loops — review what shipped, what slipped, and write down any decisions |
+| **Friday** | Closing loops - review what shipped, what slipped, and write down any decisions |
 
 Use this rhythm when scheduling work, meetings, or reviews. Do not schedule decision-making meetings on Fridays; use Friday to record decisions already made.
 
@@ -64,11 +64,11 @@ These are explicitly codified rules Orbit has identified as recurring failure mo
 - **Escalations are coordination tools, not indicators of individual failure.** Escalating is the correct behavior when a problem exceeds the current team's ability to resolve it alone.
 - When escalating, the person escalating must:
   1. Bring in the right people (those with authority or context to unblock).
-  2. Summarize current state clearly — what has been tried, what is blocked, and why.
+  2. Summarize current state clearly - what has been tried, what is blocked, and why.
   3. Name the customer impact explicitly.
   4. Keep updates moving until the risk is resolved or a workaround is established.
 - Escalations that stall because no one owns the next update are a process failure, not a customer failure.
-- An escalation is closed when the risk is resolved or a documented workaround is in place — not when the immediate noise stops.
+- An escalation is closed when the risk is resolved or a documented workaround is in place - not when the immediate noise stops.
 
 ---
 

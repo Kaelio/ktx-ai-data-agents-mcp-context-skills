@@ -32,8 +32,8 @@ tables:
 
 ## Key measures (SL: `mart_procurement_activity`)
 
-- `total_active_requesters` — `sum(active_requesters)`
-- `active_requesters_200k_threshold` — `sum(active_requesters)` where `contract_arr_threshold_cents = 20000000`
+- `total_active_requesters` - `sum(active_requesters)`
+- `active_requesters_200k_threshold` - `sum(active_requesters)` where `contract_arr_threshold_cents = 20000000`
 
 ## Common query patterns
 
@@ -44,4 +44,4 @@ tables:
 
 - `active_requesters` counts non-internal, non-test requesters on large active contracts. See [orbit-procurement-qualifying-actions](orbit-procurement-qualifying-actions).
 - The standard threshold is `contract_arr_threshold_cents = 20000000` ($200k ARR).
-- Always filter by `contract_arr_threshold_cents` — the table contains rows for multiple threshold values.
+- Always filter by `contract_arr_threshold_cents` - the table contains rows for multiple threshold values.

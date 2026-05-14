@@ -13,7 +13,7 @@ sl_refs:
   - mart_nrr_quarterly
 ---
 
-# NRR — Discount Expiration Treatment
+# NRR - Discount Expiration Treatment
 
 **Governed metric key:** `net_revenue_retention`
 **Owner team:** analytics

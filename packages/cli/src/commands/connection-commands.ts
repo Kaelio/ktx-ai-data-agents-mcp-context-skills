@@ -33,12 +33,24 @@ export function registerConnectionCommands(program: Command, context: KtxCliComm
   connection
     .command('test')
     .description('Test a configured connection')
-    .argument('<connectionId>', 'KTX connection id')
-    .action(async (connectionId: string, _options: unknown, command) => {
+    .argument('[connectionId]', 'KTX connection id (omit when --all is set)')
+    .option('--all', 'Test every configured connection and print a summary list')
+    .action(async (connectionId: string | undefined, options: { all?: boolean }, command) => {
+      const all = options.all === true;
+      if (all && connectionId !== undefined) {
+        command.error('error: --all cannot be combined with a connection id argument');
+      }
+      if (!all && connectionId === undefined) {
+        command.error('error: missing required argument <connectionId> (or pass --all)');
+      }
+      if (all) {
+        await runConnectionArgs(context, { command: 'test-all', projectDir: resolveCommandProjectDir(command) });
+        return;
+      }
       await runConnectionArgs(context, {
         command: 'test',
         projectDir: resolveCommandProjectDir(command),
-        connectionId,
+        connectionId: connectionId as string,
       });
     });
 }

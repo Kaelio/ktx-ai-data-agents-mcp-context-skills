@@ -2,6 +2,7 @@
   "title": "CLI Reference",
   "defaultOpen": true,
   "pages": [
+    "index",
     "ktx-setup",
     "ktx-connection",
     "ktx-ingest",

@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-13
 **Author:** Andrey Avtomonov
-**Status:** Design — pending implementation plan
+**Status:** Design - pending implementation plan
 
 ## Background
 

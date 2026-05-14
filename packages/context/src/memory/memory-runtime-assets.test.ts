@@ -166,17 +166,17 @@ describe('memory runtime assets', () => {
     }
   });
 
-  it('ships only the KTX connectionName sql_execution call shape in writer guidance', async () => {
+  it('ships only the KTX connectionId sql_execution call shape in writer guidance', async () => {
     const shared = await readFile(join(skillsDir, '_shared', 'identifier-verification.md'), 'utf-8');
     const bodies = [{ name: '_shared/identifier-verification.md', body: shared }];
 
-    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT DISTINCT');
-    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT 1 FROM');
+    expect(shared).toContain('sql_execution({connectionId, sql: "SELECT DISTINCT');
+    expect(shared).toContain('sql_execution({connectionId, sql: "SELECT 1 FROM');
 
     for (const skillName of verificationWriterSkills) {
       const body = await readFile(join(skillsDir, skillName, 'SKILL.md'), 'utf-8');
       bodies.push({ name: `${skillName}/SKILL.md`, body });
-      expect(body).toContain('sql_execution({connectionName');
+      expect(body).toContain('sql_execution({connectionId');
       expect(body).not.toContain('sql_execution({ sql');
       expect(body).not.toContain('session shape');
       expect(body).not.toContain('connection is already pinned by the ingest session');
@@ -186,8 +186,8 @@ describe('memory runtime assets', () => {
       const calls = sqlExecutionCallBlocks(body);
       expect(calls.length, `${name} should contain sql_execution guidance`).toBeGreaterThan(0);
       expect(
-        calls.filter((call) => !call.includes('connectionName')),
-        `${name} has sql_execution calls without connectionName`,
+        calls.filter((call) => !call.includes('connectionId')),
+        `${name} has sql_execution calls without connectionId`,
       ).toEqual([]);
       expect(body, `${name} has a connectionless multiline sql_execution call`).not.toMatch(
         /sql_execution\(\{\s*sql\s*:/,

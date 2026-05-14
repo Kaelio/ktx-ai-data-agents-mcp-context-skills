@@ -11,7 +11,7 @@ describe('createKtxDictionarySearchService', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-dictionary-search-'));
-    project = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
+    project = await initKtxProject({ projectDir: join(tempDir, 'project') });
     project.config.connections.warehouse = { driver: 'postgres', url: 'env:DATABASE_URL' };
     project.config.connections.billing = { driver: 'postgres', url: 'env:BILLING_DATABASE_URL' };
   });

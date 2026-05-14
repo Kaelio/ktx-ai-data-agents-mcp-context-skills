@@ -13,7 +13,7 @@ sl_refs:
   - mart_account_segments
 ---
 
-# ARR — Contract-First Definition
+# ARR - Contract-First Definition
 
 **Governed metric key:** `arr`
 **Owner team:** finance
@@ -30,10 +30,10 @@ The dbt test on `mart_arr_daily.arr_cents` asserts the value equals **1,874,200,
 
 ## Intermediate model
 
-`int_active_contract_arr` — active contract ARR as of 2026-03-31 (grain: `contract_id`).
+`int_active_contract_arr` - active contract ARR as of 2026-03-31 (grain: `contract_id`).
 
 ## Related
 
-- `stg_contracts` — contract records (status: draft, active, cancelled, expired)
-- `stg_subscriptions` — fallback ARR source (status: active, cancelled, past_due, trialing)
-- `mart_arr_daily` — board-prep daily ARR mart
+- `stg_contracts` - contract records (status: draft, active, cancelled, expired)
+- `stg_subscriptions` - fallback ARR source (status: active, cancelled, past_due, trialing)
+- `mart_arr_daily` - board-prep daily ARR mart

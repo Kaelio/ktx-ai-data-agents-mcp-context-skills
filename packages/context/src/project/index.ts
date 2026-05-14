@@ -1,4 +1,6 @@
 export type {
+  KtxConfigIssue,
+  KtxConfigValidation,
   KtxProjectConfig,
   KtxProjectConnectionConfig,
   KtxProjectEmbeddingConfig,
@@ -8,8 +10,10 @@ export type {
 } from './config.js';
 export {
   buildDefaultKtxProjectConfig,
+  generateKtxProjectConfigJsonSchema,
   parseKtxProjectConfig,
   serializeKtxProjectConfig,
+  validateKtxProjectConfig,
 } from './config.js';
 export type { LocalGitFileStoreDeps } from './local-git-file-store.js';
 export { LocalGitFileStore } from './local-git-file-store.js';

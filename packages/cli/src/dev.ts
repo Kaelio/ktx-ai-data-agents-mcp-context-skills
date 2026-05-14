@@ -25,19 +25,17 @@ export function registerDevCommands(program: Command, context: KtxCliCommandCont
     .command('init')
     .description('Initialize a Git-backed KTX project directory for maintenance scripts')
     .argument('[directory]', 'Project directory')
-    .option('--name <name>', 'Project name written to ktx.yaml')
     .option('--force', 'Rewrite ktx.yaml and scaffold files in an existing project', false)
     .action(
       async (
         projectDir: string | undefined,
-        commandOptions: { name?: string; force?: boolean },
+        commandOptions: { force?: boolean },
         command: CommandWithGlobalOptions,
       ) => {
         context.setExitCode(
           await context.runInit(
             {
               projectDir: projectDir ? resolve(projectDir) : resolveCommandProjectDir(command),
-              ...(commandOptions.name ? { projectName: commandOptions.name } : {}),
               force: commandOptions.force === true,
             },
             context.io,
@@ -45,6 +43,24 @@ export function registerDevCommands(program: Command, context: KtxCliCommandCont
         );
       },
     );
+
+  dev
+    .command('schema')
+    .description('Print a JSON Schema describing ktx.yaml (for editors and LLM agents)')
+    .option('--output <file>', 'Write the schema to a file instead of stdout')
+    .action(async (options: { output?: string }) => {
+      const { generateKtxProjectConfigJsonSchema } = await import('@ktx/context/project');
+      const json = `${JSON.stringify(generateKtxProjectConfigJsonSchema(), null, 2)}\n`;
+      if (options.output) {
+        const { writeFile } = await import('node:fs/promises');
+        const target = resolve(options.output);
+        await writeFile(target, json, 'utf8');
+        context.io.stdout.write(`Wrote ${target}\n`);
+      } else {
+        context.io.stdout.write(json);
+      }
+      context.setExitCode(0);
+    });
 
   registerRuntimeCommands(dev, context);
 }

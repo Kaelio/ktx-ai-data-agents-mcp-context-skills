@@ -12,7 +12,7 @@ describe('createKtxDiscoverDataService', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-discover-data-'));
-    project = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
+    project = await initKtxProject({ projectDir: join(tempDir, 'project') });
     project.config.connections.warehouse = { driver: 'postgres', url: 'env:DATABASE_URL' };
     project.config.connections.billing = { driver: 'postgres', url: 'env:BILLING_DATABASE_URL' };
   });

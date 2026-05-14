@@ -19,11 +19,10 @@ async function writeProjectFile(projectDir: string, relativePath: string, conten
 }
 
 async function createProject(projectDir: string): Promise<void> {
-  await initKtxProject({ projectDir, projectName: 'warehouse' });
+  await initKtxProject({ projectDir });
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: sqlite',

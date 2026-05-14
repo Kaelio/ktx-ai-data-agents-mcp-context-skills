@@ -154,9 +154,9 @@ For multiple schemas:
 | Primary keys | Yes | Via table constraints |
 | Foreign keys | No | Not available in Snowflake |
 | Row count estimates | Yes | From `INFORMATION_SCHEMA.TABLES.ROW_COUNT` |
-| Column statistics | No | — |
+| Column statistics | No | - |
 | Query history | Yes | Via `SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY` when enabled |
-| Table sampling | Yes | — |
+| Table sampling | Yes | - |
 
 ### Query history
 
@@ -228,12 +228,12 @@ mapping metadata. The BigQuery connector still authenticates with the
 | Feature | Supported | Notes |
 |---------|-----------|-------|
 | Tables & views | Yes | Including materialized views and external tables |
-| Primary keys | No | — |
+| Primary keys | No | - |
 | Foreign keys | No | Not available in BigQuery |
 | Row count estimates | Yes | From table metadata |
-| Column statistics | No | — |
+| Column statistics | No | - |
 | Query history | Yes | Via region-scoped `INFORMATION_SCHEMA.JOBS_BY_PROJECT` when enabled |
-| Table sampling | Yes | — |
+| Table sampling | Yes | - |
 
 ### Query history
 
@@ -307,9 +307,9 @@ connections:
 | Primary keys | Yes | Via `system.columns` |
 | Foreign keys | No | Not a ClickHouse concept |
 | Row count estimates | Yes | Via `system.parts` aggregation |
-| Column statistics | No | — |
-| Query history | No | — |
-| Table sampling | Yes | — |
+| Column statistics | No | - |
+| Query history | No | - |
+| Table sampling | Yes | - |
 
 ### Dialect notes
 
@@ -364,8 +364,8 @@ connections:
 | Primary keys | Yes | Via `KEY_COLUMN_USAGE` |
 | Foreign keys | Yes | Via `REFERENTIAL_CONSTRAINTS` |
 | Row count estimates | Yes | From `TABLE_ROWS` (InnoDB estimate) |
-| Column statistics | No | — |
-| Query history | No | — |
+| Column statistics | No | - |
+| Query history | No | - |
 | Table sampling | Yes | Uses `RAND()` filter |
 
 ### Dialect notes
@@ -430,10 +430,10 @@ For multiple schemas:
 | Primary keys | Yes | Via `TABLE_CONSTRAINTS` and `KEY_COLUMN_USAGE` |
 | Foreign keys | Yes | Via `REFERENTIAL_CONSTRAINTS` |
 | Row count estimates | Yes | Via `sys.dm_db_partition_stats` |
-| Column statistics | No | — |
-| Query history | No | — |
-| Table sampling | Yes | — |
-| Nested analysis | No | — |
+| Column statistics | No | - |
+| Query history | No | - |
+| Table sampling | Yes | - |
+| Nested analysis | No | - |
 
 ### Dialect notes
 
@@ -478,7 +478,7 @@ url: sqlite:///path/to/db.sqlite
 
 ### Authentication
 
-No authentication required — SQLite is file-based. The file must be readable by the process running KTX.
+No authentication required - SQLite is file-based. The file must be readable by the process running KTX.
 
 ### Features
 
@@ -488,10 +488,10 @@ No authentication required — SQLite is file-based. The file must be readable b
 | Primary keys | Yes | Via `PRAGMA table_info()` |
 | Foreign keys | Yes | Via `PRAGMA foreign_key_list()` (requires `PRAGMA foreign_keys = ON`) |
 | Row count estimates | Yes | Exact count via `SELECT COUNT(*)` |
-| Column statistics | No | — |
-| Query history | No | — |
-| Table sampling | Yes | — |
-| Nested analysis | No | — |
+| Column statistics | No | - |
+| Query history | No | - |
+| Table sampling | Yes | - |
+| Nested analysis | No | - |
 
 ### Dialect notes
 

@@ -15,7 +15,7 @@ sl_refs:
   - mart_nrr_quarterly
 ---
 
-# Orbit Metabase SQL Library — Patterns & Conventions
+# Orbit Metabase SQL Library - Patterns & Conventions
 
 Collection **7 "SQL Library"** (parent: Orbit Showcase, collection 5) contains reference queries that demonstrate how to write Metabase native SQL against the Orbit analytics marts. Cards here are intentionally illustrative; several have `dashboardCount: 0` and are not embedded in live dashboards.
 

@@ -20,15 +20,13 @@ describe('KTX local project runtime', () => {
 
     const result = await initKtxProject({
       projectDir,
-      projectName: 'warehouse',
       authorName: 'Agent',
       authorEmail: 'agent@example.com',
     });
 
     expect(result.projectDir).toBe(projectDir);
-    expect(result.config.project).toBe('warehouse');
     expect(result.commitHash).toMatch(/^[0-9a-f]{40}$/);
-    await expect(readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).resolves.toContain('project: warehouse');
+    await expect(readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).resolves.not.toContain('project:');
     const gitignore = await readFile(join(projectDir, '.ktx/.gitignore'), 'utf-8');
     expect(gitignore).toContain('cache/');
     expect(gitignore).toContain('db.sqlite');
@@ -46,7 +44,7 @@ describe('KTX local project runtime', () => {
 
   it('loads an initialized project with a working file store', async () => {
     const projectDir = join(tempDir, 'warehouse');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
     const loaded = await loadKtxProject({ projectDir });
     await loaded.fileStore.writeFile(
@@ -57,7 +55,6 @@ describe('KTX local project runtime', () => {
       'Add revenue page',
     );
 
-    expect(loaded.config.project).toBe('warehouse');
     await expect(loaded.fileStore.readFile('wiki/global/revenue.md')).resolves.toMatchObject({
       content: '# Revenue\n',
     });
@@ -65,16 +62,12 @@ describe('KTX local project runtime', () => {
 
   it('rejects reinitializing an existing project unless force is set', async () => {
     const projectDir = join(tempDir, 'warehouse');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
 
-    await expect(initKtxProject({ projectDir, projectName: 'warehouse' })).rejects.toThrow(
-      'Project already contains ktx.yaml',
-    );
+    await expect(initKtxProject({ projectDir })).rejects.toThrow('Project already contains ktx.yaml');
 
-    await expect(initKtxProject({ projectDir, projectName: 'warehouse-v2', force: true })).resolves.toMatchObject({
-      config: {
-        project: 'warehouse-v2',
-      },
+    await expect(initKtxProject({ projectDir, force: true })).resolves.toMatchObject({
+      configPath: join(projectDir, 'ktx.yaml'),
     });
   });
 });

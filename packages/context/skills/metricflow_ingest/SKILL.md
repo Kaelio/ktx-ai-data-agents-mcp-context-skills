@@ -15,7 +15,7 @@ A MetricFlow `semantic_model` maps to an SL source; MetricFlow `measures` map to
 | `semantic_model: X { model: ref('t') }` with measures + dimensions | **Overlay** at `<connId>/X.yaml` with `measures`, `columns` (computed), `joins` | The `model:` ref resolves to a manifest table. |
 | `semantic_model: X { model: source('s','t') }` | **Overlay** at `<connId>/X.yaml` over table `t`. | Same shape; `source()` still resolves to a physical table. |
 | `semantic_model: X { model: <literal> }` with no manifest entry | **Standalone** with explicit `sql:`, `grain:`, `columns:` | Happens when the dbt manifest isn't available. |
-| `semantic_model: Y { extends: X }` | **Merge** Y's measures/dimensions/entities into X's overlay, or write a single overlay named for the most-derived child (Y) containing both X's and Y's primitives | Do not emit a second overlay for X — flatten. |
+| `semantic_model: Y { extends: X }` | **Merge** Y's measures/dimensions/entities into X's overlay, or write a single overlay named for the most-derived child (Y) containing both X's and Y's primitives | Do not emit a second overlay for X - flatten. |
 | `measures: [{ name, agg, expr }]` | `measures: [{ name, expr: "<agg>(<expr>)" }]` | Aggregation inlined. `agg: count_distinct` → `count(distinct ...)`. |
 | `entities: [{ name, type: primary }]` | `grain: [<entity_name-or-expr>]` on the overlay/standalone | Primary/unique entities drive grain. |
 | `entities: [{ name, type: foreign }]` | `joins:` entry joining to the primary-entity's semantic_model | Only when a matching primary is discoverable. |
@@ -24,10 +24,10 @@ A MetricFlow `semantic_model` maps to an SL source; MetricFlow `measures` map to
 | `metrics: [{ type: derived, type_params: { expr, metrics } }]` | **Derived measure** on whichever source owns the referenced measures, with `expr:` referencing measure names | If the metric spans models, still write it once on the source owning the "primary" measure (the one the agent judges most central). Mention the cross-model chain in the description. |
 | `metrics: [{ type: ratio, type_params: { numerator, denominator } }]` | Same as derived; `expr: "numerator / NULLIF(denominator, 0)"` if no explicit expr | Safe-division by default. |
 | `metrics: [{ type: cumulative, type_params: { window, grain_to_date } }]` | **Standalone** source with a window-function SQL; reference the resulting column as a normal measure | KTX SL has no first-class cumulative primitive (spec Non-goals). |
-| `metrics: [{ type: conversion }]` | **Flag for human** — do NOT write. Emit a wiki note describing the intended semantics. | No KTX equivalent in v1. |
+| `metrics: [{ type: conversion }]` | **Flag for human** - do NOT write. Emit a wiki note describing the intended semantics. | No KTX equivalent in v1. |
 | Metric not mappable | Wiki page `<metric_name>-definition.md` with the full YAML body quoted | Capture the intent even if we can't emit SL. |
 
-Type map: MetricFlow `time` to KTX `time`; `categorical` to `string`; `number` to `number`; `boolean` to `boolean`. Follow `expr` over `name` when both differ — `expr` is the physical column.
+Type map: MetricFlow `time` to KTX `time`; `categorical` to `string`; `number` to `number`; `boolean` to `boolean`. Follow `expr` over `name` when both differ - `expr` is the physical column.
 
 Verify each MetricFlow model source table with entity_details before producing
 the corresponding sl_write_source.
@@ -67,7 +67,7 @@ Within one WorkUnit, multiple semantic_models linked by `extends:` are guarantee
 1. Start with the most-derived child (the one that no other semantic_model extends).
 2. Walk the `extends:` chain upward, accumulating measures, dimensions, entities.
 3. Write ONE overlay/standalone, named for the most-derived child's SL-appropriate name (not the base).
-4. Parents that lack their own distinctive content should NOT get a separate overlay. If a parent has unique measures a child doesn't inherit, consider whether the base is used elsewhere — if yes, write both; if no, still one overlay.
+4. Parents that lack their own distinctive content should NOT get a separate overlay. If a parent has unique measures a child doesn't inherit, consider whether the base is used elsewhere - if yes, write both; if no, still one overlay.
 5. Measure/dimension name collisions: child wins, but note the overridden parent in the overlay's description or in a sibling wiki page.
 
 The spec's worked example has `orders`, `orders_ext` (extends orders), and `metrics/orders_final.yml` (defines `revenue` referencing both). The right output is ONE overlay named `orders_ext` (or `orders` if the team's naming favors the base) containing `order_count`, `gross_amount`, `refund_amount`, and a derived `revenue` measure. Provenance tags point to all three source files.
@@ -88,9 +88,9 @@ call `sql_execution` with the same warehouse connection id, for example:
 `sql:` must be sourced from raw files, `entity_details`, or a successful SQL
 probe.
 
-After every `sl_write_source`, call `sl_validate`. The warehouse will reject invented columns with `Unrecognized name: <name>` — treat as a hard failure and re-read the schema.
+After every `sl_write_source`, call `sl_validate`. The warehouse will reject invented columns with `Unrecognized name: <name>` - treat as a hard failure and re-read the schema.
 
-## Cumulative metrics — sql-standalone fallback
+## Cumulative metrics - sql-standalone fallback
 
 KTX SL has no first-class `window:` or `grain_to_date:` primitive in v1 (spec Non-goals). Translate a MetricFlow cumulative metric to a standalone SL source with a window-function SQL:
 
@@ -125,7 +125,7 @@ measures:
 
 Pick the time column based on the semantic_model's `defaults.agg_time_dimension` (e.g. `ordered_at`). If the MetricFlow config omits it, probe the base table for time-typed columns and choose the most obvious. After writing the standalone SQL source, call `emit_unmapped_fallback` with `rawPath` set to the MetricFlow file path, `reason: "cumulative_metric_unsupported"`, and `fallback: "sql_standalone"`.
 
-## Conversion metrics — flag for human
+## Conversion metrics - flag for human
 
 ```yaml
 metrics:
@@ -159,7 +159,7 @@ name: orders_ext
 
 Line ranges (`#L<start>-<end>`) point to the exact YAML span within the file (the `semantic_models:` entry for its own `name`). Use `read_raw_span` to identify those ranges before writing.
 
-## Example 1 — single semantic_model to overlay
+## Example 1 - single semantic_model to overlay
 
 ```yaml
 # MetricFlow:
@@ -185,7 +185,7 @@ measures:
 grain: [order_id]
 ```
 
-## Example 2 — extends chain → one flattened overlay
+## Example 2 - extends chain → one flattened overlay
 
 ```yaml
 # MetricFlow:
@@ -232,7 +232,7 @@ measures:
 grain: [order_id]
 ```
 
-## Example 3 — derived metric spanning two semantic_models
+## Example 3 - derived metric spanning two semantic_models
 
 ```yaml
 # models/sales.yml
@@ -256,7 +256,7 @@ metrics:
       metrics: [{name: revenue}, {name: cost}]
 ```
 
-Because the WorkUnit bundles all three files (cross-component union via the metric), write the derived measure on ONE of the two sources — pick the source whose domain "owns" the metric (here, `sales` — margin is inherently a sales metric). Cross-source references aren't native in KTX SL; treat the metric's operands as already-resolvable in the target source's query context OR emit a standalone SQL that joins the two tables:
+Because the WorkUnit bundles all three files (cross-component union via the metric), write the derived measure on ONE of the two sources - pick the source whose domain "owns" the metric (here, `sales` - margin is inherently a sales metric). Cross-source references aren't native in KTX SL; treat the metric's operands as already-resolvable in the target source's query context OR emit a standalone SQL that joins the two tables:
 
 ```yaml
 # <connId>/sales.yaml
@@ -269,7 +269,7 @@ measures:
 ```
 
 ```yaml
-# <connId>/margin.yaml — standalone because it spans two tables
+# <connId>/margin.yaml - standalone because it spans two tables
 # <!-- from: .../models/sales.yml#L1-8 -->
 # <!-- from: .../models/costs.yml#L1-8 -->
 # <!-- from: .../metrics/margin.yml#L1-8 -->
@@ -292,7 +292,7 @@ measures:
 
 Also write a wiki page at `wiki/global/margin-metric.md` explaining the cross-source origin.
 
-## Example 4 — filtered metric creates a new measure
+## Example 4 - filtered metric creates a new measure
 
 ```yaml
 metrics:

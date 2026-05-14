@@ -3,22 +3,22 @@ title: Writing Context
 description: Write and refine semantic sources and wiki pages.
 ---
 
-After building context through scanning and ingestion, you'll want to refine it — edit semantic sources to match your business logic, add wiki pages that capture tribal knowledge, and query your data through the semantic layer to verify everything works.
+After building context through scanning and ingestion, you'll want to refine it - edit semantic sources to match your business logic, add wiki pages that capture tribal knowledge, and query your data through the semantic layer to verify everything works.
 
 ## Agent workflow summary
 
 Agents should refine context in this order:
 
-1. `ktx sl list --json` — discover available sources and connection ids.
-2. `ktx sl search <query> --json` — find source candidates for a concept.
+1. `ktx sl list --json` - discover available sources and connection ids.
+2. `ktx sl search <query> --json` - find source candidates for a concept.
 3. Edit the source YAML directly in `semantic-layer/<connection-id>/`.
-4. `ktx sl validate <source> --connection-id <id>` — verify columns, joins, and table references.
-5. `ktx sl query ... --format sql` — compile a representative query without executing it.
-6. `ktx wiki search ...` — check business context captured by ingest or memory.
+4. `ktx sl validate <source> --connection-id <id>` - verify columns, joins, and table references.
+5. `ktx sl query ... --format sql` - compile a representative query without executing it.
+6. `ktx wiki search ...` - check business context captured by ingest or memory.
 
 ## Semantic Sources
 
-Semantic sources are YAML files that describe your tables, columns, measures, and joins. They're the core of the context layer — the structured definitions that agents use to generate correct SQL.
+Semantic sources are YAML files that describe your tables, columns, measures, and joins. They're the core of the context layer - the structured definitions that agents use to generate correct SQL.
 
 ### Listing sources
 
@@ -44,7 +44,7 @@ YAML file under `semantic-layer/<connection-id>/`.
 
 ### The source schema
 
-A semantic source defines a single queryable entity — usually a table or a SQL expression. Here's a fully annotated example:
+A semantic source defines a single queryable entity - usually a table or a SQL expression. Here's a fully annotated example:
 
 ```yaml
 name: orders
@@ -146,7 +146,7 @@ Column visibility controls what agents see:
 |------------|----------|
 | `public` | Included in agent queries and listings (default) |
 | `internal` | Available for joins and measures but not shown to agents |
-| `hidden` | Excluded entirely — useful for ETL columns |
+| `hidden` | Excluded entirely - useful for ETL columns |
 
 ### Editing a source
 
@@ -161,7 +161,7 @@ Validation checks a source definition against the actual database schema:
 ktx sl validate orders --connection-id my-postgres
 ```
 
-This catches mismatches — columns that don't exist in the table, type mismatches, invalid join targets — before an agent tries to use the source.
+This catches mismatches - columns that don't exist in the table, type mismatches, invalid join targets - before an agent tries to use the source.
 
 ### Querying
 
@@ -207,20 +207,20 @@ Query flags:
 | `--max-rows <n>` | Maximum rows to return when executing |
 | `--include-empty` | Include empty/null rows in results |
 
-The query planner is grain-aware — it understands the cardinality of joins and avoids chasm traps (double-counting caused by many-to-many fan-outs). When you query measures that span multiple sources, KTX generates sub-queries at the correct grain before joining.
+The query planner is grain-aware - it understands the cardinality of joins and avoids chasm traps (double-counting caused by many-to-many fan-outs). When you query measures that span multiple sources, KTX generates sub-queries at the correct grain before joining.
 
 ### Workflow: edit and validate a source
 
 1. Open `semantic-layer/my-postgres/orders.yaml`.
 2. Edit the file to add columns, measures, joins, or descriptions.
-3. `ktx sl validate orders --connection-id my-postgres` — check the definition against the live schema.
-4. `ktx sl query --connection-id my-postgres --measure total_revenue --dimension order_date --format sql` — compile a representative query.
+3. `ktx sl validate orders --connection-id my-postgres` - check the definition against the live schema.
+4. `ktx sl query --connection-id my-postgres --measure total_revenue --dimension order_date --format sql` - compile a representative query.
 
 If validation fails, fix the YAML before asking an agent to use the source. Common validation failures are missing columns, invalid join targets, and measure expressions that reference fields outside the source.
 
 ## Wiki Pages
 
-Wiki pages are Markdown files that capture business context — definitions, rules, gotchas, and anything an agent needs to understand beyond what the schema tells it.
+Wiki pages are Markdown files that capture business context - definitions, rules, gotchas, and anything an agent needs to understand beyond what the schema tells it.
 
 ### What they are
 
@@ -242,8 +242,8 @@ wiki/
         └── known-data-issues.md
 ```
 
-- **Global pages** apply across all connections — business definitions, metric standards, company terminology.
-- **User-scoped pages** are private to a user ID — personal notes, local gotchas, or context you do not want shared globally.
+- **Global pages** apply across all connections - business definitions, metric standards, company terminology.
+- **User-scoped pages** are private to a user ID - personal notes, local gotchas, or context you do not want shared globally.
 
 ### Editing pages
 
@@ -274,7 +274,7 @@ ktx wiki list
 ktx wiki search "revenue recognition"
 ```
 
-Search uses both full-text matching and semantic similarity — it finds relevant pages even when the exact terms don't match. Agents call this automatically when they need business context to answer a question.
+Search uses both full-text matching and semantic similarity - it finds relevant pages even when the exact terms don't match. Agents call this automatically when they need business context to answer a question.
 
 ### Workflow: add searchable business context
 

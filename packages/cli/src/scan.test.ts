@@ -316,7 +316,7 @@ describe('runKtxScan', () => {
   });
 
   it('runs structural scans and prints a dev-friendly plain summary', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(
       async (_input: RunLocalScanOptions): Promise<LocalScanRunResult> => ({
         runId: 'scan-run-1',
@@ -377,7 +377,7 @@ describe('runKtxScan', () => {
   });
 
   it('passes managed daemon options to local ingest adapters when no explicit daemon URL is set', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const createLocalIngestAdapters = vi.fn(() => []);
     const runLocalScan = vi.fn(
       async (_input: RunLocalScanOptions): Promise<LocalScanRunResult> => ({
@@ -421,7 +421,7 @@ describe('runKtxScan', () => {
   });
 
   it('explains warnings, capability gaps, and relationships in human scan summaries', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(
       async (_input: RunLocalScanOptions): Promise<LocalScanRunResult> => ({
         runId: 'scan-run-1',
@@ -472,7 +472,7 @@ describe('runKtxScan', () => {
   });
 
   it('prints review-only relationship summaries and validation capability warnings', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const reviewOnlyReport: KtxScanReport = {
       ...reportWithAttention,
       capabilityGaps: [],
@@ -525,7 +525,7 @@ describe('runKtxScan', () => {
   });
 
   it('passes a scan progress port and prints TTY progress messages', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(async (input: RunLocalScanOptions): Promise<LocalScanRunResult> => {
       await input.progress?.update(0.15, 'Inspecting database schema');
       await input.progress?.update(0.55, 'Semantic layer comparison found 5 changes across 18 tables');
@@ -572,7 +572,7 @@ describe('runKtxScan', () => {
   });
 
   it('uses injected structured progress without requiring TTY progress output', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const progressEvents: Array<{ progress: number; message?: string; transient?: boolean }> = [];
     const structuredProgress = {
       async update(progress: number, message?: string, options?: { transient?: boolean }) {
@@ -674,7 +674,7 @@ describe('runKtxScan', () => {
   });
 
   it('flushes transient TTY progress messages before printing scan failures', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(async (input: RunLocalScanOptions): Promise<LocalScanRunResult> => {
       await input.progress?.update(0.42, 'Generating descriptions 3/35 tables', { transient: true });
       throw new Error('scan failed');
@@ -711,7 +711,7 @@ describe('runKtxScan', () => {
   });
 
   it('does not print live progress messages for non-TTY output', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(async (input: RunLocalScanOptions): Promise<LocalScanRunResult> => {
       await input.progress?.update(0.15, 'Inspecting database schema');
       return {
@@ -747,7 +747,7 @@ describe('runKtxScan', () => {
   });
 
   it('uses terminal-aware visual styling only for TTY output', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(
       async (_input: RunLocalScanOptions): Promise<LocalScanRunResult> => ({
         runId: 'scan-run-1',
@@ -807,7 +807,7 @@ describe('runKtxScan', () => {
   });
 
   it('honors NO_COLOR for TTY scan summaries', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(
       async (_input: RunLocalScanOptions): Promise<LocalScanRunResult> => ({
         runId: 'scan-run-1',
@@ -853,11 +853,10 @@ describe('runKtxScan', () => {
 
   it('passes native CLI adapters into local scan runs for mysql configs', async () => {
     const tempProject = await mkdtemp(join(tmpdir(), 'ktx-scan-cli-native-'));
-    await initKtxProject({ projectDir: tempProject, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempProject });
     await writeFile(
       join(tempProject, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: mysql',
@@ -901,11 +900,10 @@ describe('runKtxScan', () => {
 
   it('creates a native connector for standalone relationship scans', async () => {
     const tempProject = await mkdtemp(join(tmpdir(), 'ktx-scan-cli-relationships-'));
-    await initKtxProject({ projectDir: tempProject, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempProject });
     await writeFile(
       join(tempProject, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -955,11 +953,10 @@ describe('runKtxScan', () => {
 
   it('routes standalone postgres scans through the native connector before daemon fallback', async () => {
     const tempProject = await mkdtemp(join(tmpdir(), 'ktx-scan-cli-native-postgres-'));
-    await initKtxProject({ projectDir: tempProject, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempProject });
     await writeFile(
       join(tempProject, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1021,11 +1018,10 @@ describe('runKtxScan', () => {
 
   it('passes native CLI adapters into local scan runs for clickhouse configs', async () => {
     const tempProject = await mkdtemp(join(tmpdir(), 'ktx-scan-cli-native-clickhouse-'));
-    await initKtxProject({ projectDir: tempProject, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempProject });
     await writeFile(
       join(tempProject, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: clickhouse',
@@ -1072,11 +1068,10 @@ describe('runKtxScan', () => {
 
   it('passes native CLI adapters into local scan runs for sqlserver configs', async () => {
     const tempProject = await mkdtemp(join(tmpdir(), 'ktx-scan-cli-native-sqlserver-'));
-    await initKtxProject({ projectDir: tempProject, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempProject });
     await writeFile(
       join(tempProject, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlserver',
@@ -1138,11 +1133,10 @@ describe('runKtxScan', () => {
 
   it('passes native CLI adapters into local scan runs for bigquery configs', async () => {
     const tempProject = await mkdtemp(join(tmpdir(), 'ktx-scan-cli-native-bigquery-'));
-    await initKtxProject({ projectDir: tempProject, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempProject });
     await writeFile(
       join(tempProject, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: bigquery',
@@ -1203,11 +1197,10 @@ describe('runKtxScan', () => {
 
   it('passes native CLI adapters into local scan runs for snowflake configs', async () => {
     const tempProject = await mkdtemp(join(tmpdir(), 'ktx-scan-cli-native-snowflake-'));
-    await initKtxProject({ projectDir: tempProject, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempProject });
     await writeFile(
       join(tempProject, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: snowflake',

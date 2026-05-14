@@ -119,7 +119,7 @@ describe('setup databases step', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-databases-'));
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
   });
 
   afterEach(async () => {
@@ -242,7 +242,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -575,7 +574,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -622,7 +620,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -770,7 +767,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -815,7 +811,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -864,7 +859,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -936,7 +930,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1010,7 +1003,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1079,7 +1071,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1146,7 +1137,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1361,7 +1351,7 @@ describe('setup databases step', () => {
     const testConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
       commandIo.stdout.write('Connection test passed: postgres-warehouse\n');
       commandIo.stdout.write('Driver: postgres\n');
-      commandIo.stdout.write('Tables: 2\n');
+      commandIo.stdout.write('Status: ok\n');
       return 0;
     });
     const scanConnection = vi.fn(async (_projectDir: string, _connectionId: string, commandIo: KtxCliIo) => {
@@ -1646,7 +1636,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1939,7 +1928,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -2019,7 +2007,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  analytics:',
         '    driver: bigquery',
@@ -2074,7 +2061,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -2123,7 +2109,6 @@ describe('setup databases step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',

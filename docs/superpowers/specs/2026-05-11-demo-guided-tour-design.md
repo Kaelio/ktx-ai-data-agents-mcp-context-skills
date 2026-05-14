@@ -1,4 +1,4 @@
-# Demo Guided Tour — Design Spec
+# Demo Guided Tour - Design Spec
 
 ## Problem
 
@@ -40,7 +40,7 @@ Copy pre-packaged assets (demo DB, replay, context artifacts)
 ┌────────────────────────────────────────────────────────────────┐
 │ Demo banner (persistent, shown on every step)                  │
 │                                                                │
-│ Demo mode — data has been pre-processed and KTX context is     │
+│ Demo mode - data has been pre-processed and KTX context is     │
 │ already built. This walkthrough illustrates the setup steps.   │
 │ Selections are pre-filled and read-only.                       │
 └────────────────────────────────────────────────────────────────┘
@@ -67,7 +67,7 @@ Context build replay
     │
     ▼
 Transition message:
-  "Demo project is ready — let's connect your agent"
+  "Demo project is ready - let's connect your agent"
     │
     ▼
 Interactive agents step (real runKtxSetupAgentsStep())
@@ -89,7 +89,7 @@ Final summary:
 Shown at the top of every read-only step. Uses clack box-drawing style:
 
 ```
-┌ Demo mode — data has been pre-processed and KTX context is already built.
+┌ Demo mode - data has been pre-processed and KTX context is already built.
 │ This walkthrough illustrates the setup steps. Selections are pre-filled and read-only.
 ```
 
@@ -170,7 +170,7 @@ Completion summary uses the existing format:
 ★ KTX finished ingesting your data
 
   ✓ Analyzed X business areas
-  ✓ Reconciled — 0 conflicts
+  ✓ Reconciled - 0 conflicts
 
   KTX created:
     📊 X query definitions
@@ -187,7 +187,7 @@ The exact counts and artifact names come from the pre-packaged demo results
 A brief message bridges from the read-only tour to the interactive step:
 
 ```
-┌  Demo project is ready — let's connect your agent
+┌  Demo project is ready - let's connect your agent
 │
 │  Your KTX context has been built with demo data.
 │  Select an agent to start using it.
@@ -240,13 +240,13 @@ the pre-packaged replay file at an accelerated playback rate.
 | `packages/cli/src/setup.ts` | Add `demoMode` flag to setup loop; skip models/embeddings; dispatch to demo cards for databases/sources; show demo banner; demo completion summary |
 | `packages/cli/src/setup-demo-cards.ts` | New file: `renderDemoCard()` helper, demo banner renderer, demo step definitions |
 | `packages/cli/src/setup-context.ts` | Support replay mode for demo: feed pre-packaged events at accelerated pace through existing progress view |
-| `packages/cli/src/demo.ts` | Remove or simplify `runKtxSetupDemoFromEntryMenu()` — now dispatches to the main setup loop with `demoMode: true` |
+| `packages/cli/src/demo.ts` | Remove or simplify `runKtxSetupDemoFromEntryMenu()` - now dispatches to the main setup loop with `demoMode: true` |
 | `packages/cli/src/demo-assets.ts` | Update asset list if new demo data is provided; ensure demo project setup writes valid `ktx.yaml` for agent use |
 
 ## Open Items
 
 - **Demo data**: User will provide improved pre-packaged results (Postgres,
   dbt, Metabase, Notion). Current demo assets may need updating.
-- **Replay speed**: Exact acceleration factor TBD — should feel brisk but
+- **Replay speed**: Exact acceleration factor TBD - should feel brisk but
   give users time to read source names and status transitions. Start with
   ~2x real-time and adjust.

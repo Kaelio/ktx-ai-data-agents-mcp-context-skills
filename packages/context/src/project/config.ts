@@ -1,435 +1,338 @@
-import type { KtxEmbeddingBackend, KtxLlmBackend, KtxModelRole, KtxPromptCacheTtl } from '@ktx/llm';
+import { KTX_MODEL_ROLES } from '@ktx/llm';
 import YAML from 'yaml';
+import * as z from 'zod';
 
-export type KtxStorageState = 'postgres' | 'sqlite';
-export type KtxSearchBackend = 'postgres-hybrid' | 'sqlite-fts5';
-type KtxLocalLlmBackend = KtxLlmBackend | 'none';
-type KtxLocalEmbeddingBackend = KtxEmbeddingBackend | 'none';
-type KtxScanEnrichmentMode = 'none' | 'deterministic' | 'llm';
+const KTX_LLM_BACKENDS = ['none', 'anthropic', 'vertex', 'gateway'] as const;
+const KTX_EMBEDDING_BACKENDS = ['none', 'deterministic', 'openai', 'sentence-transformers'] as const;
+const KTX_PROMPT_CACHE_TTLS = ['5m', '1h'] as const;
+const KTX_ENRICHMENT_MODES = ['none', 'deterministic', 'llm'] as const;
+const KTX_WORK_UNIT_FAILURE_MODES = ['abort', 'continue'] as const;
+const KTX_STORAGE_STATES = ['sqlite', 'postgres'] as const;
+const KTX_SEARCH_BACKENDS = ['sqlite-fts5', 'postgres-hybrid'] as const;
 
-interface KtxProjectPromptCachingConfig {
-  enabled?: boolean;
-  systemTtl?: KtxPromptCacheTtl;
-  toolsTtl?: KtxPromptCacheTtl;
-  historyTtl?: KtxPromptCacheTtl;
-  vertexFallbackTo5m?: boolean;
+const DEPRECATED_KEY_HINTS: Record<string, string> = {
+  'llm.provider.provider': 'use llm.provider.backend',
+  'ingest.llm': 'use top-level llm.provider, llm.models, and ingest.workUnits',
+  'ingest.embeddings.provider': 'use ingest.embeddings.backend',
+  'scan.enrichment.backend': 'use scan.enrichment.mode',
+  'scan.enrichment.llm': 'use top-level llm.provider and llm.models',
+  'scan.enrichment.embeddings.provider': 'use scan.enrichment.embeddings.backend',
+};
+
+const apiCredentialsSchema = z
+  .strictObject({
+    api_key: z.string().min(1).optional().describe('API key for the provider. Read from this value or the provider-specific environment variable.'),
+    base_url: z.string().min(1).optional().describe('Override the provider\'s default API base URL (e.g. a proxy or self-hosted gateway).'),
+  })
+  .describe('API credentials block: optional key and base URL for an LLM or embedding provider.');
+
+const vertexProviderSchema = z
+  .strictObject({
+    project: z.string().min(1).optional().describe('Google Cloud project ID hosting the Vertex AI endpoint.'),
+    location: z.string().default('').describe('Vertex AI region (e.g. "us-east5"). Empty string falls back to the SDK default.'),
+  })
+  .describe('Google Vertex AI provider configuration.');
+
+const sentenceTransformersSchema = z
+  .strictObject({
+    base_url: z.string().default('').describe('Base URL of the sentence-transformers HTTP server. Empty string uses the managed local runtime.'),
+    pathPrefix: z.string().optional().describe('Optional URL path prefix prepended to embedding requests.'),
+  })
+  .describe('Sentence-transformers embedding server configuration.');
+
+const llmProviderSchema = z
+  .strictObject({
+    backend: z
+      .enum(KTX_LLM_BACKENDS)
+      .default('none')
+      .describe('LLM provider backend. "none" disables LLM features; "anthropic" / "vertex" / "gateway" require the matching nested credentials block.'),
+    vertex: vertexProviderSchema.optional().describe('Vertex AI credentials, used when backend is "vertex".'),
+    anthropic: apiCredentialsSchema.optional().describe('Anthropic API credentials, used when backend is "anthropic".'),
+    gateway: apiCredentialsSchema.optional().describe('AI Gateway credentials, used when backend is "gateway".'),
+  })
+  .describe('LLM provider selection and credentials.');
+
+const promptCachingSchema = z
+  .strictObject({
+    enabled: z.boolean().optional().describe('Master switch for Anthropic-style prompt caching. When omitted, the backend\'s default applies.'),
+    systemTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional().describe('Cache TTL for the system prompt segment ("5m" or "1h").'),
+    toolsTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional().describe('Cache TTL for the tools/schema segment ("5m" or "1h").'),
+    historyTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional().describe('Cache TTL for conversation-history cache breakpoints ("5m" or "1h").'),
+    vertexFallbackTo5m: z.boolean().optional().describe('When true, transparently downgrade 1h TTLs to 5m on Vertex, which does not support 1h caching.'),
+  })
+  .describe('Prompt-caching tunables for Anthropic-compatible providers.');
+
+const llmSchema = z
+  .strictObject({
+    provider: llmProviderSchema.prefault({}).describe('LLM provider backend and credentials.'),
+    models: z
+      .partialRecord(z.enum(KTX_MODEL_ROLES), z.string().min(1))
+      .default({})
+      .describe('Per-role model overrides keyed by KTX model role (e.g. "default", "triage"). Values are provider-specific model identifiers.'),
+    promptCaching: promptCachingSchema.optional().describe('Optional prompt-caching tunables.'),
+  })
+  .describe('LLM provider, per-role model overrides, and prompt-caching tunables.');
+
+const embeddingSchema = z
+  .strictObject({
+    backend: z
+      .enum(KTX_EMBEDDING_BACKENDS)
+      .default('deterministic')
+      .describe('Embedding backend. "deterministic" is a built-in hash-based vector for offline use; "openai" and "sentence-transformers" call out to those providers; "none" disables embeddings.'),
+    model: z.string().min(1).optional().describe('Provider-specific embedding model identifier (e.g. "text-embedding-3-small"). Ignored by the "deterministic" backend.'),
+    dimensions: z.int().positive().default(8).describe('Embedding vector dimensionality. Must match the chosen model when using a real provider.'),
+    openai: apiCredentialsSchema.optional().describe('OpenAI credentials, used when backend is "openai".'),
+    sentenceTransformers: sentenceTransformersSchema.optional().describe('Sentence-transformers server config, used when backend is "sentence-transformers".'),
+    batchSize: z.int().positive().optional().describe('Number of texts per embedding API call. Omit to use the backend default.'),
+  })
+  .describe('Embedding backend, model, and provider credentials.');
+
+const workUnitsSchema = z
+  .strictObject({
+    stepBudget: z.int().positive().default(40).describe('Maximum number of agent steps allowed per work unit before it is force-terminated.'),
+    maxConcurrency: z.int().positive().default(1).describe('Maximum number of work units run concurrently during ingest.'),
+    failureMode: z
+      .enum(KTX_WORK_UNIT_FAILURE_MODES)
+      .default('continue')
+      .describe('Behavior when a work unit fails: "abort" stops the whole ingest run; "continue" records the failure and keeps going.'),
+  })
+  .describe('Concurrency and failure handling for ingest work units.');
+
+const ingestSchema = z
+  .strictObject({
+    adapters: z
+      .array(z.string().min(1))
+      .default([])
+      .describe('Ingest adapter identifiers to run (e.g. "metabase", "looker", "historic-sql"). Empty array means no adapters are run.'),
+    embeddings: embeddingSchema
+      .prefault({ backend: 'deterministic', model: 'deterministic' })
+      .describe('Embedding configuration used when ingest adapters need to embed documents.'),
+    workUnits: workUnitsSchema.prefault({}).describe('Concurrency and failure handling for ingest work units.'),
+  })
+  .describe('Ingest pipeline configuration: adapters, embeddings, and work-unit policy.');
+
+const scanEnrichmentSchema = z
+  .strictObject({
+    mode: z
+      .enum(KTX_ENRICHMENT_MODES)
+      .default('none')
+      .describe('Column/table enrichment mode. "none" disables enrichment; "deterministic" uses local heuristics; "llm" calls the configured LLM provider.'),
+    embeddings: embeddingSchema.optional().describe('Optional embedding override for enrichment-time vectorization. Falls back to ingest.embeddings when omitted.'),
+  })
+  .describe('Schema-scan enrichment: how columns and tables are described.');
+
+const scanRelationshipsSchema = z
+  .strictObject({
+    enabled: z.boolean().default(true).describe('Master switch for relationship discovery during scan.'),
+    llmProposals: z.boolean().default(true).describe('When true, propose relationships using the configured LLM in addition to deterministic candidates.'),
+    validationRequiredForManifest: z
+      .boolean()
+      .default(true)
+      .describe('When true, only relationships that pass database-side validation are written to the manifest.'),
+    acceptThreshold: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.85)
+      .describe('Confidence score (0–1) at or above which an LLM-proposed relationship is auto-accepted into the manifest.'),
+    reviewThreshold: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.55)
+      .describe('Confidence score (0–1) at or above which a proposal is surfaced for human review (but not auto-accepted).'),
+    maxLlmTablesPerBatch: z
+      .int()
+      .positive()
+      .default(40)
+      .describe('Maximum number of tables included in a single LLM relationship-proposal batch.'),
+    maxCandidatesPerColumn: z
+      .int()
+      .positive()
+      .default(25)
+      .describe('Maximum number of candidate join partners considered per column during relationship discovery.'),
+    profileSampleRows: z.int().positive().default(10000).describe('Number of rows sampled per table when profiling values for relationship inference.'),
+    validationConcurrency: z.int().positive().default(4).describe('Number of relationship validation queries run in parallel against the database.'),
+    validationBudget: z
+      .union([z.literal('all'), z.int().nonnegative()])
+      .optional()
+      .describe('Cap on validation queries per scan run. Use "all" for unlimited, an integer for a hard cap, or omit for the runtime default.'),
+  })
+  .describe('Schema-scan relationship discovery and validation tunables.');
+
+const scanSchema = z
+  .strictObject({
+    enrichment: scanEnrichmentSchema.prefault({}).describe('Column/table enrichment configuration.'),
+    relationships: scanRelationshipsSchema.prefault({}).describe('Relationship discovery and validation configuration.'),
+  })
+  .describe('Schema-scan configuration: enrichment and relationship discovery.');
+
+const setupSchema = z
+  .strictObject({
+    database_connection_ids: z
+      .array(z.string().min(1))
+      .default([])
+      .describe('Connection IDs (keys of the top-level `connections` map) that the setup wizard treats as the project\'s primary databases.'),
+    completed_steps: z
+      .unknown()
+      .optional()
+      .describe('Deprecated. Accepted for backward compatibility but ignored; KTX no longer tracks setup progress here.'),
+  })
+  .transform(({ database_connection_ids }) => ({ database_connection_ids }))
+  .describe('Setup-wizard state captured during `ktx setup`.');
+
+const storageGitSchema = z
+  .strictObject({
+    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits state changes to the local Git-backed store.'),
+    author: z
+      .string()
+      .min(1)
+      .default('ktx <ktx@example.com>')
+      .describe('Git author identity used for auto-commits, in standard "Name <email>" form.'),
+  })
+  .describe('Git-backed storage commit policy.');
+
+const storageSchema = z
+  .strictObject({
+    state: z
+      .enum(KTX_STORAGE_STATES)
+      .default('sqlite')
+      .describe('Backend for KTX state storage. "sqlite" uses .ktx/db.sqlite; "postgres" expects a configured Postgres connection.'),
+    search: z
+      .enum(KTX_SEARCH_BACKENDS)
+      .default('sqlite-fts5')
+      .describe('Backend for search indexes. "sqlite-fts5" uses SQLite FTS5; "postgres-hybrid" uses Postgres lexical + vector hybrid search.'),
+    git: storageGitSchema.prefault({}).describe('Git-backed storage commit policy.'),
+  })
+  .describe('Storage backends and commit policy for KTX state and search indexes.');
+
+const connectionSchema = z
+  .looseObject({
+    driver: z.string().min(1).optional().describe('Connector driver identifier (e.g. "postgres", "bigquery", "snowflake").'),
+    url: z.string().optional().describe('Connection URL or DSN. Format depends on the driver; may contain environment-variable references.'),
+  })
+  .describe('A single database/connector connection entry. Additional driver-specific fields are accepted and passed through.');
+
+const agentSchema = z
+  .strictObject({
+    run_research: z
+      .strictObject({
+        enabled: z.boolean().default(false).describe('Master switch for the research agent.'),
+        max_iterations: z
+          .number()
+          .int()
+          .nonnegative()
+          .default(20)
+          .describe('Maximum number of tool-call iterations the research agent may take per run.'),
+        default_toolset: z
+          .array(z.string().min(1))
+          .default(['sl_query', 'wiki_search', 'sl_read_source'])
+          .describe('Default list of tool identifiers exposed to the research agent.'),
+      })
+      .prefault({})
+      .describe('Research-agent configuration.'),
+  })
+  .describe('Agent feature configuration.');
+
+const memorySchema = z
+  .strictObject({
+    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits memory updates to the Git-backed store.'),
+  })
+  .describe('Memory subsystem configuration.');
+
+const ktxProjectConfigSchema = z
+  .strictObject({
+    setup: setupSchema.optional().describe('Setup-wizard state. Written by `ktx setup`; may be omitted.'),
+    connections: z
+      .record(z.string(), connectionSchema)
+      .default({})
+      .describe('Map of connection ID to connector configuration. Keys are user-chosen names referenced elsewhere in the config.'),
+    storage: storageSchema.prefault({}).describe('Storage backends and commit policy for KTX state and search indexes.'),
+    llm: llmSchema.prefault({}).describe('LLM provider, per-role model overrides, and prompt-caching tunables.'),
+    ingest: ingestSchema.prefault({}).describe('Ingest pipeline configuration.'),
+    agent: agentSchema.prefault({}).describe('Agent feature configuration.'),
+    memory: memorySchema.prefault({}).describe('Memory subsystem configuration.'),
+    scan: scanSchema.prefault({}).describe('Schema-scan configuration: enrichment and relationship discovery.'),
+  })
+  .describe('Configuration schema for KTX project files (ktx.yaml).');
+
+export type KtxProjectConfig = z.infer<typeof ktxProjectConfigSchema>;
+export type KtxProjectLlmConfig = z.infer<typeof llmSchema>;
+export type KtxProjectLlmProviderConfig = z.infer<typeof llmProviderSchema>;
+export type KtxProjectEmbeddingConfig = z.infer<typeof embeddingSchema>;
+export type KtxScanEnrichmentConfig = z.infer<typeof scanEnrichmentSchema>;
+export type KtxIngestWorkUnitsConfig = z.infer<typeof workUnitsSchema>;
+export type KtxScanRelationshipConfig = z.infer<typeof scanRelationshipsSchema>;
+export type KtxProjectScanConfig = z.infer<typeof scanSchema>;
+export type KtxProjectConnectionConfig = z.infer<typeof connectionSchema>;
+export type KtxProjectSetupConfig = z.infer<typeof setupSchema>;
+export type KtxStorageState = z.infer<typeof storageSchema>['state'];
+export type KtxSearchBackend = z.infer<typeof storageSchema>['search'];
+
+export interface KtxConfigIssue {
+  path: string;
+  message: string;
+  fix?: string;
 }
 
-export interface KtxProjectLlmProviderConfig {
-  backend: KtxLocalLlmBackend;
-  vertex?: { project?: string; location: string };
-  anthropic?: { api_key?: string; base_url?: string };
-  gateway?: { api_key?: string; base_url?: string };
-}
-
-export interface KtxProjectLlmConfig {
-  provider: KtxProjectLlmProviderConfig;
-  models: Partial<Record<KtxModelRole, string>> & { default?: string };
-  promptCaching?: KtxProjectPromptCachingConfig;
-}
-
-export interface KtxProjectEmbeddingConfig {
-  backend: KtxLocalEmbeddingBackend;
-  model?: string;
-  dimensions: number;
-  openai?: { api_key?: string; base_url?: string };
-  sentenceTransformers?: { base_url: string; pathPrefix?: string };
-  batchSize?: number;
-}
-
-export interface KtxScanEnrichmentConfig {
-  mode: KtxScanEnrichmentMode;
-  embeddings?: KtxProjectEmbeddingConfig;
-}
-
-export interface KtxIngestWorkUnitsConfig {
-  stepBudget: number;
-  maxConcurrency: number;
-  failureMode: 'abort' | 'continue';
-}
-
-export interface KtxScanRelationshipConfig {
-  enabled: boolean;
-  llmProposals: boolean;
-  validationRequiredForManifest: boolean;
-  acceptThreshold: number;
-  reviewThreshold: number;
-  maxLlmTablesPerBatch: number;
-  maxCandidatesPerColumn: number;
-  profileSampleRows: number;
-  validationConcurrency: number;
-  validationBudget?: number | 'all';
-}
-
-export interface KtxProjectScanConfig {
-  enrichment: KtxScanEnrichmentConfig;
-  relationships: KtxScanRelationshipConfig;
-}
-
-export interface KtxProjectConnectionConfig {
-  driver: string;
-  url?: string;
-  [key: string]: unknown;
-}
-
-export interface KtxProjectSetupConfig {
-  database_connection_ids: string[];
-}
-
-export interface KtxProjectConfig {
-  project: string;
-  setup?: KtxProjectSetupConfig;
-  connections: Record<string, KtxProjectConnectionConfig>;
-  storage: {
-    state: KtxStorageState;
-    search: KtxSearchBackend;
-    git: {
-      auto_commit: boolean;
-      author: string;
-    };
-  };
-  llm: KtxProjectLlmConfig;
-  ingest: {
-    adapters: string[];
-    embeddings: KtxProjectEmbeddingConfig;
-    workUnits: KtxIngestWorkUnitsConfig;
-  };
-  agent: {
-    run_research: {
-      enabled: boolean;
-      max_iterations: number;
-      default_toolset: string[];
-    };
-  };
-  memory: {
-    auto_commit: boolean;
-  };
-  scan: KtxProjectScanConfig;
+export interface KtxConfigValidation {
+  ok: boolean;
+  issues: KtxConfigIssue[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function stringArray(value: unknown, fallback: string[]): string[] {
-  if (!Array.isArray(value)) {
-    return fallback;
-  }
-  return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+function dottedPath(path: ReadonlyArray<PropertyKey>): string {
+  return path.map((segment) => String(segment)).join('.');
 }
 
-function booleanValue(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback;
+function valueAtPath(root: unknown, path: ReadonlyArray<PropertyKey>): unknown {
+  let cursor: unknown = root;
+  for (const segment of path) {
+    if (cursor === null || typeof cursor !== 'object') return undefined;
+    cursor = (cursor as Record<PropertyKey, unknown>)[segment];
+  }
+  return cursor;
 }
 
-function numberValue(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
+function formatIssue(issue: z.core.$ZodIssue, input: unknown): KtxConfigIssue[] {
+  const basePath = dottedPath(issue.path);
 
-function stringValue(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
-}
-
-function optionalNonEmptyString(value: unknown): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function positiveIntegerConfigValue(value: unknown, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
-    return fallback;
-  }
-
-  return value;
-}
-
-function validationBudgetConfigValue(value: unknown, fallback: number | 'all' | undefined): number | 'all' | undefined {
-  if (value === 'all') {
-    return value;
-  }
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
-    return value;
-  }
-  return fallback;
-}
-
-function ratioConfigValue(value: unknown, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
-    return fallback;
-  }
-
-  return value;
-}
-
-function localLlmBackend(value: unknown, fallback: KtxLocalLlmBackend, section = 'llm.provider'): KtxLocalLlmBackend {
-  if (value == null) {
-    return fallback;
-  }
-
-  if (value === 'none' || value === 'anthropic' || value === 'vertex' || value === 'gateway') {
-    return value;
-  }
-
-  throw new Error(`Unsupported ${section}.backend: ${String(value)}`);
-}
-
-function localEmbeddingBackend(
-  value: unknown,
-  fallback: KtxLocalEmbeddingBackend,
-  section = 'ingest.embeddings',
-): KtxLocalEmbeddingBackend {
-  if (value == null) {
-    return fallback;
-  }
-
-  if (
-    value === 'none' ||
-    value === 'deterministic' ||
-    value === 'openai' ||
-    value === 'sentence-transformers'
-  ) {
-    return value;
-  }
-
-  throw new Error(`Unsupported ${section}.backend: ${String(value)}`);
-}
-
-function scanEnrichmentMode(value: unknown, fallback: KtxScanEnrichmentMode): KtxScanEnrichmentMode {
-  if (value == null) {
-    return fallback;
-  }
-
-  if (value === 'none' || value === 'deterministic' || value === 'llm') {
-    return value;
-  }
-
-  throw new Error(`Unsupported scan.enrichment.mode: ${String(value)}`);
-}
-
-function rejectUnsupportedProvider(section: string, value: unknown): void {
-  if (value !== undefined) {
-    throw new Error(`Unsupported ${section}.provider: use ${section}.backend`);
-  }
-}
-
-function optionalStringRecord(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function optionalProviderConfig(value: unknown): { api_key?: string; base_url?: string } | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const apiKey = optionalNonEmptyString(value.api_key);
-  const baseUrl = optionalNonEmptyString(value.base_url);
-  if (!apiKey && !baseUrl) {
-    return undefined;
-  }
-
-  return {
-    ...(apiKey ? { api_key: apiKey } : {}),
-    ...(baseUrl ? { base_url: baseUrl } : {}),
-  };
-}
-
-function parseModels(value: unknown): KtxProjectLlmConfig['models'] {
-  if (!isRecord(value)) {
-    return {};
-  }
-
-  const models: KtxProjectLlmConfig['models'] = {};
-  for (const [role, model] of Object.entries(value)) {
-    const modelName = optionalNonEmptyString(model);
-    if (modelName) {
-      models[role as KtxModelRole] = modelName;
-    }
-  }
-  return models;
-}
-
-function promptCacheTtl(value: unknown): KtxPromptCacheTtl | undefined {
-  return value === '5m' || value === '1h' ? value : undefined;
-}
-
-function parsePromptCaching(value: unknown): KtxProjectPromptCachingConfig | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  return {
-    ...(typeof value.enabled === 'boolean' ? { enabled: value.enabled } : {}),
-    ...(promptCacheTtl(value.systemTtl) ? { systemTtl: promptCacheTtl(value.systemTtl) } : {}),
-    ...(promptCacheTtl(value.toolsTtl) ? { toolsTtl: promptCacheTtl(value.toolsTtl) } : {}),
-    ...(promptCacheTtl(value.historyTtl) ? { historyTtl: promptCacheTtl(value.historyTtl) } : {}),
-    ...(typeof value.vertexFallbackTo5m === 'boolean' ? { vertexFallbackTo5m: value.vertexFallbackTo5m } : {}),
-  };
-}
-
-function parseProjectLlmProviderConfig(
-  raw: Record<string, unknown>,
-  defaults: KtxProjectLlmProviderConfig,
-  section: string,
-): KtxProjectLlmProviderConfig {
-  rejectUnsupportedProvider(section, raw.provider);
-
-  const vertex = isRecord(raw.vertex)
-    ? {
-        ...(optionalNonEmptyString(raw.vertex.project) ? { project: optionalNonEmptyString(raw.vertex.project) } : {}),
-        location: stringValue(raw.vertex.location, ''),
+  if (issue.code === 'unrecognized_keys') {
+    const keys = (issue as { keys?: readonly string[] }).keys ?? [];
+    return keys.map((key) => {
+      const fullPath = basePath.length > 0 ? `${basePath}.${key}` : key;
+      const hint = DEPRECATED_KEY_HINTS[fullPath];
+      if (hint !== undefined) {
+        return { path: fullPath, message: `Unsupported ${fullPath}: ${hint}`, fix: hint };
       }
-    : undefined;
-  const anthropic = optionalProviderConfig(raw.anthropic);
-  const gateway = optionalProviderConfig(raw.gateway);
+      return { path: fullPath, message: `Unsupported ${fullPath}: unknown field` };
+    });
+  }
 
-  return {
-    backend: localLlmBackend(raw.backend, defaults.backend, section),
-    ...(vertex ? { vertex } : {}),
-    ...(anthropic ? { anthropic } : {}),
-    ...(gateway ? { gateway } : {}),
-  };
+  const lastSegment = issue.path[issue.path.length - 1];
+  if (lastSegment === 'backend' && (issue.code === 'invalid_value' || issue.code === 'invalid_type')) {
+    const value = valueAtPath(input, issue.path);
+    return [{ path: basePath, message: `Unsupported ${basePath}: ${String(value)}` }];
+  }
+
+  return [{ path: basePath, message: basePath.length > 0 ? `${basePath}: ${issue.message}` : issue.message }];
 }
 
-function parseProjectLlmConfig(raw: Record<string, unknown>, defaults: KtxProjectLlmConfig): KtxProjectLlmConfig {
-  const provider = isRecord(raw.provider) ? raw.provider : {};
-  return {
-    provider: parseProjectLlmProviderConfig(provider, defaults.provider, 'llm.provider'),
-    models: parseModels(raw.models ?? defaults.models),
-    ...(parsePromptCaching(raw.promptCaching) ? { promptCaching: parsePromptCaching(raw.promptCaching) } : {}),
-  };
+function collectIssues(error: z.ZodError, input: unknown): KtxConfigIssue[] {
+  return error.issues.flatMap((issue) => formatIssue(issue, input));
 }
 
-function parseProjectEmbeddingConfig(
-  raw: Record<string, unknown>,
-  defaults: KtxProjectEmbeddingConfig,
-  section: string,
-): KtxProjectEmbeddingConfig {
-  rejectUnsupportedProvider(section, raw.provider);
-
-  const openai = optionalProviderConfig(raw.openai);
-  const sentenceTransformers = isRecord(raw.sentenceTransformers)
-    ? {
-        base_url: stringValue(raw.sentenceTransformers.base_url, ''),
-        ...(typeof raw.sentenceTransformers.pathPrefix === 'string'
-          ? { pathPrefix: raw.sentenceTransformers.pathPrefix }
-          : {}),
-      }
-    : undefined;
-
-  const backend = localEmbeddingBackend(raw.backend, defaults.backend, section);
-  const model =
-    optionalNonEmptyString(raw.model) ?? (raw.backend == null && backend !== 'none' ? defaults.model : undefined);
-  const batchSize = positiveIntegerConfigValue(raw.batchSize, 0);
-  return {
-    backend,
-    ...(model ? { model } : {}),
-    dimensions: positiveIntegerConfigValue(raw.dimensions, defaults.dimensions),
-    ...(openai ? { openai } : {}),
-    ...(sentenceTransformers ? { sentenceTransformers } : {}),
-    ...(batchSize > 0 ? { batchSize } : {}),
-  };
+function formatZodError(error: z.ZodError, input: unknown): string {
+  return collectIssues(error, input)
+    .map((issue) => issue.message)
+    .join('\n');
 }
 
-function parseScanRelationshipConfig(
-  raw: Record<string, unknown>,
-  defaults: KtxScanRelationshipConfig,
-): KtxScanRelationshipConfig {
-  const validationBudget = validationBudgetConfigValue(raw.validationBudget, defaults.validationBudget);
-
-  return {
-    enabled: booleanValue(raw.enabled, defaults.enabled),
-    llmProposals: booleanValue(raw.llmProposals, defaults.llmProposals),
-    validationRequiredForManifest: booleanValue(
-      raw.validationRequiredForManifest,
-      defaults.validationRequiredForManifest,
-    ),
-    acceptThreshold: ratioConfigValue(raw.acceptThreshold, defaults.acceptThreshold),
-    reviewThreshold: ratioConfigValue(raw.reviewThreshold, defaults.reviewThreshold),
-    maxLlmTablesPerBatch: positiveIntegerConfigValue(raw.maxLlmTablesPerBatch, defaults.maxLlmTablesPerBatch),
-    maxCandidatesPerColumn: positiveIntegerConfigValue(raw.maxCandidatesPerColumn, defaults.maxCandidatesPerColumn),
-    profileSampleRows: positiveIntegerConfigValue(raw.profileSampleRows, defaults.profileSampleRows),
-    validationConcurrency: positiveIntegerConfigValue(raw.validationConcurrency, defaults.validationConcurrency),
-    ...(validationBudget !== undefined ? { validationBudget } : {}),
-  };
-}
-
-function workUnitFailureMode(value: unknown, fallback: 'abort' | 'continue'): 'abort' | 'continue' {
-  return value === 'abort' || value === 'continue' ? value : fallback;
-}
-
-function parseIngestWorkUnitsConfig(
-  raw: Record<string, unknown>,
-  defaults: KtxIngestWorkUnitsConfig,
-): KtxIngestWorkUnitsConfig {
-  return {
-    stepBudget: positiveIntegerConfigValue(raw.stepBudget, defaults.stepBudget),
-    maxConcurrency: positiveIntegerConfigValue(raw.maxConcurrency, defaults.maxConcurrency),
-    failureMode: workUnitFailureMode(raw.failureMode, defaults.failureMode),
-  };
-}
-
-export function buildDefaultKtxProjectConfig(projectName = 'ktx-project'): KtxProjectConfig {
-  return {
-    project: projectName,
-    connections: {},
-    storage: {
-      state: 'sqlite',
-      search: 'sqlite-fts5',
-      git: {
-        auto_commit: true,
-        author: 'ktx <ktx@example.com>',
-      },
-    },
-    llm: {
-      provider: {
-        backend: 'none',
-      },
-      models: {},
-    },
-    ingest: {
-      adapters: [],
-      embeddings: {
-        backend: 'deterministic',
-        model: 'deterministic',
-        dimensions: 8,
-      },
-      workUnits: {
-        stepBudget: 40,
-        maxConcurrency: 1,
-        failureMode: 'continue',
-      },
-    },
-    agent: {
-      run_research: {
-        enabled: false,
-        max_iterations: 20,
-        default_toolset: ['sl_query', 'wiki_search', 'sl_read_source'],
-      },
-    },
-    memory: {
-      auto_commit: true,
-    },
-    scan: {
-      enrichment: {
-        mode: 'none',
-      },
-      relationships: {
-        enabled: true,
-        llmProposals: true,
-        validationRequiredForManifest: true,
-        acceptThreshold: 0.85,
-        reviewThreshold: 0.55,
-        maxLlmTablesPerBatch: 40,
-        maxCandidatesPerColumn: 25,
-        profileSampleRows: 10000,
-        validationConcurrency: 4,
-      },
-    },
-  };
+export function buildDefaultKtxProjectConfig(): KtxProjectConfig {
+  return ktxProjectConfigSchema.parse({});
 }
 
 export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
@@ -437,95 +340,41 @@ export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
   if (!isRecord(parsed)) {
     throw new Error('ktx.yaml must contain a YAML object');
   }
-
-  const project = parsed.project;
-  if (typeof project !== 'string' || project.trim().length === 0) {
-    throw new Error('ktx.yaml field "project" is required');
+  const result = ktxProjectConfigSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(formatZodError(result.error, parsed));
   }
+  return result.data;
+}
 
-  const defaults = buildDefaultKtxProjectConfig(project.trim());
-  const llm = isRecord(parsed.llm) ? parsed.llm : {};
-  const storage = isRecord(parsed.storage) ? parsed.storage : {};
-  const storageGit = isRecord(storage.git) ? storage.git : {};
-  const setup = isRecord(parsed.setup) ? parsed.setup : undefined;
-  const ingest = isRecord(parsed.ingest) ? parsed.ingest : {};
-  const ingestEmbeddings = isRecord(ingest.embeddings) ? ingest.embeddings : {};
-  const ingestWorkUnits = isRecord(ingest.workUnits) ? ingest.workUnits : {};
-  const agent = isRecord(parsed.agent) ? parsed.agent : {};
-  const runResearch = isRecord(agent.run_research) ? agent.run_research : {};
-  const memory = isRecord(parsed.memory) ? parsed.memory : {};
-  const scan = isRecord(parsed.scan) ? parsed.scan : {};
-  const scanEnrichment = isRecord(scan.enrichment) ? scan.enrichment : {};
-  const scanRelationships = isRecord(scan.relationships) ? scan.relationships : {};
-  if (isRecord(ingest.llm)) {
-    throw new Error('Unsupported ingest.llm: use top-level llm.provider, llm.models, and ingest.workUnits');
+export function validateKtxProjectConfig(raw: string): KtxConfigValidation {
+  let parsed: unknown;
+  try {
+    parsed = YAML.parse(raw);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, issues: [{ path: '', message: `ktx.yaml parse error: ${message}` }] };
   }
-  if (scanEnrichment.backend !== undefined) {
-    throw new Error('Unsupported scan.enrichment.backend: use scan.enrichment.mode');
+  if (!isRecord(parsed)) {
+    return { ok: false, issues: [{ path: '', message: 'ktx.yaml must contain a YAML object' }] };
   }
-  if (isRecord(scanEnrichment.llm)) {
-    throw new Error('Unsupported scan.enrichment.llm: use top-level llm.provider and llm.models');
+  const result = ktxProjectConfigSchema.safeParse(parsed);
+  if (result.success) {
+    return { ok: true, issues: [] };
   }
+  return { ok: false, issues: collectIssues(result.error, parsed) };
+}
 
-  const parsedLlm = parseProjectLlmConfig(llm, defaults.llm);
-  const parsedIngestEmbeddings = parseProjectEmbeddingConfig(
-    ingestEmbeddings,
-    defaults.ingest.embeddings,
-    'ingest.embeddings',
-  );
-  const parsedIngestWorkUnits = parseIngestWorkUnitsConfig(ingestWorkUnits, defaults.ingest.workUnits);
-  const scanEmbeddings = parseProjectEmbeddingConfig(
-    optionalStringRecord(scanEnrichment.embeddings),
-    defaults.ingest.embeddings,
-    'scan.enrichment.embeddings',
-  );
-  const parsedScanEnrichment: KtxScanEnrichmentConfig = {
-    mode: scanEnrichmentMode(scanEnrichment.mode, defaults.scan.enrichment.mode),
-    ...(isRecord(scanEnrichment.embeddings) ? { embeddings: scanEmbeddings } : {}),
-  };
-  const parsedScanRelationships = parseScanRelationshipConfig(scanRelationships, defaults.scan.relationships);
-  const parsedConnections = isRecord(parsed.connections)
-    ? (parsed.connections as Record<string, KtxProjectConnectionConfig>)
-    : defaults.connections;
-
+export function generateKtxProjectConfigJsonSchema(): Record<string, unknown> {
+  const schema = z.toJSONSchema(ktxProjectConfigSchema, {
+    target: 'draft-7',
+    io: 'input',
+  }) as Record<string, unknown>;
   return {
-    project: project.trim(),
-    ...(setup
-      ? {
-          setup: {
-            database_connection_ids: stringArray(setup.database_connection_ids, []),
-          },
-        }
-      : {}),
-    connections: parsedConnections,
-    storage: {
-      state: storage.state === 'sqlite' ? 'sqlite' : defaults.storage.state,
-      search: storage.search === 'sqlite-fts5' ? 'sqlite-fts5' : defaults.storage.search,
-      git: {
-        auto_commit: booleanValue(storageGit.auto_commit, defaults.storage.git.auto_commit),
-        author: stringValue(storageGit.author, defaults.storage.git.author),
-      },
-    },
-    llm: parsedLlm,
-    ingest: {
-      adapters: stringArray(ingest.adapters, defaults.ingest.adapters),
-      embeddings: parsedIngestEmbeddings,
-      workUnits: parsedIngestWorkUnits,
-    },
-    agent: {
-      run_research: {
-        enabled: booleanValue(runResearch.enabled, defaults.agent.run_research.enabled),
-        max_iterations: numberValue(runResearch.max_iterations, defaults.agent.run_research.max_iterations),
-        default_toolset: stringArray(runResearch.default_toolset, defaults.agent.run_research.default_toolset),
-      },
-    },
-    memory: {
-      auto_commit: booleanValue(memory.auto_commit, defaults.memory.auto_commit),
-    },
-    scan: {
-      enrichment: parsedScanEnrichment,
-      relationships: parsedScanRelationships,
-    },
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    $id: 'https://ktx.dev/schemas/ktx-project-config.json',
+    title: 'ktx.yaml',
+    ...schema,
   };
 }
 

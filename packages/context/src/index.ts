@@ -117,7 +117,6 @@ export type {
   KtxColumnTypeMapping,
 } from './scan/index.js';
 export {
-  appendKtxWordLimitInstruction,
   buildKtxColumnDescriptionPrompt,
   buildKtxColumnEmbeddingText,
   buildKtxDataSourceDescriptionPrompt,

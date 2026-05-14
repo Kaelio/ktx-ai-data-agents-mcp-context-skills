@@ -14,7 +14,7 @@ refs:
 
 ## Known Product Gaps and Friction Points
 
-**Source:** Notion — Product & Customers (Notes from Recent Customer Calls), last edited 2026-05-07
+**Source:** Notion - Product & Customers (Notes from Recent Customer Calls), last edited 2026-05-07
 
 ---
 
