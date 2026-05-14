@@ -1024,6 +1024,8 @@ describe('setup sources step', () => {
             databaseMappings: { '1': 'warehouse' },
             syncEnabled: { '1': true },
             syncMode: 'ALL',
+            selections: { collections: [], items: [] },
+            defaultTagNames: [],
           },
         },
         deps: {
@@ -1181,6 +1183,8 @@ describe('setup sources step', () => {
         databaseMappings: { '1': 'warehouse' },
         syncEnabled: { '1': true },
         syncMode: 'ALL',
+        selections: { collections: [], items: [] },
+        defaultTagNames: [],
       },
     });
     const testPrompts = prompts({

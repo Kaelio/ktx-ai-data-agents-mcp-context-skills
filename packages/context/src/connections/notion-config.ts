@@ -13,7 +13,20 @@ export const KTX_NOTION_ORG_KNOWLEDGE_WARNING =
 
 type KtxNotionCrawlMode = 'all_accessible' | 'selected_roots';
 
-export interface KtxNotionConnectionConfig extends KtxProjectConnectionConfig {
+type RawKtxNotionConnectionConfig = Extract<KtxProjectConnectionConfig, { driver: 'notion' }>;
+
+export type KtxNotionConnectionConfig = Omit<
+  RawKtxNotionConnectionConfig,
+  | 'auth_token'
+  | 'auth_token_ref'
+  | 'crawl_mode'
+  | 'root_page_ids'
+  | 'root_database_ids'
+  | 'root_data_source_ids'
+  | 'max_pages_per_run'
+  | 'max_knowledge_creates_per_run'
+  | 'max_knowledge_updates_per_run'
+> & {
   driver: 'notion';
   auth_token: string | null;
   auth_token_ref: string | null;
@@ -24,7 +37,7 @@ export interface KtxNotionConnectionConfig extends KtxProjectConnectionConfig {
   max_pages_per_run: number;
   max_knowledge_creates_per_run: number;
   max_knowledge_updates_per_run: number;
-}
+};
 
 export interface RedactedKtxNotionConnectionConfig {
   driver: 'notion';
