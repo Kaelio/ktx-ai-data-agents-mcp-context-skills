@@ -244,12 +244,12 @@ export async function proposeKtxRelationshipCandidatesWithLlm(
 
   const settings = mergeSettings(input.settings);
   const evidence = buildEvidencePacket(input.schema, input.profile, settings);
-  const prompt = [
+  const system = [
     'You are helping KTX review possible SQL relationships before validation.',
     'Use only the compact schema evidence. Propose likely primary keys and foreign keys for later SQL validation.',
     'Return structured output only; never assume a join is accepted.',
-    JSON.stringify(evidence),
-  ].join('\n\n');
+  ].join('\n');
+  const prompt = JSON.stringify(evidence);
 
   try {
     const generated = await generateKtxObject<
@@ -258,6 +258,7 @@ export async function proposeKtxRelationshipCandidatesWithLlm(
     >({
       llmProvider: input.llmProvider,
       role: 'candidateExtraction',
+      system,
       prompt,
       schema: relationshipLlmProposalSchema,
       generateText: input.generateText,

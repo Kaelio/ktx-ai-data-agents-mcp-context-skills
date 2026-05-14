@@ -227,10 +227,16 @@ describe('PageTriageService', () => {
     });
     generateTextMock
       .mockImplementationOnce((args: any) => {
-        const prompt = args.messages[0].content as string;
-        expect(prompt).toContain('Reusable templates and scripts are durable knowledge regardless of subject matter.');
-        expect(prompt).toContain('Date-titled standups are still skip; named templates and scripts are not.');
-        expect(prompt).toContain('Cold Call Script');
+        const systemMessage = args.messages.find((m: { role: string }) => m.role === 'system');
+        const userMessage = args.messages.find((m: { role: string }) => m.role === 'user');
+        const systemText = systemMessage.content as string;
+        const userText = userMessage.content as string;
+        expect(systemText).toContain(
+          'Reusable templates and scripts are durable knowledge regardless of subject matter.',
+        );
+        expect(systemText).toContain('Date-titled standups are still skip; named templates and scripts are not.');
+        expect(userText).toContain('Cold Call Script');
+        expect(userText).not.toContain('Reusable templates and scripts are durable knowledge');
         return { text: JSON.stringify({ lane: 'light', reason: 'reusable sales script' }) } as any;
       })
       .mockResolvedValueOnce({

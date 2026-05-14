@@ -199,6 +199,9 @@ describe('createKtxLlmProvider', () => {
     expect(createGateway).toHaveBeenCalledWith({
       apiKey: 'gateway-key', // pragma: allowlist secret
       baseURL: 'https://gateway.test/v1',
+      headers: {
+        'anthropic-beta': 'interleaved-thinking-2025-05-14,extended-cache-ttl-2025-04-11',
+      },
     });
     expect(gateway).toHaveBeenCalledWith('anthropic/claude-sonnet-4-6');
   });

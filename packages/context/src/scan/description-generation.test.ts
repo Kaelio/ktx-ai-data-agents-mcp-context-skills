@@ -104,24 +104,27 @@ function createConnector(): KtxScanConnector {
 
 describe('KTX description prompt builders', () => {
   it('builds column prompts with sample values, source descriptions, and nested BigQuery guidance', () => {
-    const prompt = buildKtxColumnDescriptionPrompt({
+    const { system, user } = buildKtxColumnDescriptionPrompt({
       columnName: 'payload',
       columnValues: [{ nested: true }, '[1,2]'],
       tableContext: 'Table: events | Columns: payload | Data source: BIGQUERY',
       dataSourceType: 'BIGQUERY',
       supportsNestedAnalysis: true,
       rawDescriptions: { db: 'Raw event payload', ai: 'Old AI text', user: 'User text' },
+      maxWords: 12,
     });
 
-    expect(prompt).toContain(
+    expect(user).toContain(
       '<table_context> Table: events | Columns: payload | Data source: BIGQUERY </table_context>',
     );
-    expect(prompt).toContain('<column_name> payload </column_name>');
-    expect(prompt).toContain('<sample_values> [object Object], [1,2] </sample_values>');
-    expect(prompt).toContain('<db_documentation> Raw event payload </db_documentation>');
-    expect(prompt).not.toContain('Old AI text');
-    expect(prompt).not.toContain('User text');
-    expect(prompt).toContain('nested/structured data');
+    expect(user).toContain('<column_name> payload </column_name>');
+    expect(user).toContain('<sample_values> [object Object], [1,2] </sample_values>');
+    expect(user).toContain('<db_documentation> Raw event payload </db_documentation>');
+    expect(user).not.toContain('Old AI text');
+    expect(user).not.toContain('User text');
+    expect(system).toContain('nested/structured data');
+    expect(system).toContain('12 words or less');
+    expect(user).not.toContain('12 words or less');
   });
 
   it('builds table and data-source prompts from sampled rows', () => {
@@ -134,21 +137,21 @@ describe('KTX description prompt builders', () => {
       totalRows: 2,
     };
 
-    expect(
-      buildKtxTableDescriptionPrompt({
-        tableName: 'orders',
-        sampleData: sample,
-        dataSourceType: 'POSTGRESQL',
-        rawDescriptions: { dbt: 'Fact table for commerce orders' },
-      }),
-    ).toContain('status: paid, refunded');
+    const table = buildKtxTableDescriptionPrompt({
+      tableName: 'orders',
+      sampleData: sample,
+      dataSourceType: 'POSTGRESQL',
+      rawDescriptions: { dbt: 'Fact table for commerce orders' },
+    });
+    expect(table.user).toContain('status: paid, refunded');
+    expect(table.system).toContain('Analyze database tables');
 
-    expect(
-      buildKtxDataSourceDescriptionPrompt({
-        tableSamples: [['orders', sample]],
-        dataSourceType: 'POSTGRESQL',
-      }),
-    ).toContain('orders (2 columns, 2 sample rows)');
+    const datasource = buildKtxDataSourceDescriptionPrompt({
+      tableSamples: [['orders', sample]],
+      dataSourceType: 'POSTGRESQL',
+    });
+    expect(datasource.user).toContain('orders (2 columns, 2 sample rows)');
+    expect(datasource.system).toContain('Analyze databases');
   });
 });
 
@@ -202,8 +205,12 @@ describe('KtxDescriptionGenerator', () => {
         temperature: 0.2,
         messages: expect.arrayContaining([
           expect.objectContaining({
-            role: 'user',
+            role: 'system',
             content: expect.stringContaining('Please provide a concise description in 12 words or less.'),
+          }),
+          expect.objectContaining({
+            role: 'user',
+            content: expect.stringContaining('<column_name> status </column_name>'),
           }),
         ]),
       }),

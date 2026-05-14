@@ -38,7 +38,7 @@ const DEFAULT_PROMPT_CACHING: KtxPromptCachingConfig = {
   vertexFallbackTo5m: false,
 };
 
-const DIRECT_ANTHROPIC_BETA_HEADER = 'interleaved-thinking-2025-05-14,extended-cache-ttl-2025-04-11';
+const ANTHROPIC_BETA_HEADER = 'interleaved-thinking-2025-05-14,extended-cache-ttl-2025-04-11';
 
 function resolvePromptCaching(config: KtxLlmConfig): KtxPromptCachingConfig {
   return { ...DEFAULT_PROMPT_CACHING, ...config.promptCaching };
@@ -158,7 +158,7 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
         ...(config.anthropic?.apiKey ? { apiKey: config.anthropic.apiKey } : {}),
         ...(config.anthropic?.baseURL ? { baseURL: config.anthropic.baseURL } : {}),
         headers: {
-          'anthropic-beta': DIRECT_ANTHROPIC_BETA_HEADER,
+          'anthropic-beta': ANTHROPIC_BETA_HEADER,
         },
       });
       return (modelId) => anthropic(modelId);
@@ -178,6 +178,9 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
     const gateway = (deps.createGateway ?? createGateway)({
       ...(config.gateway?.apiKey ? { apiKey: config.gateway.apiKey } : {}),
       ...(config.gateway?.baseURL ? { baseURL: config.gateway.baseURL } : {}),
+      headers: {
+        'anthropic-beta': ANTHROPIC_BETA_HEADER,
+      },
     });
     return (modelId) => gateway(modelId);
   }

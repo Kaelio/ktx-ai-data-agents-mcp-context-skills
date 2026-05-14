@@ -34,7 +34,6 @@ export type {
   KtxTableDescriptionPromptInput,
 } from './description-generation.js';
 export {
-  appendKtxWordLimitInstruction,
   buildKtxColumnDescriptionPrompt,
   buildKtxDataSourceDescriptionPrompt,
   buildKtxTableDescriptionPrompt,

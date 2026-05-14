@@ -58,7 +58,6 @@ describe('@ktx/context package exports', () => {
     expect(scan.writeLocalScanEnrichmentArtifacts).toBeTypeOf('function');
     expect(scan.readLocalScanStructuralSnapshot).toBeTypeOf('function');
     expect(scan.writeLocalScanManifestShards).toBeTypeOf('function');
-    expect(scan.appendKtxWordLimitInstruction).toBeTypeOf('function');
     expect(scan.buildKtxColumnDescriptionPrompt).toBeTypeOf('function');
     expect(scan.buildKtxTableDescriptionPrompt).toBeTypeOf('function');
     expect(scan.buildKtxDataSourceDescriptionPrompt).toBeTypeOf('function');
