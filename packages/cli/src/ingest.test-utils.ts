@@ -109,6 +109,7 @@ export async function writeWarehouseConfig(projectDir: string): Promise<void> {
       'connections:',
       '  prod-metabase:',
       '    driver: metabase',
+      '    api_url: https://metabase.example.test',
       '  warehouse_a:',
       '    driver: postgres',
       'ingest:',
