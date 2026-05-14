@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  lookerMappingsSchema,
+  lookmlMappingsSchema,
+  metabaseMappingsSchema,
   parseConnectionMappingBootstrap,
   parseLookmlMappingBootstrap,
   parseLookerMappingBootstrap,
@@ -81,5 +84,18 @@ describe('ktx.yaml mapping bootstrap schema', () => {
         mappings: { connectionMappings: { analytics: 'prod-warehouse' } },
       }),
     ).toMatchObject({ adapter: 'looker', connectionId: 'prod-looker' });
+  });
+
+  it('exports mapping shapes that parse documented examples', () => {
+    expect(metabaseMappingsSchema.parse({ databaseMappings: { '1': 'wh' } })).toMatchObject({
+      databaseMappings: { '1': 'wh' },
+      syncMode: 'ALL',
+    });
+    expect(lookerMappingsSchema.parse({ connectionMappings: { x: 'wh' } })).toEqual({
+      connectionMappings: { x: 'wh' },
+    });
+    expect(lookmlMappingsSchema.parse({ expectedLookerConnectionName: 'x' })).toEqual({
+      expectedLookerConnectionName: 'x',
+    });
   });
 });

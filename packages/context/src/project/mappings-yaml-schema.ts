@@ -11,24 +11,48 @@ const metabaseSelectionsSchema = z
     items: z.array(positiveIntegerValueSchema).default([]),
   });
 
-const metabaseMappingsSchema = z
+export const metabaseMappingsSchema = z
   .object({
-    databaseMappings: z.record(z.string(), stringTargetSchema).default({}),
-    syncEnabled: z.record(z.string(), z.boolean()).default({}),
-    syncMode: metabaseSyncModeSchema.default('ALL'),
-    selections: metabaseSelectionsSchema.default({ collections: [], items: [] }),
-    defaultTagNames: z.array(z.string().min(1)).default([]),
-  });
+    databaseMappings: z
+      .record(z.string(), stringTargetSchema)
+      .default({})
+      .describe('Map of Metabase database ID (positive integer string) to KTX connection ID. Use null to explicitly unmap.'),
+    syncEnabled: z
+      .record(z.string(), z.boolean())
+      .default({})
+      .describe('Per-Metabase-database sync toggle, keyed by Metabase database ID string.'),
+    syncMode: metabaseSyncModeSchema
+      .default('ALL')
+      .describe('Sync scope: ALL ingests every mapped DB; ONLY restricts to syncEnabled=true; EXCEPT excludes syncEnabled=true.'),
+    selections: metabaseSelectionsSchema
+      .default({ collections: [], items: [] })
+      .describe('Optional Metabase collection and item IDs to scope ingest.'),
+    defaultTagNames: z
+      .array(z.string().min(1))
+      .default([])
+      .describe('Default tag names applied to ingested Metabase artifacts.'),
+  })
+  .describe('Metabase database-to-warehouse mapping and sync configuration.');
 
-const lookerMappingsSchema = z
+export const lookerMappingsSchema = z
   .object({
-    connectionMappings: z.record(z.string().min(1), stringTargetSchema).default({}),
-  });
+    connectionMappings: z
+      .record(z.string().min(1), stringTargetSchema)
+      .default({})
+      .describe('Map of Looker connection name to KTX connection ID. Use null to explicitly unmap.'),
+  })
+  .describe('Looker connection-to-warehouse mapping configuration.');
 
-const lookmlMappingsSchema = z
+export const lookmlMappingsSchema = z
   .object({
-    expectedLookerConnectionName: z.string().min(1).nullable().default(null),
-  });
+    expectedLookerConnectionName: z
+      .string()
+      .min(1)
+      .nullable()
+      .default(null)
+      .describe('Looker connection name that LookML models must declare; mismatches block sl_write_source at ingest time.'),
+  })
+  .describe('LookML connection-name expectation for ingest gating.');
 
 export type MetabaseMappingBootstrap = {
   adapter: 'metabase';
