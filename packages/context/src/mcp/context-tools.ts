@@ -167,6 +167,15 @@ const dictionarySearchSchema = z.object({
   connectionId: connectionIdSchema.optional(),
 });
 
+const discoverDataKindSchema = z.enum(['wiki', 'sl_source', 'sl_measure', 'sl_dimension', 'table', 'column']);
+
+const discoverDataSchema = z.object({
+  query: z.string().min(1),
+  connectionId: connectionIdSchema.optional(),
+  kinds: z.array(discoverDataKindSchema).optional(),
+  limit: z.number().int().min(1).max(50).default(15).optional(),
+});
+
 const sqlExecutionSchema = z.object({
   connectionId: connectionIdSchema,
   sql: z.string().min(1),
@@ -419,6 +428,22 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       },
       dictionarySearchSchema,
       async (input) => jsonToolResult(await dictionarySearch.search(input)),
+    );
+  }
+
+  if (ports.discover) {
+    const discover = ports.discover;
+    registerParsedTool(
+      server,
+      'discover_data',
+      {
+        title: 'Discover Data',
+        description:
+          'Search across KTX wiki pages, semantic-layer sources/measures/dimensions, and raw warehouse schema refs.',
+        inputSchema: discoverDataSchema.shape,
+      },
+      discoverDataSchema,
+      async (input) => jsonToolResult(await discover.search(input)),
     );
   }
 

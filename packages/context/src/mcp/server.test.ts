@@ -6,6 +6,7 @@ import { createLocalProjectMemoryCapture } from '../memory/index.js';
 import { initKtxProject } from '../project/index.js';
 import { createKtxMcpServer } from './server.js';
 import type {
+  KtxDiscoverDataMcpPort,
   KtxDictionarySearchMcpPort,
   KtxEntityDetailsMcpPort,
   KtxIngestMcpPort,
@@ -252,6 +253,55 @@ describe('createKtxMcpServer', () => {
     expect(dictionarySearch.search).toHaveBeenCalledWith({
       connectionId: 'warehouse',
       values: ['paid'],
+    });
+  });
+
+  it('registers discover_data when the host provides a discover port', async () => {
+    const fake = makeFakeServer();
+    const discover: KtxDiscoverDataMcpPort = {
+      search: vi.fn<KtxDiscoverDataMcpPort['search']>().mockResolvedValue([
+        {
+          kind: 'table',
+          id: 'public.orders',
+          score: 1,
+          summary: 'Orders table',
+          snippet: 'id, status',
+          matchedOn: 'name',
+          connectionId: 'warehouse',
+          tableRef: { catalog: null, db: 'public', name: 'orders' },
+        },
+      ]),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { discover },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['discover_data']);
+    await expect(
+      getTool(fake.tools, 'discover_data').handler({
+        query: 'orders',
+        connectionId: 'warehouse',
+        kinds: ['table'],
+        limit: 5,
+      }),
+    ).resolves.toMatchObject({
+      structuredContent: [
+        {
+          kind: 'table',
+          id: 'public.orders',
+          connectionId: 'warehouse',
+          tableRef: { catalog: null, db: 'public', name: 'orders' },
+        },
+      ],
+    });
+    expect(discover.search).toHaveBeenCalledWith({
+      query: 'orders',
+      connectionId: 'warehouse',
+      kinds: ['table'],
+      limit: 5,
     });
   });
 
