@@ -64,6 +64,11 @@ describe('formatDoctorReport', () => {
     expect(output).toContain('Node 22+ · pnpm 10.20+');
     expect(output).not.toContain('v22.16.0');
     expect(output).toContain('Everything ready.');
+    expect(output).toContain('ktx status --json');
+    expect(output).toContain('ktx sl list');
+    expect(output).toContain('ktx wiki list');
+    expect(output).not.toContain('ktx scan');
+    expect(output).not.toContain('ktx sl ask');
   });
 
   it('shows the underlying detail for a single-check group on the group line', () => {
@@ -462,6 +467,7 @@ describe('runKtxDoctor', () => {
   it('includes Postgres query-history readiness in project doctor output', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     process.env.OPENAI_API_KEY = 'test-key'; // pragma: allowlist secret
+    process.env.WAREHOUSE_DATABASE_URL = 'postgresql://reader@example.test/warehouse';
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -516,8 +522,14 @@ describe('runKtxDoctor', () => {
     expect(out).toContain('pg_stat_statements ready (PostgreSQL 16.4)');
     expect(out).toContain('info: pg_stat_statements.max is 1000');
     expect(out).not.toContain('Update the Postgres parameter group or config');
+    expect(out).toContain('ktx status --json');
+    expect(out).toContain('ktx sl list');
+    expect(out).toContain('ktx wiki list');
+    expect(out).not.toContain('ktx scan');
+    expect(out).not.toContain('ktx sl ask');
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
+    delete process.env.WAREHOUSE_DATABASE_URL;
   });
 
   it('returns blocked verdict when LLM is not configured', async () => {
@@ -543,6 +555,7 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(1);
 
     expect(testIo.stdout()).toContain('no LLM configured');
+    expect(testIo.stdout()).not.toContain('ktx ask');
     expect(testIo.stdout()).toContain('ktx setup');
   });
 
