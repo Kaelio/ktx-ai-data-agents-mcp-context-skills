@@ -581,19 +581,18 @@ describe('setup sources step', () => {
       text: ['metabase-main', 'https://metabase.example.com'],
     });
 
-    await expect(
-      runKtxSetupSourcesStep(
-        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
-        io.io,
-        {
-          prompts: testPrompts,
-          discoverMetabaseDatabases: vi.fn(async () => [
-            { id: 1, name: 'Analytics', engine: 'postgres', host: 'db.example.com', dbName: 'analytics' },
-          ]),
-          runMapping,
-        },
-      ),
-    ).resolves.toEqual({ status: 'failed', projectDir });
+    const result = await runKtxSetupSourcesStep(
+      { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+      io.io,
+      {
+        prompts: testPrompts,
+        discoverMetabaseDatabases: vi.fn(async () => [
+          { id: 1, name: 'Analytics', engine: 'postgres', host: 'db.example.com', dbName: 'analytics' },
+        ]),
+        runMapping,
+      },
+    );
+    expect(result.status).not.toBe('failed');
 
     expect(runMapping).toHaveBeenCalledWith(
       projectDir,
@@ -605,6 +604,7 @@ describe('setup sources step', () => {
     );
     expect(io.stderr()).toContain('1: Metabase database does not match KTX connection database');
     expect(io.stderr()).not.toContain('Metabase mapping validation failed');
+    expect(testPrompts.log).toHaveBeenCalledWith('Edit the connection or pick a different source to continue.');
   });
 
   it('does not mark sources complete when validation fails', async () => {
@@ -785,6 +785,81 @@ describe('setup sources step', () => {
       ],
     });
     expect(testPrompts.text).toHaveBeenCalledTimes(4);
+  });
+
+  it('re-prompts when a pasted token fails authentication and accepts the second token', async () => {
+    await addPrimarySource();
+    const validateDbt = vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' }));
+    const testGitRepo = vi
+      .fn<(args: { repoUrl: string; authToken?: string | null }) => Promise<{ ok: true } | { ok: false; error: string }>>()
+      .mockResolvedValueOnce({ ok: false, error: 'authentication required' })
+      .mockResolvedValueOnce({ ok: false, error: 'Invalid username or token.' })
+      .mockResolvedValue({ ok: true });
+    const io = makeIo();
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['git', 'paste', 'paste'],
+      text: ['dbt-main', 'https://github.com/acme-org/private-repo', 'main', ''],
+      password: ['bad-token', 'good-token'],
+    });
+
+    await expect(
+      runKtxSetupSourcesStep(
+        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+        io.io,
+        {
+          prompts: testPrompts,
+          validateDbt,
+          testGitRepo,
+        },
+      ),
+    ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['dbt-main'] });
+
+    expect(testGitRepo).toHaveBeenNthCalledWith(1, { repoUrl: 'https://github.com/acme-org/private-repo' });
+    expect(testGitRepo).toHaveBeenNthCalledWith(2, {
+      repoUrl: 'https://github.com/acme-org/private-repo',
+      authToken: 'bad-token',
+    });
+    expect(testGitRepo).toHaveBeenNthCalledWith(3, {
+      repoUrl: 'https://github.com/acme-org/private-repo',
+      authToken: 'good-token',
+    });
+    expect(testPrompts.password).toHaveBeenCalledTimes(2);
+    expect(testPrompts.log).toHaveBeenCalledWith('Authentication failed: Invalid username or token.');
+    expect(testPrompts.log).toHaveBeenCalledWith('Saved to .ktx/secrets/dbt-main-auth-token');
+    expect((await readConfig()).connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      repo_url: 'https://github.com/acme-org/private-repo',
+      auth_token_ref: expect.stringMatching(/^file:.*\.ktx\/secrets\/dbt-main-auth-token$/),
+    });
+  });
+
+  it('does not exit interactive setup when validation fails for an existing connection', async () => {
+    await addPrimarySource();
+    await addConnection('dbt-main', {
+      driver: 'dbt',
+      repo_url: 'https://github.com/acme/private-repo',
+      auth_token_ref: 'env:GITHUB_TOKEN',
+    });
+    const validateDbt = vi.fn(async () => ({
+      ok: false as const,
+      message: 'Failed to clone https://github.com/acme/private-repo: Authentication failed',
+    }));
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['existing:dbt-main'],
+    });
+    const io = makeIo();
+
+    const result = await runKtxSetupSourcesStep(
+      { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+      io.io,
+      { prompts: testPrompts, validateDbt },
+    );
+
+    expect(result.status).not.toBe('failed');
+    expect(io.stderr()).toContain('Failed to clone https://github.com/acme/private-repo: Authentication failed');
+    expect(testPrompts.log).toHaveBeenCalledWith('Edit the connection or pick a different source to continue.');
   });
 
   it('adds a dbt source connection and enables its adapter', async () => {
@@ -1173,22 +1248,24 @@ describe('setup sources step', () => {
       select: ['edit:dbt-main', 'path'],
       text: ['/repo/new-dbt', ''],
     });
+    const io = makeIo();
 
-    await expect(
-      runKtxSetupSourcesStep(
-        { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
-        makeIo().io,
-        {
-          prompts: testPrompts,
-          validateDbt,
-        },
-      ),
-    ).resolves.toEqual({ status: 'failed', projectDir });
+    const result = await runKtxSetupSourcesStep(
+      { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+      io.io,
+      {
+        prompts: testPrompts,
+        validateDbt,
+      },
+    );
+    expect(result.status).not.toBe('failed');
 
     expect(validateDbt).toHaveBeenCalledWith(expect.objectContaining({
       driver: 'dbt',
       source_dir: '/repo/new-dbt',
     }));
+    expect(io.stderr()).toContain('dbt project not found');
+    expect(testPrompts.log).toHaveBeenCalledWith('Edit the connection or pick a different source to continue.');
     const config = await readConfig();
     expect(config.connections['dbt-main']).toMatchObject({
       driver: 'dbt',

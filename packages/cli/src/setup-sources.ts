@@ -260,6 +260,8 @@ async function chooseGitAuthCredentialRef(input: {
   source: KtxSetupSourceType;
   connectionId: string;
   existingRef?: string;
+  repoUrl?: string;
+  testGitRepo?: (args: { repoUrl: string; authToken?: string | null }) => Promise<{ ok: true } | { ok: false; error: string }>;
 }): Promise<string | undefined | 'back'> {
   const label = input.source === 'dbt' ? 'This' : `This ${sourceLabel(input.source)}`;
   while (true) {
@@ -280,6 +282,13 @@ async function chooseGitAuthCredentialRef(input: {
       const value = await input.prompts.password({ message: 'Git access token' });
       if (value === undefined) continue;
       if (!value.trim()) continue;
+      if (input.testGitRepo && input.repoUrl) {
+        const result = await input.testGitRepo({ repoUrl: input.repoUrl, authToken: value });
+        if (!result.ok) {
+          input.prompts.log?.(`Authentication failed: ${result.error}`);
+          continue;
+        }
+      }
       const fileName = `${input.connectionId}-auth-token`;
       const ref = await writeProjectLocalSecretReference({
         projectDir: input.projectDir,
@@ -536,12 +545,17 @@ async function defaultValidateDbt(connection: KtxProjectConnectionConfig): Promi
   }
   if (!sourceDir && repoUrl) {
     const cacheDir = await mkdtemp(join(tmpdir(), 'ktx-setup-dbt-'));
-    await cloneOrPull({
-      repoUrl,
-      authToken: repoAuthToken(connection),
-      cacheDir,
-      branch: stringField(connection.branch) ?? 'main',
-    });
+    try {
+      await cloneOrPull({
+        repoUrl,
+        authToken: repoAuthToken(connection),
+        cacheDir,
+        branch: stringField(connection.branch) ?? 'main',
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return { ok: false, message: `Failed to clone ${repoUrl}: ${reason}` };
+    }
     sourceDir = stringField(connection.path) ? join(cacheDir, String(connection.path)) : cacheDir;
   }
   if (!sourceDir) {
@@ -1058,6 +1072,8 @@ async function promptForInteractiveSource(
                 source,
                 connectionId: currentState.sourceConnectionId ?? `${source}-main`,
                 existingRef: currentState.sourceAuthTokenRef,
+                repoUrl: currentState.sourceGitUrl,
+                testGitRepo,
               });
               if (authRef === 'back') return 'back';
               if (authRef) {
@@ -1857,7 +1873,12 @@ export async function runKtxSetupSourcesStep(
           deps,
         });
         if (choiceResult.status === 'failed') {
-          return { status: 'failed', projectDir: args.projectDir };
+          if (args.source) {
+            return { status: 'failed', projectDir: args.projectDir };
+          }
+          prompts.log?.('Edit the connection or pick a different source to continue.');
+          returnToSourceSelection = true;
+          break;
         }
         if (choiceResult.status === 'back') {
           if (args.source) {
@@ -1923,7 +1944,8 @@ export async function runKtxSetupSourcesStep(
               deps,
             });
             if (choiceResult.status === 'failed') {
-              return { status: 'failed', projectDir: args.projectDir };
+              prompts.log?.('Edit the connection or pick a different source to continue.');
+              continue;
             }
             if (choiceResult.status === 'back') {
               continue;
