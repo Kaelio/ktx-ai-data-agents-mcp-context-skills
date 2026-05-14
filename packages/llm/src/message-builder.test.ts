@@ -1,6 +1,6 @@
 import type { ModelMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
-import { KtxMessageBuilder } from './message-builder.js';
+import { KtxMessageBuilder, splitKtxSystemMessages } from './message-builder.js';
 import { createKtxLlmProvider } from './model-provider.js';
 
 function makeBuilder(overrides: Parameters<typeof createKtxLlmProvider>[0]['promptCaching'] = {}) {
@@ -109,5 +109,38 @@ describe('KtxMessageBuilder.build', () => {
       '5m',
     );
     expect((out.tools.z as { providerOptions: any }).providerOptions.anthropic.cacheControl.ttl).toBe('5m');
+  });
+});
+
+describe('splitKtxSystemMessages', () => {
+  it('returns undefined system when no system messages are present', () => {
+    const split = splitKtxSystemMessages([
+      { role: 'user', content: 'hello' },
+      { role: 'assistant', content: 'hi' },
+    ]);
+    expect(split.system).toBeUndefined();
+    expect(split.messages).toHaveLength(2);
+  });
+
+  it('returns a single system message object when one system message is present, preserving providerOptions', () => {
+    const systemMessage = {
+      role: 'system' as const,
+      content: 'You are helpful.',
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
+    };
+    const split = splitKtxSystemMessages([systemMessage, { role: 'user', content: 'hello' }]);
+    expect(split.system).toBe(systemMessage);
+    expect(split.messages).toEqual([{ role: 'user', content: 'hello' }]);
+  });
+
+  it('returns an array of system messages when multiple are present, in order', () => {
+    const split = splitKtxSystemMessages([
+      { role: 'system', content: 'cached' },
+      { role: 'system', content: 'fresh' },
+      { role: 'user', content: 'hello' },
+    ]);
+    expect(Array.isArray(split.system)).toBe(true);
+    expect(split.system).toHaveLength(2);
+    expect(split.messages).toEqual([{ role: 'user', content: 'hello' }]);
   });
 });

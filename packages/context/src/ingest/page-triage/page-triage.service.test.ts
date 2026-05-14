@@ -227,9 +227,10 @@ describe('PageTriageService', () => {
     });
     generateTextMock
       .mockImplementationOnce((args: any) => {
-        const systemMessage = args.messages.find((m: { role: string }) => m.role === 'system');
+        const systemMessage = args.system ?? args.messages.find((m: { role: string }) => m.role === 'system');
         const userMessage = args.messages.find((m: { role: string }) => m.role === 'user');
-        const systemText = systemMessage.content as string;
+        const systemText =
+          typeof systemMessage === 'string' ? systemMessage : (systemMessage.content as string);
         const userText = userMessage.content as string;
         expect(systemText).toContain(
           'Reusable templates and scripts are durable knowledge regardless of subject matter.',

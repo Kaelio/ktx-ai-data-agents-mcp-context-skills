@@ -133,6 +133,50 @@ function warningLine(warning: KtxScanWarning): string {
   return `${warning.code}: ${location}${warning.message}`;
 }
 
+function groupWarningsByCode(warnings: readonly KtxScanWarning[]): Map<string, KtxScanWarning[]> {
+  const groups = new Map<string, KtxScanWarning[]>();
+  for (const warning of warnings) {
+    const list = groups.get(warning.code);
+    if (list) {
+      list.push(warning);
+    } else {
+      groups.set(warning.code, [warning]);
+    }
+  }
+  return groups;
+}
+
+function describeWarningGroup(code: string, count: number): string {
+  switch (code) {
+    case 'sampling_failed':
+      return `${count} ${plural(count, 'table')} could not be sampled (retries exhausted); descriptions used metadata-only fallback or were skipped.`;
+    case 'description_fallback_used':
+      return `${count} ${plural(count, 'table')} got an AI description from column metadata only (no sample rows available).`;
+    case 'enrichment_failed':
+      return `${count} ${plural(count, 'table/column')} could not be enriched.`;
+    case 'connector_capability_missing':
+      return `${count} ${plural(count, 'table')} affected by missing connector capability.`;
+    case 'statistics_failed':
+      return `${count} statistics ${plural(count, 'lookup')} failed.`;
+    case 'llm_unavailable':
+      return 'LLM provider unavailable; AI enrichment was skipped.';
+    case 'embedding_unavailable':
+      return 'Embedding provider unavailable; embeddings were skipped.';
+    case 'relationship_validation_failed':
+      return `${count} relationship ${plural(count, 'validation')} could not run.`;
+    case 'relationship_llm_invalid_reference':
+      return `${count} LLM-proposed ${plural(count, 'relationship')} referenced unknown columns.`;
+    case 'relationship_llm_proposal_failed':
+      return `${count} LLM relationship ${plural(count, 'proposal')} failed.`;
+    case 'scan_enrichment_backend_not_configured':
+      return 'Scan enrichment backend is not configured; AI stages were skipped.';
+    case 'credential_redacted':
+      return `${count} ${plural(count, 'credential')} were redacted from scan output.`;
+    default:
+      return `${count} ${plural(count, 'warning')} (${code})`;
+  }
+}
+
 function managedDaemonOptionsForScanRun(args: Extract<KtxScanArgs, { command: 'run' }>, io: KtxCliIo) {
   if (args.databaseIntrospectionUrl || !args.cliVersion || !args.runtimeInstallPolicy) {
     return undefined;
@@ -153,11 +197,26 @@ function writeNeedsAttention(report: KtxScanReport, io: KtxCliIo): void {
   }
   if (report.warnings.length > 0) {
     io.stdout.write(`  ${report.warnings.length} ${plural(report.warnings.length, 'warning')}\n`);
-    for (const warning of report.warnings.slice(0, 5)) {
-      io.stdout.write(`    - ${warningLine(warning)}\n`);
-    }
-    if (report.warnings.length > 5) {
-      io.stdout.write(`    - ${report.warnings.length - 5} more warnings in the JSON report\n`);
+    const groups = groupWarningsByCode(report.warnings);
+    for (const [code, warnings] of groups) {
+      io.stdout.write(`    - ${describeWarningGroup(code, warnings.length)}\n`);
+      const first = warnings[0];
+      if (first) {
+        io.stdout.write(`        ${warningLine(first)}\n`);
+      }
+      if (warnings.length > 1) {
+        const moreTables = warnings
+          .slice(1)
+          .map((warning) =>
+            warning.table ? (warning.column ? `${warning.table}.${warning.column}` : warning.table) : null,
+          )
+          .filter((value): value is string => value !== null)
+          .slice(0, 3);
+        if (moreTables.length > 0) {
+          const suffix = warnings.length - 1 > moreTables.length ? `, …` : '';
+          io.stdout.write(`        also: ${moreTables.join(', ')}${suffix}\n`);
+        }
+      }
     }
   }
   if (report.capabilityGaps.length > 0) {

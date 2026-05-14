@@ -5,10 +5,17 @@ import type {
   KtxColumnSampleResult,
   KtxScanContext,
   KtxScanLoggerPort,
+  KtxScanWarning,
   KtxTableRef,
   KtxTableSampleInput,
   KtxTableSampleResult,
 } from './types.js';
+
+interface KtxDescriptionTableColumn {
+  name: string;
+  nativeType?: string | null;
+  comment?: string | null;
+}
 
 export interface KtxDescriptionCachePort {
   buildTableKey(table: KtxTableRef): string;
@@ -53,6 +60,7 @@ export interface KtxDescriptionColumnTable extends KtxTableRef {
 
 export interface KtxDescriptionTableInput extends KtxTableRef {
   rawDescriptions?: Record<string, string>;
+  columns?: KtxDescriptionTableColumn[];
 }
 
 export interface KtxColumnAnalysisResult {
@@ -72,7 +80,8 @@ export interface KtxColumnDescriptionPromptInput {
 
 export interface KtxTableDescriptionPromptInput {
   tableName: string;
-  sampleData: KtxTableSampleResult;
+  sampleData?: KtxTableSampleResult;
+  columns?: KtxDescriptionTableColumn[];
   dataSourceType: string;
   rawDescriptions?: Record<string, string>;
 }
@@ -114,6 +123,7 @@ export interface KtxDescriptionGeneratorOptions {
   llmProvider: KtxLlmProvider;
   cache?: KtxDescriptionCachePort;
   logger?: KtxScanLoggerPort;
+  onWarning?: (warning: KtxScanWarning) => void;
   settings: KtxDescriptionGenerationSettings;
 }
 
@@ -134,6 +144,66 @@ function descriptionSources(rawDescriptions: Record<string, string> | undefined)
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+class KtxAbortedError extends Error {
+  constructor() {
+    super('aborted');
+    this.name = 'KtxAbortedError';
+  }
+}
+
+async function delayWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
+    return;
+  }
+  if (signal.aborted) {
+    throw new KtxAbortedError();
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new KtxAbortedError());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+interface RetryAsyncOptions {
+  attempts: number;
+  baseDelayMs: number;
+  signal?: AbortSignal;
+  onAttemptFailure?: (error: unknown, attempt: number) => void;
+}
+
+async function retryAsync<T>(fn: () => Promise<T>, options: RetryAsyncOptions): Promise<T> {
+  const attempts = Math.max(1, options.attempts);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (options.signal?.aborted) {
+      throw new KtxAbortedError();
+    }
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (error instanceof KtxAbortedError) {
+        throw error;
+      }
+      options.onAttemptFailure?.(error, attempt);
+      if (attempt === attempts) {
+        break;
+      }
+      const delay = options.baseDelayMs * 2 ** (attempt - 1);
+      await delayWithAbort(delay, options.signal);
+    }
+  }
+  throw lastError;
 }
 
 function toTableRef(table: KtxTableRef): KtxTableRef {
@@ -205,11 +275,12 @@ Example:
     systemParts.push(wordLimitLine(input.maxWords));
   }
 
+  const sampleValuesContent = valuesStr.length > 0 ? valuesStr : 'unavailable';
   let user = `<table_context> ${input.tableContext} </table_context>
 
 <column_name> ${input.columnName} </column_name>
 
-<sample_values> ${valuesStr} </sample_values>
+<sample_values> ${sampleValuesContent} </sample_values>
 `;
 
   const sources = descriptionSources(input.rawDescriptions);
@@ -228,16 +299,6 @@ Example:
 export function buildKtxTableDescriptionPrompt(
   input: KtxTableDescriptionPromptInput & { maxWords?: number },
 ): KtxDescriptionPrompt {
-  const columnInfo: string[] = [];
-  for (let index = 0; index < Math.min(input.sampleData.headers.length, 10); index += 1) {
-    const header = input.sampleData.headers[index];
-    const sampleValues = input.sampleData.rows
-      .slice(0, 3)
-      .map((row) => row[index])
-      .filter((value) => value !== null && value !== undefined);
-    columnInfo.push(`${header}: ${sampleValues.map((value) => String(value)).join(', ')}`);
-  }
-
   const systemParts: string[] = [
     `Analyze database tables and provide a concise description.
 
@@ -256,9 +317,38 @@ Example: "Information about healthcare professionals used for workforce manageme
     systemParts.push(wordLimitLine(input.maxWords));
   }
 
+  const hasSamples = !!input.sampleData && input.sampleData.rows.length > 0;
+  let columnsLine: string;
+  let rowsLine: string;
+  if (hasSamples) {
+    const sampleData = input.sampleData!;
+    const columnInfo: string[] = [];
+    for (let index = 0; index < Math.min(sampleData.headers.length, 10); index += 1) {
+      const header = sampleData.headers[index];
+      const sampleValues = sampleData.rows
+        .slice(0, 3)
+        .map((row) => row[index])
+        .filter((value) => value !== null && value !== undefined);
+      columnInfo.push(`${header}: ${sampleValues.map((value) => String(value)).join(', ')}`);
+    }
+    columnsLine = `Columns and sample data: ${columnInfo.join(' | ')}`;
+    rowsLine = `Total rows in sample: ${sampleData.rows.length}`;
+  } else if (input.columns && input.columns.length > 0) {
+    const columnInfo = input.columns.slice(0, 30).map((column) => {
+      const typePart = column.nativeType ? ` (${column.nativeType})` : '';
+      const commentPart = column.comment ? ` — ${column.comment}` : '';
+      return `${column.name}${typePart}${commentPart}`;
+    });
+    columnsLine = `Columns (metadata only, no sample rows): ${columnInfo.join(' | ')}`;
+    rowsLine = 'Sample rows: unavailable';
+  } else {
+    columnsLine = 'Columns: unavailable';
+    rowsLine = 'Sample rows: unavailable';
+  }
+
   let user = `Table: ${input.tableName}
-Columns and sample data: ${columnInfo.join(' | ')}
-Total rows in sample: ${input.sampleData.rows.length}
+${columnsLine}
+${rowsLine}
 Data source type: ${input.dataSourceType}`;
 
   const sources = descriptionSources(input.rawDescriptions);
@@ -313,12 +403,14 @@ export class KtxDescriptionGenerator {
   private readonly llmProvider: KtxLlmProvider;
   private readonly cache?: KtxDescriptionCachePort;
   private readonly logger?: KtxScanLoggerPort;
+  private readonly onWarning?: (warning: KtxScanWarning) => void;
   private readonly settings: ResolvedKtxDescriptionGenerationSettings;
 
   constructor(options: KtxDescriptionGeneratorOptions) {
     this.llmProvider = options.llmProvider;
     this.cache = options.cache;
     this.logger = options.logger;
+    this.onWarning = options.onWarning;
     this.settings = {
       columnMaxWords: options.settings.columnMaxWords,
       tableMaxWords: options.settings.tableMaxWords,
@@ -366,26 +458,82 @@ export class KtxDescriptionGenerator {
       }
     }
 
-    if (!input.connector.sampleTable) {
-      this.logger?.warn('KTX scan connector does not support table sampling for table description generation', {
+    const sampleTable = input.connector.sampleTable;
+    let sampleData: KtxTableSampleResult | null = null;
+    let fallbackReason: 'capability_missing' | 'sampling_failed' | 'empty_sample' | null = null;
+
+    if (!sampleTable) {
+      fallbackReason = 'capability_missing';
+      this.logger?.warn('KTX scan connector does not support table sampling; falling back to metadata-only prompt', {
         connectorId: input.connector.id,
         table: input.table.name,
       });
-      return null;
+      this.onWarning?.({
+        code: 'connector_capability_missing',
+        message: `Connector ${input.connector.id} does not support sampleTable; using metadata-only description prompt`,
+        table: input.table.name,
+        recoverable: true,
+        metadata: { connectorId: input.connector.id, capability: 'sampleTable' },
+      });
+    } else {
+      try {
+        sampleData = await retryAsync(
+          () =>
+            sampleTable(
+              {
+                connectionId: input.connectionId,
+                table: tableRef,
+                limit: 20,
+              },
+              input.context,
+            ),
+          {
+            attempts: 3,
+            baseDelayMs: 200,
+            signal: input.context.signal,
+            onAttemptFailure: (error, attempt) => {
+              this.logger?.warn(
+                `sampleTable attempt ${attempt} failed for ${input.table.name}: ${errorMessage(error)}`,
+                {
+                  connectorId: input.connector.id,
+                  table: input.table.name,
+                  attempt,
+                },
+              );
+            },
+          },
+        );
+        if (sampleData.rows.length === 0) {
+          fallbackReason = 'empty_sample';
+          this.logger?.warn('sampleTable returned no rows; using metadata-only prompt', {
+            connectorId: input.connector.id,
+            table: input.table.name,
+          });
+        }
+      } catch (error) {
+        if (error instanceof KtxAbortedError) {
+          throw error;
+        }
+        fallbackReason = 'sampling_failed';
+        this.logger?.error(`sampleTable exhausted retries for ${input.table.name}: ${errorMessage(error)}`, {
+          connectorId: input.connector.id,
+          table: input.table.name,
+        });
+        this.onWarning?.({
+          code: 'sampling_failed',
+          message: `Failed to sample table ${input.table.name} after retries: ${errorMessage(error)}`,
+          table: input.table.name,
+          recoverable: true,
+          metadata: { connectorId: input.connector.id, error: errorMessage(error) },
+        });
+      }
     }
 
     try {
-      const sampleData = await input.connector.sampleTable(
-        {
-          connectionId: input.connectionId,
-          table: tableRef,
-          limit: 20,
-        },
-        input.context,
-      );
       const prompt = buildKtxTableDescriptionPrompt({
         tableName: input.table.name,
-        sampleData,
+        ...(fallbackReason === null && sampleData ? { sampleData } : {}),
+        ...(input.table.columns && input.table.columns.length > 0 ? { columns: input.table.columns } : {}),
         dataSourceType: input.dataSourceType,
         rawDescriptions: input.table.rawDescriptions,
         maxWords: this.settings.tableMaxWords,
@@ -394,9 +542,37 @@ export class KtxDescriptionGenerator {
       if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
       }
+      if (description && fallbackReason !== null) {
+        this.onWarning?.({
+          code: 'description_fallback_used',
+          message: `Generated table description without sample rows for ${input.table.name} (reason: ${fallbackReason})`,
+          table: input.table.name,
+          recoverable: true,
+          metadata: { connectorId: input.connector.id, reason: fallbackReason },
+        });
+      }
+      if (!description) {
+        this.onWarning?.({
+          code: 'enrichment_failed',
+          message: `Failed to generate description for table ${input.table.name}`,
+          table: input.table.name,
+          recoverable: true,
+          metadata: { connectorId: input.connector.id, usedFallback: fallbackReason !== null },
+        });
+      }
       return description;
     } catch (error) {
-      this.logger?.error(`Error generating table description: ${errorMessage(error)}`);
+      this.logger?.error(`Error generating table description: ${errorMessage(error)}`, {
+        connectorId: input.connector.id,
+        table: input.table.name,
+      });
+      this.onWarning?.({
+        code: 'enrichment_failed',
+        message: `Failed to generate description for table ${input.table.name}: ${errorMessage(error)}`,
+        table: input.table.name,
+        recoverable: true,
+        metadata: { connectorId: input.connector.id },
+      });
       return null;
     }
   }
@@ -496,33 +672,64 @@ export class KtxDescriptionGenerator {
       let columnValues = column.sampleValues;
       if (!columnValues || columnValues.length === 0) {
         if (!input.connector.sampleColumn) {
-          this.logger?.warn('KTX scan connector does not support column sampling for column description generation', {
+          this.logger?.warn('KTX scan connector does not support column sampling; using available metadata only', {
             connectorId: input.connector.id,
             table: input.table.name,
             column: column.name,
           });
-          return {
-            columnName: column.name,
-            description: null,
-            skipped: false,
-            processed: false,
-          };
+          columnValues = [];
+        } else {
+          const sampleColumn = input.connector.sampleColumn;
+          try {
+            const sample = await retryAsync(
+              () =>
+                sampleColumn(
+                  {
+                    connectionId: input.connectionId,
+                    table: tableRef,
+                    column: column.name,
+                    limit: 50,
+                  },
+                  input.context,
+                ),
+              {
+                attempts: 3,
+                baseDelayMs: 200,
+                signal: input.context.signal,
+                onAttemptFailure: (error, attempt) => {
+                  this.logger?.warn(
+                    `sampleColumn attempt ${attempt} failed for ${input.table.name}.${column.name}: ${errorMessage(error)}`,
+                    {
+                      connectorId: input.connector.id,
+                      table: input.table.name,
+                      column: column.name,
+                      attempt,
+                    },
+                  );
+                },
+              },
+            );
+            columnValues = sample.values;
+          } catch (error) {
+            if (error instanceof KtxAbortedError) {
+              throw error;
+            }
+            this.logger?.warn(
+              `sampleColumn exhausted retries for ${input.table.name}.${column.name}; using available metadata only: ${errorMessage(error)}`,
+              {
+                connectorId: input.connector.id,
+                table: input.table.name,
+                column: column.name,
+              },
+            );
+            columnValues = [];
+          }
         }
-
-        const sample = await input.connector.sampleColumn(
-          {
-            connectionId: input.connectionId,
-            table: tableRef,
-            column: column.name,
-            limit: 50,
-          },
-          input.context,
-        );
-        columnValues = sample.values;
       }
 
       const nonNullValues = (columnValues ?? []).filter((value) => value !== null && value !== undefined);
-      if (nonNullValues.length === 0) {
+      const hasRawDescriptions = descriptionSources(column.rawDescriptions).length > 0;
+      if (nonNullValues.length === 0 && !hasRawDescriptions) {
         return {
           columnName: column.name,
           description: null,
@@ -553,7 +760,14 @@ export class KtxDescriptionGenerator {
         processed: description !== null,
       };
     } catch (error) {
-      this.logger?.error(`Error analyzing column '${column.name}': ${errorMessage(error)}`);
+      if (error instanceof KtxAbortedError) {
+        throw error;
+      }
+      this.logger?.error(`Error analyzing column '${column.name}': ${errorMessage(error)}`, {
+        connectorId: input.connector.id,
+        table: input.table.name,
+        column: column.name,
+      });
       return {
         columnName: column.name,
         description: null,

@@ -1,4 +1,4 @@
-import { KtxMessageBuilder, type KtxLlmProvider, type KtxModelRole } from '@ktx/llm';
+import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider, type KtxModelRole } from '@ktx/llm';
 import { generateText, Output, type FlexibleSchema, type ToolSet } from 'ai';
 
 type GenerateTextInput = Parameters<typeof generateText>[0];
@@ -29,10 +29,12 @@ export async function generateKtxText(input: GenerateKtxTextInput): Promise<stri
     tools: input.tools ?? {},
     model,
   });
+  const split = splitKtxSystemMessages(built.messages);
   const result = await (input.generateText ?? generateText)({
     model,
     temperature: input.temperature ?? 0,
-    messages: built.messages,
+    ...(split.system ? { system: split.system } : {}),
+    messages: split.messages,
     tools: built.tools as ToolSet,
     ...(hasTools(built.tools as ToolSet)
       ? {
@@ -58,10 +60,12 @@ export async function generateKtxObject<TOutput, TSchema>(
     tools: input.tools ?? {},
     model,
   });
+  const split = splitKtxSystemMessages(built.messages);
   const result = await (input.generateText ?? generateText)({
     model,
     temperature: input.temperature ?? 0,
-    messages: built.messages,
+    ...(split.system ? { system: split.system } : {}),
+    messages: split.messages,
     tools: built.tools as ToolSet,
     ...(hasTools(built.tools as ToolSet)
       ? {
