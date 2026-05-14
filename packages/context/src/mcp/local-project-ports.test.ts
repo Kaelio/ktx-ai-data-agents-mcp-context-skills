@@ -76,6 +76,93 @@ describe('createLocalProjectMcpContextPorts', () => {
     };
   }
 
+  async function seedScanReport(projectDir: string, syncId = 'sync-1'): Promise<void> {
+    const root = `raw-sources/warehouse/live-database/${syncId}`;
+    await mkdir(join(projectDir, root, 'tables'), { recursive: true });
+    await writeFile(
+      join(projectDir, root, 'connection.json'),
+      JSON.stringify(
+        {
+          connectionId: 'warehouse',
+          driver: 'postgres',
+          extractedAt: '2026-05-14T09:00:00.000Z',
+          scope: { schemas: ['public'] },
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
+    await writeFile(
+      join(projectDir, root, 'tables', 'orders.json'),
+      JSON.stringify(
+        {
+          catalog: null,
+          db: 'public',
+          name: 'orders',
+          kind: 'table',
+          comment: 'Customer orders',
+          estimatedRows: 12,
+          columns: [
+            {
+              name: 'id',
+              nativeType: 'integer',
+              normalizedType: 'integer',
+              dimensionType: 'number',
+              nullable: false,
+              primaryKey: true,
+              comment: null,
+            },
+          ],
+          foreignKeys: [],
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
+    await writeFile(
+      join(projectDir, root, 'scan-report.json'),
+      JSON.stringify(
+        {
+          connectionId: 'warehouse',
+          driver: 'postgres',
+          syncId,
+          runId: 'scan-1',
+          trigger: 'mcp',
+          mode: 'structural',
+          dryRun: false,
+          artifactPaths: {
+            rawSourcesDir: root,
+            reportPath: `${root}/scan-report.json`,
+            manifestShards: [],
+            enrichmentArtifacts: [],
+          },
+          diffSummary: { added: 0, modified: 0, deleted: 0, unchanged: 1 },
+          manifestShardsWritten: 0,
+          structuralSyncStats: { tablesWritten: 1, tablesDeleted: 0, foreignKeysWritten: 0 },
+          enrichment: {
+            dataDictionary: 'skipped',
+            tableDescriptions: 'skipped',
+            columnDescriptions: 'skipped',
+            embeddings: 'skipped',
+            deterministicRelationships: 'skipped',
+            llmRelationshipValidation: 'skipped',
+            statisticalValidation: 'skipped',
+          },
+          capabilityGaps: [],
+          warnings: [],
+          relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+          enrichmentState: { resumedStages: [], completedStages: [], failedStages: [] },
+          createdAt: '2026-05-14T09:00:00.000Z',
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
+  }
+
   it('lists local project connections from ktx.yaml', async () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     project.config.connections.warehouse = {
@@ -211,6 +298,57 @@ describe('createLocalProjectMcpContextPorts', () => {
       }),
     ).rejects.toThrow('SQL contains read/write operation: Insert');
     expect(connector.executeReadOnly).not.toHaveBeenCalled();
+  });
+
+  it('exposes local scan entity details through MCP ports', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+    await seedScanReport(project.projectDir);
+    const ports = createLocalProjectMcpContextPorts(project);
+
+    await expect(
+      ports.entityDetails?.read({
+        connectionId: 'warehouse',
+        entities: [{ table: 'public.orders', columns: ['id'] }],
+      }),
+    ).resolves.toMatchObject({
+      results: [
+        {
+          ok: true,
+          connectionId: 'warehouse',
+          display: 'public.orders',
+          columns: [{ name: 'id', nativeType: 'integer' }],
+          snapshot: { syncId: 'sync-1', scanRunId: 'scan-1' },
+        },
+      ],
+    });
+  });
+
+  it('returns a structured local entity details error when no scan exists', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+    const ports = createLocalProjectMcpContextPorts(project);
+
+    await expect(
+      ports.entityDetails?.read({
+        connectionId: 'warehouse',
+        entities: [{ table: 'public.orders' }],
+      }),
+    ).resolves.toMatchObject({
+      results: [
+        {
+          ok: false,
+          connectionId: 'warehouse',
+          error: { code: 'scan_missing' },
+        },
+      ],
+    });
   });
 
   it('triggers canonical bundle ingest and reads status, report, and replay through MCP ports', async () => {

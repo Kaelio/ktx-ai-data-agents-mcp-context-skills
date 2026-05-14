@@ -18,6 +18,7 @@ import {
 import { createLocalKtxEmbeddingProviderFromConfig, KtxIngestEmbeddingPortAdapter } from '../llm/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import {
+  createKtxEntityDetailsService,
   getLocalScanReport,
   getLocalScanStatus,
   type KtxConnectionDriver,
@@ -627,6 +628,11 @@ export function createLocalProjectMcpContextPorts(
           maxRows: input.query.limit,
           queryExecutor: options.queryExecutor,
         });
+      },
+    },
+    entityDetails: {
+      async read(input) {
+        return createKtxEntityDetailsService(project).read(input);
       },
     },
   };
