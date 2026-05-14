@@ -489,9 +489,7 @@ describe('runKtxConnection', () => {
   it('rejects unknown drivers with a helpful error', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir, projectName: 'warehouse' });
-    await writeConnections(projectDir, {
-      mystery: { driver: 'duckdb' },
-    });
+    await writeFile(join(projectDir, 'ktx.yaml'), 'project: warehouse\nconnections:\n  mystery:\n    driver: duckdb\n', 'utf-8');
     const io = makeIo();
 
     await expect(
