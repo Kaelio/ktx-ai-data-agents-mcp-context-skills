@@ -94,11 +94,15 @@ describe('ingest runtime assets', () => {
 
   it('packages identifier verification prompt assets', async () => {
     const shared = await readFile(join(skillsDir, '_shared', 'identifier-verification.md'), 'utf-8');
+    const legacyConnectionPrefix = ['connection', 'Name'].join('');
+
     expect(shared).toContain('## Identifier Verification Protocol');
     expect(shared).toContain('discover_data');
     expect(shared).toContain('entity_details');
     expect(shared).toContain('sql_execution');
-    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT DISTINCT');
-    expect(shared).toContain('sql_execution({connectionName, sql: "SELECT 1 FROM');
+    expect(shared).toContain('sql_execution({connectionId, sql: "SELECT DISTINCT');
+    expect(shared).toContain('sql_execution({connectionId, sql: "SELECT 1 FROM');
+    expect(shared).not.toContain(`entity_details({${legacyConnectionPrefix}`);
+    expect(shared).not.toContain(`sql_execution({${legacyConnectionPrefix}`);
   });
 });
