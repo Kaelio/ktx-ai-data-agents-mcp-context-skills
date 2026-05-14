@@ -162,6 +162,11 @@ const entityDetailsSchema = z.object({
     .max(20),
 });
 
+const dictionarySearchSchema = z.object({
+  values: z.array(z.string().min(1)).min(1).max(20),
+  connectionId: connectionIdSchema.optional(),
+});
+
 const sqlExecutionSchema = z.object({
   connectionId: connectionIdSchema,
   sql: z.string().min(1),
@@ -398,6 +403,22 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       },
       entityDetailsSchema,
       async (input) => jsonToolResult(await entityDetails.read(input)),
+    );
+  }
+
+  if (ports.dictionarySearch) {
+    const dictionarySearch = ports.dictionarySearch;
+    registerParsedTool(
+      server,
+      'dictionary_search',
+      {
+        title: 'Dictionary Search',
+        description:
+          'Search profile-sampled warehouse values and report matching connection/source/column locations plus non-authoritative miss reasons.',
+        inputSchema: dictionarySearchSchema.shape,
+      },
+      dictionarySearchSchema,
+      async (input) => jsonToolResult(await dictionarySearch.search(input)),
     );
   }
 

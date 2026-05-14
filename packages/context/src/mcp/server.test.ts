@@ -6,6 +6,7 @@ import { createLocalProjectMemoryCapture } from '../memory/index.js';
 import { initKtxProject } from '../project/index.js';
 import { createKtxMcpServer } from './server.js';
 import type {
+  KtxDictionarySearchMcpPort,
   KtxEntityDetailsMcpPort,
   KtxIngestMcpPort,
   KtxKnowledgeMcpPort,
@@ -186,6 +187,71 @@ describe('createKtxMcpServer', () => {
     expect(entityDetails.read).toHaveBeenCalledWith({
       connectionId: 'warehouse',
       entities: [{ table: 'public.orders', columns: ['id'] }],
+    });
+  });
+
+  it('registers dictionary_search when the host provides a dictionary-search port', async () => {
+    const fake = makeFakeServer();
+    const dictionarySearch: KtxDictionarySearchMcpPort = {
+      search: vi.fn<KtxDictionarySearchMcpPort['search']>().mockResolvedValue({
+        searched: [
+          {
+            connectionId: 'warehouse',
+            coverage: {
+              sampledRows: null,
+              valuesPerColumn: null,
+              profiledColumns: 1,
+              syncId: 'sync-1',
+              profiledAt: null,
+            },
+            status: 'ready',
+          },
+        ],
+        results: [
+          {
+            value: 'paid',
+            matches: [
+              {
+                connectionId: 'warehouse',
+                sourceName: 'orders',
+                columnName: 'status',
+                matchedValue: 'paid',
+                cardinality: 3,
+              },
+            ],
+            misses: [],
+          },
+        ],
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { dictionarySearch },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['dictionary_search']);
+    await expect(
+      getTool(fake.tools, 'dictionary_search').handler({
+        connectionId: 'warehouse',
+        values: ['paid'],
+      }),
+    ).resolves.toMatchObject({
+      structuredContent: {
+        searched: [{ connectionId: 'warehouse', status: 'ready' }],
+        results: [
+          {
+            value: 'paid',
+            matches: [{ connectionId: 'warehouse', sourceName: 'orders', columnName: 'status' }],
+            misses: [],
+          },
+        ],
+      },
+    });
+    expect(dictionarySearch.search).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      values: ['paid'],
     });
   });
 

@@ -3,6 +3,8 @@ import type { MemoryCaptureService } from '../memory/index.js';
 import type { KtxEntityDetailsInput, KtxEntityDetailsResponse } from '../scan/entity-details.js';
 import type { KtxScanMode, KtxScanReport } from '../scan/index.js';
 import type {
+  KtxDictionarySearchInput,
+  KtxDictionarySearchResponse,
   SemanticLayerQueryInput,
   SlDictionaryMatch,
   SlSearchLaneSummary,
@@ -317,6 +319,10 @@ export interface KtxEntityDetailsMcpPort {
   read(input: KtxEntityDetailsInput): Promise<KtxEntityDetailsResponse>;
 }
 
+export interface KtxDictionarySearchMcpPort {
+  search(input: KtxDictionarySearchInput): Promise<KtxDictionarySearchResponse>;
+}
+
 export interface KtxSqlExecutionResponse {
   headers: string[];
   headerTypes?: string[];
@@ -333,6 +339,7 @@ export interface KtxMcpContextPorts {
   knowledge?: KtxKnowledgeMcpPort;
   semanticLayer?: KtxSemanticLayerMcpPort;
   entityDetails?: KtxEntityDetailsMcpPort;
+  dictionarySearch?: KtxDictionarySearchMcpPort;
   sqlExecution?: KtxSqlExecutionMcpPort;
   ingest?: KtxIngestMcpPort;
   scan?: KtxScanMcpPort;

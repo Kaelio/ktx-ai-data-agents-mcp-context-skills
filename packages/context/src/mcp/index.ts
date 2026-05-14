@@ -5,6 +5,7 @@ export { createDefaultKtxMcpServer, createKtxMcpServer } from './server.js';
 export type {
   KtxConnectionSummary,
   KtxConnectionsMcpPort,
+  KtxDictionarySearchMcpPort,
   KtxEntityDetailsMcpPort,
   KtxIngestDiffSummary,
   KtxIngestMcpPort,
