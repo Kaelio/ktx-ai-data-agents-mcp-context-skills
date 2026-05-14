@@ -56,9 +56,12 @@ to host the MCP server.
 - Provide a `ktx mcp` CLI subtree that runs the MCP server over HTTP on
   localhost, with the same lifecycle pattern as the existing managed Python
   daemon (`packages/cli/src/managed-python-daemon.ts`).
-- Make `ktx setup-agents` write client-side MCP configuration entries for all
-  configured targets (claude-code, codex, cursor, opencode), pointing at the
-  local HTTP endpoint.
+- Make `ktx setup-agents` install MCP client configuration for the configured
+  targets pointing at the local HTTP endpoint. v1 splits this by client: for
+  claude-code and cursor (JSON config), `setup-agents` writes the entry
+  directly; for codex (TOML) and opencode (different JSON wrapper),
+  `setup-agents` prints a copy-pasteable snippet rather than writing the file.
+  See the client matrix below for full per-target behavior.
 - Reuse existing infrastructure (connector `executeReadOnly`, schema
   snapshots, dictionary profile, hybrid search + RRF) rather than building
   parallel implementations.
@@ -141,13 +144,25 @@ or `entity_details` tools.
 ```typescript
 {
   kind: 'wiki' | 'sl_source' | 'sl_measure' | 'sl_dimension' | 'table' | 'column',
-  id: string,                                  // wiki key, source name, or qualified table/column id
+  id: string,                                  // stable id: wiki key, source name, or driver-qualified table/column display string
   score: number,                               // RRF fused score, 0-1 range
   summary: string,                             // one-line description
   snippet: string,                             // short context snippet, ≤200 chars
   connectionId?: string,                       // present for non-wiki kinds
+  tableRef?: {                                 // present for kind 'table' and 'column'
+    catalog: string | null,
+    db: string | null,
+    name: string,
+  },
+  columnName?: string,                         // present for kind 'column'
 }
 ```
+
+The structured `tableRef` mirrors the live `KtxSchemaTable` identity
+(`packages/context/src/scan/types.ts:74-83`) so callers can pass refs into
+`entity_details` without losing `catalog`/`db` qualification on drivers
+that need it (BigQuery `project.dataset.table`, Snowflake/SQL Server
+`database.schema.table`).
 
 **Implementation:** new module `packages/context/src/search/discover.ts`.
 Composes three sub-searches in parallel:
@@ -174,7 +189,18 @@ columns) from the latest scan snapshot. The raw-data equivalent of
 {
   connectionId: z.string().min(1),
   entities: z.array(z.object({
-    table: z.string().min(1),                  // qualified or unqualified
+    // table accepts either a driver-display string ("project.dataset.table",
+    // "schema.name", "db.schema.name") or a structured ref. The resolver
+    // returns a structured error when the input is ambiguous across multiple
+    // schemas/catalogs.
+    table: z.union([
+      z.string().min(1),
+      z.object({
+        catalog: z.string().nullable(),
+        db: z.string().nullable(),
+        name: z.string().min(1),
+      }),
+    ]),
     columns: z.array(z.string()).optional(),   // omit → all columns
   })).min(1).max(20),
 }
@@ -185,20 +211,29 @@ columns) from the latest scan snapshot. The raw-data equivalent of
 ```typescript
 {
   connectionId: string,
-  table: string,                               // qualified (schema.name)
-  kind: 'table' | 'view',
+  tableRef: {                                  // structured identity, lossless on every driver
+    catalog: string | null,                    // BigQuery project, Snowflake/SQL Server database
+    db: string | null,                         // schema/dataset
+    name: string,
+  },
+  display: string,                             // driver-formatted display string
+                                               //   (e.g. "project.dataset.table", "schema.name")
+  kind: 'table' | 'view' | 'external' | 'event_stream',  // matches KtxSchemaTableKind
   comment: string | null,
   estimatedRows: number | null,
   columns: Array<{
     name: string,
     nativeType: string,
     normalizedType: string,
+    dimensionType: 'time' | 'string' | 'number' | 'boolean',
     nullable: boolean,
     primaryKey: boolean,
     comment: string | null,
   }>,
   foreignKeys: Array<{
     fromColumn: string,
+    toCatalog: string | null,                  // qualified FK target, preserves cross-db FKs
+    toDb: string | null,
     toTable: string,
     toColumn: string,
     constraintName: string | null,
@@ -210,6 +245,14 @@ columns) from the latest scan snapshot. The raw-data equivalent of
   },
 }
 ```
+
+Output fields mirror `KtxSchemaTable` / `KtxSchemaColumn` /
+`KtxSchemaForeignKey` from `packages/context/src/scan/types.ts:51-82`. The
+full `KtxSchemaTableKind` set is preserved so BigQuery `external` tables
+and warehouses with event-stream sources are not silently coerced. FK
+target qualification (`toCatalog`/`toDb`) carries through so agents can
+write valid SQL for cross-schema or cross-database references without
+re-resolving.
 
 If `columns` is provided, only the requested columns appear in the `columns`
 array (PKs and FKs still report on the full table).
@@ -264,10 +307,34 @@ research skill must teach agents not to treat a miss as exhaustive.
 ```
 
 **Output:** for each input value, the list of matching entries plus
-provenance:
+per-connection provenance. Coverage and miss reasons are connection-scoped
+because `loadLatestSlDictionaryEntries` iterates each connection's profile
+artifact independently
+(`packages/context/src/sl/sl-dictionary-profile.ts:96-112`); a single
+all-connections call can mix `no_profile_artifact` (one connection never
+ran an enriched scan), `value_not_in_sample` (another connection ran but
+the literal was outside the sample), and matches in the same response.
 
 ```typescript
 {
+  // The set of connections actually searched on this call. When the input
+  // omits connectionId this is every configured connection; otherwise it
+  // contains the single requested connection.
+  searched: Array<{
+    connectionId: string,
+    coverage: {
+      sampledRows: number | null,              // profileSampleRows used at profile time
+      valuesPerColumn: number | null,          // sampleValuesPerColumn used at profile time
+      profiledColumns: number,                 // count of columns in the dictionary index for this connection
+      syncId: string | null,                   // identifier of the profile artifact (null when missing)
+      profiledAt: string | null,               // ISO-8601 UTC of the profile artifact (null when missing)
+    },
+    // Per-connection status, independent of any specific input value:
+    //   ready                — profile present with profiled columns
+    //   no_profile_artifact  — enriched scan never ran for this connection
+    //   no_candidate_columns — profile present but no columns profile-eligible
+    status: 'ready' | 'no_profile_artifact' | 'no_candidate_columns',
+  }>,
   results: Array<{
     value: string,                             // input value
     matches: Array<{
@@ -277,25 +344,28 @@ provenance:
       matchedValue: string,                    // actual value found (may differ in case)
       cardinality: number | null,              // column cardinality if known
     }>,
-    missReason:                                // present when matches is empty
-      | 'no_profile_artifact'                  // enriched scan never ran for this connection
-      | 'no_candidate_columns'                 // profile present, no columns profile-eligible
-      | 'value_not_in_sample',                 // profile present but value not in sample (non-authoritative miss)
-    coverage: {
-      sampledRows: number | null,              // profileSampleRows used at profile time
-      valuesPerColumn: number | null,          // sampleValuesPerColumn used at profile time
-      profiledColumns: number,                 // count of columns in the dictionary index
-      syncId: string | null,                   // identifier of the profile artifact
-      profiledAt: string | null,               // ISO-8601 UTC of the profile artifact
-    },
+    // Per-connection miss reasons for this value, present when that
+    // connection produced no match. Connections that matched do not appear
+    // in `misses`. For ready connections with no match, the reason is
+    // 'value_not_in_sample' (non-authoritative miss). For unready
+    // connections, the reason mirrors their `status` above.
+    misses: Array<{
+      connectionId: string,
+      reason:
+        | 'no_profile_artifact'
+        | 'no_candidate_columns'
+        | 'value_not_in_sample',
+    }>,
   }>,
 }
 ```
 
 **Matching semantics:** case-insensitive substring match against the
 profile-sampled values. Misses are never authoritative — they only state
-that the value was not in the captured sample. `missReason` distinguishes
-"no enriched scan has run" (`no_profile_artifact`) from "scan ran but value
+that the value was not in the captured sample for the listed connection.
+`misses[].reason` distinguishes "no enriched scan has run on this
+connection" (`no_profile_artifact`), "enriched scan ran but no columns
+were profile-eligible" (`no_candidate_columns`), and "scan ran but value
 was not in the sample" (`value_not_in_sample`). The research skill must
 direct agents to follow up a `value_not_in_sample` miss with
 `sql_execution` against the most plausible columns, not to conclude the
@@ -651,9 +721,15 @@ Rules:
 
 Port is read from `.ktx/mcp.json` if present, falling back to 7878. The
 install manifest (`agentInstallManifestPath`,
-`packages/cli/src/setup-agents.ts:60`) tracks each `json-key` (and
-`toml-table` for the codex snippet case) entry so `ktx setup-agents
---remove` can roll back cleanly.
+`packages/cli/src/setup-agents.ts:60`) tracks each **written** entry so
+`ktx setup-agents --remove` can roll back cleanly. The current manifest
+entry kinds are `file` and `json-key`
+(`packages/cli/src/setup-agents.ts:42-50`); the MCP client writers for
+claude-code and cursor add `json-key` entries for their respective config
+files. Printed-only snippets for codex and opencode are **not** tracked in
+the manifest, and `--remove` does not attempt to mutate user-written
+files for those targets; the printed instructions tell the user how to
+remove the entry by hand.
 
 If the daemon is not running when `setup-agents` runs, the command prints a
 follow-up hint: "Run `ktx mcp start` to enable the configured KTX MCP
@@ -780,8 +856,11 @@ You have access to KTX MCP tools for investigating data. Follow this workflow.
   responses.
 - CLI integration test for `ktx mcp start|stop|status` lifecycle following
   the pattern in `managed-python-daemon.test.ts`.
-- Setup-agents test verifying the MCP client config entries are written for
-  each target.
+- Setup-agents tests verifying behavior per target: claude-code and cursor
+  writers add the correct JSON entry and a corresponding `json-key`
+  manifest entry that `--remove` cleans up; codex and opencode targets
+  produce printed snippet output and do not mutate any user config file
+  or add manifest entries in v1.
 - Verification commands per CLAUDE.md: `pnpm --filter @ktx/context run test`
   and `pnpm --filter @ktx/cli run test` for the affected packages, plus
   `pnpm run type-check`.
