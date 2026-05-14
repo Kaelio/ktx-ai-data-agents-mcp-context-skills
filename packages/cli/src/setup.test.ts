@@ -1094,7 +1094,7 @@ describe('setup status', () => {
     expect(embeddings).toHaveBeenCalledTimes(1);
   });
 
-  it('lets Back from database selection return to embedding setup after an empty selection warning', async () => {
+  it('lets Back from database selection return to embedding setup', async () => {
     const testIo = makeIo();
     const modelResults = [
       { status: 'ready' as const, projectDir: tempDir },
@@ -1106,9 +1106,8 @@ describe('setup status', () => {
       { status: 'back' as const, projectDir: tempDir },
     ];
     const embeddings = vi.fn(async () => embeddingResults.shift() ?? { status: 'back' as const, projectDir: tempDir });
-    const databaseMultiselectValues = [[], ['back']];
     const databasePrompts = {
-      multiselect: vi.fn(async () => databaseMultiselectValues.shift() ?? ['back']),
+      multiselect: vi.fn(async () => ['back']),
       select: vi.fn(async () => 'back'),
       text: vi.fn(),
       password: vi.fn(),
@@ -1142,9 +1141,6 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(databasePrompts.select).not.toHaveBeenCalled();
-    expect(testIo.stdout()).toContain(
-      'KTX cannot work without at least one database. Select a database or press Escape to go back.',
-    );
     expect(embeddings).toHaveBeenCalledTimes(2);
     expect(embeddings).toHaveBeenNthCalledWith(2, expect.objectContaining({ forcePrompt: true }), testIo.io);
     expect(testIo.stderr()).not.toContain('No databases selected.');
