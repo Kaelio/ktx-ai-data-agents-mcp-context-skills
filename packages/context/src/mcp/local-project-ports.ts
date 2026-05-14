@@ -27,6 +27,7 @@ import {
   type LocalScanMcpOptions,
   runLocalScan,
 } from '../scan/index.js';
+import { createKtxDiscoverDataService } from '../search/index.js';
 import type { SqlAnalysisDialect, SqlAnalysisPort } from '../sql-analysis/index.js';
 import {
   compileLocalSlQuery,
@@ -639,6 +640,11 @@ export function createLocalProjectMcpContextPorts(
     dictionarySearch: {
       async search(input) {
         return createKtxDictionarySearchService(project).search(input);
+      },
+    },
+    discover: {
+      async search(input) {
+        return createKtxDiscoverDataService(project, { userId: 'local', embeddingService }).search(input);
       },
     },
   };

@@ -448,6 +448,161 @@ describe('createLocalProjectMcpContextPorts', () => {
     });
   });
 
+  it('exposes local project discover_data across wiki, semantic-layer, and raw schema', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+    await project.fileStore.writeFile(
+      'wiki/global/orders-playbook.md',
+      [
+        '---',
+        'summary: Paid order operations',
+        'tags: [orders]',
+        'refs: []',
+        'sl_refs: []',
+        'usage_mode: auto',
+        '---',
+        '',
+        'Paid orders are used for customer activity analysis.',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'seed wiki',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      [
+        'name: orders',
+        'descriptions:',
+        '  user: Paid order facts',
+        'table: public.orders',
+        'grain: [id]',
+        'columns:',
+        '  - name: status',
+        '    type: string',
+        '    descriptions:',
+        '      user: Payment status',
+        'measures:',
+        '  - name: order_count',
+        '    expr: count(*)',
+        '    description: Number of paid orders',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'seed sl',
+    );
+    await project.fileStore.writeFile(
+      'raw-sources/warehouse/live-database/sync-1/connection.json',
+      JSON.stringify({ connectionId: 'warehouse', driver: 'postgres', extractedAt: '2026-05-14T09:00:00.000Z' }, null, 2),
+      'ktx',
+      'ktx@example.com',
+      'seed connection',
+    );
+    await project.fileStore.writeFile(
+      'raw-sources/warehouse/live-database/sync-1/tables/public-orders.json',
+      JSON.stringify(
+        {
+          catalog: null,
+          db: 'public',
+          name: 'orders',
+          kind: 'table',
+          comment: 'Orders table',
+          estimatedRows: 10,
+          columns: [
+            {
+              name: 'status',
+              nativeType: 'text',
+              normalizedType: 'text',
+              dimensionType: 'string',
+              nullable: false,
+              primaryKey: false,
+              comment: 'Order status',
+              sampleValues: ['paid'],
+            },
+          ],
+          foreignKeys: [],
+        },
+        null,
+        2,
+      ),
+      'ktx',
+      'ktx@example.com',
+      'seed table',
+    );
+    await project.fileStore.writeFile(
+      'raw-sources/warehouse/live-database/sync-1/scan-report.json',
+      JSON.stringify(
+        {
+          connectionId: 'warehouse',
+          driver: 'postgres',
+          syncId: 'sync-1',
+          runId: 'scan-1',
+          trigger: 'mcp',
+          mode: 'enriched',
+          dryRun: false,
+          artifactPaths: {
+            rawSourcesDir: 'raw-sources/warehouse/live-database/sync-1',
+            reportPath: 'raw-sources/warehouse/live-database/sync-1/scan-report.json',
+            manifestShards: [],
+            enrichmentArtifacts: [],
+          },
+          diffSummary: {
+            tablesAdded: 1,
+            tablesModified: 0,
+            tablesDeleted: 0,
+            tablesUnchanged: 0,
+            columnsAdded: 0,
+            columnsModified: 0,
+            columnsDeleted: 0,
+          },
+          manifestShardsWritten: 0,
+          structuralSyncStats: {
+            tablesCreated: 0,
+            tablesUpdated: 0,
+            tablesDeleted: 0,
+            columnsCreated: 0,
+            columnsUpdated: 0,
+            columnsDeleted: 0,
+          },
+          enrichment: {
+            dataDictionary: 'completed',
+            tableDescriptions: 'completed',
+            columnDescriptions: 'completed',
+            embeddings: 'skipped',
+            deterministicRelationships: 'skipped',
+            llmRelationshipValidation: 'skipped',
+            statisticalValidation: 'skipped',
+          },
+          capabilityGaps: [],
+          warnings: [],
+          relationships: { accepted: 0, review: 0, rejected: 0, skipped: 0 },
+          enrichmentState: { resumedStages: [], completedStages: [], failedStages: [] },
+          createdAt: '2026-05-14T09:00:00.000Z',
+        },
+        null,
+        2,
+      ),
+      'ktx',
+      'ktx@example.com',
+      'seed scan report',
+    );
+
+    const ports = createLocalProjectMcpContextPorts(project);
+    const results = await ports.discover?.search({ query: 'paid orders', connectionId: 'warehouse', limit: 10 });
+
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'wiki', id: 'orders-playbook' }),
+        expect.objectContaining({ kind: 'sl_source', id: 'orders', connectionId: 'warehouse' }),
+        expect.objectContaining({ kind: 'table', id: 'public.orders', connectionId: 'warehouse' }),
+      ]),
+    );
+  });
+
   it('triggers canonical bundle ingest and reads status, report, and replay through MCP ports', async () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     project.config.connections.warehouse = {
