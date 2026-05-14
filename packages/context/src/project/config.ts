@@ -99,9 +99,12 @@ const scanSchema = z.strictObject({
   relationships: scanRelationshipsSchema.prefault({}),
 });
 
-const setupSchema = z.strictObject({
-  database_connection_ids: z.array(z.string().min(1)).default([]),
-});
+const setupSchema = z
+  .strictObject({
+    database_connection_ids: z.array(z.string().min(1)).default([]),
+    completed_steps: z.unknown().optional(),
+  })
+  .transform(({ database_connection_ids }) => ({ database_connection_ids }));
 
 const storageGitSchema = z.strictObject({
   auto_commit: z.boolean().default(true),
@@ -115,7 +118,7 @@ const storageSchema = z.strictObject({
 });
 
 const connectionSchema = z.looseObject({
-  driver: z.string().min(1),
+  driver: z.string().min(1).optional(),
   url: z.string().optional(),
 });
 
