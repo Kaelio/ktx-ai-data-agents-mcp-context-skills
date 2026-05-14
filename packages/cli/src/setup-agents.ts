@@ -16,7 +16,7 @@ import {
 import { readKtxMcpDaemonStatus } from './managed-mcp-daemon.js';
 
 export type KtxAgentTarget = 'claude-code' | 'codex' | 'cursor' | 'opencode' | 'universal';
-export type KtxAgentScope = 'project' | 'global';
+export type KtxAgentScope = 'project' | 'global' | 'local';
 export type KtxAgentInstallMode = 'cli';
 
 export interface KtxSetupAgentsArgs {
@@ -173,6 +173,9 @@ function claudeConfigPath(projectDir: string, scope: KtxAgentScope): { path: str
   const home = process.env.HOME ?? '';
   if (scope === 'global') {
     return { path: join(home, '.claude.json'), jsonPath: ['mcpServers', 'ktx'] };
+  }
+  if (scope === 'local') {
+    return { path: join(home, '.claude.json'), jsonPath: ['projects', resolve(projectDir), 'mcpServers', 'ktx'] };
   }
   return { path: join(resolve(projectDir), '.mcp.json'), jsonPath: ['mcpServers', 'ktx'] };
 }

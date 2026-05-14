@@ -90,6 +90,7 @@ function shouldShowSetupEntryMenu(
     agents?: boolean;
     target?: string;
     global?: boolean;
+    local?: boolean;
     skipAgents?: boolean;
     yes?: boolean;
     input?: boolean;
@@ -163,6 +164,7 @@ function shouldShowSetupEntryMenu(
     'agents',
     'target',
     'global',
+    'local',
     'skipAgents',
     'yes',
     'input',
@@ -223,6 +225,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ]),
     )
     .option('--global', 'Install agent integration into the global target scope', false)
+    .option('--local', 'Install Claude Code MCP config into the private per-project ~/.claude.json scope', false)
     .addOption(new Option('--skip-agents', 'Leave agent integration incomplete for now').hideHelp().default(false))
     .option('--yes', 'Accept safe defaults in non-interactive setup', false)
     .option('--no-input', 'Disable interactive terminal input')
@@ -392,9 +395,19 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       context.setExitCode(1);
       return;
     }
+    if (options.local && options.global) {
+      context.io.stderr.write('Choose only one agent scope: --local or --global.\n');
+      context.setExitCode(1);
+      return;
+    }
+    if (options.local && options.target && options.target !== 'claude-code') {
+      context.io.stderr.write('--local is only supported with --target claude-code.\n');
+      context.setExitCode(1);
+      return;
+    }
 
     const mode = options.new ? 'new' : options.existing ? 'existing' : 'auto';
-    const resolvedAgentScope = options.global ? 'global' : 'project';
+    const resolvedAgentScope = options.local ? 'local' : options.global ? 'global' : 'project';
     await runSetupArgs(context, {
       command: 'run',
       projectDir: resolveCommandProjectDir(command),

@@ -287,7 +287,41 @@ describe('setup agents', () => {
       expect(rendered).not.toContain('secret-token');
       expect(io.stdout()).toContain('Run `ktx mcp start` to enable the configured KTX MCP server.');
     } finally {
-      process.env.KTX_MCP_TOKEN = previousToken;
+      if (previousToken === undefined) {
+        delete process.env.KTX_MCP_TOKEN;
+      } else {
+        process.env.KTX_MCP_TOKEN = previousToken;
+      }
+    }
+  });
+
+  it('writes Claude Code local MCP config under the project key in ~/.claude.json', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'ktx-setup-agents-home-'));
+    const previousHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      const io = makeIo();
+      await runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: true,
+          agents: true,
+          target: 'claude-code',
+          scope: 'local',
+          mode: 'cli',
+          skipAgents: false,
+        },
+        io.io,
+      );
+
+      const config = JSON.parse(await readFile(join(home, '.claude.json'), 'utf-8')) as {
+        projects: Record<string, { mcpServers: { ktx: { type: string; url: string } } }>;
+      };
+      expect(config.projects[tempDir].mcpServers.ktx).toEqual({ type: 'http', url: 'http://localhost:7878/mcp' });
+    } finally {
+      process.env.HOME = previousHome;
+      await rm(home, { recursive: true, force: true });
     }
   });
 

@@ -440,6 +440,7 @@ describe('runKtxCli', () => {
     expect(stdout).toContain('--agents');
     expect(stdout).toContain('--target <target>');
     expect(stdout).toContain('--global');
+    expect(stdout).toContain('--local');
     expect(stdout).toContain('--yes');
     expect(stdout).toContain('--no-input');
     expect(stdout).toContain('Global Options:');
@@ -1284,6 +1285,38 @@ describe('runKtxCli', () => {
       }),
       setupIo.io,
     );
+  });
+
+  it('rejects --local with non-Claude targets', async () => {
+    const setup = vi.fn(async () => 0);
+    const setupIo = makeIo();
+
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'setup', '--agents', '--target', 'cursor', '--local', '--no-input'],
+        setupIo.io,
+        { setup },
+      ),
+    ).resolves.toBe(1);
+
+    expect(setupIo.stderr()).toContain('--local is only supported with --target claude-code');
+    expect(setup).not.toHaveBeenCalled();
+  });
+
+  it('rejects --local and --global together', async () => {
+    const setup = vi.fn(async () => 0);
+    const setupIo = makeIo();
+
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'setup', '--agents', '--target', 'claude-code', '--local', '--global', '--no-input'],
+        setupIo.io,
+        { setup },
+      ),
+    ).resolves.toBe(1);
+
+    expect(setupIo.stderr()).toContain('Choose only one agent scope: --local or --global.');
+    expect(setup).not.toHaveBeenCalled();
   });
 
   it('rejects source-path with source-git-url', async () => {
