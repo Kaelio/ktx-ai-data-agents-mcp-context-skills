@@ -73,6 +73,13 @@ export type {
 } from './entity-details.js';
 export { createKtxEntityDetailsService } from './entity-details.js';
 export type {
+  DisplayTargetResolution,
+  RawSchemaHit,
+  TableDetail,
+  WarehouseCatalogServiceDeps,
+} from './warehouse-catalog.js';
+export { WarehouseCatalogService } from './warehouse-catalog.js';
+export type {
   KtxColumnSampleUpdate,
   KtxDescriptionSource,
   KtxDescriptionUpdate,
