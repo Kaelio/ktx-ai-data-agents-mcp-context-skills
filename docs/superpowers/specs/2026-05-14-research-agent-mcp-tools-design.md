@@ -203,6 +203,11 @@ columns) from the latest scan snapshot. The raw-data equivalent of
     toColumn: string,
     constraintName: string | null,
   }>,
+  snapshot: {                                  // freshness metadata, present on every response
+    syncId: string,                            // latest scan/sync identifier
+    extractedAt: string,                       // ISO-8601 UTC of the snapshot
+    scanRunId: string | null,                  // scan run id if available
+  },
 }
 ```
 
@@ -215,11 +220,39 @@ read. No new infrastructure. If the requested table is not in the latest
 snapshot, the tool returns a structured error with a suggestion to run
 `ktx ingest <connectionId>`.
 
+**Cache freshness.** Today `WarehouseCatalogService` caches `ConnectionCatalog`
+per connection name with no invalidation
+(`packages/context/src/ingest/tools/warehouse-verification/warehouse-catalog.service.ts:248-249`,
+`:404-411`). For an ingest tool that runs inside a single short-lived ingest
+session that is acceptable, but the MCP daemon is long-lived and serves
+clients across multiple `scan_trigger` / `ktx ingest` runs. The MCP adapter
+**must** key its cache on the latest scan artifact identity (the `syncId`
+derived from the artifact path, or the artifact file mtime) and re-read when
+that identity advances. The same rule applies to the shared services backing
+`discover_data` and `dictionary_search`. The implementation plan must
+either:
+
+1. Extend `WarehouseCatalogService` (and equivalent dictionary/discover
+   services) to invalidate cached entries when the underlying artifact
+   identity advances, or
+2. Wrap those services in an MCP-adapter cache layer that performs the
+   identity check before returning cached values.
+
 ### dictionary_search
 
-Find which connection, source, and column hold a given literal value (or
-substring) such as "Acme Corp" or "shipped". Backed by the existing
+Find which connection, source, and column **profile-sampled** a given literal
+value (or substring) such as "Acme Corp" or "shipped". Backed by the existing
 `SlDictionaryEntry` extraction over relationship-profiling artifacts.
+
+**Authoritativeness.** The dictionary index is built from *sampled* values
+captured during relationship profiling — by default 5 values per column,
+drawn from a sample of up to 10,000 rows
+(`packages/context/src/scan/relationship-profiling.ts:409-410`,
+`packages/context/src/sl/sl-dictionary-profile.ts:70`). A hit confirms a
+column contains the value; a miss is **not** proof that the value is absent
+from the column or warehouse — the value may simply have been outside the
+profile sample. The tool must surface this distinction in its output and the
+research skill must teach agents not to treat a miss as exhaustive.
 
 **Input schema:**
 
@@ -230,7 +263,8 @@ substring) such as "Acme Corp" or "shipped". Backed by the existing
 }
 ```
 
-**Output:** for each input value, the list of matching entries:
+**Output:** for each input value, the list of matching entries plus
+provenance:
 
 ```typescript
 {
@@ -243,14 +277,34 @@ substring) such as "Acme Corp" or "shipped". Backed by the existing
       matchedValue: string,                    // actual value found (may differ in case)
       cardinality: number | null,              // column cardinality if known
     }>,
+    missReason:                                // present when matches is empty
+      | 'no_profile_artifact'                  // enriched scan never ran for this connection
+      | 'no_candidate_columns'                 // profile present, no columns profile-eligible
+      | 'value_not_in_sample',                 // profile present but value not in sample (non-authoritative miss)
+    coverage: {
+      sampledRows: number | null,              // profileSampleRows used at profile time
+      valuesPerColumn: number | null,          // sampleValuesPerColumn used at profile time
+      profiledColumns: number,                 // count of columns in the dictionary index
+      syncId: string | null,                   // identifier of the profile artifact
+      profiledAt: string | null,               // ISO-8601 UTC of the profile artifact
+    },
   }>,
 }
 ```
 
-**Matching semantics:** case-insensitive substring match. Empty results when
-the relationship-profiling artifact has no candidate columns for the
-connection — the tool reports this distinctly from "value not found" so the
-agent can suggest running `ktx ingest --deep`.
+**Matching semantics:** case-insensitive substring match against the
+profile-sampled values. Misses are never authoritative — they only state
+that the value was not in the captured sample. `missReason` distinguishes
+"no enriched scan has run" (`no_profile_artifact`) from "scan ran but value
+was not in the sample" (`value_not_in_sample`). The research skill must
+direct agents to follow up a `value_not_in_sample` miss with
+`sql_execution` against the most plausible columns, not to conclude the
+value is absent.
+
+**Cache freshness:** the dictionary index is keyed on the profile artifact
+identity (the `syncId` derived from its path or the artifact mtime). When
+that identity advances, the daemon re-reads the artifact on next call. See
+the `entity_details` cache-freshness note above for the shared rule.
 
 **Implementation:** new module `packages/context/src/sl/dictionary-search.ts`.
 Loads `SlDictionaryEntry` records via the existing extraction code path,
@@ -279,11 +333,20 @@ result. The fallback path for questions the semantic layer does not cover.
 ```typescript
 {
   headers: string[],
-  headerTypes: string[],                       // driver-mapped type names
+  headerTypes?: string[],                      // driver-mapped type names, one per header; optional
   rows: Array<Array<unknown>>,
   rowCount: number,
 }
 ```
+
+`headerTypes` is optional because not every connector exposes per-column
+type metadata. The current contract makes it optional
+(`KtxQueryResult.headerTypes` in `packages/context/src/scan/types.ts:272-277`),
+and the SQLite connector currently omits it
+(`packages/connector-sqlite/src/connector.ts:237-240`, `:301-308`). When a
+connector returns header types, the MCP adapter passes them through
+verbatim. When a connector does not, the MCP adapter omits the field rather
+than fabricating values.
 
 **Implementation:** delegates to `KtxScanConnector.executeReadOnly` on the
 matching connector. The connector calls `assertReadOnlySql` and
@@ -343,11 +406,15 @@ A new CLI subtree in `packages/cli/src/commands/mcp-commands.ts`, wired into
 ### Commands
 
 ```bash
-ktx mcp start [--port <n>] [--host <h>] [--token <t>] [--foreground]
+ktx mcp start [--port <n>] [--host <h>] [--token <t>] [--foreground] \
+              [--allowed-host <h>...] [--allowed-origin <o>...]
 ktx mcp stop
 ktx mcp status
 ktx mcp logs [--follow]
 ```
+
+`--allowed-host` and `--allowed-origin` are repeatable. They extend (not
+replace) the defaults defined in the security model below.
 
 ### `ktx mcp start`
 
@@ -430,16 +497,29 @@ below).
 - `127.0.0.1` binding is the default and requires no token auth (loopback
   only). Even on loopback, the server enforces **Host and Origin header
   validation** on every `/mcp` and `/health` request to defend against
-  browser-driven DNS-rebinding attacks. The allowed-host list defaults to
-  `localhost`, `127.0.0.1`, and `[::1]`; the allowed-origin list rejects
-  any browser `Origin` header that is not in the same allow list.
-  Non-browser clients without an `Origin` header are accepted on loopback.
+  browser-driven DNS-rebinding attacks (the same defense the MCP SDK
+  exposes in `createMcpExpressApp` / `createMcpHonoApp`).
+- **Host validation** compares the incoming `Host` header to the allowed-host
+  list after normalizing: lowercase, strip any port, strip surrounding
+  brackets from IPv6 literals (`[::1]:7878` → `::1`). Comparison is exact
+  on the normalized host string. The default allowed-host list is
+  `['localhost', '127.0.0.1', '::1']`. `--allowed-host` values are appended
+  after the same normalization.
+- **Origin validation** compares the full browser `Origin` header (scheme +
+  host + port) to the allowed-origin list. The default allowed-origin list
+  is empty: any request that carries an `Origin` header is rejected unless
+  an explicit `--allowed-origin` entry matches. Non-browser clients that
+  do not send an `Origin` header (Claude Code, Cursor, Codex, opencode
+  HTTP transports) are accepted regardless of `Origin`. Each
+  `--allowed-origin` value must be a full origin string
+  (e.g., `http://localhost:7878`); KTX validates the format at startup.
 - Non-loopback binding requires `--token <t>` or `KTX_MCP_TOKEN`. The
   server checks `Authorization: Bearer <t>` on **every** `/mcp` method —
   `POST`, `GET` (SSE), and `DELETE` — and rejects with HTTP 401 otherwise.
   Token enforcement is independent of the session check; both must pass.
   When `--host` is non-loopback, the allowed-host list expands to include
-  the bound host and any user-supplied `--allowed-host` values.
+  the normalized bound host plus any user-supplied `--allowed-host`
+  values.
 - TLS is out of scope. For remote access, document running KTX behind a
   reverse proxy (Caddy, nginx) that terminates TLS.
 
@@ -485,8 +565,8 @@ Claude Code (HTTP):
     "ktx": {
       "type": "http",
       "url": "http://localhost:7878/mcp"
-      // when token auth is active:
-      // "headers": { "Authorization": "Bearer <token>" }
+      // when token auth is active, env-var expansion only:
+      // "headers": { "Authorization": "Bearer ${KTX_MCP_TOKEN}" }
     }
   }
 }
@@ -499,8 +579,8 @@ Cursor (HTTP, project `.cursor/mcp.json` or global `~/.cursor/mcp.json`):
   "mcpServers": {
     "ktx": {
       "url": "http://localhost:7878/mcp"
-      // when token auth is active:
-      // "headers": { "Authorization": "Bearer <token>" }
+      // when token auth is active, env-var expansion only:
+      // "headers": { "Authorization": "Bearer ${KTX_MCP_TOKEN}" }
     }
   }
 }
@@ -525,8 +605,8 @@ opencode (printed snippet, `opencode.json`):
       "type": "remote",
       "url": "http://localhost:7878/mcp",
       "enabled": true
-      // when token auth is active:
-      // "headers": { "Authorization": "Bearer <token>" }
+      // when token auth is active, env-var expansion only:
+      // "headers": { "Authorization": "Bearer ${KTX_MCP_TOKEN}" }
     }
   }
 }
@@ -534,20 +614,40 @@ opencode (printed snippet, `opencode.json`):
 
 #### Token handling per client
 
-When `--token` / `KTX_MCP_TOKEN` is active, `setup-agents` must materialize
-the bearer token into the correct field per client. The matrix above lists
-the supported clients; before writing an entry, `setup-agents` must verify
-that the chosen client has documented support for `headers` in its MCP
-config:
+When `--token` / `KTX_MCP_TOKEN` is active, `setup-agents` writes the bearer
+token **only via environment-variable reference** (`Bearer ${KTX_MCP_TOKEN}`),
+never as a literal token value. Claude Code, Cursor, and opencode all
+support environment-variable expansion inside `headers` values; the
+written entry references `${KTX_MCP_TOKEN}` and the user is responsible
+for exporting it in the shell that launches the MCP client.
 
-- claude-code: supported (`headers` on HTTP entries, including `Authorization`).
-- cursor: supported (`headers` on HTTP entries).
-- opencode: supported (`headers` on remote MCP entries).
-- codex: **not currently supported** in published config docs. When a token
-  is active and the user selects codex, `setup-agents` prints a warning and
-  skips the codex entry rather than writing an entry that codex will
-  silently ignore. The recommended workaround is to bind KTX to loopback
-  without a token for codex users.
+Rules:
+
+- **No literal-token writes, anywhere.** Even the user-scope (private)
+  Claude Code / Cursor config receives env-var references, not the raw
+  token. This keeps the same writer codepath for every scope and avoids a
+  branch that materializes secrets.
+- **Project-scope (shared, checked-in) configs are gated.** When a token is
+  active and the user requests a shared scope — `<projectDir>/.mcp.json`
+  for Claude Code, `<projectDir>/.cursor/mcp.json` for Cursor — `setup-agents`
+  prints a warning and offers a choice: (a) write the entry with the
+  `${KTX_MCP_TOKEN}` reference (the file is safe to commit; readers must
+  export the variable locally), or (b) skip the shared entry and rely on a
+  user-scope entry instead. The default is (a).
+- **Verify header support per client before writing.** The matrix below
+  reflects the current state of each client's MCP config docs:
+  - claude-code: supports `headers` with `${VAR}` expansion on HTTP entries.
+  - cursor: supports `headers` with `${VAR}` expansion on HTTP entries.
+  - opencode: supports `headers` with `${VAR}` expansion on remote MCP
+    entries.
+  - codex: **not currently supported** in published config docs. When a
+    token is active and the user selects codex, `setup-agents` prints a
+    warning and skips the codex entry rather than writing an entry that
+    codex will silently ignore. The recommended workaround is to bind KTX
+    to loopback without a token for codex users.
+- **Implementation acceptance test.** Setup-agents writer tests must assert
+  that no rendered output contains the literal token string for any
+  scope/target combination — only the `${KTX_MCP_TOKEN}` reference.
 
 Port is read from `.ktx/mcp.json` if present, falling back to 7878. The
 install manifest (`agentInstallManifestPath`,
@@ -614,7 +714,7 @@ You have access to KTX MCP tools for investigating data. Follow this workflow.
 - Prefer the semantic layer over raw SQL when both can answer the question — measures are the source of truth.
 - Read entity details before writing SQL against an unfamiliar table; do not assume column names.
 - Treat `sql_execution` as read-only. Writes are rejected by the server.
-- Validate value mentions with `dictionary_search` instead of guessing case/spelling.
+- Validate value mentions with `dictionary_search` instead of guessing case/spelling — but treat a `dictionary_search` *miss* as non-authoritative. The index is built from profile-sampled values, so a missing value may simply have been outside the sample. Follow up with `sql_execution` against the most plausible columns before concluding the value is absent.
 </rules>
 
 <examples>
