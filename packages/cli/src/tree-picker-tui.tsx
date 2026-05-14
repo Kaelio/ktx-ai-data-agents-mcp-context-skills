@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   filterTree,
   flattenSelection,
+  hasPartialChildren,
   isAncestorChecked,
   reducer,
   visibleNodeIds,
@@ -165,7 +166,7 @@ export function treePickerCommandForInkInput(
   if (key.return) return 'save-request';
   if (input === ' ') return 'toggle-check';
   if (input === '/') return 'search-start';
-  if (input === 'a') return 'select-all-visible';
+  if (input === 'a') return 'toggle-select-all-visible';
   if (input === 'n') return 'select-none';
   if (key.escape) return 'quit';
   return null;
@@ -178,8 +179,9 @@ function PickerRow(props: { state: PickerState; nodeId: string; width: number; t
   const locked = isAncestorChecked(node.id, props.state.checked, props.state.byId);
   const checked = props.state.checked.has(node.id);
   const isSelected = checked || locked;
-  const glyph = isSelected ? '◼' : '◻';
-  const glyphColor = checked || locked ? props.theme.selected : props.theme.muted;
+  const partial = !isSelected && hasPartialChildren(node.id, props.state.checked, props.state.byId);
+  const glyph = isSelected ? '◼' : partial ? '◧' : '◻';
+  const glyphColor = isSelected || partial ? props.theme.selected : props.theme.muted;
   const childAffordance =
     node.childIds.length > 0 ? (props.state.expanded.has(node.id) ? ' ▾' : ` ▸ (${node.childIds.length})`) : '';
   const indent = ' '.repeat(node.depth * 2);

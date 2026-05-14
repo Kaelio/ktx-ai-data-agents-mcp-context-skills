@@ -46,12 +46,16 @@ async function chooseSetupDatabaseContextDepth(input: {
   const options =
     recommended === 'deep'
       ? [
-          { value: 'deep', label: 'Deep: AI descriptions, embeddings, relationships, slower' },
+          {
+            value: 'deep',
+            label: 'Deep: AI descriptions, embeddings, relationships, slower',
+            hint: 'recommended',
+          },
           { value: 'fast', label: 'Fast: schema only, no AI, quickest' },
           { value: 'back', label: 'Back' },
         ]
       : [
-          { value: 'fast', label: 'Fast: schema only, no AI, quickest' },
+          { value: 'fast', label: 'Fast: schema only, no AI, quickest', hint: 'recommended' },
           { value: 'deep', label: 'Deep: AI descriptions, embeddings, relationships, slower' },
           { value: 'back', label: 'Back' },
         ];

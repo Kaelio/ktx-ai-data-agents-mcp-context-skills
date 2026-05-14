@@ -6,6 +6,7 @@ import {
   clearExpiredTransientHint,
   filterTree,
   flattenSelection,
+  hasPartialChildren,
   moveCursor,
   reducer,
   selectAllVisible,
@@ -134,6 +135,54 @@ describe('selection invariants', () => {
   });
 });
 
+describe('hasPartialChildren', () => {
+  const ROOT = 'r0000000-0000-0000-0000-000000000000';
+  const CHILD_A = 'a0000000-0000-0000-0000-000000000000';
+  const CHILD_B = 'b0000000-0000-0000-0000-000000000000';
+  const GRANDCHILD = 'g0000000-0000-0000-0000-000000000000';
+  const LEAF = 'l0000000-0000-0000-0000-000000000000';
+
+  function tree() {
+    return buildPickerTree([
+      { id: ROOT, title: 'Root', parentId: null },
+      { id: CHILD_A, title: 'Child A', parentId: ROOT },
+      { id: CHILD_B, title: 'Child B', parentId: ROOT },
+      { id: GRANDCHILD, title: 'Grandchild', parentId: CHILD_A },
+      { id: LEAF, title: 'Leaf', parentId: null },
+    ]);
+  }
+
+  function byId() {
+    return new Map(tree().map((node) => [node.id, node]));
+  }
+
+  it('returns false for a leaf node with no children', () => {
+    expect(hasPartialChildren(LEAF, new Set(), byId())).toBe(false);
+    expect(hasPartialChildren(LEAF, new Set([LEAF]), byId())).toBe(false);
+  });
+
+  it('returns false when the node itself is checked', () => {
+    expect(hasPartialChildren(ROOT, new Set([ROOT]), byId())).toBe(false);
+  });
+
+  it('returns false when an ancestor is checked (node is locked)', () => {
+    expect(hasPartialChildren(CHILD_A, new Set([ROOT]), byId())).toBe(false);
+  });
+
+  it('returns true when a direct child is checked', () => {
+    expect(hasPartialChildren(ROOT, new Set([CHILD_A]), byId())).toBe(true);
+  });
+
+  it('returns true when a deep descendant is checked', () => {
+    expect(hasPartialChildren(ROOT, new Set([GRANDCHILD]), byId())).toBe(true);
+  });
+
+  it('returns false when no descendant is checked', () => {
+    expect(hasPartialChildren(ROOT, new Set([LEAF]), byId())).toBe(false);
+    expect(hasPartialChildren(ROOT, new Set(), byId())).toBe(false);
+  });
+});
+
 describe('search and cursor movement', () => {
   it('filters by title and path while deriving auto-expanded ancestors', () => {
     const state = buildInitialState({
@@ -186,6 +235,23 @@ describe('bulk actions and reducer effects', () => {
     const selected = selectAllVisible(searching);
     expect(flattenSelection(selected.checked, selected.byId)).toEqual([IDS.architecture, IDS.marketing]);
     expect([...selectNone(selected).checked]).toEqual([]);
+  });
+
+  it('toggle-select-all-visible selects all visible roots, then clears on repeat', () => {
+    const state = buildInitialState({
+      tree: buildPickerTree(pages()),
+      existingSelectedIds: [],
+    });
+
+    const firstPress = reducer(state, 'toggle-select-all-visible').next;
+    expect(firstPress.checked.size).toBeGreaterThan(0);
+    const allSelectedIds = [...firstPress.checked].sort();
+
+    const secondPress = reducer(firstPress, 'toggle-select-all-visible').next;
+    expect([...secondPress.checked]).toEqual([]);
+
+    const thirdPress = reducer(secondPress, 'toggle-select-all-visible').next;
+    expect([...thirdPress.checked].sort()).toEqual(allSelectedIds);
   });
 
   it('saves immediately when confirm is not required and prompts confirmation when requireConfirmOnSave is true', () => {

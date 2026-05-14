@@ -149,29 +149,8 @@ describe('setup databases step', () => {
         { value: 'bigquery', label: 'BigQuery' },
         { value: 'snowflake', label: 'Snowflake' },
       ],
-      required: false,
+      required: true,
     });
-  });
-
-  it('requires choosing a database after an empty interactive selection', async () => {
-    const io = makeIo();
-    const prompts = makePromptAdapter({
-      multiselectValues: [[], ['back']],
-      selectValues: ['choose'],
-    });
-
-    const result = await runKtxSetupDatabasesStep(
-      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
-      io.io,
-      { prompts },
-    );
-
-    expect(result.status).toBe('back');
-    expect(prompts.select).not.toHaveBeenCalled();
-    expect(io.stdout()).toContain(
-      'KTX cannot work without at least one database. Select a database or press Escape to go back.',
-    );
-    expect(prompts.multiselect).toHaveBeenCalledTimes(2);
   });
 
   it('lets Back from connection method selection return to database selection when adding a new driver', async () => {
@@ -744,10 +723,10 @@ describe('setup databases step', () => {
     expect(config.setup?.database_connection_ids).toEqual(['postgres-warehouse', 'mysql-warehouse']);
   });
 
-  it('returns to configured primary menu when submitting empty driver selection after adding a source', async () => {
+  it('returns to configured primary menu when pressing back on driver selection after adding a source', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({
-      multiselectValues: [['postgres'], []],
+      multiselectValues: [['postgres'], ['back']],
       selectValues: ['url', 'add', 'continue'],
       textValues: ['', 'env:DATABASE_URL'],
     });
@@ -787,7 +766,7 @@ describe('setup databases step', () => {
     });
   });
 
-  it('returns to configured primary menu when submitting empty driver selection with pre-existing source', async () => {
+  it('returns to configured primary menu when pressing back on driver selection with pre-existing source', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
@@ -806,7 +785,7 @@ describe('setup databases step', () => {
     await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
     const io = makeIo();
     const prompts = makePromptAdapter({
-      multiselectValues: [[]],
+      multiselectValues: [['back']],
       selectValues: ['add', 'continue'],
     });
 
@@ -2007,7 +1986,7 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Enable query-history ingest for this PostgreSQL connection?',
       options: [
-        { value: 'yes', label: 'Enable query history' },
+        { value: 'yes', label: 'Enable query history (recommended)' },
         { value: 'no', label: 'Do not enable query history' },
         { value: 'back', label: 'Back' },
       ],

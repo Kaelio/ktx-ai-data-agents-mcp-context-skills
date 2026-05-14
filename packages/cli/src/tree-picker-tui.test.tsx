@@ -90,7 +90,7 @@ describe('treePickerCommandForInkInput', () => {
     expect(treePickerCommandForInkInput('', { leftArrow: true }, state().search, null)).toBe('cursor-left');
     expect(treePickerCommandForInkInput(' ', {}, state().search, null)).toBe('toggle-check');
     expect(treePickerCommandForInkInput('/', {}, state().search, null)).toBe('search-start');
-    expect(treePickerCommandForInkInput('a', {}, state().search, null)).toBe('select-all-visible');
+    expect(treePickerCommandForInkInput('a', {}, state().search, null)).toBe('toggle-select-all-visible');
     expect(treePickerCommandForInkInput('n', {}, state().search, null)).toBe('select-none');
     expect(treePickerCommandForInkInput('', { return: true }, state().search, null)).toBe('save-request');
     expect(treePickerCommandForInkInput('', { escape: true }, state().search, null)).toBe('quit');
@@ -196,6 +196,31 @@ describe('TreePickerApp', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('◼ Engineering Docs ▾');
     expect(frame).toContain('  ◼ Architecture');
+  });
+
+  it('renders the partial glyph on a parent whose descendant is checked', () => {
+    const partialPages: TreePickerNodeInput[] = [
+      { id: IDS.engineering, title: 'Engineering Docs', archived: false, parentId: null },
+      { id: IDS.architecture, title: 'Architecture', archived: false, parentId: IDS.engineering },
+    ];
+    const initialState = buildInitialState({
+      tree: buildPickerTree(partialPages),
+      existingSelectedIds: [IDS.architecture],
+    });
+    const { lastFrame } = renderInkTest(
+      <TreePickerApp
+        initialState={initialState}
+        chrome={chrome()}
+        terminalRows={24}
+        terminalWidth={100}
+        onExit={vi.fn()}
+      />,
+    );
+
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('◧ Engineering Docs ▾');
+    expect(frame).toContain('  ◼ Architecture');
+    expect(frame).not.toContain('◻ Engineering Docs');
   });
 
   it('supports keyboard selection, confirm-on-save, and save callback', async () => {

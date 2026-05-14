@@ -44,6 +44,7 @@ export type PickerCommand =
   | 'collapse-all'
   | 'toggle-check'
   | 'select-all-visible'
+  | 'toggle-select-all-visible'
   | 'select-none'
   | 'clear-transient-hint'
   | 'search-start'
@@ -228,6 +229,17 @@ export function isAncestorChecked(nodeId: string, checked: Set<string>, byId: Ma
   return ancestorsOf(nodeId, byId).some((ancestorId) => checked.has(ancestorId));
 }
 
+export function hasPartialChildren(
+  nodeId: string,
+  checked: Set<string>,
+  byId: Map<string, TreePickerNode>,
+): boolean {
+  if (checked.has(nodeId) || isAncestorChecked(nodeId, checked, byId)) {
+    return false;
+  }
+  return descendantsOf(nodeId, byId).some((descendantId) => checked.has(descendantId));
+}
+
 function checkedAncestor(nodeId: string, state: PickerState): TreePickerNode | null {
   for (const ancestorId of ancestorsOf(nodeId, state.byId)) {
     if (state.checked.has(ancestorId)) {
@@ -348,6 +360,16 @@ export function selectAllVisible(state: PickerState): PickerState {
 
 export function selectNone(state: PickerState): PickerState {
   return cloneState(state, { checked: new Set(), transientHint: null });
+}
+
+export function toggleSelectAllVisible(state: PickerState): PickerState {
+  const next = selectAllVisible(state);
+  const unchanged =
+    next.checked.size === state.checked.size && [...next.checked].every((id) => state.checked.has(id));
+  if (unchanged && state.checked.size > 0) {
+    return selectNone(state);
+  }
+  return next;
 }
 
 function setExpanded(state: PickerState, nodeId: string, value: boolean | 'toggle'): PickerState {
@@ -487,6 +509,8 @@ export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()
       return { next: toggleChecked(state, state.cursorId, now), effect: null };
     case 'select-all-visible':
       return { next: selectAllVisible(state), effect: null };
+    case 'toggle-select-all-visible':
+      return { next: toggleSelectAllVisible(state), effect: null };
     case 'select-none':
       return { next: selectNone(state), effect: null };
     case 'clear-transient-hint':

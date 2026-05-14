@@ -932,7 +932,7 @@ async function maybeApplyHistoricSqlConfig(input: {
     const choice = await input.prompts.select({
       message: `Enable query-history ingest for this ${driverLabel(input.driver)} connection?`,
       options: [
-        { value: 'yes', label: 'Enable query history' },
+        { value: 'yes', label: 'Enable query history (recommended)' },
         { value: 'no', label: 'Do not enable query history' },
         { value: 'back', label: 'Back' },
       ],
@@ -1756,27 +1756,17 @@ async function chooseDrivers(
     );
     return 'missing-input';
   }
-  while (true) {
-    const initialValues = unique(options?.initialDrivers ?? []);
-    const choices = await prompts.multiselect({
-      message: withMultiselectNavigation('Which databases should KTX connect to?'),
-      options: [...DRIVER_OPTIONS],
-      ...(initialValues.length > 0 ? { initialValues } : {}),
-      required: options?.hasPrimarySources === true,
-    });
-    if (choices.includes('back')) {
-      return 'back';
-    }
-    if (choices.length > 0) {
-      return choices as KtxSetupDatabaseDriver[];
-    }
-
-    if (options?.hasPrimarySources) {
-      return 'back';
-    }
-
-    io.stdout.write('│  KTX cannot work without at least one database. Select a database or press Escape to go back.\n');
+  const initialValues = unique(options?.initialDrivers ?? []);
+  const choices = await prompts.multiselect({
+    message: withMultiselectNavigation('Which databases should KTX connect to?'),
+    options: [...DRIVER_OPTIONS],
+    ...(initialValues.length > 0 ? { initialValues } : {}),
+    required: true,
+  });
+  if (choices.includes('back')) {
+    return 'back';
   }
+  return choices as KtxSetupDatabaseDriver[];
 }
 
 async function chooseConnectionIdForDriver(input: {
