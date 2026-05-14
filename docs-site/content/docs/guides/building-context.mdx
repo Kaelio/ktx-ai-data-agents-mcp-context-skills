@@ -1,171 +1,195 @@
 ---
 title: Building Context
-description: Build database and source context from configured KTX connections.
+description: Build and refresh KTX context from databases, source tools, query history, and text.
 ---
 
-Building context reads your configured connections and writes local context that
-agents can use. Database connections produce schema context, and source
-connections such as dbt, Looker, Metabase, and Notion produce semantic sources
-and wiki pages.
+Building context turns configured connections into local semantic-layer sources
+and wiki pages. Agents use those files to understand your schema, business
+definitions, metric logic, joins, and known caveats before they write SQL.
+
+Use this guide after `ktx setup` has created `ktx.yaml` and at least one
+database or context-source connection.
+
+## The build loop
+
+Most projects use this loop:
+
+1. Check readiness with `ktx status`.
+2. Build one connection with `ktx ingest <connectionId>`, or build everything
+   with `ktx ingest --all`.
+3. Search or inspect the generated files under `semantic-layer/` and `wiki/`.
+4. Edit source YAML or Markdown when business logic needs refinement.
+5. Validate and query representative sources before handing the context to an
+   agent.
+
+`ktx ingest --all` runs database connections first, then context-source
+connections. That order lets dbt, BI, Notion, and text ingest attach context to
+known warehouse tables.
 
 ## Database ingest
 
-Database ingest connects to your warehouse and extracts structural metadata.
-KTX stores the results locally so agents can understand your schema without
-querying the database directly.
-
-### Running database ingest
+Database ingest connects to a configured warehouse and records local schema
+context. It gives agents table, column, type, constraint, and row-count
+grounding without requiring them to inspect the database directly.
 
 ```bash
-ktx ingest <connection-id>
-```
-
-This runs a fast schema ingest by default. You can choose the depth with public
-flags:
-
-| Flag | What it does |
-|------|-------------|
-| `--fast` | Tables, columns, types, constraints, and row counts |
-| `--deep` | Fast ingest plus AI-enriched database context |
-
-```bash
-# Build one connection quickly
-ktx ingest my-postgres --fast
-
-# Build AI-enriched database context
-ktx ingest my-postgres --deep
+# Build one configured database connection
+ktx ingest warehouse
 
 # Build all configured connections
 ktx ingest --all
 ```
 
-### Checking results
+Depth controls how much context KTX builds:
 
-Every ingest prints a summary and writes local artifacts. Use `ktx status`
-after ingest to review project readiness and follow-up setup work:
+| Flag | Best for | What it does |
+|------|----------|--------------|
+| `--fast` | First setup, quick refreshes, CI smoke checks | Deterministic schema ingest with tables, columns, types, constraints, and row counts |
+| `--deep` | Agent-ready context for real analysis | Fast ingest plus AI-enriched descriptions, embeddings, relationship evidence, and optional query history |
 
-```bash
-ktx status
-```
-
-### Relationship detection
-
-Many databases lack declared foreign keys. KTX infers relationships by scoring column pairs across seven signals - name similarity, type compatibility, value overlap, embedding similarity, profile uniqueness, null rate, and structural priors. The weighted score determines each candidate's status:
-
-| Score range | Status | Meaning |
-|-------------|--------|---------|
-| &ge; 0.85 | `accepted` | High confidence - applied automatically |
-| 0.55 &ndash; 0.84 | `review` | Plausible - needs human review |
-| &lt; 0.55 | `rejected` | Low confidence - not applied |
-
-Deep database ingest can include relationship evidence where the connector can
-provide it. Relationship review and calibration subcommands are not part of the
-current public CLI surface.
-
-## Ingestion
-
-Ingestion pulls semantic context from your existing analytics tools - dbt projects, Looker models, Metabase questions, and more - and writes it into your KTX project as semantic sources and wiki pages.
-
-### How it works
-
-Each ingest run follows this flow:
-
-1. An **adapter** extracts metadata from your tool (dbt manifest, LookML files, Metabase API, etc.)
-2. An **LLM agent** reconciles the extracted metadata with your existing context - it merges intelligently rather than overwriting
-3. **Semantic sources** (YAML) and **wiki pages** (Markdown) are written to your project directory
-
-### Running an ingest
+Examples:
 
 ```bash
-ktx ingest my-dbt-source
+ktx ingest warehouse --fast
+ktx ingest warehouse --deep
+ktx ingest --all --deep
 ```
 
-Useful output flags:
+Deep ingest needs LLM and embedding readiness. If those providers are not
+configured, run `ktx setup` or use `--fast`.
+
+## Query history
+
+PostgreSQL, BigQuery, and Snowflake can add query-history context. This helps
+KTX learn common joins, filters, service-account patterns, redaction rules, and
+usage-heavy query templates.
+
+Enable it during setup, store it under `connections.<id>.context.queryHistory`,
+or request it for one run:
+
+```bash
+ktx ingest warehouse --deep --query-history
+ktx ingest warehouse --query-history-window-days 30
+```
+
+Use `--no-query-history` when you want to skip a stored query-history setting
+for one run.
+
+## Relationship evidence
+
+Many databases do not declare all foreign keys. KTX can score relationship
+candidates using signals such as name similarity, type compatibility, value
+overlap, embedding similarity, uniqueness, null rate, and structural priors.
+
+The public CLI does not expose separate relationship review subcommands.
+Relationship evidence is built as part of deep database ingest when the
+connector and readiness checks support it.
+
+## Context-source ingest
+
+Context-source connections pull business metadata from tools your team already
+uses. The current public `ktx ingest` command is connection-centric: pass one
+configured connection id, or pass `--all`.
+
+```bash
+# Build one source connection
+ktx ingest dbt_main
+
+# Build every configured database and source connection
+ktx ingest --all
+```
+
+Supported source types:
+
+| Driver | Typical source | Output |
+|--------|----------------|--------|
+| `dbt` | dbt project or Git repo | Semantic sources with model, column, test, tag, and description metadata |
+| `metricflow` | MetricFlow project or Git repo | Metrics, dimensions, entities, and semantic joins |
+| `lookml` | LookML files or Git repo | Views, explores, dimensions, measures, and joins |
+| `looker` | Looker API | Explores, looks, dashboards, and model metadata |
+| `metabase` | Metabase API | Questions, dashboards, table metadata, and mappings |
+| `notion` | Notion API | Wiki pages and business knowledge |
+
+Source ingest extracts metadata, reconciles it with existing local context, and
+writes semantic-layer YAML plus wiki Markdown. It merges rather than blindly
+overwriting local edits.
+
+## Text ingest
+
+Use `ktx ingest text` for notes, Markdown files, runbooks, Slack exports, or
+other free-form knowledge that should become searchable KTX memory.
+
+```bash
+# Capture a Markdown file
+ktx ingest text docs/revenue-notes.md --connection-id warehouse
+
+# Capture one stdin item
+printf "Refunds are excluded from net revenue." | ktx ingest text -
+
+# Capture direct text
+ktx ingest text --text "ARR excludes one-time implementation fees."
+```
+
+Useful flags:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
-| `--plain` | Plain text output |
+| `--connection-id <connectionId>` | Attach the captured memory to a KTX connection |
+| `--user-id <id>` | Attribute capture to a user scope, default `local-cli` |
+| `--json` | Print structured output |
+| `--fail-fast` | Stop after the first failed text item |
 
-Foreground context builds do not detach into background control sessions. If a
-run is interrupted, rerun `ktx ingest <connection-id>` or `ktx ingest --all`.
+Text ingest is a good fit for small, high-signal documents. For system-specific
+connectors such as Notion, dbt, or Metabase, prefer configured source ingest so
+KTX can preserve source metadata.
 
-### Supported context sources
+## Output and artifacts
 
-| Driver | Source | What gets ingested |
-|--------|--------|--------------------|
-| `dbt` | dbt project | Model definitions, column descriptions, tests, tags |
-| `metricflow` | MetricFlow semantic models | Metrics, dimensions, entities, semantic joins |
-| `lookml` | LookML files | Views, explores, dimensions, measures, joins |
-| `looker` | Looker API | Explores, looks, dashboard metadata |
-| `metabase` | Metabase API | Questions, dashboards, table metadata |
-| `notion` | Notion API | Database pages, knowledge articles |
+Every ingest run prints a summary. Use `--json` when an agent or script needs a
+structured plan and per-target results.
 
-Query history is a database connection facet. Enable it with
-`connections.<id>.context.queryHistory` or pass `--query-history` for a current
-run. See [Context Sources](/docs/integrations/context-sources) for
-driver-specific setup and auth configuration.
-
-### What gets generated
-
-A typical dbt ingest produces semantic sources and wiki pages in your project:
-
-**Semantic source** (`semantic-layer/my-postgres/orders.yaml`):
-
-```yaml title="semantic-layer/my-postgres/orders.yaml"
-name: orders
-table: public.orders
-grain:
-  - order_id
-columns:
-  - name: order_id
-    type: string
-    description: Unique order identifier
-  - name: customer_id
-    type: string
-    description: Foreign key to customers table
-  - name: order_date
-    type: time
-    role: time
-    description: Date the order was placed
-  - name: total_amount
-    type: number
-    description: Total order value in USD
-measures:
-  - name: total_revenue
-    expr: SUM(total_amount)
-    description: Sum of all order values
-  - name: order_count
-    expr: COUNT(DISTINCT order_id)
-    description: Number of distinct orders
-joins:
-  - to: customers
-    on: orders.customer_id = customers.customer_id
-    relationship: many_to_one
+```bash
+ktx ingest --all --json
 ```
 
-**Wiki page** (`wiki/global/order-status-definitions.md`):
+Typical generated files:
 
-```markdown
----
-summary: Business definitions for order status values
-tags: [orders, definitions]
-sl_refs: [orders]
----
+| Path | Created by | Purpose |
+|------|------------|---------|
+| `semantic-layer/<connection-id>/*.yaml` | Database and source ingest | Queryable semantic source definitions |
+| `wiki/global/*.md` | Source, text, and memory ingest | Shared business definitions and notes |
+| `wiki/user/<user-id>/*.md` | Text and memory ingest | User-scoped context |
+| `.ktx/setup/context-build.json` | Setup context build | Resume and readiness state for setup |
 
-## Order Statuses
+Ingest sessions also record transcripts with tool calls, LLM responses, and
+write decisions. Inspect them when you need to debug why a source or wiki page
+was written a certain way.
 
-- **pending**: Order placed but not yet processed
-- **confirmed**: Payment received, awaiting fulfillment
-- **shipped**: Order dispatched to carrier
-- **delivered**: Order received by customer
-- **cancelled**: Order cancelled before shipment
+## Example: first full refresh
 
-Orders in "pending" status for more than 48 hours are flagged for review.
+After interactive setup:
+
+```bash
+ktx status
+ktx ingest --all --deep
+ktx status
 ```
 
-### Ingest transcripts
+Then inspect what changed:
 
-Every ingest session records a full transcript: tool calls, LLM responses, and
-write decisions. Inspect the stored transcript files when you need to debug why
-a source was written a certain way.
+```bash
+git status --short
+ktx sl list --json
+ktx wiki search "revenue" --json --limit 10
+```
+
+## Common errors
+
+| Symptom | Likely cause | Recovery |
+|---------|--------------|----------|
+| Connection not configured | The connection id is missing from `ktx.yaml` | Add it with `ktx setup` |
+| Deep readiness is missing | LLM or embeddings are not setup-ready | Run `ktx setup`, or rerun with `--fast` |
+| Query history is unsupported | The selected database driver does not expose query history | Run schema ingest without query-history flags |
+| No target selected | You omitted both a connection id and `--all` | Run `ktx ingest <connectionId>` or `ktx ingest --all` |
+| Source flags have no effect | Depth and query-history flags were supplied for a source connector | Use those flags only for database connections |
+| Text ingest stops early | `--fail-fast` stopped on the first failed item | Fix the item or rerun without `--fail-fast` |
