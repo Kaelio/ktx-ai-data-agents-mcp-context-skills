@@ -86,13 +86,8 @@ export class KtxMessageBuilder {
     }
 
     if (input.messages) {
-      // Only mark a history breakpoint when prior turns exist. A single-message call
-      // is the current user turn — marking it writes a cache entry that can't be
-      // reused on the next (different-content) call, costing tokens for nothing.
-      const shouldMarkHistory =
-        cachingActive && this.cacheHistoryEnabled() && input.messages.length > 1;
       messages.push(
-        ...(shouldMarkHistory
+        ...(cachingActive && this.cacheHistoryEnabled()
           ? this.markLastHistoryMessage(input.messages, ttls.historyTtl, input.model)
           : input.messages),
       );

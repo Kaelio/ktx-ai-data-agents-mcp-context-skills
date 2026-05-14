@@ -81,50 +81,6 @@ describe('KtxMessageBuilder.build', () => {
     expect((out.tools.z as { providerOptions?: unknown }).providerOptions).toBeUndefined();
   });
 
-  it('wrapSimple does not mark a single user message with a cache breakpoint', () => {
-    const builder = makeBuilder();
-
-    const out = builder.wrapSimple({
-      system: 'SYS',
-      messages: [{ role: 'user', content: 'one-shot prompt' }],
-      tools: {},
-      model: 'anthropic/claude-sonnet-4-6',
-    });
-
-    expect(out.messages).toHaveLength(2);
-    expect(out.messages[0]).toMatchObject({
-      role: 'system',
-      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } },
-    });
-    expect(out.messages[1]).toMatchObject({ role: 'user', content: 'one-shot prompt' });
-    expect((out.messages[1] as { providerOptions?: unknown }).providerOptions).toBeUndefined();
-  });
-
-  it('wrapSimple still marks the last history message when there are multiple messages', () => {
-    const builder = makeBuilder();
-
-    const out = builder.wrapSimple({
-      system: 'SYS',
-      messages: [
-        { role: 'user', content: 'turn 1' },
-        { role: 'assistant', content: 'reply 1' },
-        { role: 'user', content: 'turn 2' },
-      ],
-      tools: {},
-      model: 'anthropic/claude-sonnet-4-6',
-    });
-
-    expect(out.messages).toHaveLength(4);
-    expect(out.messages[1]).toMatchObject({ role: 'user' });
-    expect((out.messages[1] as { providerOptions?: unknown }).providerOptions).toBeUndefined();
-    expect(out.messages[2]).toMatchObject({ role: 'assistant' });
-    expect((out.messages[2] as { providerOptions?: unknown }).providerOptions).toBeUndefined();
-    const last = out.messages[3] as { content: Array<{ providerOptions?: unknown }> };
-    expect(last.content[0].providerOptions).toEqual({
-      anthropic: { cacheControl: { type: 'ephemeral', ttl: '5m' } },
-    });
-  });
-
   it('clamps every TTL to 5m for Vertex when vertexFallbackTo5m is enabled', () => {
     const provider = createKtxLlmProvider({
       backend: 'vertex',
