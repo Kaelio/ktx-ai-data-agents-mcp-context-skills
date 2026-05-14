@@ -30,6 +30,7 @@ import {
 import type { SqlAnalysisDialect, SqlAnalysisPort } from '../sql-analysis/index.js';
 import {
   compileLocalSlQuery,
+  createKtxDictionarySearchService,
   type LocalSlSourceSearchResult,
   type LocalSlSourceSummary,
   listLocalSlSources,
@@ -633,6 +634,11 @@ export function createLocalProjectMcpContextPorts(
     entityDetails: {
       async read(input) {
         return createKtxEntityDetailsService(project).read(input);
+      },
+    },
+    dictionarySearch: {
+      async search(input) {
+        return createKtxDictionarySearchService(project).search(input);
       },
     },
   };

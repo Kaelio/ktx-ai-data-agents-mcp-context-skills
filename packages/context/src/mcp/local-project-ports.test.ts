@@ -366,6 +366,88 @@ describe('createLocalProjectMcpContextPorts', () => {
     });
   });
 
+  it('exposes local dictionary search through MCP ports', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+    await project.fileStore.writeFile(
+      'raw-sources/warehouse/live-database/sync-1/enrichment/relationship-profile.json',
+      `${JSON.stringify(
+        {
+          connectionId: 'warehouse',
+          driver: 'postgres',
+          sqlAvailable: true,
+          queryCount: 4,
+          tables: [],
+          columns: {
+            'orders.status': {
+              table: { catalog: null, db: 'public', name: 'orders' },
+              column: 'status',
+              nativeType: 'text',
+              normalizedType: 'string',
+              distinctCount: 2,
+              sampleValues: ['paid', 'refunded'],
+            },
+          },
+          warnings: [],
+        },
+        null,
+        2,
+      )}\n`,
+      'ktx',
+      'ktx@example.com',
+      'Seed dictionary profile',
+    );
+
+    const ports = createLocalProjectMcpContextPorts(project);
+
+    await expect(ports.dictionarySearch?.search({ values: ['paid'] })).resolves.toMatchObject({
+      searched: [{ connectionId: 'warehouse', status: 'ready' }],
+      results: [
+        {
+          value: 'paid',
+          matches: [{ connectionId: 'warehouse', sourceName: 'orders', columnName: 'status', matchedValue: 'paid' }],
+          misses: [],
+        },
+      ],
+    });
+  });
+
+  it('reports missing local dictionary profiles through MCP ports', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+
+    const ports = createLocalProjectMcpContextPorts(project);
+
+    await expect(ports.dictionarySearch?.search({ values: ['paid'] })).resolves.toEqual({
+      searched: [
+        {
+          connectionId: 'warehouse',
+          coverage: {
+            sampledRows: null,
+            valuesPerColumn: null,
+            profiledColumns: 0,
+            syncId: null,
+            profiledAt: null,
+          },
+          status: 'no_profile_artifact',
+        },
+      ],
+      results: [
+        {
+          value: 'paid',
+          matches: [],
+          misses: [{ connectionId: 'warehouse', reason: 'no_profile_artifact' }],
+        },
+      ],
+    });
+  });
+
   it('triggers canonical bundle ingest and reads status, report, and replay through MCP ports', async () => {
     const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
     project.config.connections.warehouse = {
