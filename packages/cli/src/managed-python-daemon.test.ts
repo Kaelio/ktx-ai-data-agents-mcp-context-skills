@@ -15,11 +15,13 @@ import {
 } from './managed-python-daemon.js';
 import type {
   InstalledKtxRuntimeManifest,
+  ManagedPythonDaemonLayout,
   ManagedPythonRuntimeInstallResult,
   ManagedPythonRuntimeLayout,
 } from './managed-python-runtime.js';
 
-function layout(root: string): ManagedPythonRuntimeLayout {
+function layout(root: string): ManagedPythonDaemonLayout {
+  const projectDir = join(root, 'project');
   return {
     cliVersion: '0.2.0',
     runtimeRoot: join(root, 'runtime'),
@@ -31,10 +33,17 @@ function layout(root: string): ManagedPythonRuntimeLayout {
     assetManifestPath: join(root, 'assets', 'python', 'manifest.json'),
     pythonPath: join(root, 'runtime', '0.2.0', '.venv', 'bin', 'python'),
     daemonPath: join(root, 'runtime', '0.2.0', '.venv', 'bin', 'ktx-daemon'),
-    daemonStatePath: join(root, 'runtime', '0.2.0', 'daemon.json'),
-    daemonStdoutPath: join(root, 'runtime', '0.2.0', 'daemon.stdout.log'),
-    daemonStderrPath: join(root, 'runtime', '0.2.0', 'daemon.stderr.log'),
+    projectDir,
+    daemonStateDir: join(projectDir, '.ktx', 'runtime'),
+    daemonStatePath: join(projectDir, '.ktx', 'runtime', 'daemon.json'),
+    daemonStdoutPath: join(projectDir, '.ktx', 'runtime', 'daemon.stdout.log'),
+    daemonStderrPath: join(projectDir, '.ktx', 'runtime', 'daemon.stderr.log'),
   };
+}
+
+function installLayout(root: string): ManagedPythonRuntimeLayout {
+  const { projectDir: _projectDir, daemonStateDir: _d, daemonStatePath: _ds, daemonStdoutPath: _so, daemonStderrPath: _se, ...rest } = layout(root);
+  return rest;
 }
 
 function manifest(root: string, features: Array<'core' | 'local-embeddings'> = ['core']): InstalledKtxRuntimeManifest {
@@ -66,7 +75,7 @@ function manifest(root: string, features: Array<'core' | 'local-embeddings'> = [
 function installResult(root: string, features: Array<'core' | 'local-embeddings'> = ['core']): ManagedPythonRuntimeInstallResult {
   return {
     status: 'ready',
-    layout: layout(root),
+    layout: installLayout(root),
     asset: {
       manifest: manifest(root, features).asset,
       wheelPath: join(root, 'assets', 'python', 'kaelio_ktx-0.2.0-py3-none-any.whl'),
@@ -107,22 +116,12 @@ function runningState(root: string, overrides: Partial<ManagedPythonDaemonState>
   };
 }
 
-function daemonStatePath(root: string, version: string): string {
-  return join(root, 'runtime', version, 'daemon.json');
-}
-
-function runningStateForVersion(
-  root: string,
-  version: string,
-  overrides: Partial<ManagedPythonDaemonState> = {},
-): ManagedPythonDaemonState {
+function daemonOptionsBase(root: string) {
   return {
-    ...runningState(root),
-    version,
-    stdoutLog: join(root, 'runtime', version, 'daemon.stdout.log'),
-    stderrLog: join(root, 'runtime', version, 'daemon.stderr.log'),
-    ...overrides,
-  };
+    cliVersion: '0.2.0',
+    projectDir: layout(root).projectDir,
+    runtimeRoot: join(root, 'runtime'),
+  } as const;
 }
 
 describe('managed Python daemon lifecycle', () => {
@@ -138,8 +137,7 @@ describe('managed Python daemon lifecycle', () => {
 
   it('reports stopped when no daemon state exists', async () => {
     const status = await readManagedPythonDaemonStatus({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       processAlive: vi.fn(() => false),
       fetch: makeFetch(),
     });
@@ -153,8 +151,7 @@ describe('managed Python daemon lifecycle', () => {
     const installRuntime = vi.fn(async () => installResult(tempDir));
 
     const result = await startManagedPythonDaemon({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       features: ['core'],
       installRuntime,
       spawnDaemon,
@@ -204,8 +201,7 @@ describe('managed Python daemon lifecycle', () => {
       });
 
     const result = await startManagedPythonDaemon({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       features: ['core'],
       installRuntime,
       spawnDaemon,
@@ -226,13 +222,12 @@ describe('managed Python daemon lifecycle', () => {
   });
 
   it('reuses a healthy daemon with the requested feature set', async () => {
-    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await mkdir(layout(tempDir).daemonStateDir, { recursive: true });
     await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
     const spawnDaemon = makeSpawn(9999);
 
     const result = await startManagedPythonDaemon({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       features: ['core'],
       installRuntime: vi.fn(async () => installResult(tempDir)),
       spawnDaemon,
@@ -247,15 +242,14 @@ describe('managed Python daemon lifecycle', () => {
   });
 
   it('starts a fresh daemon when the previous state is stale', async () => {
-    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await mkdir(layout(tempDir).daemonStateDir, { recursive: true });
     await writeFile(
       layout(tempDir).daemonStatePath,
       `${JSON.stringify(runningState(tempDir, { version: '0.1.0' }), null, 2)}\n`,
     );
 
     const result = await startManagedPythonDaemon({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       features: ['core'],
       installRuntime: vi.fn(async () => installResult(tempDir)),
       spawnDaemon: makeSpawn(6666),
@@ -276,13 +270,12 @@ describe('managed Python daemon lifecycle', () => {
   });
 
   it('stops a recorded daemon and removes the state file', async () => {
-    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await mkdir(layout(tempDir).daemonStateDir, { recursive: true });
     await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
     const killProcess = vi.fn();
 
     const result = await stopManagedPythonDaemon({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       processAlive: vi.fn(() => true),
       killProcess,
     });
@@ -292,25 +285,16 @@ describe('managed Python daemon lifecycle', () => {
     await expect(readFile(layout(tempDir).daemonStatePath, 'utf8')).rejects.toThrow();
   });
 
-  it('stops all recorded daemon states across runtime versions and removes state files', async () => {
-    await mkdir(join(tempDir, 'runtime', '0.1.0'), { recursive: true });
-    await mkdir(join(tempDir, 'runtime', '0.2.0'), { recursive: true });
-    await writeFile(
-      daemonStatePath(tempDir, '0.1.0'),
-      `${JSON.stringify(runningStateForVersion(tempDir, '0.1.0', { pid: 1111, port: 61111 }), null, 2)}\n`,
-    );
-    await writeFile(
-      daemonStatePath(tempDir, '0.2.0'),
-      `${JSON.stringify(runningStateForVersion(tempDir, '0.2.0', { pid: 2222, port: 62222 }), null, 2)}\n`,
-    );
-    const alive = new Set([1111, 2222]);
+  it('stops the recorded daemon for this project and removes the state file', async () => {
+    await mkdir(layout(tempDir).daemonStateDir, { recursive: true });
+    await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
+    const alive = new Set([4242]);
     const killProcess = vi.fn((pid: number) => {
       alive.delete(pid);
     });
 
     const result = await stopAllManagedPythonDaemons({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       listProcesses: vi.fn(async () => []),
       processAlive: vi.fn((pid) => alive.has(pid)),
       killProcess,
@@ -318,20 +302,17 @@ describe('managed Python daemon lifecycle', () => {
     });
 
     expect(result.failed).toHaveLength(0);
-    expect(result.stopped.map((entry) => entry.pid).sort()).toEqual([1111, 2222]);
-    expect(killProcess).toHaveBeenCalledWith(1111, 'SIGTERM');
-    expect(killProcess).toHaveBeenCalledWith(2222, 'SIGTERM');
-    await expect(readFile(daemonStatePath(tempDir, '0.1.0'), 'utf8')).rejects.toThrow();
-    await expect(readFile(daemonStatePath(tempDir, '0.2.0'), 'utf8')).rejects.toThrow();
+    expect(result.stopped.map((entry) => entry.pid)).toEqual([4242]);
+    expect(killProcess).toHaveBeenCalledWith(4242, 'SIGTERM');
+    await expect(readFile(layout(tempDir).daemonStatePath, 'utf8')).rejects.toThrow();
   });
 
   it('removes stale state when the recorded daemon process is no longer alive', async () => {
-    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await mkdir(layout(tempDir).daemonStateDir, { recursive: true });
     await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
 
     const result = await stopAllManagedPythonDaemons({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       listProcesses: vi.fn(async () => []),
       processAlive: vi.fn(() => false),
       killProcess: vi.fn(),
@@ -344,7 +325,7 @@ describe('managed Python daemon lifecycle', () => {
   });
 
   it('deduplicates a daemon found by state and process scan, preferring state metadata', async () => {
-    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await mkdir(layout(tempDir).daemonStateDir, { recursive: true });
     await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
     const alive = new Set([4242]);
     const killProcess = vi.fn((pid: number) => {
@@ -352,8 +333,7 @@ describe('managed Python daemon lifecycle', () => {
     });
 
     const result = await stopAllManagedPythonDaemons({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       listProcesses: vi.fn(async (): Promise<ManagedPythonDaemonProcessInfo[]> => [
         { pid: 4242, command: 'uv run ktx-daemon serve-http --host 127.0.0.1 --port 61234' },
       ]),
@@ -378,8 +358,7 @@ describe('managed Python daemon lifecycle', () => {
     });
 
     const result = await stopAllManagedPythonDaemons({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       listProcesses: vi.fn(async (): Promise<ManagedPythonDaemonProcessInfo[]> => [
         { pid: 3333, command: 'uv run ktx-daemon serve-http --host 127.0.0.1 --port 8765' },
         { pid: 4444, command: 'node server.js --port 8765' },
@@ -404,12 +383,11 @@ describe('managed Python daemon lifecycle', () => {
   });
 
   it('reports a failed stop when TERM and KILL leave a daemon running', async () => {
-    await mkdir(layout(tempDir).versionDir, { recursive: true });
+    await mkdir(layout(tempDir).daemonStateDir, { recursive: true });
     await writeFile(layout(tempDir).daemonStatePath, `${JSON.stringify(runningState(tempDir), null, 2)}\n`);
 
     const result = await stopAllManagedPythonDaemons({
-      cliVersion: '0.2.0',
-      runtimeRoot: join(tempDir, 'runtime'),
+      ...daemonOptionsBase(tempDir),
       listProcesses: vi.fn(async () => []),
       processAlive: vi.fn(() => true),
       killProcess: vi.fn(),

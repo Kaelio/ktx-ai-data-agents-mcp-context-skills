@@ -61,6 +61,15 @@ export interface ManagedPythonRuntimeLayout {
   assetManifestPath: string;
   pythonPath: string;
   daemonPath: string;
+}
+
+export interface ManagedPythonDaemonLayoutOptions extends ManagedPythonRuntimeLayoutOptions {
+  projectDir: string;
+}
+
+export interface ManagedPythonDaemonLayout extends ManagedPythonRuntimeLayout {
+  projectDir: string;
+  daemonStateDir: string;
   daemonStatePath: string;
   daemonStdoutPath: string;
   daemonStderrPath: string;
@@ -114,17 +123,11 @@ function defaultAssetDir(): string {
   return fileURLToPath(new URL('../assets/python/', import.meta.url));
 }
 
-function runtimeRootFor(input: Required<Pick<ManagedPythonRuntimeLayoutOptions, 'platform' | 'env' | 'homeDir'>>): string {
+function runtimeRootFor(input: { env: NodeJS.ProcessEnv; homeDir: string }): string {
   if (input.env.KTX_RUNTIME_ROOT) {
     return input.env.KTX_RUNTIME_ROOT;
   }
-  if (input.platform === 'darwin') {
-    return join(input.homeDir, 'Library', 'Application Support', 'kaelio', 'ktx', 'runtime');
-  }
-  if (input.platform === 'win32') {
-    return join(input.env.LOCALAPPDATA ?? join(input.homeDir, 'AppData', 'Local'), 'Kaelio', 'KTX', 'runtime');
-  }
-  return join(input.env.XDG_DATA_HOME ?? join(input.homeDir, '.local', 'share'), 'kaelio', 'ktx', 'runtime');
+  return join(input.homeDir, '.ktx', 'runtime');
 }
 
 function executablePath(venvDir: string, platform: NodeJS.Platform, name: string): string {
@@ -138,7 +141,7 @@ export function managedPythonRuntimeLayout(options: ManagedPythonRuntimeLayoutOp
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
   const homeDir = options.homeDir ?? homedir();
-  const runtimeRoot = options.runtimeRoot ?? runtimeRootFor({ platform, env, homeDir });
+  const runtimeRoot = options.runtimeRoot ?? runtimeRootFor({ env, homeDir });
   const versionDir = join(runtimeRoot, options.cliVersion);
   const venvDir = join(versionDir, '.venv');
   const assetDir = options.assetDir ?? defaultAssetDir();
@@ -154,9 +157,19 @@ export function managedPythonRuntimeLayout(options: ManagedPythonRuntimeLayoutOp
     assetManifestPath: join(assetDir, 'manifest.json'),
     pythonPath: executablePath(venvDir, platform, 'python'),
     daemonPath: executablePath(venvDir, platform, 'ktx-daemon'),
-    daemonStatePath: join(versionDir, 'daemon.json'),
-    daemonStdoutPath: join(versionDir, 'daemon.stdout.log'),
-    daemonStderrPath: join(versionDir, 'daemon.stderr.log'),
+  };
+}
+
+export function managedPythonDaemonLayout(options: ManagedPythonDaemonLayoutOptions): ManagedPythonDaemonLayout {
+  const runtime = managedPythonRuntimeLayout(options);
+  const daemonStateDir = join(options.projectDir, '.ktx', 'runtime');
+  return {
+    ...runtime,
+    projectDir: options.projectDir,
+    daemonStateDir,
+    daemonStatePath: join(daemonStateDir, 'daemon.json'),
+    daemonStdoutPath: join(daemonStateDir, 'daemon.stdout.log'),
+    daemonStderrPath: join(daemonStateDir, 'daemon.stderr.log'),
   };
 }
 

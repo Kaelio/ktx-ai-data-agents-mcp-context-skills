@@ -45,9 +45,6 @@ function runtime(): ManagedPythonCommandRuntime {
       assetManifestPath: '/assets/python/manifest.json',
       pythonPath: '/runtime/0.2.0/.venv/bin/python',
       daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-      daemonStatePath: '/runtime/0.2.0/daemon.json',
-      daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-      daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
     },
     manifest: {
       schemaVersion: 1,
@@ -77,7 +74,14 @@ function runtime(): ManagedPythonCommandRuntime {
 function daemonResult(status: 'started' | 'reused' = 'reused'): ManagedPythonDaemonStartResult {
   return {
     status,
-    layout: runtime().layout,
+    layout: {
+      ...runtime().layout,
+      projectDir: '/work/proj',
+      daemonStateDir: '/work/proj/.ktx/runtime',
+      daemonStatePath: '/work/proj/.ktx/runtime/daemon.json',
+      daemonStdoutPath: '/work/proj/.ktx/runtime/daemon.stdout.log',
+      daemonStderrPath: '/work/proj/.ktx/runtime/daemon.stderr.log',
+    },
     baseUrl: 'http://127.0.0.1:61234',
     state: {
       schemaVersion: 1,
@@ -87,8 +91,8 @@ function daemonResult(status: 'started' | 'reused' = 'reused'): ManagedPythonDae
       version: '0.2.0',
       features: ['core', 'local-embeddings'],
       startedAt: '2026-05-11T00:00:00.000Z',
-      stdoutLog: '/runtime/0.2.0/daemon.stdout.log',
-      stderrLog: '/runtime/0.2.0/daemon.stderr.log',
+      stdoutLog: '/work/proj/.ktx/runtime/daemon.stdout.log',
+      stderrLog: '/work/proj/.ktx/runtime/daemon.stderr.log',
     },
   };
 }
@@ -138,6 +142,7 @@ describe('ensureManagedLocalEmbeddingsDaemon', () => {
     await expect(
       ensureManagedLocalEmbeddingsDaemon({
         cliVersion: '0.2.0',
+        projectDir: '/work/proj',
         installPolicy: 'auto',
         io: io.io,
         ensureRuntime,
@@ -158,6 +163,7 @@ describe('ensureManagedLocalEmbeddingsDaemon', () => {
     });
     expect(startDaemon).toHaveBeenCalledWith({
       cliVersion: '0.2.0',
+      projectDir: '/work/proj',
       features: ['local-embeddings'],
       force: false,
     });
@@ -169,6 +175,7 @@ describe('ensureManagedLocalEmbeddingsDaemon', () => {
 
     await ensureManagedLocalEmbeddingsDaemon({
       cliVersion: '0.2.0',
+      projectDir: '/work/proj',
       installPolicy: 'prompt',
       io: io.io,
       ensureRuntime: vi.fn(async () => runtime()),

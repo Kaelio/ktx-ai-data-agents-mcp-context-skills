@@ -34,6 +34,7 @@ export type ManagedPythonHttpPostJson = (
 
 export interface ManagedPythonCoreDaemonOptions {
   cliVersion: string;
+  projectDir: string;
   installPolicy: KtxManagedPythonInstallPolicy;
   io: KtxCliIo;
   ensureRuntime?: (options: {
@@ -44,6 +45,7 @@ export interface ManagedPythonCoreDaemonOptions {
   }) => Promise<ManagedPythonCommandRuntime>;
   startDaemon?: (options: {
     cliVersion: string;
+    projectDir: string;
     features: ['core'];
     force: false;
   }) => Promise<ManagedPythonDaemonStartResult>;
@@ -135,6 +137,7 @@ export function createManagedPythonDaemonBaseUrlResolver(
     });
     const daemon = await startDaemon({
       cliVersion: options.cliVersion,
+      projectDir: options.projectDir,
       features: ['core'],
       force: false,
     });

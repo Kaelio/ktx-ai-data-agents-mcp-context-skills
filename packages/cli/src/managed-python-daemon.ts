@@ -1,19 +1,18 @@
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, open, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import {
   installManagedPythonRuntime,
-  managedPythonRuntimeLayout,
+  managedPythonDaemonLayout,
   runtimeFeatureSchema,
   type KtxRuntimeFeature,
+  type ManagedPythonDaemonLayout,
+  type ManagedPythonDaemonLayoutOptions,
   type ManagedPythonRuntimeInstallOptions,
   type ManagedPythonRuntimeInstallResult,
-  type ManagedPythonRuntimeLayout,
-  type ManagedPythonRuntimeLayoutOptions,
 } from './managed-python-runtime.js';
 
 export interface ManagedPythonDaemonState {
@@ -29,20 +28,20 @@ export interface ManagedPythonDaemonState {
 }
 
 export type ManagedPythonDaemonStatus =
-  | { kind: 'stopped'; detail: string; layout: ManagedPythonRuntimeLayout }
-  | { kind: 'running'; detail: string; layout: ManagedPythonRuntimeLayout; state: ManagedPythonDaemonState; baseUrl: string }
-  | { kind: 'stale'; detail: string; layout: ManagedPythonRuntimeLayout; state?: ManagedPythonDaemonState };
+  | { kind: 'stopped'; detail: string; layout: ManagedPythonDaemonLayout }
+  | { kind: 'running'; detail: string; layout: ManagedPythonDaemonLayout; state: ManagedPythonDaemonState; baseUrl: string }
+  | { kind: 'stale'; detail: string; layout: ManagedPythonDaemonLayout; state?: ManagedPythonDaemonState };
 
 export interface ManagedPythonDaemonStartResult {
   status: 'started' | 'reused';
-  layout: ManagedPythonRuntimeLayout;
+  layout: ManagedPythonDaemonLayout;
   state: ManagedPythonDaemonState;
   baseUrl: string;
 }
 
 export interface ManagedPythonDaemonStopResult {
   status: 'stopped' | 'already-stopped';
-  layout: ManagedPythonRuntimeLayout;
+  layout: ManagedPythonDaemonLayout;
   state?: ManagedPythonDaemonState;
 }
 
@@ -68,7 +67,6 @@ export interface ManagedPythonDaemonStopAllFailure extends ManagedPythonDaemonSt
 }
 
 export interface ManagedPythonDaemonStopAllResult {
-  runtimeRoot: string;
   stopped: ManagedPythonDaemonStopAllEntry[];
   stale: ManagedPythonDaemonStopAllEntry[];
   failed: ManagedPythonDaemonStopAllFailure[];
@@ -101,7 +99,7 @@ export type ManagedPythonDaemonFetch = (
 
 export type ManagedPythonDaemonKillProcess = (pid: number, signal?: NodeJS.Signals) => void;
 
-export interface ManagedPythonDaemonStartOptions extends ManagedPythonRuntimeLayoutOptions {
+export interface ManagedPythonDaemonStartOptions extends ManagedPythonDaemonLayoutOptions {
   features: KtxRuntimeFeature[];
   force?: boolean;
   installRuntime?: (options: ManagedPythonRuntimeInstallOptions) => Promise<ManagedPythonRuntimeInstallResult>;
@@ -115,17 +113,17 @@ export interface ManagedPythonDaemonStartOptions extends ManagedPythonRuntimeLay
   pollIntervalMs?: number;
 }
 
-export interface ManagedPythonDaemonStatusOptions extends ManagedPythonRuntimeLayoutOptions {
+export interface ManagedPythonDaemonStatusOptions extends ManagedPythonDaemonLayoutOptions {
   fetch?: ManagedPythonDaemonFetch;
   processAlive?: (pid: number) => boolean;
 }
 
-export interface ManagedPythonDaemonStopOptions extends ManagedPythonRuntimeLayoutOptions {
+export interface ManagedPythonDaemonStopOptions extends ManagedPythonDaemonLayoutOptions {
   processAlive?: (pid: number) => boolean;
   killProcess?: ManagedPythonDaemonKillProcess;
 }
 
-export interface ManagedPythonDaemonStopAllOptions extends ManagedPythonRuntimeLayoutOptions {
+export interface ManagedPythonDaemonStopAllOptions extends ManagedPythonDaemonLayoutOptions {
   listProcesses?: () => Promise<ManagedPythonDaemonProcessInfo[]>;
   processAlive?: (pid: number) => boolean;
   killProcess?: ManagedPythonDaemonKillProcess;
@@ -242,7 +240,7 @@ async function healthOk(input: {
 export async function readManagedPythonDaemonStatus(
   options: ManagedPythonDaemonStatusOptions,
 ): Promise<ManagedPythonDaemonStatus> {
-  const layout = managedPythonRuntimeLayout(options);
+  const layout = managedPythonDaemonLayout(options);
   let state: ManagedPythonDaemonState | undefined;
   try {
     state = await readState(layout.daemonStatePath);
@@ -329,12 +327,12 @@ async function waitForHealth(input: {
   throw new Error(`KTX Python daemon failed to start: ${lastDetail}. stderr: ${input.state.stderrLog}`);
 }
 
-async function removeState(layout: ManagedPythonRuntimeLayout): Promise<void> {
+async function removeState(layout: ManagedPythonDaemonLayout): Promise<void> {
   await rm(layout.daemonStatePath, { force: true });
 }
 
 async function stopRecordedDaemon(input: {
-  layout: ManagedPythonRuntimeLayout;
+  layout: ManagedPythonDaemonLayout;
   state: ManagedPythonDaemonState;
   processAlive: (pid: number) => boolean;
   killProcess: ManagedPythonDaemonKillProcess;
@@ -343,10 +341,6 @@ async function stopRecordedDaemon(input: {
     input.killProcess(input.state.pid);
   }
   await removeState(input.layout);
-}
-
-function runtimeRootForStopAll(options: ManagedPythonRuntimeLayoutOptions): string {
-  return managedPythonRuntimeLayout(options).runtimeRoot;
 }
 
 async function removeStatePaths(paths: string[]): Promise<void> {
@@ -410,42 +404,26 @@ async function probeCandidateHealth(
   }
 }
 
-async function readStateCandidates(runtimeRoot: string): Promise<ManagedPythonDaemonStopCandidate[]> {
-  let entries;
+async function readStateCandidates(statePath: string): Promise<ManagedPythonDaemonStopCandidate[]> {
+  let state: ManagedPythonDaemonState | undefined;
   try {
-    entries = await readdir(runtimeRoot, { withFileTypes: true });
-  } catch (error) {
-    const code = (error as { code?: unknown }).code;
-    if (code === 'ENOENT') {
-      return [];
-    }
-    throw error;
+    state = await readState(statePath);
+  } catch {
+    return [];
   }
-  const candidates: ManagedPythonDaemonStopCandidate[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-    const statePath = join(runtimeRoot, entry.name, 'daemon.json');
-    let state: ManagedPythonDaemonState | undefined;
-    try {
-      state = await readState(statePath);
-    } catch {
-      continue;
-    }
-    if (!state) {
-      continue;
-    }
-    candidates.push({
+  if (!state) {
+    return [];
+  }
+  return [
+    {
       pid: state.pid,
       source: 'state',
       host: state.host,
       port: state.port,
       version: state.version,
       statePaths: [statePath],
-    });
-  }
-  return candidates;
+    },
+  ];
 }
 
 function tokenizeCommand(command: string): string[] {
@@ -638,12 +616,12 @@ async function waitUntilStopped(input: {
 async function discoverStopAllCandidates(
   options: ManagedPythonDaemonStopAllOptions,
 ): Promise<{
-  runtimeRoot: string;
+  layout: ManagedPythonDaemonLayout;
   candidates: ManagedPythonDaemonStopCandidate[];
   scanErrors: string[];
 }> {
-  const runtimeRoot = runtimeRootForStopAll(options);
-  const stateCandidates = await readStateCandidates(runtimeRoot);
+  const layout = managedPythonDaemonLayout(options);
+  const stateCandidates = await readStateCandidates(layout.daemonStatePath);
   const scanErrors: string[] = [];
   let processCandidates: ManagedPythonDaemonStopCandidate[] = [];
   try {
@@ -656,7 +634,7 @@ async function discoverStopAllCandidates(
     scanErrors.push(error instanceof Error ? error.message : String(error));
   }
   return {
-    runtimeRoot,
+    layout,
     candidates: mergeCandidates([...stateCandidates, ...processCandidates]),
     scanErrors,
   };
@@ -674,13 +652,18 @@ export async function startManagedPythonDaemon(
     ...(options.env !== undefined ? { env: options.env } : {}),
     ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
   };
-  const layout = managedPythonRuntimeLayout({ cliVersion: options.cliVersion, ...layoutOverrides });
+  const layout = managedPythonDaemonLayout({
+    cliVersion: options.cliVersion,
+    projectDir: options.projectDir,
+    ...layoutOverrides,
+  });
   const processAlive = options.processAlive ?? defaultProcessAlive;
   const killProcess = options.killProcess ?? defaultKillProcess;
   const fetchImpl = options.fetch ?? defaultFetch;
 
   const status = await readManagedPythonDaemonStatus({
     cliVersion: options.cliVersion,
+    projectDir: options.projectDir,
     ...layoutOverrides,
     fetch: fetchImpl,
     processAlive,
@@ -701,7 +684,7 @@ export async function startManagedPythonDaemon(
     force: false,
   });
 
-  await mkdir(layout.versionDir, { recursive: true });
+  await mkdir(layout.daemonStateDir, { recursive: true });
   const stdout = await open(layout.daemonStdoutPath, 'a');
   const stderr = await open(layout.daemonStderrPath, 'a');
   try {
@@ -752,7 +735,7 @@ export async function startManagedPythonDaemon(
 export async function stopManagedPythonDaemon(
   options: ManagedPythonDaemonStopOptions,
 ): Promise<ManagedPythonDaemonStopResult> {
-  const layout = managedPythonRuntimeLayout(options);
+  const layout = managedPythonDaemonLayout(options);
   const state = await readState(layout.daemonStatePath);
   if (!state) {
     return { status: 'already-stopped', layout };
@@ -818,7 +801,6 @@ export async function stopAllManagedPythonDaemons(
   }
 
   return {
-    runtimeRoot: discovery.runtimeRoot,
     stopped,
     stale,
     failed,

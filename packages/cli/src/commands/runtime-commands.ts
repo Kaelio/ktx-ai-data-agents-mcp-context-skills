@@ -1,5 +1,5 @@
 import { type Command, Option } from '@commander-js/extra-typings';
-import type { KtxCliCommandContext } from '../cli-program.js';
+import { resolveCommandProjectDir, type CommandWithGlobalOptions, type KtxCliCommandContext } from '../cli-program.js';
 import type { KtxRuntimeArgs } from '../runtime.js';
 
 type RuntimeFeature = Extract<KtxRuntimeArgs, { command: 'install' }>['feature'];
@@ -41,10 +41,11 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
     .description('Start the KTX-managed Python HTTP daemon')
     .addOption(createRuntimeFeatureOption())
     .option('--force', 'Restart even when a matching daemon is already running', false)
-    .action(async (options: { feature: RuntimeFeature; force?: boolean }) => {
+    .action(async (options: { feature: RuntimeFeature; force?: boolean }, command: CommandWithGlobalOptions) => {
       await runRuntimeArgs(context, {
         command: 'start',
         cliVersion: context.packageInfo.version,
+        projectDir: resolveCommandProjectDir(command),
         feature: options.feature,
         force: options.force === true,
       });
@@ -54,10 +55,11 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
     .command('stop')
     .description('Stop the KTX-managed Python HTTP daemon')
     .option('--all', 'Stop all KTX daemon processes recorded or discoverable on this machine', false)
-    .action(async (options: { all?: boolean }) => {
+    .action(async (options: { all?: boolean }, command: CommandWithGlobalOptions) => {
       await runRuntimeArgs(context, {
         command: 'stop',
         cliVersion: context.packageInfo.version,
+        projectDir: resolveCommandProjectDir(command),
         all: options.all === true,
       });
     });

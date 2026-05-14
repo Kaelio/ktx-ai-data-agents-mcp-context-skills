@@ -156,6 +156,7 @@ describe('setup embeddings step', () => {
     expect(result.status).toBe('ready');
     expect(ensureLocalEmbeddings).toHaveBeenCalledWith({
       cliVersion: '0.2.0',
+      projectDir: tempDir,
       installPolicy: 'auto',
       io: io.io,
     });

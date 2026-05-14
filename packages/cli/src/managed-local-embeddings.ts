@@ -19,6 +19,7 @@ export interface ManagedLocalEmbeddingsDaemon {
 
 export interface ManagedLocalEmbeddingsOptions {
   cliVersion: string;
+  projectDir: string;
   installPolicy: KtxManagedPythonInstallPolicy;
   io: KtxCliIo;
   ensureRuntime?: (options: {
@@ -29,6 +30,7 @@ export interface ManagedLocalEmbeddingsOptions {
   }) => Promise<ManagedPythonCommandRuntime>;
   startDaemon?: (options: {
     cliVersion: string;
+    projectDir: string;
     features: ['local-embeddings'];
     force: boolean;
   }) => Promise<ManagedPythonDaemonStartResult>;
@@ -79,6 +81,7 @@ export async function ensureManagedLocalEmbeddingsDaemon(
   });
   const daemon = await startDaemon({
     cliVersion: options.cliVersion,
+    projectDir: options.projectDir,
     features: ['local-embeddings'],
     force: false,
   });

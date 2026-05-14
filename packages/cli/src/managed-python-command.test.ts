@@ -45,9 +45,6 @@ function layout(): ManagedPythonRuntimeLayout {
     assetManifestPath: '/assets/python/manifest.json',
     pythonPath: '/runtime/0.2.0/.venv/bin/python',
     daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-    daemonStatePath: '/runtime/0.2.0/daemon.json',
-    daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-    daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
   };
 }
 

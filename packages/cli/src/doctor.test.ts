@@ -280,6 +280,50 @@ describe('runKtxDoctor', () => {
     });
   });
 
+  it('prints a friendly message when ktx.yaml is missing at the project dir', async () => {
+    const originalEnvProjectDir = process.env.KTX_PROJECT_DIR;
+    process.env.KTX_PROJECT_DIR = tempDir;
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {},
+      ),
+    ).resolves.toBe(1);
+
+    const out = testIo.stdout();
+    expect(out).toContain('KTX status');
+    expect(out).toContain('No KTX project here yet.');
+    expect(out).toContain('ktx setup');
+    expect(out).toContain('KTX_PROJECT_DIR');
+    expect(out).not.toContain('ENOENT');
+    expect(testIo.stderr()).toBe('');
+
+    if (originalEnvProjectDir === undefined) {
+      delete process.env.KTX_PROJECT_DIR;
+    } else {
+      process.env.KTX_PROJECT_DIR = originalEnvProjectDir;
+    }
+  });
+
+  it('emits a structured JSON error when ktx.yaml is missing and JSON output is requested', async () => {
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
+        testIo.io,
+        {},
+      ),
+    ).resolves.toBe(1);
+
+    const parsed = JSON.parse(testIo.stdout()) as { error: string; projectDir: string };
+    expect(parsed.error).toBe('missing_project');
+    expect(parsed.projectDir).toBe(tempDir);
+  });
+
   it('runs project checks against a valid ktx.yaml', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     await writeFile(

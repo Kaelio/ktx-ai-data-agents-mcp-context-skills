@@ -450,6 +450,48 @@ function writeReport(report: DoctorReport, outputMode: KtxDoctorOutputMode, io: 
   io.stdout.write(renderPlainReport(report, options));
 }
 
+export function renderMissingProjectMessage(
+  projectDir: string,
+  outputMode: KtxDoctorOutputMode,
+  io: KtxDoctorIo,
+): void {
+  if (outputMode === 'json') {
+    io.stdout.write(
+      `${JSON.stringify(
+        {
+          error: 'missing_project',
+          projectDir,
+          message: `No ktx.yaml found in ${projectDir}`,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+
+  const useColor = shouldUseColor(io);
+  const dim = (text: string) => styleDim(useColor, text);
+  const bold = (text: string) => styleBold(useColor, text);
+  const abbreviated = abbreviateHome(projectDir) ?? projectDir;
+  const envProjectDir = process.env.KTX_PROJECT_DIR;
+
+  const lines: string[] = [];
+  lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
+  lines.push('');
+  lines.push(`  No KTX project here yet. ${dim('(ktx.yaml not found)')}`);
+  lines.push('');
+  lines.push(`  Run  ${bold('ktx setup')}  to create one.`);
+  if (envProjectDir !== undefined) {
+    lines.push(`  ${dim(`Or unset KTX_PROJECT_DIR (currently ${envProjectDir}) to use a different directory.`)}`);
+  } else {
+    lines.push(`  ${dim('Or pass --project-dir to point at an existing project.')}`);
+  }
+  lines.push('');
+
+  io.stdout.write(lines.join('\n'));
+}
+
 export async function runKtxDoctor(
   args: KtxDoctorArgs,
   io: KtxDoctorIo = process,
@@ -460,6 +502,11 @@ export async function runKtxDoctor(
     const runSetupChecks = deps.runSetupChecks ?? (() => runSetupDoctorChecks());
 
     if (args.command === 'project') {
+      const configPath = join(args.projectDir, 'ktx.yaml');
+      if (!(await defaultPathExists(configPath))) {
+        renderMissingProjectMessage(args.projectDir, args.outputMode, io);
+        return 1;
+      }
       const { loadKtxProject } = await import('@ktx/context/project');
       const { buildProjectStatus, renderProjectStatus } = await import('./status-project.js');
       const project = await loadKtxProject({ projectDir: args.projectDir });

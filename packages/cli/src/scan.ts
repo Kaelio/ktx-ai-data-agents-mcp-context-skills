@@ -139,6 +139,7 @@ function managedDaemonOptionsForScanRun(args: Extract<KtxScanArgs, { command: 'r
   }
   return {
     cliVersion: args.cliVersion,
+    projectDir: args.projectDir,
     installPolicy: args.runtimeInstallPolicy,
     io,
   };

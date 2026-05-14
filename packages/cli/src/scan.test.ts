@@ -413,6 +413,7 @@ describe('runKtxScan', () => {
     expect(createLocalIngestAdapters).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir }), {
       managedDaemon: {
         cliVersion: '0.2.0',
+        projectDir: tempDir,
         installPolicy: 'auto',
         io: io.io,
       },

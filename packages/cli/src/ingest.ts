@@ -539,6 +539,7 @@ function managedDaemonOptionsForIngestRun(
   }
   return {
     cliVersion: args.cliVersion,
+    projectDir: args.projectDir,
     installPolicy: args.runtimeInstallPolicy,
     io,
   };

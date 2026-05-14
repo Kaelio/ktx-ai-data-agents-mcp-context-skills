@@ -7,6 +7,7 @@ import {
   MISSING_UV_RUNTIME_INSTALL_MESSAGE,
   doctorManagedPythonRuntime,
   installManagedPythonRuntime,
+  managedPythonDaemonLayout,
   managedPythonRuntimeLayout,
   readManagedPythonRuntimeStatus,
   verifyRuntimeAsset,
@@ -40,7 +41,7 @@ async function writeAsset(root: string, contents = 'wheel-bytes') {
 }
 
 describe('managedPythonRuntimeLayout', () => {
-  it('uses the macOS application-support runtime root', () => {
+  it('uses ~/.ktx/runtime as the runtime root on macOS', () => {
     const layout = managedPythonRuntimeLayout({
       cliVersion: '0.2.0',
       platform: 'darwin',
@@ -49,28 +50,42 @@ describe('managedPythonRuntimeLayout', () => {
       assetDir: '/repo/packages/cli/assets/python',
     });
 
-    expect(layout.runtimeRoot).toBe('/Users/alex/Library/Application Support/kaelio/ktx/runtime');
-    expect(layout.versionDir).toBe('/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0');
-    expect(layout.venvDir).toBe('/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/.venv');
-    expect(layout.pythonPath).toBe(
-      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/.venv/bin/python',
-    );
-    expect(layout.daemonPath).toBe(
-      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/.venv/bin/ktx-daemon',
-    );
-    expect(layout.daemonStatePath).toBe(
-      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/daemon.json',
-    );
-    expect(layout.daemonStdoutPath).toBe(
-      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/daemon.stdout.log',
-    );
-    expect(layout.daemonStderrPath).toBe(
-      '/Users/alex/Library/Application Support/kaelio/ktx/runtime/0.2.0/daemon.stderr.log',
-    );
+    expect(layout.runtimeRoot).toBe('/Users/alex/.ktx/runtime');
+    expect(layout.versionDir).toBe('/Users/alex/.ktx/runtime/0.2.0');
+    expect(layout.venvDir).toBe('/Users/alex/.ktx/runtime/0.2.0/.venv');
+    expect(layout.pythonPath).toBe('/Users/alex/.ktx/runtime/0.2.0/.venv/bin/python');
+    expect(layout.daemonPath).toBe('/Users/alex/.ktx/runtime/0.2.0/.venv/bin/ktx-daemon');
     expect(layout.assetManifestPath).toBe('/repo/packages/cli/assets/python/manifest.json');
   });
 
-  it('honors KTX_RUNTIME_ROOT before platform defaults', () => {
+  it('uses ~/.ktx/runtime on Linux too', () => {
+    const layout = managedPythonRuntimeLayout({
+      cliVersion: '0.2.0',
+      platform: 'linux',
+      env: {},
+      homeDir: '/home/alex',
+      assetDir: '/repo/packages/cli/assets/python',
+    });
+
+    expect(layout.runtimeRoot).toBe('/home/alex/.ktx/runtime');
+    expect(layout.versionDir).toBe('/home/alex/.ktx/runtime/0.2.0');
+  });
+
+  it('uses Scripts/*.exe layout on Windows under ~/.ktx/runtime', () => {
+    const layout = managedPythonRuntimeLayout({
+      cliVersion: '0.2.0',
+      platform: 'win32',
+      env: {},
+      homeDir: 'C:\\Users\\Alex',
+      assetDir: 'C:\\repo\\packages\\cli\\assets\\python',
+    });
+
+    expect(layout.runtimeRoot).toBe('C:\\Users\\Alex/.ktx/runtime');
+    expect(layout.pythonPath).toBe('C:\\Users\\Alex/.ktx/runtime/0.2.0/.venv/Scripts/python.exe');
+    expect(layout.daemonPath).toBe('C:\\Users\\Alex/.ktx/runtime/0.2.0/.venv/Scripts/ktx-daemon.exe');
+  });
+
+  it('honors KTX_RUNTIME_ROOT before the default ~/.ktx/runtime', () => {
     const layout = managedPythonRuntimeLayout({
       cliVersion: '0.2.0',
       platform: 'darwin',
@@ -82,32 +97,39 @@ describe('managedPythonRuntimeLayout', () => {
     expect(layout.runtimeRoot).toBe('/tmp/ktx-runtime');
     expect(layout.versionDir).toBe('/tmp/ktx-runtime/0.2.0');
   });
+});
 
-  it('honors XDG_DATA_HOME on Linux', () => {
-    const layout = managedPythonRuntimeLayout({
+describe('managedPythonDaemonLayout', () => {
+  it('places daemon state, stdout, and stderr under {projectDir}/.ktx/runtime', () => {
+    const layout = managedPythonDaemonLayout({
       cliVersion: '0.2.0',
-      platform: 'linux',
-      env: { XDG_DATA_HOME: '/var/xdg' },
-      homeDir: '/home/alex',
+      projectDir: '/work/orbit-analytics',
+      platform: 'darwin',
+      env: {},
+      homeDir: '/Users/alex',
       assetDir: '/repo/packages/cli/assets/python',
     });
 
-    expect(layout.runtimeRoot).toBe('/var/xdg/kaelio/ktx/runtime');
-    expect(layout.versionDir).toBe('/var/xdg/kaelio/ktx/runtime/0.2.0');
+    expect(layout.projectDir).toBe('/work/orbit-analytics');
+    expect(layout.daemonStateDir).toBe('/work/orbit-analytics/.ktx/runtime');
+    expect(layout.daemonStatePath).toBe('/work/orbit-analytics/.ktx/runtime/daemon.json');
+    expect(layout.daemonStdoutPath).toBe('/work/orbit-analytics/.ktx/runtime/daemon.stdout.log');
+    expect(layout.daemonStderrPath).toBe('/work/orbit-analytics/.ktx/runtime/daemon.stderr.log');
   });
 
-  it('uses LocalAppData on Windows', () => {
-    const layout = managedPythonRuntimeLayout({
+  it('keeps install paths under the global runtime root regardless of projectDir', () => {
+    const layout = managedPythonDaemonLayout({
       cliVersion: '0.2.0',
-      platform: 'win32',
-      env: { LOCALAPPDATA: 'C:\\Users\\Alex\\AppData\\Local' },
-      homeDir: 'C:\\Users\\Alex',
-      assetDir: 'C:\\repo\\packages\\cli\\assets\\python',
+      projectDir: '/work/orbit-analytics',
+      platform: 'darwin',
+      env: {},
+      homeDir: '/Users/alex',
+      assetDir: '/repo/packages/cli/assets/python',
     });
 
-    expect(layout.runtimeRoot).toBe('C:\\Users\\Alex\\AppData\\Local/Kaelio/KTX/runtime');
-    expect(layout.pythonPath).toBe('C:\\Users\\Alex\\AppData\\Local/Kaelio/KTX/runtime/0.2.0/.venv/Scripts/python.exe');
-    expect(layout.daemonPath).toBe('C:\\Users\\Alex\\AppData\\Local/Kaelio/KTX/runtime/0.2.0/.venv/Scripts/ktx-daemon.exe');
+    expect(layout.runtimeRoot).toBe('/Users/alex/.ktx/runtime');
+    expect(layout.versionDir).toBe('/Users/alex/.ktx/runtime/0.2.0');
+    expect(layout.pythonPath).toBe('/Users/alex/.ktx/runtime/0.2.0/.venv/bin/python');
   });
 });
 

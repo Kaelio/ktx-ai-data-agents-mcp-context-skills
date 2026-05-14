@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -102,6 +102,7 @@ describe('runKtxCli', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-'));
+    await writeFile(join(tempDir, 'ktx.yaml'), 'project: cli-dispatch-fixture\n', 'utf-8');
   });
 
   afterEach(async () => {
@@ -272,6 +273,7 @@ describe('runKtxCli', () => {
       {
         command: 'start',
         cliVersion: '0.0.0-private',
+        projectDir: expect.any(String),
         feature: 'local-embeddings',
         force: true,
       },
@@ -282,6 +284,7 @@ describe('runKtxCli', () => {
       {
         command: 'stop',
         cliVersion: '0.0.0-private',
+        projectDir: expect.any(String),
         all: false,
       },
       stopIo.io,
@@ -291,6 +294,7 @@ describe('runKtxCli', () => {
       {
         command: 'stop',
         cliVersion: '0.0.0-private',
+        projectDir: expect.any(String),
         all: true,
       },
       stopAllIo.io,
@@ -656,7 +660,7 @@ describe('runKtxCli', () => {
     const publicIngest = vi.fn().mockResolvedValue(0);
 
     await expect(
-      runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse', '--fast', '--no-input'], testIo.io, {
+      runKtxCli(['--project-dir', tempDir, 'ingest', 'warehouse', '--fast', '--no-input'], testIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(0);
@@ -664,7 +668,7 @@ describe('runKtxCli', () => {
     expect(publicIngest).toHaveBeenCalledWith(
       {
         command: 'run',
-        projectDir: '/tmp/project',
+        projectDir: tempDir,
         targetConnectionId: 'warehouse',
         all: false,
         json: false,
@@ -676,7 +680,7 @@ describe('runKtxCli', () => {
       },
       testIo.io,
     );
-    expect(testIo.stderr()).toBe('Project: /tmp/project\n');
+    expect(testIo.stderr()).toBe(`Project: ${tempDir}\n`);
   });
 
   it('routes public ingest --all --deep with JSON output', async () => {
@@ -684,7 +688,7 @@ describe('runKtxCli', () => {
     const publicIngest = vi.fn().mockResolvedValue(0);
 
     await expect(
-      runKtxCli(['--project-dir', '/tmp/project', 'ingest', '--all', '--deep', '--json'], testIo.io, {
+      runKtxCli(['--project-dir', tempDir, 'ingest', '--all', '--deep', '--json'], testIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(0);
@@ -692,7 +696,7 @@ describe('runKtxCli', () => {
     expect(publicIngest).toHaveBeenCalledWith(
       {
         command: 'run',
-        projectDir: '/tmp/project',
+        projectDir: tempDir,
         all: true,
         json: true,
         inputMode: 'auto',
@@ -727,7 +731,7 @@ describe('runKtxCli', () => {
       const publicIngest = vi.fn(async () => 0);
 
       await expect(
-        runKtxCli(['--project-dir', '/tmp/project', 'ingest', connectionId, '--no-input'], testIo.io, {
+        runKtxCli(['--project-dir', tempDir, 'ingest', connectionId, '--no-input'], testIo.io, {
           publicIngest,
         }),
       ).resolves.toBe(0);
@@ -735,7 +739,7 @@ describe('runKtxCli', () => {
       expect(publicIngest).toHaveBeenCalledWith(
         {
           command: 'run',
-          projectDir: '/tmp/project',
+          projectDir: tempDir,
           targetConnectionId: connectionId,
           all: false,
           json: false,
@@ -1478,6 +1482,7 @@ describe('runKtxCli', () => {
 
   it('dispatches public connection subcommands through the existing connection implementation', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'ktx-connection-dispatch-'));
+    await writeFile(join(tempDir, 'ktx.yaml'), 'project: connection-dispatch\n', 'utf-8');
     const connection = vi.fn(async () => 0);
 
     await expect(

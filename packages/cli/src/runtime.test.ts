@@ -49,9 +49,6 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-          daemonStatePath: '/runtime/0.2.0/daemon.json',
-          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
         asset: {
           wheelPath: '/assets/python/kaelio_ktx-0.1.0-py3-none-any.whl',
@@ -128,9 +125,11 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-          daemonStatePath: '/runtime/0.2.0/daemon.json',
-          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
+          projectDir: '/work/proj',
+          daemonStateDir: '/work/proj/.ktx/runtime',
+          daemonStatePath: '/work/proj/.ktx/runtime/daemon.json',
+          daemonStdoutPath: '/work/proj/.ktx/runtime/daemon.stdout.log',
+          daemonStderrPath: '/work/proj/.ktx/runtime/daemon.stderr.log',
         },
         state: {
           schemaVersion: 1,
@@ -140,15 +139,15 @@ describe('runKtxRuntime', () => {
           version: '0.2.0',
           features: ['core', 'local-embeddings'],
           startedAt: '2026-05-11T00:00:00.000Z',
-          stdoutLog: '/runtime/0.2.0/daemon.stdout.log',
-          stderrLog: '/runtime/0.2.0/daemon.stderr.log',
+          stdoutLog: '/work/proj/.ktx/runtime/daemon.stdout.log',
+          stderrLog: '/work/proj/.ktx/runtime/daemon.stderr.log',
         },
       })),
     };
 
     await expect(
       runKtxRuntime(
-        { command: 'start', cliVersion: '0.2.0', feature: 'local-embeddings', force: true },
+        { command: 'start', cliVersion: '0.2.0', projectDir: '/work/proj', feature: 'local-embeddings', force: true },
         io.io,
         deps,
       ),
@@ -156,6 +155,7 @@ describe('runKtxRuntime', () => {
 
     expect(deps.startDaemon).toHaveBeenCalledWith({
       cliVersion: '0.2.0',
+      projectDir: '/work/proj',
       features: ['local-embeddings'],
       force: true,
     });
@@ -163,7 +163,7 @@ describe('runKtxRuntime', () => {
     expect(io.stdout()).toContain('url: http://127.0.0.1:61234');
     expect(io.stdout()).toContain('pid: 4242');
     expect(io.stdout()).toContain('features: core, local-embeddings');
-    expect(io.stdout()).toContain('stderr: /runtime/0.2.0/daemon.stderr.log');
+    expect(io.stdout()).toContain('stderr: /work/proj/.ktx/runtime/daemon.stderr.log');
   });
 
   it('stops the managed Python daemon', async () => {
@@ -182,9 +182,11 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-          daemonStatePath: '/runtime/0.2.0/daemon.json',
-          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
+          projectDir: '/work/proj',
+          daemonStateDir: '/work/proj/.ktx/runtime',
+          daemonStatePath: '/work/proj/.ktx/runtime/daemon.json',
+          daemonStdoutPath: '/work/proj/.ktx/runtime/daemon.stdout.log',
+          daemonStderrPath: '/work/proj/.ktx/runtime/daemon.stderr.log',
         },
         state: {
           schemaVersion: 1,
@@ -194,15 +196,17 @@ describe('runKtxRuntime', () => {
           version: '0.2.0',
           features: ['core'],
           startedAt: '2026-05-11T00:00:00.000Z',
-          stdoutLog: '/runtime/0.2.0/daemon.stdout.log',
-          stderrLog: '/runtime/0.2.0/daemon.stderr.log',
+          stdoutLog: '/work/proj/.ktx/runtime/daemon.stdout.log',
+          stderrLog: '/work/proj/.ktx/runtime/daemon.stderr.log',
         },
       })),
     };
 
-    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', all: false }, io.io, deps)).resolves.toBe(0);
+    await expect(
+      runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', projectDir: '/work/proj', all: false }, io.io, deps),
+    ).resolves.toBe(0);
 
-    expect(deps.stopDaemon).toHaveBeenCalledWith({ cliVersion: '0.2.0' });
+    expect(deps.stopDaemon).toHaveBeenCalledWith({ cliVersion: '0.2.0', projectDir: '/work/proj' });
     expect(io.stdout()).toContain('Stopped KTX Python daemon');
     expect(io.stdout()).toContain('pid: 4242');
   });
@@ -211,9 +215,8 @@ describe('runKtxRuntime', () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
       stopAllDaemons: vi.fn(async (): Promise<ManagedPythonDaemonStopAllResult> => ({
-        runtimeRoot: '/runtime',
         stopped: [
-          { pid: 4242, source: 'state', url: 'http://127.0.0.1:61234', statePaths: ['/runtime/0.2.0/daemon.json'] },
+          { pid: 4242, source: 'state', url: 'http://127.0.0.1:61234', statePaths: ['/work/proj/.ktx/runtime/daemon.json'] },
           { pid: 5252, source: 'process', url: 'http://127.0.0.1:8765', statePaths: [] },
         ],
         stale: [],
@@ -222,9 +225,11 @@ describe('runKtxRuntime', () => {
       })),
     };
 
-    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', all: true }, io.io, deps)).resolves.toBe(0);
+    await expect(
+      runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', projectDir: '/work/proj', all: true }, io.io, deps),
+    ).resolves.toBe(0);
 
-    expect(deps.stopAllDaemons).toHaveBeenCalledWith({ cliVersion: '0.2.0' });
+    expect(deps.stopAllDaemons).toHaveBeenCalledWith({ cliVersion: '0.2.0', projectDir: '/work/proj' });
     expect(io.stdout()).toContain('Stopped 2 KTX Python daemons');
     expect(io.stdout()).toContain('pid: 4242 source: state url: http://127.0.0.1:61234');
     expect(io.stdout()).toContain('pid: 5252 source: process url: http://127.0.0.1:8765');
@@ -234,7 +239,6 @@ describe('runKtxRuntime', () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
       stopAllDaemons: vi.fn(async (): Promise<ManagedPythonDaemonStopAllResult> => ({
-        runtimeRoot: '/runtime',
         stopped: [],
         stale: [],
         failed: [
@@ -242,7 +246,7 @@ describe('runKtxRuntime', () => {
             pid: 4242,
             source: 'state',
             url: 'http://127.0.0.1:61234',
-            statePaths: ['/runtime/0.2.0/daemon.json'],
+            statePaths: ['/work/proj/.ktx/runtime/daemon.json'],
             detail: 'Process still running after SIGKILL',
           },
         ],
@@ -250,7 +254,9 @@ describe('runKtxRuntime', () => {
       })),
     };
 
-    await expect(runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', all: true }, io.io, deps)).resolves.toBe(1);
+    await expect(
+      runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', projectDir: '/work/proj', all: true }, io.io, deps),
+    ).resolves.toBe(1);
 
     expect(io.stderr()).toContain('Stopped 0 KTX Python daemons; failed 1');
     expect(io.stderr()).toContain('pid: 4242 source: state url: http://127.0.0.1:61234');
@@ -274,9 +280,6 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-          daemonStatePath: '/runtime/0.2.0/daemon.json',
-          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
       })),
       doctorRuntime: vi.fn(async (): Promise<ManagedPythonRuntimeDoctorCheck[]> => [
@@ -325,9 +328,6 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-          daemonStatePath: '/runtime/0.2.0/daemon.json',
-          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
         manifest: {
           schemaVersion: 1,
@@ -386,9 +386,6 @@ describe('runKtxRuntime', () => {
           assetManifestPath: '/assets/python/manifest.json',
           pythonPath: '/runtime/0.2.0/.venv/bin/python',
           daemonPath: '/runtime/0.2.0/.venv/bin/ktx-daemon',
-          daemonStatePath: '/runtime/0.2.0/daemon.json',
-          daemonStdoutPath: '/runtime/0.2.0/daemon.stdout.log',
-          daemonStderrPath: '/runtime/0.2.0/daemon.stderr.log',
         },
         manifest: {
           schemaVersion: 1,

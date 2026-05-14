@@ -401,6 +401,7 @@ export async function runKtxSetupEmbeddingsStep(
       try {
         managedLocalEmbeddings = await ensureLocalEmbeddings({
           cliVersion: args.cliVersion,
+          projectDir: args.projectDir,
           installPolicy: args.runtimeInstallPolicy,
           io,
         });

@@ -1,5 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxCli, type KtxCliDeps } from './index.js';
+
+async function makeFixtureProject(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  await writeFile(join(dir, 'ktx.yaml'), 'project: project-dir-fixture\n', 'utf-8');
+  return dir;
+}
 
 function makeIo() {
   let stdout = '';
@@ -23,12 +32,22 @@ function makeIo() {
 }
 
 describe('project directory defaults', () => {
-  afterEach(() => {
+  let envProjectDir: string;
+  let explicitProjectDir: string;
+
+  beforeEach(async () => {
+    envProjectDir = await makeFixtureProject('ktx-env-project-');
+    explicitProjectDir = await makeFixtureProject('ktx-explicit-project-');
+  });
+
+  afterEach(async () => {
     delete process.env.KTX_PROJECT_DIR;
+    await rm(envProjectDir, { recursive: true, force: true });
+    await rm(explicitProjectDir, { recursive: true, force: true });
   });
 
   it('uses KTX_PROJECT_DIR when Commander-dispatched commands omit --project-dir', async () => {
-    process.env.KTX_PROJECT_DIR = '/tmp/ktx-env-project';
+    process.env.KTX_PROJECT_DIR = envProjectDir;
 
     const connection = vi.fn(async () => 0);
     const doctor = vi.fn(async () => 0);
@@ -45,26 +64,26 @@ describe('project directory defaults', () => {
       {
         argv: ['connection', 'list'],
         spy: connection,
-        expected: { command: 'list', projectDir: '/tmp/ktx-env-project' },
-        expectedStderr: 'Project: /tmp/ktx-env-project\n',
+        expected: { command: 'list', projectDir: envProjectDir },
+        expectedStderr: `Project: ${envProjectDir}\n`,
       },
       {
         argv: ['status', '--no-input'],
         spy: doctor,
-        expected: { command: 'project', projectDir: '/tmp/ktx-env-project' },
-        expectedStderr: 'Project: /tmp/ktx-env-project\n',
+        expected: { command: 'project', projectDir: envProjectDir },
+        expectedStderr: `Project: ${envProjectDir}\n`,
       },
       {
         argv: ['setup', '--no-input'],
         spy: setup,
-        expected: { command: 'run', projectDir: '/tmp/ktx-env-project' },
+        expected: { command: 'run', projectDir: envProjectDir },
         expectedStderr: '',
       },
       {
         argv: ['ingest', 'warehouse', '--no-input'],
         spy: publicIngest,
-        expected: { command: 'run', projectDir: '/tmp/ktx-env-project', targetConnectionId: 'warehouse' },
-        expectedStderr: 'Project: /tmp/ktx-env-project\n',
+        expected: { command: 'run', projectDir: envProjectDir, targetConnectionId: 'warehouse' },
+        expectedStderr: `Project: ${envProjectDir}\n`,
       },
     ];
 
@@ -77,35 +96,35 @@ describe('project directory defaults', () => {
   });
 
   it('lets explicit global --project-dir override KTX_PROJECT_DIR before and after nested commands', async () => {
-    process.env.KTX_PROJECT_DIR = '/tmp/ktx-env-project';
+    process.env.KTX_PROJECT_DIR = envProjectDir;
 
     const publicIngest = vi.fn(async () => 0);
     const beforeCommandIo = makeIo();
     const afterCommandIo = makeIo();
 
     await expect(
-      runKtxCli(['--project-dir', '/tmp/ktx-explicit-project', 'ingest', 'warehouse', '--no-input'], beforeCommandIo.io, {
+      runKtxCli(['--project-dir', explicitProjectDir, 'ingest', 'warehouse', '--no-input'], beforeCommandIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(0);
     await expect(
-      runKtxCli(['ingest', 'warehouse', '--project-dir=/tmp/ktx-explicit-project', '--no-input'], afterCommandIo.io, {
+      runKtxCli(['ingest', 'warehouse', `--project-dir=${explicitProjectDir}`, '--no-input'], afterCommandIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(0);
 
     expect(publicIngest).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ command: 'run', projectDir: '/tmp/ktx-explicit-project' }),
+      expect.objectContaining({ command: 'run', projectDir: explicitProjectDir }),
       beforeCommandIo.io,
     );
     expect(publicIngest).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ command: 'run', projectDir: '/tmp/ktx-explicit-project' }),
+      expect.objectContaining({ command: 'run', projectDir: explicitProjectDir }),
       afterCommandIo.io,
     );
-    expect(beforeCommandIo.stderr()).toBe('Project: /tmp/ktx-explicit-project\n');
-    expect(afterCommandIo.stderr()).toBe('Project: /tmp/ktx-explicit-project\n');
+    expect(beforeCommandIo.stderr()).toBe(`Project: ${explicitProjectDir}\n`);
+    expect(afterCommandIo.stderr()).toBe(`Project: ${explicitProjectDir}\n`);
   });
 
   it('uses nearest ancestor containing ktx.yaml when no explicit or environment project-dir exists', async () => {

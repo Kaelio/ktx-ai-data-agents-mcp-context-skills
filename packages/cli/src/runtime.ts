@@ -21,19 +21,20 @@ import {
 
 export type KtxRuntimeArgs =
   | { command: 'install'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
-  | { command: 'start'; cliVersion: string; feature: KtxRuntimeFeature; force: boolean }
-  | { command: 'stop'; cliVersion: string; all: boolean }
+  | { command: 'start'; cliVersion: string; projectDir: string; feature: KtxRuntimeFeature; force: boolean }
+  | { command: 'stop'; cliVersion: string; projectDir: string; all: boolean }
   | { command: 'status'; cliVersion: string; json: boolean };
 
 export interface KtxRuntimeDeps {
   installRuntime?: (options: ManagedPythonRuntimeInstallOptions) => Promise<ManagedPythonRuntimeInstallResult>;
   startDaemon?: (options: {
     cliVersion: string;
+    projectDir: string;
     features: KtxRuntimeFeature[];
     force?: boolean;
   }) => Promise<ManagedPythonDaemonStartResult>;
-  stopDaemon?: (options: { cliVersion: string }) => Promise<ManagedPythonDaemonStopResult>;
-  stopAllDaemons?: (options: { cliVersion: string }) => Promise<ManagedPythonDaemonStopAllResult>;
+  stopDaemon?: (options: { cliVersion: string; projectDir: string }) => Promise<ManagedPythonDaemonStopResult>;
+  stopAllDaemons?: (options: { cliVersion: string; projectDir: string }) => Promise<ManagedPythonDaemonStopAllResult>;
   readStatus?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeStatus>;
   doctorRuntime?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeDoctorCheck[]>;
 }
@@ -174,6 +175,7 @@ export async function runKtxRuntime(
       const startDaemon = deps.startDaemon ?? startManagedPythonDaemon;
       const result = await startDaemon({
         cliVersion: args.cliVersion,
+        projectDir: args.projectDir,
         features: [args.feature],
         force: args.force,
       });
@@ -183,11 +185,11 @@ export async function runKtxRuntime(
     if (args.command === 'stop') {
       if (args.all) {
         const stopAllDaemons = deps.stopAllDaemons ?? stopAllManagedPythonDaemons;
-        const result = await stopAllDaemons({ cliVersion: args.cliVersion });
+        const result = await stopAllDaemons({ cliVersion: args.cliVersion, projectDir: args.projectDir });
         return writeDaemonStopAll(io, result);
       } else {
         const stopDaemon = deps.stopDaemon ?? stopManagedPythonDaemon;
-        const result = await stopDaemon({ cliVersion: args.cliVersion });
+        const result = await stopDaemon({ cliVersion: args.cliVersion, projectDir: args.projectDir });
         writeDaemonStop(io, result);
         return 0;
       }

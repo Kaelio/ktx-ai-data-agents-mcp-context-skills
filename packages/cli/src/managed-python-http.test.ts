@@ -33,6 +33,7 @@ describe('createManagedPythonDaemonBaseUrlResolver', () => {
     }));
     const resolveBaseUrl = createManagedPythonDaemonBaseUrlResolver({
       cliVersion: '0.2.0',
+      projectDir: '/work/proj',
       installPolicy: 'auto',
       io: testIo.io,
       ensureRuntime,
@@ -52,6 +53,7 @@ describe('createManagedPythonDaemonBaseUrlResolver', () => {
     expect(startDaemon).toHaveBeenCalledTimes(1);
     expect(startDaemon).toHaveBeenCalledWith({
       cliVersion: '0.2.0',
+      projectDir: '/work/proj',
       features: ['core'],
       force: false,
     });
@@ -72,6 +74,7 @@ describe('createManagedPythonDaemonBaseUrlResolver', () => {
     }));
     const resolveBaseUrl = createManagedPythonDaemonBaseUrlResolver({
       cliVersion: '0.2.0',
+      projectDir: '/work/proj',
       installPolicy: 'never',
       io: testIo.io,
       ensureRuntime,

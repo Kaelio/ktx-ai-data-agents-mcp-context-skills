@@ -1132,6 +1132,7 @@ describe('runKtxIngest', () => {
 
     const expectedManagedDaemon = {
       cliVersion: '0.2.0',
+      projectDir,
       installPolicy: 'auto',
       io: io.io,
     };

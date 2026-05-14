@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { Command, InvalidArgumentError } from '@commander-js/extra-typings';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
@@ -7,6 +9,7 @@ import { registerSetupCommands } from './commands/setup-commands.js';
 import { registerSlCommands } from './commands/sl-commands.js';
 import { registerStatusCommands } from './commands/status-commands.js';
 import { registerDevCommands } from './dev.js';
+import { renderMissingProjectMessage } from './doctor.js';
 import { findNearestKtxProjectDir, resolveKtxProjectDir } from './project-resolver.js';
 import { profileMark, profileSpan } from './startup-profile.js';
 
@@ -53,6 +56,22 @@ type CommandPathNode = CommandWithGlobalOptions & {
 };
 
 const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status']);
+const COMMANDS_THAT_CREATE_PROJECT = new Set(['setup', 'ktx dev init']);
+const COMMANDS_WITH_OWN_MISSING_PROJECT_HANDLING = new Set(['status']);
+
+class KtxProjectMissingAbortError extends Error {
+  readonly isKtxProjectMissingAbort = true;
+  constructor() {
+    super('ktx project missing');
+  }
+}
+
+function isKtxProjectMissingAbortError(error: unknown): error is KtxProjectMissingAbortError {
+  return (
+    error instanceof KtxProjectMissingAbortError ||
+    (typeof error === 'object' && error !== null && (error as { isKtxProjectMissingAbort?: unknown }).isKtxProjectMissingAbort === true)
+  );
+}
 const REMOVED_COMMAND_PATHS = new Set([
   'scan',
   'wiki read',
@@ -257,11 +276,60 @@ function writeDebug(io: KtxCliIo, commandContext: CommandWithGlobalOptions, comm
   io.stderr.write(`[debug] dispatch=${command}\n`);
 }
 
+function ktxYamlExists(projectDir: string): boolean {
+  return existsSync(join(projectDir, 'ktx.yaml'));
+}
+
+function commandRendersMissingProjectMessage(path: string[]): boolean {
+  if (!isProjectAwareCommand(path)) {
+    return false;
+  }
+  const pathKey = path.join(' ');
+  const rootCommand = path[1];
+  if (rootCommand !== undefined && COMMANDS_THAT_CREATE_PROJECT.has(rootCommand)) {
+    return false;
+  }
+  if (COMMANDS_THAT_CREATE_PROJECT.has(pathKey)) {
+    return false;
+  }
+  return true;
+}
+
+function requiresExistingProject(path: string[]): boolean {
+  if (!commandRendersMissingProjectMessage(path)) {
+    return false;
+  }
+  const rootCommand = path[1];
+  if (rootCommand !== undefined && COMMANDS_WITH_OWN_MISSING_PROJECT_HANDLING.has(rootCommand)) {
+    return false;
+  }
+  return true;
+}
+
 function writeProjectDir(io: KtxCliIo, commandContext: CommandPathNode): void {
   if (!shouldPrintProjectDir(commandContext)) {
     return;
   }
-  io.stderr.write(`Project: ${resolveCommandProjectDir(commandContext)}\n`);
+  const projectDir = resolveCommandProjectDir(commandContext);
+  if (commandRendersMissingProjectMessage(commandPath(commandContext)) && !ktxYamlExists(projectDir)) {
+    return;
+  }
+  io.stderr.write(`Project: ${projectDir}\n`);
+}
+
+function ensureProjectAvailable(io: KtxCliIo, command: CommandPathNode): void {
+  const path = commandPath(command);
+  if (!requiresExistingProject(path)) {
+    return;
+  }
+  const projectDir = resolveCommandProjectDir(command);
+  if (ktxYamlExists(projectDir)) {
+    return;
+  }
+  const options = commandOptions(command);
+  const outputMode: 'plain' | 'json' = options.json === true ? 'json' : 'plain';
+  renderMissingProjectMessage(projectDir, outputMode, io);
+  throw new KtxProjectMissingAbortError();
 }
 
 function formatCliError(error: unknown): string {
@@ -346,6 +414,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   const program = createBaseProgram(options.packageInfo, options.io);
   program.hook('preAction', (_thisCommand, actionCommand) => {
     writeProjectDir(options.io, actionCommand as CommandPathNode);
+    ensureProjectAvailable(options.io, actionCommand as CommandPathNode);
   });
 
   const context: KtxCliCommandContext = {
@@ -429,6 +498,9 @@ export async function runCommanderKtxCli(
   try {
     await profileSpan('commander:parseAsync', () => program.parseAsync(argv, { from: 'user' }));
   } catch (error) {
+    if (isKtxProjectMissingAbortError(error)) {
+      return 1;
+    }
     if (isCommanderExit(error)) {
       return error.exitCode === 0 ? 0 : 1;
     }
