@@ -139,6 +139,39 @@ describe('composeOverlay', () => {
     expect(composed.measures).toHaveLength(1);
   });
 
+  it('merges overlay columns onto same-named manifest columns, preserving manifest type when overlay omits it', () => {
+    const overlay = {
+      name: 'fct_labs',
+      columns: [
+        { name: 'lab_order_id', descriptions: { user: 'Primary key' } },
+        { name: 'admin_user_id', descriptions: { user: 'FK to admin_users' } },
+      ],
+    };
+    const composed = composeOverlay(baseTable, overlay);
+    // No duplicate columns appended — same-named overlay entries merged onto the base.
+    expect(composed.columns).toHaveLength(3);
+    const labOrder = composed.columns.find((c) => c.name === 'lab_order_id');
+    expect(labOrder?.type).toBe('string');
+    expect(labOrder?.descriptions).toEqual({ user: 'Primary key' });
+    const adminUser = composed.columns.find((c) => c.name === 'admin_user_id');
+    expect(adminUser?.type).toBe('string');
+    expect(adminUser?.descriptions).toEqual({ user: 'FK to admin_users' });
+  });
+
+  it('still appends new overlay computed columns alongside merged same-name columns', () => {
+    const overlay = {
+      name: 'fct_labs',
+      columns: [
+        { name: 'lab_order_id', descriptions: { user: 'PK doc' } },
+        { name: 'is_byol', type: 'boolean', expr: "lab_type = 'byol'" },
+      ],
+    };
+    const composed = composeOverlay(baseTable, overlay);
+    expect(composed.columns).toHaveLength(4);
+    expect(composed.columns.find((c) => c.name === 'is_byol')?.expr).toBe("lab_type = 'byol'");
+    expect(composed.columns.find((c) => c.name === 'lab_order_id')?.type).toBe('string');
+  });
+
   it('merges overlay descriptions (plural) with base descriptions keyed by source', () => {
     const baseWithDescriptions: SemanticLayerSource = {
       ...baseTable,

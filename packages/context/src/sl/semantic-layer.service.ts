@@ -1367,12 +1367,25 @@ export function composeOverlay(base: SemanticLayerSource, overlay: Record<string
 
   // Filter out excluded columns
   const excluded = new Set((normalizedOverlay.exclude_columns as string[] | undefined) ?? []);
-  let columns = result.columns.filter((c) => !excluded.has(c.name));
+  const baseColumns = result.columns.filter((c) => !excluded.has(c.name));
 
-  // Append overlay computed columns
+  // Overlay columns matched by name merge onto the base column (overlay fields win, but
+  // the base column's type/role/etc are preserved when the overlay omits them — dbt-style
+  // overlays often declare a column only to attach descriptions). New names append.
   const overlayColumns = (normalizedOverlay.columns as SemanticLayerSource['columns'] | undefined) ?? [];
-  columns = [...columns, ...overlayColumns];
-  result.columns = columns;
+  const baseByName = new Map(baseColumns.map((c) => [c.name.toLowerCase(), c]));
+  const mergedAppended: SemanticLayerSource['columns'] = [];
+  const mergedByName = new Map<string, SemanticLayerSource['columns'][number]>();
+  for (const overlay of overlayColumns) {
+    const key = overlay.name.toLowerCase();
+    const base = baseByName.get(key);
+    if (base) {
+      mergedByName.set(key, mergeOverlayColumn(base, overlay));
+    } else {
+      mergedAppended.push(overlay);
+    }
+  }
+  result.columns = [...baseColumns.map((c) => mergedByName.get(c.name.toLowerCase()) ?? c), ...mergedAppended];
 
   // Measures from overlay only
   result.measures = (normalizedOverlay.measures as SemanticLayerSource['measures'] | undefined) ?? [];
@@ -1430,6 +1443,32 @@ function parseJoinOn(
 
   // Fallback: left side is "from", right side is "to"
   return { fromColumn: leftCol, toColumn: rightCol };
+}
+
+/**
+ * Merge an overlay column declaration onto a matching manifest column. Overlay fields
+ * win, except descriptions (plural) which merge per source key. Manifest values are
+ * preserved when the overlay omits them — this lets dbt/metabase emit description-only
+ * overlay column entries without redeclaring `type:` (which would have to mirror the
+ * scan column and rot when the schema changes).
+ */
+function mergeOverlayColumn(
+  base: SemanticLayerSource['columns'][number],
+  overlay: SemanticLayerSource['columns'][number],
+): SemanticLayerSource['columns'][number] {
+  const merged: SemanticLayerSource['columns'][number] = { ...base, ...overlay };
+  if (!overlay.type && base.type) {
+    merged.type = base.type;
+  }
+  if (!overlay.role && base.role) {
+    merged.role = base.role;
+  }
+  const baseDescriptions = base.descriptions ?? {};
+  const overlayDescriptions = overlay.descriptions ?? {};
+  if (Object.keys(baseDescriptions).length > 0 || Object.keys(overlayDescriptions).length > 0) {
+    merged.descriptions = { ...baseDescriptions, ...overlayDescriptions };
+  }
+  return merged;
 }
 
 /**
