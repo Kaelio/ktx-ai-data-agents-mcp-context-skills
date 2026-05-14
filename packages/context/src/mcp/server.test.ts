@@ -6,6 +6,7 @@ import { createLocalProjectMemoryCapture } from '../memory/index.js';
 import { initKtxProject } from '../project/index.js';
 import { createKtxMcpServer } from './server.js';
 import type {
+  KtxEntityDetailsMcpPort,
   KtxIngestMcpPort,
   KtxKnowledgeMcpPort,
   KtxMcpContextPorts,
@@ -120,6 +121,71 @@ describe('createKtxMcpServer', () => {
       connectionId: 'warehouse',
       sql: 'select status, count(*) from public.orders group by status',
       maxRows: 50,
+    });
+  });
+
+  it('registers entity_details when the host provides an entity-details port', async () => {
+    const fake = makeFakeServer();
+    const entityDetails: KtxEntityDetailsMcpPort = {
+      read: vi.fn<KtxEntityDetailsMcpPort['read']>().mockResolvedValue({
+        results: [
+          {
+            ok: true,
+            connectionId: 'warehouse',
+            tableRef: { catalog: null, db: 'public', name: 'orders' },
+            display: 'public.orders',
+            kind: 'table',
+            comment: 'Customer orders',
+            estimatedRows: 12,
+            columns: [
+              {
+                name: 'id',
+                nativeType: 'integer',
+                normalizedType: 'integer',
+                dimensionType: 'number',
+                nullable: false,
+                primaryKey: true,
+                comment: null,
+              },
+            ],
+            foreignKeys: [],
+            snapshot: {
+              syncId: 'sync-1',
+              extractedAt: '2026-05-14T09:00:00.000Z',
+              scanRunId: 'scan-1',
+            },
+          },
+        ],
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { entityDetails },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['entity_details']);
+    await expect(
+      getTool(fake.tools, 'entity_details').handler({
+        connectionId: 'warehouse',
+        entities: [{ table: 'public.orders', columns: ['id'] }],
+      }),
+    ).resolves.toMatchObject({
+      structuredContent: {
+        results: [
+          {
+            ok: true,
+            connectionId: 'warehouse',
+            display: 'public.orders',
+            columns: [{ name: 'id' }],
+          },
+        ],
+      },
+    });
+    expect(entityDetails.read).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      entities: [{ table: 'public.orders', columns: ['id'] }],
     });
   });
 

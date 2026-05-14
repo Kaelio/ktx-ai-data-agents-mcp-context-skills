@@ -143,6 +143,25 @@ const scanArtifactReadSchema = z.object({
   path: z.string().min(1),
 });
 
+const entityDetailsTableRefSchema = z.object({
+  catalog: z.string().nullable(),
+  db: z.string().nullable(),
+  name: z.string().min(1),
+});
+
+const entityDetailsSchema = z.object({
+  connectionId: connectionIdSchema,
+  entities: z
+    .array(
+      z.object({
+        table: z.union([z.string().min(1), entityDetailsTableRefSchema]),
+        columns: z.array(z.string().min(1)).optional(),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+
 const sqlExecutionSchema = z.object({
   connectionId: connectionIdSchema,
   sql: z.string().min(1),
@@ -364,6 +383,21 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
             },
           }),
         ),
+    );
+  }
+
+  if (ports.entityDetails) {
+    const entityDetails = ports.entityDetails;
+    registerParsedTool(
+      server,
+      'entity_details',
+      {
+        title: 'Entity Details',
+        description: 'Read raw table and column metadata from the latest KTX live-database scan snapshot.',
+        inputSchema: entityDetailsSchema.shape,
+      },
+      entityDetailsSchema,
+      async (input) => jsonToolResult(await entityDetails.read(input)),
     );
   }
 

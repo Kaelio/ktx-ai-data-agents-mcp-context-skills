@@ -1,5 +1,6 @@
 import type { IngestReportSnapshot, MemoryFlowReplayInput, TableUsageOutput } from '../ingest/index.js';
 import type { MemoryCaptureService } from '../memory/index.js';
+import type { KtxEntityDetailsInput, KtxEntityDetailsResponse } from '../scan/entity-details.js';
 import type { KtxScanMode, KtxScanReport } from '../scan/index.js';
 import type {
   SemanticLayerQueryInput,
@@ -312,6 +313,10 @@ export interface KtxScanMcpPort {
   readArtifact?(input: { runId: string; path: string }): Promise<KtxScanArtifactReadResponse | null>;
 }
 
+export interface KtxEntityDetailsMcpPort {
+  read(input: KtxEntityDetailsInput): Promise<KtxEntityDetailsResponse>;
+}
+
 export interface KtxSqlExecutionResponse {
   headers: string[];
   headerTypes?: string[];
@@ -327,6 +332,7 @@ export interface KtxMcpContextPorts {
   connections?: KtxConnectionsMcpPort;
   knowledge?: KtxKnowledgeMcpPort;
   semanticLayer?: KtxSemanticLayerMcpPort;
+  entityDetails?: KtxEntityDetailsMcpPort;
   sqlExecution?: KtxSqlExecutionMcpPort;
   ingest?: KtxIngestMcpPort;
   scan?: KtxScanMcpPort;
