@@ -281,9 +281,9 @@ function buildConnectionStatus(
       return warn('repoUrl not set', 'Rerun `ktx setup`');
     }
     case 'metabase': {
-      const url = (conn as Record<string, unknown>).url ?? (conn as Record<string, unknown>).base_url;
+      const url = (conn as Record<string, unknown>).api_url;
       if (typeof url === 'string' && url.length > 0) return ok(`url: ${url}`);
-      return warn('url not set', 'Rerun `ktx setup`');
+      return warn('api_url not set', 'Rerun `ktx setup`');
     }
     case 'looker':
     case 'lookml': {
