@@ -20,6 +20,7 @@ ktx status [options]
 |------|-------------|---------|
 | `--json` | Print JSON output | `false` |
 | `-v`, `--verbose` | Show every check, including passing ones | `false` |
+| `--validate` | Only validate the `ktx.yaml` schema; skip readiness checks | `false` |
 | `--no-input` | Disable interactive terminal input | - |
 
 ## Examples
@@ -33,6 +34,9 @@ ktx status --json --no-input
 
 # Show all checks, not only warnings and failures
 ktx status --verbose
+
+# Validate ktx.yaml without running readiness checks
+ktx status --validate
 
 # Check a project from another directory
 ktx status --project-dir ./analytics
@@ -63,5 +67,6 @@ ktx status --project-dir ./analytics
 |-------|-------|----------|
 | No KTX project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | `ktx status` runs setup checks; run from a KTX project or set `KTX_PROJECT_DIR` for project checks |
 | Project config check fails | The project directory is missing or has an invalid `ktx.yaml` | Run `ktx setup` to resume setup |
+| Schema validation fails | `ktx.yaml` does not match the current config schema | Run `ktx status --validate --json` for structured issue details, then edit `ktx.yaml` or rerun `ktx setup` |
 | Semantic search check warns | Embeddings are not configured or the provider probe failed | Run `ktx setup` or inspect the check's `fix` field in JSON output |
 | Query history check warns | A database has query history enabled but the warehouse prerequisites are missing | Fix the warehouse extension, grants, or history access, then rerun `ktx status` |

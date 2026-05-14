@@ -20,6 +20,7 @@ ktx dev <subcommand> [options]
 | Subcommand | Description |
 |-----------|-------------|
 | `init [directory]` | Initialize a Git-backed KTX project directory for maintenance scripts |
+| `schema` | Print a JSON Schema describing `ktx.yaml` |
 | `runtime` | Install, start, stop, and inspect the KTX-managed Python runtime |
 
 ## `dev init`
@@ -27,6 +28,12 @@ ktx dev <subcommand> [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--force` | Rewrite `ktx.yaml` and scaffold files in an existing project | `false` |
+
+## `dev schema`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--output <file>` | Write the schema to a file instead of stdout | — |
 
 ## `dev runtime` Subcommands
 
@@ -53,6 +60,9 @@ ktx dev <subcommand> [options]
 ktx dev init
 ktx dev init ./my-project
 ktx dev init --force
+
+ktx dev schema
+ktx dev schema --output ./ktx.schema.json
 
 ktx dev runtime install --yes
 ktx dev runtime install --feature local-embeddings --yes

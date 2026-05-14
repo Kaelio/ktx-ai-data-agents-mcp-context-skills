@@ -89,11 +89,12 @@ ktx connection list --project-dir "$PROJECT_DIR"
 ktx connection test warehouse --project-dir "$PROJECT_DIR"
 ```
 
-The connection test prints the configured driver and discovered table count:
+The connection test prints the configured driver and connector-specific status:
 
 ```text
+Connection test passed: warehouse
 Driver: sqlite
-Tables: 1
+Status: ok
 ```
 
 ## What's in a project

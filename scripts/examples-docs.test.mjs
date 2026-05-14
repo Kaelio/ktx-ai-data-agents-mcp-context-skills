@@ -181,8 +181,9 @@ describe('standalone example docs', () => {
 
     assert.match(connectionReference, /ktx connection list/);
     assert.match(connectionReference, /ktx connection test my-warehouse/);
+    assert.match(connectionReference, /ktx connection test --all/);
     assert.match(quickstart, /Connection test passed/);
-    assert.match(quickstart, /Driver: PostgreSQL .* Tables: 42/);
+    assert.match(quickstart, /Driver: PostgreSQL .* Status: ok/);
   });
 
   it('documents public npm and managed runtime usage', async () => {

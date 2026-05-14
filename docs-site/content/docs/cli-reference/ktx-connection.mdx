@@ -18,13 +18,18 @@ ktx connection <subcommand> [options]
 | Subcommand | Description |
 |-----------|-------------|
 | `list` | List configured connections |
-| `test <connectionId>` | Test a configured connection |
+| `test [connectionId]` | Test one configured connection, or every connection with `--all` |
 
 ## Options
 
 `ktx connection` uses the shared global options such as `--project-dir` and
-`--debug`. The `list` and `test` subcommands do not currently define
-command-specific options.
+`--debug`.
+
+### `connection test`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--all` | Test every configured connection and print a summary list | `false` |
 
 Project directory resolution defaults to `KTX_PROJECT_DIR`, then the nearest
 `ktx.yaml`, then the current working directory.
@@ -37,6 +42,9 @@ ktx connection list
 
 # Test a connection
 ktx connection test my-warehouse
+
+# Test every configured connection
+ktx connection test --all
 
 # Test a connection from outside the project
 ktx connection test my-warehouse --project-dir ./analytics
@@ -58,13 +66,26 @@ my-warehouse  postgres
 ```
 
 `ktx connection test <connectionId>` performs a lightweight connection probe.
-Database connections report a table count. Metabase connections report a
-database count.
+Native database connections report `Status: ok` when the connector probe
+passes. Source connectors report connector-specific details such as Metabase
+database count, Looker user, Notion bot, or Git repo URL.
 
 ```text
 Connection test passed: my-warehouse
 Driver: postgres
-Tables: 42
+Status: ok
+```
+
+`ktx connection test --all` prints one row per configured connection and exits
+non-zero if any probe fails.
+
+```text
+╭  connection test --all
+│
+│  • warehouse  postgres  ✓ ok      Status: ok
+│  • metabase   metabase  ✓ ok      Databases: 2
+│
+╰  2 tested · 2 passed
 ```
 
 ## Common errors
