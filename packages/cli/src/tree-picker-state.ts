@@ -362,7 +362,7 @@ export function selectNone(state: PickerState): PickerState {
   return cloneState(state, { checked: new Set(), transientHint: null });
 }
 
-export function toggleSelectAllVisible(state: PickerState): PickerState {
+function toggleSelectAllVisible(state: PickerState): PickerState {
   const next = selectAllVisible(state);
   const unchanged =
     next.checked.size === state.checked.size && [...next.checked].every((id) => state.checked.has(id));
