@@ -1,4 +1,4 @@
-import type { Command } from '@commander-js/extra-typings';
+import { type Command, Option } from '@commander-js/extra-typings';
 import {
   type KtxCliCommandContext,
   parsePositiveIntegerOption,
@@ -27,32 +27,64 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
   wiki
     .command('list')
     .description('List local wiki pages')
-    .option('--json', 'Print JSON output', false)
     .option('--user-id <id>', 'Local user id', 'local')
-    .action(async (options: { userId: string; json?: boolean }, command) => {
-      await runKnowledgeArgs(context, {
-        command: 'list',
-        projectDir: resolveCommandProjectDir(command),
-        userId: options.userId,
-        json: options.json,
-      });
-    });
+    .addOption(
+      new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
+        'pretty',
+        'plain',
+        'json',
+      ]),
+    )
+    .option('--json', 'Shortcut for --output=json (overrides --output)', false)
+    .action(
+      async (
+        options: { userId: string; output?: 'pretty' | 'plain' | 'json'; json?: boolean },
+        command,
+      ) => {
+        await runKnowledgeArgs(context, {
+          command: 'list',
+          projectDir: resolveCommandProjectDir(command),
+          userId: options.userId,
+          output: options.output,
+          json: options.json,
+        });
+      },
+    );
 
   wiki
     .command('search')
     .description('Search local wiki pages')
     .argument('<query>', 'Search query')
-    .option('--json', 'Print JSON output', false)
     .option('--user-id <id>', 'Local user id', 'local')
     .option('--limit <number>', 'Maximum search results', parsePositiveIntegerOption)
-    .action(async (query: string, options: { userId: string; json?: boolean; limit?: number }, command) => {
-      await runKnowledgeArgs(context, {
-        command: 'search',
-        projectDir: resolveCommandProjectDir(command),
-        query,
-        userId: options.userId,
-        json: options.json,
-        ...(options.limit !== undefined ? { limit: options.limit } : {}),
-      });
-    });
+    .addOption(
+      new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
+        'pretty',
+        'plain',
+        'json',
+      ]),
+    )
+    .option('--json', 'Shortcut for --output=json (overrides --output)', false)
+    .action(
+      async (
+        query: string,
+        options: {
+          userId: string;
+          limit?: number;
+          output?: 'pretty' | 'plain' | 'json';
+          json?: boolean;
+        },
+        command,
+      ) => {
+        await runKnowledgeArgs(context, {
+          command: 'search',
+          projectDir: resolveCommandProjectDir(command),
+          query,
+          userId: options.userId,
+          output: options.output,
+          json: options.json,
+          ...(options.limit !== undefined ? { limit: options.limit } : {}),
+        });
+      },
+    );
 }

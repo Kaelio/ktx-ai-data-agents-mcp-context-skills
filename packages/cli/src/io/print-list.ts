@@ -16,6 +16,16 @@ export interface PrintListColumn<Row> {
   optional?: boolean;
   /** Pretty-mode hint: render this column dim. */
   dim?: boolean;
+  /**
+   * Pretty-mode role override. When omitted, role is auto-detected:
+   * - `'badge'`  — leading dim cell before the name column (right-padded across rows).
+   * - `'name'`   — name column. Default: first non-grouped, non-metric, non-optional column.
+   * - `'metric'` — `"N word"` cell. Default: any column with a non-empty `plain` prefix.
+   * - `'suffix'` — trailing em-dash optional value. Default: any column with `optional: true`.
+   */
+  role?: 'name' | 'metric' | 'badge' | 'suffix';
+  /** Custom pretty-mode value formatter (e.g. score → "87%"). Plain/JSON unaffected. */
+  prettyFormat?: (value: Row[keyof Row & string], row: Row) => string;
 }
 
 export interface PrintListArgs<Row> {
@@ -23,6 +33,11 @@ export interface PrintListArgs<Row> {
   columns: ReadonlyArray<PrintListColumn<Row>>;
   groupBy?: keyof Row & string;
   emptyMessage: string;
+  /** Optional second-line hint shown on empty results.
+   *  Plain mode: written to stderr. Pretty mode: dimmed line inside the box. JSON mode: ignored. */
+  emptyHint?: string;
+  /** Singular noun used in counts (`N {unit}s`, `(N {unit}s)`). Defaults to `'result'`. */
+  unit?: string;
   command: string;
   mode: KtxOutputMode;
   io: KtxCliIo;
@@ -57,6 +72,15 @@ function isEmpty(value: unknown): boolean {
 }
 
 function printListPlain<Row extends object>(args: PrintListArgs<Row>): void {
+  if (args.rows.length === 0) {
+    if (args.emptyHint !== undefined && args.emptyHint !== '') {
+      // Plain mode keeps stdout pipe-safe. Send the human-readable empty
+      // state to stderr as two lines (message, then hint).
+      args.io.stderr.write(`${args.emptyMessage}\n`);
+      args.io.stderr.write(`${args.emptyHint}\n`);
+    }
+    return;
+  }
   for (const row of args.rows) {
     const cells: string[] = [];
     for (const col of args.columns) {
@@ -114,52 +138,129 @@ function groupRows<Row extends object>(
   return groups;
 }
 
+interface ResolvedColumns<Row extends object> {
+  badge: ReadonlyArray<PrintListColumn<Row>>;
+  name?: PrintListColumn<Row>;
+  metric: ReadonlyArray<PrintListColumn<Row>>;
+  suffix: ReadonlyArray<PrintListColumn<Row>>;
+}
+
+function resolveColumns<Row extends object>(
+  columns: ReadonlyArray<PrintListColumn<Row>>,
+  groupBy: (keyof Row & string) | undefined,
+): ResolvedColumns<Row> {
+  const badge: PrintListColumn<Row>[] = [];
+  const metric: PrintListColumn<Row>[] = [];
+  const suffix: PrintListColumn<Row>[] = [];
+  let name: PrintListColumn<Row> | undefined;
+
+  for (const col of columns) {
+    if (col.role === 'badge') {
+      badge.push(col);
+      continue;
+    }
+    if (col.role === 'name') {
+      name ??= col;
+      continue;
+    }
+    if (col.role === 'metric') {
+      metric.push(col);
+      continue;
+    }
+    if (col.role === 'suffix') {
+      suffix.push(col);
+      continue;
+    }
+    // Auto-detect when no explicit role.
+    if (col.key === groupBy) continue;
+    if (col.optional === true) {
+      suffix.push(col);
+      continue;
+    }
+    if (typeof col.plain === 'string' && col.plain.length > 0) {
+      metric.push(col);
+      continue;
+    }
+    if (!name && !col.plain && col.plain !== false) {
+      name = col;
+    }
+  }
+
+  return { badge, name, metric, suffix };
+}
+
+function formatCellValue<Row extends object>(col: PrintListColumn<Row>, row: Row): string {
+  const value = row[col.key];
+  if (col.prettyFormat) {
+    return col.prettyFormat(value as Row[keyof Row & string], row);
+  }
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
 function printListPretty<Row extends object>(args: PrintListArgs<Row>): void {
-  const { io, command, rows, columns, groupBy, emptyMessage } = args;
+  const { io, command, rows, columns, groupBy, emptyMessage, emptyHint } = args;
+  const unit = args.unit ?? 'result';
 
   io.stdout.write(`${SYMBOLS.barStart}  ${command}\n`);
   io.stdout.write(`${SYMBOLS.bar}\n`);
 
   if (rows.length === 0) {
-    io.stdout.write(`${SYMBOLS.barEnd}  ${emptyMessage}\n`);
+    if (emptyHint !== undefined && emptyHint !== '') {
+      io.stdout.write(`${SYMBOLS.bar}  ${emptyMessage}\n`);
+      io.stdout.write(`${SYMBOLS.bar}  ${dim(emptyHint)}\n`);
+      io.stdout.write(`${SYMBOLS.barEnd}  ${dim(`0 ${unit}s`)}\n`);
+    } else {
+      io.stdout.write(`${SYMBOLS.barEnd}  ${emptyMessage}\n`);
+    }
     return;
   }
 
-  // Identify role of each column.
-  // - First non-grouped, non-metric, non-optional column = "name" column (bolded)
-  // - Columns with a `plain` prefix = metric columns (rendered as "N word")
-  // - optional columns = trailing suffix (em-dash + value), only when value is present
-  const nameCol = columns.find(
-    (c) => c.key !== groupBy && !c.plain && !c.optional && c.plain !== false,
-  );
-  const metricCols = columns.filter((c) => typeof c.plain === 'string' && c.plain.length > 0);
-  const optionalCols = columns.filter((c) => c.optional === true);
+  const resolved = resolveColumns(columns, groupBy);
 
   const buckets = groupBy ? groupRows(rows, groupBy) : new Map<string, Row[]>([['', [...rows]]]);
 
-  const nameWidth = nameCol
-    ? Math.max(...rows.map((r) => String(r[nameCol.key] ?? '').length))
+  const nameWidth = resolved.name
+    ? Math.max(...rows.map((r) => String(r[resolved.name!.key] ?? '').length))
     : 0;
+
+  const badgeWidths = resolved.badge.map((col) =>
+    Math.max(0, ...rows.map((r) => formatCellValue(col, r).length)),
+  );
 
   for (const [groupValue, groupRowList] of buckets) {
     if (groupBy) {
       io.stdout.write(
-        `${SYMBOLS.bar}  ${SYMBOLS.group} ${bold(groupValue)} ${dim(`(${pluralize(groupRowList.length, 'source')})`)}\n`,
+        `${SYMBOLS.bar}  ${SYMBOLS.group} ${bold(groupValue)} ${dim(`(${pluralize(groupRowList.length, unit)})`)}\n`,
       );
     }
     for (const row of groupRowList) {
       const segments: string[] = [];
-      if (nameCol) {
-        segments.push(String(row[nameCol.key] ?? '').padEnd(nameWidth));
+
+      resolved.badge.forEach((col, idx) => {
+        segments.push(dim(formatCellValue(col, row).padStart(badgeWidths[idx] ?? 0)));
+      });
+
+      if (resolved.name) {
+        segments.push(String(row[resolved.name.key] ?? '').padEnd(nameWidth));
       }
-      const metrics = metricCols
-        .map((c) => metricCell(c.label ?? c.key, Number(row[c.key] ?? 0)))
+
+      const metrics = resolved.metric
+        .map((col) => {
+          if (col.prettyFormat) return formatCellValue(col, row);
+          return metricCell(col.label ?? col.key, Number(row[col.key] ?? 0));
+        })
         .join(` ${SYMBOLS.middot} `);
       if (metrics.length > 0) segments.push(dim(metrics));
-      const optionalSuffix = optionalCols
-        .map((c) => row[c.key])
-        .filter((v) => !isEmpty(v))
-        .map((v) => `${SYMBOLS.emDash} ${dim(String(v))}`)
+
+      const optionalSuffix = resolved.suffix
+        .map((col) => {
+          const value = row[col.key];
+          if (isEmpty(value)) return null;
+          const formatted = col.prettyFormat ? formatCellValue(col, row) : String(value);
+          return `${SYMBOLS.emDash} ${dim(formatted)}`;
+        })
+        .filter((s): s is string => s !== null)
         .join(' ');
       if (optionalSuffix.length > 0) segments.push(optionalSuffix);
 
@@ -169,5 +270,5 @@ function printListPretty<Row extends object>(args: PrintListArgs<Row>): void {
   }
 
   io.stdout.write(`${SYMBOLS.bar}\n`);
-  io.stdout.write(`${SYMBOLS.barEnd}  ${pluralize(rows.length, 'source')}\n`);
+  io.stdout.write(`${SYMBOLS.barEnd}  ${pluralize(rows.length, unit)}\n`);
 }

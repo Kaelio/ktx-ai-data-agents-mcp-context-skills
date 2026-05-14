@@ -46,6 +46,7 @@ describe('printList — plain mode', () => {
       mode: 'plain',
       command: 'sl list',
       emptyMessage: 'No sources',
+      unit: 'source',
       io: r.io,
     });
     expect(r.out()).toBe(
@@ -62,9 +63,30 @@ describe('printList — plain mode', () => {
       mode: 'plain',
       command: 'sl list',
       emptyMessage: 'No sources',
+      unit: 'source',
       io: r.io,
     });
     expect(r.out()).toBe('');
+    expect(r.err()).toBe('');
+  });
+
+  it('routes emptyMessage + emptyHint to stderr when no rows and hint is provided', () => {
+    const r = recorder();
+    printList<SlRow>({
+      rows: [],
+      columns: SL_COLUMNS,
+      mode: 'plain',
+      command: 'sl search',
+      emptyMessage: 'No sources matched "foo"',
+      emptyHint: 'Run `ktx sl list` to see available sources.',
+      unit: 'source',
+      io: r.io,
+    });
+    expect(r.out()).toBe('');
+    expect(r.err()).toBe(
+      'No sources matched "foo"\n' +
+      'Run `ktx sl list` to see available sources.\n',
+    );
   });
 });
 
@@ -77,6 +99,7 @@ describe('printList — json mode', () => {
       mode: 'json',
       command: 'sl list',
       emptyMessage: 'No sources',
+      unit: 'source',
       io: r.io,
     });
     const written = r.out();
@@ -97,6 +120,8 @@ describe('printList — json mode', () => {
       mode: 'json',
       command: 'sl list',
       emptyMessage: 'No sources',
+      emptyHint: 'ignored in json mode',
+      unit: 'source',
       io: r.io,
     });
     expect(JSON.parse(r.out())).toEqual({
@@ -104,6 +129,7 @@ describe('printList — json mode', () => {
       data: { items: [] },
       meta: { command: 'sl list' },
     });
+    expect(r.err()).toBe('');
   });
 });
 
@@ -122,6 +148,7 @@ describe('printList — pretty mode', () => {
       mode: 'pretty',
       command: 'sl list',
       emptyMessage: 'No sources',
+      unit: 'source',
       io: r.io,
     });
     const out = stripAnsi(r.out());
@@ -143,11 +170,31 @@ describe('printList — pretty mode', () => {
       mode: 'pretty',
       command: 'sl list',
       emptyMessage: 'No semantic-layer sources found in /tmp/proj',
+      unit: 'source',
       io: r.io,
     });
     const out = stripAnsi(r.out());
     expect(out).toContain(`${SYMBOLS.barStart}  sl list`);
     expect(out).toContain(`${SYMBOLS.barEnd}  No semantic-layer sources found in /tmp/proj`);
+  });
+
+  it('renders empty-state with hint and zero-count footer when emptyHint is provided', () => {
+    const r = recorder();
+    printList<SlRow>({
+      rows: [],
+      columns: SL_COLUMNS,
+      groupBy: 'connectionId',
+      mode: 'pretty',
+      command: 'sl search',
+      emptyMessage: 'No sources matched "foo"',
+      emptyHint: 'Run `ktx sl list` to see available sources.',
+      unit: 'source',
+      io: r.io,
+    });
+    const out = stripAnsi(r.out());
+    expect(out).toContain(`${SYMBOLS.bar}  No sources matched "foo"`);
+    expect(out).toContain(`${SYMBOLS.bar}  Run \`ktx sl list\` to see available sources.`);
+    expect(out).toContain(`${SYMBOLS.barEnd}  0 sources`);
   });
 
   it('singularizes the footer when there is one row', () => {
@@ -159,10 +206,102 @@ describe('printList — pretty mode', () => {
       mode: 'pretty',
       command: 'sl list',
       emptyMessage: 'No sources',
+      unit: 'source',
       io: r.io,
     });
     const out = stripAnsi(r.out());
     expect(out).toContain(`${SYMBOLS.barEnd}  1 source`);
+  });
+
+  it('uses the provided unit in pluralization and group counts', () => {
+    const r = recorder();
+    interface PageRow { scope: string; key: string; summary: string }
+    const PAGE_COLUMNS: ReadonlyArray<PrintListColumn<PageRow>> = [
+      { key: 'scope', label: 'SCOPE', plain: '' },
+      { key: 'key', label: 'KEY', plain: '' },
+      { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
+    ];
+    printList<PageRow>({
+      rows: [
+        { scope: 'GLOBAL', key: 'a', summary: 'x' },
+        { scope: 'GLOBAL', key: 'b', summary: '' },
+      ],
+      columns: PAGE_COLUMNS,
+      groupBy: 'scope',
+      mode: 'pretty',
+      command: 'wiki list',
+      emptyMessage: 'No pages',
+      unit: 'page',
+      io: r.io,
+    });
+    const out = stripAnsi(r.out());
+    expect(out).toContain('(2 pages)');
+    expect(out).toContain(`${SYMBOLS.barEnd}  2 pages`);
+  });
+
+  it('renders a leading dim badge column with prettyFormat in pretty mode', () => {
+    const r = recorder();
+    interface SearchRow { score: number; scope: string; key: string; summary: string }
+    const SEARCH_COLUMNS: ReadonlyArray<PrintListColumn<SearchRow>> = [
+      {
+        key: 'score',
+        label: 'SCORE',
+        plain: 'score=',
+        role: 'badge',
+        prettyFormat: (v) => `${Math.round(Number(v) * 100)}%`,
+        dim: true,
+      },
+      { key: 'scope', label: 'SCOPE', plain: '' },
+      { key: 'key', label: 'KEY', plain: '' },
+      { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
+    ];
+    const rows: SearchRow[] = [
+      { score: 0.87, scope: 'GLOBAL', key: 'alpha', summary: 'first' },
+      { score: 0.04, scope: 'GLOBAL', key: 'beta', summary: 'second' },
+    ];
+    printList<SearchRow>({
+      rows,
+      columns: SEARCH_COLUMNS,
+      groupBy: 'scope',
+      mode: 'pretty',
+      command: 'wiki search',
+      emptyMessage: 'No matches',
+      unit: 'page',
+      io: r.io,
+    });
+    const out = stripAnsi(r.out());
+    // Badge displays as right-padded percentage before the name column.
+    expect(out).toMatch(new RegExp(`${escapeRegExp(SYMBOLS.item)} 87%\\s+alpha\\s+`));
+    expect(out).toMatch(new RegExp(`${escapeRegExp(SYMBOLS.item)}  4%\\s+beta\\s+`));
+  });
+
+  it('emits the badge column in plain mode using its plain prefix', () => {
+    const r = recorder();
+    interface SearchRow { score: number; scope: string; key: string; summary: string }
+    const SEARCH_COLUMNS: ReadonlyArray<PrintListColumn<SearchRow>> = [
+      {
+        key: 'score',
+        label: 'SCORE',
+        plain: 'score=',
+        role: 'badge',
+        prettyFormat: (v) => `${Math.round(Number(v) * 100)}%`,
+        dim: true,
+      },
+      { key: 'scope', label: 'SCOPE', plain: '' },
+      { key: 'key', label: 'KEY', plain: '' },
+      { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
+    ];
+    printList<SearchRow>({
+      rows: [{ score: 0.87, scope: 'GLOBAL', key: 'alpha', summary: 'first' }],
+      columns: SEARCH_COLUMNS,
+      groupBy: 'scope',
+      mode: 'plain',
+      command: 'wiki search',
+      emptyMessage: 'No matches',
+      unit: 'page',
+      io: r.io,
+    });
+    expect(r.out()).toBe('score=0.87\tGLOBAL\talpha\tfirst\n');
   });
 });
 

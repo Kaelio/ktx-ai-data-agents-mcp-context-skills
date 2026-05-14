@@ -17,6 +17,7 @@ import {
   type LocalSlSourceSummary,
   type SemanticLayerQueryInput,
 } from '@ktx/context/sl';
+import type { PrintListColumn } from './io/print-list.js';
 import {
   createManagedPythonSemanticLayerComputePort,
   type KtxManagedPythonInstallPolicy,
@@ -81,28 +82,82 @@ function slSearchEmbeddingService(project: KtxLocalProject, deps: KtxSlDeps): Kt
 }
 
 async function printSlSources(input: {
+  rows: ReadonlyArray<LocalSlSourceSummary>;
+  command: 'sl list';
+  output?: string;
+  json?: boolean;
+  io: KtxSlIo;
+  emptyMessage: string;
+  emptyHint?: string;
+}): Promise<void>;
+async function printSlSources(input: {
+  rows: ReadonlyArray<LocalSlSourceSearchResult>;
+  command: 'sl search';
+  output?: string;
+  json?: boolean;
+  io: KtxSlIo;
+  emptyMessage: string;
+  emptyHint?: string;
+}): Promise<void>;
+async function printSlSources(input: {
   rows: ReadonlyArray<LocalSlSourceSummary | LocalSlSourceSearchResult>;
   command: 'sl list' | 'sl search';
   output?: string;
   json?: boolean;
   io: KtxSlIo;
   emptyMessage: string;
+  emptyHint?: string;
 }): Promise<void> {
   const { resolveOutputMode } = await import('./io/mode.js');
   const { printList } = await import('./io/print-list.js');
   const mode = resolveOutputMode({ explicit: input.output, json: input.json, io: input.io });
-  printList({
-    rows: input.rows,
-    columns: [
+
+  if (input.command === 'sl search') {
+    const searchColumns: ReadonlyArray<PrintListColumn<LocalSlSourceSearchResult>> = [
+      {
+        key: 'score',
+        label: 'SCORE',
+        plain: 'score=',
+        role: 'badge',
+        prettyFormat: (value) => `${Math.round(Number(value) * 100)}%`,
+        dim: true,
+      },
       { key: 'connectionId', label: 'CONNECTION', plain: '' },
       { key: 'name', label: 'NAME', plain: '' },
       { key: 'columnCount', label: 'COLS', plain: 'columns=', dim: true },
       { key: 'measureCount', label: 'MEASURES', plain: 'measures=', dim: true },
       { key: 'joinCount', label: 'JOINS', plain: 'joins=', dim: true },
       { key: 'description', label: 'DESCRIPTION', plain: false, optional: true, dim: true },
-    ],
+    ];
+    printList<LocalSlSourceSearchResult>({
+      rows: input.rows as ReadonlyArray<LocalSlSourceSearchResult>,
+      columns: searchColumns,
+      groupBy: 'connectionId',
+      emptyMessage: input.emptyMessage,
+      emptyHint: input.emptyHint,
+      unit: 'source',
+      command: input.command,
+      mode,
+      io: input.io,
+    });
+    return;
+  }
+
+  const listColumns: ReadonlyArray<PrintListColumn<LocalSlSourceSummary>> = [
+    { key: 'connectionId', label: 'CONNECTION', plain: '' },
+    { key: 'name', label: 'NAME', plain: '' },
+    { key: 'columnCount', label: 'COLS', plain: 'columns=', dim: true },
+    { key: 'measureCount', label: 'MEASURES', plain: 'measures=', dim: true },
+    { key: 'joinCount', label: 'JOINS', plain: 'joins=', dim: true },
+    { key: 'description', label: 'DESCRIPTION', plain: false, optional: true, dim: true },
+  ];
+  printList<LocalSlSourceSummary>({
+    rows: input.rows as ReadonlyArray<LocalSlSourceSummary>,
+    columns: listColumns,
     groupBy: 'connectionId',
     emptyMessage: input.emptyMessage,
+    emptyHint: input.emptyHint,
+    unit: 'source',
     command: input.command,
     mode,
     io: input.io,
@@ -142,6 +197,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       await printSlSources({
         rows: sources,
         emptyMessage: `No semantic-layer sources matched "${args.query}" in ${project.projectDir}`,
+        emptyHint: 'Run `ktx sl list` to inspect available sources.',
         command: 'sl search',
         output: args.output,
         json: args.json,
