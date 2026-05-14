@@ -5,20 +5,16 @@ import {
 } from '@ktx/context';
 import { loadKtxProject } from '@ktx/context/project';
 import {
-  type LocalKnowledgeScope,
   type LocalKnowledgeSearchResult,
   type LocalKnowledgeSummary,
   listLocalKnowledgePages,
-  readLocalKnowledgePage,
   searchLocalKnowledgePages,
-  writeLocalKnowledgePage,
 } from '@ktx/context/wiki';
 import { resolveOutputMode } from './io/mode.js';
-import { printList, type PrintListColumn, writeJsonResult } from './io/print-list.js';
+import { printList, type PrintListColumn } from './io/print-list.js';
 
 export type KtxKnowledgeArgs =
   | { command: 'list'; projectDir: string; userId: string; output?: string; json?: boolean }
-  | { command: 'read'; projectDir: string; key: string; userId: string; json?: boolean }
   | {
       command: 'search';
       projectDir: string;
@@ -27,18 +23,6 @@ export type KtxKnowledgeArgs =
       output?: string;
       json?: boolean;
       limit?: number;
-    }
-  | {
-      command: 'write';
-      projectDir: string;
-      key: string;
-      scope: LocalKnowledgeScope;
-      userId: string;
-      summary: string;
-      content: string;
-      tags: string[];
-      refs: string[];
-      slRefs: string[];
     };
 
 type KtxKnowledgeIo = import('./cli-runtime.js').KtxCliIo;
@@ -104,25 +88,6 @@ export async function runKtxKnowledge(
       });
       return 0;
     }
-    if (args.command === 'read') {
-      const page = await readLocalKnowledgePage(project, { key: args.key, userId: args.userId });
-      if (!page) {
-        throw new Error(`Wiki page "${args.key}" was not found`);
-      }
-      if (args.json) {
-        writeJsonResult(io, {
-          kind: 'wiki.page',
-          data: page,
-          meta: { command: 'wiki read' },
-        });
-        return 0;
-      }
-      io.stdout.write(`# ${page.key}\n\n`);
-      io.stdout.write(`Scope: ${page.scope}\n`);
-      io.stdout.write(`Summary: ${page.summary}\n\n`);
-      io.stdout.write(`${page.content}\n`);
-      return 0;
-    }
     if (args.command === 'search') {
       const results = await searchLocalKnowledgePages(project, {
         query: args.query,
@@ -153,18 +118,6 @@ export async function runKtxKnowledge(
       });
       return 0;
     }
-
-    const write = await writeLocalKnowledgePage(project, {
-      key: args.key,
-      scope: args.scope,
-      userId: args.userId,
-      summary: args.summary,
-      content: args.content,
-      tags: args.tags,
-      refs: args.refs,
-      slRefs: args.slRefs,
-    });
-    io.stdout.write(`Wrote ${write.path}\n`);
     return 0;
   } catch (error) {
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
