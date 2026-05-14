@@ -136,6 +136,9 @@ pnpm run native:rebuild
 echo "Building KTX packages..."
 pnpm run build
 
+echo "Building KTX runtime artifacts..."
+pnpm run artifacts:build
+
 echo "Running KTX setup doctor..."
 node packages/cli/dist/bin.js status --no-input
 
