@@ -106,7 +106,6 @@ export async function writeWarehouseConfig(projectDir: string): Promise<void> {
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  prod-metabase:',
       '    driver: metabase',
@@ -126,7 +125,6 @@ export async function writeMetabaseConfig(projectDir: string): Promise<void> {
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -488,7 +486,6 @@ export async function runPublicMetabaseSyncModeCase(tempDir: string, input: Sync
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      `project: metabase-sync-mode-${input.name}`,
       'connections:',
       '  prod-metabase:',
       '    driver: metabase',

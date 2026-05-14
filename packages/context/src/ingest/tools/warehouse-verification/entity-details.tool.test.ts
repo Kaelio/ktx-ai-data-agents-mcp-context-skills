@@ -15,7 +15,7 @@ describe('EntityDetailsTool', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-entity-details-'));
-    project = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
+    project = await initKtxProject({ projectDir: join(tempDir, 'project') });
     await seedLiveDatabaseScan();
     tool = new EntityDetailsTool(() => new WarehouseCatalogService({ fileStore: project.fileStore }));
     context = {

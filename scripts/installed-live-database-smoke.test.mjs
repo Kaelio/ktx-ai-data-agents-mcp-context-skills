@@ -53,7 +53,6 @@ describe('installed live-database artifact smoke helpers', () => {
     assert.equal(
       buildKtxYaml('postgresql://ktx:postgres@127.0.0.1:15432/warehouse'), // pragma: allowlist secret
       [
-        'project: artifact-live-database',
         'connections:',
         '  warehouse:',
         '    driver: postgres',

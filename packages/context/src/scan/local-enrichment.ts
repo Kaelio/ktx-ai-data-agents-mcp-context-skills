@@ -515,8 +515,7 @@ export async function runLocalScanEnrichment(
   const now = input.now ?? (() => new Date());
   const state = completedKtxScanEnrichmentStateSummary();
   const syncId = input.syncId ?? input.context.runId;
-  const relationshipSettings =
-    input.relationshipSettings ?? buildDefaultKtxProjectConfig(input.connectionId).scan.relationships;
+  const relationshipSettings = input.relationshipSettings ?? buildDefaultKtxProjectConfig().scan.relationships;
   const inputHash = computeKtxScanEnrichmentInputHash({
     snapshot,
     mode: input.mode,

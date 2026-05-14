@@ -1,6 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   formatDoctorReport,
@@ -328,7 +328,6 @@ describe('runKtxDoctor', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'storrage:',
         '  state: sqlite',
         'ingest:',
@@ -359,7 +358,7 @@ describe('runKtxDoctor', () => {
   it('emits structured JSON when ktx.yaml fails Zod validation', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
-      ['project: warehouse', 'storrage: {}', ''].join('\n'),
+      ['storrage: {}', ''].join('\n'),
       'utf-8',
     );
     const testIo = makeIo();
@@ -387,7 +386,6 @@ describe('runKtxDoctor', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -418,7 +416,6 @@ describe('runKtxDoctor', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -452,7 +449,7 @@ describe('runKtxDoctor', () => {
 
     const out = testIo.stdout();
     expect(out).toContain('KTX status');
-    expect(out).toContain('· warehouse');
+    expect(out).toContain(`· ${basename(tempDir)}`);
     expect(out).toContain('Connections (1)');
     expect(out).toContain('LLM');
     expect(out).toContain('anthropic');
@@ -468,7 +465,6 @@ describe('runKtxDoctor', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -528,7 +524,6 @@ describe('runKtxDoctor', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -558,7 +553,6 @@ describe('runKtxDoctor', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -620,7 +614,6 @@ describe('runKtxDoctor', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -660,7 +653,6 @@ describe('runKtxDoctor', () => {
       await writeFile(
         join(tempDir, 'ktx.yaml'),
         [
-          'project: warehouse',
           'connections:',
           '  warehouse:',
           '    driver: sqlite',
@@ -695,7 +687,6 @@ describe('runKtxDoctor', () => {
       await writeFile(
         join(tempDir, 'ktx.yaml'),
         [
-          'project: warehouse',
           'connections:',
           '  warehouse:',
           '    driver: sqlite',
@@ -724,7 +715,6 @@ describe('runKtxDoctor', () => {
       await writeFile(
         join(tempDir, 'ktx.yaml'),
         [
-          'project: warehouse',
           'storrage:',
           '  state: sqlite',
           'ingest:',
@@ -752,7 +742,7 @@ describe('runKtxDoctor', () => {
     it('emits structured JSON issues when validation fails', async () => {
       await writeFile(
         join(tempDir, 'ktx.yaml'),
-        ['project: warehouse', 'storrage: {}', ''].join('\n'),
+        ['storrage: {}', ''].join('\n'),
         'utf-8',
       );
       const testIo = makeIo();
@@ -788,7 +778,6 @@ describe('runKtxDoctor', () => {
       await writeFile(
         join(tempDir, 'ktx.yaml'),
         [
-          'project: warehouse',
           'connections:',
           '  warehouse:',
           '    driver: postgres',

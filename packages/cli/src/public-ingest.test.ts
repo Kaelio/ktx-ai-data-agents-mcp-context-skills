@@ -41,7 +41,7 @@ function projectWithConnections(connections: KtxProjectConfig['connections']): K
   return {
     projectDir: '/tmp/project',
     config: {
-      ...buildDefaultKtxProjectConfig('warehouse'),
+      ...buildDefaultKtxProjectConfig(),
       connections,
     },
   };
@@ -51,7 +51,7 @@ function deepReadyProject(
   connections: KtxProjectConfig['connections'],
   relationshipsEnabled = true,
 ): KtxPublicIngestProject {
-  const config = buildDefaultKtxProjectConfig('warehouse');
+  const config = buildDefaultKtxProjectConfig();
   return {
     projectDir: '/tmp/project',
     config: {

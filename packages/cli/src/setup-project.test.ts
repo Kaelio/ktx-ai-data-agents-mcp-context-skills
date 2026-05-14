@@ -76,11 +76,10 @@ describe('setup project step', () => {
 
   it('loads an existing project with --existing and drops config setup progress', async () => {
     const projectDir = join(tempDir, 'warehouse');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -196,7 +195,7 @@ describe('setup project step', () => {
       expect.objectContaining({ message: `Create KTX project at ${projectDir}?` }),
     );
     expect(prompts.text).not.toHaveBeenCalled();
-    expect(result.status === 'ready' ? result.project.config.project : '').toBe('ktx-project');
+    expect(result.status === 'ready' ? result.project.configPath : '').toBe(join(projectDir, 'ktx.yaml'));
     expect(testIo.stdout()).toContain(`│  KTX will create:\n│    ${projectDir}`);
     await expect(stat(join(projectDir, 'ktx.yaml'))).resolves.toBeDefined();
   });

@@ -6,7 +6,7 @@ import { runKtxCli, type KtxCliDeps } from './index.js';
 
 async function makeFixtureProject(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
-  await writeFile(join(dir, 'ktx.yaml'), 'project: project-dir-fixture\n', 'utf-8');
+  await writeFile(join(dir, 'ktx.yaml'), '{}\n', 'utf-8');
   return dir;
 }
 
@@ -138,7 +138,7 @@ describe('project directory defaults', () => {
     const projectDir = join(root, 'warehouse');
     const nestedDir = join(projectDir, 'nested', 'deeper');
     await mkdir(nestedDir, { recursive: true });
-    await writeFile(join(projectDir, 'ktx.yaml'), 'project: warehouse\n', 'utf-8');
+    await writeFile(join(projectDir, 'ktx.yaml'), '{}\n', 'utf-8');
     const expectedProjectDir = await realpath(projectDir);
 
     const publicIngest = vi.fn(async () => 0);

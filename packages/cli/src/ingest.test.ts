@@ -633,7 +633,6 @@ describe('runKtxIngest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: metabase-cli',
         'connections:',
         '  prod-metabase:',
         '    driver: metabase',
@@ -1099,7 +1098,7 @@ describe('runKtxIngest', () => {
 
   it('passes managed daemon options to adapters and pull-config options when no explicit daemon URL is set', async () => {
     const projectDir = join(tempDir, 'managed-daemon-ingest-project');
-    await initKtxProject({ projectDir, projectName: 'managed-daemon-ingest-project' });
+    await initKtxProject({ projectDir });
     await writeWarehouseConfig(projectDir);
     const createdAdapters: SourceAdapter[] = [
       { source: 'fake', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
@@ -1159,7 +1158,6 @@ describe('runKtxIngest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: historic-sql-project',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1224,7 +1222,6 @@ describe('runKtxIngest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: historic-sql-progress-project',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1353,7 +1350,6 @@ describe('runKtxIngest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: historic-sql-step-progress-project',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1446,7 +1442,6 @@ describe('runKtxIngest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: historic-sql-concurrent-progress-project',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1596,7 +1591,6 @@ describe('runKtxIngest', () => {
     await writeFile(
       join(projectDir, 'ktx.yaml'),
       [
-        'project: looker-cli',
         'connections:',
         '  prod-looker:',
         '    driver: looker',

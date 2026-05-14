@@ -7,7 +7,6 @@ import { LocalGitFileStore } from './local-git-file-store.js';
 
 export interface InitKtxProjectOptions {
   projectDir: string;
-  projectName?: string;
   force?: boolean;
   authorName?: string;
   authorEmail?: string;
@@ -101,7 +100,7 @@ async function createRuntime(
 
 export async function initKtxProject(options: InitKtxProjectOptions): Promise<InitKtxProjectResult> {
   const projectDir = resolve(options.projectDir);
-  const projectName = options.projectName?.trim() || basename(projectDir) || 'ktx-project';
+  const projectName = basename(projectDir) || 'ktx-project';
   const authorName = options.authorName ?? 'ktx';
   const authorEmail = options.authorEmail ?? 'ktx@example.com';
   const logger = options.logger ?? noopLogger;
@@ -112,7 +111,7 @@ export async function initKtxProject(options: InitKtxProjectOptions): Promise<In
     throw new Error(`Project already contains ktx.yaml: ${configPath}`);
   }
 
-  const config = buildDefaultKtxProjectConfig(projectName);
+  const config = buildDefaultKtxProjectConfig();
   const runtime = await createRuntime(projectDir, config, authorName, authorEmail, logger);
 
   await writeProjectFile(projectDir, 'ktx.yaml', serializeKtxProjectConfig(config));

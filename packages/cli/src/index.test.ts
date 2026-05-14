@@ -102,7 +102,7 @@ describe('runKtxCli', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-'));
-    await writeFile(join(tempDir, 'ktx.yaml'), 'project: cli-dispatch-fixture\n', 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), '{}\n', 'utf-8');
   });
 
   afterEach(async () => {
@@ -502,7 +502,7 @@ describe('runKtxCli', () => {
 
   it('keeps representative JSON command stdout parseable', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     const commands = [
       ['--project-dir', projectDir, 'status', '--json'],
       ['--project-dir', projectDir, 'sl', 'list', '--json'],
@@ -580,7 +580,7 @@ describe('runKtxCli', () => {
 
     try {
       delete process.env.KTX_PROJECT_DIR;
-      await writeFile(join(tempDir, 'ktx.yaml'), 'project: revenue\nconnections: {}\n', 'utf-8');
+      await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
       process.chdir(tempDir);
 
       await expect(runKtxCli([], testIo.io, { setup })).resolves.toBe(0);
@@ -1482,7 +1482,7 @@ describe('runKtxCli', () => {
 
   it('dispatches public connection subcommands through the existing connection implementation', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'ktx-connection-dispatch-'));
-    await writeFile(join(tempDir, 'ktx.yaml'), 'project: connection-dispatch\n', 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), '{}\n', 'utf-8');
     const connection = vi.fn(async () => 0);
 
     await expect(

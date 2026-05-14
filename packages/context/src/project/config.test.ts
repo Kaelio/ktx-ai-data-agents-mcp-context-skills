@@ -11,7 +11,6 @@ describe('KTX project config', () => {
   it.each(['status', 'replay', 'run', 'watch'])('accepts former ingest subcommand name "%s" as a connection id', (connectionId) => {
     expect(
       parseKtxProjectConfig(`
-project: reserved-test
 connections:
   ${connectionId}:
     driver: postgres
@@ -24,8 +23,7 @@ connections:
   });
 
   it('builds the default standalone project config', () => {
-    expect(buildDefaultKtxProjectConfig('warehouse')).toEqual({
-      project: 'warehouse',
+    expect(buildDefaultKtxProjectConfig()).toEqual({
       connections: {},
       storage: {
         state: 'sqlite',
@@ -84,15 +82,14 @@ connections:
   });
 
   it('round-trips through YAML with stable defaults', () => {
-    const serialized = serializeKtxProjectConfig(buildDefaultKtxProjectConfig('warehouse'));
+    const serialized = serializeKtxProjectConfig(buildDefaultKtxProjectConfig());
     const parsed = parseKtxProjectConfig(serialized);
 
-    expect(serialized).toContain('project: warehouse');
+    expect(serialized).not.toContain('project:');
     expect(serialized).not.toContain('live-database');
     expect(serialized).toContain(
       '  embeddings:\n    backend: deterministic\n    model: deterministic\n    dimensions: 8',
     );
-    expect(parsed.project).toBe('warehouse');
     expect(parsed.ingest.adapters).toEqual([]);
     expect(parsed.ingest.embeddings).toEqual({
       backend: 'deterministic',
@@ -103,7 +100,6 @@ connections:
 
   it('parses and serializes setup warehouse metadata without setup progress', () => {
     const config = parseKtxProjectConfig(`
-project: revenue
 setup:
   database_connection_ids:
     - warehouse
@@ -126,7 +122,6 @@ connections:
 
   it('parses global direct Anthropic LLM config', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 llm:
   provider:
     backend: anthropic
@@ -166,7 +161,6 @@ ingest:
 
   it('parses global Vertex LLM config', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 llm:
   provider:
     backend: vertex
@@ -188,7 +182,6 @@ llm:
 
   it('parses gateway LLM, OpenAI scan embeddings, and sentence-transformers ingest embeddings', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 llm:
   provider:
     backend: gateway
@@ -232,7 +225,6 @@ scan:
 
   it('parses scan relationship settings', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 scan:
   relationships:
     enabled: false
@@ -273,7 +265,6 @@ scan:
 
   it('parses the scan relationship validation budget sentinel', () => {
     const config = parseKtxProjectConfig(`
-project: demo
 scan:
   relationships:
     validationBudget: all
@@ -285,7 +276,6 @@ scan:
 
   it('rejects out-of-range scan relationship numeric settings', () => {
     const yaml = `
-project: demo
 scan:
   relationships:
     acceptThreshold: 2
@@ -316,7 +306,6 @@ scan:
 
   it('rejects invalid scan relationship validation budget strings', () => {
     const yaml = `
-project: demo
 scan:
   relationships:
     validationBudget: infinite
@@ -327,7 +316,6 @@ scan:
   it('rejects unsupported local LLM and embedding fields', () => {
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 ingest:
   llm:
     backend: anthropic
@@ -336,7 +324,6 @@ ingest:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 scan:
   enrichment:
     backend: gateway
@@ -345,7 +332,6 @@ scan:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 scan:
   enrichment:
     mode: llm
@@ -356,7 +342,6 @@ scan:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 ingest:
   embeddings:
     provider: gateway
@@ -368,7 +353,6 @@ ingest:
   it('rejects gateway embedding configs', () => {
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 ingest:
   embeddings:
     backend: gateway
@@ -379,7 +363,6 @@ ingest:
 
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 scan:
   enrichment:
     mode: llm
@@ -392,9 +375,9 @@ scan:
   });
 
   it('fills optional sections when a minimal config is loaded', () => {
-    const config = parseKtxProjectConfig('project: local\n');
+    const config = parseKtxProjectConfig('{}\n');
 
-    expect(config).toEqual(buildDefaultKtxProjectConfig('local'));
+    expect(config).toEqual(buildDefaultKtxProjectConfig());
     expect(config.ingest.embeddings).toEqual({
       backend: 'deterministic',
       model: 'deterministic',
@@ -406,14 +389,15 @@ scan:
     expect(() => parseKtxProjectConfig('- nope\n')).toThrow('ktx.yaml must contain a YAML object');
   });
 
-  it('rejects configs with a missing project name', () => {
-    expect(() => parseKtxProjectConfig('connections: {}\n')).toThrow('ktx.yaml field "project" is required');
+  it('accepts configs without a project name', () => {
+    expect(parseKtxProjectConfig('connections: {}\n')).toMatchObject({
+      connections: {},
+    });
   });
 
   it('rejects unknown top-level fields under strict mode', () => {
     expect(() =>
       parseKtxProjectConfig(`
-project: demo
 storrage:
   state: sqlite
 `),
@@ -423,13 +407,12 @@ storrage:
 
 describe('validateKtxProjectConfig', () => {
   it('returns ok: true with no issues for a valid config', () => {
-    const result = validateKtxProjectConfig('project: warehouse\n');
+    const result = validateKtxProjectConfig('connections: {}\n');
     expect(result).toEqual({ ok: true, issues: [] });
   });
 
   it('collects every schema issue without throwing', () => {
     const result = validateKtxProjectConfig(`
-project: ""
 storage:
   search: not-a-real-backend
 scan:
@@ -441,7 +424,6 @@ scan:
     const paths = result.issues.map((issue) => issue.path);
     expect(paths).toEqual(
       expect.arrayContaining([
-        'project',
         'storage.search',
         'scan.relationships.acceptThreshold',
       ]),
@@ -450,7 +432,6 @@ scan:
 
   it('attaches migration hints for known deprecated keys', () => {
     const result = validateKtxProjectConfig(`
-project: demo
 ingest:
   llm:
     backend: anthropic
@@ -499,18 +480,15 @@ describe('generateKtxProjectConfigJsonSchema', () => {
 
   it('exposes every top-level ktx.yaml section under properties', () => {
     const properties = schema.properties as Record<string, unknown>;
-    expect(Object.keys(properties).sort()).toEqual(
-      ['agent', 'connections', 'ingest', 'llm', 'memory', 'project', 'scan', 'setup', 'storage'].sort(),
-    );
+    expect(Object.keys(properties).sort()).toEqual(['agent', 'connections', 'ingest', 'llm', 'memory', 'scan', 'setup', 'storage'].sort());
   });
 
-  it('marks "project" as required', () => {
-    expect(schema.required).toEqual(expect.arrayContaining(['project']));
+  it('does not require any top-level fields', () => {
+    expect(schema.required).toBeUndefined();
   });
 
   it('carries .describe() text on top-level fields', () => {
     const properties = schema.properties as Record<string, { description?: string }>;
-    expect(properties.project?.description).toMatch(/Project identifier/);
     expect(properties.llm?.description).toMatch(/LLM/);
     expect(properties.scan?.description).toMatch(/Schema-scan/);
   });

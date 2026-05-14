@@ -92,7 +92,7 @@ describe('setup Anthropic model step', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-models-'));
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
   });
 
   afterEach(async () => {
@@ -1049,11 +1049,10 @@ describe('setup Anthropic model step', () => {
 
   it('preserves already completed llm setup when no model args request changes', async () => {
     await mkdir(join(tempDir, '.ktx'), { recursive: true });
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse', force: true });
+    await initKtxProject({ projectDir: tempDir, force: true });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'setup:',
         '  database_connection_ids: []',
         'connections: {}',
@@ -1099,7 +1098,6 @@ describe('setup Anthropic model step', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'setup:',
         '  database_connection_ids: []',
         'connections: {}',

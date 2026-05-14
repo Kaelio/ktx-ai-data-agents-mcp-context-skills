@@ -79,7 +79,7 @@ describe('setup sources step', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-sources-'));
     projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'sources' });
+    await initKtxProject({ projectDir });
   });
 
   afterEach(async () => {

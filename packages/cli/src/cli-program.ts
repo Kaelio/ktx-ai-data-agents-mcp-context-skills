@@ -20,7 +20,7 @@ export interface KtxCliCommandContext {
   deps: KtxCliDeps;
   packageInfo: KtxCliPackageInfo;
   setExitCode: (code: number) => void;
-  runInit: (args: { projectDir: string; projectName?: string; force: boolean }, io: KtxCliIo) => Promise<number>;
+  runInit: (args: { projectDir: string; force: boolean }, io: KtxCliIo) => Promise<number>;
   writeDebug?: (command: string, commandContext: CommandWithGlobalOptions) => void;
 }
 
@@ -32,14 +32,14 @@ export interface OutputModeOptions {
 }
 
 interface KtxCommanderProgramOptions {
-  runInit: (args: { projectDir: string; projectName?: string; force: boolean }, io: KtxCliIo) => Promise<number>;
+  runInit: (args: { projectDir: string; force: boolean }, io: KtxCliIo) => Promise<number>;
 }
 
 export interface BuildKtxProgramOptions {
   io: KtxCliIo;
   deps: KtxCliDeps;
   packageInfo: KtxCliPackageInfo;
-  runInit: (args: { projectDir: string; projectName?: string; force: boolean }, io: KtxCliIo) => Promise<number>;
+  runInit: (args: { projectDir: string; force: boolean }, io: KtxCliIo) => Promise<number>;
   setExitCode?: (code: number) => void;
 }
 

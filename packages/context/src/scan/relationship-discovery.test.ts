@@ -243,7 +243,7 @@ function llmProvider(): KtxLlmProvider {
 }
 
 function relationshipSettings() {
-  return buildDefaultKtxProjectConfig('warehouse').scan.relationships;
+  return buildDefaultKtxProjectConfig().scan.relationships;
 }
 
 function llmOnlyRelationshipSnapshot(): KtxSchemaSnapshot {
@@ -557,7 +557,7 @@ describe('production relationship discovery', () => {
     `);
 
     const settings = {
-      ...buildDefaultKtxProjectConfig('warehouse').scan.relationships,
+      ...buildDefaultKtxProjectConfig().scan.relationships,
       acceptThreshold: 0.99,
       reviewThreshold: 0.55,
     };
@@ -633,7 +633,7 @@ describe('production relationship discovery', () => {
       schema: snapshotToKtxEnrichedSchema(richSnapshot),
       context: { runId: 'candidate-cap' },
       settings: {
-        ...buildDefaultKtxProjectConfig('warehouse').scan.relationships,
+        ...buildDefaultKtxProjectConfig().scan.relationships,
         maxCandidatesPerColumn: 1,
       },
     });

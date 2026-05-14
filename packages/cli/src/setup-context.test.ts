@@ -50,7 +50,7 @@ type ReadyProjectOverrides = Omit<Partial<KtxProjectConfig>, 'ingest' | 'llm' | 
 };
 
 async function writeReadyProject(projectDir: string, overrides: ReadyProjectOverrides = {}) {
-  const defaults = buildDefaultKtxProjectConfig('revenue');
+  const defaults = buildDefaultKtxProjectConfig();
   const readyConfig: KtxProjectConfig = {
     ...defaults,
     setup: { database_connection_ids: ['warehouse'] },
@@ -595,7 +595,6 @@ describe('setup context build state', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'connections: {}',
         'llm:',
         '  provider:',

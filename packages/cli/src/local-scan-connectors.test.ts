@@ -39,11 +39,10 @@ describe('createKtxCliScanConnector', () => {
   });
 
   it('creates a native sqlite connector from standalone config', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -61,11 +60,10 @@ describe('createKtxCliScanConnector', () => {
   });
 
   it('passes canonical BigQuery YAML scan limits through to the connector', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: bigquery',
@@ -95,11 +93,10 @@ describe('createKtxCliScanConnector', () => {
   });
 
   it('throws for structural daemon-only fallback configs', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: duckdb',
@@ -116,11 +113,10 @@ describe('createKtxCliScanConnector', () => {
   });
 
   it('throws a clear error when the connection block has no driver field', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    type: postgres',
