@@ -33,3 +33,57 @@ describe('connectionConfigSchema (driver discriminated union)', () => {
     expect(() => connectionConfigSchema.parse({ driver: 'nope', url: 'x' })).toThrow();
   });
 });
+
+describe('connectionConfigSchema - context source drivers with mappings', () => {
+  it('parses a metabase connection with mappings', () => {
+    const parsed = connectionConfigSchema.parse({
+      driver: 'metabase',
+      api_url: 'https://metabase.example.com',
+      api_key_ref: 'env:METABASE_API_KEY',
+      mappings: {
+        databaseMappings: { '3': 'prod-warehouse' },
+        syncEnabled: { '3': true },
+        syncMode: 'ONLY',
+      },
+    });
+    expect(parsed).toMatchObject({
+      driver: 'metabase',
+      api_url: 'https://metabase.example.com',
+      mappings: {
+        databaseMappings: { '3': 'prod-warehouse' },
+        syncMode: 'ONLY',
+      },
+    });
+  });
+
+  it('parses a looker connection with connectionMappings', () => {
+    const parsed = connectionConfigSchema.parse({
+      driver: 'looker',
+      base_url: 'https://looker.example.com',
+      client_id: 'abc',
+      client_secret_ref: 'env:LOOKER_CLIENT_SECRET',
+      mappings: { connectionMappings: { bigquery_prod: 'wh' } },
+    });
+    expect(parsed.mappings).toEqual({ connectionMappings: { bigquery_prod: 'wh' } });
+  });
+
+  it('parses a lookml connection with expectedLookerConnectionName', () => {
+    const parsed = connectionConfigSchema.parse({
+      driver: 'lookml',
+      repoUrl: 'https://github.com/acme/looker.git',
+      branch: 'main',
+      mappings: { expectedLookerConnectionName: 'bigquery_prod' },
+    });
+    expect(parsed.mappings).toEqual({ expectedLookerConnectionName: 'bigquery_prod' });
+  });
+
+  it('rejects metabase mapping with non-integer database key', () => {
+    expect(() =>
+      connectionConfigSchema.parse({
+        driver: 'metabase',
+        api_url: 'https://x',
+        mappings: { databaseMappings: { abc: 'wh' } },
+      }),
+    ).toThrow();
+  });
+});
