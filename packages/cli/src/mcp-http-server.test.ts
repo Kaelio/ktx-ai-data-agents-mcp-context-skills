@@ -1,8 +1,12 @@
+import { request } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 import {
   buildMcpSecurityConfig,
   isMcpRequestAuthorized,
   normalizeHostHeader,
+  runKtxMcpHttpServer,
 } from './mcp-http-server.js';
 
 describe('normalizeHostHeader', () => {
@@ -112,5 +116,159 @@ describe('isMcpRequestAuthorized', () => {
     expect(isMcpRequestAuthorized({ path: '/health', headers: { host: 'mcp.example.test' } }, config)).toEqual({
       ok: true,
     });
+  });
+});
+
+function postJson(port: number, path: string, body: unknown, headers: Record<string, string> = {}) {
+  return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: string }>(
+    (resolve, reject) => {
+      const payload = JSON.stringify(body);
+      const req = request(
+        {
+          host: '127.0.0.1',
+          port,
+          path,
+          method: 'POST',
+          headers: {
+            host: `127.0.0.1:${port}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+            'content-length': Buffer.byteLength(payload),
+            ...headers,
+          },
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () =>
+            resolve({
+              status: res.statusCode ?? 0,
+              headers: res.headers,
+              body: Buffer.concat(chunks).toString('utf8'),
+            }),
+          );
+        },
+      );
+      req.on('error', reject);
+      req.end(payload);
+    },
+  );
+}
+
+function get(port: number, path: string, headers: Record<string, string> = {}) {
+  return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: string }>(
+    (resolve, reject) => {
+      const req = request(
+        {
+          host: '127.0.0.1',
+          port,
+          path,
+          method: 'GET',
+          headers: { host: `127.0.0.1:${port}`, ...headers },
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () =>
+            resolve({
+              status: res.statusCode ?? 0,
+              headers: res.headers,
+              body: Buffer.concat(chunks).toString('utf8'),
+            }),
+          );
+        },
+      );
+      req.on('error', reject);
+      req.end();
+    },
+  );
+}
+
+function createTestMcpServer() {
+  return () => {
+    const server = new McpServer({ name: 'ktx-test', version: '0.0.0-test' });
+    server.registerTool('ping', { inputSchema: {} }, async () => ({
+      content: [{ type: 'text', text: 'pong' }],
+    }));
+    return server;
+  };
+}
+
+describe('runKtxMcpHttpServer', () => {
+  it('serves /health with project metadata', async () => {
+    const handle = await runKtxMcpHttpServer({
+      projectDir: '/tmp/ktx-project',
+      host: '127.0.0.1',
+      port: 0,
+      allowedHosts: [],
+      allowedOrigins: [],
+      createMcpServer: createTestMcpServer(),
+    });
+    try {
+      const port = (handle.server.address() as AddressInfo).port;
+      const response = await get(port, '/health');
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({
+        status: 'ok',
+        projectDir: '/tmp/ktx-project',
+        port,
+      });
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('allocates a stateful MCP session on initialize', async () => {
+    const handle = await runKtxMcpHttpServer({
+      projectDir: '/tmp/ktx-project',
+      host: '127.0.0.1',
+      port: 0,
+      allowedHosts: [],
+      allowedOrigins: [],
+      createMcpServer: createTestMcpServer(),
+    });
+    try {
+      const port = (handle.server.address() as AddressInfo).port;
+      const response = await postJson(port, '/mcp', {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'vitest', version: '0.0.0' },
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['mcp-session-id']).toBeTruthy();
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('rejects unknown session ids with 404', async () => {
+    const handle = await runKtxMcpHttpServer({
+      projectDir: '/tmp/ktx-project',
+      host: '127.0.0.1',
+      port: 0,
+      allowedHosts: [],
+      allowedOrigins: [],
+      createMcpServer: createTestMcpServer(),
+    });
+    try {
+      const port = (handle.server.address() as AddressInfo).port;
+      const response = await postJson(
+        port,
+        '/mcp',
+        { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+        { 'mcp-session-id': 'missing-session' },
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body).toContain('Unknown MCP session');
+    } finally {
+      await handle.close();
+    }
   });
 });
