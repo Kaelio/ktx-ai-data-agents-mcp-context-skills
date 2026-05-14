@@ -3,8 +3,10 @@ from __future__ import annotations
 from ktx_daemon.sql_analysis import (
     AnalyzeSqlBatchItem,
     AnalyzeSqlBatchRequest,
+    ValidateReadOnlySqlRequest,
     _columns_from_nodes,
     analyze_sql_batch_response,
+    validate_read_only_sql_response,
 )
 
 
@@ -56,3 +58,74 @@ def test_analyze_sql_batch_returns_per_item_parse_errors() -> None:
 
 def test_columns_from_nodes_ignores_non_expression_clause_values() -> None:
     assert _columns_from_nodes([True, False, None]) == []
+
+
+def test_validate_read_only_sql_accepts_select_and_with_queries() -> None:
+    select_response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(
+            dialect="postgres",
+            sql="select id, status from public.orders where status = 'paid'",
+        )
+    )
+    with_response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(
+            dialect="postgres",
+            sql=(
+                "with paid as (select * from public.orders where status = 'paid') "
+                "select count(*) from paid"
+            ),
+        )
+    )
+
+    assert select_response.ok is True
+    assert select_response.error is None
+    assert with_response.ok is True
+    assert with_response.error is None
+
+
+def test_validate_read_only_sql_rejects_cte_dml() -> None:
+    response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(
+            dialect="postgres",
+            sql="with x as (insert into audit.events values (1) returning *) select * from x",
+        )
+    )
+
+    assert response.ok is False
+    assert response.error == "SQL contains read/write operation: Insert"
+
+
+def test_validate_read_only_sql_rejects_multi_statement_payloads() -> None:
+    response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(
+            dialect="postgres",
+            sql="select * from public.orders; delete from public.orders",
+        )
+    )
+
+    assert response.ok is False
+    assert response.error == "Only one SQL statement can be executed."
+
+
+def test_validate_read_only_sql_rejects_commands_and_pragmas() -> None:
+    command_response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(dialect="postgres", sql="call refresh_stats()")
+    )
+    pragma_response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(dialect="sqlite", sql="pragma table_info(users)")
+    )
+
+    assert command_response.ok is False
+    assert command_response.error == "SQL contains read/write operation: Command"
+    assert pragma_response.ok is False
+    assert pragma_response.error == "SQL contains read/write operation: Pragma"
+
+
+def test_validate_read_only_sql_reports_parse_errors() -> None:
+    response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(dialect="postgres", sql="select * from where")
+    )
+
+    assert response.ok is False
+    assert response.error is not None
+    assert "Invalid expression" in response.error
