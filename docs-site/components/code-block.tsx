@@ -54,7 +54,7 @@ export function CodeBlock(props: Props) {
   const isOutput = !isTerminal && WIZARD_GLYPHS.test(codeText);
   const hasTitle = typeof title === "string" && title.length > 0;
 
-  // Mode A — Terminal (commands the user types)
+  // Mode A - Terminal (commands the user types)
   if (isTerminal) {
     return (
       <div className="not-prose ktx-code ktx-code-terminal group">
@@ -77,7 +77,7 @@ export function CodeBlock(props: Props) {
     );
   }
 
-  // Mode D — Output preview (wizard prompts, terminal output)
+  // Mode D - Output preview (wizard prompts, terminal output)
   if (isOutput) {
     return (
       <div className="not-prose ktx-code ktx-code-output group relative">
@@ -90,7 +90,7 @@ export function CodeBlock(props: Props) {
     );
   }
 
-  // Mode B — VS Code tab (filename present)
+  // Mode B - VS Code tab (filename present)
   if (hasTitle) {
     return (
       <div className="not-prose ktx-code ktx-code-tab group">
@@ -107,7 +107,7 @@ export function CodeBlock(props: Props) {
     );
   }
 
-  // Mode C — Minimal default
+  // Mode C - Minimal default
   return (
     <div className="not-prose ktx-code ktx-code-minimal group relative">
       {language && <span className="ktx-code-minimal-lang">{language}</span>}

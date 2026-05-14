@@ -84,7 +84,7 @@ For each card:
 4. Decide:
    - Simple aggregation on a table that already has a source → `sl_edit_source` to add a measure.
    - Join between tables that should be linked in the SL graph → `sl_edit_source` to add a join.
-   - Complex derived SQL (CTEs, multi-layer aggregation, scoring models) → `sl_write_source` with `source_type: sql`. When the SQL projects/filters from a single manifest-backed base table, set `inherits_columns_from: <manifest_key>` so columns inherit type and description from the manifest — see `sl_capture` skill for the slim form. Use `sl_discover` to discover the manifest key from the table reference in the SQL (it accepts `MARTS.CONSIGNMENTS`, `ANALYTICS.MARTS.CONSIGNMENTS`, or `CONSIGNMENTS`).
+   - Complex derived SQL (CTEs, multi-layer aggregation, scoring models) → `sl_write_source` with `source_type: sql`. When the SQL projects/filters from a single manifest-backed base table, set `inherits_columns_from: <manifest_key>` so columns inherit type and description from the manifest - see `sl_capture` skill for the slim form. Use `sl_discover` to discover the manifest key from the table reference in the SQL (it accepts `MARTS.CONSIGNMENTS`, `ANALYTICS.MARTS.CONSIGNMENTS`, or `CONSIGNMENTS`).
    - New base table not yet in the semantic layer → `sl_write_source` with `source_type: table`.
    - Trivial query (`SELECT *`, simple `COUNT(*)` with no business logic) → do nothing; the runner will record this card as `action_type='skipped'`.
    - Duplicate of an existing measure → same as trivial; do nothing for this card.
@@ -102,7 +102,7 @@ Overlay shape: `name:` plus any of `measures:`, `segments:`, `descriptions:`, `j
 
 **Join discovery:** When your card's SQL references warehouse tables (e.g. in `FROM` or `JOIN` clauses), call `sl_discover({ query: '<table>' })` before writing. The matching manifest entry's `name` is the value you use in `joins: [- to: <name>]` only when the card output exposes a local key that matches the target source grain (for example `account_id = mart_account_segments.account_id`). Do not declare a KTX join just because the card SQL joins that table internally. If the output only exposes display fields such as `account_name`, keep the SQL source self-contained or project the key before adding the join. Use `many_to_one` for FK-to-dimension joins, `one_to_many` for the reverse.
 
-**Hard rule on join columns (prevents broken joins):** For every join you declare, the local column on the left of `on:` MUST be (a) present in your source's projected output and (b) a key/ID column, never a display value. If the natural FK isn't in your SELECT, add it to SELECT before declaring the join. Joining `account_name = mart_account_segments.account_id` is always wrong — names are not identifiers and the equality produces zero matches. The validator rejects this with a "display value to identifier" error; the tool will refuse to save it. Add `account_id` to your SELECT and join on `account_id = mart_account_segments.account_id`, or omit the join entirely.
+**Hard rule on join columns (prevents broken joins):** For every join you declare, the local column on the left of `on:` MUST be (a) present in your source's projected output and (b) a key/ID column, never a display value. If the natural FK isn't in your SELECT, add it to SELECT before declaring the join. Joining `account_name = mart_account_segments.account_id` is always wrong - names are not identifiers and the equality produces zero matches. The validator rejects this with a "display value to identifier" error; the tool will refuse to save it. Add `account_id` to your SELECT and join on `account_id = mart_account_segments.account_id`, or omit the join entirely.
 
 ## priorProvenance
 
@@ -114,7 +114,7 @@ If the WU prompt includes a `priorProvenance` section for a card, it tells you w
 
 ## Deduplication
 
-Before writing, scan all cards in this WU for near-duplicate groups — cards whose `resolvedSql` shares the same CTEs, base tables, joins, and aggregation structure but differs only in:
+Before writing, scan all cards in this WU for near-duplicate groups - cards whose `resolvedSql` shares the same CTEs, base tables, joins, and aggregation structure but differs only in:
 - Trailing filters (e.g. `date_trunc(week, date)` vs `date_trunc(month, date)`).
 - Minor `WHERE` clause variations.
 - Column aliases or output column subsets.
@@ -124,7 +124,7 @@ When you find a group of near-duplicates:
 1. Create ONE generalized source from the most comprehensive card in the group.
 2. Strip card-specific trailing filters from the SQL so the source covers all variants (e.g. keep daily grain instead of filtering to week/month).
 3. If each card had a distinct measure or filter, add them as separate measures on the single source.
-4. For all cards except the canonical one, do nothing — they'll be recorded as `action_type='skipped'` automatically by the runner.
+4. For all cards except the canonical one, do nothing - they'll be recorded as `action_type='skipped'` automatically by the runner.
 
 Do NOT merge cards with fundamentally different business logic, even if they share CTEs.
 
@@ -132,7 +132,7 @@ Do NOT merge cards with fundamentally different business logic, even if they sha
 
 When a card's `resolvedSql` contains `GROUP BY` with aggregation functions (`SUM`, `COUNT`, `AVG`, …):
 
-1. **Detect**: simple aggregation on base tables/joins — `SELECT` with `GROUP BY`, no complex CTEs or window functions.
+1. **Detect**: simple aggregation on base tables/joins - `SELECT` with `GROUP BY`, no complex CTEs or window functions.
 2. **Decompose**: strip the `GROUP BY` and aggregation functions. Keep `FROM`, `JOIN`, and `WHERE` intact.
 3. **Expose row-level columns**: include the grouped-by columns AND the raw columns being aggregated (e.g. `money_out` instead of `SUM(money_out) AS total_money_out`).
 4. **Define aggregations as measures**: convert each aggregation into a KSL measure (e.g. `sum(money_out)`).
@@ -144,17 +144,17 @@ Exception: keep the pre-aggregated SQL when the query involves multi-CTE pipelin
 
 Every card carries a `resolvedSql` field. Check the staged card's `resolutionStatus` first:
 
-- `resolutionStatus: "resolved"` — `{{#N}}` references are inlined and `[[ ... ]]` optional clauses have been dropped locally. If the resolved SQL contains no other parameters the SQL is executable as-is. If the card had **required** (non-bracketed) `{{ var }}` placeholders, the SQL is prefixed with a placeholder-warning comment block listing every dummy substitution Metabase made — see "Step A" below.
-- `resolutionStatus: "fallback"` — Metabase failed to resolve. The SQL still contains `{{#N}}`, `{{#N-name}} alias`, `{{ var }}`, and `[[ ... ]]` syntax. Do the translation steps below before writing a source.
+- `resolutionStatus: "resolved"` - `{{#N}}` references are inlined and `[[ ... ]]` optional clauses have been dropped locally. If the resolved SQL contains no other parameters the SQL is executable as-is. If the card had **required** (non-bracketed) `{{ var }}` placeholders, the SQL is prefixed with a placeholder-warning comment block listing every dummy substitution Metabase made - see "Step A" below.
+- `resolutionStatus: "fallback"` - Metabase failed to resolve. The SQL still contains `{{#N}}`, `{{#N-name}} alias`, `{{ var }}`, and `[[ ... ]]` syntax. Do the translation steps below before writing a source.
 
-### Step A — Handle dummy-substituted placeholders (resolved cards only)
+### Step A - Handle dummy-substituted placeholders (resolved cards only)
 
 When a card has a required `{{ var }}` outside any `[[ ]]` block, the resolver substitutes a **dummy value** purely so Metabase's parser will accept the query. The resulting SQL is prefixed with a comment like:
 
 ```sql
 -- PLACEHOLDER_WARNING: this SQL was extracted from a Metabase card with
 -- unbound template parameters. The placeholders below were substituted with DUMMY
--- values to satisfy Metabase's parser — they DO NOT represent intended filters.
+-- values to satisfy Metabase's parser - they DO NOT represent intended filters.
 -- Drop the corresponding clauses (or expose them as runtime SL filters) before
 -- persisting this SQL as a semantic-layer source.
 --   {{ auction_end }} (type=dimension, widget=date/all-options) → '2020-01-01~2020-12-31'
@@ -165,7 +165,7 @@ WHERE start_date >= '2020-01-01' AND start_date < '2021-01-01' AND status = 'pla
 
 For each listed placeholder: locate the WHERE clause(s) in the SQL that reference the dummy literal and **drop them**, then strip the warning comment. SL chat-time filters compose narrowing predicates dynamically, so the source should represent the unfiltered dataset.
 
-For `fallback` cards, dropping is simpler — the SQL still has the `[[ ... ]]` brackets and `{{ var }}` placeholders intact:
+For `fallback` cards, dropping is simpler - the SQL still has the `[[ ... ]]` brackets and `{{ var }}` placeholders intact:
 
 ```sql
 -- before:
@@ -177,18 +177,18 @@ WHERE 1=1
 WHERE 1=1
 ```
 
-### Step B — Inline `{{#N}}` references (fallback cards only)
+### Step B - Inline `{{#N}}` references (fallback cards only)
 
 Resolved cards already have `{{#N}}` inlined for you. For `fallback` cards, each `{{#N}}` (or `{{#N-some-slug}}`) in the SQL refers to another card's `resolvedSql`. The referenced card is in the WU's `rawFiles` or `dependencyPaths`. Read it with `read_raw_file`, then inline its SQL.
 
 If the reference has an alias (`from {{#5996-listing-interactions}} tb`), the **outer** SQL probably uses that alias (`select tb.* ...`, `tb.column_name`, etc.). When you inline, you must EITHER:
 
-1. **Pick a single base table inside the inlined SQL and rename its alias to the outer alias.** Useful when the inlined card is `SELECT * FROM listings JOIN ...` — set the LISTINGS alias to `tb` and `tb.*` keeps working in the outer query.
+1. **Pick a single base table inside the inlined SQL and rename its alias to the outer alias.** Useful when the inlined card is `SELECT * FROM listings JOIN ...` - set the LISTINGS alias to `tb` and `tb.*` keeps working in the outer query.
 2. **Replace the outer alias references with explicit columns from the inlined SQL.** Useful when the inlined card has multiple JOINs and `tb.*` is ambiguous.
 
 Never leave the outer alias dangling: after inlining, **grep your SQL for the outer alias name and rewrite or remove every reference**. A leftover `tb.*` with no `tb` table is the most common failure mode here.
 
-### Step C — Inlining cleanup checklist
+### Step C - Inlining cleanup checklist
 
 After Steps A and B, your SQL must:
 
@@ -209,11 +209,11 @@ For `source_type: sql`:
 - If `sl_discover` resolves the table, it is not outside the manifest. Do not write an `unmapped-table-*` fallback for resolved `orbit_raw`, `mart`, or other manifest-backed sources just because they appear inside card SQL.
 - If `sl_discover` cannot resolve a referenced table at all, write a single-line `wiki_write` with key `unmapped-table-<table_name>` and `rawPaths: ["cards/<id>.json"]` so the gap is documented, then call `emit_unmapped_fallback` with the staged card path as `rawPath`, `reason: "missing_target_table"`, `tableRef: "<table_name>"`, and `fallback: "wiki_only"`. Do not use this fallback if `sl_discover` resolved the table/source.
 
-Joins on manifest-backed names compose: the manifest's joins are inherited automatically, and any overlay `joins:` are merged on top (deduped by `to` + `on`). Use `disable_joins: ["<on-clause>"]` in the overlay to suppress a specific manifest join. If `sl_discover` shows a manifest-backed source with `Joins: 0` and the warehouse FK metadata is genuinely absent, declaring application-level joins via the overlay is fair game — bootstrap with `sl_write_source` (overlay shape above), then refine via `sl_edit_source`.
+Joins on manifest-backed names compose: the manifest's joins are inherited automatically, and any overlay `joins:` are merged on top (deduped by `to` + `on`). Use `disable_joins: ["<on-clause>"]` in the overlay to suppress a specific manifest join. If `sl_discover` shows a manifest-backed source with `Joins: 0` and the warehouse FK metadata is genuinely absent, declaring application-level joins via the overlay is fair game - bootstrap with `sl_write_source` (overlay shape above), then refine via `sl_edit_source`.
 
 ## Cross-card references (`{{#N}}`)
 
-Resolved cards (`resolutionStatus: "resolved"`) have these inlined for you. Unresolved cards (`resolutionStatus: "fallback"`) need manual handling — see "SQL translation from raw native to KSL" above.
+Resolved cards (`resolutionStatus: "resolved"`) have these inlined for you. Unresolved cards (`resolutionStatus: "fallback"`) need manual handling - see "SQL translation from raw native to KSL" above.
 
 ## Provenance markers
 
@@ -237,7 +237,7 @@ Source definitions must follow ktx-sl YAML conventions:
 - `columns`: all columns with correct types (`string`, `number`, `time`, `boolean`).
 - Time columns: mark with `role: time`.
 - `joins`: use correct `relationship` types (`many_to_one` for FK→PK, `one_to_many` for reverse).
-- `joins.on`: `local_column = TARGET_SOURCE.target_column` — the right side MUST include the target source name.
+- `joins.on`: `local_column = TARGET_SOURCE.target_column` - the right side MUST include the target source name.
 - `measures.expr`: aggregation expression (e.g. `"sum(amount)"`); optional `filter` for business rules; required `description`.
 
 Measure naming: descriptive `snake_case` (e.g. `total_revenue`, `avg_order_value`).
@@ -250,4 +250,4 @@ Measure naming: descriptive `snake_case` (e.g. `total_revenue`, `avg_order_value
 - If two measures differ only by a filter (e.g. `revenue` vs `paid_revenue`), they are distinct.
 - Use the card's `name` + `description` to write meaningful measure descriptions.
 - When multiple cards in a WU are near-duplicates, create ONE generalized source; the runner will skip the rest automatically.
-- Process every card in the WU — don't stop early.
+- Process every card in the WU - don't stop early.

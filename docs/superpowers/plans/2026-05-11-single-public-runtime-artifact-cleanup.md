@@ -874,7 +874,7 @@ Expected: PASS. The output includes `# fail 0`.
 
 - [ ] **Step 2: Verify stale artifact strings are gone from production/docs files**
 
-Run (scans only production and docs files, not test files — test files keep guard assertions that reference the removed strings):
+Run (scans only production and docs files, not test files - test files keep guard assertions that reference the removed strings):
 
 ```bash
 rg -n "uv', \\['build', '--package', 'ktx-sl'|uv', \\['build', '--package', 'ktx-daemon'|ktx_sl-0\\.1\\.0|ktx_daemon-0\\.1\\.0|pythonArtifactInstallArgs|pythonVerifySource|verifyPythonArtifacts|standalone Python distributions|installs the Python artifacts directly" scripts/package-artifacts.mjs scripts/release-readiness.mjs README.md examples/package-artifacts/README.md release-policy.json

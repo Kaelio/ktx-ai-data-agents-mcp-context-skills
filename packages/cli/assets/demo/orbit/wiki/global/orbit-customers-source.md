@@ -20,7 +20,7 @@ tables:
 
 **Table:** `orbit_analytics.customer`
 **Grain:** one row per signed-up customer
-**Source:** Notion — Orbit Demo Home / Data Team - Onboarding / Orbit Customers Source, last edited 2026-05-07
+**Source:** Notion - Orbit Demo Home / Data Team - Onboarding / Orbit Customers Source, last edited 2026-05-07
 
 Use this when a question needs customer identity, plan tier, signup timing, recent activity, or the standard customer joins.
 
@@ -29,7 +29,7 @@ Use this when a question needs customer identity, plan tier, signup timing, rece
 | Column | Type | Notes |
 |---|---|---|
 | `id` | number | Primary key, surrogate key |
-| `email` | string | Login email, unique — **do not use as join key** |
+| `email` | string | Login email, unique - **do not use as join key** |
 | `name` | string | Display name |
 | `country` | string | ISO 3166-1 alpha-2 code |
 | `plan_tier` | string | One of `free`, `pro`, `enterprise` |

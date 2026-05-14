@@ -1,6 +1,6 @@
 # Semantic Layer Engine
 
-Python semantic layer that generates SQL from structured JSON queries. No `from` clause — sources are inferred from fully-qualified field names (`source.column`).
+Python semantic layer that generates SQL from structured JSON queries. No `from` clause - sources are inferred from fully-qualified field names (`source.column`).
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ Use `--model` to pass a self-contained YAML model (list of source definitions) i
 ### 1. Create an inline model file
 
 ```yaml
-# /tmp/model.yaml — a YAML list of source definitions
+# /tmp/model.yaml - a YAML list of source definitions
 - name: orders
   table: public.orders
   grain: [id]
@@ -119,9 +119,9 @@ uv run python -m semantic_layer.cli --model /tmp/model.yaml \
 
 ## Coding Guidelines
 
-### Expression handling — always use sqlglot AST, never regex on SQL
+### Expression handling - always use sqlglot AST, never regex on SQL
 
-- **Parse expressions** with `sqlglot.parse_one(f"SELECT {expr}")` and walk/transform the AST. Never use `str.replace()`, `re.sub()`, or string splitting on SQL fragments — these corrupt string literals, aliases, and nested expressions.
+- **Parse expressions** with `sqlglot.parse_one(f"SELECT {expr}")` and walk/transform the AST. Never use `str.replace()`, `re.sub()`, or string splitting on SQL fragments - these corrupt string literals, aliases, and nested expressions.
 - **Quote reserved words first**: always call `quote_reserved_identifiers(expr)` before passing to `sqlglot.parse_one()`. Column/source names like `group`, `key`, `order` will fail to parse otherwise.
 - **Use the parse cache** in `parser.py` (`ExpressionParser._parse_as_select()`) for read-only AST walks. Direct `sqlglot.parse_one()` calls are fine when you need to `.transform()` the tree.
 - **Regex is fine for non-SQL tasks**: sanitizing alias names, masking string literals before parse, etc. The rule is: don't use regex to interpret SQL structure.

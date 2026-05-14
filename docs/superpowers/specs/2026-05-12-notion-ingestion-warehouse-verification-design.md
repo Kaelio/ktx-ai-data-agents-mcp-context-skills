@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-12
 **Author:** Andrey Avtomonov
-**Status:** Design — pending implementation plan
+**Status:** Design - pending implementation plan
 
 ## Background and motivation
 
@@ -16,7 +16,7 @@ A real-world inspection (project `/tmp/ktx-proj-1`) surfaced two failure modes t
 Root cause analysis (`packages/context/skills/notion_synthesize/SKILL.md`, `packages/context/src/ingest/tools/emit-unmapped-fallback.tool.ts`, `packages/context/src/wiki/tools/wiki-write.tool.ts`) showed three contributing factors:
 
 - The synthesis LLM has no verification primitive that distinguishes a real warehouse identifier from a fabricated one. `sl_discover` only finds objects already promoted into the semantic layer; raw warehouse scans (which already exist on disk under `raw-sources/<conn>/live-database/<sync>/`) are not surfaced to the LLM at all.
-- `wiki_write` performs no body-text validation — anything the LLM emits is written.
+- `wiki_write` performs no body-text validation - anything the LLM emits is written.
 - The skill prompt itself uses `orbit_analytics.customer` as a canonical example string (`SKILL.md:70`), reinforcing the same fictional name the LLM ends up emitting.
 
 Kaelio's server-side ingest WU agent (`/Users/andrey/conductor/workspaces/kaelio-main2/douala/server/src/tools/toolset-factory.service.ts`) had four verification tools that KTX dropped during the open-source extraction: `discover_data`, `entity_details`, `dictionary_search`, and `sql_execution`. The underlying connector infrastructure (`KtxScanConnector`, dialect classes, `assertReadOnlySql`, `SemanticLayerService.executeQuery`) is present in KTX, so the gap is at the tool layer, not the platform layer.
@@ -115,7 +115,7 @@ export type SupportedDriver = 'postgres'|'postgresql'|'mysql'|'sqlserver'|'snowf
 export function getDialectForDriver(driver: SupportedDriver): KtxDialect;
 ```
 
-Sync dispatch. The connectors' existing dialect classes already expose the same shape — `formatTableName(KtxTableRef)`, `quoteIdentifier(string)`, `mapToDimensionType(nativeType)`. The implementation plan introduces a minimal `KtxDialect` interface that these classes already satisfy structurally; no connector-internal changes required. Used by tools only for display-string parsing and error-message formatting; tools never construct executable SQL.
+Sync dispatch. The connectors' existing dialect classes already expose the same shape - `formatTableName(KtxTableRef)`, `quoteIdentifier(string)`, `mapToDimensionType(nativeType)`. The implementation plan introduces a minimal `KtxDialect` interface that these classes already satisfy structurally; no connector-internal changes required. Used by tools only for display-string parsing and error-message formatting; tools never construct executable SQL.
 
 ## Tool contracts
 
@@ -139,7 +139,7 @@ Type: table | Native columns: 11 | PK: account_id | FKs: parent_account_id → o
 Description: One row per customer account…
 
 Columns:
-- account_id (text, nullable=false, PK) — sample: ["acct_001","acct_002",…]
+- account_id (text, nullable=false, PK) - sample: ["acct_001","acct_002",…]
 - parent_account_id (text, nullable=true, FK → orbit_raw.accounts.account_id)
 - account_name (text, nullable=false)
 - …
@@ -147,7 +147,7 @@ Columns:
 Profile: rowCount=4321 distinctCount(account_id)=4321 nullRate(parent_account_id)=0.62
 ```
 
-When `column` is provided in a target, output is scoped to that one column. When a target doesn't resolve, output is `Not found in scan. Closest matches: …` with up to 5 candidates from `searchByName`. When the connection has no `live-database` scan, output is `No live-database scan available for connection "<name>"; run \`ktx scan\` first.` — distinct from the "not found" state.
+When `column` is provided in a target, output is scoped to that one column. When a target doesn't resolve, output is `Not found in scan. Closest matches: …` with up to 5 candidates from `searchByName`. When the connection has no `live-database` scan, output is `No live-database scan available for connection "<name>"; run \`ktx scan\` first.` - distinct from the "not found" state.
 
 Structured output: `{ resolved: TableDetail[], missing: Array<{target, candidates}>, scanAvailable: boolean }`.
 
@@ -165,14 +165,14 @@ input = {
 
 Pipeline:
 
-1. `assertReadOnlySql(sql)` — regex rejects anything starting with `insert|update|delete|merge|alter|drop|create|truncate|grant|revoke|copy|call|do|vacuum|analyze|refresh`.
-2. `limitSqlForExecution(sql, rowLimit)` — wraps as `select * from (<llm_sql>) as ktx_query_result limit N`.
+1. `assertReadOnlySql(sql)` - regex rejects anything starting with `insert|update|delete|merge|alter|drop|create|truncate|grant|revoke|copy|call|do|vacuum|analyze|refresh`.
+2. `limitSqlForExecution(sql, rowLimit)` - wraps as `select * from (<llm_sql>) as ktx_query_result limit N`.
 3. `SemanticLayerService.executeQuery(connectionName, wrappedSql)`.
 4. Format as markdown table; first ~20 rows inline; if truncated, append `… +N more rows`.
 
 Structured output: `{ headers, rows, rowCount, truncated, sql, wrappedSql }`.
 
-Connector errors surface verbatim (e.g., Postgres `relation "orbit_analytics.customer" does not exist`). That error message is the most valuable verification signal — it tells the LLM the identifier is fictional.
+Connector errors surface verbatim (e.g., Postgres `relation "orbit_analytics.customer" does not exist`). That error message is the most valuable verification signal - it tells the LLM the identifier is fictional.
 
 Refuses `connectionName` not in `allowedConnectionNames`. Each connector's driver-level read-only enforcement (Postgres read-only transaction, BigQuery query-only jobs) is a second defence under the regex gate.
 
@@ -189,9 +189,9 @@ input = {
 
 Composes three searches and groups output into three sections, omitting empty sections:
 
-1. **Wiki Pages** — `wiki_search({query, limit})`. Routing hint: *use `wiki_read(blockKey)` for full content*.
-2. **Semantic Layer Sources** — `sl_discover({query, connectionName})`. Routing hint: *use `sl_read_source(sourceName)` for the YAML, or `entity_details` for warehouse-shape details*.
-3. **Raw Warehouse Schema** — `WarehouseCatalogService.searchByName(connectionName, query, limit)`. Routing hint: *use `entity_details({connectionName, targets: [{display}]})` for full DDL + sample values*.
+1. **Wiki Pages** - `wiki_search({query, limit})`. Routing hint: *use `wiki_read(blockKey)` for full content*.
+2. **Semantic Layer Sources** - `sl_discover({query, connectionName})`. Routing hint: *use `sl_read_source(sourceName)` for the YAML, or `entity_details` for warehouse-shape details*.
+3. **Raw Warehouse Schema** - `WarehouseCatalogService.searchByName(connectionName, query, limit)`. Routing hint: *use `entity_details({connectionName, targets: [{display}]})` for full DDL + sample values*.
 
 When `sourceName` is set, delegates entirely to `sl_discover` inspect mode and skips other sections. When all three sections are empty, output is `No matches for "<query>" across wiki, semantic layer, or raw warehouse schema. Try broader terms; this concept may not exist yet.`
 
@@ -215,7 +215,7 @@ const warehouseTools = createWarehouseVerificationTools({
 // alongside emit_unmapped_fallback.
 ```
 
-`createWarehouseVerificationTools` returns `Record<string, Tool>` with three keys. The set is wired into every adapter's synthesis stage — no per-adapter opt-in.
+`createWarehouseVerificationTools` returns `Record<string, Tool>` with three keys. The set is wired into every adapter's synthesis stage - no per-adapter opt-in.
 
 ## Skill-prompt updates
 
@@ -227,12 +227,12 @@ const warehouseTools = createWarehouseVerificationTools({
 ## Identifier Verification Protocol
 
 Before writing a wiki page or SL source on any topic:
-1. `discover_data({query: "<topic>"})` — see what wikis, SL sources, and raw tables
+1. `discover_data({query: "<topic>"})` - see what wikis, SL sources, and raw tables
    already exist. Prefer updating existing pages over creating new ones.
 
 Before emitting any `schema.table` or `schema.table.column` into a wiki body,
 SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
-2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` —
+2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
    confirm the identifier resolves; inspect native types, FK/PK, and sampleValues.
 3. For literal values from the source (status codes, plan tiers): check whether
    they appear in `entity_details`' `sampleValues` for the relevant column.
@@ -241,7 +241,7 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 4. If the candidate identifier still doesn't resolve, do one of:
    (a) Use `sql_execution` with `SELECT 1 FROM <ref> LIMIT 0`. If it errors,
        the identifier is fictional.
-   (b) Wrap the identifier in `[unverified — from <rawPath>]` in the wiki body,
+   (b) Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
        citing the exact raw path that mentioned it.
    (c) When recording `emit_unmapped_fallback` with `no_physical_table`,
        include the failing probe error in `clarification`.
@@ -271,10 +271,10 @@ Two skills are deliberately excluded from updates: `ingest_triage` (read-only tr
 
 ### Cleanups beyond the four-tool addition
 
-- `notion_synthesize/SKILL.md:70` — remove `orbit_analytics.customer` (placeholder).
-- `packages/context/src/ingest/tools/emit-unmapped-fallback.tool.ts:67` — same example string in the Zod `.describe()` — replace with `<schema>.<table>`.
-- `dbt_ingest/SKILL.md:24` — fix `wiki_sl_search` and `sl_describe_table` (neither tool exists in KTX).
-- `packages/context/src/sl/tools/sl-warehouse-validation.ts:93` — inline error message references the non-existent `sl_describe_table`. Replace with `sl_read_source`.
+- `notion_synthesize/SKILL.md:70` - remove `orbit_analytics.customer` (placeholder).
+- `packages/context/src/ingest/tools/emit-unmapped-fallback.tool.ts:67` - same example string in the Zod `.describe()` - replace with `<schema>.<table>`.
+- `dbt_ingest/SKILL.md:24` - fix `wiki_sl_search` and `sl_describe_table` (neither tool exists in KTX).
+- `packages/context/src/sl/tools/sl-warehouse-validation.ts:93` - inline error message references the non-existent `sl_describe_table`. Replace with `sl_read_source`.
 
 ## Testing strategy
 
@@ -294,7 +294,7 @@ Two skills are deliberately excluded from updates: `ingest_triage` (read-only tr
 
 - Extend `packages/context/src/ingest/ingest-bundle.runner.test.ts` to verify the three new tools are present in both WU-stage and reconcile-stage tool maps and refuse out-of-scope `connectionName` values.
 - New fixture-based test: stage a small `raw-sources/<conn>/live-database/<sync>/` directory with 2 tables + 1 enrichment profile, then call each tool through the runner's tool map and assert the markdown contains the expected fields. Uses the same fake-LLM harness as `notion.adapter.test.ts`.
-- One end-to-end regression test reproducing the `orbit_analytics.customer` hallucination: a fake Notion page mentioning the fictional table is fed to the synthesis stage; the run produces a wiki page where the fictional name is wrapped in `[unverified — …]` or omitted, not promoted to `tables:` frontmatter.
+- One end-to-end regression test reproducing the `orbit_analytics.customer` hallucination: a fake Notion page mentioning the fictional table is fed to the synthesis stage; the run produces a wiki page where the fictional name is wrapped in `[unverified - …]` or omitted, not promoted to `tables:` frontmatter.
 
 ### Prompt-bundling tests
 
@@ -306,7 +306,7 @@ Extend `packages/context/src/memory/memory-runtime-assets.test.ts`:
 
 ### Performance guards
 
-`WarehouseCatalogService` caches the per-connection table list per stage (one WorkUnit's lifetime). Tests assert second call is a cache hit. No DB index for `searchByName` in this iteration — linear scan over scan artefacts is acceptable up to ~50K columns. If volume warrants it later, a follow-up PR adds a SQLite FTS index.
+`WarehouseCatalogService` caches the per-connection table list per stage (one WorkUnit's lifetime). Tests assert second call is a cache hit. No DB index for `searchByName` in this iteration - linear scan over scan artefacts is acceptable up to ~50K columns. If volume warrants it later, a follow-up PR adds a SQLite FTS index.
 
 ## Rollout
 
@@ -323,7 +323,7 @@ Skill prompts land last so they can reference the tools that already exist.
 
 ## Out of scope
 
-- **Hard write-time validation in `wiki_write` / `emit_unmapped_fallback`.** A complementary spec covers regex-based identifier validation at the write boundary. Defence-in-depth — separate concern.
+- **Hard write-time validation in `wiki_write` / `emit_unmapped_fallback`.** A complementary spec covers regex-based identifier validation at the write boundary. Defence-in-depth - separate concern.
 - **SQLite FTS index for `searchByName`.** Deferred until the linear scan benchmark fails.
 - **`raw_schema_search` as a standalone tool.** `discover_data`'s raw section covers the concept-search case.
 - **`semantic_query` in the synthesis toolset.** `semantic_query` will exist in KTX for the research/chat-time agent; it is deliberately excluded from synthesis because synthesis creates SL sources rather than queries them.

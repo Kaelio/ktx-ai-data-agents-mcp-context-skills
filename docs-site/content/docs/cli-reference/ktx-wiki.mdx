@@ -3,7 +3,9 @@ title: "ktx wiki"
 description: "List or search wiki pages."
 ---
 
-Manage wiki pages in your KTX project. Wiki pages are Markdown documents that capture business definitions, rules, and gotchas. Agents search them for context when answering questions about your data.
+List and search wiki pages in your KTX project. Wiki pages are Markdown
+documents that capture business definitions, rules, and gotchas. Agents search
+them for context when answering questions about your data.
 
 ## Command signature
 
@@ -18,22 +20,28 @@ ktx wiki <subcommand> [options]
 | `list` | List local wiki pages |
 | `search <query>` | Search local wiki pages |
 
+The current public CLI lists and searches wiki pages. Edit the Markdown files
+under `wiki/` directly, or ingest source content with `ktx ingest`, when you
+need to add or update wiki knowledge.
+
 ## Options
 
 ### `wiki list`
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--json` | Print JSON output | `false` |
 | `--user-id <id>` | Local user id | `local` |
+| `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
+| `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
 ### `wiki search`
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--json` | Print JSON output | `false` |
 | `--user-id <id>` | Local user id | `local` |
-| `--limit <number>` | Maximum search results | — |
+| `--limit <number>` | Maximum search results | - |
+| `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
+| `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
 ## Examples
 
@@ -49,12 +57,17 @@ ktx wiki search "monthly recurring revenue"
 
 # Search wiki pages as JSON
 ktx wiki search "monthly recurring revenue" --json --limit 10
+
+# Print search results as TSV
+ktx wiki search "monthly recurring revenue" --output plain
 ```
 
 ## Output
 
-Wiki commands print local wiki page listings and search results. Open the
-matching Markdown files directly when you need the full page contents.
+Wiki commands print clack-style pretty output in a TTY and TSV-style plain
+output when requested. JSON output wraps the items with a command metadata
+envelope. Open the matching Markdown files directly when you need the full page
+contents.
 
 ```json
 {

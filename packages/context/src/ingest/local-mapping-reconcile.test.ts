@@ -27,11 +27,12 @@ describe('local mapping yaml reconciliation bridge', () => {
     const project = projectWithConnections({
       'prod-metabase': {
         driver: 'metabase',
+        api_url: 'https://metabase.example.com',
         mappings: {
           databaseMappings: { '1': 'prod-warehouse' },
           syncEnabled: { '1': true },
           syncMode: 'ONLY',
-          selections: { collections: [12] },
+          selections: { collections: [12], items: [] },
           defaultTagNames: ['ktx'],
         },
       },
@@ -46,6 +47,8 @@ describe('local mapping yaml reconciliation bridge', () => {
     const project = projectWithConnections({
       'prod-looker': {
         driver: 'looker',
+        base_url: 'https://looker.example.com',
+        client_id: 'client',
         mappings: { connectionMappings: { analytics: 'prod-warehouse' } },
       },
       'prod-warehouse': { driver: 'postgres', url: 'postgresql://readonly@db.test/analytics' },

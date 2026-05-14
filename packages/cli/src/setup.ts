@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
 import {
   ktxLocalStateDbPath,
@@ -317,7 +317,7 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
     })) ?? [];
 
   return {
-    project: { path: resolvedProjectDir, ready: true, name: project.config.project },
+    project: { path: resolvedProjectDir, ready: true, name: basename(project.projectDir) || project.projectDir },
     llm,
     embeddings,
     databases: databaseIds.map((connectionId) => ({

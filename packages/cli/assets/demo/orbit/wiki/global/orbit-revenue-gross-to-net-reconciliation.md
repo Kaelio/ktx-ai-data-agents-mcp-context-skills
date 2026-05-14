@@ -12,7 +12,7 @@ sl_refs:
   - mart_revenue_daily
 ---
 
-# Revenue — Gross-to-Net Reconciliation
+# Revenue - Gross-to-Net Reconciliation
 
 **Governed metric key:** `net_revenue`
 **Owner team:** finance
@@ -25,7 +25,7 @@ sl_refs:
 net_revenue = gross_revenue - credits - refunds
 ```
 
-All amounts are in **cents** (USD only — `stg_invoices.currency` is asserted to be `USD`).
+All amounts are in **cents** (USD only - `stg_invoices.currency` is asserted to be `USD`).
 
 ## Components
 
@@ -38,12 +38,12 @@ All amounts are in **cents** (USD only — `stg_invoices.currency` is asserted t
 
 ## Intermediate model
 
-`int_revenue_components` — daily gross, credit, refund, and net revenue components.
+`int_revenue_components` - daily gross, credit, refund, and net revenue components.
 
 ## Quality Gates
 
 - `reconciliation_check` must be `true` on every row of `mart_revenue_daily`.
-- `assert_february_2026_net_revenue` — a dbt singular test covering February 2026 net revenue total.
+- `assert_february_2026_net_revenue` - a dbt singular test covering February 2026 net revenue total.
 
 ## Line Item Types (`stg_invoice_line_items`)
 

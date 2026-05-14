@@ -5,7 +5,7 @@ description: What a context layer is, why agents need one, and how KTX compares 
 
 ## The problem
 
-Give an agent access to your database and it will generate SQL. It might even produce a decent chart. But ask it a real analytics question — "what's our net revenue trend by segment?" — and things fall apart.
+Give an agent access to your database and it will generate SQL. It might even produce a decent chart. But ask it a real analytics question - "what's our net revenue trend by segment?" - and things fall apart.
 
 The agent doesn't know that `orders.amount` includes refunds and needs a status filter. It doesn't know that `customers` should join to `orders` on `customer_id`, not `id`. It doesn't know that your team stopped using `legacy_segments` six months ago, or that "enterprise" means contracts over $100k, not just big logos. It sees column names and types. It doesn't see your business.
 
@@ -17,15 +17,170 @@ Analytics engineers already know this pain. It's the same reason you write dbt t
 
 The industry has moved through three distinct approaches to getting AI and data to work together.
 
-**Wave one: database access.** Connect an LLM to a database, let it generate SQL. This works for simple lookups — "how many orders last week?" — but breaks on anything that requires business knowledge. The agent guesses at joins, invents metrics, and hallucinates table relationships. Every query is a coin flip.
+**Wave one: database access.** Connect an LLM to a database, let it generate SQL. This works for simple lookups - "how many orders last week?" - but breaks on anything that requires business knowledge. The agent guesses at joins, invents metrics, and hallucinates table relationships. Every query is a coin flip.
 
-**Wave two: semantic layers and text-to-SQL.** Add structure. Define metrics in MetricFlow or Cube, expose schemas, build text-to-SQL pipelines. This is better — the agent knows that `revenue` means `sum(amount) where status != 'refunded'` — but building and maintaining that structure by hand is manual, time-consuming, and still limited. Semantic layers define what to calculate, not why, when, or how to interpret the result. The agent can compute net revenue but doesn't know about the February refund anomaly, the segment reclassification, or the fact that `enterprise` changed definition last quarter.
+**Wave two: semantic layers and text-to-SQL.** Add structure. Define metrics in MetricFlow or Cube, expose schemas, build text-to-SQL pipelines. This is better - the agent knows that `revenue` means `sum(amount) where status != 'refunded'` - but building and maintaining that structure by hand is manual, time-consuming, and still limited. Semantic layers define what to calculate, not why, when, or how to interpret the result. The agent can compute net revenue but doesn't know about the February refund anomaly, the segment reclassification, or the fact that `enterprise` changed definition last quarter.
 
-**Wave three: agentic context.** AI is no longer just answering questions — it's generating dashboards, writing semantic definitions, proposing dbt models, creating tests and documentation. For that to work, agents need more than metric definitions. They need the full picture: business rules, known data quality issues, relationship maps, historical context, and the institutional knowledge that lives in your team's heads. They need a context layer.
+**Wave three: agentic context.** AI is no longer just answering questions - it's generating dashboards, writing semantic definitions, proposing dbt models, creating tests and documentation. For that to work, agents need more than metric definitions. They need the full picture: business rules, known data quality issues, relationship maps, historical context, and the institutional knowledge that lives in your team's heads. They need a context layer.
 
 ## What a context layer is
 
-A context layer is the infrastructure that gives agents the business knowledge they need to produce correct analytics artifacts. It includes a semantic layer — that's a critical component — but it's not the whole thing.
+A context layer is the infrastructure that gives agents the business knowledge they need to produce correct analytics artifacts. It includes a semantic layer - that's a critical component - but it's not the whole thing.
+
+<div
+  className="not-prose my-10 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="How KTX turns source systems into agent-ready context"
+>
+  <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
+    <p className="mb-1 text-xs font-semibold uppercase text-fd-primary">
+      {"How KTX works"}
+    </p>
+    <p className="max-w-3xl text-sm leading-6 text-fd-muted-foreground">
+      {"KTX pulls structured metadata and human knowledge from your analytics stack, reconciles it into reviewable files, then gives agents a trusted surface for search, SQL generation, validation, and edits."}
+    </p>
+  </div>
+
+  <div className="grid gap-0 lg:grid-cols-[1.05fr_2.1rem_0.95fr_2.1rem_1.15fr_2.1rem_0.95fr]">
+    <section className="bg-fd-background p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"Source systems"}
+      </p>
+      <div className="space-y-2">
+        <div className="border-l-2 border-fd-primary bg-fd-card px-3 py-2">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"Warehouses"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"schemas, types, row counts, constraints, query history"}
+          </p>
+        </div>
+        <div className="border-l-2 border-amber-500 bg-fd-card px-3 py-2">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"Modeling tools"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"dbt, MetricFlow, LookML"}
+          </p>
+        </div>
+        <div className="border-l-2 border-orange-500 bg-fd-card px-3 py-2">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"BI systems"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"Looker explores, Metabase questions, dashboards"}
+          </p>
+        </div>
+        <div className="border-l-2 border-slate-500 bg-fd-card px-3 py-2 dark:border-cyan-200">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"Notion and team knowledge"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"runbooks, definitions, policies, analyst notes"}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
+
+    <section className="relative bg-[#102226] p-4 text-white dark:bg-[#0b181b]">
+      <div className="absolute inset-y-0 left-0 w-1 bg-fd-primary" />
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
+        {"KTX ingest"}
+      </p>
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">{"Extract"}</p>
+          <p className="mt-0.5 text-xs leading-5 text-cyan-50/75">
+            {"adapters read metadata, files, APIs, and warehouse evidence"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm font-semibold">{"Reconcile"}</p>
+          <p className="mt-0.5 text-xs leading-5 text-cyan-50/75">
+            {"the ingest agent merges new facts with existing context"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm font-semibold">{"Verify"}</p>
+          <p className="mt-0.5 text-xs leading-5 text-cyan-50/75">
+            {"validation and provenance make each write auditable"}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
+
+    <section className="bg-fd-background p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"KTX project"}
+      </p>
+      <dl className="grid gap-2 text-sm">
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">
+            {"semantic-layer/"}
+          </dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"sources, columns, joins, grain, measures, segments, filters"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">{"wiki/"}</dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"business definitions, rules, gotchas, semantic references"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">
+            {"raw-sources/"}
+          </dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"scan artifacts, extracted metadata, relationship evidence"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">{".ktx/"}</dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"local indexes, embeddings, session state, caches"}
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
+
+    <section className="bg-fd-muted/35 p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"Agent workflows"}
+      </p>
+      <div className="space-y-2 text-sm">
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Search sources and wiki pages"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Compile trusted SQL"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Explain metrics and provenance"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Patch files, validate, open review"}
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div className="border-t border-dashed border-fd-border bg-fd-background px-5 py-3 text-sm text-fd-muted-foreground">
+    {"Reviewed agent and analyst edits flow back into the same YAML and Markdown files, so the next ingest run starts from the team's accepted context."}
+  </div>
+</div>
 
 KTX organizes context into four pillars:
 
@@ -67,7 +222,7 @@ measures:
     expr: count(id)
 ```
 
-**Wiki pages** are Markdown documents that capture business definitions, rules, and operating context — the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
+**Wiki pages** are Markdown documents that capture business definitions, rules, and operating context - the kind of context that doesn't fit in a schema definition. Pages have structured frontmatter (summary, tags, semantic layer references) and free-form content. Agents search them when they need to understand why a metric works a certain way, not just how to compute it.
 
 ```markdown
 ---
@@ -91,9 +246,9 @@ canonical revenue reporting.
 
 **Scan artifacts** are the raw output of KTX's database scanner: table and column metadata, inferred foreign key relationships (even without declared constraints), column statistics, and enrichment reports. They form the foundation that semantic sources are built on.
 
-**Provenance** is the record of how context was created and changed. Every ingestion session records a full transcript — which adapter ran, what the LLM decided, which sources were created or updated, and why. This is what makes the system auditable: you can trace any semantic source back to the ingestion decision that created it.
+**Provenance** is the record of how context was created and changed. Every ingestion session records a full transcript - which adapter ran, what the LLM decided, which sources were created or updated, and why. This is what makes the system auditable: you can trace any semantic source back to the ingestion decision that created it.
 
-Together, these four pillars give agents enough context to produce analytics artifacts that match what your team would produce — not just syntactically valid SQL, but the right query for the question.
+Together, these four pillars give agents enough context to produce analytics artifacts that match what your team would produce - not just syntactically valid SQL, but the right query for the question.
 
 ## How KTX compares
 
@@ -115,7 +270,7 @@ If you do not have a semantic layer, KTX can build an agent-native one from your
 
 ## The plain-files philosophy
 
-A KTX project is a directory of plain files. No server to run, no database to manage, no proprietary store to back up. Everything is YAML, Markdown, and SQLite — formats you can read, diff, and version-control with tools you already use.
+A KTX project is a directory of plain files. No server to run, no database to manage, no proprietary store to back up. Everything is YAML, Markdown, and SQLite - formats you can read, diff, and version-control with tools you already use.
 
 ```
 my-project/
@@ -140,7 +295,7 @@ my-project/
     └── cache/                    # Runtime cache (git-ignored)
 ```
 
-Semantic sources and wiki pages are committed to git. The SQLite database holds ephemeral state — schema ingest results, embedding indexes, session logs — and is git-ignored. If you delete it, KTX rebuilds it on the next run.
+Semantic sources and wiki pages are committed to git. The SQLite database holds ephemeral state - schema ingest results, embedding indexes, session logs - and is git-ignored. If you delete it, KTX rebuilds it on the next run.
 
 This means your analytics context travels with your code. You can fork it, branch it, review it in a PR, and merge it with the same tools you use for dbt models. There's no sync problem between a remote server and your local state. There's no migration to run. The files are the source of truth.
 

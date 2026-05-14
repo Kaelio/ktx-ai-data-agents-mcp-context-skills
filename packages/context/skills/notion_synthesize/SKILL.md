@@ -67,7 +67,7 @@ Search existing wiki pages for the same `tables:` or `sl_refs:` frontmatter and 
 - Do not create SL sources under the Notion connection just because a page mentions a warehouse, dbt, Looker, or Metabase object. Use the mapped warehouse/source connection after discovery, or emit an unmapped fallback and write wiki-only.
 - Distinguish fallback reasons precisely: if a non-Notion warehouse/dbt connection exists but `sl_discover` cannot find the named table/source, use `no_physical_table`; reserve `no_connection_mapping` for cases where there is no plausible non-Notion target connection at all.
 - If `sl_discover` resolves the table/source, do not call `emit_unmapped_fallback` for that table. Use the resolved source for `sl_refs`, overlay edits, or wiki-only documentation.
-- When calling `emit_unmapped_fallback`, pass the table or source identifier as `tableRef` (e.g. `tableRef: "<schema>.<table>"`) — the tool generates the canonical detail string from the reason code and `tableRef`. Use the optional `clarification` field only to add context that does not contradict the reason. Do not restate the reason in `clarification`.
+- When calling `emit_unmapped_fallback`, pass the table or source identifier as `tableRef` (e.g. `tableRef: "<schema>.<table>"`) - the tool generates the canonical detail string from the reason code and `tableRef`. Use the optional `clarification` field only to add context that does not contradict the reason. Do not restate the reason in `clarification`.
 
 ## Identifier Verification Protocol
 

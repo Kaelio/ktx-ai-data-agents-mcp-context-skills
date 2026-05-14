@@ -1,4 +1,3 @@
-project: orbit-relationship-verification
 connections:
   orbit:
     driver: sqlite

@@ -11,7 +11,7 @@ describe('loadLatestSlDictionaryEntries', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-sl-dictionary-profile-'));
-    project = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
+    project = await initKtxProject({ projectDir: join(tempDir, 'project') });
   });
 
   afterEach(async () => {

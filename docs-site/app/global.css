@@ -9,7 +9,7 @@
 }
 
 /* ═══════════════════════════════════════════
-   KTX Light Theme — Warm Cream & Taupe
+   KTX Light Theme - Warm Cream & Taupe
    ═══════════════════════════════════════════ */
 :root {
   --color-fd-background: #faf9f6;
@@ -42,7 +42,7 @@
 }
 
 /* ═══════════════════════════════════════════
-   KTX Dark Theme — Deep Ocean Slate
+   KTX Dark Theme - Deep Ocean Slate
    ═══════════════════════════════════════════ */
 .dark {
   --color-fd-background: #0f1719;
@@ -79,7 +79,7 @@ body {
 }
 
 /* ═══════════════════════════════════════════
-   Typography — Outfit display, Inter body
+   Typography - Outfit display, Inter body
    ═══════════════════════════════════════════ */
 h1, h2, h3, h4 {
   font-family: var(--font-display), var(--font-sans), sans-serif;
@@ -114,7 +114,7 @@ h2 {
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Code blocks — give them a subtle traffic-light feel */
+/* Code blocks - give them a subtle traffic-light feel */
 figure[data-rehype-pretty-code-figure],
 figure:has(> pre) {
   position: relative;
@@ -166,7 +166,7 @@ pre {
 }
 
 /* ═══════════════════════════════════════════
-   Code blocks — context-aware modes
+   Code blocks - context-aware modes
    ═══════════════════════════════════════════ */
 
 /* Shared wrapper base */
@@ -504,7 +504,7 @@ th {
 }
 
 /* ═══════════════════════════════════════════
-   Sidebar — Typographic sections + active rail
+   Sidebar - Typographic sections + active rail
    ═══════════════════════════════════════════ */
 #nd-sidebar {
   border-right: 1px solid var(--color-fd-border);
@@ -516,7 +516,7 @@ th {
   backdrop-filter: blur(10px);
 }
 
-/* Section folder trigger — uppercase tracked label
+/* Section folder trigger - uppercase tracked label
    Fumadocs 15 section wrappers are bare <div data-state> (no class, no id);
    content panels and other Radix collapsibles always carry a class attribute,
    so :not([class]) tightly scopes these rules to section triggers only. */
@@ -601,7 +601,7 @@ th {
 }
 
 /* ═══════════════════════════════════════════
-   Cards — refined with multi-layer shadow & lift
+   Cards - refined with multi-layer shadow & lift
    ═══════════════════════════════════════════ */
 [data-card="true"] {
   border-radius: 12px !important;
@@ -683,7 +683,7 @@ th {
 }
 
 /* ═══════════════════════════════════════════
-   Page title area — give docs pages a hero feel
+   Page title area - give docs pages a hero feel
    ═══════════════════════════════════════════ */
 [data-page-header] h1,
 article > h1:first-of-type {
@@ -724,7 +724,7 @@ article a:not([data-card]):hover {
 }
 
 /* ═══════════════════════════════════════════
-   Background atmosphere — gradient blobs (subtle)
+   Background atmosphere - gradient blobs (subtle)
    ═══════════════════════════════════════════ */
 body::before {
   content: "";
@@ -973,7 +973,7 @@ body > * {
   100% { left: 200%; }
 }
 
-/* Glow text — use sparingly on hero key phrase */
+/* Glow text - use sparingly on hero key phrase */
 .glow-text {
   position: relative;
   color: var(--color-fd-primary);

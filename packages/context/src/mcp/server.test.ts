@@ -168,7 +168,7 @@ describe('createKtxMcpServer', () => {
   it('runs MCP memory_capture against a local project memory port', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'ktx-mcp-local-memory-'));
     try {
-      const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+      const project = await initKtxProject({ projectDir: tempDir });
       const agentRunner = {
         runLoop: async ({
           toolSet,

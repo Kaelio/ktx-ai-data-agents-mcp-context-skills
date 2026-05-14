@@ -371,7 +371,7 @@ describe('local scan enrichment', () => {
         },
       },
       relationshipSettings: {
-        ...buildDefaultKtxProjectConfig('warehouse').scan.relationships,
+        ...buildDefaultKtxProjectConfig().scan.relationships,
         llmProposals: false,
         maxLlmTablesPerBatch: 40,
       },
@@ -383,7 +383,7 @@ describe('local scan enrichment', () => {
 
   it('skips relationship detection when scan relationships are disabled', async () => {
     const settings = {
-      ...buildDefaultKtxProjectConfig('warehouse').scan.relationships,
+      ...buildDefaultKtxProjectConfig().scan.relationships,
       enabled: false,
     };
     const result = await runLocalScanEnrichment({
@@ -509,7 +509,7 @@ describe('local scan enrichment', () => {
       })),
     };
     const settings = {
-      ...buildDefaultKtxProjectConfig('test').scan.relationships,
+      ...buildDefaultKtxProjectConfig().scan.relationships,
       enabled: false,
     };
 

@@ -169,7 +169,7 @@ describe('PGlite semantic-layer search prototype', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-pglite-sl-prototype-'));
-    project = await initKtxProject({ projectDir: join(tempDir, 'project'), projectName: 'warehouse' });
+    project = await initKtxProject({ projectDir: join(tempDir, 'project') });
     project.config.ingest.embeddings.dimensions = 3;
     pgliteDataDir = join(tempDir, 'pglite-search');
     port = await allocatePort();

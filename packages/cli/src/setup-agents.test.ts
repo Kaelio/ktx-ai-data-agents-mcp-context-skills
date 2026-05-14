@@ -30,7 +30,7 @@ describe('setup agents', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-agents-'));
     await mkdir(join(tempDir, '.ktx', 'agents'), { recursive: true });
-    await writeFile(join(tempDir, 'ktx.yaml'), 'project: revenue\nconnections: {}\n', 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
   });
 
   afterEach(async () => {

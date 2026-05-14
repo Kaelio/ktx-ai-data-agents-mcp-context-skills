@@ -68,7 +68,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'llm:',
         '  provider:',
         '    backend: anthropic',
@@ -109,7 +108,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'llm:',
         '  provider:',
         ...fixture.providerLines,
@@ -129,7 +127,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -162,7 +159,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -183,7 +179,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -206,7 +201,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids: []',
         'connections:',
@@ -230,7 +224,7 @@ describe('setup status', () => {
 
   it('reports agent status from the install manifest', async () => {
     await mkdir(join(tempDir, '.ktx', 'agents'), { recursive: true });
-    await writeFile(join(tempDir, 'ktx.yaml'), 'project: revenue\nconnections: {}\n', 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     await writeFile(
       join(tempDir, '.ktx/agents/install-manifest.json'),
       JSON.stringify(
@@ -256,7 +250,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -309,7 +302,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -319,7 +311,7 @@ describe('setup status', () => {
         '    url: env:DATABASE_URL',
         '  metabase:',
         '    driver: metabase',
-        '    url: env:METABASE_URL',
+        '    api_url: https://metabase.example.test',
         '    api_key_ref: env:METABASE_API_KEY',
         '    warehouse_connection_id: warehouse',
         'llm:',
@@ -370,7 +362,7 @@ describe('setup status', () => {
   });
 
   it('prints the readiness checklist for an existing project', async () => {
-    await writeFile(join(tempDir, 'ktx.yaml'), 'project: revenue\nconnections: {}\n', 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
 
     const rendered = formatKtxSetupStatus(await readKtxSetupStatus(tempDir));
 
@@ -503,7 +495,7 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    await writeFile(join(tempDir, 'ktx.yaml'), 'project: revenue\nconnections: {}\n', 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
 
     await expect(
       runKtxSetup(
@@ -589,7 +581,7 @@ describe('setup status', () => {
   });
 
   it('lets Back from new project creation return to the first setup intent menu', async () => {
-    const existingConfig = 'project: revenue\nconnections: {}\n';
+    const existingConfig = 'connections: {}\n';
     await writeFile(join(tempDir, 'ktx.yaml'), existingConfig, 'utf-8');
 
     const entryChoices = ['new-project', 'exit'];
@@ -645,7 +637,7 @@ describe('setup status', () => {
     const existingProjectDir = join(tempDir, 'existing');
     const newProjectDir = join(tempDir, 'fresh');
     await mkdir(existingProjectDir, { recursive: true });
-    const existingConfig = 'project: revenue\nconnections: {}\n';
+    const existingConfig = 'connections: {}\n';
     await writeFile(join(existingProjectDir, 'ktx.yaml'), existingConfig, 'utf-8');
 
     const projectChoices = ['custom', 'create'];
@@ -722,7 +714,7 @@ describe('setup status', () => {
     const existingProjectDir = join(tempDir, 'existing');
     const newProjectDir = join(tempDir, 'fresh');
     await mkdir(existingProjectDir, { recursive: true });
-    await writeFile(join(existingProjectDir, 'ktx.yaml'), 'project: revenue\nconnections: {}\n', 'utf-8');
+    await writeFile(join(existingProjectDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
 
     const projectChoices = ['custom', 'create'];
     const projectPrompts = {
@@ -1147,7 +1139,7 @@ describe('setup status', () => {
   });
 
   it('lets Back from the first setup step return to the entry menu instead of exiting', async () => {
-    await writeFile(join(tempDir, 'ktx.yaml'), 'project: test\nconnections: {}\n', 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     const testIo = makeIo();
 
     const entryChoices = ['setup', 'exit'];
@@ -1254,7 +1246,7 @@ describe('setup status', () => {
   it('runs sources after database setup', async () => {
     const calls: string[] = [];
     const io = makeIo();
-    await writeFile(join(tempDir, 'ktx.yaml'), ['project: revenue', 'connections: {}', ''].join('\n'), 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
 
     await expect(
       runKtxSetup(
@@ -1315,7 +1307,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -1374,7 +1365,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1430,7 +1420,7 @@ describe('setup status', () => {
   it('runs context after sources and before agents in full setup', async () => {
     const calls: string[] = [];
     const io = makeIo();
-    await writeFile(join(tempDir, 'ktx.yaml'), ['project: revenue', 'connections: {}', ''].join('\n'), 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
 
     await expect(
       runKtxSetup(
@@ -1543,7 +1533,7 @@ describe('setup status', () => {
   it('runs agent setup after context succeeds in --agents mode', async () => {
     const calls: string[] = [];
     const io = makeIo();
-    await writeFile(join(tempDir, 'ktx.yaml'), ['project: revenue', 'connections: {}', ''].join('\n'), 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
 
     await expect(
       runKtxSetup(
@@ -1596,7 +1586,7 @@ describe('setup status', () => {
       projectDir: tempDir,
       installs: [{ target: 'codex' as const, scope: 'project' as const, mode: 'cli' as const }],
     }));
-    await writeFile(join(tempDir, 'ktx.yaml'), ['project: revenue', 'connections: {}', ''].join('\n'), 'utf-8');
+    await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
 
     await expect(
       runKtxSetup(
@@ -1633,7 +1623,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids:',
         '    - warehouse',
@@ -1671,7 +1660,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids: []',
         'connections: {}',
@@ -1778,7 +1766,6 @@ describe('setup status', () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: revenue',
         'setup:',
         '  database_connection_ids: []',
         'connections: {}',

@@ -13,7 +13,7 @@ refs:
 
 ## Customer Stakeholder Needs by Role
 
-**Source:** Notion — Product & Customers, last edited 2026-05-07
+**Source:** Notion - Product & Customers, last edited 2026-05-07
 
 ---
 
@@ -26,7 +26,7 @@ These are recurring, role-specific customer needs observed across accounts. Use 
 | Role | Primary Need | Implication |
 |---|---|---|
 | **Finance** | Committed spend visibility earlier in the procurement cycle | Surface budget commitments at request approval, not at PO creation |
-| **Department leaders** | Request speed — faster time from request to approval | Reduce approval routing friction; minimize back-and-forth |
+| **Department leaders** | Request speed - faster time from request to approval | Reduce approval routing friction; minimize back-and-forth |
 | **Procurement** | Supplier file complete before the first invoice | Supplier onboarding must be finished before PO is issued, not after |
 | **Legal** | Fewer emergency reviews | Route contracts with legal implications earlier; avoid last-minute escalations |
 | **Customer Success (internal)** | Renewal risk visible before the account is already annoyed | CS needs leading indicators of dissatisfaction, not lagging ones |

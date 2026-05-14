@@ -17,7 +17,7 @@ LookML views map to SL sources, `measure:` to measures, `explore: { join: }` to 
 | `view: X { sql_always_where: <p> }` | **Standalone** with `sql: SELECT * FROM <base> WHERE <p>` | Enforcement, not opt-in |
 | `explore: { join: Y { sql_on: …; relationship: … } }` | `joins:` entry `{ to: Y, on: "<local> = Y.<col>", relationship: … }` | On the overlay or standalone |
 | `conditionally_filter` / `always_filter` | `segments: [{ name, expr }]` | Callers reference by name |
-| Manifest entry | `_schema/*.yaml` | **Never edit** — auto-imported |
+| Manifest entry | `_schema/*.yaml` | **Never edit** - auto-imported |
 
 Type map: `date`/`datetime`/`timestamp` → `time`; `yesno` → `boolean`; `number` → `number`; `string` → `string`. Ignore `drill_fields:` (UI only).
 
@@ -92,14 +92,14 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
    `sql_execution({connectionName: "warehouse", sql: "SELECT 1 FROM analytics.orders LIMIT 0"})`.
    Replace `warehouse`, `analytics`, and `orders` with the verified connection,
    schema or dataset, and table from the WorkUnit evidence.
-3. Use only those names in `sql:`, `columns:`, and `grain:`. Map each `dimension_group` to ONE `{ name: <physical_col>, type: time, role: time }` entry — never one per timeframe.
+3. Use only those names in `sql:`, `columns:`, and `grain:`. Map each `dimension_group` to ONE `{ name: <physical_col>, type: time, role: time }` entry - never one per timeframe.
 
 | LookML input | KTX `columns:` entry |
 |---|---|
 | `dimension_group: month { type: time; timeframes: [month]; sql: ${TABLE}.month_date ;; }` | `{ name: month_date, type: time, role: time }` |
-| `dimension_group: date { type: time; timeframes: [raw, date, week, month]; sql: ${TABLE}.date ;; }` | `{ name: date, type: time, role: time }` — single entry, NOT `date_raw`/`date_date`/`date_week` |
+| `dimension_group: date { type: time; timeframes: [raw, date, week, month]; sql: ${TABLE}.date ;; }` | `{ name: date, type: time, role: time }` - single entry, NOT `date_raw`/`date_date`/`date_week` |
 
-**After every `sl_write_source`**: call `sl_validate`. It runs `SELECT * FROM (<your sql:>) LIMIT 0` against the connection. If a column name was invented, the warehouse's `Unrecognized name: …` error comes back verbatim. Treat that as a hard failure — re-read the real columns with `sl_discover` and rewrite.
+**After every `sl_write_source`**: call `sl_validate`. It runs `SELECT * FROM (<your sql:>) LIMIT 0` against the connection. If a column name was invented, the warehouse's `Unrecognized name: …` error comes back verbatim. Treat that as a hard failure - re-read the real columns with `sl_discover` and rewrite.
 
 ## Provenance markers
 
@@ -110,13 +110,13 @@ When a wiki mixes LookML source prose with `sl_discover` output, tag sections:
 Customers fan out many-to-one into `accounts` via `account_id`.
 <!-- /from -->
 <!-- from: bq_schema -->
-`customers.admin_user_id` is nullable — orphan rows exist.
+`customers.admin_user_id` is nullable - orphan rows exist.
 <!-- /from -->
 ```
 
 Invisible in most renderers; lets a future pass audit provenance.
 
-## Example 1 — overlay (thin wrapper)
+## Example 1 - overlay (thin wrapper)
 
 LookML (excerpt):
 
@@ -155,7 +155,7 @@ joins:
     relationship: many_to_one
 ```
 
-## Example 2 — standalone from `derived_table`
+## Example 2 - standalone from `derived_table`
 
 ```lookml
 view: lab_results {
@@ -189,7 +189,7 @@ measures:
   - { name: avg_delta, expr: "avg(delta)" }
 ```
 
-## Example 3 — standalone with `sql_always_where`
+## Example 3 - standalone with `sql_always_where`
 
 ```lookml
 view: rpt_daily_braze_email {

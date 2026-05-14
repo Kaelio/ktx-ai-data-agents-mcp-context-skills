@@ -105,7 +105,6 @@ async function writeLiveDatabaseConfig(projectDir: string): Promise<void> {
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -123,7 +122,6 @@ async function writeDatabaseConfigWithoutIngestAdapters(projectDir: string): Pro
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -184,7 +182,7 @@ describe('local scan', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-scan-'));
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeLiveDatabaseConfig(projectDir);
     project = await loadKtxProject({ projectDir });
   });
@@ -1037,7 +1035,6 @@ describe('local scan', () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: postgres',
@@ -1393,7 +1390,6 @@ describe('local scan', () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -1425,7 +1421,6 @@ describe('local scan', () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: mysql',
@@ -1457,7 +1452,6 @@ describe('local scan', () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: clickhouse',
@@ -1492,7 +1486,6 @@ describe('local scan', () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlserver',

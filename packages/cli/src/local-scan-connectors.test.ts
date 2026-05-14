@@ -39,11 +39,10 @@ describe('createKtxCliScanConnector', () => {
   });
 
   it('creates a native sqlite connector from standalone config', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: sqlite',
@@ -61,11 +60,10 @@ describe('createKtxCliScanConnector', () => {
   });
 
   it('passes canonical BigQuery YAML scan limits through to the connector', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: bigquery',
@@ -94,12 +92,11 @@ describe('createKtxCliScanConnector', () => {
     expect(bigQueryMock.constructorInputs[0]).not.toHaveProperty('maxBytesBilled');
   });
 
-  it('throws for structural daemon-only fallback configs', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+  it('rejects daemon-only fallback driver configs at config parse time', async () => {
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    driver: duckdb',
@@ -108,19 +105,17 @@ describe('createKtxCliScanConnector', () => {
       ].join('\n'),
       'utf-8',
     );
-    const project = await loadKtxProject({ projectDir: tempDir });
 
-    await expect(createKtxCliScanConnector(project, 'warehouse')).rejects.toThrow(
-      'Connection "warehouse" uses driver "duckdb", which has no native standalone KTX scan connector',
+    await expect(loadKtxProject({ projectDir: tempDir })).rejects.toThrow(
+      /connections\.warehouse\.driver:.*Invalid discriminator value/,
     );
   });
 
-  it('throws a clear error when the connection block has no driver field', async () => {
-    await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+  it('rejects connection blocks with no driver field at config parse time', async () => {
+    await initKtxProject({ projectDir: tempDir });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
       [
-        'project: warehouse',
         'connections:',
         '  warehouse:',
         '    type: postgres',
@@ -129,10 +124,9 @@ describe('createKtxCliScanConnector', () => {
       ].join('\n'),
       'utf-8',
     );
-    const project = await loadKtxProject({ projectDir: tempDir });
 
-    await expect(createKtxCliScanConnector(project, 'warehouse')).rejects.toThrow(
-      'Connection "warehouse" has no `driver` field in ktx.yaml',
+    await expect(loadKtxProject({ projectDir: tempDir })).rejects.toThrow(
+      /connections\.warehouse\.driver:.*Invalid discriminator value/,
     );
   });
 });

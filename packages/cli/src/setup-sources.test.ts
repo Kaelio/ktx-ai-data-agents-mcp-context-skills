@@ -79,7 +79,7 @@ describe('setup sources step', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-sources-'));
     projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'sources' });
+    await initKtxProject({ projectDir });
   });
 
   afterEach(async () => {
@@ -1024,6 +1024,8 @@ describe('setup sources step', () => {
             databaseMappings: { '1': 'warehouse' },
             syncEnabled: { '1': true },
             syncMode: 'ALL',
+            selections: { collections: [], items: [] },
+            defaultTagNames: [],
           },
         },
         deps: {
@@ -1181,6 +1183,8 @@ describe('setup sources step', () => {
         databaseMappings: { '1': 'warehouse' },
         syncEnabled: { '1': true },
         syncMode: 'ALL',
+        selections: { collections: [], items: [] },
+        defaultTagNames: [],
       },
     });
     const testPrompts = prompts({

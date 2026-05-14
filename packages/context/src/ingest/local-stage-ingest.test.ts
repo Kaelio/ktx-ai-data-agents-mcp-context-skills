@@ -17,7 +17,6 @@ async function writeWarehouseConfig(projectDir: string): Promise<void> {
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -34,7 +33,6 @@ async function writeLiveDatabaseConfig(projectDir: string): Promise<void> {
   await writeFile(
     join(projectDir, 'ktx.yaml'),
     [
-      'project: warehouse',
       'connections:',
       '  warehouse:',
       '    driver: postgres',
@@ -88,7 +86,7 @@ describe('local ingest', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-local-ingest-'));
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeWarehouseConfig(projectDir);
     project = await loadKtxProject({ projectDir });
   });
@@ -574,7 +572,6 @@ describe('local ingest', () => {
       await writeFile(
         join(project.projectDir, 'ktx.yaml'),
         [
-          'project: warehouse',
           'connections:',
           '  notion-main:',
           '    driver: notion',

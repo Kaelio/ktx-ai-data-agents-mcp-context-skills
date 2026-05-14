@@ -48,7 +48,7 @@ describe('resolveKtxProjectDir', () => {
     const project = join(tempDir, 'warehouse');
     const nested = join(project, 'nested', 'deeper');
     await mkdir(nested, { recursive: true });
-    await writeFile(join(project, 'ktx.yaml'), 'project: warehouse\n', 'utf-8');
+    await writeFile(join(project, 'ktx.yaml'), '{}\n', 'utf-8');
 
     expect(resolveKtxProjectDir({ env: {}, cwd: nested })).toBe(resolve(project));
     expect(findNearestKtxProjectDir(nested)).toBe(resolve(project));

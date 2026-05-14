@@ -6,23 +6,25 @@ description: "Build or refresh KTX context from configured connections."
 `ktx ingest` builds or refreshes KTX context from configured connections.
 Database connections build schema context. Context-source connections ingest
 metadata from tools such as dbt, Looker, Metabase, MetricFlow, LookML, and
-Notion.
+Notion. The current public command is connection-centric: pass one
+`connectionId`, or pass `--all`.
 
 ## Command signature
 
 ```bash
 ktx ingest [options] [connectionId]
+ktx ingest text [options] [files...]
 ```
 
 Use a connection id to build one configured connection. Use `--all` to build
 every configured connection. Database connections run before context-source
 connections when you use `--all`.
 
-## Build options
+## `ktx ingest` Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--all` | Build every configured connection | `false` |
+| `--all` | Ingest all configured connections | `false` |
 | `--fast` | Use deterministic database schema ingest | Stored connection default, or `fast` |
 | `--deep` | Use AI-enriched database ingest | Stored connection default, or `fast` |
 | `--query-history` | Include database query-history usage patterns | Stored connection default |
@@ -30,24 +32,74 @@ connections when you use `--all`.
 | `--query-history-window-days <days>` | Query-history lookback window for this run | Stored connection default |
 | `--plain` | Print plain text output | `true` |
 | `--json` | Print JSON output | `false` |
-| `--no-input` | Disable interactive terminal input | `false` |
+| `--no-input` | Disable interactive terminal input | — |
 
 `--fast` and `--deep` are mutually exclusive. Depth flags apply only to
 database connections. Query-history flags apply only to database connections
-that support query history.
+that support query history. Query-history ingest runs after schema ingest and
+requires deep ingest readiness.
+
+When `--all` selects both databases and context sources, database ingest runs
+first, then source ingest and memory updates run for source connections.
+
+## `ktx ingest text` Options
+
+Use `ktx ingest text` to capture free-form text artifacts into KTX memory.
+Provide files, pass `--text` one or more times, or use `-` as a file argument to
+read one item from stdin.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--text <content>` | Text content to ingest; repeat for a batch | `[]` |
+| `--connection-id <connectionId>` | Optional KTX connection id for semantic-layer capture | — |
+| `--user-id <id>` | Memory user id for capture attribution | `local-cli` |
+| `--json` | Print JSON output | `false` |
+| `--fail-fast` | Stop after the first failed text item | `false` |
 
 ## Examples
 
 ```bash
+# Build one database or source connection
 ktx ingest warehouse
+
+# Force deterministic database schema ingest
 ktx ingest warehouse --fast
+
+# Force AI-enriched database ingest
 ktx ingest warehouse --deep
+
+# Include query-history usage patterns
 ktx ingest warehouse --deep --query-history
 ktx ingest warehouse --query-history-window-days 30
+
+# Build a source connection
 ktx ingest notion
+
+# Build all configured connections
 ktx ingest --all
 ktx ingest --all --deep
+
+# Capture local Markdown notes into memory
+ktx ingest text docs/revenue-notes.md --connection-id warehouse
+
+# Capture one stdin item
+printf "Refunds are excluded from net revenue." | ktx ingest text -
 ```
+
+## Output
+
+Plain output summarizes each target and the operations that ran.
+
+```text
+Ingest finished
+
+Source         Database schema  Query history  Source ingest  Memory update
+warehouse      done             done           skipped        skipped
+notion         skipped          skipped        done           done
+```
+
+Use `--json` when a script or agent needs the selected plan and per-target
+results.
 
 ## Common errors
 
@@ -57,3 +109,5 @@ ktx ingest --all --deep
 | Deep readiness is missing | `--deep` or query history needs model, embedding, and scan-enrichment configuration | Run `ktx setup` or rerun with `--fast` |
 | Query history is unsupported | The selected database driver does not support query history | Run schema ingest without query-history flags |
 | No ingest target was selected | No connection id was provided and `--all` was omitted | Run `ktx ingest <connectionId>` or `ktx ingest --all` |
+| Source options were ignored | Depth and query-history flags were supplied for a non-database source | Omit database-only flags when ingesting source connections |
+| Text ingest stops early | `--fail-fast` was used and one item failed | Fix the failed item or rerun without `--fail-fast` to collect all failures |

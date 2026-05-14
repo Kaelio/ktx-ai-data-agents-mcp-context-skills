@@ -38,8 +38,8 @@ tables:
 
 ## Key measures (SL: `mart_nrr_quarterly`)
 
-- `avg_nrr` — `avg(net_revenue_retention)` across all rows
-- `avg_nrr_enterprise` — `avg(net_revenue_retention)` filtered to `segment = 'enterprise'`
+- `avg_nrr` - `avg(net_revenue_retention)` across all rows
+- `avg_nrr_enterprise` - `avg(net_revenue_retention)` filtered to `segment = 'enterprise'`
 - `total_expansion_arr_cents`, `total_contraction_arr_cents`, `total_churned_arr_cents`
 
 ## Common query patterns

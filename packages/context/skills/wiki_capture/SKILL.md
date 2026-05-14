@@ -1,6 +1,6 @@
 ---
 name: wiki_capture
-description: KTX's knowledge base — wiki pages for durable, reusable business knowledge. Covers capture workflow for user preferences, metric definitions, organizational conventions, and cross-references between wiki pages and semantic-layer sources. Loaded by the post-turn memory-agent only. The research agent reads wiki via `wiki_read`/`wiki_search` but does not write it.
+description: KTX's knowledge base - wiki pages for durable, reusable business knowledge. Covers capture workflow for user preferences, metric definitions, organizational conventions, and cross-references between wiki pages and semantic-layer sources. Loaded by the post-turn memory-agent only. The research agent reads wiki via `wiki_read`/`wiki_search` but does not write it.
 callers: [memory_agent]
 ---
 
@@ -8,14 +8,14 @@ callers: [memory_agent]
 
 ## Role
 
-The knowledge base stores durable, reusable business knowledge for an analytics assistant. Each page is a self-contained rule, definition, or convention that answers "how should this concept be handled in this organization?" — written once and reused across chats.
+The knowledge base stores durable, reusable business knowledge for an analytics assistant. Each page is a self-contained rule, definition, or convention that answers "how should this concept be handled in this organization?" - written once and reused across chats.
 
 Scope selection is handled by the runtime:
 - When user-scoped knowledge is enabled AND the caller is a chat turn, writes go to the user's **personal** scope.
 - When the caller is an admin-driven ingest (`sourceType: 'external_ingest'`), writes go to the **global** scope.
 - When user-scoped knowledge is disabled, all writes go to the global scope.
 
-The `wiki_write` tool picks the right scope based on the session. Capture logic does not need to choose — focus on whether the content is worth capturing at all.
+The `wiki_write` tool picks the right scope based on the session. Capture logic does not need to choose - focus on whether the content is worth capturing at all.
 
 ## What to capture
 
@@ -30,8 +30,8 @@ Do NOT capture:
 - One-off requests ("answer under 100 words").
 - Temporary instructions scoped to the current chat.
 - Ad-hoc formatting preferences.
-- Information already present in the semantic layer (column names, join paths, measure formulas — those belong in SL).
-- **Query results, snapshots, or time-bounded benchmark tables.** Numbers go stale; pasting "Oct 2025: 25%, Nov 2025: 19.9%, …" creates misinformation as soon as new data lands. Reference the SL source by name (`sl_refs`) and let future query tools pull live data — the wiki captures the *rule* (definition, exclusion, segmentation), the SL source captures the *measure*, and query execution captures the *current values*.
+- Information already present in the semantic layer (column names, join paths, measure formulas - those belong in SL).
+- **Query results, snapshots, or time-bounded benchmark tables.** Numbers go stale; pasting "Oct 2025: 25%, Nov 2025: 19.9%, …" creates misinformation as soon as new data lands. Reference the SL source by name (`sl_refs`) and let future query tools pull live data - the wiki captures the *rule* (definition, exclusion, segmentation), the SL source captures the *measure*, and query execution captures the *current values*.
 - **Interpretive narrative tied to a specific snapshot** ("M1 retention degraded sharply from Dec 2025"). The observation is anchored to data that will move; the actionable convention (e.g., "always exclude in-progress cohorts") may be worth capturing on its own, but the snapshot-specific commentary is not.
 
 If nothing is worth capturing, respond without calling any tool.
@@ -40,13 +40,13 @@ If nothing is worth capturing, respond without calling any tool.
 
 1. Read the wiki index (provided in the prompt) and decide whether the turn introduces durable knowledge.
 2. **Before writing**, search for related content so cross-references are accurate:
-   - `discover_data` first when a page relates to data or SL concepts — find
+   - `discover_data` first when a page relates to data or SL concepts - find
      existing wiki pages, SL sources, and raw warehouse schema together.
-   - `wiki_search` with the topic — find related wiki pages to populate `refs`.
-   - `sl_discover` with the concept — if the page defines a metric (revenue, churn, retention, LTV, ARR, MRR, CAC, attribution, etc.), find matching SL sources or measures to populate `sl_refs`. If no matches, pass `sl_refs: []` so future readers know you checked.
+   - `wiki_search` with the topic - find related wiki pages to populate `refs`.
+   - `sl_discover` with the concept - if the page defines a metric (revenue, churn, retention, LTV, ARR, MRR, CAC, attribution, etc.), find matching SL sources or measures to populate `sl_refs`. If no matches, pass `sl_refs: []` so future readers know you checked.
 3. If updating an existing page, `wiki_read` it first. Use the returned `structured.content` or markdown body as the exact stored text for targeted replacements; current tags, refs, and sl_refs are returned in structured metadata.
 4. `wiki_write` to create or update. Prefer merging into an existing page over creating a new one.
-5. `wiki_remove` only when a page is truly obsolete — not to replace stale content (update it instead).
+5. `wiki_remove` only when a page is truly obsolete - not to replace stale content (update it instead).
 
 For bundle/external ingest, include `rawPaths` on every `wiki_write`/`wiki_remove` call with only the raw files that directly support that wiki action. This keeps ingest provenance tied to the actual source file, not every file in the WorkUnit.
 
@@ -82,7 +82,7 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 
 - **Keys** are short kebab-case topic identifiers: `leads-source-filter`, `revenue-definition`, `churn-calculation`. No namespacing, no prefixes.
 - **Summary** is a one-line hook (≤200 chars) shown in the index.
-- **Content** is concise markdown — actionable rules, not prose.
+- **Content** is concise markdown - actionable rules, not prose.
 
 ```
 ## [Topic Title]
@@ -116,8 +116,8 @@ All three fields use REPLACE semantics on update:
 
 Two modes:
 
-- **Full content** — pass `content` to rewrite the whole page. Use when the page structure needs to change.
-- **Targeted edits** — pass `replacements: [{ oldText, newText }]` to apply exact-string replacements. Use for small updates; preserves the rest of the page.
+- **Full content** - pass `content` to rewrite the whole page. Use when the page structure needs to change.
+- **Targeted edits** - pass `replacements: [{ oldText, newText }]` to apply exact-string replacements. Use for small updates; preserves the rest of the page.
 
 When editing, read the page first so the edit matches exact whitespace and indentation.
 
@@ -125,7 +125,7 @@ When editing, read the page first so the edit matches exact whitespace and inden
 
 Organization (GLOBAL) pages are read-only from a user's personal-scope session. To override a global rule for a single user, write a personal page with the **same key**. At read time the USER page wins.
 
-## Worked example — capturing a metric with cross-references
+## Worked example - capturing a metric with cross-references
 
 User says: "Going forward, the official refund rate is total refunded amount divided by total gross transaction amount."
 
@@ -133,7 +133,7 @@ User says: "Going forward, the official refund rate is total refunded amount div
 wiki_list_tags()
   → existing tags include "finance"
 wiki_search({ query: "refund revenue paid orders" })
-  → returns `revenue-definition` (related — defines paid-orders filter)
+  → returns `revenue-definition` (related - defines paid-orders filter)
 sl_discover({ query: "refund rate" })
   → returns fct_orders (score 0.08), fct_gaap_revenue (0.06)
 sl_read_source({ connectionId: "warehouse", sourceName: "fct_orders" })
@@ -155,6 +155,6 @@ Search-then-write order matters. Cross-references are part of the page's identit
 - Read existing pages before updating them.
 - Prefer merging into an existing page over creating a new one.
 - Prefer fewer, richer pages over many thin ones.
-- Write content as clear, actionable rules — not narrative prose.
+- Write content as clear, actionable rules - not narrative prose.
 - Discover cross-references via search before writing, not after.
 - If nothing is worth capturing, respond without calling any tool.

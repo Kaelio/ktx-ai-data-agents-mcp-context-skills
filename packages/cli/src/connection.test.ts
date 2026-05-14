@@ -82,7 +82,7 @@ describe('runKtxConnection', () => {
 
   it('lists configured connections without resolving secrets', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
       docs: { driver: 'notion', auth_token_ref: 'env:NOTION_TOKEN', crawl_mode: 'all_accessible' },
@@ -100,7 +100,7 @@ describe('runKtxConnection', () => {
 
   it('prints an empty-state message that points at setup instead of removed connection add', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     const io = makeIo();
 
     await expect(runKtxConnection({ command: 'list', projectDir }, io.io)).resolves.toBe(0);
@@ -111,7 +111,7 @@ describe('runKtxConnection', () => {
 
   it('tests a native connection by calling connector.testConnection (not introspect)', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       warehouse: { driver: 'sqlite' },
     });
@@ -136,7 +136,7 @@ describe('runKtxConnection', () => {
 
   it('reports the connector error and still cleans up when native testConnection fails', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       warehouse: { driver: 'sqlite' },
     });
@@ -155,7 +155,7 @@ describe('runKtxConnection', () => {
 
   it('tests a configured Metabase connection through the Metabase runtime client', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       prod_metabase: {
         driver: 'metabase',
@@ -201,7 +201,7 @@ describe('runKtxConnection', () => {
 
   it('tests a Looker connection through the Looker client', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       bi_looker: {
         driver: 'looker',
@@ -230,7 +230,7 @@ describe('runKtxConnection', () => {
 
   it('falls back to userId when Looker metadata has no display name', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       bi_looker: {
         driver: 'looker',
@@ -255,7 +255,7 @@ describe('runKtxConnection', () => {
 
   it('reports the Looker error when testConnection fails', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       bi_looker: {
         driver: 'looker',
@@ -277,7 +277,7 @@ describe('runKtxConnection', () => {
 
   it('tests a Notion connection by retrieving the bot user', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       docs: {
         driver: 'notion',
@@ -302,7 +302,7 @@ describe('runKtxConnection', () => {
 
   it('falls back to bot id when Notion bot has no name', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       docs: {
         driver: 'notion',
@@ -323,7 +323,7 @@ describe('runKtxConnection', () => {
 
   it('tests a dbt connection via testRepoConnection (success)', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     process.env.DBT_TOKEN = 'gh_token_abc'; // pragma: allowlist secret
     await writeConnections(projectDir, {
       'dbt-main': {
@@ -354,7 +354,7 @@ describe('runKtxConnection', () => {
 
   it('reports the git error when testRepoConnection fails for dbt', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       'dbt-main': {
         driver: 'dbt',
@@ -377,7 +377,7 @@ describe('runKtxConnection', () => {
 
   it('tests a LookML connection via testRepoConnection with camelCase repoUrl', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       lookml_main: {
         driver: 'lookml',
@@ -400,7 +400,7 @@ describe('runKtxConnection', () => {
 
   it('tests a MetricFlow connection via the nested metricflow block', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       mf_main: {
         driver: 'metricflow',
@@ -422,7 +422,7 @@ describe('runKtxConnection', () => {
 
   it('--all: prints a single coherent list with one row per connection', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       warehouse: { driver: 'sqlite' },
       docs: { driver: 'notion', auth_token: 'secret_token', crawl_mode: 'all_accessible' }, // pragma: allowlist secret
@@ -450,7 +450,7 @@ describe('runKtxConnection', () => {
 
   it('--all: marks failing connections, keeps passing ones, and returns non-zero', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
       warehouse: { driver: 'sqlite' },
       broken: { driver: 'sqlite' },
@@ -476,7 +476,7 @@ describe('runKtxConnection', () => {
 
   it('--all: shows an empty-state message when no connections are configured', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
+    await initKtxProject({ projectDir });
     const io = makeIo();
 
     await expect(runKtxConnection({ command: 'test-all', projectDir }, io.io)).resolves.toBe(0);
@@ -488,16 +488,18 @@ describe('runKtxConnection', () => {
 
   it('rejects unknown drivers with a helpful error', async () => {
     const projectDir = join(tempDir, 'project');
-    await initKtxProject({ projectDir, projectName: 'warehouse' });
-    await writeConnections(projectDir, {
-      mystery: { driver: 'duckdb' },
-    });
+    await initKtxProject({ projectDir });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      'connections:\n  mystery:\n    driver: duckdb\n',
+      'utf-8',
+    );
     const io = makeIo();
 
     await expect(
       runKtxConnection({ command: 'test', projectDir, connectionId: 'mystery' }, io.io),
     ).resolves.toBe(1);
-    expect(io.stderr()).toContain('uses driver "duckdb"');
-    expect(io.stderr()).toContain('Supported:');
+    expect(io.stderr()).toContain('connections.mystery.driver');
+    expect(io.stderr()).toContain('postgres');
   });
 });

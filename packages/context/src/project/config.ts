@@ -1,6 +1,7 @@
 import { KTX_MODEL_ROLES } from '@ktx/llm';
 import YAML from 'yaml';
 import * as z from 'zod';
+import { connectionConfigSchema } from './driver-schemas.js';
 
 const KTX_LLM_BACKENDS = ['none', 'anthropic', 'vertex', 'gateway'] as const;
 const KTX_EMBEDDING_BACKENDS = ['none', 'deterministic', 'openai', 'sentence-transformers'] as const;
@@ -206,12 +207,7 @@ const storageSchema = z
   })
   .describe('Storage backends and commit policy for KTX state and search indexes.');
 
-const connectionSchema = z
-  .looseObject({
-    driver: z.string().min(1).optional().describe('Connector driver identifier (e.g. "postgres", "bigquery", "snowflake").'),
-    url: z.string().optional().describe('Connection URL or DSN. Format depends on the driver; may contain environment-variable references.'),
-  })
-  .describe('A single database/connector connection entry. Additional driver-specific fields are accepted and passed through.');
+const connectionSchema = connectionConfigSchema;
 
 const agentSchema = z
   .strictObject({
@@ -242,11 +238,6 @@ const memorySchema = z
 
 const ktxProjectConfigSchema = z
   .strictObject({
-    project: z
-      .string({ error: 'ktx.yaml field "project" is required' })
-      .trim()
-      .min(1, 'ktx.yaml field "project" is required')
-      .describe('Project identifier; used in logs, ktx state files, and as the default workspace name.'),
     setup: setupSchema.optional().describe('Setup-wizard state. Written by `ktx setup`; may be omitted.'),
     connections: z
       .record(z.string(), connectionSchema)
@@ -336,8 +327,8 @@ function formatZodError(error: z.ZodError, input: unknown): string {
     .join('\n');
 }
 
-export function buildDefaultKtxProjectConfig(projectName = 'ktx-project'): KtxProjectConfig {
-  return ktxProjectConfigSchema.parse({ project: projectName });
+export function buildDefaultKtxProjectConfig(): KtxProjectConfig {
+  return ktxProjectConfigSchema.parse({});
 }
 
 export function parseKtxProjectConfig(raw: string): KtxProjectConfig {

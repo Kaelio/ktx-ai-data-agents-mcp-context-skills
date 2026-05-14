@@ -21,18 +21,18 @@ sl_refs:
 
 ## Risk Levels
 
-`low`, `medium`, `high` — derived from two signal types:
+`low`, `medium`, `high` - derived from two signal types:
 
 1. **Support ticket signals** (`stg_support_tickets`): open or pending tickets with severity `high` or `critical` increase risk.
 2. **Procurement activity signals** (`stg_purchase_requests`, `stg_purchase_orders`): recent qualifying procurement actions reduce risk.
 
 ## Intermediate Model
 
-`int_customer_health_signals` — combines open critical ticket count and recent procurement action count per account.
+`int_customer_health_signals` - combines open critical ticket count and recent procurement action count per account.
 
 ## Mart
 
-`mart_customer_health` — account-grain risk mart as of **2026-03-31**.
+`mart_customer_health` - account-grain risk mart as of **2026-03-31**.
 
 - `account_id`: dbt not_null, unique
 - `risk_level`: dbt accepted_values [low, medium, high]

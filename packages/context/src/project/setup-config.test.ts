@@ -36,7 +36,7 @@ describe('KTX setup config helpers', () => {
   });
 
   it('sets setup database connection ids without duplicates', () => {
-    const config = buildDefaultKtxProjectConfig('warehouse');
+    const config = buildDefaultKtxProjectConfig();
 
     const withDatabases = setKtxSetupDatabaseConnectionIds(config, ['warehouse', 'analytics', 'warehouse']);
 

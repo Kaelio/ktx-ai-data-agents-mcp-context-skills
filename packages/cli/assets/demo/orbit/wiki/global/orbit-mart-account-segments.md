@@ -37,10 +37,10 @@ tables:
 
 ## Key measures (SL: `mart_account_segments`)
 
-- `account_count` — `count(*)`
-- `total_contract_arr_cents` — `sum(contract_arr_cents)`
-- `active_contract_arr_cents` — `sum(contract_arr_cents)` where `contract_status = 'active'`
-- `active_contract_arr_millions` — active ARR in $M
+- `account_count` - `count(*)`
+- `total_contract_arr_cents` - `sum(contract_arr_cents)`
+- `active_contract_arr_cents` - `sum(contract_arr_cents)` where `contract_status = 'active'`
+- `active_contract_arr_millions` - active ARR in $M
 
 ## Common query patterns
 

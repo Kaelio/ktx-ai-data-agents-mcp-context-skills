@@ -3,7 +3,7 @@ title: Contributing
 description: How to contribute to KTX.
 ---
 
-KTX is an open-source project and welcomes contributions — bug fixes, new connectors, documentation improvements, and feature proposals. This page covers how to set up a development environment, navigate the repository, run tests, and submit changes.
+KTX is an open-source project and welcomes contributions - bug fixes, new connectors, documentation improvements, and feature proposals. This page covers how to set up a development environment, navigate the repository, run tests, and submit changes.
 
 ## Development setup
 
@@ -14,9 +14,9 @@ an analytics project, use the published
 
 ### Prerequisites
 
-- **Node.js 22+** and **pnpm** — for the TypeScript workspace
-- **Python 3.11+** and **uv** — for the Python semantic layer and daemon
-- **Git** — for version control
+- **Node.js 22+** and **pnpm** - for the TypeScript workspace
+- **Python 3.11+** and **uv** - for the Python semantic layer and daemon
+- **Git** - for version control
 
 ### Clone and install
 
@@ -72,12 +72,12 @@ packages/
   connector-posthog/    # PostHog connector
 
 python/
-  ktx-sl/               # Semantic layer — grain-aware query planning and SQL generation
-  ktx-daemon/           # Daemon — portable API server around the semantic layer
+  ktx-sl/               # Semantic layer - grain-aware query planning and SQL generation
+  ktx-daemon/           # Daemon - portable API server around the semantic layer
 
 examples/               # Example projects and fixtures
 scripts/                # Workspace scripts (benchmarks, verification, release)
-docs/                   # Documentation site (Fumadocs)
+docs-site/              # Documentation site (Fumadocs)
 ```
 
 All TypeScript packages are ESM (`"type": "module"`) and use `NodeNext` module resolution. The Python projects use `pyproject.toml` for dependency management.
@@ -179,17 +179,17 @@ The `package.json` should follow the pattern of existing connectors:
 
 Your connector class must implement `KtxScanConnector`, which requires:
 
-- **`id`** — a string identifier, typically `"<driver>:<connectionId>"`
-- **`driver`** — the `KtxConnectionDriver` value for your database
-- **`capabilities`** — a `KtxConnectorCapabilities` object declaring what your connector supports: `tableSampling`, `columnSampling`, `columnStats`, `readOnlySql`, `nestedAnalysis`, `eventStreamDiscovery`, `formalForeignKeys`, `estimatedRowCounts`
-- **`introspect()`** — discovers tables, columns, types, and constraints, returning a `KtxSchemaSnapshot`
+- **`id`** - a string identifier, typically `"<driver>:<connectionId>"`
+- **`driver`** - the `KtxConnectionDriver` value for your database
+- **`capabilities`** - a `KtxConnectorCapabilities` object declaring what your connector supports: `tableSampling`, `columnSampling`, `columnStats`, `readOnlySql`, `nestedAnalysis`, `eventStreamDiscovery`, `formalForeignKeys`, `estimatedRowCounts`
+- **`introspect()`** - discovers tables, columns, types, and constraints, returning a `KtxSchemaSnapshot`
 
 Optional methods for richer scanning:
 
-- **`sampleColumn()`** — sample values from a specific column
-- **`sampleTable()`** — sample rows from a table
-- **`columnStats()`** — compute column statistics
-- **`executeReadOnly()`** — execute arbitrary read-only SQL
+- **`sampleColumn()`** - sample values from a specific column
+- **`sampleTable()`** - sample rows from a table
+- **`columnStats()`** - compute column statistics
+- **`executeReadOnly()`** - execute arbitrary read-only SQL
 
 ### Step 3: Add a dialect
 
@@ -212,7 +212,7 @@ Use `packages/connector-sqlite/` as a minimal reference and `packages/connector-
 ## Code conventions
 
 - **TypeScript**: strict types, no `any`, no `as unknown as`. Use `zod` schemas for runtime validation at CLI and config boundaries. Follow the `camelCaseSchema` / `PascalCaseType` naming convention for Zod schemas and inferred types.
-- **Python**: type hints on all new code, `pathlib` over `os.path`, explicit exception types over broad `except Exception`, `logger.exception()` for caught exceptions. Use `sqlglot` for SQL parsing — never regex.
+- **Python**: type hints on all new code, `pathlib` over `os.path`, explicit exception types over broad `except Exception`, `logger.exception()` for caught exceptions. Use `sqlglot` for SQL parsing - never regex.
 - **Dependencies**: `pnpm` for Node packages (never `npm` or `bun`), `uv` for Python (never `pip`).
 - **Dead code**: remove it. Don't leave commented-out code, unused wrappers, or empty directories.
 
@@ -220,11 +220,11 @@ Use `packages/connector-sqlite/` as a minimal reference and `packages/connector-
 
 Before submitting a pull request:
 
-1. **Run the relevant checks** — at minimum, `pnpm run type-check` and `pnpm run test` for TypeScript changes, `uv run pytest -q` and `uv run pre-commit run --files [FILES]` for Python changes.
-2. **Build if you changed exports** — run `pnpm run build` to verify package exports and `dist/` expectations still align.
-3. **Keep changes focused** — one logical change per PR. Don't bundle unrelated refactors.
-4. **Follow existing patterns** — match the style and conventions of surrounding code. The codebase favors explicit over clever.
-5. **Don't commit artifacts** — `node_modules/`, `.venv/`, `dist/`, coverage output, and local databases should not be committed.
+1. **Run the relevant checks** - at minimum, `pnpm run type-check` and `pnpm run test` for TypeScript changes, `uv run pytest -q` and `uv run pre-commit run --files [FILES]` for Python changes.
+2. **Build if you changed exports** - run `pnpm run build` to verify package exports and `dist/` expectations still align.
+3. **Keep changes focused** - one logical change per PR. Don't bundle unrelated refactors.
+4. **Follow existing patterns** - match the style and conventions of surrounding code. The codebase favors explicit over clever.
+5. **Don't commit artifacts** - `node_modules/`, `.venv/`, `dist/`, coverage output, and local databases should not be committed.
 
 For larger features or architectural changes, open an issue first to discuss the approach.
 

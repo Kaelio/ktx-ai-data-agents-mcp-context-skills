@@ -12,7 +12,7 @@ sl_refs:
   - mart_procurement_activity
 ---
 
-# Procurement — Qualifying Actions & Weekly Active Requesters
+# Procurement - Qualifying Actions & Weekly Active Requesters
 
 **Governed metric key:** `weekly_active_requesters`
 **Owner team:** product

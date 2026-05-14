@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   initKtxProject,
   type KtxLocalProject,
@@ -156,7 +156,7 @@ async function persistProjectStep(project: KtxLocalProject): Promise<KtxLocalPro
 
 async function createProject(projectDir: string, deps: KtxSetupProjectDeps): Promise<KtxLocalProject> {
   const initProject = deps.initProject ?? initKtxProject;
-  const initialized = await initProject({ projectDir, projectName: basename(projectDir) || 'ktx-project' });
+  const initialized = await initProject({ projectDir });
   return await persistProjectStep(initialized);
 }
 
