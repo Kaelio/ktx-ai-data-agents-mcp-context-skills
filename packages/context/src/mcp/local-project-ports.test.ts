@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRunnerService } from '../agent/index.js';
 import { FakeSourceAdapter, type MemoryFlowReplayInput } from '../ingest/index.js';
 import { initKtxProject } from '../project/index.js';
-import { createKtxConnectorCapabilities, type KtxScanConnector, type KtxSchemaSnapshot } from '../scan/index.js';
+import {
+  createKtxConnectorCapabilities,
+  type KtxQueryResult,
+  type KtxScanConnector,
+  type KtxSchemaSnapshot,
+} from '../scan/index.js';
 import { writeLocalSlSource } from '../sl/index.js';
 import { createLocalProjectMcpContextPorts } from './local-project-ports.js';
 
@@ -60,12 +65,13 @@ describe('createLocalProjectMcpContextPorts', () => {
     };
   }
 
-  function testConnector(snapshot = testSnapshot()): KtxScanConnector {
+  function testConnector(snapshot = testSnapshot(), queryResult?: KtxQueryResult): KtxScanConnector {
     return {
       id: `test:${snapshot.connectionId}`,
       driver: snapshot.driver,
-      capabilities: createKtxConnectorCapabilities(),
+      capabilities: createKtxConnectorCapabilities({ readOnlySql: queryResult !== undefined }),
       introspect: vi.fn(async () => snapshot),
+      executeReadOnly: queryResult === undefined ? undefined : vi.fn(async () => queryResult),
       cleanup: vi.fn(async () => {}),
     };
   }
@@ -117,6 +123,94 @@ describe('createLocalProjectMcpContextPorts', () => {
       { runId: 'connection-test-warehouse' },
     );
     expect(connector.cleanup).toHaveBeenCalled();
+  });
+
+  it('executes MCP SQL only after parser-backed validation passes', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+    const connector = testConnector(testSnapshot(), {
+      headers: ['id'],
+      headerTypes: ['integer'],
+      rows: [[1]],
+      totalRows: 1,
+      rowCount: 1,
+    });
+    const createConnector = vi.fn(async () => connector);
+    const sqlAnalysis = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(),
+      validateReadOnly: vi.fn(async () => ({ ok: true, error: null })),
+    };
+    const ports = createLocalProjectMcpContextPorts(project, {
+      sqlAnalysis,
+      localScan: {
+        createConnector,
+      },
+    });
+
+    await expect(
+      ports.sqlExecution?.execute({
+        connectionId: 'warehouse',
+        sql: 'select id from public.orders',
+        maxRows: 5,
+      }),
+    ).resolves.toEqual({
+      headers: ['id'],
+      headerTypes: ['integer'],
+      rows: [[1]],
+      rowCount: 1,
+    });
+    expect(sqlAnalysis.validateReadOnly).toHaveBeenCalledWith('select id from public.orders', 'postgres');
+    expect(createConnector).toHaveBeenCalledWith('warehouse');
+    expect(connector.executeReadOnly).toHaveBeenCalledWith(
+      {
+        connectionId: 'warehouse',
+        sql: 'select id from public.orders',
+        maxRows: 5,
+      },
+      { runId: 'mcp-sql-execution' },
+    );
+    expect(connector.cleanup).toHaveBeenCalled();
+  });
+
+  it('rejects MCP SQL before connector execution when parser validation fails', async () => {
+    const project = await initKtxProject({ projectDir: tempDir, projectName: 'warehouse' });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+    const connector = testConnector(testSnapshot(), {
+      headers: ['id'],
+      rows: [[1]],
+      totalRows: 1,
+      rowCount: 1,
+    });
+    const sqlAnalysis = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(),
+      validateReadOnly: vi.fn(async () => ({
+        ok: false,
+        error: 'SQL contains read/write operation: Insert',
+      })),
+    };
+    const ports = createLocalProjectMcpContextPorts(project, {
+      sqlAnalysis,
+      localScan: {
+        createConnector: vi.fn(async () => connector),
+      },
+    });
+
+    await expect(
+      ports.sqlExecution?.execute({
+        connectionId: 'warehouse',
+        sql: 'with x as (insert into t values (1) returning *) select * from x',
+        maxRows: 1000,
+      }),
+    ).rejects.toThrow('SQL contains read/write operation: Insert');
+    expect(connector.executeReadOnly).not.toHaveBeenCalled();
   });
 
   it('triggers canonical bundle ingest and reads status, report, and replay through MCP ports', async () => {
