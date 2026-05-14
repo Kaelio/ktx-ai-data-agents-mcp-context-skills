@@ -62,6 +62,17 @@ export {
   skippedKtxScanEnrichmentSummary,
 } from './enrichment-summary.js';
 export type {
+  KtxEntityDetailsColumn,
+  KtxEntityDetailsErrorCode,
+  KtxEntityDetailsErrorResult,
+  KtxEntityDetailsInput,
+  KtxEntityDetailsRecord,
+  KtxEntityDetailsResponse,
+  KtxEntityDetailsSnapshotInfo,
+  KtxEntityDetailsTableInput,
+} from './entity-details.js';
+export { createKtxEntityDetailsService } from './entity-details.js';
+export type {
   KtxColumnSampleUpdate,
   KtxDescriptionSource,
   KtxDescriptionUpdate,
