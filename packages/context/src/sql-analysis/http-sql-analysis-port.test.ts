@@ -108,6 +108,44 @@ describe('createHttpSqlAnalysisPort', () => {
     });
   });
 
+  it('maps read-only SQL validation responses', async () => {
+    const requests: Array<{ path: string; payload: Record<string, unknown> }> = [];
+    const port = createHttpSqlAnalysisPort({
+      baseUrl: 'http://127.0.0.1:8765',
+      requestJson: async (path, payload) => {
+        requests.push({ path, payload });
+        return { ok: false, error: 'SQL contains read/write operation: Insert' };
+      },
+    });
+
+    await expect(
+      port.validateReadOnly('with x as (insert into t values (1)) select * from x', 'postgres'),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'SQL contains read/write operation: Insert',
+    });
+    expect(requests).toEqual([
+      {
+        path: '/sql/validate-read-only',
+        payload: {
+          dialect: 'postgres',
+          sql: 'with x as (insert into t values (1)) select * from x',
+        },
+      },
+    ]);
+  });
+
+  it('rejects malformed read-only validation responses', async () => {
+    const port = createHttpSqlAnalysisPort({
+      baseUrl: 'http://127.0.0.1:8765',
+      requestJson: async () => ({ ok: 'yes' }),
+    });
+
+    await expect(port.validateReadOnly('select 1', 'postgres')).rejects.toThrow(
+      'sql analysis response is missing boolean field ok',
+    );
+  });
+
   it('rejects malformed SQL batch responses instead of inventing defaults', async () => {
     const requestJson = vi.fn(async () => ({
       results: {
