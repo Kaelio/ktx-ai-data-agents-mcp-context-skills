@@ -4,8 +4,8 @@ description: "List and test configured data sources."
 ---
 
 Inspect configured connections in your KTX project. Connections define how KTX
-reaches your data warehouse, BI tools, and context sources. Use `ktx setup` to
-add, remove, or reconfigure connections.
+reaches databases, warehouses, BI tools, source projects, and knowledge
+systems. Use `ktx setup` to add, remove, or reconfigure them.
 
 ## Command signature
 
@@ -22,20 +22,12 @@ ktx connection <subcommand> [options]
 
 ## Options
 
-The `connection` command has command-level options for listing and testing
-existing connections.
+`ktx connection` uses the shared global options such as `--project-dir` and
+`--debug`. The `list` and `test` subcommands do not currently define
+command-specific options.
 
-### `connection list`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--json` | Print JSON output | `false` |
-
-### `connection test`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--json` | Print JSON output | `false` |
+Project directory resolution defaults to `KTX_PROJECT_DIR`, then the nearest
+`ktx.yaml`, then the current working directory.
 
 ## Examples
 
@@ -45,6 +37,9 @@ ktx connection list
 
 # Test a connection
 ktx connection test my-warehouse
+
+# Test a connection from outside the project
+ktx connection test my-warehouse --project-dir ./analytics
 ```
 
 ## Setup-managed connections
@@ -55,24 +50,28 @@ Metabase mapping prompts for BI-to-warehouse mappings.
 
 ## Output
 
-Commands with `--json` return machine-readable JSON suitable for scripts and
-agents.
+`ktx connection list` prints a table of configured ids and drivers.
 
-```json
-{
-  "connections": [
-    {
-      "id": "my-warehouse",
-      "driver": "postgres"
-    }
-  ]
-}
+```text
+ID            DRIVER
+my-warehouse  postgres
+```
+
+`ktx connection test <connectionId>` performs a lightweight connection probe.
+Database connections report a table count. Metabase connections report a
+database count.
+
+```text
+Connection test passed: my-warehouse
+Driver: postgres
+Tables: 42
 ```
 
 ## Common errors
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
+| No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or source connection |
 | Connection test fails | Credentials, network access, database, warehouse, or schema is invalid | Verify the same URL with the database's native client, then rerun `ktx setup` and reconfigure the connection |
 | Mapping validation fails during setup | BI database mappings do not point at valid warehouse connections | Rerun `ktx setup` and update the source mapping selections |
 | Notion page picker cannot run | The terminal is non-interactive or Notion discovery failed | Rerun interactive `ktx setup`, or use non-interactive setup flags with explicit root page ids |

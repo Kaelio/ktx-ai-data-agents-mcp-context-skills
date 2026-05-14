@@ -3,7 +3,9 @@ title: "ktx wiki"
 description: "List or search wiki pages."
 ---
 
-Manage wiki pages in your KTX project. Wiki pages are Markdown documents that capture business definitions, rules, and gotchas. Agents search them for context when answering questions about your data.
+List and search wiki pages in your KTX project. Wiki pages are Markdown
+documents that capture business definitions, rules, and gotchas. Agents search
+them for context when answering questions about your data.
 
 ## Command signature
 
@@ -17,6 +19,10 @@ ktx wiki <subcommand> [options]
 |-----------|-------------|
 | `list` | List local wiki pages |
 | `search <query>` | Search local wiki pages |
+
+The current public CLI lists and searches wiki pages. Edit the Markdown files
+under `wiki/` directly, or ingest source content with `ktx ingest`, when you
+need to add or update wiki knowledge.
 
 ## Options
 
@@ -53,8 +59,9 @@ ktx wiki search "monthly recurring revenue" --json --limit 10
 
 ## Output
 
-Wiki commands print local wiki page listings and search results. Open the
-matching Markdown files directly when you need the full page contents.
+Wiki commands print local wiki page listings and search results. Plain output
+is tab-separated. JSON output wraps the items with a command metadata envelope.
+Open the matching Markdown files directly when you need the full page contents.
 
 ```json
 {

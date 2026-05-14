@@ -3,7 +3,14 @@ title: "ktx setup"
 description: "Set up or resume a local KTX project."
 ---
 
-Interactive wizard that walks you through configuring LLM credentials, embeddings, database connections, context sources, and agent integrations. When run without flags in a directory that has no `ktx.yaml`, it launches the full guided flow. When run in an existing project, it resumes from the first incomplete step.
+`ktx setup` is the guided configuration flow for a local KTX project. It can
+create or resume `ktx.yaml`, configure LLM and embedding providers, add
+database and context-source connections, build initial context, and install
+agent integrations.
+
+When you run bare `ktx` in an interactive terminal outside any KTX project, the
+CLI starts this same setup flow. Inside an existing project, `ktx setup`
+resumes from incomplete setup state or opens the setup menu.
 
 ## Command signature
 
@@ -11,27 +18,117 @@ Interactive wizard that walks you through configuring LLM credentials, embedding
 ktx setup [options]
 ```
 
-## Options
+## Visible Options
 
-### General
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--project-dir <path>` | KTX project directory | `KTX_PROJECT_DIR`, nearest `ktx.yaml`, or cwd |
-| `--yes` | Accept safe defaults in non-interactive setup | `false` |
-| `--no-input` | Disable interactive terminal input | - |
-
-### Agent Integration
+The help output intentionally keeps setup focused on the common interactive
+flags. Automation flags are accepted by the same command and are documented
+below.
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--agents` | Install agent integration only | `false` |
-| `--target <target>` | Agent target (`claude-code`, `codex`, `cursor`, `opencode`, `universal`) | - |
-| `--global` | Install agent integration into the global target scope (Claude Code and Codex only) | `false` |
+| `--target <target>` | Agent target: `claude-code`, `codex`, `cursor`, `opencode`, or `universal` | - |
+| `--global` | Install agent integration into the global target scope for `claude-code` or `codex` | `false` |
+| `--yes` | Accept safe defaults in non-interactive setup | `false` |
+| `--no-input` | Disable interactive terminal input | - |
 
-The setup wizard is the public configuration interface. It prompts for LLM
-credentials, embeddings, database connections, context sources, query history,
-and agent integration when those values are needed.
+Use the global `--project-dir <path>` option when setup should target a
+specific directory.
+
+## Automation Options
+
+These flags are useful for repeatable setup in examples, tests, CI fixtures, and
+scripted project creation. They are not shown in `ktx setup --help`.
+
+### Project Mode
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--new` | Create a new KTX project before setup | `false` |
+| `--existing` | Use an existing KTX project | `false` |
+
+### LLM Provider
+
+| Flag | Description |
+|------|-------------|
+| `--llm-backend <backend>` | LLM backend: `anthropic` or `vertex` |
+| `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key |
+| `--anthropic-api-key-file <path>` | File containing the Anthropic API key |
+| `--anthropic-model <model>` | Anthropic model ID to validate and save |
+| `--vertex-project <project>` | Vertex AI project ID, `env:NAME`, or `file:/path` reference |
+| `--vertex-location <location>` | Vertex AI location, `env:NAME`, or `file:/path` reference |
+| `--skip-llm` | Leave LLM setup incomplete |
+
+Choose only one Anthropic credential source. Anthropic credential flags are only
+valid with the Anthropic backend; Vertex flags are only valid with the Vertex
+backend.
+
+### Embeddings
+
+| Flag | Description |
+|------|-------------|
+| `--embedding-backend <backend>` | Embedding backend: `openai` or `sentence-transformers` |
+| `--embedding-api-key-env <name>` | Environment variable containing the embedding provider API key |
+| `--embedding-api-key-file <path>` | File containing the embedding provider API key |
+| `--skip-embeddings` | Leave embedding setup incomplete |
+
+`sentence-transformers` uses the KTX-managed Python runtime. Choose only one
+embedding credential source.
+
+### Databases
+
+| Flag | Description |
+|------|-------------|
+| `--database <driver>` | Database driver to configure; repeatable. Choices: `sqlite`, `postgres`, `mysql`, `clickhouse`, `sqlserver`, `bigquery`, `snowflake` |
+| `--database-connection-id <id>` | Existing selected connection id; repeatable |
+| `--new-database-connection-id <id>` | Connection id for one new database connection |
+| `--database-url <url>` | URL, `env:NAME`, or `file:/path` for one new URL-style database connection; also used as the SQLite path |
+| `--database-schema <schema>` | Database schema or dataset to include; repeatable |
+| `--skip-databases` | Leave database setup incomplete |
+
+KTX needs at least one database connection before it can build database
+context. Use `--skip-databases` only when intentionally leaving the project
+incomplete.
+
+### Query History
+
+| Flag | Description |
+|------|-------------|
+| `--enable-query-history` | Enable query-history ingest when the selected database supports it |
+| `--disable-query-history` | Disable query-history ingest for the selected database |
+| `--query-history-window-days <number>` | Query-history lookback window |
+| `--query-history-min-executions <number>` | Minimum executions for a query-history template |
+| `--query-history-service-account-pattern <pattern>` | Query-history service-account regex; repeatable |
+| `--query-history-redaction-pattern <pattern>` | Query-history SQL-literal redaction regex; repeatable |
+
+Query history setup is supported for Postgres, BigQuery, and Snowflake. Enabling
+query history makes deep ingest readiness matter for later `ktx ingest` runs.
+
+### Context Sources
+
+| Flag | Description |
+|------|-------------|
+| `--source <type>` | Source connector type: `dbt`, `metricflow`, `metabase`, `looker`, `lookml`, or `notion` |
+| `--source-connection-id <id>` | Connection id for source setup |
+| `--source-path <path>` | Local source path for dbt, MetricFlow, or LookML |
+| `--source-git-url <url>` | Git URL for dbt, MetricFlow, or LookML |
+| `--source-branch <branch>` | Git branch for source setup |
+| `--source-subpath <path>` | Repo subpath for source setup |
+| `--source-auth-token-ref <ref>` | `env:` or `file:` credential reference for source repo auth |
+| `--source-url <url>` | Source service URL for Metabase or Looker |
+| `--source-api-key-ref <ref>` | `env:` or `file:` API key reference for Metabase or Notion |
+| `--source-client-id <id>` | Looker client id |
+| `--source-client-secret-ref <ref>` | `env:` or `file:` Looker client secret reference |
+| `--source-warehouse-connection-id <id>` | Warehouse connection id used for source mapping |
+| `--source-project-name <name>` | dbt project name override |
+| `--source-profiles-path <path>` | dbt profiles path |
+| `--source-target <target>` | dbt target or source-specific mapping target |
+| `--metabase-database-id <id>` | Metabase database id to map |
+| `--notion-crawl-mode <mode>` | Notion crawl mode: `all_accessible` or `selected_roots` |
+| `--notion-root-page-id <id>` | Notion root page id; repeatable |
+| `--skip-sources` | Mark optional source setup complete with no sources |
+
+Choose only one source location: `--source-path` or `--source-git-url`.
 
 ## Examples
 
@@ -42,14 +139,37 @@ ktx setup
 # Run setup for a specific project directory
 ktx setup --project-dir ./analytics
 
-# Install agent integration for Claude Code only
-ktx setup --agents --target claude-code
+# Script a Postgres connection that reads its URL from the environment
+ktx setup \
+  --project-dir ./analytics \
+  --no-input \
+  --skip-llm \
+  --skip-embeddings \
+  --database postgres \
+  --new-database-connection-id warehouse \
+  --database-url env:DATABASE_URL \
+  --database-schema public
 
-# Install agent integration globally for Codex
-ktx setup --agents --target codex --global
+# Enable Postgres query history while setting up a database
+ktx setup \
+  --project-dir ./analytics \
+  --database postgres \
+  --new-database-connection-id warehouse \
+  --database-url env:DATABASE_URL \
+  --enable-query-history \
+  --query-history-min-executions 5
 
-# Check setup readiness
-ktx status
+# Add a Metabase source mapped to an existing warehouse connection
+ktx setup \
+  --source metabase \
+  --source-connection-id prod_metabase \
+  --source-url https://metabase.example.com \
+  --source-api-key-ref env:METABASE_API_KEY \
+  --source-warehouse-connection-id warehouse \
+  --metabase-database-id 1
+
+# Install project-scoped agent integration for Codex
+ktx setup --agents --target codex
 ```
 
 ## Output
@@ -68,11 +188,16 @@ KTX context built: yes
 Agent integration ready: yes (codex:project)
 ```
 
+Use `ktx status` for repeatable readiness checks after setup exits.
+
 ## Common errors
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
 | Setup resumes an unexpected project | `KTX_PROJECT_DIR` or nearest `ktx.yaml` points to another directory | Pass `--project-dir <path>` explicitly |
-| Health check for model fails | Provider key or model id is invalid | Set the correct environment variable or secret file and rerun setup |
-| Setup cannot run in CI | Interactive prompts need a TTY | Run setup interactively before CI, or provide a fixture `ktx.yaml` for automated tests |
+| Setup cannot run in CI | Required values are missing and `--no-input` disables prompts | Provide the relevant automation flags or create a fixture `ktx.yaml` |
+| Provider health check fails | Provider key, model id, Vertex project, or Vertex location is invalid | Fix the `env:` or `file:` reference and rerun setup |
+| `--enable-query-history` is rejected | The selected database driver does not support query history | Use Postgres, BigQuery, or Snowflake, or rerun without query-history flags |
+| Source setup rejects location flags | Both `--source-path` and `--source-git-url` were supplied | Choose the local path or the Git URL, not both |
 | Agent integration missing | Setup skipped the agents step | Run `ktx setup --agents --target <target>` |
+| Global agent install is rejected | `--global` was used with a target other than `claude-code` or `codex` | Omit `--global`, or choose `--target claude-code` or `--target codex` |

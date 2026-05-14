@@ -3,7 +3,9 @@ title: "ktx sl"
 description: "List, search, validate, or query semantic-layer sources."
 ---
 
-Interact with your project's semantic layer. Semantic sources are YAML definitions that describe your tables, columns, measures, joins, and grain - the vocabulary agents use to generate correct SQL.
+Interact with your project's semantic layer. Semantic sources are YAML
+definitions that describe tables, columns, measures, joins, segments, and grain:
+the vocabulary agents use to generate correct SQL.
 
 ## Command signature
 
@@ -60,7 +62,12 @@ ktx sl <subcommand> [options]
 | `--include-empty` | Include empty rows | `false` |
 | `--format <format>` | Output format: `json` or `sql` | `json` |
 | `--execute` | Execute the compiled query against the database | `false` |
+| `--yes` | Install the managed Python runtime without prompting when required | `false` |
+| `--no-input` | Disable interactive managed runtime installation | - |
 | `--max-rows <n>` | Maximum rows to return when executing | - |
+
+`sl query` requires at least one `--measure` unless `--query-file` is set.
+`--query-file` should point to a JSON semantic-layer query object.
 
 ## Examples
 
@@ -113,6 +120,13 @@ ktx sl query \
   --execute \
   --max-rows 1000
 
+# Compile or execute without prompting for runtime installation
+ktx sl query \
+  --connection-id my-warehouse \
+  --measure orders.count \
+  --execute \
+  --yes
+
 # Execute a query from a JSON file
 ktx sl query \
   --connection-id my-warehouse \
@@ -123,7 +137,10 @@ ktx sl query \
 
 ## Output
 
-Semantic-layer commands return human-readable output by default. Use `--json` or `--format json` when an agent needs structured output; use `--format sql` to inspect generated SQL before execution.
+Semantic-layer list and search commands return human-readable output by
+default. Use `--json` on `list` or `search` when an agent needs structured
+output. Use `--format sql` on `query` to inspect generated SQL before
+execution, or leave `--format json` for the compiled query and optional rows.
 
 ```json
 {
@@ -145,3 +162,4 @@ Semantic-layer commands return human-readable output by default. Use `--json` or
 | Validation fails | YAML references missing columns, invalid joins, or invalid SQL expressions | Fix the source YAML and rerun `ktx sl validate` |
 | Query compile fails | Measure, dimension, filter, or segment name is invalid | Search sources with `ktx sl search`, inspect the source YAML in your project files, then retry using declared fields |
 | Execution returns too many rows | `--max-rows` is missing or too high | Add `--max-rows` with a bounded value before executing |
+| Runtime install is blocked | Query execution needs the managed Python runtime and prompts are disabled | Run `ktx dev runtime install --feature core --yes`, or rerun `ktx sl query --yes` |

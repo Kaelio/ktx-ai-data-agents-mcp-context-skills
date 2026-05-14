@@ -4,8 +4,9 @@ description: "Check KTX setup and project readiness."
 ---
 
 Run the KTX readiness doctor. Inside a KTX project, this checks setup,
-project configuration, semantic search, connections, and related diagnostics.
-Outside a project, it checks local CLI setup readiness.
+project configuration, semantic search, query history, connections, and related
+diagnostics. Outside a project, it checks local CLI setup readiness so you know
+whether `ktx setup` can run.
 
 ## Command signature
 
@@ -18,6 +19,7 @@ ktx status [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--json` | Print JSON output | `false` |
+| `-v`, `--verbose` | Show every check, including passing ones | `false` |
 | `--no-input` | Disable interactive terminal input | - |
 
 ## Examples
@@ -28,12 +30,18 @@ ktx status
 
 # Get status as JSON without interactive input
 ktx status --json --no-input
+
+# Show all checks, not only warnings and failures
+ktx status --verbose
+
+# Check a project from another directory
+ktx status --project-dir ./analytics
 ```
 
 ## Output
 
-`ktx status` prints doctor checks. Agents should use `ktx status --json --no-input`
-when they need to branch on readiness state.
+`ktx status` prints grouped doctor checks. Agents should use
+`ktx status --json --no-input` when they need to branch on readiness state.
 
 ```json
 {
@@ -56,3 +64,4 @@ when they need to branch on readiness state.
 | No KTX project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | `ktx status` runs setup checks; run from a KTX project or set `KTX_PROJECT_DIR` for project checks |
 | Project config check fails | The project directory is missing or has an invalid `ktx.yaml` | Run `ktx setup` to resume setup |
 | Semantic search check warns | Embeddings are not configured or the provider probe failed | Run `ktx setup` or inspect the check's `fix` field in JSON output |
+| Query history check warns | A database has query history enabled but the warehouse prerequisites are missing | Fix the warehouse extension, grants, or history access, then rerun `ktx status` |
