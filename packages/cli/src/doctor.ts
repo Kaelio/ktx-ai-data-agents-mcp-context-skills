@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import type { KtxConfigIssue } from '@ktx/context/project';
 import type { BuildProjectStatusOptions } from './status-project.js';
 
 const execFileAsync = promisify(execFile);
@@ -450,6 +451,50 @@ function writeReport(report: DoctorReport, outputMode: KtxDoctorOutputMode, io: 
   io.stdout.write(renderPlainReport(report, options));
 }
 
+export function renderInvalidConfigMessage(
+  projectDir: string,
+  issues: KtxConfigIssue[],
+  outputMode: KtxDoctorOutputMode,
+  io: KtxDoctorIo,
+): void {
+  if (outputMode === 'json') {
+    io.stdout.write(
+      `${JSON.stringify(
+        {
+          error: 'invalid_config',
+          projectDir,
+          issues,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+
+  const useColor = shouldUseColor(io);
+  const dim = (text: string) => styleDim(useColor, text);
+  const bold = (text: string) => styleBold(useColor, text);
+  const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
+  const abbreviated = abbreviateHome(projectDir) ?? projectDir;
+
+  const lines: string[] = [];
+  lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
+  lines.push('');
+  lines.push(`  ${status('fail', '✗')} ${bold('Config')}    ktx.yaml has ${issues.length} schema issue${issues.length === 1 ? '' : 's'}`);
+  for (const issue of issues) {
+    lines.push(`      ${status('fail', '✗')} ${issue.message}`);
+    if (issue.fix) {
+      lines.push(`        ${dim(`→ ${issue.fix}`)}`);
+    }
+  }
+  lines.push('');
+  lines.push(`  ${dim('Fix the issues in')} ${join(abbreviated, 'ktx.yaml')} ${dim('and rerun')} ${bold('ktx status')}.`);
+  lines.push('');
+
+  io.stdout.write(lines.join('\n'));
+}
+
 export function renderMissingProjectMessage(
   projectDir: string,
   outputMode: KtxDoctorOutputMode,
@@ -507,10 +552,16 @@ export async function runKtxDoctor(
         renderMissingProjectMessage(args.projectDir, args.outputMode, io);
         return 1;
       }
-      const { loadKtxProject } = await import('@ktx/context/project');
+      const { loadKtxProject, validateKtxProjectConfig } = await import('@ktx/context/project');
       const { buildProjectStatus, renderProjectStatus } = await import('./status-project.js');
+      const rawConfig = await readFile(configPath, 'utf-8');
+      const validation = validateKtxProjectConfig(rawConfig);
+      if (!validation.ok) {
+        renderInvalidConfigMessage(args.projectDir, validation.issues, args.outputMode, io);
+        return 1;
+      }
       const project = await loadKtxProject({ projectDir: args.projectDir });
-      const projectStatus = await buildProjectStatus(project, deps);
+      const projectStatus = await buildProjectStatus(project, { ...deps, configIssues: validation.issues });
       const verbose = args.verbose ?? false;
       const toolchainChecks = verbose ? await runSetupChecks() : undefined;
       if (args.outputMode === 'json') {

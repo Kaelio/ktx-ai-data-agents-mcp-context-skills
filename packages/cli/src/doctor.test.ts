@@ -324,6 +324,95 @@ describe('runKtxDoctor', () => {
     expect(parsed.projectDir).toBe(tempDir);
   });
 
+  it('prints schema issues and exits 1 when ktx.yaml fails Zod validation', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'storrage:',
+        '  state: sqlite',
+        'ingest:',
+        '  llm:',
+        '    backend: anthropic',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {},
+      ),
+    ).resolves.toBe(1);
+
+    const out = testIo.stdout();
+    expect(out).toContain('KTX status');
+    expect(out).toContain('Config');
+    expect(out).toContain('Unsupported storrage: unknown field');
+    expect(out).toContain('Unsupported ingest.llm: use top-level llm.provider');
+    expect(out).toContain('ktx.yaml');
+  });
+
+  it('emits structured JSON when ktx.yaml fails Zod validation', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      ['project: warehouse', 'storrage: {}', ''].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
+        testIo.io,
+        {},
+      ),
+    ).resolves.toBe(1);
+
+    const parsed = JSON.parse(testIo.stdout()) as {
+      error: string;
+      projectDir: string;
+      issues: Array<{ path: string; message: string }>;
+    };
+    expect(parsed.error).toBe('invalid_config');
+    expect(parsed.projectDir).toBe(tempDir);
+    expect(parsed.issues.some((issue) => issue.path === 'storrage')).toBe(true);
+  });
+
+  it('shows a Config row labelled "ktx.yaml schema valid" on the happy path', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'project: warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: sqlite',
+        '    path: ./warehouse.db',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {},
+      ),
+    ).resolves.toBe(0);
+
+    expect(testIo.stdout()).toContain('ktx.yaml schema valid');
+    delete process.env.ANTHROPIC_API_KEY;
+  });
+
   it('runs project checks against a valid ktx.yaml', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     await writeFile(

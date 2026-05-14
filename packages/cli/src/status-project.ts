@@ -1,4 +1,5 @@
 import type {
+  KtxConfigIssue,
   KtxLocalProject,
   KtxProjectConfig,
   KtxProjectConnectionConfig,
@@ -56,6 +57,12 @@ interface StorageStatus {
   gitAuthor: string;
 }
 
+interface ConfigStatus {
+  status: ProjectStatusLevel;
+  detail: string;
+  issues: KtxConfigIssue[];
+}
+
 interface WarningItem {
   message: string;
   fix?: string;
@@ -72,6 +79,7 @@ function hasOwnField(value: Record<string, unknown>, key: string): boolean {
 export interface ProjectStatus {
   projectName: string;
   projectDir: string;
+  config: ConfigStatus;
   llm: LlmStatus;
   embeddings: EmbeddingsStatus;
   storage: StorageStatus;
@@ -610,12 +618,26 @@ function buildVerdict(
 export interface BuildProjectStatusOptions {
   env?: NodeJS.ProcessEnv;
   postgresQueryHistoryProbe?: PostgresQueryHistoryProbe;
+  configIssues?: KtxConfigIssue[];
+}
+
+function buildConfigStatus(issues: KtxConfigIssue[] | undefined): ConfigStatus {
+  const list = issues ?? [];
+  if (list.length === 0) {
+    return { status: 'ok', detail: 'ktx.yaml schema valid', issues: [] };
+  }
+  return {
+    status: 'warn',
+    detail: `${list.length} issue${list.length === 1 ? '' : 's'} in ktx.yaml`,
+    issues: list,
+  };
 }
 
 export async function buildProjectStatus(project: KtxLocalProject, options: BuildProjectStatusOptions = {}): Promise<ProjectStatus> {
   const env = options.env ?? process.env;
   const config = project.config;
 
+  const configStatus = buildConfigStatus(options.configIssues);
   const llm = buildLlmStatus(config.llm, env);
   const embeddings = buildEmbeddingsStatus(config.ingest.embeddings, env);
   const storage = buildStorageStatus(config);
@@ -630,6 +652,7 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
   return {
     projectName: config.project,
     projectDir: project.projectDir,
+    config: configStatus,
     llm,
     embeddings,
     storage,
@@ -719,6 +742,13 @@ export function renderProjectStatus(status: ProjectStatus, options: RenderProjec
   lines.push(`  ${label('Embeddings')}   ${embedDetail}  ${sym(status.embeddings.status)} ${dim(status.embeddings.detail)}`);
 
   lines.push(`  ${label('Storage')}   ${dim(`${status.storage.state} (state) · ${status.storage.search} (search)`)}`);
+  lines.push(`  ${label('Config')}   ${sym(status.config.status)} ${dim(status.config.detail)}`);
+  if (status.config.issues.length > 0) {
+    for (const issue of status.config.issues) {
+      lines.push(`      ${color('warn', SYMBOL.warn)} ${issue.message}`);
+      if (issue.fix) lines.push(`        ${dim(`→ ${issue.fix}`)}`);
+    }
+  }
   lines.push('');
 
   // Connections

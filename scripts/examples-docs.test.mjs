@@ -50,8 +50,8 @@ describe('standalone example docs', () => {
       config,
       /path: \.\.\/\.\.\/packages\/context\/test\/fixtures\/relationship-benchmarks\/orbit_style_product_no_declared_constraints\/data\.sqlite/,
     );
-    assert.match(config, /llm_proposals: false/);
-    assert.match(config, /validation_required_for_manifest: true/);
+    assert.match(config, /llmProposals: false/);
+    assert.match(config, /validationRequiredForManifest: true/);
   });
 
   it('documents the Postgres historic SQL smoke example', async () => {
