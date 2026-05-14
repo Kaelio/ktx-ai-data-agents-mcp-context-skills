@@ -1,295 +1,341 @@
 ---
 title: Writing Context
-description: Write and refine semantic sources and wiki pages.
+description: Edit semantic sources and wiki pages so agents use your business logic.
 ---
 
-After building context through scanning and ingestion, you'll want to refine it - edit semantic sources to match your business logic, add wiki pages that capture tribal knowledge, and query your data through the semantic layer to verify everything works.
+KTX context is meant to be edited. Ingest gives you a grounded first draft, then
+you refine source YAML and wiki Markdown until agents can answer data questions
+with the same definitions your team uses.
 
-## Agent workflow summary
+Use this guide when you are adding measures, fixing joins, documenting business
+rules, or reviewing context changes made by an agent.
 
-Agents should refine context in this order:
+## Editing workflow
 
-1. `ktx sl list --json` - discover available sources and connection ids.
-2. `ktx sl search <query> --json` - find source candidates for a concept.
-3. Edit the source YAML directly in `semantic-layer/<connection-id>/`.
-4. `ktx sl validate <source> --connection-id <id>` - verify columns, joins, and table references.
-5. `ktx sl query ... --format sql` - compile a representative query without executing it.
-6. `ktx wiki search ...` - check business context captured by ingest or memory.
+Use this order for most context changes:
 
-## Semantic Sources
+1. Discover existing context.
 
-Semantic sources are YAML files that describe your tables, columns, measures, and joins. They're the core of the context layer - the structured definitions that agents use to generate correct SQL.
+   ```bash
+   ktx sl list --json
+   ktx sl search "revenue" --json
+   ktx wiki search "revenue recognition" --json --limit 10
+   ```
 
-### Listing sources
+2. Edit the smallest relevant files under `semantic-layer/<connection-id>/` or
+   `wiki/`.
+3. Validate semantic source changes.
 
-```bash
-# List all sources across connections
-ktx sl list
+   ```bash
+   ktx sl validate orders --connection-id warehouse
+   ```
 
-# List sources for a specific connection
-ktx sl list --connection-id my-postgres
+4. Compile a representative query before executing it.
 
-# Output as JSON
-ktx sl list --json
+   ```bash
+   ktx sl query \
+     --connection-id warehouse \
+     --measure orders.total_revenue \
+     --dimension orders.created_date \
+     --format sql
+   ```
+
+5. Search again using likely user wording to confirm the new context is
+   discoverable.
+
+## Semantic sources
+
+Semantic sources are YAML files that describe queryable entities. A source is
+usually a table, but it can also point at a custom SQL expression. Sources
+define the vocabulary agents use for measures, dimensions, segments, joins, and
+grain-aware query planning.
+
+Source files live at:
+
+```text
+semantic-layer/<connection-id>/<source-name>.yaml
 ```
 
-### Searching sources
-
-```bash
-ktx sl search "revenue" --connection-id my-postgres --json
-```
-
-Search returns ranked source summaries. To inspect or edit a source, open the
-YAML file under `semantic-layer/<connection-id>/`.
-
-### The source schema
-
-A semantic source defines a single queryable entity - usually a table or a SQL expression. Here's a fully annotated example:
+### Minimal source
 
 ```yaml
 name: orders
-description: Customer orders with line-item totals
-table: public.orders          # or use `sql:` for a custom SQL expression
+description: Customer orders with booked revenue.
+table: public.orders
 grain:
-  - order_id                  # columns that uniquely identify a row
+  - order_id
+columns:
+  - name: order_id
+    type: string
+    description: Unique order identifier.
+  - name: order_date
+    type: time
+    role: time
+    description: Date the order was placed.
+  - name: total_amount
+    type: number
+    description: Booked order value in USD.
+measures:
+  - name: total_revenue
+    expr: SUM(total_amount)
+    description: Sum of booked order value before refunds.
+```
+
+### Full source shape
+
+```yaml
+name: orders
+description: Customer orders with line-item totals.
+table: public.orders
+grain:
+  - order_id
 
 columns:
   - name: order_id
-    type: string              # string | number | time | boolean
-    description: Unique order identifier
+    type: string
+    description: Unique order identifier.
 
   - name: order_date
     type: time
-    role: time                # marks this as the default time dimension
-    description: Date the order was placed
+    role: time
+    description: Date the order was placed.
 
   - name: status
     type: string
-    visibility: public        # public (default) | internal | hidden
-    description: Current order status
+    visibility: public
+    description: Current order status.
 
   - name: _etl_loaded_at
     type: time
-    visibility: hidden        # hidden columns are excluded from agent queries
-    description: Internal ETL timestamp
+    visibility: hidden
+    description: Internal load timestamp.
 
   - name: total_amount
     type: number
-    description: Order total in USD
+    description: Order total in USD.
 
 measures:
   - name: total_revenue
     expr: SUM(total_amount)
-    description: Sum of all order values
+    description: Sum of all order values.
   - name: order_count
     expr: COUNT(DISTINCT order_id)
-    description: Number of distinct orders
+    description: Number of distinct orders.
   - name: avg_order_value
     expr: AVG(total_amount)
-    description: Average order value
+    description: Average booked order value.
   - name: high_value_revenue
     expr: SUM(total_amount)
     filter: total_amount > 100
-    description: Revenue from orders over $100
+    description: Revenue from orders over $100.
 
 segments:
-  - name: us_orders
-    expr: country = 'US'
-    description: Orders from US customers
+  - name: completed_orders
+    expr: status = 'completed'
+    description: Orders that completed fulfillment.
 
 joins:
   - to: customers
     on: orders.customer_id = customers.customer_id
-    relationship: many_to_one   # many_to_one | one_to_many | one_to_one
+    relationship: many_to_one
   - to: order_items
     on: orders.order_id = order_items.order_id
     relationship: one_to_many
-    alias: items                # optional alias for the joined source
+    alias: items
 ```
 
-Key fields:
+### Source fields
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Source identifier (lowercase, underscores) |
-| `table` or `sql` | Yes | Database table or custom SQL expression (exactly one) |
-| `grain` | Yes | Columns that define row uniqueness |
-| `columns` | No | Column definitions with type, role, visibility |
-| `measures` | No | Aggregation expressions (SUM, COUNT, AVG, etc.) |
-| `joins` | No | Relationships to other sources |
-| `segments` | No | Named filter conditions |
-| `inherits_columns_from` | No | Inherit column metadata from a manifest entry |
+| `name` | Yes | Source identifier. Use lowercase words and underscores. |
+| `table` or `sql` | Yes | Database table or custom SQL expression. Use exactly one. |
+| `grain` | Yes | Columns that uniquely identify a row at the source grain. |
+| `columns` | No | Column definitions with type, role, visibility, and descriptions. |
+| `measures` | No | Aggregation expressions such as `SUM`, `COUNT`, and `AVG`. |
+| `segments` | No | Named predicates agents can reuse. |
+| `joins` | No | Relationships to other semantic sources. |
+| `inherits_columns_from` | No | Inherit column metadata from a manifest entry. |
 
-Source component fields:
+### Component fields
 
 | Component | Field | Required | Description |
 |-----------|-------|----------|-------------|
-| Column | `name` | Yes | Column identifier as used in SQL expressions |
-| Column | `type` | Yes | Agent-facing type: `string`, `number`, `time`, or `boolean` |
-| Column | `role` | No | Special role such as `time` for default time dimensions |
-| Column | `visibility` | No | `public`, `internal`, or `hidden` |
-| Column | `description` | Strongly recommended | Human-readable business meaning |
-| Measure | `name` | Yes | Queryable metric name |
-| Measure | `expr` | Yes | SQL aggregation expression at the source grain |
-| Measure | `filter` | No | SQL predicate applied only to this measure |
-| Measure | `description` | Strongly recommended | Definition agents can cite and compare |
-| Segment | `name` | Yes | Reusable filter name |
-| Segment | `expr` | Yes | SQL predicate for the segment |
-| Join | `to` | Yes | Target semantic source name |
-| Join | `on` | Yes | SQL join condition using source names or aliases |
-| Join | `relationship` | Yes | `many_to_one`, `one_to_many`, or `one_to_one` |
-| Join | `alias` | No | Query alias for repeated or clearer joins |
+| Column | `name` | Yes | Column identifier used in SQL expressions. |
+| Column | `type` | Yes | Agent-facing type: `string`, `number`, `time`, or `boolean`. |
+| Column | `role` | No | Special role such as `time` for default time dimensions. |
+| Column | `visibility` | No | `public`, `internal`, or `hidden`. |
+| Column | `description` | Strongly recommended | Business meaning and usage notes. |
+| Measure | `name` | Yes | Queryable metric name. |
+| Measure | `expr` | Yes | SQL aggregation expression at the source grain. |
+| Measure | `filter` | No | SQL predicate applied only to this measure. |
+| Measure | `description` | Strongly recommended | Definition agents can cite and compare. |
+| Segment | `name` | Yes | Reusable filter name. |
+| Segment | `expr` | Yes | SQL predicate for the segment. |
+| Join | `to` | Yes | Target semantic source name. |
+| Join | `on` | Yes | SQL join condition using source names or aliases. |
+| Join | `relationship` | Yes | `many_to_one`, `one_to_many`, or `one_to_one`. |
+| Join | `alias` | No | Query alias for repeated or clearer joins. |
 
-Column visibility controls what agents see:
+### Visibility
 
-| Visibility | Behavior |
-|------------|----------|
-| `public` | Included in agent queries and listings (default) |
-| `internal` | Available for joins and measures but not shown to agents |
-| `hidden` | Excluded entirely - useful for ETL columns |
+| Visibility | Agent behavior |
+|------------|----------------|
+| `public` | Included in listings and available for agent queries. |
+| `internal` | Available for joins and measures, but not highlighted to agents. |
+| `hidden` | Excluded from agent-facing context. Use for ETL fields and sensitive internals. |
 
-### Editing a source
+## Measures
 
-Edit source files directly. They live at
-`semantic-layer/<connection-id>/<source-name>.yaml` in your project directory.
+Good measures have precise names, SQL expressions at the correct grain, and
+descriptions that say what is included and excluded.
 
-### Validating sources
-
-Validation checks a source definition against the actual database schema:
-
-```bash
-ktx sl validate orders --connection-id my-postgres
+```yaml
+measures:
+  - name: net_revenue
+    expr: SUM(total_amount - refunded_amount)
+    filter: status = 'completed'
+    description: Completed order revenue after refunds, excluding cancelled orders.
 ```
 
-This catches mismatches - columns that don't exist in the table, type mismatches, invalid join targets - before an agent tries to use the source.
+Prefer one canonical measure plus wiki synonyms over several nearly identical
+measures. If your team uses multiple definitions, document the distinction in a
+wiki page and link it with `sl_refs`.
 
-### Querying
+## Joins and grain
 
-The semantic layer compiles your measures and dimensions into SQL, optionally executing it against the database:
+`grain` and `relationship` prevent agents from producing double-counted SQL.
+State the row grain even when it seems obvious.
+
+```yaml
+grain:
+  - order_id
+joins:
+  - to: customers
+    on: orders.customer_id = customers.customer_id
+    relationship: many_to_one
+```
+
+Use `many_to_one` for dimensions such as customer, account, product, or plan.
+Use `one_to_many` only when the target can fan out the source rows, such as
+orders to order items.
+
+## Validate and query
+
+Validation checks source YAML against the live database schema:
 
 ```bash
-# Compile a query to SQL
+ktx sl validate orders --connection-id warehouse
+```
+
+It catches missing columns, invalid join targets, and table-reference problems
+before an agent relies on the source.
+
+Compile a query to inspect generated SQL:
+
+```bash
 ktx sl query \
-  --connection-id my-postgres \
-  --measure total_revenue \
-  --measure order_count \
-  --dimension "order_date" \
-  --filter "status = 'completed'" \
-  --order-by order_date:desc \
+  --connection-id warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.order_date \
+  --filter "orders.status = 'completed'" \
+  --order-by orders.order_date:desc \
   --limit 10 \
   --format sql
 ```
 
-This outputs the compiled SQL without executing it. To run the query:
+Execute only when you need live rows:
 
 ```bash
-# Execute and return results
 ktx sl query \
-  --connection-id my-postgres \
-  --measure total_revenue \
-  --dimension "order_date" \
+  --connection-id warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.status \
   --execute \
   --max-rows 100
 ```
 
-Query flags:
+## Wiki pages
 
-| Flag | Description |
-|------|-------------|
-| `--measure <name>` | Measure to query (repeatable, at least one required) |
-| `--dimension <name>` | Dimension to group by (repeatable) |
-| `--filter <expr>` | Filter expression (repeatable) |
-| `--segment <name>` | Named segment to apply (repeatable) |
-| `--order-by <field[:dir]>` | Sort field, optionally with `:asc` or `:desc` (repeatable) |
-| `--limit <n>` | Maximum rows in the compiled query |
-| `--format <mode>` | Output format: `json` (default) or `sql` |
-| `--execute` | Execute the query against the database |
-| `--max-rows <n>` | Maximum rows to return when executing |
-| `--include-empty` | Include empty/null rows in results |
+Wiki pages capture business context that does not belong in a single source
+file: metric policies, dashboard caveats, company vocabulary, data freshness,
+known issues, and source-of-truth notes.
 
-The query planner is grain-aware - it understands the cardinality of joins and avoids chasm traps (double-counting caused by many-to-many fan-outs). When you query measures that span multiple sources, KTX generates sub-queries at the correct grain before joining.
+Wiki files live under:
 
-### Workflow: edit and validate a source
-
-1. Open `semantic-layer/my-postgres/orders.yaml`.
-2. Edit the file to add columns, measures, joins, or descriptions.
-3. `ktx sl validate orders --connection-id my-postgres` - check the definition against the live schema.
-4. `ktx sl query --connection-id my-postgres --measure total_revenue --dimension order_date --format sql` - compile a representative query.
-
-If validation fails, fix the YAML before asking an agent to use the source. Common validation failures are missing columns, invalid join targets, and measure expressions that reference fields outside the source.
-
-## Wiki Pages
-
-Wiki pages are Markdown files that capture business context - definitions, rules, gotchas, and anything an agent needs to understand beyond what the schema tells it.
-
-### What they are
-
-When an agent asks "what counts as an active user?" or "why do revenue numbers differ between the dashboard and the SQL query?", the answer isn't in the schema. It's tribal knowledge that lives in Slack threads, Notion pages, or someone's head. Wiki pages make that context searchable and available to agents.
-
-### Organization
-
-Wiki pages are organized by scope:
-
-```
+```text
 wiki/
-├── global/                          # Cross-cutting definitions
-│   ├── order-status-definitions.md
-│   ├── revenue-recognition-rules.md
-│   └── data-freshness-sla.md
-└── user/
-    └── local/                       # User-scoped context
-        ├── schema-conventions.md
-        └── known-data-issues.md
+  global/
+  user/<user-id>/
 ```
 
-- **Global pages** apply across all connections - business definitions, metric standards, company terminology.
-- **User-scoped pages** are private to a user ID - personal notes, local gotchas, or context you do not want shared globally.
+Use global pages for shared business rules. Use user-scoped pages for local
+notes, personal conventions, or context that should not be shared broadly.
 
-### Editing pages
+### Wiki page example
 
-Create and edit wiki pages directly as Markdown files in the `wiki/`
-directory. Ingest and memory capture also create these pages automatically.
+```markdown
+---
+summary: Revenue recognition rules for finance reporting.
+tags: [revenue, finance, reporting]
+sl_refs: [orders]
+external_refs:
+  - type: notion
+    id: finance-revenue-policy
+---
 
-Wiki page fields:
+## Recognized Revenue
+
+Recognized revenue includes completed orders after refunds. It excludes
+cancelled orders, test orders, implementation fees, and tax.
+
+Finance reporting uses order completion date, not invoice creation date.
+```
+
+Useful frontmatter:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| Key | Yes | Stable page identifier used as the Markdown filename |
-| Summary | Yes | Short text shown in search results |
-| Content | Yes | Full Markdown business context |
-| Scope | No | `global` for shared context or `user` for user-scoped notes |
-| Tags | No | Search and organization labels |
-| External refs | No | Links or identifiers for source-of-truth systems |
-| Semantic-layer refs | No | Source names the page explains or constrains |
+| `summary` | Yes | Short text shown in search results. |
+| `tags` | No | Business terms and synonyms that improve search. |
+| `sl_refs` | No | Semantic source names the page explains or constrains. |
+| `external_refs` | No | Source-of-truth system links or ids. |
 
-### Listing pages
+## Add searchable business context
+
+1. Search first.
+
+   ```bash
+   ktx wiki search "active customer definition" --json --limit 10
+   ```
+
+2. If no page covers the rule, create or edit a Markdown file under
+   `wiki/global/`.
+3. Write a compact `summary` with the wording users are likely to ask.
+4. Add tags for synonyms and related business areas.
+5. Add `sl_refs` for relevant semantic sources.
+6. Search again with a user-like phrase.
+
+## Review context changes
+
+Before accepting agent-written context:
 
 ```bash
-ktx wiki list
+git diff -- semantic-layer wiki
+ktx sl validate orders --connection-id warehouse
+ktx sl search "revenue" --json
+ktx wiki search "revenue recognition" --json --limit 10
 ```
 
-### Searching
-
-```bash
-ktx wiki search "revenue recognition"
-```
-
-Search uses both full-text matching and semantic similarity - it finds relevant pages even when the exact terms don't match. Agents call this automatically when they need business context to answer a question.
-
-### Workflow: add searchable business context
-
-1. Search first: `ktx wiki search "order status definitions"`.
-2. If no page already covers the rule, create or edit a Markdown file under `wiki/global/`.
-3. Include concise frontmatter; agents see the summary before loading full content.
-4. Add `tags` values for the business area and `sl_refs` values for related semantic sources.
-5. Search again with the user's likely wording to confirm the page is discoverable.
+Check that definitions are specific, hidden columns stay hidden, joins have
+explicit relationships, and measures compile into the expected SQL.
 
 ## Common errors
 
-| Error or symptom | Likely cause | Recovery |
-|------------------|--------------|----------|
-| `ktx sl validate` reports a missing column | YAML references a column that is absent from the scanned table | Run a fresh scan or update the YAML to match the warehouse schema |
-| Query compilation double-counts a measure | Join relationship or grain is missing or wrong | Add `grain` and explicit `relationship` values, then validate and recompile |
-| Agent cannot find a metric | Measure name or description does not match business terminology | Add a measure description and a wiki page with common synonyms |
-| Wiki search misses a page | Summary and tags do not include likely user wording | Rewrite the summary and add relevant tags, then search again |
-| Semantic-layer changes are hard to review | The YAML edit is too large or unfocused | Split the change into smaller source-file edits, then review the git diff |
+| Symptom | Likely cause | Recovery |
+|---------|--------------|----------|
+| `ktx sl validate` reports a missing column | YAML references a column absent from the scanned table | Refresh database context or update the YAML |
+| Query compilation double-counts a measure | `grain` or join `relationship` is missing or wrong | Add explicit grain and relationship values, then recompile |
+| Agent cannot find a metric | Measure name and description do not match business terminology | Add a clearer measure description and a wiki page with synonyms |
+| Wiki search misses a page | Summary, tags, or content do not match user wording | Rewrite the summary and add likely synonyms |
+| Context diff is hard to review | One edit changed too many concepts | Split the change into focused source and wiki edits |
