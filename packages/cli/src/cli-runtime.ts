@@ -34,6 +34,12 @@ export interface KtxCliDeps {
   runtime?: (args: KtxRuntimeArgs, io: KtxCliIo) => Promise<number>;
   knowledge?: (args: KtxKnowledgeArgs, io: KtxCliIo) => Promise<number>;
   sl?: (args: KtxSlArgs, io: KtxCliIo) => Promise<number>;
+  mcp?: {
+    startDaemon?: typeof import('./managed-mcp-daemon.js').startKtxMcpDaemon;
+    stopDaemon?: typeof import('./managed-mcp-daemon.js').stopKtxMcpDaemon;
+    readStatus?: typeof import('./managed-mcp-daemon.js').readKtxMcpDaemonStatus;
+    runServer?: typeof import('./mcp-http-server.js').runKtxMcpHttpServer;
+  };
 }
 
 export function getKtxCliPackageInfo(): KtxCliPackageInfo {

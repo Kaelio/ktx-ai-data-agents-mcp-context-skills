@@ -5,6 +5,7 @@ import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerIngestCommands } from './commands/ingest-commands.js';
 import { registerWikiCommands } from './commands/knowledge-commands.js';
+import { registerMcpCommands } from './commands/mcp-commands.js';
 import { registerSetupCommands } from './commands/setup-commands.js';
 import { registerSlCommands } from './commands/sl-commands.js';
 import { registerStatusCommands } from './commands/status-commands.js';
@@ -55,7 +56,7 @@ type CommandPathNode = CommandWithGlobalOptions & {
   parent?: CommandPathNode | null;
 };
 
-const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status']);
+const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'mcp']);
 const COMMANDS_THAT_CREATE_PROJECT = new Set(['setup', 'ktx dev init']);
 const COMMANDS_WITH_OWN_MISSING_PROJECT_HANDLING = new Set(['status']);
 
@@ -439,6 +440,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   registerWikiCommands(program, context);
   registerSlCommands(program, context);
   registerStatusCommands(program, context);
+  registerMcpCommands(program, context);
   registerDevCommands(program, context);
 
   return program;
