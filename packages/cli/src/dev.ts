@@ -46,5 +46,23 @@ export function registerDevCommands(program: Command, context: KtxCliCommandCont
       },
     );
 
+  dev
+    .command('schema')
+    .description('Print a JSON Schema describing ktx.yaml (for editors and LLM agents)')
+    .option('--output <file>', 'Write the schema to a file instead of stdout')
+    .action(async (options: { output?: string }) => {
+      const { generateKtxProjectConfigJsonSchema } = await import('@ktx/context/project');
+      const json = `${JSON.stringify(generateKtxProjectConfigJsonSchema(), null, 2)}\n`;
+      if (options.output) {
+        const { writeFile } = await import('node:fs/promises');
+        const target = resolve(options.output);
+        await writeFile(target, json, 'utf8');
+        context.io.stdout.write(`Wrote ${target}\n`);
+      } else {
+        context.io.stdout.write(json);
+      }
+      context.setExitCode(0);
+    });
+
   registerRuntimeCommands(dev, context);
 }

@@ -19,137 +19,247 @@ const DEPRECATED_KEY_HINTS: Record<string, string> = {
   'scan.enrichment.embeddings.provider': 'use scan.enrichment.embeddings.backend',
 };
 
-const apiCredentialsSchema = z.strictObject({
-  api_key: z.string().min(1).optional(),
-  base_url: z.string().min(1).optional(),
-});
+const apiCredentialsSchema = z
+  .strictObject({
+    api_key: z.string().min(1).optional().describe('API key for the provider. Read from this value or the provider-specific environment variable.'),
+    base_url: z.string().min(1).optional().describe('Override the provider\'s default API base URL (e.g. a proxy or self-hosted gateway).'),
+  })
+  .describe('API credentials block: optional key and base URL for an LLM or embedding provider.');
 
-const vertexProviderSchema = z.strictObject({
-  project: z.string().min(1).optional(),
-  location: z.string().default(''),
-});
+const vertexProviderSchema = z
+  .strictObject({
+    project: z.string().min(1).optional().describe('Google Cloud project ID hosting the Vertex AI endpoint.'),
+    location: z.string().default('').describe('Vertex AI region (e.g. "us-east5"). Empty string falls back to the SDK default.'),
+  })
+  .describe('Google Vertex AI provider configuration.');
 
-const sentenceTransformersSchema = z.strictObject({
-  base_url: z.string().default(''),
-  pathPrefix: z.string().optional(),
-});
+const sentenceTransformersSchema = z
+  .strictObject({
+    base_url: z.string().default('').describe('Base URL of the sentence-transformers HTTP server. Empty string uses the managed local runtime.'),
+    pathPrefix: z.string().optional().describe('Optional URL path prefix prepended to embedding requests.'),
+  })
+  .describe('Sentence-transformers embedding server configuration.');
 
-const llmProviderSchema = z.strictObject({
-  backend: z.enum(KTX_LLM_BACKENDS).default('none'),
-  vertex: vertexProviderSchema.optional(),
-  anthropic: apiCredentialsSchema.optional(),
-  gateway: apiCredentialsSchema.optional(),
-});
+const llmProviderSchema = z
+  .strictObject({
+    backend: z
+      .enum(KTX_LLM_BACKENDS)
+      .default('none')
+      .describe('LLM provider backend. "none" disables LLM features; "anthropic" / "vertex" / "gateway" require the matching nested credentials block.'),
+    vertex: vertexProviderSchema.optional().describe('Vertex AI credentials, used when backend is "vertex".'),
+    anthropic: apiCredentialsSchema.optional().describe('Anthropic API credentials, used when backend is "anthropic".'),
+    gateway: apiCredentialsSchema.optional().describe('AI Gateway credentials, used when backend is "gateway".'),
+  })
+  .describe('LLM provider selection and credentials.');
 
-const promptCachingSchema = z.strictObject({
-  enabled: z.boolean().optional(),
-  systemTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional(),
-  toolsTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional(),
-  historyTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional(),
-  vertexFallbackTo5m: z.boolean().optional(),
-});
+const promptCachingSchema = z
+  .strictObject({
+    enabled: z.boolean().optional().describe('Master switch for Anthropic-style prompt caching. When omitted, the backend\'s default applies.'),
+    systemTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional().describe('Cache TTL for the system prompt segment ("5m" or "1h").'),
+    toolsTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional().describe('Cache TTL for the tools/schema segment ("5m" or "1h").'),
+    historyTtl: z.enum(KTX_PROMPT_CACHE_TTLS).optional().describe('Cache TTL for conversation-history cache breakpoints ("5m" or "1h").'),
+    vertexFallbackTo5m: z.boolean().optional().describe('When true, transparently downgrade 1h TTLs to 5m on Vertex, which does not support 1h caching.'),
+  })
+  .describe('Prompt-caching tunables for Anthropic-compatible providers.');
 
-const llmSchema = z.strictObject({
-  provider: llmProviderSchema.prefault({}),
-  models: z.partialRecord(z.enum(KTX_MODEL_ROLES), z.string().min(1)).default({}),
-  promptCaching: promptCachingSchema.optional(),
-});
+const llmSchema = z
+  .strictObject({
+    provider: llmProviderSchema.prefault({}).describe('LLM provider backend and credentials.'),
+    models: z
+      .partialRecord(z.enum(KTX_MODEL_ROLES), z.string().min(1))
+      .default({})
+      .describe('Per-role model overrides keyed by KTX model role (e.g. "default", "triage"). Values are provider-specific model identifiers.'),
+    promptCaching: promptCachingSchema.optional().describe('Optional prompt-caching tunables.'),
+  })
+  .describe('LLM provider, per-role model overrides, and prompt-caching tunables.');
 
-const embeddingSchema = z.strictObject({
-  backend: z.enum(KTX_EMBEDDING_BACKENDS).default('deterministic'),
-  model: z.string().min(1).optional(),
-  dimensions: z.int().positive().default(8),
-  openai: apiCredentialsSchema.optional(),
-  sentenceTransformers: sentenceTransformersSchema.optional(),
-  batchSize: z.int().positive().optional(),
-});
+const embeddingSchema = z
+  .strictObject({
+    backend: z
+      .enum(KTX_EMBEDDING_BACKENDS)
+      .default('deterministic')
+      .describe('Embedding backend. "deterministic" is a built-in hash-based vector for offline use; "openai" and "sentence-transformers" call out to those providers; "none" disables embeddings.'),
+    model: z.string().min(1).optional().describe('Provider-specific embedding model identifier (e.g. "text-embedding-3-small"). Ignored by the "deterministic" backend.'),
+    dimensions: z.int().positive().default(8).describe('Embedding vector dimensionality. Must match the chosen model when using a real provider.'),
+    openai: apiCredentialsSchema.optional().describe('OpenAI credentials, used when backend is "openai".'),
+    sentenceTransformers: sentenceTransformersSchema.optional().describe('Sentence-transformers server config, used when backend is "sentence-transformers".'),
+    batchSize: z.int().positive().optional().describe('Number of texts per embedding API call. Omit to use the backend default.'),
+  })
+  .describe('Embedding backend, model, and provider credentials.');
 
-const workUnitsSchema = z.strictObject({
-  stepBudget: z.int().positive().default(40),
-  maxConcurrency: z.int().positive().default(1),
-  failureMode: z.enum(KTX_WORK_UNIT_FAILURE_MODES).default('continue'),
-});
+const workUnitsSchema = z
+  .strictObject({
+    stepBudget: z.int().positive().default(40).describe('Maximum number of agent steps allowed per work unit before it is force-terminated.'),
+    maxConcurrency: z.int().positive().default(1).describe('Maximum number of work units run concurrently during ingest.'),
+    failureMode: z
+      .enum(KTX_WORK_UNIT_FAILURE_MODES)
+      .default('continue')
+      .describe('Behavior when a work unit fails: "abort" stops the whole ingest run; "continue" records the failure and keeps going.'),
+  })
+  .describe('Concurrency and failure handling for ingest work units.');
 
-const ingestSchema = z.strictObject({
-  adapters: z.array(z.string().min(1)).default([]),
-  embeddings: embeddingSchema.prefault({ backend: 'deterministic', model: 'deterministic' }),
-  workUnits: workUnitsSchema.prefault({}),
-});
+const ingestSchema = z
+  .strictObject({
+    adapters: z
+      .array(z.string().min(1))
+      .default([])
+      .describe('Ingest adapter identifiers to run (e.g. "metabase", "looker", "historic-sql"). Empty array means no adapters are run.'),
+    embeddings: embeddingSchema
+      .prefault({ backend: 'deterministic', model: 'deterministic' })
+      .describe('Embedding configuration used when ingest adapters need to embed documents.'),
+    workUnits: workUnitsSchema.prefault({}).describe('Concurrency and failure handling for ingest work units.'),
+  })
+  .describe('Ingest pipeline configuration: adapters, embeddings, and work-unit policy.');
 
-const scanEnrichmentSchema = z.strictObject({
-  mode: z.enum(KTX_ENRICHMENT_MODES).default('none'),
-  embeddings: embeddingSchema.optional(),
-});
+const scanEnrichmentSchema = z
+  .strictObject({
+    mode: z
+      .enum(KTX_ENRICHMENT_MODES)
+      .default('none')
+      .describe('Column/table enrichment mode. "none" disables enrichment; "deterministic" uses local heuristics; "llm" calls the configured LLM provider.'),
+    embeddings: embeddingSchema.optional().describe('Optional embedding override for enrichment-time vectorization. Falls back to ingest.embeddings when omitted.'),
+  })
+  .describe('Schema-scan enrichment: how columns and tables are described.');
 
-const scanRelationshipsSchema = z.strictObject({
-  enabled: z.boolean().default(true),
-  llmProposals: z.boolean().default(true),
-  validationRequiredForManifest: z.boolean().default(true),
-  acceptThreshold: z.number().min(0).max(1).default(0.85),
-  reviewThreshold: z.number().min(0).max(1).default(0.55),
-  maxLlmTablesPerBatch: z.int().positive().default(40),
-  maxCandidatesPerColumn: z.int().positive().default(25),
-  profileSampleRows: z.int().positive().default(10000),
-  validationConcurrency: z.int().positive().default(4),
-  validationBudget: z.union([z.literal('all'), z.int().nonnegative()]).optional(),
-});
+const scanRelationshipsSchema = z
+  .strictObject({
+    enabled: z.boolean().default(true).describe('Master switch for relationship discovery during scan.'),
+    llmProposals: z.boolean().default(true).describe('When true, propose relationships using the configured LLM in addition to deterministic candidates.'),
+    validationRequiredForManifest: z
+      .boolean()
+      .default(true)
+      .describe('When true, only relationships that pass database-side validation are written to the manifest.'),
+    acceptThreshold: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.85)
+      .describe('Confidence score (0–1) at or above which an LLM-proposed relationship is auto-accepted into the manifest.'),
+    reviewThreshold: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.55)
+      .describe('Confidence score (0–1) at or above which a proposal is surfaced for human review (but not auto-accepted).'),
+    maxLlmTablesPerBatch: z
+      .int()
+      .positive()
+      .default(40)
+      .describe('Maximum number of tables included in a single LLM relationship-proposal batch.'),
+    maxCandidatesPerColumn: z
+      .int()
+      .positive()
+      .default(25)
+      .describe('Maximum number of candidate join partners considered per column during relationship discovery.'),
+    profileSampleRows: z.int().positive().default(10000).describe('Number of rows sampled per table when profiling values for relationship inference.'),
+    validationConcurrency: z.int().positive().default(4).describe('Number of relationship validation queries run in parallel against the database.'),
+    validationBudget: z
+      .union([z.literal('all'), z.int().nonnegative()])
+      .optional()
+      .describe('Cap on validation queries per scan run. Use "all" for unlimited, an integer for a hard cap, or omit for the runtime default.'),
+  })
+  .describe('Schema-scan relationship discovery and validation tunables.');
 
-const scanSchema = z.strictObject({
-  enrichment: scanEnrichmentSchema.prefault({}),
-  relationships: scanRelationshipsSchema.prefault({}),
-});
+const scanSchema = z
+  .strictObject({
+    enrichment: scanEnrichmentSchema.prefault({}).describe('Column/table enrichment configuration.'),
+    relationships: scanRelationshipsSchema.prefault({}).describe('Relationship discovery and validation configuration.'),
+  })
+  .describe('Schema-scan configuration: enrichment and relationship discovery.');
 
 const setupSchema = z
   .strictObject({
-    database_connection_ids: z.array(z.string().min(1)).default([]),
-    completed_steps: z.unknown().optional(),
+    database_connection_ids: z
+      .array(z.string().min(1))
+      .default([])
+      .describe('Connection IDs (keys of the top-level `connections` map) that the setup wizard treats as the project\'s primary databases.'),
+    completed_steps: z
+      .unknown()
+      .optional()
+      .describe('Deprecated. Accepted for backward compatibility but ignored; KTX no longer tracks setup progress here.'),
   })
-  .transform(({ database_connection_ids }) => ({ database_connection_ids }));
+  .transform(({ database_connection_ids }) => ({ database_connection_ids }))
+  .describe('Setup-wizard state captured during `ktx setup`.');
 
-const storageGitSchema = z.strictObject({
-  auto_commit: z.boolean().default(true),
-  author: z.string().min(1).default('ktx <ktx@example.com>'),
-});
+const storageGitSchema = z
+  .strictObject({
+    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits state changes to the local Git-backed store.'),
+    author: z
+      .string()
+      .min(1)
+      .default('ktx <ktx@example.com>')
+      .describe('Git author identity used for auto-commits, in standard "Name <email>" form.'),
+  })
+  .describe('Git-backed storage commit policy.');
 
-const storageSchema = z.strictObject({
-  state: z.enum(KTX_STORAGE_STATES).default('sqlite'),
-  search: z.enum(KTX_SEARCH_BACKENDS).default('sqlite-fts5'),
-  git: storageGitSchema.prefault({}),
-});
+const storageSchema = z
+  .strictObject({
+    state: z
+      .enum(KTX_STORAGE_STATES)
+      .default('sqlite')
+      .describe('Backend for KTX state storage. "sqlite" uses .ktx/db.sqlite; "postgres" expects a configured Postgres connection.'),
+    search: z
+      .enum(KTX_SEARCH_BACKENDS)
+      .default('sqlite-fts5')
+      .describe('Backend for search indexes. "sqlite-fts5" uses SQLite FTS5; "postgres-hybrid" uses Postgres lexical + vector hybrid search.'),
+    git: storageGitSchema.prefault({}).describe('Git-backed storage commit policy.'),
+  })
+  .describe('Storage backends and commit policy for KTX state and search indexes.');
 
-const connectionSchema = z.looseObject({
-  driver: z.string().min(1).optional(),
-  url: z.string().optional(),
-});
+const connectionSchema = z
+  .looseObject({
+    driver: z.string().min(1).optional().describe('Connector driver identifier (e.g. "postgres", "bigquery", "snowflake").'),
+    url: z.string().optional().describe('Connection URL or DSN. Format depends on the driver; may contain environment-variable references.'),
+  })
+  .describe('A single database/connector connection entry. Additional driver-specific fields are accepted and passed through.');
 
-const agentSchema = z.strictObject({
-  run_research: z
-    .strictObject({
-      enabled: z.boolean().default(false),
-      max_iterations: z.number().int().nonnegative().default(20),
-      default_toolset: z.array(z.string().min(1)).default(['sl_query', 'wiki_search', 'sl_read_source']),
-    })
-    .prefault({}),
-});
+const agentSchema = z
+  .strictObject({
+    run_research: z
+      .strictObject({
+        enabled: z.boolean().default(false).describe('Master switch for the research agent.'),
+        max_iterations: z
+          .number()
+          .int()
+          .nonnegative()
+          .default(20)
+          .describe('Maximum number of tool-call iterations the research agent may take per run.'),
+        default_toolset: z
+          .array(z.string().min(1))
+          .default(['sl_query', 'wiki_search', 'sl_read_source'])
+          .describe('Default list of tool identifiers exposed to the research agent.'),
+      })
+      .prefault({})
+      .describe('Research-agent configuration.'),
+  })
+  .describe('Agent feature configuration.');
 
-const memorySchema = z.strictObject({
-  auto_commit: z.boolean().default(true),
-});
+const memorySchema = z
+  .strictObject({
+    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits memory updates to the Git-backed store.'),
+  })
+  .describe('Memory subsystem configuration.');
 
-const ktxProjectConfigSchema = z.strictObject({
-  project: z
-    .string({ error: 'ktx.yaml field "project" is required' })
-    .trim()
-    .min(1, 'ktx.yaml field "project" is required'),
-  setup: setupSchema.optional(),
-  connections: z.record(z.string(), connectionSchema).default({}),
-  storage: storageSchema.prefault({}),
-  llm: llmSchema.prefault({}),
-  ingest: ingestSchema.prefault({}),
-  agent: agentSchema.prefault({}),
-  memory: memorySchema.prefault({}),
-  scan: scanSchema.prefault({}),
-});
+const ktxProjectConfigSchema = z
+  .strictObject({
+    project: z
+      .string({ error: 'ktx.yaml field "project" is required' })
+      .trim()
+      .min(1, 'ktx.yaml field "project" is required')
+      .describe('Project identifier; used in logs, ktx state files, and as the default workspace name.'),
+    setup: setupSchema.optional().describe('Setup-wizard state. Written by `ktx setup`; may be omitted.'),
+    connections: z
+      .record(z.string(), connectionSchema)
+      .default({})
+      .describe('Map of connection ID to connector configuration. Keys are user-chosen names referenced elsewhere in the config.'),
+    storage: storageSchema.prefault({}).describe('Storage backends and commit policy for KTX state and search indexes.'),
+    llm: llmSchema.prefault({}).describe('LLM provider, per-role model overrides, and prompt-caching tunables.'),
+    ingest: ingestSchema.prefault({}).describe('Ingest pipeline configuration.'),
+    agent: agentSchema.prefault({}).describe('Agent feature configuration.'),
+    memory: memorySchema.prefault({}).describe('Memory subsystem configuration.'),
+    scan: scanSchema.prefault({}).describe('Schema-scan configuration: enrichment and relationship discovery.'),
+  })
+  .describe('Configuration schema for KTX project files (ktx.yaml).');
 
 export type KtxProjectConfig = z.infer<typeof ktxProjectConfigSchema>;
 export type KtxProjectLlmConfig = z.infer<typeof llmSchema>;
@@ -258,6 +368,19 @@ export function validateKtxProjectConfig(raw: string): KtxConfigValidation {
     return { ok: true, issues: [] };
   }
   return { ok: false, issues: collectIssues(result.error, parsed) };
+}
+
+export function generateKtxProjectConfigJsonSchema(): Record<string, unknown> {
+  const schema = z.toJSONSchema(ktxProjectConfigSchema, {
+    target: 'draft-7',
+    io: 'input',
+  }) as Record<string, unknown>;
+  return {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    $id: 'https://ktx.dev/schemas/ktx-project-config.json',
+    title: 'ktx.yaml',
+    ...schema,
+  };
 }
 
 export function serializeKtxProjectConfig(config: KtxProjectConfig): string {

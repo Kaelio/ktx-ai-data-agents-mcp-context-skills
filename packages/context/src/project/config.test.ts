@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDefaultKtxProjectConfig,
+  generateKtxProjectConfigJsonSchema,
   parseKtxProjectConfig,
   serializeKtxProjectConfig,
   validateKtxProjectConfig,
@@ -483,5 +484,51 @@ scan:
       ok: false,
       issues: [{ path: '', message: 'ktx.yaml must contain a YAML object' }],
     });
+  });
+});
+
+describe('generateKtxProjectConfigJsonSchema', () => {
+  const schema = generateKtxProjectConfigJsonSchema();
+
+  it('emits draft-07 metadata', () => {
+    expect(schema.$schema).toBe('http://json-schema.org/draft-07/schema#');
+    expect(schema.$id).toBe('https://ktx.dev/schemas/ktx-project-config.json');
+    expect(schema.title).toBe('ktx.yaml');
+    expect(schema.type).toBe('object');
+  });
+
+  it('exposes every top-level ktx.yaml section under properties', () => {
+    const properties = schema.properties as Record<string, unknown>;
+    expect(Object.keys(properties).sort()).toEqual(
+      ['agent', 'connections', 'ingest', 'llm', 'memory', 'project', 'scan', 'setup', 'storage'].sort(),
+    );
+  });
+
+  it('marks "project" as required', () => {
+    expect(schema.required).toEqual(expect.arrayContaining(['project']));
+  });
+
+  it('carries .describe() text on top-level fields', () => {
+    const properties = schema.properties as Record<string, { description?: string }>;
+    expect(properties.project?.description).toMatch(/Project identifier/);
+    expect(properties.llm?.description).toMatch(/LLM/);
+    expect(properties.scan?.description).toMatch(/Schema-scan/);
+  });
+
+  it('propagates enum values through to nested fields', () => {
+    const llm = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).llm;
+    const provider = llm?.properties?.provider as { properties?: Record<string, unknown> };
+    const backend = provider?.properties?.backend as { enum?: readonly string[] };
+    expect(backend?.enum).toEqual(['none', 'anthropic', 'vertex', 'gateway']);
+
+    const storage = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).storage;
+    const state = storage?.properties?.state as { enum?: readonly string[] };
+    expect(state?.enum).toEqual(['sqlite', 'postgres']);
+  });
+
+  it('carries descriptions on deeply nested leaves', () => {
+    const scan = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).scan;
+    const relationships = scan?.properties?.relationships as { properties?: Record<string, { description?: string }> };
+    expect(relationships?.properties?.acceptThreshold?.description).toMatch(/auto-accepted/);
   });
 });

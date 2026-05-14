@@ -10,6 +10,7 @@ export type {
 } from './config.js';
 export {
   buildDefaultKtxProjectConfig,
+  generateKtxProjectConfigJsonSchema,
   parseKtxProjectConfig,
   serializeKtxProjectConfig,
   validateKtxProjectConfig,
