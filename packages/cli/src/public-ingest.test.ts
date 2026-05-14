@@ -85,7 +85,7 @@ describe('buildPublicIngestPlan', () => {
   it('plans warehouse connections as scan targets and source connections as source ingest targets', () => {
     const project = projectWithConnections({
       warehouse: { driver: 'postgres' },
-      prod_metabase: { driver: 'metabase' },
+      prod_metabase: { driver: 'metabase', api_url: 'https://metabase.example.com' },
       docs: { driver: 'notion' },
     });
 
@@ -745,7 +745,7 @@ describe('runKtxPublicIngest', () => {
     const io = makeIo();
     const project = projectWithConnections({
       warehouse: { driver: 'postgres' },
-      prod_metabase: { driver: 'metabase' },
+      prod_metabase: { driver: 'metabase', api_url: 'https://metabase.example.com' },
     });
     const runScan = vi.fn(async () => 1);
     const runIngest = vi.fn(async () => 0);

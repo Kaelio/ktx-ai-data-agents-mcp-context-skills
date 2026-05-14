@@ -1,6 +1,7 @@
 import { KTX_MODEL_ROLES } from '@ktx/llm';
 import YAML from 'yaml';
 import * as z from 'zod';
+import { connectionConfigSchema } from './driver-schemas.js';
 
 const KTX_LLM_BACKENDS = ['none', 'anthropic', 'vertex', 'gateway'] as const;
 const KTX_EMBEDDING_BACKENDS = ['none', 'deterministic', 'openai', 'sentence-transformers'] as const;
@@ -206,12 +207,7 @@ const storageSchema = z
   })
   .describe('Storage backends and commit policy for KTX state and search indexes.');
 
-const connectionSchema = z
-  .looseObject({
-    driver: z.string().min(1).optional().describe('Connector driver identifier (e.g. "postgres", "bigquery", "snowflake").'),
-    url: z.string().optional().describe('Connection URL or DSN. Format depends on the driver; may contain environment-variable references.'),
-  })
-  .describe('A single database/connector connection entry. Additional driver-specific fields are accepted and passed through.');
+const connectionSchema = connectionConfigSchema;
 
 const agentSchema = z
   .strictObject({

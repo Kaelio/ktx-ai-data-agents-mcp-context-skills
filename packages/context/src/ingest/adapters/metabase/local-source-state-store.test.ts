@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildDefaultKtxProjectConfig } from '../../../project/index.js';
+import { connectionConfigSchema } from '../../../project/driver-schemas.js';
 import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from './local-source-state-store.js';
 
 describe('Metabase YAML source state and discovery cache', () => {
@@ -23,10 +24,11 @@ describe('Metabase YAML source state and discovery cache', () => {
       config: {
         ...buildDefaultKtxProjectConfig(),
         connections: {
-          'prod-metabase': {
+          'prod-metabase': connectionConfigSchema.parse({
             driver: 'metabase',
+            api_url: 'https://metabase.example.com',
             mappings,
-          },
+          }),
         },
       },
     };
