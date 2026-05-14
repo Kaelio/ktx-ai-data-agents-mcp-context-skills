@@ -3,9 +3,9 @@ import { connectionConfigSchema } from './driver-schemas.js';
 
 describe('connectionConfigSchema (driver discriminated union)', () => {
   it.each([
-    ['postgres', 'postgres://user:pass@host:5432/db'],
-    ['postgresql', 'postgresql://user:pass@host:5432/db'],
-    ['mysql', 'mysql://user:pass@host:3306/db'],
+    ['postgres', 'postgres://user:pass@host:5432/db'], // pragma: allowlist secret
+    ['postgresql', 'postgresql://user:pass@host:5432/db'], // pragma: allowlist secret
+    ['mysql', 'mysql://user:pass@host:3306/db'], // pragma: allowlist secret
     ['snowflake', 'snowflake://account/db'],
     ['bigquery', 'bigquery://project/dataset'],
     ['sqlite', 'sqlite:///tmp/db.sqlite'],
@@ -39,7 +39,7 @@ describe('connectionConfigSchema - context source drivers with mappings', () => 
     const parsed = connectionConfigSchema.parse({
       driver: 'metabase',
       api_url: 'https://metabase.example.com',
-      api_key_ref: 'env:METABASE_API_KEY',
+      api_key_ref: 'env:METABASE_API_KEY', // pragma: allowlist secret
       mappings: {
         databaseMappings: { '3': 'prod-warehouse' },
         syncEnabled: { '3': true },
@@ -61,7 +61,7 @@ describe('connectionConfigSchema - context source drivers with mappings', () => 
       driver: 'looker',
       base_url: 'https://looker.example.com',
       client_id: 'abc',
-      client_secret_ref: 'env:LOOKER_CLIENT_SECRET',
+      client_secret_ref: 'env:LOOKER_CLIENT_SECRET', // pragma: allowlist secret
       mappings: { connectionMappings: { bigquery_prod: 'wh' } },
     });
     expect(parsed.mappings).toEqual({ connectionMappings: { bigquery_prod: 'wh' } });
