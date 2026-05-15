@@ -11,7 +11,7 @@ function makeTool(overrides: any = {}) {
     }),
     validateWithProposedSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }),
     writeSource: vi.fn().mockResolvedValue({ commitHash: 'c1' }),
-    loadAllSources: vi.fn().mockResolvedValue([]),
+    loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
     deleteSource: vi.fn().mockResolvedValue(undefined),
     isManifestBacked: vi.fn().mockResolvedValue(false),
     ...overrides.semanticLayerService,
@@ -44,7 +44,7 @@ function makeSession(overrides: Partial<ToolSession> = {}): ToolSession {
       }),
       validateWithProposedSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }),
       writeSource: vi.fn().mockResolvedValue({ commitHash: 'c1' }),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
     } as any,
     wikiService: {} as any,
     configService: {} as any,
@@ -191,9 +191,10 @@ describe('SlEditSourceTool — manifest-backed source without overlay', () => {
     expect(joinedErrors).toContain('manifest');
     expect(joinedErrors).toContain('sl_write_source');
     expect(joinedErrors).toContain('overlay');
-    // Overlay shape: only name + measures/segments/description
+    // Overlay shape: name plus overlay-only fields.
     expect(joinedErrors).toContain('measures');
     expect(joinedErrors).toContain('segments');
+    expect(joinedErrors).toContain('column_overrides');
   });
 
   it('still returns the plain "Source not found" error for truly-missing names', async () => {

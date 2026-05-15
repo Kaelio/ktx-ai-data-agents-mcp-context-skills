@@ -148,11 +148,21 @@ class TestLoaderEdgeCases:
             with open(Path(tmpdir) / "test.yaml", "w") as f:
                 yaml.dump(data, f)
             loader = SourceLoader(tmpdir)
-            try:
-                sources = loader.load_all()
-                assert "test" in sources
-            except Exception:
-                pass
+            with pytest.raises(Exception, match="unknown_field"):
+                loader.load_all()
+
+    def test_source_requires_table_or_sql(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data = {
+                "name": "test",
+                "grain": ["id"],
+                "columns": [{"name": "id", "type": "number"}],
+            }
+            with open(Path(tmpdir) / "test.yaml", "w") as f:
+                yaml.dump(data, f)
+            loader = SourceLoader(tmpdir)
+            with pytest.raises(Exception, match="table.*sql"):
+                loader.load_file(Path(tmpdir) / "test.yaml")
 
     def test_subdirectory_sources(self):
         with tempfile.TemporaryDirectory() as tmpdir:

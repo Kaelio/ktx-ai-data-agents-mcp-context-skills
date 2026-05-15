@@ -87,18 +87,23 @@ class SourceLoader:
                 sources[name] = SourceDefinition(**data)
             else:
                 # Overlay — validate and compose with matching manifest entry
-                errors = validate_overlay(data)
-                if errors:
-                    raise ValueError(
-                        f"Invalid overlay '{name}' in {path}: {'; '.join(errors)}"
-                    )
                 base = sources.get(name)
                 if base:
+                    errors = validate_overlay(data, {c.name for c in base.columns})
+                    if errors:
+                        raise ValueError(
+                            f"Invalid overlay '{name}' in {path}: {'; '.join(errors)}"
+                        )
                     (
                         sources[name],
                         description_sources[name],
                     ) = self._compose(base, data, description_sources.get(name))
                 else:
+                    errors = validate_overlay(data)
+                    if errors:
+                        raise ValueError(
+                            f"Invalid overlay '{name}' in {path}: {'; '.join(errors)}"
+                        )
                     logger.warning(
                         "Orphan overlay '%s' in %s: no matching manifest entry, skipping",
                         name,
@@ -149,12 +154,55 @@ class SourceLoader:
                 description_sources or None,
             )
 
-        # Filter columns
+        excluded = set(overlay.get("exclude_columns", []))
+        overrides = overlay.get("column_overrides", [])
+        override_names = {override.get("name") for override in overrides}
+        conflicts = sorted(name for name in override_names if name in excluded)
+        if conflicts:
+            raise ValueError(
+                "column_overrides conflict with exclude_columns: "
+                + ", ".join(conflicts)
+            )
+
+        base_by_name = {column.name: column for column in base.columns}
+
+        for override in overrides:
+            name = override.get("name")
+            base_column = base_by_name.get(name)
+            if base_column is None:
+                raise ValueError(
+                    f"column '{name}' in column_overrides does not exist on manifest source '{base.name}'"
+                )
+
         excluded = set(overlay.get("exclude_columns", []))
         source.columns = [c for c in source.columns if c.name not in excluded]
 
-        # Append computed columns (overlay columns with expr)
+        columns_by_name = {column.name: column for column in source.columns}
+
+        for override in overrides:
+            name = override["name"]
+            base_column = base_by_name[name]
+            merged = base_column.model_dump(mode="python", exclude_none=True)
+            base_descriptions = merged.get("descriptions") or {}
+            override_data = dict(override)
+            override_descriptions = override_data.get("descriptions") or {}
+            merged.update(override_data)
+            if base_descriptions or override_descriptions:
+                merged["descriptions"] = {
+                    **base_descriptions,
+                    **override_descriptions,
+                }
+            columns_by_name[name] = SourceColumn(**merged)
+        source.columns = list(columns_by_name.values())
+
+        # Append computed columns. Manifest column names cannot be reused here;
+        # use column_overrides for metadata patches.
         for col in overlay.get("columns", []):
+            name = col.get("name")
+            if name in base_by_name:
+                raise ValueError(
+                    f"column '{name}' in columns patches a manifest column on '{base.name}' — move it to 'column_overrides:'"
+                )
             source.columns.append(SourceColumn(**col))
 
         # Set measures
@@ -180,6 +228,11 @@ class SourceLoader:
             if f"{j.to}::{_normalize_ws(j.on)}" not in existing_keys
         ]
         source.joins = manifest_joins + new_joins
+
+        if not source.table and not source.sql:
+            raise ValueError("resolved source must have 'table' or 'sql'")
+        if source.table and source.sql:
+            raise ValueError("'table' and 'sql' are mutually exclusive")
 
         return source, (description_sources or None)
 

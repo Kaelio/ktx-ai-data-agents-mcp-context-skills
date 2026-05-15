@@ -345,7 +345,8 @@ export type KtxScanWarningCode =
   | 'relationship_llm_invalid_reference'
   | 'relationship_llm_proposal_failed'
   | 'credential_redacted'
-  | 'enrichment_failed';
+  | 'enrichment_failed'
+  | 'description_fallback_used';
 
 export interface KtxScanWarning {
   code: KtxScanWarningCode;

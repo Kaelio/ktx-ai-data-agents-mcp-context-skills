@@ -47,6 +47,32 @@ export interface SemanticLayerSource {
   usage?: TableUsageOutput;
 }
 
+type SemanticLayerColumn = SemanticLayerSource['columns'][number];
+type SemanticLayerJoin = SemanticLayerSource['joins'][number];
+
+export interface SemanticLayerColumnOverride {
+  name: string;
+  role?: string;
+  visibility?: string;
+  descriptions?: Record<string, string>;
+  constraints?: { dbt?: { not_null?: boolean; unique?: boolean } };
+  enum_values?: { dbt?: string[] };
+  tests?: {
+    dbt?: Array<{ name: string; package: string; kwargs?: Record<string, unknown> }>;
+    dbt_by_package?: Record<string, string[]>;
+  };
+}
+
+export type ResolvedSemanticLayerSource = Omit<
+  SemanticLayerSource,
+  'inherits_columns_from' | 'usage' | 'joins'
+> & {
+  table?: string;
+  sql?: string;
+  columns: Array<SemanticLayerColumn & { type: string }>;
+  joins: Array<Omit<SemanticLayerJoin, 'source'>>;
+};
+
 export interface SemanticLayerQueryInput {
   measures: Array<string | { expr: string; name: string }>;
   dimensions: Array<string | { field: string; granularity?: string }>;

@@ -39,6 +39,10 @@ columns:                    # computed dimensions only
   - name: is_large_order
     type: boolean
     expr: "amount > 1000"
+column_overrides:           # metadata patches for inherited columns
+  - name: status
+    descriptions:
+      user: "Order lifecycle status."
 segments:
   - name: paid_non_refunded
     expr: "is_paid = true AND is_refunded = false"
@@ -51,6 +55,7 @@ joins:
 Rules:
 - Do **not** repeat base-table columns, grain, `table`, or `source_type` in an overlay - those are inherited.
 - Overlay columns MUST be computed (`expr` + `type`).
+- Use `column_overrides` to add descriptions or metadata to inherited manifest columns. Do not put `type` or `expr` in `column_overrides`.
 - `exclude_columns` hides specific manifest columns; `disable_joins` suppresses specific auto-detected joins.
 
 ### Standalone table sources
@@ -110,7 +115,7 @@ An SQL source is a one-shot answer: the aggregation is frozen, callers cannot re
 
 ### Columns
 
-Every standalone column requires `name` and `type`. Overlays have computed columns only.
+Every standalone column requires `name` and `type`. Overlays have computed columns in `columns:` and manifest column metadata patches in `column_overrides:`.
 
 - `type`: one of `string`, `number`, `boolean`, `time`. Map LookML `date`/`datetime`/`timestamp` → `time`. Map LookML `yesno` → `boolean`.
 - `role` (optional): `time` enables time-granularity queries (month, week, day). `default` is the implicit fallback.

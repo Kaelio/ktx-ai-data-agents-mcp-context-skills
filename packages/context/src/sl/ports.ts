@@ -1,4 +1,4 @@
-import type { SemanticLayerQueryInput, SemanticLayerSource } from './types.js';
+import type { ResolvedSemanticLayerSource, SemanticLayerQueryInput } from './types.js';
 
 export interface KtxConnectionInfo {
   id: string;
@@ -20,7 +20,7 @@ export interface SlConnectionCatalogPort {
 
 export interface SlPythonPort {
   validateSources(input: {
-    sources: SemanticLayerSource[];
+    sources: ResolvedSemanticLayerSource[];
     dialect: string;
     recently_touched?: string[];
   }): Promise<{
@@ -28,7 +28,7 @@ export interface SlPythonPort {
     error?: unknown;
   }>;
   query(input: {
-    sources: SemanticLayerSource[];
+    sources: ResolvedSemanticLayerSource[];
     query: SemanticLayerQueryInput;
     dialect: string;
   }): Promise<{ data?: { sql?: string; plan?: Record<string, unknown> } | null; error?: unknown }>;

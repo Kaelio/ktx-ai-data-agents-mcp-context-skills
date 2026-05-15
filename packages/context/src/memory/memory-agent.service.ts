@@ -308,7 +308,7 @@ export class MemoryAgentService {
     // Reindex SL search if any SL actions actually landed on main.
     if (hasSL && finalActions.some((a) => a.target === 'sl')) {
       try {
-        const allSources = await this.deps.semanticLayerService.loadAllSources(input.connectionId!);
+        const { sources: allSources } = await this.deps.semanticLayerService.loadAllSources(input.connectionId!);
         await this.deps.slSearchService.indexSources(input.connectionId!, allSources);
       } catch (e) {
         this.logger.warn(
@@ -610,7 +610,7 @@ export class MemoryAgentService {
 
   private async buildSlIndex(connectionId: string): Promise<string> {
     const [sources, warehouseLine] = await Promise.all([
-      this.deps.semanticLayerService.loadAllSources(connectionId),
+      this.deps.semanticLayerService.loadAllSources(connectionId).then((result) => result.sources),
       this.buildWarehouseLine(connectionId),
     ]);
     const indexLines =

@@ -34,7 +34,7 @@ describe('SlValidateTool — session-aware touched-set filtering', () => {
       { name: 'customers', table: 'x.customers', grain: ['id'], columns: [], joins: [], measures: [] },
     ];
     const serviceMock = {
-      loadAllSources: vi.fn().mockResolvedValue(sources),
+      loadAllSources: vi.fn().mockResolvedValue({ sources, loadErrors: [] }),
       validateSourcesForConnection: vi.fn().mockResolvedValue({
         errors: ['orders: missing join target', 'customers: invalid grain'],
         warnings: ['orders: disconnected-components warning'],
