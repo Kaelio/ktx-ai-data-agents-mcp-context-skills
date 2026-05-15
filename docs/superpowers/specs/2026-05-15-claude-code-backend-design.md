@@ -1,13 +1,15 @@
-# Brainstorm: `claude-code` LLM backend for KTX
+# Brainstorm: `claude-code` agent-runner backend for KTX
 
-Adds a fourth value to `KtxLlmBackend` (alongside `'anthropic' | 'vertex' | 'gateway'`) that routes KTX agentic LLM calls through `@anthropic-ai/claude-agent-sdk`, reusing the user's existing Claude Code authentication. Same KTX UX (`ktx ingest`, etc.); the backend is selected in `ktx.yaml`.
+Adds a `claude-code` selection that routes KTX **agent-runner** LLM calls through `@anthropic-ai/claude-agent-sdk`, reusing the user's existing Claude Code authentication. Same KTX UX (`ktx ingest`, etc.); the backend is selected in `ktx.yaml`.
+
+**Scope of the new backend.** The `claude-code` selection is an **agent-runner backend**, not a drop-in replacement for the global `KtxLlmProvider`. Non-agent LLM call sites (page triage, scan enrichment, scan description generation, relationship LLM proposals) all consume `KtxLlmProvider` directly via `generateKtxText` / `generateKtxObject` (`packages/context/src/ingest/page-triage/page-triage.service.ts:342-356`, `packages/context/src/scan/local-scan.ts:377-382`, `packages/context/src/scan/description-generation.ts:780-788`, `packages/context/src/scan/relationship-discovery.ts:244-255`) and `createKtxLlmProvider` currently routes any unknown backend to gateway (`packages/llm/src/model-provider.ts:155-186`). The plan must decide one of: (a) introduce `llm.provider.backend: 'claude-code'` as a global LLM backend and define behavior for every non-agent consumer (likely by mapping it to an Anthropic provider construction that also reuses local Claude Code credentials, or by failing fast with a clear error), or (b) keep `llm.provider.backend` to its existing values and add a separate `llm.agentRunner.backend` (or equivalent) field whose `'claude-code'` value only swaps the agent runner. Option (b) preserves existing non-agent behavior with no risk of accidental gateway fall-through; option (a) requires explicit handling at every non-agent site. This decision is open for the plan-writing session — the brainstorm does not lock it.
 
 This is not a plan. It is the decided design after a `/brainstorming` session. The follow-up plan should be written separately.
 
 ## Goals
 
 - Let a KTX user run `ktx ingest` (and the other agentic CLI paths) against their existing Claude Code session — without provisioning a new `ANTHROPIC_API_KEY` or Vertex credentials.
-- Preserve KTX's per-stage tool curation: each `ktx ingest` stage continues to pass its own `Record<string, Tool>` into the runner; the new backend exposes exactly that set and nothing more.
+- Preserve KTX's per-stage tool curation: each `ktx ingest` stage continues to pass its own curated tool set into the runner; the new backend exposes exactly that set and nothing more, with **no Claude Code built-ins** (`Bash` / `Read` / `Edit` / `Write` / `Grep` / `Glob` / `WebFetch` / `Task`) reachable by the model.
 - Preserve correctness of existing ingest output. The new backend must produce work-unit results equivalent to today's AI-SDK backend on the same inputs.
 
 ## Non-goals (MVP)
@@ -27,22 +29,33 @@ ktx ingest
           ├─ AgentRunnerService           (when llm.backend !== 'claude-code')
           │   uses generateText() + llmProvider.getModel(role) + experimental_repairToolCall
           │
-          └─ ClaudeAgentSdkRunnerService  (when llm.backend === 'claude-code')
+          └─ ClaudeAgentSdkRunnerService  (when agent-runner backend === 'claude-code')
               uses @anthropic-ai/claude-agent-sdk: query({
                 prompt,
                 options: {
                   cwd: project.projectDir,
                   systemPrompt,
-                  mcpServers: { ktx: createSdkMcpServer({ tools: toolSet -> toClaudeAgentSdkTool() }) },
-                  allowedTools: ['mcp__ktx__<each-tool>'],
+                  mcpServers: { ktx: createSdkMcpServer({ tools: <curated KTX tools> }) },
+                  // Make ONLY KTX MCP tools reachable. The exact SDK option that
+                  // enforces "agent may not call anything outside this list" is open
+                  // for the plan; `allowedTools` alone is documented as an
+                  // auto-approval list, not a restriction. Candidate mechanisms
+                  // (to be confirmed by plan-writing against current SDK docs):
+                  //   - `disallowedTools` covering each built-in tool name, OR
+                  //   - the `tools` option configured to expose only the MCP set, OR
+                  //   - a `canUseTool` callback / permission mode that denies
+                  //     anything not prefixed `mcp__ktx__`.
+                  // Whichever mechanism the SDK actually supports for restriction
+                  // is what the plan must use; the security boundary is "no Claude
+                  // Code built-in reachable", not the literal word `allowedTools`.
                   maxTurns: stepBudget,
                 }
               })
 ```
 
-The two runner classes share the public `runLoop(params: RunLoopParams): Promise<RunLoopResult>` shape (see `packages/context/src/agent/agent-runner.service.ts:13-37` for the interface). Stage code does not change. The CLI DI layer in `packages/cli/src/runtime.ts` selects one runner or the other based on the resolved project config.
+The two runner classes share the public `runLoop(params: RunLoopParams): Promise<RunLoopResult>` shape (see `packages/context/src/agent/agent-runner.service.ts:13-37` for the interface). Stage code does not change. The runner is selected at the **context-runtime DI factories** that today construct `AgentRunnerService` — `resolveAgentRunner` in `packages/context/src/ingest/local-bundle-runtime.ts:580-604` for ingest, and the corresponding agent-runner construction in `packages/context/src/memory/local-memory.ts:92-110` for the memory agent. (Note: `packages/cli/src/runtime.ts` is the Python-runtime command handler, not agent-runner DI; it is **not** the integration point.)
 
-The Claude Agent SDK authenticates from `~/.claude/` (the existing `claude login` artifacts). No KTX-side login flow. No `ANTHROPIC_API_KEY`.
+The Claude Agent SDK is documented to reuse local Claude Code authentication automatically when the user has run `claude` to authenticate (see Verified evidence #1). No KTX-side login flow. No `ANTHROPIC_API_KEY`.
 
 ## Decisions
 
@@ -50,10 +63,10 @@ The Claude Agent SDK authenticates from `~/.claude/` (the existing `claude login
 |---|---|---|
 | Q1 | Same `ktx ingest`/`ktx scan`/etc. surface; backend selected via `ktx.yaml` | KTX UX stays unchanged; the new backend is invisible to the user except in config |
 | Q2 | `@anthropic-ai/claude-agent-sdk` directly (not the OpenAI proxy, not `claude -p` subprocess) | Native Anthropic protocol; reuses `~/.claude/` auth; fewest hops |
-| Q3 | KTX MCP tools only; Claude Code built-ins (`Bash`/`Read`/`Edit`/`Write`/`Grep`/`Glob`/`WebFetch`) disabled via `allowedTools` allow-list | Preserves current ingest determinism and blast-radius limits; tool set continues to come from each stage's `buildToolSet(wu)` |
+| Q3 | KTX MCP tools only; Claude Code built-ins (`Bash`/`Read`/`Edit`/`Write`/`Grep`/`Glob`/`WebFetch`/`Task`) must be unreachable to the model. The exact SDK mechanism (e.g. `disallowedTools`, `tools` configuration, `canUseTool` / permission mode) is an open item for the plan — `allowedTools` alone is auto-approval, not a restriction | Preserves current ingest determinism and blast-radius limits; tool set continues to come from each stage's curated set |
 | Q4 | New `ClaudeAgentSdkRunnerService` class alongside existing `AgentRunnerService`; both implement the same `runLoop` shape | Avoids polluting the AI-SDK runner with conditional dead deps; clean per-runner deps shape; both call sites in `stage-3-work-units.ts:91` etc. are untouched |
 | `cwd` | Explicit `cwd: project.projectDir` (resolved at startup via `resolveKtxProjectDir`, not `process.cwd()`) | SDK's `cwd` is semantic (skills, `CLAUDE.md`, file checkpointing); KTX's existing convention is to anchor on `projectDir` regardless of invocation directory |
-| Tool adapter | New `toClaudeAgentSdkTool()` in `packages/context/src/tools/base-tool.ts` next to existing `toAiSdkTool()` (`:117-165`) | KTX tools return `{ markdown, structured }`; Claude Agent SDK's `tool()` expects `{ content: [{ type: 'text', text }] }` — trivial shim that flattens `markdown` |
+| Tool adapter | A backend-neutral tool boundary that preserves enough KTX tool definition data to build an SDK `tool(name, description, zodSchema, handler)` for each entry. Today `RunLoopParams.toolSet` is `Record<string, Tool>` (AI SDK type) and source-specific tools (e.g. `emit_historic_sql_evidence`) are already raw AI SDK `Tool` objects, not `BaseTool` instances (`packages/context/src/ingest/local-bundle-runtime.ts:543-556`); the runner alone cannot recover the original Zod input schema and KTX handler from those. The plan must either (a) extend the toolset port (`createIngestWuToolset`, equivalents in memory/scan toolsets) so it returns a per-tool descriptor with `name`, `description`, `inputSchema` (Zod), and the KTX handler — convertible to **either** AI SDK or Claude Agent SDK tools at the boundary — and adapt source-specific raw tools to that descriptor, or (b) require both shapes to be produced upstream. `toClaudeAgentSdkTool()` on `BaseTool` is fine for the BaseTool subset but is not sufficient on its own | KTX tools return `{ markdown, structured }`; Claude Agent SDK's `tool()` expects `{ content: [{ type: 'text', text }] }` — flattening `markdown` is straightforward once the underlying schema + handler are reachable |
 | Q5 | MVP: degraded repair + no telemetry; both documented as known gaps | Fastest path to a working backend; correctness preserved (model self-corrects); follow-up wires both through SDK hooks if/when needed |
 | Naming | Config value: `'claude-code'` | Names the user-facing thing (the Claude Code session they already authenticated); fits enum semantics (each value names an auth/API surface); avoids productizing the Max subscription |
 
@@ -61,11 +74,11 @@ The Claude Agent SDK authenticates from `~/.claude/` (the existing `claude login
 
 The plan should touch (at minimum) these areas. This is a sketch, not the plan.
 
-- **`packages/llm/src/types.ts`** — extend `KtxLlmBackend` from `'anthropic' | 'vertex' | 'gateway'` to add `| 'claude-code'`. Confirm that `KtxLlmConfig` and downstream consumers tolerate the new value (the `claude-code` runner will not consume the AI-SDK provider; the config path can leave fields like `apiKey` optional for this backend).
-- **`packages/context/src/tools/base-tool.ts`** — add `toClaudeAgentSdkTool()` parallel to `toAiSdkTool()`. Same input (a `BaseTool` subclass with zod schema + `ToolOutput` handler), different output wrapper (returns SDK's `tool(name, description, zodSchema, handler)` with a handler that calls the underlying KTX `execute()` and converts `ToolOutput.markdown` into `{ content: [{ type: 'text', text }] }`).
-- **`packages/context/src/agent/`** — add `claude-agent-sdk-runner.service.ts` exposing `ClaudeAgentSdkRunnerService` with the same `runLoop(params: RunLoopParams)` shape as `AgentRunnerService`. Internals: wrap `toolSet` via `createSdkMcpServer`, set `cwd`, `systemPrompt`, `maxTurns: stepBudget`, `allowedTools: ['mcp__ktx__<name>', ...]`, and consume the async iterator to detect stop conditions and map onto `RunLoopResult`.
-- **`packages/cli/src/runtime.ts`** (or equivalent DI wiring) — branch on `project.llm.backend === 'claude-code'` to construct `ClaudeAgentSdkRunnerService` instead of `AgentRunnerService`. All call sites (`stage-3-work-units.ts:91`, memory agent, etc.) receive the chosen runner via DI and don't change.
-- **Setup / config validation** — when the user selects `claude-code` in `ktx setup`, detect whether `~/.claude/` is populated (i.e. whether `claude login` has been run) and surface a clear error if not. Exact detection mechanism is an implementation detail for the plan.
+- **Config schema** — depending on the open scope decision (see top of doc), either (a) extend `KtxLlmBackend` in `packages/llm/src/types.ts` and explicitly handle the new value in `createKtxLlmProvider` / `createModelFactory` (`packages/llm/src/model-provider.ts:155-186`) so it does not silently fall through to gateway, **and** at every non-agent LLM consumer (page triage, scan enrichment, scan description generation, relationship LLM proposals); or (b) leave `KtxLlmBackend` alone and add a separate agent-runner backend field to `KtxProjectLlmConfig` whose `'claude-code'` value is consumed only at the agent-runner DI boundary.
+- **Tool boundary** — make the per-stage toolset port return descriptors that preserve `name`, `description`, Zod input schema, and the KTX handler so either an AI SDK tool or a Claude Agent SDK `tool()` can be built at the consumer. Touch `LocalIngestToolsetFactory.createIngestWuToolset` and the memory/scan toolset equivalents (`packages/context/src/ingest/local-bundle-runtime.ts:543-556`, `packages/context/src/memory/types.ts:120-126`). Source-specific raw AI SDK tools must be wrapped to the same descriptor shape. `BaseTool.toAiSdkTool()` (`:117-165`) stays; a parallel `toClaudeAgentSdkTool()` may live alongside it but is not the whole solution.
+- **`packages/context/src/agent/`** — add `claude-agent-sdk-runner.service.ts` exposing `ClaudeAgentSdkRunnerService` with the same `runLoop(params: RunLoopParams)` shape as `AgentRunnerService`. Internals: register the curated KTX tools via `createSdkMcpServer` and `mcpServers`, set `cwd`, `systemPrompt`, `maxTurns: stepBudget`, configure the SDK so only `mcp__ktx__*` tools are reachable (mechanism per the open Q3 item — not `allowedTools` alone), and consume the async iterator to detect stop conditions and map onto `RunLoopResult`.
+- **DI wiring** — modify `resolveAgentRunner` in `packages/context/src/ingest/local-bundle-runtime.ts:580-604` and the agent-runner construction path in `packages/context/src/memory/local-memory.ts:92-110` to branch on the resolved agent-runner backend and construct `ClaudeAgentSdkRunnerService` instead of `AgentRunnerService` when applicable. All call sites (`stage-3-work-units.ts:91`, memory agent, etc.) receive the chosen runner via DI and do not change.
+- **Setup / config validation** — when the user selects `claude-code` in `ktx setup`, verify that the local Claude Code SDK auth is **usable**, not just that `~/.claude/` exists. SDK docs establish that the SDK reuses authentication automatically when the user has run `claude` to authenticate; they do not establish directory probing as a sufficient liveness test. The plan must define a usability check (e.g. a minimal SDK probe call that exercises auth, an SDK-provided auth-status helper if one exists, or a documented file-presence check that the SDK docs explicitly endorse). Pure existence-of-`~/.claude/` is not sufficient on its own.
 - **Docs** — `docs-site/content/docs/concepts/` and `docs-site/content/docs/getting-started/` need a section on the `claude-code` backend, framed as "use your own local Claude Code session." Avoid productizing-Max-sub language.
 
 ## Verified evidence
@@ -73,8 +86,8 @@ The plan should touch (at minimum) these areas. This is a sketch, not the plan.
 Findings cited during the brainstorm (each one already verified in this session):
 
 1. **Auth reuse.** Claude Agent SDK docs (`/nothflare/claude-agent-sdk-docs` via context7): "if you have already authenticated Claude Code by running `claude` in your terminal, the SDK will use that authentication automatically."
-2. **Tool config.** SDK uses `createSdkMcpServer({ name, version, tools: [tool(name, description, zodSchema, handler), ...] })` registered via `mcpServers` in `query()` options. `allowedTools` controls which tool names the agent may call.
-3. **Disabling Claude Code built-ins.** Set `allowedTools` to the list of `mcp__<server>__<tool>` names; do not opt into the `'claude_code'` preset for `tools` or `systemPrompt`. Default is open; this is required.
+2. **Tool config.** SDK uses `createSdkMcpServer({ name, version, tools: [tool(name, description, zodSchema, handler), ...] })` registered via `mcpServers` in `query()` options.
+3. **Disabling Claude Code built-ins.** Required outcome: only the registered `mcp__<server>__<tool>` names are reachable; `Bash` / `Read` / `Edit` / `Write` / `Grep` / `Glob` / `WebFetch` / `Task` and any other built-ins must not be invocable by the model. The exact SDK option that enforces this is open and must be confirmed against current SDK docs in the plan-writing session — `allowedTools` is documented as an auto-approval list and is **not** sufficient as a restriction; candidate enforcement mechanisms are `disallowedTools`, the `tools` option, or a `canUseTool` / permission-mode callback.
 4. **Step budget.** `maxTurns` option in `query()` maps to KTX's `stepBudget`.
 5. **`cwd` semantics.** Skill loading (`.claude/skills/`), `CLAUDE.md` discovery (when `settingSources: ['project']`), and file checkpointing all resolve relative to `cwd`. Defaults to `process.cwd()`.
 6. **No transparent repair hook.** SDK hook event list: `PreToolUse | PostToolUse | PostToolUseFailure | Notification | UserPromptSubmit | SessionStart | SessionEnd | Stop | SubagentStart | SubagentStop | PreCompact | PermissionRequest`. `PostToolUseFailure` fires on execution failure, not on pre-execution malformed args.
@@ -90,7 +103,7 @@ Findings cited during the brainstorm (each one already verified in this session)
 Real questions the plan will need to answer that we did not lock during brainstorm:
 
 1. **Model selection per role.** Today KTX has `KtxModelRole = 'default' | 'triage' | 'candidateExtraction' | 'curator' | 'reconcile' | 'repair'` with per-role model IDs. Claude Agent SDK's `query()` accepts a single `model` string per call. The plan needs to decide whether the `claude-code` backend (a) maps each role to a specific Claude model ID per call, (b) uses a single configured model for all roles, or (c) reads role-to-model mapping from the same `ktx.yaml` shape used by other backends. The `'repair'` role specifically is degraded under Q5=A, but the rest still need a binding strategy.
-2. **Auth presence check.** Before the first `query()` call, KTX should fail fast with a clear message if `~/.claude/` does not contain valid Claude Code credentials. The detection mechanism (file probe, SDK probe call, etc.) is open.
-3. **`ktx.yaml` schema migration.** Adding `'claude-code'` to the enum is a config schema change. The plan needs to update any config validation (zod schemas under `packages/context/src/project/`) and the setup wizard (`packages/cli/src/setup-models.ts`) to surface the new choice.
+2. **Auth presence check.** Before the first `query()` call, KTX should fail fast with a clear message if the local Claude Code SDK auth is not usable. The check must be a usability test, not just `~/.claude/` directory probing — directory presence does not prove the SDK can actually authenticate (see implementation surface). The detection mechanism (SDK probe call, SDK-provided helper, or a docs-endorsed file-presence test) is open.
+3. **`ktx.yaml` schema migration & non-agent LLM consumers.** Decide between the two scope options at the top of this document (global `KtxLlmBackend` extension vs. separate agent-runner backend field). If extending `KtxLlmBackend`: update zod schemas under `packages/context/src/project/`, the setup wizard (`packages/cli/src/setup-models.ts`, `packages/cli/src/commands/setup-commands.ts`), `createKtxLlmProvider` / `createModelFactory` (`packages/llm/src/model-provider.ts:155-186`), and define behavior at every non-agent LLM consumer (`packages/context/src/ingest/page-triage/page-triage.service.ts`, `packages/context/src/scan/local-scan.ts`, `packages/context/src/scan/description-generation.ts`, `packages/context/src/scan/relationship-discovery.ts`). If adding a separate field: only the setup wizard, the project zod schema, and the agent-runner DI factories need to change.
 4. **Stop-reason mapping.** The Agent SDK exposes session lifecycle via the async iterator and the `Stop` hook event. The plan needs to define how a Claude Agent SDK session maps to KTX's `RunLoopStopReason = 'budget' | 'natural' | 'error'` (`agent-runner.service.ts:6`). In particular: how to detect that `maxTurns` was hit vs natural completion vs error.
 5. **Tool failure counting.** `stage-3-work-units.ts:132` reads `toolFailureCount?(wu.unitKey)` to fail a WU when any tool call failed. The new runner needs to surface tool failures via the same counting mechanism. The `PostToolUseFailure` hook is the natural integration point.
