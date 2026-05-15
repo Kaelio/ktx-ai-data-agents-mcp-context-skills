@@ -2,7 +2,12 @@
 
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
-import { access as fsAccess, readdir as fsReaddir, stat as fsStat } from 'node:fs/promises';
+import {
+  access as fsAccess,
+  readdir as fsReaddir,
+  stat as fsStat,
+  writeFile as fsWriteFile,
+} from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -12,6 +17,10 @@ function ktxRootDir() {
 
 function cliBinPath(rootDir) {
   return resolve(rootDir, 'packages', 'cli', 'dist', 'bin.js');
+}
+
+function buildStampPath(rootDir) {
+  return resolve(rootDir, 'packages', 'cli', 'dist', '.ktx-build-stamp');
 }
 
 async function fileExists(path, access) {
@@ -66,17 +75,17 @@ async function newestMtimeMs(path, fs) {
   return newest;
 }
 
-async function isBuildStale(rootDir, binPath, fs) {
-  let binStats;
+async function isBuildStale(rootDir, stampPath, fs) {
+  let stampStats;
   try {
-    binStats = await fs.stat(binPath);
+    stampStats = await fs.stat(stampPath);
   } catch {
     return true;
   }
 
   const inputPaths = await packageBuildInputPaths(rootDir, fs.readdir);
   for (const inputPath of inputPaths) {
-    if ((await newestMtimeMs(inputPath, fs)) > binStats.mtimeMs) {
+    if ((await newestMtimeMs(inputPath, fs)) > stampStats.mtimeMs) {
       return true;
     }
   }
@@ -137,7 +146,9 @@ export async function runWorkspaceKtx(argv, options = {}) {
     stat: options.stat ?? fsStat,
     readdir: options.readdir ?? fsReaddir,
   };
+  const writeFile = options.writeFile ?? fsWriteFile;
   const binPath = cliBinPath(rootDir);
+  const stampPath = buildStampPath(rootDir);
   const runCommand =
     options.runCommand ??
     (options.execFile
@@ -146,7 +157,7 @@ export async function runWorkspaceKtx(argv, options = {}) {
   const commandEnv = options.env;
 
   const binExists = await fileExists(binPath, access);
-  const needsBuild = !binExists || (await isBuildStale(rootDir, binPath, fs));
+  const needsBuild = !binExists || (await isBuildStale(rootDir, stampPath, fs));
   if (needsBuild) {
     stderr.write(
       binExists
@@ -160,6 +171,7 @@ export async function runWorkspaceKtx(argv, options = {}) {
       );
       return buildExitCode;
     }
+    await writeFile(stampPath, '');
   }
 
   return await runCommand(process.execPath, [binPath, ...cliArgv], { cwd: rootDir, env: commandEnv });
