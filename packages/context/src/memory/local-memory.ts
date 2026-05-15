@@ -1,13 +1,17 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { KtxLlmProvider } from '@ktx/llm';
 import YAML from 'yaml';
-import { AgentRunnerService } from '../agent/index.js';
 import { localConnectionInfoFromConfig } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxFileStorePort, KtxFileWriteResult } from '../core/index.js';
 import { type KtxLogger, noopLogger, SessionWorktreeService } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
-import { createLocalKtxLlmProviderFromConfig } from '../llm/index.js';
+import {
+  createLocalKtxLlmRuntimeFromConfig,
+  RuntimeAgentRunner,
+  type AgentRunnerPort,
+  type KtxLlmRuntimePort,
+  type KtxRuntimeToolSet,
+} from '../llm/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { PromptService } from '../prompts/index.js';
 import { SkillsRegistryService } from '../skills/index.js';
@@ -63,8 +67,8 @@ const LOCAL_AUTHOR = { name: 'KTX Local', email: 'local@ktx.local' };
 const LOCAL_SHAPE_WARNING = 'Local memory capture validates semantic-layer YAML shape only.';
 
 export interface CreateLocalProjectMemoryCaptureOptions {
-  llmProvider?: KtxLlmProvider;
-  agentRunner?: AgentRunnerService;
+  llmRuntime?: KtxLlmRuntimePort;
+  agentRunner?: AgentRunnerPort;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
@@ -89,7 +93,8 @@ export function createLocalProjectMemoryCapture(
   const slSearchService = new SlSearchService(embedding, slSourcesRepository, logger);
   const wikiService = new KnowledgeWikiService(rootFileStore, embedding, knowledgeIndex, project.git, logger);
   const authorResolver = new LocalAuthorResolver();
-  const llmProvider = options.llmProvider ?? createLocalKtxLlmProviderFromConfig(project.config.llm);
+  const llmRuntime =
+    options.llmRuntime ?? createLocalKtxLlmRuntimeFromConfig(project.config.llm, { projectDir: project.projectDir });
   const toolsetFactory = new LocalMemoryToolsetFactory({
     project,
     embedding,
@@ -104,10 +109,7 @@ export function createLocalProjectMemoryCapture(
   });
   const agentRunner =
     options.agentRunner ??
-    new AgentRunnerService({
-      llmProvider: requireLlmProvider(llmProvider),
-      logger,
-    });
+    new RuntimeAgentRunner(requireLlmRuntime(llmRuntime));
   const memoryAgent = new MemoryAgentService({
     settings: {
       knowledge: { userScopedKnowledgeEnabled: false },
@@ -143,11 +145,11 @@ export function createLocalProjectMemoryCapture(
   });
 }
 
-function requireLlmProvider(provider: KtxLlmProvider | null | undefined): KtxLlmProvider {
-  if (!provider) {
+function requireLlmRuntime(runtime: KtxLlmRuntimePort | null | undefined): KtxLlmRuntimePort {
+  if (!runtime) {
     throw new Error('createLocalProjectMemoryCapture requires llm.provider.backend or an injected agentRunner');
   }
-  return provider;
+  return runtime;
 }
 
 class LocalMemoryFileStore implements MemoryFileStorePort {
@@ -386,8 +388,8 @@ class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
 class LocalMemoryToolSet implements MemoryToolSetLike {
   constructor(private readonly tools: BaseTool[]) {}
 
-  toAiSdkTools(context: ToolContext) {
-    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAiSdkTool(context)]));
+  toRuntimeTools(context: ToolContext): KtxRuntimeToolSet {
+    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toRuntimeTool(context)]));
   }
 }
 

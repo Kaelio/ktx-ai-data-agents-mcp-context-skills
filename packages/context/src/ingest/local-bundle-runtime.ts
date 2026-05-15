@@ -1,20 +1,20 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { KtxLlmProvider } from '@ktx/llm';
-import type { Tool } from 'ai';
 import YAML from 'yaml';
-import type { AgentRunnerService } from '../agent/index.js';
-import { AgentRunnerService as DefaultAgentRunnerService } from '../agent/index.js';
 import { localConnectionInfoFromConfig, type KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
 import { noopLogger, SessionWorktreeService } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
 import {
-  createJsonlKtxLlmDebugRequestRecorder,
+  createRuntimeToolDescriptorFromAiTool,
   createLocalKtxEmbeddingProviderFromConfig,
-  createLocalKtxLlmProviderFromConfig,
+  createLocalKtxLlmRuntimeFromConfig,
   KtxIngestEmbeddingPortAdapter,
+  RuntimeAgentRunner,
+  type AgentRunnerPort,
+  type KtxLlmRuntimePort,
+  type KtxRuntimeToolSet,
 } from '../llm/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/index.js';
@@ -100,8 +100,9 @@ const LOCAL_SHAPE_WARNING = 'Local ingest validates semantic-layer YAML shape on
 export interface CreateLocalBundleIngestRuntimeOptions {
   project: KtxLocalProject;
   adapters: SourceAdapter[];
-  agentRunner?: AgentRunnerService;
-  llmProvider?: KtxLlmProvider;
+  agentRunner?: AgentRunnerPort;
+  llmRuntime?: KtxLlmRuntimePort;
+  createLlmRuntime?: typeof createLocalKtxLlmRuntimeFromConfig;
   llmDebugRequestFile?: string;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
@@ -456,12 +457,12 @@ class NoopKnowledgeEventPort implements KnowledgeEventPort {
 class LocalIngestToolSet implements IngestToolsetLike {
   constructor(
     private readonly tools: BaseTool[],
-    private readonly sourceTools: Record<string, Tool> = {},
+    private readonly sourceTools: KtxRuntimeToolSet = {},
   ) {}
 
-  toAiSdkTools(context: ToolContext) {
+  toRuntimeTools(context: ToolContext): KtxRuntimeToolSet {
     return {
-      ...Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAiSdkTool(context)])),
+      ...Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toRuntimeTool(context)])),
       ...this.sourceTools,
     };
   }
@@ -541,13 +542,16 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
   }
 
   createIngestWuToolset(session: ToolSession, options?: { includeContextEvidenceTools?: boolean }): IngestToolsetLike {
-    const sourceTools: Record<string, Tool> =
+    const sourceTools: KtxRuntimeToolSet =
       session.ingest?.sourceKey === 'historic-sql'
         ? {
-            emit_historic_sql_evidence: createEmitHistoricSqlEvidenceTool({
-              connectionId: session.connectionId,
-              session,
-            }),
+            emit_historic_sql_evidence: createRuntimeToolDescriptorFromAiTool(
+              'emit_historic_sql_evidence',
+              createEmitHistoricSqlEvidenceTool({
+                connectionId: session.connectionId,
+                session,
+              }),
+            ),
           }
         : {};
     return new LocalIngestToolSet(
@@ -571,36 +575,35 @@ function nextLocalJobId(): string {
 
 function localIngestLlmProviderGuardMessage(projectDir: string): string {
   return [
-    'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+    'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, or claude-code, or an injected agentRunner.',
     'Configure an Anthropic provider, then rerun ingest:',
     `  ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
   ].join('\n');
 }
 
 function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
-  agentRunner: AgentRunnerService;
-  llmProvider?: KtxLlmProvider;
+  agentRunner: AgentRunnerPort;
+  llmRuntime?: KtxLlmRuntimePort;
 } {
-  const llmProvider =
-    options.llmProvider ?? createLocalKtxLlmProviderFromConfig(options.project.config.llm) ?? undefined;
+  const llmRuntime =
+    options.llmRuntime ??
+    (options.createLlmRuntime ?? createLocalKtxLlmRuntimeFromConfig)(options.project.config.llm, {
+      projectDir: options.project.projectDir,
+      env: process.env,
+    }) ??
+    undefined;
 
   if (options.agentRunner) {
-    return { agentRunner: options.agentRunner, ...(llmProvider ? { llmProvider } : {}) };
+    return { agentRunner: options.agentRunner, ...(llmRuntime ? { llmRuntime } : {}) };
   }
 
-  if (!llmProvider) {
+  if (!llmRuntime) {
     throw new Error(localIngestLlmProviderGuardMessage(options.project.projectDir));
   }
 
   return {
-    agentRunner: new DefaultAgentRunnerService({
-      llmProvider,
-      logger: options.logger ?? noopLogger,
-      ...(options.llmDebugRequestFile
-        ? { debugRequestRecorder: createJsonlKtxLlmDebugRequestRecorder(options.llmDebugRequestFile) }
-        : {}),
-    }),
-    llmProvider,
+    agentRunner: new RuntimeAgentRunner(llmRuntime),
+    llmRuntime,
   };
 }
 
@@ -627,7 +630,7 @@ export function createLocalBundleIngestRuntime(
   const knowledgeIndex = new LocalKnowledgeIndex(options.project, embedding);
   const knowledgeEvents = new NoopKnowledgeEventPort();
   const wikiService = new KnowledgeWikiService(rootFileStore, embedding, knowledgeIndex, options.project.git, logger);
-  const { agentRunner, llmProvider } = resolveAgentRunner(options);
+  const { agentRunner, llmRuntime } = resolveAgentRunner(options);
   const promptService = new PromptService({ promptsDir, partials: [], logger });
   const storage = new LocalIngestStorage(options.project);
   const registry = registerAdapters(options.adapters);
@@ -681,10 +684,11 @@ export function createLocalBundleIngestRuntime(
     commitMessages: new LocalCommitMessagePort(),
     embedding,
     contextEvidenceIndex: new ContextEvidenceIndexService({ store: contextStore, embeddings: embedding, logger }),
-    pageTriage: llmProvider
+    llmRuntime,
+    pageTriage: llmRuntime
       ? new PageTriageService({
           store: contextStore,
-          llmProvider,
+          llmRuntime,
           settings: {
             enabled: true,
             maxConcurrency: 2,

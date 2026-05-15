@@ -1,5 +1,4 @@
-import type { Tool } from 'ai';
-import type { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerPort, KtxRuntimeToolSet } from '../llm/index.js';
 import type { GitService, KtxFileStorePort, KtxLogger, SessionWorktreeService } from '../core/index.js';
 import type { PromptService } from '../prompts/index.js';
 import type { SkillsRegistryService } from '../skills/index.js';
@@ -118,7 +117,7 @@ export interface MemoryCommitMessagePort {
 export interface MemoryFileStorePort extends KtxFileStorePort<MemoryFileStorePort>, MemoryCommitMessagePort {}
 
 export interface MemoryToolSetLike {
-  toAiSdkTools(context: ToolContext): Record<string, Tool>;
+  toRuntimeTools(context: ToolContext): KtxRuntimeToolSet;
 }
 
 export interface MemoryToolsetFactoryPort {
@@ -150,7 +149,7 @@ export interface MemoryAgentServiceDeps {
   slSourcesRepository: SlSourcesIndexPort;
   sessionWorktreeService: SessionWorktreeService<MemoryFileStorePort>;
   semanticLayerSourceReconciler: MemorySlSourceReconcilerPort;
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   slValidator: SlValidatorPort<SlValidationDeps>;
   toolsetFactory: MemoryToolsetFactoryPort;
   telemetry?: MemoryTelemetryPort;

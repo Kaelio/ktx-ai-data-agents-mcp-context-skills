@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tool } from 'ai';
 import * as YAML from 'yaml';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../core/index.js';
+import type { KtxRuntimeToolSet } from '../llm/index.js';
 import {
   revertSourceToPreHead,
   type SemanticLayerSource,
@@ -125,8 +125,9 @@ export class MemoryAgentService {
       session: toolSession,
     };
 
-    const loadSkillTool = {
-      load_skill: tool({
+    const loadSkillTool: KtxRuntimeToolSet = {
+      load_skill: {
+        name: 'load_skill',
         description:
           'Load a skill to get specialized instructions. Call this when a skill listed in the system prompt matches the current task.',
         inputSchema: z.object({
@@ -137,23 +138,27 @@ export class MemoryAgentService {
           if (!skill) {
             const available =
               (await this.deps.skillsRegistry.listSkills('memory_agent')).map((s) => s.name).join(', ') || '(none)';
-            return `Skill "${name}" not available to the memory agent. Available: ${available}`;
+            return { markdown: `Skill "${name}" not available to the memory agent. Available: ${available}` };
           }
           try {
             const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');
             if (!skillsLoaded.includes(skill.name)) {
               skillsLoaded.push(skill.name);
             }
-            return {
+            const structured = {
               name: skill.name,
               skillDirectory: skill.path,
               content: this.deps.skillsRegistry.stripFrontmatter(body),
             };
+            return {
+              markdown: `# ${structured.name}\n\n${structured.content}`,
+              structured,
+            };
           } catch (e) {
-            return `Error loading skill "${name}": ${e instanceof Error ? e.message : String(e)}`;
+            return { markdown: `Error loading skill "${name}": ${e instanceof Error ? e.message : String(e)}` };
           }
         },
-      }),
+      },
     };
 
     const skillNames: string[] = [...DEFAULT_SKILL_NAMES];
@@ -212,7 +217,7 @@ export class MemoryAgentService {
         modelRole: 'candidateExtraction',
         systemPrompt,
         userPrompt: prompt,
-        toolSet: { ...toolset.toAiSdkTools(toolContext), ...loadSkillTool },
+        toolSet: { ...toolset.toRuntimeTools(toolContext), ...loadSkillTool },
         stepBudget,
         telemetryTags: {
           operationName: 'memory-agent-ingest',

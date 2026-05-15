@@ -1,6 +1,6 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { ToolExecuteFunction, ToolExecutionOptions, ToolSet } from 'ai';
+import type { KtxRuntimeToolSet } from '../../llm/index.js';
 
 export interface ToolCallLogEntry {
   ts: string;
@@ -31,7 +31,7 @@ interface ToolCallLoggerOptions {
  * sequential (`generateText` awaits each tool result), so per-WU files are
  * effectively single-writer and lines land in call order.
  */
-export function wrapToolsWithLogger<T extends ToolSet>(
+export function wrapToolsWithLogger<T extends KtxRuntimeToolSet>(
   tools: T,
   logFilePath: string,
   wuKey: string,
@@ -44,17 +44,13 @@ export function wrapToolsWithLogger<T extends ToolSet>(
       wrapped[name] = original;
       continue;
     }
-    const wrappedExecute: ToolExecuteFunction<unknown, unknown> = async (
-      input: unknown,
-      opts: ToolExecutionOptions,
-    ) => {
+    const wrappedExecute = async (input: unknown) => {
       const start = Date.now();
       try {
-        const output = await (originalExecute as ToolExecuteFunction<unknown, unknown>)(input, opts);
+        const output = await originalExecute(input);
         const entry: ToolCallLogEntry = {
           ts: new Date().toISOString(),
           wuKey,
-          toolCallId: opts.toolCallId,
           toolName: name,
           durationMs: Date.now() - start,
           input,
@@ -67,7 +63,6 @@ export function wrapToolsWithLogger<T extends ToolSet>(
         const entry: ToolCallLogEntry = {
           ts: new Date().toISOString(),
           wuKey,
-          toolCallId: opts.toolCallId,
           toolName: name,
           durationMs: Date.now() - start,
           input,

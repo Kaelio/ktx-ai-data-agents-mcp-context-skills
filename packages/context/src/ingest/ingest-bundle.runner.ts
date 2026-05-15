@@ -1,9 +1,9 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { type Tool, tool } from 'ai';
 import pLimit from 'p-limit';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../core/index.js';
+import { createRuntimeToolDescriptorFromAiTool, type KtxRuntimeToolSet } from '../llm/index.js';
 import type { CaptureSession, MemoryAction } from '../memory/index.js';
 import type { SemanticLayerService, SemanticLayerSource, SlValidationDeps } from '../sl/index.js';
 import { createTouchedSlSources, type ToolContext, type ToolSession } from '../tools/index.js';
@@ -694,8 +694,9 @@ export class IngestBundleRunner {
           };
 
           const skillsLoadedPerWu: string[] = [];
-          const loadSkillTool: Record<string, Tool> = {
-            load_skill: tool({
+          const loadSkillTool: KtxRuntimeToolSet = {
+            load_skill: {
+              name: 'load_skill',
               description:
                 'Load a skill to get specialized instructions. Call this when a skill listed in the system prompt matches the current task.',
               inputSchema: z.object({ name: z.string() }),
@@ -705,19 +706,23 @@ export class IngestBundleRunner {
                   const available =
                     (await this.deps.skillsRegistry.listSkills('memory_agent')).map((s) => s.name).join(', ') ||
                     '(none)';
-                  return `Skill "${name}" not available. Available: ${available}`;
+                  return { markdown: `Skill "${name}" not available. Available: ${available}` };
                 }
                 const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');
                 if (!skillsLoadedPerWu.includes(skill.name)) {
                   skillsLoadedPerWu.push(skill.name);
                 }
-                return {
+                const structured = {
                   name: skill.name,
                   skillDirectory: skill.path,
                   content: this.deps.skillsRegistry.stripFrontmatter(body),
                 };
+                return {
+                  markdown: `# ${structured.name}\n\n${structured.content}`,
+                  structured,
+                };
               },
-            }),
+            },
           };
 
           const priorProvenance = await this.deps.provenance.findLatestArtifactsForRawPaths(
@@ -726,12 +731,15 @@ export class IngestBundleRunner {
             wu.rawFiles,
           );
           const wuEmitUnmappedFallbackTool = {
-            emit_unmapped_fallback: createEmitUnmappedFallbackTool({
-              stageIndex,
-              allowedPaths: new Set(wu.rawFiles),
-              tableRefExists: (tableRef) =>
-                this.tableRefExistsInSemanticLayer(scopedSemanticLayerService, slConnectionIds, tableRef),
-            }),
+            emit_unmapped_fallback: createRuntimeToolDescriptorFromAiTool(
+              'emit_unmapped_fallback',
+              createEmitUnmappedFallbackTool({
+                stageIndex,
+                allowedPaths: new Set(wu.rawFiles),
+                tableRefExists: (tableRef) =>
+                  this.tableRefExistsInSemanticLayer(scopedSemanticLayerService, slConnectionIds, tableRef),
+              }),
+            ),
           };
 
           const systemPrompt = buildWuSystemPrompt({
@@ -765,7 +773,7 @@ export class IngestBundleRunner {
                     wu: wuInner,
                     loadSkillTool,
                     emitUnmappedFallbackTool: wuEmitUnmappedFallbackTool,
-                    toolsetTools: wuToolset.toAiSdkTools(wuToolContext),
+                    toolsetTools: wuToolset.toRuntimeTools(wuToolContext),
                   }),
                   join(transcriptDir, `${wuInner.unitKey}.jsonl`),
                   wuInner.unitKey,
@@ -921,53 +929,79 @@ export class IngestBundleRunner {
         ingest: ingestToolMetadata,
         session: rcToolSession,
       };
-      const rcLoadSkill: Record<string, Tool> = {
-        load_skill: tool({
+      const rcLoadSkill: KtxRuntimeToolSet = {
+        load_skill: {
+          name: 'load_skill',
           description: 'Load a skill.',
           inputSchema: z.object({ name: z.string() }),
           execute: async ({ name }) => {
             const skill = await this.deps.skillsRegistry.getSkill(name, 'memory_agent');
             if (!skill) {
-              return `Skill "${name}" not found`;
+              return { markdown: `Skill "${name}" not found` };
             }
             const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');
-            return { name: skill.name, content: this.deps.skillsRegistry.stripFrontmatter(body) };
+            const structured = { name: skill.name, content: this.deps.skillsRegistry.stripFrontmatter(body) };
+            return { markdown: `# ${structured.name}\n\n${structured.content}`, structured };
           },
-        }),
+        },
       };
       const allStagedPaths = new Set<string>([...currentHashes.keys()]);
-      const rcRawSpanTool = { read_raw_span: createReadRawSpanTool({ stagedDir, allowedPaths: allStagedPaths }) };
-      const rcStageListTool = { stage_list: createStageListTool({ stageIndex }) };
-      const rcStageDiffTool = { stage_diff: createStageDiffTool({ stageIndex }) };
+      const rcRawSpanTool = {
+        read_raw_span: createRuntimeToolDescriptorFromAiTool(
+          'read_raw_span',
+          createReadRawSpanTool({ stagedDir, allowedPaths: allStagedPaths }),
+        ),
+      };
+      const rcStageListTool = {
+        stage_list: createRuntimeToolDescriptorFromAiTool('stage_list', createStageListTool({ stageIndex })),
+      };
+      const rcStageDiffTool = {
+        stage_diff: createRuntimeToolDescriptorFromAiTool('stage_diff', createStageDiffTool({ stageIndex })),
+      };
       const rcEvictionListTool = {
-        eviction_list: createEvictionListTool({
-          provenance: this.deps.provenance,
-          connectionId: job.connectionId,
-          sourceKey: job.sourceKey,
-          deletedRawPaths: eviction?.deletedRawPaths ?? [],
-        }),
+        eviction_list: createRuntimeToolDescriptorFromAiTool(
+          'eviction_list',
+          createEvictionListTool({
+            provenance: this.deps.provenance,
+            connectionId: job.connectionId,
+            sourceKey: job.sourceKey,
+            deletedRawPaths: eviction?.deletedRawPaths ?? [],
+          }),
+        ),
       };
       const rcEmitConflictResolutionTool = {
-        emit_conflict_resolution: createEmitConflictResolutionTool({ stageIndex }),
+        emit_conflict_resolution: createRuntimeToolDescriptorFromAiTool(
+          'emit_conflict_resolution',
+          createEmitConflictResolutionTool({ stageIndex }),
+        ),
       };
       const rcEmitEvictionDecisionTool = {
-        emit_eviction_decision: createEmitEvictionDecisionTool({
-          stageIndex,
-          deletedRawPaths: eviction?.deletedRawPaths ?? [],
-        }),
+        emit_eviction_decision: createRuntimeToolDescriptorFromAiTool(
+          'emit_eviction_decision',
+          createEmitEvictionDecisionTool({
+            stageIndex,
+            deletedRawPaths: eviction?.deletedRawPaths ?? [],
+          }),
+        ),
       };
       const rcEmitArtifactResolutionTool = {
-        emit_artifact_resolution: createEmitArtifactResolutionTool({
-          stageIndex,
-          allowedPaths: allStagedPaths,
-        }),
+        emit_artifact_resolution: createRuntimeToolDescriptorFromAiTool(
+          'emit_artifact_resolution',
+          createEmitArtifactResolutionTool({
+            stageIndex,
+            allowedPaths: allStagedPaths,
+          }),
+        ),
       };
       const rcEmitUnmappedFallbackTool = {
-        emit_unmapped_fallback: createEmitUnmappedFallbackTool({
-          stageIndex,
-          allowedPaths: allStagedPaths,
-          tableRefExists: (tableRef) => this.tableRefExistsInSemanticLayer(rcScopedSl, slConnectionIds, tableRef),
-        }),
+        emit_unmapped_fallback: createRuntimeToolDescriptorFromAiTool(
+          'emit_unmapped_fallback',
+          createEmitUnmappedFallbackTool({
+            stageIndex,
+            allowedPaths: allStagedPaths,
+            tableRefExists: (tableRef) => this.tableRefExistsInSemanticLayer(rcScopedSl, slConnectionIds, tableRef),
+          }),
+        ),
       };
 
       const reconcileBaseFraming = await this.deps.promptService.loadPrompt('memory_agent_bundle_ingest_reconcile');
@@ -1026,7 +1060,7 @@ export class IngestBundleRunner {
                 emitArtifactResolutionTool: rcEmitArtifactResolutionTool,
                 emitUnmappedFallbackTool: rcEmitUnmappedFallbackTool,
                 readRawSpanTool: rcRawSpanTool,
-                toolsetTools: rcToolset.toAiSdkTools(rcToolContext),
+                toolsetTools: rcToolset.toRuntimeTools(rcToolContext),
               }),
               join(transcriptDir, 'reconcile.jsonl'),
               'reconcile',
@@ -1075,7 +1109,7 @@ export class IngestBundleRunner {
                 emitArtifactResolutionTool: rcEmitArtifactResolutionTool,
                 emitUnmappedFallbackTool: rcEmitUnmappedFallbackTool,
                 readRawSpanTool: rcRawSpanTool,
-                toolsetTools: rcToolset.toAiSdkTools(rcToolContext),
+                toolsetTools: rcToolset.toRuntimeTools(rcToolContext),
               }),
               join(transcriptDir, 'reconcile.jsonl'),
               'reconcile',

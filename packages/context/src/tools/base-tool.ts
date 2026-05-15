@@ -171,7 +171,7 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
     return {
       name: toolName,
       description: this.description,
-      inputSchema: this.inputSchema as KtxRuntimeToolDescriptor['inputSchema'],
+      inputSchema: this.inputSchema as unknown as KtxRuntimeToolDescriptor['inputSchema'],
       execute: async (params) => {
         const callContext = { ...context };
         if (!callContext.userId) {

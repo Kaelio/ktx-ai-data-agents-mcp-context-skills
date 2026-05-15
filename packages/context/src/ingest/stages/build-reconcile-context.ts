@@ -1,5 +1,5 @@
-import type { Tool, ToolSet } from 'ai';
 import { buildCanonicalPinsPromptBlock, type CanonicalPin } from '../canonical-pins.js';
+import type { KtxRuntimeToolSet } from '../../llm/index.js';
 import {
   createVerificationLedgerState,
   VERIFICATION_LEDGER_PROMPT,
@@ -181,19 +181,19 @@ export function buildReconcileUserPrompt(
 }
 
 export interface ReconcileToolSetInput {
-  loadSkillTool: Record<string, Tool>;
-  stageListTool: Record<string, Tool>;
-  stageDiffTool: Record<string, Tool>;
-  evictionListTool: Record<string, Tool>;
-  emitConflictResolutionTool: Record<string, Tool>;
-  emitEvictionDecisionTool: Record<string, Tool>;
-  emitArtifactResolutionTool: Record<string, Tool>;
-  emitUnmappedFallbackTool: Record<string, Tool>;
-  readRawSpanTool: Record<string, Tool>;
-  toolsetTools: ToolSet;
+  loadSkillTool: KtxRuntimeToolSet;
+  stageListTool: KtxRuntimeToolSet;
+  stageDiffTool: KtxRuntimeToolSet;
+  evictionListTool: KtxRuntimeToolSet;
+  emitConflictResolutionTool: KtxRuntimeToolSet;
+  emitEvictionDecisionTool: KtxRuntimeToolSet;
+  emitArtifactResolutionTool: KtxRuntimeToolSet;
+  emitUnmappedFallbackTool: KtxRuntimeToolSet;
+  readRawSpanTool: KtxRuntimeToolSet;
+  toolsetTools: KtxRuntimeToolSet;
 }
 
-export function buildReconcileToolSet(input: ReconcileToolSetInput): ToolSet {
+export function buildReconcileToolSet(input: ReconcileToolSetInput): KtxRuntimeToolSet {
   const state = createVerificationLedgerState();
   return withVerificationLedger(
     {

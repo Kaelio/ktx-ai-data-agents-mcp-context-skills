@@ -638,7 +638,7 @@ describe('local scan', () => {
       enrichmentProviders: {
         llmRuntime: {
           ...deterministicLlmRuntime(),
-          generateObject,
+          generateObject: generateObject as never,
         },
         embedding: {
           dimensions: 8,

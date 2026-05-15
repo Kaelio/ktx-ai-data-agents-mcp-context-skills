@@ -183,6 +183,9 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
     if (error) {
       throw error;
     }
+    if (result.subtype !== 'success') {
+      throw new Error(`Claude Code query failed (${result.subtype})`);
+    }
     return result.result;
   }
 
@@ -208,6 +211,9 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
     const error = resultError(result);
     if (error) {
       throw error;
+    }
+    if (result.subtype !== 'success') {
+      throw new Error(`Claude Code query failed (${result.subtype})`);
     }
     return (input.schema as z.ZodType<TOutput>).parse(result.structured_output);
   }

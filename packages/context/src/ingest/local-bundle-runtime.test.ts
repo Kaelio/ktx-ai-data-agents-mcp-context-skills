@@ -55,10 +55,36 @@ describe('createLocalBundleIngestRuntime', () => {
       }),
     ).toThrow(
       [
-        'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+        'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, or claude-code, or an injected agentRunner.',
         `Configure an Anthropic provider, then rerun ingest:`,
         `  ktx setup --project-dir ${project.projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
       ].join('\n'),
+    );
+  });
+
+  it('uses a runtime-backed agent runner when claude-code is configured', () => {
+    const runtime = {
+      generateText: vi.fn(),
+      generateObject: vi.fn(),
+      runAgentLoop: vi.fn(async () => ({ stopReason: 'natural' as const })),
+    };
+    project.config.llm = {
+      provider: { backend: 'claude-code' },
+      models: { default: 'sonnet' },
+      promptCaching: { enabled: false },
+    };
+    const createLlmRuntime = vi.fn(() => runtime);
+
+    const created = createLocalBundleIngestRuntime({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      createLlmRuntime,
+    });
+
+    expect(created).toBeDefined();
+    expect(createLlmRuntime).toHaveBeenCalledWith(
+      project.config.llm,
+      expect.objectContaining({ projectDir: project.projectDir }),
     );
   });
 

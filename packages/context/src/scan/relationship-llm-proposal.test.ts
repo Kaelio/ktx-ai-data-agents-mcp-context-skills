@@ -7,7 +7,7 @@ import { proposeKtxRelationshipCandidatesWithLlm } from './relationship-llm-prop
 function llmRuntime(output?: unknown): KtxLlmRuntimePort {
   return {
     generateText: vi.fn(),
-    generateObject: vi.fn(async () => output),
+    generateObject: vi.fn(async () => output) as KtxLlmRuntimePort['generateObject'],
     runAgentLoop: vi.fn(),
   };
 }

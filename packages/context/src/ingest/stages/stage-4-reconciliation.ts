@@ -1,16 +1,15 @@
-import type { AgentRunnerService } from '@ktx/context/agent';
+import type { AgentRunnerPort, KtxRuntimeToolSet } from '@ktx/context';
 import type { KtxModelRole } from '@ktx/llm';
-import type { ToolSet } from 'ai';
 import type { EvictionUnit } from '../types.js';
 import type { StageIndex } from './stage-index.types.js';
 
 export interface ReconciliationContext {
   stageIndex: StageIndex;
   evictionUnit: EvictionUnit | undefined;
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   buildSystemPrompt: (idx: StageIndex, ev: EvictionUnit | undefined) => string;
   buildUserPrompt: (idx: StageIndex, ev: EvictionUnit | undefined) => string;
-  buildToolSet: () => ToolSet;
+  buildToolSet: () => KtxRuntimeToolSet;
   modelRole: KtxModelRole;
   stepBudget: number;
   sourceKey: string;

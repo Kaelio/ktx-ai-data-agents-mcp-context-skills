@@ -1,5 +1,5 @@
 import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider } from '@ktx/llm';
-import { generateText, Output, stepCountIs, type FlexibleSchema, type TelemetrySettings } from 'ai';
+import { generateText, Output, stepCountIs, type FlexibleSchema, type TelemetrySettings, type ToolSet } from 'ai';
 import type { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../core/index.js';
 import { summarizeKtxLlmDebugRequest, type KtxLlmDebugRequestRecorder } from './debug-request-recorder.js';
@@ -52,7 +52,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
       temperature: input.temperature ?? 0,
       ...(split.system ? { system: split.system } : {}),
       messages: split.messages,
-      tools: built.tools,
+      tools: built.tools as ToolSet,
       ...(hasTools(tools)
         ? {
             experimental_repairToolCall: this.deps.llmProvider.repairToolCallHandler({
@@ -84,7 +84,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
       temperature: input.temperature ?? 0,
       ...(split.system ? { system: split.system } : {}),
       messages: split.messages,
-      tools: built.tools,
+      tools: built.tools as ToolSet,
       ...(hasTools(tools)
         ? {
             experimental_repairToolCall: this.deps.llmProvider.repairToolCallHandler({
@@ -137,7 +137,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         }),
         ...(promptMessages.system ? { system: promptMessages.system } : {}),
         messages: promptMessages.messages,
-        tools: built.tools,
+        tools: built.tools as ToolSet,
         onStepFinish: async () => {
           stepIndex += 1;
           if (!params.onStepFinish) {

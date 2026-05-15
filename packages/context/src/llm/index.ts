@@ -19,7 +19,13 @@ export type {
   RunLoopStopReason,
 } from './runtime-port.js';
 export { RuntimeAgentRunner } from './runtime-port.js';
-export { createAiSdkToolSet, createClaudeSdkTools, normalizeKtxRuntimeToolOutput } from './runtime-tools.js';
+export {
+  createAiSdkToolSet,
+  createClaudeSdkTools,
+  createRuntimeToolDescriptorFromAiTool,
+  createRuntimeToolSetFromAiSdkTools,
+  normalizeKtxRuntimeToolOutput,
+} from './runtime-tools.js';
 export type {
   KtxLlmDebugProviderOptionsEntry,
   KtxLlmDebugRequest,

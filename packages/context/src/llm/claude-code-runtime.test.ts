@@ -16,7 +16,7 @@ function initMessage(overrides: Partial<Extract<SDKMessage, { type: 'system'; su
   return {
     type: 'system',
     subtype: 'init',
-    apiKeySource: 'none',
+    apiKeySource: 'none' as never,
     claude_code_version: '0.3.142',
     cwd: '/tmp/project',
     tools: [],
@@ -27,7 +27,7 @@ function initMessage(overrides: Partial<Extract<SDKMessage, { type: 'system'; su
     output_style: 'default',
     skills: [],
     plugins: [],
-    uuid: 'init-id',
+    uuid: '00000000-0000-4000-8000-000000000001',
     session_id: 'session-id',
     ...overrides,
   };
@@ -51,7 +51,7 @@ function resultMessage(overrides: Partial<Extract<SDKMessage, { type: 'result' }
     modelUsage: {},
     permission_denials: [],
     errors: [],
-    uuid: 'result-id',
+    uuid: '00000000-0000-4000-8000-000000000002',
     session_id: 'session-id',
     ...overrides,
   } as Extract<SDKMessage, { type: 'result' }>;
@@ -59,7 +59,7 @@ function resultMessage(overrides: Partial<Extract<SDKMessage, { type: 'result' }
 
 describe('ClaudeCodeKtxLlmRuntime', () => {
   it('passes isolation options and scrubbed env to text generation', async () => {
-    const query = vi.fn(() => stream([initMessage(), resultMessage({ result: 'hello' })]));
+    const query = vi.fn((_input: any) => stream([initMessage(), resultMessage({ result: 'hello' })]));
     const runtime = new ClaudeCodeKtxLlmRuntime({
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
@@ -88,7 +88,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
 
   it('validates structured output with the caller schema', async () => {
     const schema = z.object({ answer: z.string() });
-    const query = vi.fn(() => stream([initMessage(), resultMessage({ structured_output: { answer: 'yes' } })]));
+    const query = vi.fn((_input: any) => stream([initMessage(), resultMessage({ structured_output: { answer: 'yes' } })]));
     const runtime = new ClaudeCodeKtxLlmRuntime({
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
@@ -104,16 +104,16 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
   });
 
   it('registers only exact KTX MCP tool ids and denies non-KTX tools', async () => {
-    const query = vi.fn(() =>
+    const query = vi.fn((_input: any) =>
       stream([
         initMessage({ tools: ['mcp__ktx__load_skill'], mcp_servers: [{ name: 'ktx', status: 'connected' }] }),
         {
           type: 'assistant',
           message: { role: 'assistant', content: [] },
           parent_tool_use_id: null,
-          uuid: 'assistant-1',
+          uuid: '00000000-0000-4000-8000-000000000003',
           session_id: 'session-id',
-        } as SDKMessage,
+        } as unknown as SDKMessage,
         resultMessage({ subtype: 'error_max_turns', is_error: true }),
       ]),
     );
@@ -164,7 +164,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
   });
 
   it('auth probe uses isolation options and a scrubbed env', async () => {
-    const query = vi.fn(() => stream([initMessage(), resultMessage({ result: 'ok' })]));
+    const query = vi.fn((_input: any) => stream([initMessage(), resultMessage({ result: 'ok' })]));
 
     await expect(
       runClaudeCodeAuthProbe({ projectDir: '/tmp/project', model: 'sonnet', query, env: { ANTHROPIC_API_KEY: 'sk-ant-test' } }),

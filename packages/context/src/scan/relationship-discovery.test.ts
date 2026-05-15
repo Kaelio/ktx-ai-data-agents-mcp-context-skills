@@ -1,6 +1,6 @@
-import type { KtxLlmProvider } from '@ktx/llm';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import { buildDefaultKtxProjectConfig } from '../project/config.js';
 import { snapshotToKtxEnrichedSchema } from './local-enrichment.js';
 import {
@@ -216,29 +216,11 @@ function connector(executor: InMemorySqliteExecutor | null): KtxScanConnector {
   };
 }
 
-function llmProvider(): KtxLlmProvider {
-  const model = { modelId: 'claude-sonnet-4-6', provider: 'anthropic' };
+function llmRuntime(output: unknown): KtxLlmRuntimePort {
   return {
-    getModel: vi.fn(() => model as ReturnType<KtxLlmProvider['getModel']>),
-    getModelByName: vi.fn(() => model as ReturnType<KtxLlmProvider['getModelByName']>),
-    cacheMarker: vi.fn(),
-    repairToolCallHandler: vi.fn(),
-    thinkingProviderOptions: vi.fn(() => ({})),
-    telemetryConfig: vi.fn(() => undefined),
-    promptCachingConfig: vi.fn(
-      () =>
-        ({
-          enabled: false,
-          systemTtl: '1h',
-          toolsTtl: '1h',
-          historyTtl: '5m',
-          cacheSystem: true,
-          cacheTools: true,
-          cacheHistory: true,
-          vertexFallbackTo5m: false,
-        }) as ReturnType<KtxLlmProvider['promptCachingConfig']>,
-    ),
-    activeBackend: vi.fn(() => 'anthropic' as ReturnType<KtxLlmProvider['activeBackend']>),
+    generateText: vi.fn(),
+    generateObject: vi.fn(async () => output) as KtxLlmRuntimePort['generateObject'],
+    runAgentLoop: vi.fn(),
   };
 }
 
@@ -505,21 +487,19 @@ describe('production relationship discovery', () => {
       INSERT INTO customers (id) VALUES (1), (2);
       INSERT INTO orders (id, buyer_ref) VALUES (10, 1), (11, 2);
     `);
-    const generateText = vi.fn(async () => ({
-      output: {
-        pkCandidates: [{ table: 'customers', column: 'id', confidence: 0.91, rationale: 'Unique customer key.' }],
-        fkCandidates: [
-          {
-            fromTable: 'orders',
-            fromColumn: 'buyer_ref',
-            toTable: 'customers',
-            toColumn: 'id',
-            confidence: 0.89,
-            rationale: 'Buyer reference values align with customer identifiers.',
-          },
-        ],
-      },
-    }));
+    const llmOutput = {
+      pkCandidates: [{ table: 'customers', column: 'id', confidence: 0.91, rationale: 'Unique customer key.' }],
+      fkCandidates: [
+        {
+          fromTable: 'orders',
+          fromColumn: 'buyer_ref',
+          toTable: 'customers',
+          toColumn: 'id',
+          confidence: 0.89,
+          rationale: 'Buyer reference values align with customer identifiers.',
+        },
+      ],
+    };
 
     const result = await discoverKtxRelationships({
       connectionId: 'warehouse',
@@ -528,8 +508,7 @@ describe('production relationship discovery', () => {
       schema: snapshotToKtxEnrichedSchema(llmOnlyRelationshipSnapshot()),
       context: { runId: 'llm-relationship-orchestrator' },
       settings: relationshipSettings(),
-      llmProvider: llmProvider(),
-      generateText,
+      llmRuntime: llmRuntime(llmOutput),
     });
 
     expect(result.llmRelationshipValidation).toBe('completed');

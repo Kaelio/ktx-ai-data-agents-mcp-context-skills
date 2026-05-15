@@ -1,4 +1,5 @@
 import type { KtxLlmProvider } from '@ktx/llm';
+import type { KtxLogger } from '../core/index.js';
 import { AiSdkKtxLlmRuntime, type AgentTelemetryPort } from '../llm/ai-sdk-runtime.js';
 import type { KtxLlmDebugRequestRecorder } from '../llm/debug-request-recorder.js';
 import type { AgentRunnerPort, RunLoopParams, RunLoopResult } from '../llm/runtime-port.js';

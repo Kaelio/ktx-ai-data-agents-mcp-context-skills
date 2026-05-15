@@ -1,8 +1,7 @@
-import type { ToolSet } from 'ai';
 import type { KtxModelRole } from '@ktx/llm';
-import type { AgentRunnerService } from '../agent/index.js';
 import type { KtxEmbeddingPort } from '../core/embedding.js';
 import type { GitService, KtxFileStorePort, KtxLogger, SessionOutcome } from '../core/index.js';
+import type { AgentRunnerPort, KtxLlmRuntimePort, KtxRuntimeToolSet } from '../llm/index.js';
 import type { CaptureSession, MemoryAction, MemoryKnowledgeSlRefsPort } from '../memory/index.js';
 import type { PromptService } from '../prompts/index.js';
 import type { SkillsRegistryService } from '../skills/index.js';
@@ -163,7 +162,7 @@ export interface IngestCommitMessagePort {
 }
 
 export interface IngestToolsetLike {
-  toAiSdkTools(context: ToolContext): ToolSet;
+  toRuntimeTools(context: ToolContext): KtxRuntimeToolSet;
 }
 
 export interface IngestToolsetFactoryPort {
@@ -315,7 +314,7 @@ export interface CuratorPaginationPort {
       items: ReconcileCandidateForPrompt[];
       runState: ReconcilePromptRunState;
     }) => string;
-    buildToolSet: (passNumber: number) => ToolSet;
+    buildToolSet: (passNumber: number) => KtxRuntimeToolSet;
     getReconciliationActions: () => MemoryAction[];
     onStepFinish?: (info: { passNumber: number; stepIndex: number; stepBudget: number }) => void;
   }): Promise<ReconciliationOutcome & { report: CuratorPaginationReport; warnings: string[] }>;
@@ -350,7 +349,8 @@ export interface IngestBundleRunnerDeps {
   registry: SourceAdapterRegistryPort;
   diffSetService: DiffSetComputerPort;
   sessionWorktreeService: IngestSessionWorktreePort;
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
+  llmRuntime?: KtxLlmRuntimePort;
   gitService: GitService;
   lockingService: IngestLockPort;
   storage: IngestStoragePort;

@@ -1,4 +1,4 @@
-import { tool as aiTool, type ToolSet } from 'ai';
+import { tool as aiTool, type Tool, type ToolSet } from 'ai';
 import { tool as claudeTool, type SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -66,4 +66,26 @@ export function createClaudeSdkTools(tools: KtxRuntimeToolSet = {}): Array<SdkMc
 
 export function mcpToolIds(tools: KtxRuntimeToolSet = {}): string[] {
   return Object.keys(tools).map((name) => `mcp__ktx__${name}`);
+}
+
+export function createRuntimeToolDescriptorFromAiTool(name: string, aiSdkTool: Tool): KtxRuntimeToolDescriptor {
+  return {
+    name,
+    description: aiSdkTool.description ?? '',
+    inputSchema: aiSdkTool.inputSchema as KtxRuntimeToolDescriptor['inputSchema'],
+    execute: async (input) => {
+      if (typeof aiSdkTool.execute !== 'function') {
+        throw new Error(`KTX runtime tool "${name}" has no execute function`);
+      }
+      return normalizeKtxRuntimeToolOutput(
+        await aiSdkTool.execute(input as never, { toolCallId: `runtime-${name}` } as never),
+      );
+    },
+  };
+}
+
+export function createRuntimeToolSetFromAiSdkTools(tools: ToolSet = {}): KtxRuntimeToolSet {
+  return Object.fromEntries(
+    Object.entries(tools).map(([name, aiSdkTool]) => [name, createRuntimeToolDescriptorFromAiTool(name, aiSdkTool as Tool)]),
+  );
 }

@@ -249,7 +249,6 @@ export async function proposeKtxRelationshipCandidatesWithLlm(
       system,
       prompt,
       schema: relationshipLlmProposalSchema,
-      generateText: input.generateText,
     });
     const output = relationshipLlmProposalSchema.parse(generated);
     const mapped = mapValidProposals(input.schema, output, settings);

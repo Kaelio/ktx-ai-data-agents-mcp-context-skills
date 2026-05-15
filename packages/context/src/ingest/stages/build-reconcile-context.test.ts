@@ -141,26 +141,17 @@ describe('buildReconcileToolSet', () => {
       toolsetTools: { sl_write_source: { description: 'sl write', inputSchema: {} as any, execute: slWrite } as any },
     });
 
-    const correction = await toolSet.sl_write_source.execute?.(
-      { connectionId: 'warehouse', sourceName: 'accounts' },
-      { toolCallId: 't1' } as any,
-    );
+    const correction = await toolSet.sl_write_source.execute?.({ connectionId: 'warehouse', sourceName: 'accounts' });
 
     expect(slWrite).not.toHaveBeenCalled();
     expect(correction).toMatchObject({ structured: { success: false, reason: 'verification_ledger_required' } });
 
-    await toolSet.record_verification_ledger.execute?.(
-      {
-        summary: 'Verified warehouse.accounts with entity_details.',
-        verifiedIdentifiers: ['warehouse.accounts'],
-        unverifiedIdentifiers: [],
-      },
-      { toolCallId: 't2' } as any,
-    );
-    const written = await toolSet.sl_write_source.execute?.(
-      { connectionId: 'warehouse', sourceName: 'accounts' },
-      { toolCallId: 't3' } as any,
-    );
+    await toolSet.record_verification_ledger.execute?.({
+      summary: 'Verified warehouse.accounts with entity_details.',
+      verifiedIdentifiers: ['warehouse.accounts'],
+      unverifiedIdentifiers: [],
+    });
+    const written = await toolSet.sl_write_source.execute?.({ connectionId: 'warehouse', sourceName: 'accounts' });
 
     expect(slWrite).toHaveBeenCalledTimes(1);
     expect(written).toMatchObject({ structured: { success: true } });
