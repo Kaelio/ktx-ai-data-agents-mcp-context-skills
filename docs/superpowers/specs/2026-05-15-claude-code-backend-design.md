@@ -243,9 +243,18 @@ For structured object generation:
 The plan must confirm the exact option names against the pinned SDK version, but
 the required outcome is fixed:
 
-- Filesystem settings are not loaded. `settingSources: []` is explicit, and the
-  implementation should assert from the SDK init message that no unexpected
-  settings-derived commands, skills, agents, plugins, or MCP servers are active.
+- Filesystem settings are not loaded. The SDK's documented default for an
+  omitted `settingSources` is `["user", "project", "local"]`
+  (`@anthropic-ai/claude-agent-sdk@0.3.142` `sdk.d.ts:1690-1697`,
+  `sdk.mjs` default `W6$=["user","project","local"]`), which would inherit the
+  user's Claude Code hooks, skills, plugins, MCP servers, slash commands, and
+  agents. Every KTX `query()` call site - agent loops, text generation, object
+  generation, and the auth probe - MUST pass `settingSources: []` explicitly,
+  along with `skills: []`, `plugins: []`, `tools: []`, `persistSession: false`,
+  and no `mcpServers` entries other than the KTX MCP server (omitted entirely
+  when the call site does not expose tools). The implementation should assert
+  from the SDK init message that no unexpected settings-derived commands,
+  skills, agents, plugins, or MCP servers are active.
 - Skills are disabled with `skills: []`, and plugins are disabled with
   `plugins: []`.
 - Built-in tools are disabled by setting `tools: []`. The pinned SDK type
@@ -392,13 +401,93 @@ For text and object generation, SDK authentication, billing, rate-limit,
 permission, max-turn, structured-output, and execution errors must map to the
 same error surfaces that KTX uses for the Anthropic API-key backend.
 
+## Agent-loop progress callbacks
+
+`RunLoopParams.onStepFinish`
+(`packages/context/src/agent/agent-runner.service.ts:20`) is part of the
+current agent-loop contract. The AI SDK runner increments `stepIndex` on each
+`generateText` step and invokes the callback
+(`agent-runner.service.ts:83-97`). KTX consumers depend on this:
+`packages/context/src/ingest/ingest-bundle.runner.ts:782` emits
+`work_unit_step` events from it, and `:1036` / `:1089` update reconciliation
+progress for the user-visible "Reconciling results · step N" status.
+
+The `claude-code` runner MUST preserve `onStepFinish` semantics:
+
+- It MUST invoke `onStepFinish` exactly once per assistant turn (i.e. once per
+  step the SDK reports), incrementing `stepIndex` starting at 1.
+- The plan MUST name the concrete SDK stream event used as the step boundary
+  (the implementation plan picks one of the documented assistant/result
+  message events from the pinned SDK version and justifies it). The chosen
+  event must produce the same `stepIndex` count as the AI SDK runner for an
+  equivalent run: N tool-using turns yield N callbacks.
+- Callback errors MUST be caught and logged at `warn` level without aborting
+  the loop, matching `agent-runner.service.ts:90-96`.
+- `stepBudget` passed to the callback MUST equal the `maxTurns` configured on
+  the SDK `query()` call.
+
+Acceptance criteria:
+
+- A `claude-code` agent loop run with `stepBudget: N` produces N
+  `work_unit_step` events when the loop runs to budget.
+- A reconciliation run under `claude-code` produces the same
+  `updateProgress` calls (count and `stepIndex / stepBudget` ratio) as the
+  Anthropic API-key backend for an equivalent fixture.
+- An `onStepFinish` callback that throws does not surface the error as the
+  loop result.
+
+## Prompt caching parity
+
+`packages/llm/src/types.ts:44, :61` exposes `llm.promptCaching` as a config
+field, and the AI SDK message builder
+(`packages/llm/src/message-builder.ts:62-114, :141-218`) applies
+`anthropic.cacheControl: { type: "ephemeral", ttl }` markers to the system
+message, the last history message, and sorted tools, with TTLs split into
+`systemTtl`, `toolsTtl`, and `historyTtl`. `model-provider.test.ts:276`
+verifies caching is enabled by default with those three TTLs.
+
+The Agent SDK does not expose KTX's marker-based contract. The closest
+mechanism is `systemPrompt: string[]` with
+`SYSTEM_PROMPT_DYNAMIC_BOUNDARY` (`sdk.d.ts:1746-1799`), which marks a static
+prefix as cacheable but provides no per-tool, per-history, or per-TTL knobs.
+
+For the `claude-code` backend, the spec treats `llm.promptCaching` as
+**partial parity**:
+
+- The Claude runtime MAY map a non-empty static system prefix to a cacheable
+  `systemPrompt` array using `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` when
+  `cacheSystem` is enabled in the resolved `KtxPromptCachingConfig`. The
+  implementation plan decides whether to ship this mapping in the first pass
+  or defer it.
+- `cacheTools`, `cacheHistory`, and the `systemTtl` / `toolsTtl` /
+  `historyTtl` fields have no Agent SDK equivalent. The runtime MUST NOT
+  silently drop them: when a user sets non-default values under
+  `llm.promptCaching` and the backend is `claude-code`, status/doctor and the
+  setup wizard MUST surface that these fields are ignored on this backend.
+- Docs under `docs-site/content/docs/` MUST document this divergence in the
+  same pages that describe `claude-code` setup, so users do not assume the
+  TTL/tool/history knobs apply.
+
+Acceptance criteria:
+
+- A `claude-code` runtime constructed from a config with default
+  `promptCaching` does not throw and does not pass KTX `cacheControl`
+  markers to the Agent SDK (the AI-SDK-only markers stay on the AI SDK
+  path).
+- A `claude-code` runtime constructed from a config with non-default
+  `promptCaching` values yields a warning surfaced through doctor/status
+  output identifying the ignored fields.
+
 ## Auth and setup
 
 `ktx setup`, status, and doctor flows must validate that Claude Code SDK auth is
 usable, not just that `~/.claude/` exists. Acceptable validation strategies:
 
-- A minimal SDK probe call with `settingSources: []`, `tools: []`, and
-  `maxTurns: 1`.
+- A minimal SDK probe call with `settingSources: []`, `skills: []`,
+  `plugins: []`, `tools: []`, `persistSession: false`, no `mcpServers`, and
+  `maxTurns: 1`. The probe MUST NOT rely on the SDK's documented default for
+  these fields, because the default for `settingSources` is
+  `["user", "project", "local"]` and loads filesystem settings.
 - An SDK-provided account/auth status method if the pinned version exposes one.
 - A docs-endorsed file-presence check only if the official SDK docs explicitly
   state that it proves auth usability.
@@ -443,12 +532,16 @@ Claude subscription limits.
   `agentRunner` today (`packages/context/src/ingest/local-bundle-runtime.ts`,
   `packages/context/src/mcp/local-project-ports.ts`).
 - The Agent SDK TypeScript reference (`@anthropic-ai/claude-agent-sdk@0.3.142`,
-  `sdk.d.ts`) documents `settingSources` defaulting to no filesystem settings,
-  `allowedTools` as auto-approval rather than restriction, `canUseTool` as the
-  programmatic permission handler, `permissionMode: "dontAsk"`, `tools` as the
-  base built-in set with `[]` meaning "disable all built-ins" and no MCP-id
-  support, `disallowedTools`, `maxTurns`, `mcpServers`, `cwd`,
-  `persistSession`, and SDK result/hook message shapes.
+  `sdk.d.ts:1690-1697` and the `sdk.mjs` runtime default
+  `["user","project","local"]`) documents `settingSources` **defaulting to
+  loading user, project, and local filesystem settings** when omitted; passing
+  `[]` is the explicit opt-out ("SDK isolation mode"). The same reference
+  documents `allowedTools` as auto-approval rather than restriction,
+  `canUseTool` as the programmatic permission handler,
+  `permissionMode: "dontAsk"`, `tools` as the base built-in set with `[]`
+  meaning "disable all built-ins" and no MCP-id support, `disallowedTools`,
+  `maxTurns`, `mcpServers`, `cwd`, `persistSession`, and SDK result/hook
+  message shapes.
 - `SDKResultMessage = SDKResultSuccess | SDKResultError` in
   `@anthropic-ai/claude-agent-sdk@0.3.142` (`sdk.d.ts`); both variants expose
   an optional `terminal_reason: TerminalReason`, where `TerminalReason`
@@ -486,3 +579,11 @@ Claude subscription limits.
    `claude-code` runtime when configured.
 8. Write tests proving a raw built-in Claude Code tool request is denied and
    only `mcp__ktx__*` tools are available during KTX agent loops.
+9. Write a test that asserts every KTX-originated `query()` invocation
+   (agent loop, text generation, object generation, auth probe) is called
+   with `settingSources: []`, `skills: []`, `plugins: []`, `tools: []`, and
+   `persistSession: false`, by spying on the SDK entry point. The test must
+   fail if any path falls back to SDK defaults for those fields.
+10. Write a test that asserts `onStepFinish` is invoked the expected number
+    of times for a fixed-budget `claude-code` agent loop, including the
+    work-unit and reconciliation progress paths.
