@@ -11,7 +11,8 @@ export function ignoredClaudeCodePromptCachingFields(config: KtxProjectLlmConfig
   if (config.provider.backend !== 'claude-code' || !config.promptCaching) {
     return [];
   }
-  return CLAUDE_CODE_IGNORED_PROMPT_CACHING_FIELDS.filter((key) => key in config.promptCaching).map(
+  const promptCaching = config.promptCaching;
+  return CLAUDE_CODE_IGNORED_PROMPT_CACHING_FIELDS.filter((key) => key in promptCaching).map(
     (key) => `llm.promptCaching.${key}`,
   );
 }
