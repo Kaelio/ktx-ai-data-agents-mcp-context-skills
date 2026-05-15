@@ -1,0 +1,538 @@
+# MCP Tool Polish: Slim Research Surface + Spec Compliance
+
+**Date:** 2026-05-16
+**Author:** Andrey Avtomonov
+**Status:** Design — pending implementation plan
+
+## Background
+
+KTX currently exposes 25 MCP tools across context, semantic-layer, ingest, and
+scan ports (`packages/context/src/mcp/context-tools.ts`). The
+`ktx-analytics` SKILL.md (`packages/cli/src/skills/analytics/SKILL.md`)
+is installed into every supported MCP client by `ktx setup --agents` and
+already describes a Douala-equivalent research methodology (Discover → Inspect
+→ Resolve → Plan → Query → Validate → Capture) that references nine of those
+tools.
+
+A recent in-session audit surfaced three real bug classes:
+
+- **`structuredContent` shape** — `discover_data` returned a bare array; MCP
+  requires an object. Fixed.
+- **Union-shape LLM drift** — `sl_query.order_by` accepted
+  `{ field, direction }` but Claude emitted Cube-style `{ id, desc }`. Fixed
+  via a `z.preprocess` that normalizes the alt-shape before strict validation.
+- **Contract leak to the Python daemon** — `compileLocalSlQuery` skipped
+  `toResolvedWire` and sent TS-only authoring fields (`usage`,
+  `inherits_columns_from`) to a Pydantic model with `extra="forbid"`. Fixed.
+
+The audit also identified systemic gaps applicable across the surface: no
+per-field `.describe()` outside `memory_capture*`, no `outputSchema` declared
+anywhere, no MCP tool annotations, lingering union-drift risk on
+`slQueryDimensionSchema` (`{ dimension, granularity }`) and
+`entityDetailsTableRefSchema` (`{ schema, table }`), and inconsistent error
+handling (only `sql_execution` wraps thrown errors in-band per MCP spec; the
+other 24 let exceptions propagate as JSON-RPC errors).
+
+The current MCP spec (2025-11-25) provides several mechanisms KTX does not
+use: `outputSchema` with `structuredContent` validation, tool annotations
+(`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`/`title`),
+progress notifications via `_meta.progressToken`, and a clear in-band error
+contract (`isError: true` with text content).
+
+The 25-tool surface is also wider than the agent needs. The `ktx-analytics`
+SKILL only orchestrates nine of them; the rest are admin/setup/maintenance
+operations that are better served by a `ktx`-CLI flow (and a future
+`ktx-admin` SKILL — out of scope for this spec).
+
+## Goals
+
+- Reduce the MCP-registered surface to **11 tools** focused on the research
+  loop: `connection_list`, `discover_data`, `wiki_search`, `wiki_read`,
+  `entity_details`, `dictionary_search`, `sl_read_source`, `sl_query`,
+  `sql_execution`, `memory_ingest` (new), `memory_ingest_status` (new). The
+  remaining 14 tools become CLI-only by removing their MCP registration; their
+  implementations stay in `packages/context/src/` to back the CLI.
+- Replace `memory_capture` / `memory_capture_status` with `memory_ingest` /
+  `memory_ingest_status`. The new tool takes free-form markdown `content`
+  plus optional `connectionId`; the memory agent triages into wiki and SL as
+  before.
+- Apply the per-tool polish kit on every retained tool: MCP tool annotations,
+  `outputSchema`, per-field `.describe()`, rewritten tool descriptions,
+  standardized in-band error handling, union-drift normalization on the two
+  remaining at-risk schemas, and a type-narrowed `jsonToolResult`.
+- Emit MCP progress notifications from `sql_execution` and `sl_query`.
+- Update `ktx-analytics` SKILL.md to use the renamed tool, broaden the capture
+  step, and document multi-connection routing.
+
+## Non-Goals
+
+- Admin CLI skill (separate spec).
+- Deleting the source code of the admin tools (deferred follow-up gated by
+  the admin CLI skill landing).
+- MCP resources (subscribable wiki / SL).
+- MCP prompts pushed by the server (the analytics SKILL is the equivalent).
+- Elicitation, sampling, tool icons.
+- A code-execution tool / Python sandbox (separate spec; the analytics
+  workflow does not require one for the goals above).
+- Per-client schema-feature workarounds beyond what the audit findings
+  already cover. Codex's no-header-auth limitation is unrelated to tool
+  shape and is left to `setup-agents.ts` to document.
+- Multi-tenancy, telemetry, rate limiting.
+
+## Design
+
+### 1. Surface change
+
+#### 1.1 Retained tools (11)
+
+| # | Tool | Port |
+|---|---|---|
+| 1 | `connection_list` | `KtxConnectionsMcpPort.list` |
+| 2 | `discover_data` | `KtxDiscoverDataMcpPort.search` |
+| 3 | `wiki_search` | `KtxKnowledgeMcpPort.search` |
+| 4 | `wiki_read` | `KtxKnowledgeMcpPort.read` |
+| 5 | `entity_details` | `KtxEntityDetailsMcpPort.read` |
+| 6 | `dictionary_search` | `KtxDictionarySearchMcpPort.search` |
+| 7 | `sl_read_source` | `KtxSemanticLayerMcpPort.readSource` |
+| 8 | `sl_query` | `KtxSemanticLayerMcpPort.query` |
+| 9 | `sql_execution` | `KtxSqlExecutionMcpPort.execute` |
+| 10 | `memory_ingest` | New port `KtxMemoryIngestMcpPort.ingest` |
+| 11 | `memory_ingest_status` | `KtxMemoryIngestMcpPort.status` |
+
+`connection_list` is retained because in multi-connection projects, the agent
+needs a way to enumerate available connections before issuing a `sql_execution`
+or `sl_query` against a specific one. Single-connection projects continue to
+auto-resolve when `connectionId` is omitted.
+
+#### 1.2 Removed from MCP registration
+
+`connection_test`, `wiki_write`, `sl_list_sources`, `sl_write_source`,
+`sl_validate`, `ingest_trigger`, `ingest_status`, `ingest_report`,
+`ingest_replay`, `scan_trigger`, `scan_status`, `scan_report`,
+`scan_list_artifacts`, `scan_read_artifact`,
+plus `memory_capture` and `memory_capture_status` (replaced).
+
+The conditional registration blocks in `registerKtxContextTools` for these
+ports are removed. The underlying `KtxIngestMcpPort`, `KtxScanMcpPort`, etc.
+implementations stay; the `ktx` CLI uses them directly. The `KtxMcpContextPorts`
+type drops the removed `ingest?`, `scan?`, etc. fields. `MemoryCapturePort` is
+renamed to `MemoryIngestPort`.
+
+#### 1.3 New tool — `memory_ingest`
+
+Replaces `memory_capture`. The change is a rename + a slightly relaxed input
+contract; the underlying `MemoryCaptureService` is reused as-is and renamed to
+`MemoryIngestService`. No alias, no migration shim — per the standing
+no-back-compat rule, the rename is atomic with the SKILL update.
+
+**Input schema:**
+
+```typescript
+const memoryIngestSchema = z.object({
+  content: z
+    .string()
+    .min(1)
+    .describe(
+      'Free-form markdown to ingest. Include the knowledge itself plus any ' +
+        'context (source, the user\'s question, why this came up) that the ' +
+        'memory agent should consider when triaging into wiki/SL.',
+    ),
+  connectionId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Scope this memory to a specific connection. Omit if the knowledge is ' +
+        'global (e.g., a company-wide policy); specify when it is tied to one ' +
+        'warehouse (e.g., a measure definition specific to a connection\'s SL).',
+    ),
+});
+```
+
+**Tool description:**
+
+> Ingest free-form knowledge into KTX's durable memory so it is available to
+> future turns. Call this whenever a research turn produces something worth
+> remembering — business rules, metric definitions, gotchas, schema
+> explanations, recurring findings — **or** whenever the user asks you to
+> remember something. Pass everything in `content` as markdown: the finding,
+> plus any source or context that helps the memory agent triage. KTX's memory
+> agent decides whether the content belongs in the wiki, the semantic layer,
+> or both. Each call is a feedback loop — better notes here mean smarter
+> `discover_data` and `wiki_search` results for everyone next time.
+
+**Returns:** `{ runId: string }` — same shape as today's `memory_capture`.
+
+**`memory_ingest_status`** mirrors today's `memory_capture_status` exactly,
+renamed only.
+
+### 2. Per-tool polish kit
+
+#### 2.1 Tool annotations
+
+Every tool gets annotations and a `title`:
+
+| Tool | title | readOnly | destructive | idempotent | openWorld |
+|---|---|:--:|:--:|:--:|:--:|
+| `connection_list` | Connection List | ✓ | — | ✓ | — |
+| `discover_data` | Discover Data | ✓ | — | — | — |
+| `wiki_search` | Wiki Search | ✓ | — | — | — |
+| `wiki_read` | Wiki Read | ✓ | — | ✓ | — |
+| `entity_details` | Entity Details | ✓ | — | ✓ | — |
+| `dictionary_search` | Dictionary Search | ✓ | — | — | — |
+| `sl_read_source` | Semantic Layer Read Source | ✓ | — | ✓ | — |
+| `sl_query` | Semantic Layer Query | ✓ | — | — | — |
+| `sql_execution` | SQL Execution | ✓ | — | — | — |
+| `memory_ingest` | Memory Ingest | — | ✓ | — | — |
+| `memory_ingest_status` | Memory Ingest Status | ✓ | — | (✓ once terminal) | — |
+
+`openWorldHint: false` for every tool — even `sql_execution` targets a
+configured, bounded warehouse, not the web. `sql_execution` is `readOnlyHint:
+true` because the server-side parser enforces read-only (`assertReadOnlySql`).
+`destructiveHint` is omitted (defaults to `false`) for read-only tools per the
+MCP spec; explicit `false` is fine but redundant.
+
+`registerTool` accepts annotations in the `config` object today; this is a
+plumbing change in `registerParsedTool` to forward them.
+
+#### 2.2 `outputSchema` on all 11 tools
+
+Per the MCP 2025-11-25 spec, clients SHOULD validate `structuredContent`
+against `outputSchema` when declared. Authoring is mechanical: each response
+shape already typed in `packages/context/src/mcp/types.ts` gets a parallel
+Zod schema and is passed as `outputSchema` to `registerTool`.
+
+`registerParsedTool` is extended to accept an optional `outputSchema` arg and
+forward it to `server.registerTool`. The Zod schemas live alongside the
+input schemas in `context-tools.ts` (or a sibling `tool-output-schemas.ts` if
+the file grows too large).
+
+Example for `discover_data`:
+
+```typescript
+const discoverDataOutputSchema = z.object({
+  refs: z.array(
+    z.object({
+      kind: discoverDataKindSchema,
+      id: z.string(),
+      score: z.number(),
+      summary: z.string().nullable(),
+      snippet: z.string().nullable(),
+      matchedOn: z.enum(['name', 'display', 'description', 'comment', 'expr', 'sample_value', 'body']),
+      connectionId: z.string().optional(),
+      tableRef: z.object({ catalog: z.string().nullable(), db: z.string().nullable(), name: z.string() }).optional(),
+      columnName: z.string().optional(),
+    }),
+  ),
+});
+```
+
+#### 2.3 Per-field `.describe()` on every input
+
+Anthropic's documented mechanism for fighting model drift, already used in
+`memory_capture*`. Applied to every input field on every retained tool.
+Highest leverage: `sl_query`, `entity_details`, `dictionary_search`,
+`sql_execution`, `memory_ingest`. Tool-level `description` strings are
+rewritten to be longer with one concrete example shape inlined (the technique
+that fixed `order_by` model drift in this session).
+
+#### 2.4 In-band error wrapping in `registerParsedTool`
+
+Per MCP spec, tools return errors as `isError: true` + text content, not
+JSON-RPC errors. Move the try/catch into the `registerParsedTool` helper so
+every tool consistently surfaces handler exceptions and Zod parse failures as
+`jsonErrorToolResult`. `sql_execution`'s local try/catch is removed (the
+helper handles it).
+
+```typescript
+function registerParsedTool<TInput extends z.ZodType, TOutput extends z.ZodType>(
+  server: KtxMcpServerLike,
+  name: string,
+  config: { title: string; description: string; inputSchema: unknown; outputSchema?: unknown; annotations: ToolAnnotations },
+  inputSchema: TInput,
+  handler: (input: z.infer<TInput>) => Promise<KtxMcpToolResult>,
+  outputSchema?: TOutput,
+): void {
+  server.registerTool(name, { ...config, outputSchema: outputSchema ? outputSchema : undefined }, async (input) => {
+    try {
+      return await handler(inputSchema.parse(input));
+    } catch (error) {
+      return jsonErrorToolResult(formatToolError(error));
+    }
+  });
+}
+```
+
+A small `formatToolError` helper renders Zod errors with `path: message` lines
+and falls through to `error.message` / `String(error)` for non-Zod cases.
+
+#### 2.5 Union-drift normalization
+
+Apply the same `z.preprocess` pattern used for `order_by` to the two remaining
+at-risk unions:
+
+**`slQueryDimensionSchema`** — accept `{ dimension, granularity }` (Cube
+convention) as an alias for `{ field, granularity }`. Bare strings continue to
+work unchanged.
+
+```typescript
+const slQueryDimensionSchema = z.preprocess(
+  (value) => {
+    if (typeof value === 'string') return { field: value };
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = { ...(value as Record<string, unknown>) };
+      if (!('field' in obj) && typeof obj.dimension === 'string') obj.field = obj.dimension;
+      return obj;
+    }
+    return value;
+  },
+  z.object({
+    field: z.string().min(1).describe('Dimension to group by, e.g. "orders.created_at" or a SL dimension key.'),
+    granularity: z.string().min(1).optional().describe('Time granularity for time dimensions: day, week, month, quarter, year.'),
+  }),
+);
+```
+
+**`entityDetailsTableRefSchema`** — accept `{ schema, table }` (BigQuery /
+SQL-style convention) as an alias for `{ db, name }`.
+
+```typescript
+const entityDetailsTableRefSchema = z.preprocess(
+  (value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = { ...(value as Record<string, unknown>) };
+      if (!('db' in obj) && typeof obj.schema === 'string') obj.db = obj.schema;
+      if (!('name' in obj) && typeof obj.table === 'string') obj.name = obj.table;
+      return obj;
+    }
+    return value;
+  },
+  z.object({
+    catalog: z.string().nullable().describe('Catalog/project (BigQuery project, Snowflake database). null when not applicable.'),
+    db: z.string().nullable().describe('Schema/database for the table. null when not applicable.'),
+    name: z.string().min(1).describe('Table name.'),
+  }),
+);
+```
+
+`slQueryMeasureSchema` is **not** changed — bare strings cover the common case
+and `{ expr, name }` matches Cube's measure-with-alias convention; no observed
+drift.
+
+#### 2.6 Type-narrow `jsonToolResult`
+
+```typescript
+export function jsonToolResult<T extends Record<string, unknown>>(
+  structuredContent: T,
+): KtxMcpToolResult<T> { ... }
+```
+
+`T extends Record<string, unknown>` instead of `T extends object` means arrays
+no longer satisfy the constraint at compile time. Catches the entire
+`discover_data` array-as-`structuredContent` bug class. Pure defensive type
+change; no runtime effect on current code.
+
+#### 2.7 Document the `toResolvedWire` invariant
+
+Add a doc comment on `KtxSemanticLayerComputePort.query` (and
+`.validateSources`) stating that callers must pass `toResolvedWire`-sanitized
+sources to prevent the daemon `usage`-leak bug from regressing if a new code
+path bypasses `SemanticLayerService`.
+
+#### 2.8 Progress notifications — `sql_execution` + `sl_query`
+
+Per MCP spec, the caller may include `params._meta.progressToken` in the
+request; the server emits `notifications/progress` with `{ progressToken,
+progress, total?, message }` at stage transitions.
+
+`KtxSqlExecutionMcpPort.execute` and `KtxSemanticLayerMcpPort.query` are
+extended with an optional `onProgress?: (event: { progress: number; total?: number; message: string }) => void` parameter. The MCP tool handlers wire
+`onProgress` to the SDK's notification channel via the handler-context object
+passed by `server.registerTool`. Non-progress-supporting clients ignore the
+events.
+
+Emitted stages:
+
+- `sql_execution`: `"Validating SQL"` (progress 0.0) → `"Executing"` (0.3) → `"Fetched N rows"` (1.0).
+- `sl_query`: `"Compiling query"` (0.0) → `"Generating SQL"` (0.3) → `"Executing"` (0.6) → `"Fetched N rows"` (1.0).
+
+Progress emission is best-effort; if the underlying port can't report a stage
+boundary (e.g., a driver doesn't expose progress callbacks), the stage is
+simply skipped.
+
+`memory_ingest` does not emit progress — `runId` + `memory_ingest_status`
+polling is the documented async pattern for it.
+
+### 3. `ktx-analytics` SKILL.md refinements
+
+File: `packages/cli/src/skills/analytics/SKILL.md`.
+
+**Step 7 rewrite** (current vs. new):
+
+Current:
+
+> 7. **Capture durable learnings** - at the end of the turn, call `memory_capture` when the investigation produced reusable business context, metric definitions, or schema knowledge.
+
+New:
+
+> 7. **Capture durable learnings** - call `memory_ingest` whenever a turn produces something worth remembering (business rules, metric definitions, schema gotchas, recurring findings) **or** whenever the user asks you to remember something. Pass markdown in `content` including any source context the memory agent should weigh. Each call is a feedback loop — better notes today mean smarter `discover_data` and `wiki_search` results tomorrow.
+
+**Tool-name updates** throughout: every `memory_capture` reference becomes
+`memory_ingest`.
+
+**Multi-connection rule** added under `<rules>`:
+
+> When `connection_list` shows multiple connections, route each tool call with an explicit `connectionId`. Don't assume; if the user's intent doesn't pin a connection, ask.
+
+**One new worked example** demonstrating user-driven ingest:
+
+> **Input:** "Heads up — ARR is always reported in cents in our warehouse."
+>
+> **Workflow:**
+> 1. `memory_ingest({ content: "ARR is reported in cents (not dollars) in this warehouse. Multiply by 0.01 for dollar amounts. Source: user clarification." })` — no analysis turn; just remember.
+
+The existing Discover → Inspect → Resolve → Plan → Query → Validate → Capture
+workflow stays. The existing two examples are updated only to reflect the
+`memory_capture` → `memory_ingest` rename.
+
+## Migration / sequencing
+
+Three landings, each independently mergeable, in this order:
+
+### PR 1 — Surface change (atomic)
+
+- Remove the 14 admin tools from `registerKtxContextTools` (conditional
+  registration blocks deleted).
+- Rename `memory_capture` → `memory_ingest`, `memory_capture_status` →
+  `memory_ingest_status`. Rename `MemoryCapturePort` → `MemoryIngestPort`,
+  `MemoryCaptureService` → `MemoryIngestService`. Update the new tool's input
+  contract per §1.3.
+- Update `packages/context/src/mcp/local-project-ports.ts` and
+  `packages/context/src/mcp/server.ts` to reflect the renames and the dropped
+  ports.
+- Update `packages/cli/src/skills/analytics/SKILL.md` per §3 in the same
+  diff.
+- Update all tests for the removed/renamed tools.
+- Update `docs-site/content/docs/integrations/agent-clients.mdx` if it lists
+  the available MCP tools.
+
+The CLI keeps using the removed tools' implementations directly — no CLI
+changes required in this PR.
+
+### PR 2 — Polish kit
+
+Touches all 11 retained tools. Can be one PR or split per family
+(annotations + outputSchema + descriptions + error wrapping + union-drift
+fixes + `jsonToolResult` type narrowing + `toResolvedWire` doc comment).
+
+### PR 3 — Progress notifications
+
+Extends `KtxSqlExecutionMcpPort` and `KtxSemanticLayerMcpPort` with optional
+`onProgress`, wires the MCP handler context's notification channel, emits at
+the stage boundaries listed in §2.8.
+
+Eventual **deletion** of the 14 admin tool implementations is a separate
+follow-up spec gated on the `ktx-admin` SKILL landing. Until then they remain
+in `packages/context/src/` and are used only by the CLI.
+
+## Verification
+
+### Unit tests per retained tool
+
+For each of the 11 retained tools:
+
+- Input schema accepts canonical input.
+- Input schema accepts each documented normalized alt-shape (Cube
+  `{ dimension, granularity }`, `{ schema, table }`, bare-string `order_by`,
+  Cube-style `{ id, desc }` `order_by`).
+- Output schema accepts the response shape returned by the underlying port.
+- Error path returns `{ isError: true, content: [{ type: 'text', ... }] }`
+  (not a thrown exception).
+
+### Schema snapshot test
+
+A `tools/list` snapshot test in `packages/context/src/mcp/server.test.ts`
+captures the exact JSON Schema each client receives for every tool. Re-runs
+across PRs catch accidental schema drift (e.g., a Zod change silently
+broadening the contract).
+
+### Annotations test
+
+Assert every tool's registered config carries the expected `readOnlyHint`,
+`destructiveHint`, `idempotentHint`, `openWorldHint`, and `title` per §2.1.
+
+### Multi-client end-to-end smoke
+
+Stdio (Claude Desktop) and Streamable HTTP (Claude Code) are the two
+transports; the other four clients (Codex, Cursor, OpenCode, universal) share
+one of these transports and their config files are static. Spin up `ktx mcp
+stdio` and `ktx mcp start`, call each retained tool through both transports,
+verify response shape against `outputSchema`.
+
+### Red-green regression
+
+For the union-drift fixes (§2.5): revert the preprocess in `local-query.ts` or
+`context-tools.ts`, run the alt-shape test → expect failure, restore →
+expect pass. Same pattern as the `order_by` and `usage`-leak fixes in this
+session.
+
+## Risks
+
+- **Removed tools surprise a user who depended on them via MCP.** Mitigated
+  by the no-back-compat rule (KTX is pre-public) and by the SKILL update
+  landing atomically with the surface change. Users on `ktx setup --agents`
+  flow get the updated SKILL the next time they re-run setup.
+- **`outputSchema` validation breaks a client that doesn't tolerate
+  unrecognized JSON Schema keywords.** Mitigated by emitting `outputSchema`
+  with the same Draft-07 dialect the MCP SDK already produces for
+  `inputSchema`; the spec uses SHOULD-validate semantics, not MUST. The
+  snapshot test catches drift; the multi-client smoke confirms compatibility.
+- **Progress notifications increase notification volume for clients that
+  poll.** Mitigated by stage-based emission (3-4 events per call max). Clients
+  that don't support progress simply ignore the events.
+- **Renaming `MemoryCapturePort`/`MemoryCaptureService` cascades through
+  internal callers.** Cascade is bounded to `packages/context/src/memory/`,
+  `packages/context/src/mcp/`, and their tests; type-checker catches missed
+  call sites.
+
+## Open Questions
+
+None at design time. Open items for the implementation plan:
+
+- Final wording for the rewritten tool descriptions on `discover_data`,
+  `entity_details`, `dictionary_search`, `sl_read_source`, `sl_query`,
+  `sql_execution`. (Drafts can be authored during PR 2.)
+- Whether `formatToolError` should redact path elements for security
+  (probably not — these are local-only MCP servers, and the existing error
+  shape doesn't redact).
+- Whether to split PR 2 into per-family sub-PRs or keep it monolithic. Default
+  is monolithic since the polish-kit changes touch the same files and tests.
+
+## Appendix A — File map
+
+| Change | File |
+|---|---|
+| Tool registration removed (14 tools) | `packages/context/src/mcp/context-tools.ts` |
+| Memory rename | `packages/context/src/mcp/server.ts`, `packages/context/src/memory/*` |
+| Local ports update | `packages/context/src/mcp/local-project-ports.ts` |
+| Port types update | `packages/context/src/mcp/types.ts` |
+| Annotations, outputSchema, describe, error wrapping, union preprocess | `packages/context/src/mcp/context-tools.ts` |
+| `jsonToolResult` type narrowing | `packages/context/src/mcp/context-tools.ts` |
+| `toResolvedWire` invariant comment | `packages/context/src/daemon/semantic-layer-compute.ts` |
+| Progress callback plumbing | `packages/context/src/daemon/semantic-layer-compute.ts`, `packages/context/src/sl/local-query.ts`, `packages/context/src/mcp/local-project-ports.ts` (`executeValidatedReadOnlySql`) |
+| Tests | `packages/context/src/mcp/server.test.ts`, `packages/context/src/mcp/local-project-ports.test.ts`, `packages/context/src/sl/local-query.test.ts` |
+| Skill | `packages/cli/src/skills/analytics/SKILL.md` |
+| Docs | `docs-site/content/docs/integrations/agent-clients.mdx` |
+
+## Appendix B — MCP-spec cross-reference
+
+- Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
+  `openWorldHint`, `title`): MCP 2025-11-25 spec `/schema` "ToolAnnotations".
+- `outputSchema` with `structuredContent` SHOULD-validate: spec
+  `/server/tools` "Tool Result > Structured Content".
+- In-band error contract (`isError: true` + text content, not JSON-RPC
+  error): spec `/server/tools` "Tool Execution Error Example".
+- Progress notifications via `params._meta.progressToken` →
+  `notifications/progress`: spec `/basic/utilities/progress`.
+- `inputSchema.type: "object"` requirement and JSON Schema 2020-12 default
+  dialect: spec `/server/tools` "Tool > inputSchema" and SEP 1613.
