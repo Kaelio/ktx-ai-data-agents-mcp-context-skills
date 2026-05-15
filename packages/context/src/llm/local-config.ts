@@ -9,11 +9,17 @@ import {
 } from '@ktx/llm';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
 import type { KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from '../project/config.js';
+import { AiSdkKtxLlmRuntime } from './ai-sdk-runtime.js';
+import { ClaudeCodeKtxLlmRuntime } from './claude-code-runtime.js';
+import type { KtxLlmRuntimePort } from './runtime-port.js';
 
 interface LocalConfigDeps {
   env?: NodeJS.ProcessEnv;
+  projectDir?: string;
   createKtxLlmProvider?: typeof createKtxLlmProvider;
   createKtxEmbeddingProvider?: typeof createKtxEmbeddingProvider;
+  createClaudeCodeRuntime?: (deps: ConstructorParameters<typeof ClaudeCodeKtxLlmRuntime>[0]) => KtxLlmRuntimePort;
+  createAiSdkRuntime?: (deps: { llmProvider: KtxLlmProvider }) => KtxLlmRuntimePort;
 }
 
 export const MANAGED_SENTENCE_TRANSFORMERS_BASE_URL = 'managed:local-embeddings';
@@ -106,7 +112,33 @@ export function createLocalKtxLlmProviderFromConfig(
   deps: LocalConfigDeps = {},
 ): KtxLlmProvider | null {
   const resolved = resolveLocalKtxLlmConfig(config, deps.env ?? process.env);
-  return resolved ? (deps.createKtxLlmProvider ?? createKtxLlmProvider)(resolved) : null;
+  if (!resolved || resolved.backend === 'claude-code') {
+    return null;
+  }
+  return (deps.createKtxLlmProvider ?? createKtxLlmProvider)(resolved);
+}
+
+export function createLocalKtxLlmRuntimeFromConfig(
+  config: KtxProjectLlmConfig,
+  deps: LocalConfigDeps = {},
+): KtxLlmRuntimePort | null {
+  const resolved = resolveLocalKtxLlmConfig(config, deps.env ?? process.env);
+  if (!resolved) {
+    return null;
+  }
+  if (resolved.backend === 'claude-code') {
+    const projectDir = deps.projectDir;
+    if (!projectDir) {
+      throw new Error('projectDir is required when creating the claude-code LLM runtime');
+    }
+    return (deps.createClaudeCodeRuntime ?? ((runtimeDeps) => new ClaudeCodeKtxLlmRuntime(runtimeDeps)))({
+      projectDir,
+      modelSlots: resolved.modelSlots,
+      env: deps.env,
+    });
+  }
+  const llmProvider = (deps.createKtxLlmProvider ?? createKtxLlmProvider)(resolved);
+  return (deps.createAiSdkRuntime ?? ((runtimeDeps) => new AiSdkKtxLlmRuntime(runtimeDeps)))({ llmProvider });
 }
 
 function resolveSentenceTransformersBaseUrl(

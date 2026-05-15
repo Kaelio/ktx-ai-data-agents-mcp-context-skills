@@ -8,7 +8,7 @@ import {
 } from '../ingest/index.js';
 import {
   createLocalKtxEmbeddingProviderFromConfig,
-  createLocalKtxLlmProviderFromConfig,
+  createLocalKtxLlmRuntimeFromConfig,
   KtxScanEmbeddingPortAdapter,
 } from '../llm/index.js';
 import type { KtxProjectLlmConfig, KtxScanEnrichmentConfig, KtxScanRelationshipConfig } from '../project/config.js';
@@ -150,6 +150,7 @@ interface LocalScanEnrichmentProviderDeps {
   createKtxLlmProvider?: typeof createKtxLlmProvider;
   createKtxEmbeddingProvider?: typeof createKtxEmbeddingProvider;
   env?: NodeJS.ProcessEnv;
+  projectDir?: string;
 }
 
 export function createLocalScanEnrichmentProvidersFromConfig(
@@ -165,14 +166,17 @@ export function createLocalScanEnrichmentProvidersFromConfig(
     return null;
   }
 
-  const llm = createLocalKtxLlmProviderFromConfig(llmConfig, deps);
+  const llmRuntime = createLocalKtxLlmRuntimeFromConfig(llmConfig, {
+    ...deps,
+    projectDir: deps.projectDir,
+  });
   const embeddingProvider = createLocalKtxEmbeddingProviderFromConfig(config.embeddings, deps);
-  if (!llm || !embeddingProvider) {
+  if (!llmRuntime || !embeddingProvider) {
     return null;
   }
 
   return {
-    llm,
+    llmRuntime,
     embedding: new KtxScanEmbeddingPortAdapter(embeddingProvider),
   };
 }
@@ -378,7 +382,9 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
     connector && (mode !== 'structural' || options.detectRelationships)
       ? options.enrichmentProviders !== undefined
         ? options.enrichmentProviders
-        : createLocalScanEnrichmentProvidersFromConfig(options.project.config.scan.enrichment, options.project.config.llm)
+        : createLocalScanEnrichmentProvidersFromConfig(options.project.config.scan.enrichment, options.project.config.llm, {
+            projectDir: options.project.projectDir,
+          })
       : null;
 
   await options.progress?.update(0.15, 'Inspecting database schema');

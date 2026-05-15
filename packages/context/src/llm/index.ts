@@ -35,6 +35,7 @@ export {
   MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV,
   createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmProviderFromConfig,
+  createLocalKtxLlmRuntimeFromConfig,
   resolveLocalKtxEmbeddingConfig,
   resolveLocalKtxLlmConfig,
 } from './local-config.js';

@@ -1,7 +1,5 @@
-import type { KtxLlmProvider } from '@ktx/llm';
-import type { generateText } from 'ai';
 import { z } from 'zod';
-import { generateKtxObject } from '../llm/index.js';
+import { generateKtxObject, type KtxLlmRuntimePort } from '../llm/index.js';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
 import {
   normalizeKtxRelationshipName,
@@ -32,10 +30,6 @@ const relationshipLlmProposalSchema = z.object({
 });
 
 type KtxRelationshipLlmProposalOutput = z.infer<typeof relationshipLlmProposalSchema>;
-type GenerateTextInput = Parameters<typeof generateText>[0];
-export type KtxRelationshipLlmProposalGenerateText = (
-  input: GenerateTextInput,
-) => Promise<{ text?: string; output?: unknown }>;
 
 export interface KtxRelationshipLlmProposalSettings {
   maxTablesPerBatch: number;
@@ -48,9 +42,8 @@ export interface ProposeKtxRelationshipCandidatesWithLlmInput {
   connectionId: string;
   schema: KtxEnrichedSchema;
   profile: KtxRelationshipProfileArtifact;
-  llmProvider: KtxLlmProvider | null;
+  llmRuntime: KtxLlmRuntimePort | null;
   settings?: Partial<KtxRelationshipLlmProposalSettings>;
-  generateText?: KtxRelationshipLlmProposalGenerateText;
 }
 
 export interface KtxRelationshipLlmProposalResult {
@@ -75,11 +68,6 @@ function mergeSettings(
 
 function clampConfidence(value: number): number {
   return Number(Math.max(0, Math.min(1, value)).toFixed(3));
-}
-
-function modelIsDeterministic(llmProvider: KtxLlmProvider): boolean {
-  const model = llmProvider.getModel('candidateExtraction');
-  return (model as { provider?: string }).provider === 'deterministic';
 }
 
 function findTable(schema: KtxEnrichedSchema, name: string): KtxEnrichedTable | null {
@@ -238,7 +226,7 @@ function generationFailureWarning(error: unknown): KtxScanWarning {
 export async function proposeKtxRelationshipCandidatesWithLlm(
   input: ProposeKtxRelationshipCandidatesWithLlmInput,
 ): Promise<KtxRelationshipLlmProposalResult> {
-  if (!input.llmProvider || modelIsDeterministic(input.llmProvider)) {
+  if (!input.llmRuntime) {
     return { candidates: [], warnings: [], llmCalls: 0, summary: 'skipped' };
   }
 
@@ -256,7 +244,7 @@ export async function proposeKtxRelationshipCandidatesWithLlm(
       KtxRelationshipLlmProposalOutput,
       typeof relationshipLlmProposalSchema
     >({
-      llmProvider: input.llmProvider,
+      runtime: input.llmRuntime,
       role: 'candidateExtraction',
       system,
       prompt,

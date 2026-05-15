@@ -1,32 +1,14 @@
-import type { KtxLlmProvider } from '@ktx/llm';
 import { describe, expect, it, vi } from 'vitest';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
 import type { KtxRelationshipProfileArtifact } from './relationship-profiling.js';
 import { proposeKtxRelationshipCandidatesWithLlm } from './relationship-llm-proposal.js';
 
-function llmProvider(provider = 'anthropic'): KtxLlmProvider {
-  const model = { modelId: 'claude-sonnet-4-6', provider };
+function llmRuntime(output?: unknown): KtxLlmRuntimePort {
   return {
-    getModel: vi.fn(() => model as ReturnType<KtxLlmProvider['getModel']>),
-    getModelByName: vi.fn(() => model as ReturnType<KtxLlmProvider['getModelByName']>),
-    cacheMarker: vi.fn(),
-    repairToolCallHandler: vi.fn(),
-    thinkingProviderOptions: vi.fn(() => ({})),
-    telemetryConfig: vi.fn(() => undefined),
-    promptCachingConfig: vi.fn(
-      () =>
-        ({
-          enabled: false,
-          systemTtl: '1h',
-          toolsTtl: '1h',
-          historyTtl: '5m',
-          cacheSystem: true,
-          cacheTools: true,
-          cacheHistory: true,
-          vertexFallbackTo5m: false,
-        }) as ReturnType<KtxLlmProvider['promptCachingConfig']>,
-    ),
-    activeBackend: vi.fn(() => provider as ReturnType<KtxLlmProvider['activeBackend']>),
+    generateText: vi.fn(),
+    generateObject: vi.fn(async () => output),
+    runAgentLoop: vi.fn(),
   };
 }
 
@@ -125,28 +107,25 @@ function profile(): KtxRelationshipProfileArtifact {
 
 describe('relationship LLM proposals', () => {
   it('maps valid structured FK proposals into review candidates with rationale evidence', async () => {
-    const generateText = vi.fn(async () => ({
-      output: {
-        pkCandidates: [{ table: 'customers', column: 'id', confidence: 0.94, rationale: 'Unique customer identifier.' }],
-        fkCandidates: [
-          {
-            fromTable: 'orders',
-            fromColumn: 'buyer_ref',
-            toTable: 'customers',
-            toColumn: 'id',
-            confidence: 0.88,
-            rationale: 'Buyer reference values match customer identifiers.',
-          },
-        ],
-      },
-    }));
+    const runtime = llmRuntime({
+      pkCandidates: [{ table: 'customers', column: 'id', confidence: 0.94, rationale: 'Unique customer identifier.' }],
+      fkCandidates: [
+        {
+          fromTable: 'orders',
+          fromColumn: 'buyer_ref',
+          toTable: 'customers',
+          toColumn: 'id',
+          confidence: 0.88,
+          rationale: 'Buyer reference values match customer identifiers.',
+        },
+      ],
+    });
 
     const result = await proposeKtxRelationshipCandidatesWithLlm({
       connectionId: 'warehouse',
       schema: schema(),
       profile: profile(),
-      llmProvider: llmProvider(),
-      generateText,
+      llmRuntime: runtime,
     });
 
     expect(result.summary).toBe('completed');
@@ -164,42 +143,27 @@ describe('relationship LLM proposals', () => {
         reasons: ['llm_proposal', 'llm_pk_proposal'],
       },
     });
-    expect(generateText).toHaveBeenCalledWith(
+    expect(runtime.generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: expect.objectContaining({
-          role: 'system',
-          content: expect.stringContaining('You are helping KTX review possible SQL relationships'),
-        }),
-        messages: expect.arrayContaining([
-          expect.objectContaining({
-            role: 'user',
-            content: expect.stringContaining('"tables"'),
-          }),
-        ]),
+        role: 'candidateExtraction',
+        system: expect.stringContaining('You are helping KTX review possible SQL relationships'),
+        prompt: expect.stringContaining('"tables"'),
       }),
     );
-    const call = (
-      generateText.mock.calls as unknown as Array<[{ messages: Array<{ role: string; content: string }> }]>
-    )[0]?.[0];
-    const userMessage = call?.messages.find((m) => m.role === 'user');
-    expect(userMessage?.content).not.toContain('You are helping KTX review possible SQL relationships');
-    expect(call?.messages.some((m) => m.role === 'system')).toBe(false);
+    const call = vi.mocked(runtime.generateObject).mock.calls[0]?.[0];
+    expect(call?.prompt).not.toContain('You are helping KTX review possible SQL relationships');
   });
 
-  it('skips deterministic providers without calling generateText', async () => {
-    const generateText = vi.fn();
-
+  it('skips when no runtime is configured', async () => {
     const result = await proposeKtxRelationshipCandidatesWithLlm({
       connectionId: 'warehouse',
       schema: schema(),
       profile: profile(),
-      llmProvider: llmProvider('deterministic'),
-      generateText,
+      llmRuntime: null,
     });
 
     expect(result).toMatchObject({ candidates: [], llmCalls: 0, summary: 'skipped' });
     expect(result.warnings).toEqual([]);
-    expect(generateText).not.toHaveBeenCalled();
   });
 
   it('returns recoverable warnings for invalid references and generation failures', async () => {
@@ -207,22 +171,19 @@ describe('relationship LLM proposals', () => {
       connectionId: 'warehouse',
       schema: schema(),
       profile: profile(),
-      llmProvider: llmProvider(),
-      generateText: vi.fn(async () => ({
-        output: {
-          pkCandidates: [],
-          fkCandidates: [
-            {
-              fromTable: 'orders',
-              fromColumn: 'missing_column',
-              toTable: 'customers',
-              toColumn: 'id',
-              confidence: 0.7,
-              rationale: 'Invalid source column.',
-            },
-          ],
-        },
-      })),
+      llmRuntime: llmRuntime({
+        pkCandidates: [],
+        fkCandidates: [
+          {
+            fromTable: 'orders',
+            fromColumn: 'missing_column',
+            toTable: 'customers',
+            toColumn: 'id',
+            confidence: 0.7,
+            rationale: 'Invalid source column.',
+          },
+        ],
+      }),
     });
     expect(invalidReference.candidates).toEqual([]);
     expect(invalidReference.summary).toBe('completed');
@@ -235,10 +196,13 @@ describe('relationship LLM proposals', () => {
       connectionId: 'warehouse',
       schema: schema(),
       profile: profile(),
-      llmProvider: llmProvider(),
-      generateText: vi.fn(async () => {
-        throw new Error('model unavailable');
-      }),
+      llmRuntime: {
+        generateText: vi.fn(),
+        generateObject: vi.fn(async () => {
+          throw new Error('model unavailable');
+        }),
+        runAgentLoop: vi.fn(),
+      },
     });
     expect(failed).toMatchObject({ candidates: [], llmCalls: 1, summary: 'failed' });
     expect(failed.warnings[0]).toMatchObject({
