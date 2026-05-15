@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import pLimit from 'p-limit';
 import { z } from 'zod';
-import { createAgentTool, type AgentToolSet } from '../agent/index.js';
+import { createAgentTool, type AgentToolSet, type RunLoopToolFailure } from '../agent/index.js';
 import { type KtxLogger, noopLogger } from '../core/index.js';
 import type { CaptureSession, MemoryAction } from '../memory/index.js';
 import type { SemanticLayerService, SemanticLayerSource, SlValidationDeps } from '../sl/index.js';
@@ -401,13 +401,39 @@ export class IngestBundleRunner {
     }
     const transcriptDir = this.deps.storage.resolveTranscriptDir(job.jobId);
     const transcriptSummaries = new Map<string, MutableToolTranscriptSummary>();
+    const recordedToolErrorKeys = new Set<string>();
+    const transcriptErrorKey = (
+      entry: Pick<ToolCallLogEntry, 'wuKey' | 'toolName' | 'toolCallId' | 'error'>,
+    ): string | null => (entry.error && entry.toolCallId ? `${entry.wuKey}:${entry.toolName}:${entry.toolCallId}` : null);
     const recordTranscriptEntry =
       (path: string) =>
       (entry: ToolCallLogEntry): void => {
+        const errorKey = transcriptErrorKey(entry);
+        if (errorKey) {
+          recordedToolErrorKeys.add(errorKey);
+        }
         const current =
           transcriptSummaries.get(entry.wuKey) ?? createMutableToolTranscriptSummary(entry.wuKey, path);
         recordToolTranscriptEntry(current, entry);
         transcriptSummaries.set(entry.wuKey, current);
+      };
+    const recordSdkToolFailure =
+      (path: string, unitKey: string) =>
+      (failure: RunLoopToolFailure): void => {
+        const entry: ToolCallLogEntry = {
+          ts: new Date().toISOString(),
+          wuKey: unitKey,
+          ...(failure.toolCallId ? { toolCallId: failure.toolCallId } : {}),
+          toolName: failure.toolName,
+          durationMs: failure.durationMs ?? 0,
+          input: failure.input,
+          error: { message: failure.error },
+        };
+        const errorKey = transcriptErrorKey(entry);
+        if (errorKey && recordedToolErrorKeys.has(errorKey)) {
+          return;
+        }
+        recordTranscriptEntry(path)(entry);
       };
     const overrideReport = await this.loadOverrideReport(job);
 
@@ -779,6 +805,8 @@ export class IngestBundleRunner {
               sourceKey: job.sourceKey,
               connectionId: job.connectionId,
               jobId: job.jobId,
+              onToolFailure: (unitKey, failure) =>
+                recordSdkToolFailure(join(transcriptDir, `${unitKey}.jsonl`), unitKey)(failure),
               toolFailureCount: (unitKey) => transcriptSummaries.get(unitKey)?.fatalErrorCount ?? 0,
               onStepFinish: ({ stepIndex, stepBudget }) => {
                 memoryFlow?.emit({ type: 'work_unit_step', unitKey: wu.unitKey, stepIndex, stepBudget });

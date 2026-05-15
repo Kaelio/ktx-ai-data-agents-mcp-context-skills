@@ -912,6 +912,53 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
+  it('records SDK tool failures as fatal WorkUnit transcript failures', async () => {
+    const deps = makeDeps();
+    deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
+      if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+        await params.onToolFailure?.({
+          toolName: 'read_raw_span',
+          input: { path: 42 },
+          toolCallId: 'schema-1',
+          error: 'Input validation failed: expected path to be a string',
+          durationMs: 4,
+        });
+      }
+      return { stopReason: 'natural' };
+    });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect(deps.reportsRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          failedWorkUnits: ['u1'],
+          toolTranscripts: [
+            expect.objectContaining({
+              unitKey: 'u1',
+              toolCallCount: 1,
+              errorCount: 1,
+              toolNames: ['read_raw_span'],
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
   it('persists WorkUnit unmapped fallback records in the report body', async () => {
     const deps = makeDeps();
     deps.agentRunner.runLoop.mockImplementation(async (params: any) => {

@@ -121,6 +121,33 @@ describe('Stage 3 — executeWorkUnit', () => {
     expect(deps.resetHardTo).toHaveBeenCalledWith('pre');
   });
 
+  it('forwards runner tool failures with the current WorkUnit key', async () => {
+    const deps = makeDeps();
+    const onToolFailure = vi.fn();
+    deps.onToolFailure = onToolFailure;
+    deps.sessionWorktreeGit.revParseHead = vi.fn().mockResolvedValueOnce('pre').mockResolvedValueOnce('post');
+    deps.agentRunner.runLoop = vi.fn().mockImplementation(async (params: any) => {
+      await params.onToolFailure?.({
+        toolName: 'read_raw_span',
+        input: { path: 42 },
+        toolCallId: 'tool-1',
+        error: 'Input validation failed',
+        durationMs: 3,
+      });
+      return { stopReason: 'natural' };
+    });
+
+    await executeWorkUnit(deps, makeWu());
+
+    expect(onToolFailure).toHaveBeenCalledWith('u1', {
+      toolName: 'read_raw_span',
+      input: { path: 42 },
+      toolCallId: 'tool-1',
+      error: 'Input validation failed',
+      durationMs: 3,
+    });
+  });
+
   it('runner loop thrown exception resets to the pre-WU SHA and marks WU failed', async () => {
     const deps = makeDeps();
     deps.sessionWorktreeGit.revParseHead = vi.fn().mockResolvedValueOnce('pre').mockResolvedValueOnce('post');

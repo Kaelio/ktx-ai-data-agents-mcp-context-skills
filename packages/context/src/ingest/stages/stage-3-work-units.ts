@@ -1,4 +1,4 @@
-import type { AgentRunnerPort, AgentToolSet } from '@ktx/context/agent';
+import type { AgentRunnerPort, AgentToolSet, RunLoopToolFailure } from '@ktx/context/agent';
 import type { KtxModelRole } from '@ktx/llm';
 import type { CaptureSession, MemoryAction } from '../../memory/index.js';
 import { listTouchedSlSources, type TouchedSlSource } from '../../tools/index.js';
@@ -27,6 +27,7 @@ export interface WorkUnitExecutionDeps {
   connectionId: string;
   jobId: string;
   onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
+  onToolFailure?: (unitKey: string, failure: RunLoopToolFailure) => void | Promise<void>;
   toolFailureCount?: (unitKey: string) => number;
 }
 
@@ -100,6 +101,7 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
         jobId: deps.jobId,
       },
       onStepFinish: deps.onStepFinish,
+      onToolFailure: deps.onToolFailure ? (failure) => deps.onToolFailure?.(wu.unitKey, failure) : undefined,
     });
   } catch (error) {
     return failWithResetFromCurrentHead(error instanceof Error ? error.message : String(error));
