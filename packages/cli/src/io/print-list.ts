@@ -18,7 +18,7 @@ export interface PrintListColumn<Row> {
   dim?: boolean;
   /**
    * Pretty-mode role override. When omitted, role is auto-detected:
-   * - `'badge'`  — leading dim cell before the name column (right-padded across rows).
+   * - `'badge'`  — leading cell before the name column (right-padded across rows).
    * - `'name'`   — name column. Default: first non-grouped, non-metric, non-optional column.
    * - `'metric'` — `"N word"` cell. Default: any column with a non-empty `plain` prefix.
    * - `'suffix'` — trailing em-dash optional value. Default: any column with `optional: true`.
