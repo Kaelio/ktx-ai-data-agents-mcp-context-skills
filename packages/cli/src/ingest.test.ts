@@ -311,7 +311,7 @@ describe('runKtxIngest', () => {
 
     expect(runIo.stdout()).toBe('');
     expect(runIo.stderr()).toContain(
-      'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+      'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway; llm.agentRunner.backend: claude-code; or an injected agentRunner.',
     );
     expect(runIo.stderr()).toContain(
       `ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
