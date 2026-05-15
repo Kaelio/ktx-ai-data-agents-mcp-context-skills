@@ -1,6 +1,7 @@
 export type {
   KtxConfigIssue,
   KtxConfigValidation,
+  KtxProjectAgentRunnerConfig,
   KtxProjectConfig,
   KtxProjectConnectionConfig,
   KtxProjectEmbeddingConfig,

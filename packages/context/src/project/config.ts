@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { connectionConfigSchema } from './driver-schemas.js';
 
 const KTX_LLM_BACKENDS = ['none', 'anthropic', 'vertex', 'gateway'] as const;
+const KTX_AGENT_RUNNER_BACKENDS = ['ai-sdk', 'claude-code'] as const;
 const KTX_EMBEDDING_BACKENDS = ['none', 'deterministic', 'openai', 'sentence-transformers'] as const;
 const KTX_PROMPT_CACHE_TTLS = ['5m', '1h'] as const;
 const KTX_ENRICHMENT_MODES = ['none', 'deterministic', 'llm'] as const;
@@ -63,6 +64,17 @@ const promptCachingSchema = z
   })
   .describe('Prompt-caching tunables for Anthropic-compatible providers.');
 
+const agentRunnerSchema = z
+  .strictObject({
+    backend: z
+      .enum(KTX_AGENT_RUNNER_BACKENDS)
+      .default('ai-sdk')
+      .describe(
+        'Agent-loop backend. "ai-sdk" uses the configured LLM provider; "claude-code" uses the local Claude Agent SDK session for agentic loops only.',
+      ),
+  })
+  .describe('Agent runner backend selection for ingest and memory-agent loops.');
+
 const llmSchema = z
   .strictObject({
     provider: llmProviderSchema.prefault({}).describe('LLM provider backend and credentials.'),
@@ -71,8 +83,9 @@ const llmSchema = z
       .default({})
       .describe('Per-role model overrides keyed by KTX model role (e.g. "default", "triage"). Values are provider-specific model identifiers.'),
     promptCaching: promptCachingSchema.optional().describe('Optional prompt-caching tunables.'),
+    agentRunner: agentRunnerSchema.prefault({}).describe('Agent runner backend selection for ingest and memory-agent loops.'),
   })
-  .describe('LLM provider, per-role model overrides, and prompt-caching tunables.');
+  .describe('LLM provider, per-role model overrides, prompt-caching tunables, and agent-runner backend.');
 
 const embeddingSchema = z
   .strictObject({
@@ -253,6 +266,7 @@ const ktxProjectConfigSchema = z
   .describe('Configuration schema for KTX project files (ktx.yaml).');
 
 export type KtxProjectConfig = z.infer<typeof ktxProjectConfigSchema>;
+export type KtxProjectAgentRunnerConfig = z.infer<typeof agentRunnerSchema>;
 export type KtxProjectLlmConfig = z.infer<typeof llmSchema>;
 export type KtxProjectLlmProviderConfig = z.infer<typeof llmProviderSchema>;
 export type KtxProjectEmbeddingConfig = z.infer<typeof embeddingSchema>;
@@ -311,6 +325,9 @@ function formatIssue(issue: z.core.$ZodIssue, input: unknown): KtxConfigIssue[] 
   const lastSegment = issue.path[issue.path.length - 1];
   if (lastSegment === 'backend' && (issue.code === 'invalid_value' || issue.code === 'invalid_type')) {
     const value = valueAtPath(input, issue.path);
+    if (basePath === 'llm.agentRunner.backend') {
+      return [{ path: 'llm.agentRunner', message: `Unsupported llm.agentRunner: ${String(value)}` }];
+    }
     return [{ path: basePath, message: `Unsupported ${basePath}: ${String(value)}` }];
   }
 

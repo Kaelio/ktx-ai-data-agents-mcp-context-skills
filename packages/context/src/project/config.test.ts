@@ -38,6 +38,9 @@ connections:
           backend: 'none',
         },
         models: {},
+        agentRunner: {
+          backend: 'ai-sdk',
+        },
       },
       ingest: {
         adapters: [],
@@ -178,6 +181,50 @@ llm:
       default: 'claude-sonnet-4-6',
       triage: 'claude-haiku-4-5',
     });
+  });
+
+  it('defaults the agent runner backend to ai-sdk', () => {
+    expect(buildDefaultKtxProjectConfig().llm.agentRunner).toEqual({
+      backend: 'ai-sdk',
+    });
+  });
+
+  it('accepts claude-code as an agent runner backend without enabling the global LLM provider', () => {
+    const config = parseKtxProjectConfig(`
+llm:
+  agentRunner:
+    backend: claude-code
+  models:
+    default: claude-sonnet-4-6
+`);
+
+    expect(config.llm.provider.backend).toBe('none');
+    expect(config.llm.agentRunner.backend).toBe('claude-code');
+    expect(config.llm.models.default).toBe('claude-sonnet-4-6');
+  });
+
+  it('rejects unknown agent runner backends with a scoped config issue', () => {
+    const result = validateKtxProjectConfig(`
+llm:
+  agentRunner:
+    backend: subprocess
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.issues).toContainEqual({
+      path: 'llm.agentRunner',
+      message: 'Unsupported llm.agentRunner: subprocess',
+    });
+  });
+
+  it('includes agent runner backend values in the generated JSON schema', () => {
+    const schema = generateKtxProjectConfigJsonSchema();
+    const properties = schema.properties as Record<string, { properties?: Record<string, unknown> }>;
+    const llm = properties.llm as { properties?: Record<string, { properties?: Record<string, unknown> }> };
+    const agentRunner = llm.properties?.agentRunner as { properties?: Record<string, unknown> };
+    const backend = agentRunner.properties?.backend as { enum?: readonly string[] };
+
+    expect(backend.enum).toEqual(['ai-sdk', 'claude-code']);
   });
 
   it('parses gateway LLM, OpenAI scan embeddings, and sentence-transformers ingest embeddings', () => {
