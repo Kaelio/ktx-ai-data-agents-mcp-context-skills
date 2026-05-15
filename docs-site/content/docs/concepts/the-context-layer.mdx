@@ -250,6 +250,17 @@ canonical revenue reporting.
 
 Together, these four pillars give agents enough context to produce analytics artifacts that match what your team would produce - not just syntactically valid SQL, but the right query for the question.
 
+## Agent runner backends
+
+KTX separates the global LLM provider from the agent runner. The global
+provider powers non-agent calls such as scan enrichment and relationship
+proposals. The agent runner powers curated tool loops used by ingest and memory
+capture.
+
+Use `llm.agentRunner.backend: claude-code` when you want those curated loops to
+run through the Claude Agent SDK. KTX registers only its stage-specific MCP
+tools for the session and disables Claude Code built-in tools for that backend.
+
 ## How KTX compares
 
 KTX is a context layer with an agent-native semantic layer at its core. MetricFlow, Cube, and Malloy model metrics, dimensions, joins, and generated SQL. KTX covers that semantic-layer work, then adds the context agents need to use and maintain it: wiki pages, schema scans, provenance, ingestion, validation, and agent-facing CLI commands.

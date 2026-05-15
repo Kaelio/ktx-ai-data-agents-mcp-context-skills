@@ -5,7 +5,7 @@ import { AgentRunnerService } from '../agent/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
-import { createLocalBundleIngestRuntime } from './local-bundle-runtime.js';
+import { createLocalBundleIngestRuntime, resolveAgentRunnerForTest } from './local-bundle-runtime.js';
 
 type RuntimeWithConnectionDeps = {
   deps: {
@@ -55,7 +55,7 @@ describe('createLocalBundleIngestRuntime', () => {
       }),
     ).toThrow(
       [
-        'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+        'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway; llm.agentRunner.backend: claude-code; or an injected agentRunner.',
         `Configure an Anthropic provider, then rerun ingest:`,
         `  ktx setup --project-dir ${project.projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
       ].join('\n'),
@@ -82,6 +82,18 @@ describe('createLocalBundleIngestRuntime', () => {
     );
 
     await mkdir(runtime.storage.resolveUploadDir('job-1'), { recursive: true });
+  });
+
+  it('constructs a Claude Agent SDK runner when llm.agentRunner.backend is claude-code', () => {
+    project.config.llm = {
+      provider: { backend: 'none' },
+      models: { default: 'claude-sonnet-4-6' },
+      agentRunner: { backend: 'claude-code' },
+    };
+
+    const resolved = resolveAgentRunnerForTest({ project, adapters: [] });
+
+    expect(resolved.agentRunner.constructor.name).toBe('ClaudeAgentSdkRunnerService');
   });
 
   it('exposes canonical warehouse connection types to local ingest SL tools', async () => {

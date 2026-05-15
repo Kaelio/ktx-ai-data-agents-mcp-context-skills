@@ -73,6 +73,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: 0.3.142
+        version: 0.3.142(zod@4.4.3)
       '@clack/prompts':
         specifier: 1.4.0
         version: 1.4.0

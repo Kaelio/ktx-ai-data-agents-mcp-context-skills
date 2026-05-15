@@ -913,6 +913,7 @@ describe('runContextBuild', () => {
         llm: {
           provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
           models: { default: 'gpt-test' },
+          agentRunner: { backend: 'ai-sdk' },
         },
         scan: {
           ...projectWithConnections({ warehouse: { driver: 'postgres' } }).config.scan,

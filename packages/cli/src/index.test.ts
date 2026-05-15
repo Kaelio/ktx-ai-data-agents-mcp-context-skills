@@ -1074,6 +1074,41 @@ describe('runKtxCli', () => {
     );
   });
 
+  it('dispatches Claude Code setup flags to the setup runner', async () => {
+    const setup = vi.fn(async () => 0);
+    const setupIo = makeIo();
+
+    await expect(
+      runKtxCli(
+        [
+          '--project-dir',
+          tempDir,
+          'setup',
+          '--no-input',
+          '--llm-backend',
+          'claude-code',
+          '--anthropic-model',
+          'claude-sonnet-4-6',
+        ],
+        setupIo.io,
+        { setup },
+      ),
+    ).resolves.toBe(0);
+
+    expect(setup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        cliVersion: '0.0.0-private',
+        llmBackend: 'claude-code',
+        anthropicModel: 'claude-sonnet-4-6',
+        skipLlm: false,
+      }),
+      setupIo.io,
+    );
+  });
+
   it('rejects conflicting Anthropic credential setup flags', async () => {
     const setup = vi.fn(async () => 0);
     const setupIo = makeIo();

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { KtxLlmProvider } from '@ktx/llm';
 import YAML from 'yaml';
 import type { AgentRunnerPort, AgentToolSet } from '../agent/index.js';
-import { AgentRunnerService as DefaultAgentRunnerService } from '../agent/index.js';
+import { AgentRunnerService as DefaultAgentRunnerService, ClaudeAgentSdkRunnerService } from '../agent/index.js';
 import { localConnectionInfoFromConfig, type KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
 import { noopLogger, SessionWorktreeService } from '../core/index.js';
@@ -570,7 +570,7 @@ function nextLocalJobId(): string {
 
 function localIngestLlmProviderGuardMessage(projectDir: string): string {
   return [
-    'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
+    'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway; llm.agentRunner.backend: claude-code; or an injected agentRunner.',
     'Configure an Anthropic provider, then rerun ingest:',
     `  ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
   ].join('\n');
@@ -585,6 +585,17 @@ function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
 
   if (options.agentRunner) {
     return { agentRunner: options.agentRunner, ...(llmProvider ? { llmProvider } : {}) };
+  }
+
+  if (options.project.config.llm.agentRunner.backend === 'claude-code') {
+    return {
+      agentRunner: new ClaudeAgentSdkRunnerService({
+        projectDir: options.project.projectDir,
+        modelSlots: options.project.config.llm.models,
+        logger: options.logger ?? noopLogger,
+      }),
+      ...(llmProvider ? { llmProvider } : {}),
+    };
   }
 
   if (!llmProvider) {
@@ -602,6 +613,8 @@ function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
     llmProvider,
   };
 }
+
+export const resolveAgentRunnerForTest = resolveAgentRunner;
 
 export function createLocalBundleIngestRuntime(
   options: CreateLocalBundleIngestRuntimeOptions,

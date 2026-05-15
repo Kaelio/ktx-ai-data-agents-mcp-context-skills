@@ -143,6 +143,17 @@ describe('createLocalProjectMemoryCapture', () => {
     );
   });
 
+  it('constructs local memory capture with Claude Agent SDK runner config', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    project.config.llm = {
+      provider: { backend: 'none' },
+      models: { default: 'claude-sonnet-4-6' },
+      agentRunner: { backend: 'claude-code' },
+    };
+
+    expect(() => createLocalProjectMemoryCapture(project)).not.toThrow();
+  });
+
   it('captures a semantic-layer source for a named local connection id', async () => {
     const project = await initKtxProject({ projectDir: tempDir });
     project.config.connections.warehouse = { driver: 'postgres' };

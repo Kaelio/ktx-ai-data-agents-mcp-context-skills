@@ -271,7 +271,7 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
           verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
           unverifiedIdentifiers: [],
         },
-        { toolCallId: 'cli-looker-verification-ledger', messages: [] },
+        { toolCallId: 'cli-looker-verification-ledger' },
       );
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
@@ -292,10 +292,13 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
             measures: [{ name: 'total_revenue', expr: 'sum(revenue)' }],
           },
         },
-        { toolCallId: 'cli-looker-sl-write', messages: [] },
+        { toolCallId: 'cli-looker-sl-write' },
       );
-      if (!result.structured.success) {
-        throw new Error(result.markdown);
+      const structured =
+        result && typeof result === 'object' && 'structured' in result ? result.structured : undefined;
+      if (!structured || typeof structured !== 'object' || !('success' in structured) || structured.success !== true) {
+        const message = result && typeof result === 'object' && 'markdown' in result ? result.markdown : String(result);
+        throw new Error(typeof message === 'string' ? message : 'sl_write_source failed');
       }
     }
     return { stopReason: 'natural' as const };

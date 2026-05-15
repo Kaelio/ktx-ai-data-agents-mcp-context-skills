@@ -29,7 +29,7 @@ function embeddingBackend(value: string): 'openai' | 'sentence-transformers' {
 }
 
 function llmBackend(value: string): KtxSetupLlmBackend {
-  if (value === 'anthropic' || value === 'vertex') {
+  if (value === 'anthropic' || value === 'vertex' || value === 'claude-code') {
     return value;
   }
   throw new InvalidArgumentError(`invalid choice '${value}'`);
@@ -361,12 +361,18 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       context.setExitCode(1);
       return;
     }
-    if (options.llmBackend === 'vertex' && (options.anthropicApiKeyEnv || options.anthropicApiKeyFile)) {
+    if (
+      (options.llmBackend === 'vertex' || options.llmBackend === 'claude-code') &&
+      (options.anthropicApiKeyEnv || options.anthropicApiKeyFile)
+    ) {
       context.io.stderr.write('Anthropic API key flags are only valid with --llm-backend anthropic.\n');
       context.setExitCode(1);
       return;
     }
-    if (options.llmBackend === 'anthropic' && (options.vertexProject || options.vertexLocation)) {
+    if (
+      (options.llmBackend === 'anthropic' || options.llmBackend === 'claude-code') &&
+      (options.vertexProject || options.vertexLocation)
+    ) {
       context.io.stderr.write('Vertex AI flags are only valid with --llm-backend vertex.\n');
       context.setExitCode(1);
       return;

@@ -975,6 +975,26 @@ describe('setup Anthropic model step', () => {
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 
+  it('writes claude-code agent runner config when requested as the LLM backend', async () => {
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'claude-code',
+        anthropicModel: 'claude-sonnet-4-6',
+        skipLlm: false,
+      },
+      makeIo().io,
+      { claudeCodeAuthProbe: vi.fn(async () => ({ ok: true as const })) },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm.provider.backend).toBe('none');
+    expect(config.llm.agentRunner.backend).toBe('claude-code');
+    expect(config.llm.models.default).toBe('claude-sonnet-4-6');
+  });
+
   it('returns back without writing config when Back is selected', async () => {
     const prompts = makePromptAdapter({ credentialChoice: 'back' });
     const result = await runKtxSetupAnthropicModelStep(

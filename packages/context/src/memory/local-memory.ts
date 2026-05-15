@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { KtxLlmProvider } from '@ktx/llm';
 import YAML from 'yaml';
-import { AgentRunnerService, type AgentRunnerPort } from '../agent/index.js';
+import { AgentRunnerService, ClaudeAgentSdkRunnerService, type AgentRunnerPort } from '../agent/index.js';
 import { localConnectionInfoFromConfig } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxFileStorePort, KtxFileWriteResult } from '../core/index.js';
 import { type KtxLogger, noopLogger, SessionWorktreeService } from '../core/index.js';
@@ -104,10 +104,16 @@ export function createLocalProjectMemoryCapture(
   });
   const agentRunner =
     options.agentRunner ??
-    new AgentRunnerService({
-      llmProvider: requireLlmProvider(llmProvider),
-      logger,
-    });
+    (project.config.llm.agentRunner.backend === 'claude-code'
+      ? new ClaudeAgentSdkRunnerService({
+          projectDir: project.projectDir,
+          modelSlots: project.config.llm.models,
+          logger,
+        })
+      : new AgentRunnerService({
+          llmProvider: requireLlmProvider(llmProvider),
+          logger,
+        }));
   const memoryAgent = new MemoryAgentService({
     settings: {
       knowledge: { userScopedKnowledgeEnabled: false },
@@ -145,7 +151,9 @@ export function createLocalProjectMemoryCapture(
 
 function requireLlmProvider(provider: KtxLlmProvider | null | undefined): KtxLlmProvider {
   if (!provider) {
-    throw new Error('createLocalProjectMemoryCapture requires llm.provider.backend or an injected agentRunner');
+    throw new Error(
+      'createLocalProjectMemoryCapture requires llm.provider.backend, llm.agentRunner.backend: claude-code, or an injected agentRunner',
+    );
   }
   return provider;
 }

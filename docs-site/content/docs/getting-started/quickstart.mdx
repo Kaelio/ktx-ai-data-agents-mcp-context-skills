@@ -59,7 +59,7 @@ completed setup steps and resumes from the remaining work.
 KTX uses a Claude model for ingest agents that turn schemas, SQL, BI metadata,
 and documents into semantic-layer sources and wiki context.
 
-Setup supports two LLM provider paths:
+Setup supports two hosted LLM provider paths:
 
 | Provider | Use when | Credential model |
 |----------|----------|------------------|
@@ -77,6 +77,28 @@ your active `gcloud` project, list visible projects, or accept explicit
 Setup checks the selected model before saving. Anthropic API setup fetches live
 Claude model choices when possible and falls back to bundled defaults if model
 discovery is unavailable.
+
+### Use a local Claude Code session for ingest agents
+
+KTX can run ingest and memory-agent loops through your local Claude Code
+session. This affects only agentic loops; scan enrichment, page triage, and
+relationship proposals still use `llm.provider`.
+
+```bash
+ktx setup --llm-backend claude-code --anthropic-model claude-sonnet-4-6
+```
+
+The generated `ktx.yaml` uses:
+
+```yaml
+llm:
+  provider:
+    backend: none
+  agentRunner:
+    backend: claude-code
+  models:
+    default: claude-sonnet-4-6
+```
 
 ## Step 3: Configure embeddings
 

@@ -53,7 +53,7 @@ export interface AnthropicModelChoice {
   recommended: boolean;
 }
 
-export type KtxSetupLlmBackend = 'anthropic' | 'vertex';
+export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code';
 
 export interface KtxSetupModelPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
@@ -68,6 +68,7 @@ export interface KtxSetupModelDeps {
   prompts?: KtxSetupModelPromptAdapter;
   listModels?: (apiKey: string) => Promise<AnthropicModelChoice[]>;
   healthCheck?: (config: KtxLlmConfig) => Promise<KtxLlmHealthCheckResult>;
+  claudeCodeAuthProbe?: () => Promise<{ ok: true } | { ok: false; message: string }>;
   readGcloudProject?: () => Promise<string | undefined>;
   listGcloudProjects?: () => Promise<GcloudProjectChoice[]>;
   spinner?: () => KtxCliSpinner;
@@ -238,6 +239,9 @@ export async function fetchAnthropicModels(
 }
 
 export function isKtxSetupLlmConfigReady(config: KtxProjectLlmConfig): boolean {
+  if (config.agentRunner?.backend === 'claude-code') {
+    return Boolean(config.models.default);
+  }
   let resolved: KtxLlmConfig | null;
   try {
     resolved = resolveLocalKtxLlmConfig(config, process.env);
@@ -274,6 +278,7 @@ function buildProjectLlmConfig(
       },
       models: { ...existing.models, default: model },
       promptCaching: { ...(existing.promptCaching ?? {}), enabled: true, vertexFallbackTo5m: true },
+      agentRunner: { backend: 'ai-sdk' },
     };
   }
 
@@ -284,6 +289,7 @@ function buildProjectLlmConfig(
     },
     models: { ...existing.models, default: model },
     promptCaching: { ...(existing.promptCaching ?? {}), enabled: true },
+    agentRunner: { backend: 'ai-sdk' },
   };
 }
 
@@ -303,6 +309,30 @@ function buildVertexHealthConfig(vertex: { project?: string; location: string },
     modelSlots: { default: model },
     promptCaching: { enabled: true, vertexFallbackTo5m: true },
   };
+}
+
+async function defaultClaudeCodeAuthProbe(): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { query } = await import('@anthropic-ai/claude-agent-sdk');
+  const session = query({
+    prompt: '',
+    options: {
+      tools: [],
+      settingSources: [],
+      skills: [],
+      allowedTools: [],
+      disallowedTools: ['Bash', 'Read', 'Edit', 'Write', 'Grep', 'Glob', 'WebFetch', 'WebSearch', 'Task'],
+      permissionMode: 'dontAsk',
+      maxTurns: 1,
+    },
+  });
+  try {
+    await session.accountInfo();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  } finally {
+    session.close();
+  }
 }
 
 type LlmHealthProvider = 'Anthropic API' | 'Vertex AI';
@@ -483,13 +513,18 @@ async function chooseBackend(
     options: [
       { value: 'anthropic', label: 'Anthropic API' },
       { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
+      { value: 'claude-code', label: 'Claude Code local session (agent runner only)' },
       { value: 'back', label: 'Back' },
     ],
   });
   if (choice === 'back') {
     return { status: 'back' };
   }
-  return { status: 'ready', backend: choice === 'vertex' ? 'vertex' : 'anthropic', prompted: true };
+  return {
+    status: 'ready',
+    backend: choice === 'vertex' ? 'vertex' : choice === 'claude-code' ? 'claude-code' : 'anthropic',
+    prompted: true,
+  };
 }
 
 function resolveProvidedVertexRef(
@@ -826,6 +861,21 @@ async function persistLlmConfig(
   await markKtxSetupStateStepComplete(projectDir, 'llm');
 }
 
+async function persistClaudeCodeAgentRunnerConfig(projectDir: string, model: string): Promise<void> {
+  const project = await loadKtxProject({ projectDir });
+  const nextConfig: KtxProjectConfig = {
+    ...project.config,
+    llm: {
+      ...project.config.llm,
+      provider: { backend: 'none' },
+      models: { ...project.config.llm.models, default: model },
+      agentRunner: { backend: 'claude-code' },
+    },
+  };
+  await writeFile(project.configPath, serializeKtxProjectConfig(nextConfig), 'utf-8');
+  await markKtxSetupStateStepComplete(projectDir, 'llm');
+}
+
 function buildInteractiveRetryArgs(args: KtxSetupModelArgs, backend?: KtxSetupLlmBackend): KtxSetupModelArgs {
   return {
     projectDir: args.projectDir,
@@ -873,6 +923,18 @@ export async function runKtxSetupAnthropicModelStep(
     const backendArgs = backendChoice.prompted
       ? ({ ...attemptArgs, llmBackend: backendChoice.backend, showPromptInstructions: false } satisfies KtxSetupModelArgs)
       : attemptArgs;
+
+    if (backendChoice.backend === 'claude-code') {
+      const model = backendArgs.anthropicModel ?? 'claude-sonnet-4-6';
+      const probe = await (deps.claudeCodeAuthProbe ?? defaultClaudeCodeAuthProbe)();
+      if (!probe.ok) {
+        io.stderr.write(`Claude Code authentication check failed: ${probe.message}\n`);
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      await persistClaudeCodeAgentRunnerConfig(args.projectDir, model);
+      io.stdout.write(`│  LLM ready: yes (Claude Code agent runner, ${model})\n`);
+      return { status: 'ready', projectDir: args.projectDir };
+    }
 
     if (backendChoice.backend === 'vertex') {
       const vertex = await chooseVertexConfig(backendArgs, io, deps);

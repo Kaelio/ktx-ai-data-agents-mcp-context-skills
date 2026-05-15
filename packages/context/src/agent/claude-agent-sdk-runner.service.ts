@@ -12,7 +12,6 @@ import {
   agentToolOutputToText,
   assertAgentToolSet,
   type AgentToolDefinition,
-  type AgentToolSet,
 } from './agent-tool.js';
 import type { AgentRunnerPort, RunLoopParams, RunLoopResult, RunLoopStopReason } from './agent-runner.service.js';
 

@@ -61,6 +61,7 @@ async function writeReadyProject(projectDir: string, overrides: ReadyProjectOver
     llm: {
       provider: { backend: 'anthropic' },
       models: { default: 'claude-sonnet-4-6' },
+      agentRunner: { backend: 'ai-sdk' },
     },
     ingest: {
       ...defaults.ingest,
