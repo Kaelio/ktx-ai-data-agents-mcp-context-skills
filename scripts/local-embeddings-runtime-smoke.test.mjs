@@ -36,8 +36,8 @@ describe('localEmbeddingsSmokeOptIn', () => {
 describe('publicKtxTarballName', () => {
   it('selects the public @kaelio/ktx tarball name', () => {
     assert.equal(
-      publicKtxTarballName(['kaelio-ktx-0.1.0-rc.0.tgz', 'ignore-me.tgz']),
-      'kaelio-ktx-0.1.0-rc.0.tgz',
+      publicKtxTarballName(['kaelio-ktx-0.1.0-rc.1.tgz', 'ignore-me.tgz']),
+      'kaelio-ktx-0.1.0-rc.1.tgz',
     );
   });
 
@@ -50,7 +50,7 @@ describe('publicKtxTarballName', () => {
 
   it('fails when multiple public package tarballs are present', () => {
     assert.throws(
-      () => publicKtxTarballName(['kaelio-ktx-0.1.0-rc.0.tgz', 'kaelio-ktx-0.2.0.tgz']),
+      () => publicKtxTarballName(['kaelio-ktx-0.1.0-rc.1.tgz', 'kaelio-ktx-0.2.0.tgz']),
       /Expected exactly one @kaelio\/ktx tarball/,
     );
   });
@@ -60,7 +60,7 @@ describe('expectedPublicKtxVersionPattern', () => {
   it('matches the public package version and rejects the private workspace version', () => {
     const pattern = expectedPublicKtxVersionPattern();
 
-    assert.match('@kaelio/ktx 0.1.0-rc.0\n', pattern);
+    assert.match('@kaelio/ktx 0.1.0-rc.1\n', pattern);
     assert.doesNotMatch('@kaelio/ktx 0.0.0-private\n', pattern);
   });
 });

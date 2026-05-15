@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 export const PUBLIC_NPM_PACKAGE_NAME = '@kaelio/ktx';
-export const PUBLIC_NPM_PACKAGE_VERSION = '0.1.0-rc.0';
+export const PUBLIC_NPM_PACKAGE_VERSION = '0.1.0-rc.1';
 
 export function publicNpmPackageTarballName(version = PUBLIC_NPM_PACKAGE_VERSION) {
   return `kaelio-ktx-${version}.tgz`;
