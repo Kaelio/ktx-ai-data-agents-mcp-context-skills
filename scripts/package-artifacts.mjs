@@ -14,9 +14,9 @@ import {
 } from './build-python-runtime-wheel.mjs';
 import {
   PUBLIC_NPM_PACKAGE_NAME,
-  PUBLIC_NPM_PACKAGE_VERSION,
   publicNpmPackageTarballName,
 } from './build-public-npm-package.mjs';
+import { publicNpmPackageVersion } from './public-npm-release-metadata.mjs';
 
 export {
   RUNTIME_WHEEL_DISTRIBUTION_NAME,
@@ -45,24 +45,27 @@ function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
 
-function npmPackageTarballName(packageName) {
+function npmPackageTarballName(packageName, version) {
   if (packageName !== PUBLIC_NPM_PACKAGE_NAME) {
     throw new Error(`Unsupported npm artifact package: ${packageName}`);
   }
-  return publicNpmPackageTarballName(PUBLIC_NPM_PACKAGE_VERSION);
+  return publicNpmPackageTarballName(version);
 }
 
-function npmPackageTarballs(npmDir) {
+function npmPackageTarballs(npmDir, version) {
   return Object.fromEntries(
-    NPM_ARTIFACT_PACKAGES.map((packageInfo) => [packageInfo.name, join(npmDir, npmPackageTarballName(packageInfo.name))]),
+    NPM_ARTIFACT_PACKAGES.map((packageInfo) => [
+      packageInfo.name,
+      join(npmDir, npmPackageTarballName(packageInfo.name, version)),
+    ]),
   );
 }
 
-export function packageArtifactLayout(rootDir = scriptRootDir()) {
+export function packageArtifactLayout(rootDir = scriptRootDir(), version = publicNpmPackageVersion(rootDir)) {
   const artifactDir = join(rootDir, 'dist', 'artifacts');
   const npmDir = join(artifactDir, 'npm');
   const pythonDir = join(artifactDir, 'python');
-  const npmTarballs = npmPackageTarballs(npmDir);
+  const npmTarballs = npmPackageTarballs(npmDir, version);
 
   return {
     rootDir,
@@ -170,7 +173,7 @@ function releaseMetadataEntry({ ecosystem, packageName, packageRoot, packageVers
   };
 }
 
-async function readNpmPackageMetadata(rootDir, packageInfo) {
+async function readNpmPackageMetadata(rootDir, packageInfo, version) {
   const packageJson = await readJson(join(rootDir, packageInfo.packageRoot, 'package.json'));
   const expectedSourceName = packageInfo.name === PUBLIC_NPM_PACKAGE_NAME ? '@ktx/cli' : packageInfo.name;
   if (packageJson.name !== expectedSourceName) {
@@ -183,14 +186,14 @@ async function readNpmPackageMetadata(rootDir, packageInfo) {
     ecosystem: 'npm',
     packageName: packageInfo.name,
     packageRoot: packageInfo.packageRoot,
-    packageVersion: isPublicKtxPackage ? PUBLIC_NPM_PACKAGE_VERSION : packageJson.version,
+    packageVersion: isPublicKtxPackage ? version : packageJson.version,
     privatePackage: isPublicKtxPackage ? false : packageJson.private === true,
   });
 }
 
-export async function packageReleaseMetadata(rootDir = scriptRootDir()) {
+export async function packageReleaseMetadata(rootDir = scriptRootDir(), version = publicNpmPackageVersion(rootDir)) {
   const npmPackages = await Promise.all(
-    NPM_ARTIFACT_PACKAGES.map((packageInfo) => readNpmPackageMetadata(rootDir, packageInfo)),
+    NPM_ARTIFACT_PACKAGES.map((packageInfo) => readNpmPackageMetadata(rootDir, packageInfo, version)),
   );
 
   return [

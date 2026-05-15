@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
+import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
 import {
   CLI_PYTHON_ASSET_MANIFEST,
   INTERNAL_NPM_WORKSPACE_PACKAGES,
@@ -32,6 +33,35 @@ async function writeJson(path, value) {
 }
 
 async function writeReleaseMetadataInputs(root) {
+  await writeJson(join(root, 'release-policy.json'), {
+    schemaVersion: 1,
+    publicNpmPackageVersion: PUBLIC_NPM_PACKAGE_VERSION,
+    releaseMode: 'ci-artifact-only',
+    npm: {
+      publish: false,
+      registry: null,
+      access: 'public',
+      tag: 'next',
+      packages: ['@kaelio/ktx'],
+    },
+    python: {
+      publish: false,
+      repository: null,
+      packages: ['kaelio-ktx'],
+    },
+    publishedPackageSmoke: {
+      packageName: '@kaelio/ktx',
+      version: PUBLIC_NPM_PACKAGE_VERSION,
+      registry: null,
+    },
+    runtimeInstaller: {
+      uvStrategy: 'path-prerequisite',
+      bootstrapUv: false,
+      missingUvBehavior: 'focused-error',
+    },
+    requiredBeforePublishing: ['Choose public release version.'],
+  });
+
   for (const packageInfo of INTERNAL_NPM_WORKSPACE_PACKAGES) {
     await mkdir(join(root, packageInfo.packageRoot), { recursive: true });
     await writeJson(join(root, packageInfo.packageRoot, 'package.json'), {
@@ -64,7 +94,7 @@ async function writeUploadableArtifactFixtures(layout) {
 
 describe('packageArtifactLayout', () => {
   it('uses stable artifact paths under ktx/dist/artifacts', () => {
-    const layout = packageArtifactLayout('/repo/ktx');
+    const layout = packageArtifactLayout('/repo/ktx', PUBLIC_NPM_PACKAGE_VERSION);
 
     assert.equal(layout.artifactDir, '/repo/ktx/dist/artifacts');
     assert.equal(layout.npmDir, '/repo/ktx/dist/artifacts/npm');
@@ -76,7 +106,7 @@ describe('packageArtifactLayout', () => {
 
 describe('buildArtifactCommands', () => {
   it('builds TypeScript packages in parallel topology, then the runtime wheel, then packs npm artifacts', () => {
-    const layout = packageArtifactLayout('/repo/ktx');
+    const layout = packageArtifactLayout('/repo/ktx', PUBLIC_NPM_PACKAGE_VERSION);
     const commands = buildArtifactCommands(layout);
 
     assert.deepEqual(
@@ -147,7 +177,7 @@ describe('findPythonArtifacts', () => {
 describe('artifact manifest', () => {
   it('writes release metadata, source revision, checksums, and byte counts for every uploadable artifact', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-manifest-test-'));
-    const layout = packageArtifactLayout(root);
+    const layout = packageArtifactLayout(root, PUBLIC_NPM_PACKAGE_VERSION);
     try {
       await writeReleaseMetadataInputs(root);
       await writeUploadableArtifactFixtures(layout);
@@ -244,7 +274,7 @@ describe('artifact manifest', () => {
 describe('verifyArtifactManifest', () => {
   it('accepts a schema version 2 manifest that matches the artifact directory', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-verify-manifest-test-'));
-    const layout = packageArtifactLayout(root);
+    const layout = packageArtifactLayout(root, PUBLIC_NPM_PACKAGE_VERSION);
     try {
       await writeReleaseMetadataInputs(root);
       await writeUploadableArtifactFixtures(layout);
@@ -266,7 +296,7 @@ describe('verifyArtifactManifest', () => {
 
   it('rejects a manifest when a file checksum has drifted', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-checksum-drift-test-'));
-    const layout = packageArtifactLayout(root);
+    const layout = packageArtifactLayout(root, PUBLIC_NPM_PACKAGE_VERSION);
     try {
       await writeReleaseMetadataInputs(root);
       await writeUploadableArtifactFixtures(layout);
@@ -286,7 +316,7 @@ describe('verifyArtifactManifest', () => {
 
   it('rejects a manifest with an unsafe artifact path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-path-test-'));
-    const layout = packageArtifactLayout(root);
+    const layout = packageArtifactLayout(root, PUBLIC_NPM_PACKAGE_VERSION);
     try {
       await writeReleaseMetadataInputs(root);
       await writeUploadableArtifactFixtures(layout);
@@ -304,7 +334,7 @@ describe('verifyArtifactManifest', () => {
 
   it('rejects a manifest from the wrong source revision when one is required', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-revision-test-'));
-    const layout = packageArtifactLayout(root);
+    const layout = packageArtifactLayout(root, PUBLIC_NPM_PACKAGE_VERSION);
     try {
       await writeReleaseMetadataInputs(root);
       await writeUploadableArtifactFixtures(layout);
@@ -328,7 +358,7 @@ describe('verifyArtifactManifest', () => {
 describe('copyRuntimeWheelAssets', () => {
   it('copies the runtime wheel and checksum manifest into CLI assets', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-runtime-assets-test-'));
-    const layout = packageArtifactLayout(root);
+    const layout = packageArtifactLayout(root, PUBLIC_NPM_PACKAGE_VERSION);
     try {
       await mkdir(layout.pythonDir, { recursive: true });
       await writeFile(
@@ -399,7 +429,7 @@ describe('standalone Python artifact cleanup', () => {
 
 describe('verification snippets', () => {
   it('pins the smoke project to the public package artifact', () => {
-    const layout = packageArtifactLayout('/repo/ktx');
+    const layout = packageArtifactLayout('/repo/ktx', PUBLIC_NPM_PACKAGE_VERSION);
 
     const packageJson = npmSmokePackageJson(layout);
     assert.deepEqual(packageJson.dependencies, {

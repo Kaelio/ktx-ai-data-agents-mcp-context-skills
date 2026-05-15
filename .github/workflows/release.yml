@@ -3,14 +3,27 @@ name: KTX Release
 on:
   workflow_dispatch:
     inputs:
+      release_kind:
+        description: "Release kind: rc publishes to next, stable publishes to latest"
+        required: true
+        type: choice
+        default: "rc"
+        options:
+          - rc
+          - stable
+      force_release:
+        description: "Force a patch release even if semantic-release finds no releasable commits"
+        required: false
+        type: boolean
+        default: false
       publish_live:
-        description: "Publish @kaelio/ktx to npm instead of running a dry-run"
+        description: "Create the release and publish @kaelio/ktx to npm instead of running a dry-run"
         required: true
         type: boolean
         default: false
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ktx-release-${{ github.ref }}
@@ -22,6 +35,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
@@ -34,6 +49,7 @@ jobs:
           node-version: "24"
           cache: "pnpm"
           cache-dependency-path: "pnpm-lock.yaml"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install TypeScript dependencies
         run: pnpm install --frozen-lockfile
@@ -52,18 +68,19 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --all-packages
 
-      - name: Build and verify artifacts
-        run: pnpm run artifacts:check
-
-      - name: Check release readiness
-        run: pnpm run release:readiness
-
-      - name: Dry-run npm publish
+      - name: Dry-run semantic release
         if: ${{ !inputs.publish_live }}
-        run: pnpm run release:npm-publish
-
-      - name: Publish npm package
-        if: ${{ inputs.publish_live }}
-        run: pnpm run release:npm-publish -- --publish
+        run: pnpm run semantic-release:dry-run
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KTX_RELEASE_KIND: ${{ inputs.release_kind }}
+          FORCE_RELEASE: ${{ inputs.force_release }}
+
+      - name: Create semantic release
+        if: ${{ inputs.publish_live }}
+        run: pnpm run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KTX_RELEASE_KIND: ${{ inputs.release_kind }}
+          FORCE_RELEASE: ${{ inputs.force_release }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

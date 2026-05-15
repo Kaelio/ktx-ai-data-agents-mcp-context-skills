@@ -3,7 +3,13 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/**/*.mjs"],
-      "project": ["scripts/**/*.mjs"]
+      "project": ["scripts/**/*.mjs"],
+      "ignoreDependencies": [
+        "@semantic-release/commit-analyzer",
+        "@semantic-release/github",
+        "@semantic-release/release-notes-generator",
+        "conventional-changelog-conventionalcommits"
+      ]
     },
     "packages/cli": {
       "entry": [

@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { packageArtifactLayout, packageReleaseMetadata, verifyArtifactManifest } from './package-artifacts.mjs';
-import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
+import { assertPublicNpmPackageVersion, publicNpmPackageVersion } from './public-npm-release-metadata.mjs';
 import { readPublishedPackageSmokeConfig } from './published-package-smoke-config.mjs';
 
 function scriptRootDir() {
@@ -138,6 +138,8 @@ export function validateReleasePolicy(policy) {
     throw new Error(`Unsupported release policy schemaVersion: ${policy.schemaVersion}`);
   }
   assertSupportedReleaseMode(policy.releaseMode);
+  assertString(policy.publicNpmPackageVersion, 'Release policy publicNpmPackageVersion');
+  assertPublicNpmPackageVersion(policy.publicNpmPackageVersion);
   assertPlainObject(policy.npm, 'Release policy npm');
   assertPlainObject(policy.python, 'Release policy python');
   assertPlainObject(policy.publishedPackageSmoke, 'Release policy publishedPackageSmoke');
@@ -202,7 +204,7 @@ function publishedPackageSmokeGate(policy) {
   };
 }
 
-function assertNonPublishingArtifactPolicy(policy, metadata) {
+function assertNonPublishingArtifactPolicy(policy, metadata, publicPackageVersion) {
   const policyLabel =
     policy.releaseMode === CI_ARTIFACT_ONLY_RELEASE_MODE ? 'ci-artifact-only policy' : `${policy.releaseMode} policy`;
 
@@ -232,8 +234,8 @@ function assertNonPublishingArtifactPolicy(policy, metadata) {
         if (entry.private !== false) {
           throw new Error(`${policyLabel} npm package @kaelio/ktx must be publishable when npm.publish is false`);
         }
-        if (entry.packageVersion !== PUBLIC_NPM_PACKAGE_VERSION) {
-          throw new Error(`${policyLabel} npm package @kaelio/ktx must use public version ${PUBLIC_NPM_PACKAGE_VERSION}`);
+        if (entry.packageVersion !== publicPackageVersion) {
+          throw new Error(`${policyLabel} npm package @kaelio/ktx must use public version ${publicPackageVersion}`);
         }
       } else if (entry.private !== true) {
         throw new Error(`${policyLabel} npm package ${entry.packageName} must remain private`);
@@ -244,7 +246,7 @@ function assertNonPublishingArtifactPolicy(policy, metadata) {
   }
 }
 
-function assertNpmPublicReleaseReadyPolicy(policy, metadata) {
+function assertNpmPublicReleaseReadyPolicy(policy, metadata, publicPackageVersion) {
   if (policy.npm.publish !== true) {
     throw new Error('npm-public-release-ready policy requires npm.publish true');
   }
@@ -265,29 +267,30 @@ function assertNpmPublicReleaseReadyPolicy(policy, metadata) {
   if (npmMetadata.private !== false) {
     throw new Error('npm-public-release-ready policy requires @kaelio/ktx to be publishable');
   }
-  if (npmMetadata.packageVersion !== PUBLIC_NPM_PACKAGE_VERSION) {
+  if (npmMetadata.packageVersion !== publicPackageVersion) {
     throw new Error(
-      `npm-public-release-ready policy expected @kaelio/ktx ${PUBLIC_NPM_PACKAGE_VERSION}, got ${npmMetadata.packageVersion}`,
+      `npm-public-release-ready policy expected @kaelio/ktx ${publicPackageVersion}, got ${npmMetadata.packageVersion}`,
     );
   }
   if (policy.publishedPackageSmoke.packageName !== '@kaelio/ktx') {
     throw new Error('npm-public-release-ready policy requires publishedPackageSmoke.packageName @kaelio/ktx');
   }
-  if (policy.publishedPackageSmoke.version !== PUBLIC_NPM_PACKAGE_VERSION) {
-    throw new Error(`npm-public-release-ready policy requires publishedPackageSmoke.version ${PUBLIC_NPM_PACKAGE_VERSION}`);
+  if (policy.publishedPackageSmoke.version !== publicPackageVersion) {
+    throw new Error(`npm-public-release-ready policy requires publishedPackageSmoke.version ${publicPackageVersion}`);
   }
 }
 
 export async function releaseReadinessReport(rootDir = scriptRootDir()) {
   const policy = validateReleasePolicy(await readReleasePolicy(rootDir));
-  const layout = packageArtifactLayout(rootDir);
+  const publicPackageVersion = publicNpmPackageVersion(rootDir);
+  const layout = packageArtifactLayout(rootDir, publicPackageVersion);
   const manifest = await verifyArtifactManifest(layout);
-  const metadata = await packageReleaseMetadata(rootDir);
+  const metadata = await packageReleaseMetadata(rootDir, publicPackageVersion);
 
   if (policy.releaseMode === NPM_PUBLIC_RELEASE_READY_MODE) {
-    assertNpmPublicReleaseReadyPolicy(policy, metadata);
+    assertNpmPublicReleaseReadyPolicy(policy, metadata, publicPackageVersion);
   } else {
-    assertNonPublishingArtifactPolicy(policy, metadata);
+    assertNonPublishingArtifactPolicy(policy, metadata, publicPackageVersion);
   }
 
   return {
@@ -303,7 +306,7 @@ export async function releaseReadinessReport(rootDir = scriptRootDir()) {
       policy.releaseMode === NPM_PUBLIC_RELEASE_READY_MODE
         ? {
             packageName: '@kaelio/ktx',
-            version: PUBLIC_NPM_PACKAGE_VERSION,
+            version: publicPackageVersion,
             access: policy.npm.access,
             tag: policy.npm.tag,
             registry: policy.npm.registry,
