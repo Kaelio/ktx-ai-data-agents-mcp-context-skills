@@ -37,8 +37,11 @@ llm:
 ```
 
 `claude-code` keeps KTX tool boundaries intact. KTX exposes only the MCP tools
-needed for the current KTX agent loop and disables Claude Code built-in tools,
-filesystem settings, skills, plugins, agents, hooks, and slash commands.
+needed for the current KTX agent loop, disables Claude Code built-in tools,
+keeps plugins empty, and denies every non-KTX tool request through
+`canUseTool`. The Claude Agent SDK may still report host-discovered slash
+commands, skills, and subagent names in init metadata; that metadata is not an
+execution grant for KTX agent loops.
 
 ## Prompt caching
 
