@@ -228,7 +228,7 @@ mapping metadata. The BigQuery connector still authenticates with the
 | Feature | Supported | Notes |
 |---------|-----------|-------|
 | Tables & views | Yes | Including materialized views and external tables |
-| Primary keys | No | - |
+| Primary keys | Yes | Via `INFORMATION_SCHEMA` table constraints when declared |
 | Foreign keys | No | Not available in BigQuery |
 | Row count estimates | Yes | From table metadata |
 | Column statistics | No | - |
@@ -500,7 +500,7 @@ No authentication required - SQLite is file-based. The file must be readable by 
 - Uses `LIMIT X OFFSET Y` for pagination
 - SQLite type affinity system: `TEXT`, `NUMERIC`, `INTEGER`, `REAL`, `BLOB`
 - Foreign key enforcement requires explicit `PRAGMA foreign_keys = ON`
-- In-memory databases supported with `path: ":memory:"` (for testing)
+- Database file must exist before `ktx connection test` or ingest runs
 
 ## Common errors
 

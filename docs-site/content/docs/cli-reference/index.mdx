@@ -4,8 +4,8 @@ description: "Command map and shared options for the KTX CLI."
 ---
 
 The `ktx` CLI sets up local projects, builds agent-ready context, checks
-connections, queries semantic-layer sources, searches wiki pages, and manages
-the bundled Python runtime.
+connections, queries semantic-layer sources, searches wiki pages, runs the MCP
+server, and manages the bundled Python runtime.
 
 ## Command Map
 
@@ -26,6 +26,11 @@ ktx
     validate <sourceName>
     query
   status
+  mcp
+    start
+    stop
+    status
+    logs
   dev
     init [directory]
     schema
@@ -73,4 +78,7 @@ ktx ingest --all
 # Search semantic-layer sources and wiki pages
 ktx sl search "revenue"
 ktx wiki search "revenue recognition"
+
+# Start the local MCP server for agent clients
+ktx mcp start
 ```

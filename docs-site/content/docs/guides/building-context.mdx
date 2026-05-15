@@ -67,13 +67,15 @@ they are exact KTX MCP tools for the current run.
 
 PostgreSQL, BigQuery, and Snowflake can add query-history context. This helps
 KTX learn common joins, filters, service-account patterns, redaction rules, and
-usage-heavy query templates.
+usage-heavy query templates. BigQuery and Snowflake support a lookback window;
+Postgres reads the current `pg_stat_statements` aggregate data instead.
 
 Enable it during setup, store it under `connections.<id>.context.queryHistory`,
 or request it for one run:
 
 ```bash
 ktx ingest warehouse --deep --query-history
+# Set the lookback window for BigQuery or Snowflake query history
 ktx ingest warehouse --query-history-window-days 30
 ```
 

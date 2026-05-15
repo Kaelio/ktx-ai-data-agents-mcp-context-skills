@@ -39,20 +39,29 @@ export default async function Page(props: {
   const hero = isHeroPage(params.slug);
 
   return (
-    <DocsPage toc={page.data.toc}>
+    <DocsPage
+      toc={page.data.toc}
+      className="!mx-0 min-w-0 justify-self-start md:!mx-auto"
+      style={{
+        width: "calc(100vw - 2rem)",
+        maxWidth: "900px",
+      }}
+    >
       {!hero && (
         <>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <DocsTitle>{page.data.title}</DocsTitle>
             <DocsPageActions
               markdownUrl={`${page.url}.md`}
               mdxSource={mdxSource}
             />
           </div>
-          <DocsDescription>{page.data.description}</DocsDescription>
+          <DocsDescription className="wrap-anywhere">
+            {page.data.description}
+          </DocsDescription>
         </>
       )}
-      <DocsBody>
+      <DocsBody className="min-w-0 max-w-full wrap-anywhere">
         <MDX components={{ ...defaultMdxComponents, pre: CodeBlock }} />
       </DocsBody>
     </DocsPage>

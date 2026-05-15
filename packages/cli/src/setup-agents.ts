@@ -310,7 +310,8 @@ function ktxCommandLine(launcher: KtxCliLauncher, args: string[]): string {
 }
 
 function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLauncher }): string {
-  const projectDirArgs = ['--json', '--project-dir', input.projectDir];
+  const projectDirArgs = ['--project-dir', input.projectDir];
+  const jsonProjectDirArgs = ['--json', ...projectDirArgs];
   return [
     '---',
     'name: ktx',
@@ -327,9 +328,9 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
     '',
     'Available commands:',
     '',
-    `- \`${ktxCommandLine(input.launcher, ['status', ...projectDirArgs])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['sl', 'list', ...projectDirArgs])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['sl', 'search', '<text>', ...projectDirArgs, '--connection-id', '<id>'])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['status', ...jsonProjectDirArgs])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['sl', 'list', ...jsonProjectDirArgs])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['sl', 'search', '<text>', ...jsonProjectDirArgs, '--connection-id', '<id>'])}\``,
     `- \`${ktxCommandLine(input.launcher, [
       'sl',
       'query',
@@ -338,11 +339,13 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
       '<id>',
       '--query-file',
       '<path>',
+      '--format',
+      'json',
       '--execute',
       '--max-rows',
       '100',
     ])}\``,
-    `- \`${ktxCommandLine(input.launcher, ['wiki', 'search', '<query>', ...projectDirArgs, '--limit', '10'])}\``,
+    `- \`${ktxCommandLine(input.launcher, ['wiki', 'search', '<query>', ...jsonProjectDirArgs, '--limit', '10'])}\``,
     '',
     'Use semantic-layer queries before direct database access. Do not print secrets or credential references.',
     '',

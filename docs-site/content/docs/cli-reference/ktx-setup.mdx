@@ -98,13 +98,16 @@ incomplete.
 |------|-------------|
 | `--enable-query-history` | Enable query-history ingest when the selected database supports it |
 | `--disable-query-history` | Disable query-history ingest for the selected database |
-| `--query-history-window-days <number>` | Query-history lookback window |
+| `--query-history-window-days <number>` | BigQuery/Snowflake query-history lookback window |
 | `--query-history-min-executions <number>` | Minimum executions for a query-history template |
 | `--query-history-service-account-pattern <pattern>` | Query-history service-account regex; repeatable |
 | `--query-history-redaction-pattern <pattern>` | Query-history SQL-literal redaction regex; repeatable |
 
-Query history setup is supported for Postgres, BigQuery, and Snowflake. Enabling
-query history makes deep ingest readiness matter for later `ktx ingest` runs.
+Query history setup is supported for Postgres, BigQuery, and Snowflake. The
+window flag applies to BigQuery and Snowflake; Postgres reads the current
+`pg_stat_statements` aggregate data instead of a time-windowed history table.
+Enabling query history makes deep ingest readiness matter for later
+`ktx ingest` runs.
 
 ### Context Sources
 

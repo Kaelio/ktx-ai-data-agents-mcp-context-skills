@@ -15,6 +15,13 @@ import {
   ignoredClaudeCodePromptCachingFields,
 } from './claude-code-prompt-caching.js';
 import type { DoctorCheck } from './doctor.js';
+import {
+  bold as _bold,
+  dim as _dim,
+  green,
+  red,
+  yellow,
+} from './io/symbols.js';
 import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 
 type ProjectStatusLevel = 'ok' | 'warn' | 'fail';
@@ -747,13 +754,11 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
 
 const SYMBOL: Record<ProjectStatusLevel, string> = { ok: '✓', warn: '⚠', fail: '✗' };
 
-function ansi(useColor: boolean, code: string, text: string, closer = '39'): string {
-  return useColor ? `\u001b[${code}m${text}\u001b[${closer}m` : text;
+function colorForLevel(useColor: boolean, level: ProjectStatusLevel, text: string): string {
+  if (!useColor) return text;
+  return level === 'ok' ? green(text) : level === 'warn' ? yellow(text) : red(text);
 }
 
-function colorFor(level: ProjectStatusLevel): string {
-  return level === 'ok' ? '32' : level === 'warn' ? '33' : '31';
-}
 
 function abbreviateHome(filePath: string, env: NodeJS.ProcessEnv): string {
   const home = env.HOME;
@@ -775,9 +780,9 @@ export function renderProjectStatus(status: ProjectStatus, options: RenderProjec
   const verbose = options.verbose ?? false;
   const useColor = options.useColor ?? false;
   const env = options.env ?? process.env;
-  const dim = (s: string) => ansi(useColor, '2', s, '22');
-  const bold = (s: string) => ansi(useColor, '1', s, '22');
-  const color = (level: ProjectStatusLevel, s: string) => ansi(useColor, colorFor(level), s);
+  const dim = useColor ? _dim : (s: string) => s;
+  const bold = useColor ? _bold : (s: string) => s;
+  const color = (level: ProjectStatusLevel, s: string) => colorForLevel(useColor, level, s);
   const sym = (level: ProjectStatusLevel) => color(level, SYMBOL[level]);
 
   const lines: string[] = [];
