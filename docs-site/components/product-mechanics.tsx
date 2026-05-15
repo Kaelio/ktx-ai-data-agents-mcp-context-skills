@@ -222,7 +222,7 @@ function RuntimeDiagram() {
 
         <section className="bg-fd-muted/35 p-4">
           <ColumnLabel>KTX planning and execution</ColumnLabel>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <ol className="grid gap-2 sm:grid-cols-2">
             {runtimeSteps.map((step, index) => (
               <PipelineStep
                 key={step.title}
@@ -231,7 +231,7 @@ function RuntimeDiagram() {
                 body={step.body}
               />
             ))}
-          </div>
+          </ol>
         </section>
       </div>
 
