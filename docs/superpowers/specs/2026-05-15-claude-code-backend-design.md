@@ -216,23 +216,10 @@ query({
     skills: [],
     plugins: [],
     mcpServers: { ktx: createSdkMcpServer({ name: "ktx", tools }) },
-    tools: ["mcp__ktx__*"],
-    allowedTools: ["mcp__ktx__*"],
+    tools: [],
+    allowedTools: [/* exact mcp__ktx__<toolName> ids generated from the tool map */],
+    canUseTool: ktxCanUseTool,
     permissionMode: "dontAsk",
-    disallowedTools: [
-      "Agent",
-      "Task",
-      "AskUserQuestion",
-      "Bash",
-      "Read",
-      "Edit",
-      "Write",
-      "Glob",
-      "Grep",
-      "WebFetch",
-      "WebSearch",
-      "TodoWrite"
-    ],
     persistSession: false
   }
 });
@@ -261,10 +248,28 @@ the required outcome is fixed:
   settings-derived commands, skills, agents, plugins, or MCP servers are active.
 - Skills are disabled with `skills: []`, and plugins are disabled with
   `plugins: []`.
-- `allowedTools` alone is not sufficient because the current SDK docs describe
-  it as auto-approval, not restriction. Use `tools`, `permissionMode:
-  "dontAsk"`, and explicit `disallowedTools` for built-ins.
-- Built-ins are denied even if a future SDK default changes.
+- Built-in tools are disabled by setting `tools: []`. The pinned SDK type
+  (`@anthropic-ai/claude-agent-sdk@0.3.142`, `sdk.d.ts`) documents `tools` as
+  the base set of built-in tools, with `[]` meaning "disable all built-ins";
+  `tools` does not accept MCP tool ids and cannot be used to restrict MCP
+  availability.
+- MCP tool availability is granted by registering the KTX MCP server through
+  `mcpServers`. The SDK does not document a wildcard like `mcp__ktx__*` for
+  any tool field; KTX must enumerate exact generated MCP tool ids of the form
+  `mcp__ktx__<toolName>` (derived from the tool map handed to
+  `createSdkMcpServer`) wherever a list of tool ids is required.
+- Pre-approval under `permissionMode: "dontAsk"` is configured by listing those
+  same exact `mcp__ktx__<toolName>` ids in `allowedTools` (documented as
+  auto-allow without prompting). Treat `allowedTools` as auto-approval, not
+  restriction.
+- Defense-in-depth restriction uses `canUseTool`. The KTX runtime supplies a
+  `canUseTool` handler that allows only tool names in the current KTX MCP
+  tool map and denies everything else, so a future SDK default that re-enables
+  built-ins or a misconfigured MCP server cannot expand the surface.
+- `disallowedTools` MAY additionally list the current built-in tool names
+  (`Agent`, `Task`, `AskUserQuestion`, `Bash`, `Read`, `Edit`, `Write`, `Glob`,
+  `Grep`, `WebFetch`, `WebSearch`, `TodoWrite`) as redundant insurance, but is
+  not the primary restriction mechanism.
 - `cwd` is `project.projectDir`, resolved at startup via `resolveKtxProjectDir`,
   not `process.cwd()`.
 - Sessions are not persisted unless the plan identifies a concrete debugging
@@ -281,13 +286,25 @@ interface KtxRuntimeToolDescriptor<TInput, TOutput> {
   name: string;
   description: string;
   inputSchema: z.ZodObject<z.ZodRawShape>;
-  execute(input: TInput): Promise<ToolOutput<TOutput>>;
+  execute(input: TInput): Promise<KtxRuntimeToolOutput<TOutput>>;
+}
+
+interface KtxRuntimeToolOutput<TOutput> {
+  // What the model sees as the tool_result content. Always a markdown string;
+  // never a raw JS object. This matches BaseTool's existing
+  // `toModelOutput` contract (`packages/context/src/tools/base-tool.ts:154-162`)
+  // which sends only markdown to the LLM.
+  markdown: string;
+  // Out-of-band payload preserved for tool callers (transcripts, debug,
+  // verification ledger, downstream KTX consumers). Not sent to the model.
+  structured?: TOutput;
 }
 ```
 
-Every composed tool entry must preserve the descriptor, including:
+Every composed tool entry must produce this descriptor shape, including:
 
-- `BaseTool` outputs from factory toolsets.
+- `BaseTool` outputs from factory toolsets, which already return
+  `{ markdown, structured }`.
 - Source-specific raw tools such as `emit_historic_sql_evidence` in
   `packages/context/src/ingest/local-bundle-runtime.ts`.
 - Stage-local tools in `buildWuToolSet` and `buildReconcileToolSet`.
@@ -295,25 +312,76 @@ Every composed tool entry must preserve the descriptor, including:
   `packages/context/src/ingest/ingest-bundle.runner.ts`.
 - Memory-agent `load_skill` in
   `packages/context/src/memory/memory-agent.service.ts`.
-- The `withVerificationLedger` wrapping layer.
+- The `withVerificationLedger` wrapping layer, whose markdown/structured
+  guard outputs (`packages/context/src/ingest/tools/verification-ledger.tool.ts:40-97`)
+  already match the contract.
 
-The AI SDK adapter converts descriptors to `tool(...)`. The Claude Code adapter
-converts descriptors to Agent SDK `tool(name, description, schema.shape,
-handler)` entries inside `createSdkMcpServer(...)`. KTX tool handlers return
-`{ markdown, structured }`; the Claude adapter returns markdown as text content
-and may include structured JSON only if a caller needs it.
+### Tool output contract
+
+The runtime defines a single output contract for both backends so the model
+sees the same content regardless of provider:
+
+- **Model-visible content**: the `markdown` field, mapped to the Agent SDK
+  tool handler return as `{ content: [{ type: "text", text: markdown }] }` for
+  `claude-code`, and surfaced through the existing `toModelOutput` markdown
+  path for AI SDK backends. The model never sees raw JS objects.
+- **Structured payload**: the optional `structured` field, preserved on the
+  in-process tool-result envelope for transcript/debug capture, the
+  verification ledger, and any KTX caller that introspects results. The
+  Claude adapter does not put structured JSON into model-visible content
+  unless an individual call site explicitly opts in.
+- **Normalization of existing raw tools**: tools that today return a bare
+  string (e.g. `load_skill` "Skill not available" responses in
+  `packages/context/src/ingest/ingest-bundle.runner.ts:697-721` and
+  `:924-936`, and `packages/context/src/memory/memory-agent.service.ts:128-152`)
+  must be wrapped at the descriptor boundary so `markdown` is the string and
+  `structured` is omitted. Tools that today return a plain object (e.g.
+  skill payload `{ name, content, skillDirectory }`) must be wrapped so
+  `markdown` is a deterministic human-readable rendering (e.g. the skill
+  body with a header) and the original object is preserved on `structured`.
+  No KTX tool may return a raw object as the model-visible payload on the
+  Claude Code backend, because the Agent SDK MCP handler will otherwise
+  stringify it and drop the structured fields.
+- **AI SDK parity**: the AI SDK adapter MUST preserve BaseTool's existing
+  `toModelOutput` markdown-only behavior. Migrating BaseTool-derived tools
+  to the descriptor must not start sending structured JSON to the model.
+
+The AI SDK adapter converts descriptors to `tool(...)` with a `toModelOutput`
+that emits `markdown` only. The Claude Code adapter converts descriptors to
+Agent SDK `tool(name, description, schema.shape, handler)` entries inside
+`createSdkMcpServer(...)` and returns `{ content: [{ type: "text", text:
+markdown }] }`.
 
 Non-object schemas are unsupported for `claude-code` and must be rejected at
 startup with a clear error. In practice KTX tool inputs are already `z.object`.
 
 ## Stop reasons and failures
 
-The Claude runner maps the SDK's typed result message to
-`RunLoopStopReason = "budget" | "natural" | "error"`:
+The Claude runner maps the SDK's typed `SDKResultMessage` (union of
+`SDKResultSuccess` and `SDKResultError` in
+`@anthropic-ai/claude-agent-sdk@0.3.142`, `sdk.d.ts`) to
+`RunLoopStopReason = "budget" | "natural" | "error"`. The mapping must consider
+three typed signals in this precedence order, because each successive signal
+may be present where the previous one is absent:
 
-- `subtype: "error_max_turns"` or `stop_reason: "max_turns"` -> `"budget"`.
-- `subtype: "success"` -> `"natural"`.
-- Other error subtypes or non-null unsuccessful stop reasons -> `"error"`.
+1. `subtype`: `"error_max_turns"` -> `"budget"`; `"success"` -> `"natural"`;
+   other error subtypes (`"error_during_execution"`,
+   `"error_max_budget_usd"`, `"error_max_structured_output_retries"`) ->
+   `"error"`.
+2. `terminal_reason` (optional `TerminalReason` field on both success and
+   error results): `"max_turns"` -> `"budget"`; `"completed"` -> `"natural"`;
+   any other terminal reason such as `"blocking_limit"`,
+   `"rapid_refill_breaker"`, `"prompt_too_long"`, `"image_error"`,
+   `"model_error"`, `"aborted_streaming"`, `"aborted_tools"`,
+   `"stop_hook_prevented"`, `"hook_stopped"`, or `"tool_deferred"` ->
+   `"error"`.
+3. The assistant message `stop_reason`: `"max_turns"` -> `"budget"`; any
+   other non-null unsuccessful stop reason -> `"error"`.
+
+A `max_turns` signal arriving through any of the three sources must map to
+`"budget"`; the runner MUST NOT classify a max-turn termination as
+`"natural"` or as a generic `"error"` because it was reported via
+`terminal_reason` instead of `subtype`.
 
 `Stop` hooks are not the authoritative stop-reason source because they do not
 carry the terminal reason. They remain useful for lifecycle logging. Tool failure
@@ -374,12 +442,28 @@ Claude subscription limits.
 - Local ingest and MCP local project ports inject `llmProvider` and
   `agentRunner` today (`packages/context/src/ingest/local-bundle-runtime.ts`,
   `packages/context/src/mcp/local-project-ports.ts`).
-- The Agent SDK TypeScript reference documents `settingSources` defaulting to no
-  filesystem settings, `allowedTools` as auto-approval rather than restriction,
-  `permissionMode: "dontAsk"`, `tools`, `disallowedTools`, `maxTurns`,
-  `mcpServers`, `cwd`, `persistSession`, and SDK result/hook message shapes.
-- The Agent SDK MCP docs show registering MCP servers in `query()` options and
-  using `allowedTools` for MCP tool access.
+- The Agent SDK TypeScript reference (`@anthropic-ai/claude-agent-sdk@0.3.142`,
+  `sdk.d.ts`) documents `settingSources` defaulting to no filesystem settings,
+  `allowedTools` as auto-approval rather than restriction, `canUseTool` as the
+  programmatic permission handler, `permissionMode: "dontAsk"`, `tools` as the
+  base built-in set with `[]` meaning "disable all built-ins" and no MCP-id
+  support, `disallowedTools`, `maxTurns`, `mcpServers`, `cwd`,
+  `persistSession`, and SDK result/hook message shapes.
+- `SDKResultMessage = SDKResultSuccess | SDKResultError` in
+  `@anthropic-ai/claude-agent-sdk@0.3.142` (`sdk.d.ts`); both variants expose
+  an optional `terminal_reason: TerminalReason`, where `TerminalReason`
+  includes `'max_turns' | 'completed'` alongside other terminal reasons.
+- The Agent SDK MCP docs and SDK examples (e.g. Context7
+  `/nothflare/claude-agent-sdk-docs` custom-tools guide) show registering MCP
+  servers in `query()` options and listing exact `mcp__<server>__<tool>` ids
+  in `allowedTools`; no SDK doc or type currently documents a wildcard form.
+- BaseTool's `toModelOutput` already sends only `markdown` to the model while
+  preserving structured output for callers
+  (`packages/context/src/tools/base-tool.ts:154-162`); some raw AI SDK tools
+  in `packages/context/src/ingest/ingest-bundle.runner.ts:697-721, :924-936`
+  and `packages/context/src/memory/memory-agent.service.ts:128-152` currently
+  return bare strings or plain objects and must be normalized at the
+  descriptor boundary so both backends preserve the contract.
 - The Agent SDK skills docs say discovered skills can be controlled with the
   `skills` option and disabled with `[]`; the runtime should set this
   explicitly.
