@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const configuredDocsSiteUrl = process.env.DOCS_SITE_URL;
+const docsBasePath = "/ktx";
 let docsSiteUrl = configuredDocsSiteUrl;
 let docsServer;
 let docsServerOutput = "";
@@ -46,7 +47,7 @@ async function waitForDocsServer() {
     }
 
     try {
-      await fetch(`${docsSiteUrl}/docs`, { redirect: "manual" });
+      await fetch(`${docsSiteUrl}${docsBasePath}/docs`, { redirect: "manual" });
       return;
     } catch {
       await delay(200);
@@ -99,12 +100,14 @@ after(async () => {
   }
 });
 
-test("/docs redirects to the docs introduction", async () => {
-  const response = await fetch(`${docsSiteUrl}/docs`, { redirect: "manual" });
+test("/ktx/docs redirects to the docs introduction", async () => {
+  const response = await fetch(`${docsSiteUrl}${docsBasePath}/docs`, {
+    redirect: "manual",
+  });
 
   assert.equal(response.status, 307);
   assert.equal(
     response.headers.get("location"),
-    "/docs/getting-started/introduction",
+    `${docsBasePath}/docs/getting-started/introduction`,
   );
 });
