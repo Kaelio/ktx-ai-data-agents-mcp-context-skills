@@ -9,6 +9,11 @@ import type {
   KtxProjectLlmConfig,
 } from '@ktx/context/project';
 import type { PostgresPgssProbeResult } from '@ktx/context/ingest';
+import {
+  formatClaudeCodePromptCachingFix,
+  formatClaudeCodePromptCachingWarning,
+  ignoredClaudeCodePromptCachingFields,
+} from './claude-code-prompt-caching.js';
 import type { DoctorCheck } from './doctor.js';
 import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 
@@ -509,13 +514,6 @@ function buildPipelineStatus(config: KtxProjectConfig): PipelineStatus {
   };
 }
 
-function ignoredClaudeCodePromptCachingFields(config: KtxProjectLlmConfig): string[] {
-  if (config.provider.backend !== 'claude-code' || !config.promptCaching) {
-    return [];
-  }
-  return Object.keys(config.promptCaching).map((key) => `llm.promptCaching.${key}`);
-}
-
 function buildStorageStatus(config: KtxProjectConfig): StorageStatus {
   return {
     state: config.storage.state,
@@ -603,11 +601,11 @@ function buildWarnings(
     });
   }
 
-  const ignored = ignoredClaudeCodePromptCachingFields(config.llm);
-  if (ignored.length > 0) {
+  const warning = formatClaudeCodePromptCachingWarning(ignoredClaudeCodePromptCachingFields(config.llm));
+  if (warning) {
     warnings.push({
-      message: `claude-code ignores ${ignored.join(', ')} because the Claude Agent SDK does not expose KTX prompt-cache TTL, tool, or history markers.`,
-      fix: 'Remove those promptCaching fields or use anthropic, vertex, or gateway when those cache knobs are required.',
+      message: warning,
+      fix: formatClaudeCodePromptCachingFix(),
     });
   }
 

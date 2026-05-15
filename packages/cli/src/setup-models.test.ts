@@ -209,6 +209,44 @@ describe('setup Anthropic model step', () => {
     expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
   });
 
+  it('warns during Claude Code setup when existing prompt-caching fields will be ignored', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        '  promptCaching:',
+        '    enabled: true',
+        '    systemTtl: 1h',
+        '    toolsTtl: 1h',
+        '    historyTtl: 5m',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'claude-code',
+        skipLlm: false,
+      },
+      io.io,
+      {
+        claudeCodeAuthProbe: async () => ({ ok: true as const }),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('claude-code ignores llm.promptCaching.systemTtl');
+    expect(io.stderr()).toContain('Claude Agent SDK does not expose KTX prompt-cache TTL, tool, or history markers');
+  });
+
   it('returns from Anthropic credential Back to provider selection', async () => {
     const prompts = makePromptAdapter({ selectValues: ['anthropic', 'back', 'back'] });
 

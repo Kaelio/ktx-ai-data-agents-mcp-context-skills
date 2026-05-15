@@ -11,6 +11,10 @@ import {
   serializeKtxProjectConfig,
 } from '@ktx/context/project';
 import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from '@ktx/llm';
+import {
+  formatClaudeCodePromptCachingWarning,
+  ignoredClaudeCodePromptCachingFields,
+} from './claude-code-prompt-caching.js';
 import { createClackSpinner, type KtxCliSpinner } from './clack.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { withTextInputNavigation } from './prompt-navigation.js';
@@ -945,6 +949,14 @@ export async function runKtxSetupAnthropicModelStep(
       if (!health.ok) {
         io.stderr.write(`${health.message}\n`);
         return { status: 'failed', projectDir: args.projectDir };
+      }
+      const warning = formatClaudeCodePromptCachingWarning(
+        ignoredClaudeCodePromptCachingFields(
+          buildProjectLlmConfig(project.config.llm, { backend: 'claude-code' }, model),
+        ),
+      );
+      if (warning) {
+        io.stderr.write(`${warning}\n`);
       }
       await persistLlmConfig(args.projectDir, { backend: 'claude-code' }, model);
       io.stdout.write(`│  LLM ready: yes (${model})\n`);
