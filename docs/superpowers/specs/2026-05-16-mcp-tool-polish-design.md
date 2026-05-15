@@ -117,13 +117,25 @@ only on the local SL path; do not broaden it as part of this spec):
 | `sl_read_source` | required | no |
 | `sl_query` | optional | yes — `resolveLocalConnectionId` (`packages/context/src/sl/local-query.ts`) auto-resolves when the project has exactly one connection |
 | `sql_execution` | required | no |
-| `memory_ingest` | optional | no — omitted means "global" knowledge |
+| `memory_ingest` | optional | no — omitted means "global" knowledge (wiki only — see below) |
 | `memory_ingest_status` | n/a | n/a |
 
 The skill update in §3 must reflect this matrix: when `connection_list` shows
 multiple connections, the agent always passes `connectionId` for the required
 tools and for `sl_query`/`discover_data`/`dictionary_search` whenever the user
 intent pins a specific warehouse.
+
+**`memory_ingest` connectionId semantics — important constraint.** The
+underlying `MemoryAgentService.ingest` derives `hasSL = !!input.connectionId`
+(`packages/context/src/memory/memory-agent.service.ts:55`) and only wires the
+SL-capable toolset when `connectionId` is supplied
+(`packages/context/src/memory/memory-agent.service.ts:116-118`). Therefore
+`memory_ingest` can update the semantic layer **only** when `connectionId` is
+provided. Omit `connectionId` only for genuinely global wiki-only knowledge
+(company-wide policies, vocabulary, user preferences); supply `connectionId`
+for any knowledge that touches a specific warehouse — including measure
+definitions, schema gotchas, and any wording like "in our warehouse" or "this
+warehouse". The §3 SKILL update and the worked example must enforce this.
 
 #### 1.2 Removed from MCP registration
 
@@ -142,9 +154,31 @@ renamed to `MemoryIngestPort`.
 #### 1.3 New tool — `memory_ingest`
 
 Replaces `memory_capture`. The change is a rename + a slightly relaxed input
-contract; the underlying `MemoryCaptureService` is reused as-is and renamed to
+contract; the underlying `MemoryCaptureService`
+(`packages/context/src/memory/memory-runs.ts:81`) is reused as-is and renamed to
 `MemoryIngestService`. No alias, no migration shim — per the standing
 no-back-compat rule, the rename is atomic with the SKILL update.
+
+**Final internal API shape after the rename — no compatibility wrappers:**
+
+| Old name | New name |
+|---|---|
+| `MemoryCaptureService` (class) | `MemoryIngestService` |
+| `MemoryCaptureService.capture(input)` (method) | `MemoryIngestService.ingest(input)` |
+| `MemoryCaptureServiceDeps` | `MemoryIngestServiceDeps` |
+| `MemoryCaptureStartResult` | `MemoryIngestStartResult` |
+| `MemoryCaptureStatus` (return type) | `MemoryIngestStatus` |
+| `MemoryCapturePort` (in `mcp/types.ts`) | `MemoryIngestPort` (with `.ingest()` and `.status()`) |
+| `MemoryCapturePort.capture()` | `MemoryIngestPort.ingest()` |
+| `TextMemoryCapturePort` (CLI, `text-ingest.ts`) | `TextMemoryIngestPort` (with `.ingest()`, `.waitForRun()`, `.status()`) |
+| `createLocalProjectMemoryCapture` factory | `createLocalProjectMemoryIngest` |
+
+Every internal call site (`packages/context/src/mcp/server.ts`,
+`packages/context/src/mcp/local-project-ports.ts`,
+`packages/cli/src/mcp-server-factory.ts`, `packages/cli/src/text-ingest.ts`,
+their tests, and the `packages/context/src/memory/index.ts` re-exports) is
+updated in lockstep. The agent-facing `MemoryAgentService.ingest` method and
+its `MemoryAgentInput` type are unchanged.
 
 **Mapping `memory_ingest` input → `MemoryAgentInput`** (defined in
 `packages/context/src/memory/types.ts`):
@@ -183,9 +217,12 @@ const memoryIngestSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Scope this memory to a specific connection. Omit if the knowledge is ' +
-        'global (e.g., a company-wide policy); specify when it is tied to one ' +
-        'warehouse (e.g., a measure definition specific to a connection\'s SL).',
+      'Scope this memory to a specific connection. REQUIRED when the knowledge ' +
+        'is warehouse-specific (measure definitions, schema gotchas, anything ' +
+        'tied to a particular warehouse) — without it the memory agent cannot ' +
+        'update the semantic layer and the knowledge will land as wiki-only. ' +
+        'Omit only for genuinely global wiki knowledge (company-wide policies, ' +
+        'vocabulary, user preferences).',
     ),
 });
 ```
@@ -225,13 +262,21 @@ Every tool gets annotations and a `title`:
 | `sl_query` | Semantic Layer Query | ✓ | — | — | — |
 | `sql_execution` | SQL Execution | ✓ | — | — | — |
 | `memory_ingest` | Memory Ingest | — | ✓ | — | — |
-| `memory_ingest_status` | Memory Ingest Status | ✓ | — | (✓ once terminal) | — |
+| `memory_ingest_status` | Memory Ingest Status | ✓ | — | omit | — |
 
 `openWorldHint: false` for every tool — even `sql_execution` targets a
 configured, bounded warehouse, not the web. `sql_execution` is `readOnlyHint:
 true` because the server-side parser enforces read-only (`assertReadOnlySql`).
 `destructiveHint` is omitted (defaults to `false`) for read-only tools per the
 MCP spec; explicit `false` is fine but redundant.
+
+`ToolAnnotations` are static optional booleans per the MCP 2025-11-25 schema
+(`title?`, `readOnlyHint?`, `destructiveHint?`, `idempotentHint?`,
+`openWorldHint?` — no state-dependent variants). `idempotentHint` describes
+whether repeated calls have additional environmental effect and is most
+meaningful when `readOnlyHint` is `false`. For `memory_ingest_status`, which is
+a polling read whose response shape changes while a run is active, leave
+`idempotentHint` unset — the tool is read-only but not statically idempotent.
 
 `registerTool` accepts annotations in the `config` object today; this is a
 plumbing change in `registerParsedTool` to forward them.
@@ -479,7 +524,10 @@ New:
 > **Input:** "Heads up — ARR is always reported in cents in our warehouse."
 >
 > **Workflow:**
-> 1. `memory_ingest({ content: "ARR is reported in cents (not dollars) in this warehouse. Multiply by 0.01 for dollar amounts. Source: user clarification." })` — no analysis turn; just remember.
+> 1. If multiple connections, call `connection_list` and pick the warehouse the
+>    user means (asking if ambiguous). Pass its id as `connectionId` so the
+>    memory agent can update the semantic layer, not just the wiki.
+> 2. `memory_ingest({ connectionId: "<warehouse-id>", content: "ARR is reported in cents (not dollars) in this warehouse. Multiply by 0.01 for dollar amounts. Source: user clarification." })` — no analysis turn; just remember.
 
 The existing Discover → Inspect → Resolve → Plan → Query → Validate → Capture
 workflow stays. The existing two examples are updated only to reflect the
@@ -503,8 +551,10 @@ Three landings, each independently mergeable, in this order:
 - Update `packages/cli/src/skills/analytics/SKILL.md` per §3 in the same
   diff.
 - Update all tests for the removed/renamed tools.
-- Update `docs-site/content/docs/integrations/agent-clients.mdx` if it lists
-  the available MCP tools.
+- Update `docs-site/content/docs/integrations/agent-clients.mdx` to replace
+  the existing "memory capture" wording (currently at line ~90) with
+  "memory ingest". This update is unconditional — the file already names the
+  tool family.
 - Update `packages/cli/src/mcp-server-factory.ts` and
   `packages/cli/src/text-ingest.ts` (plus their tests) to reflect the
   `MemoryCapture*` → `MemoryIngest*` rename. Both files import
@@ -576,12 +626,27 @@ The named test files include slow tests that are excluded from the default
 pnpm --filter @ktx/context run test
 pnpm --filter @ktx/context run test:slow
 pnpm --filter @ktx/context run type-check
+pnpm --filter @ktx/cli run type-check
+pnpm --filter @ktx/cli run test
 pnpm run dead-code
 ```
 
+CLI checks are required because PR 1 renames cross the CLI boundary
+(`packages/cli/src/mcp-server-factory.ts`, `packages/cli/src/text-ingest.ts`,
+the `MemoryCapture*` re-exports, plus their vitest specs).
+`pnpm --filter @ktx/cli run test:slow` should also be added if PR 1 ends up
+touching any of the slow-test files enumerated in `packages/cli/package.json`
+(`scan.test.ts`, `setup*.test.ts`, etc.); the rename diff today does not, but
+the implementation plan must re-check before merging.
+
 When `docs-site/content/docs/integrations/agent-clients.mdx` is touched, also
-run the docs-site checks declared in `docs-site/package.json` (lint/build) so
-stale tool lists or anchors fail CI rather than ship.
+run the docs-site scripts declared in `docs-site/package.json` — there is no
+`lint` script:
+
+```bash
+pnpm --filter ktx-docs run build
+pnpm --filter ktx-docs run test
+```
 
 ### Red-green regression
 
