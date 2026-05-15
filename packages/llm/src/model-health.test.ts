@@ -61,4 +61,17 @@ describe('KTX LLM health check', () => {
       message: '401 invalid x-api-key [redacted]',
     });
   });
+
+  it('reports claude-code as unsupported by the AI SDK health check', async () => {
+    const result = await runKtxLlmHealthCheck({
+      backend: 'claude-code',
+      modelSlots: { default: 'sonnet' },
+      promptCaching: { enabled: false },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: expect.stringContaining('claude-code is not an AI SDK LanguageModel backend'),
+    });
+  });
 });
