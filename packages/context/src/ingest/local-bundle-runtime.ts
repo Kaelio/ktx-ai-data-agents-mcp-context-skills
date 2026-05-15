@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { KtxLlmProvider } from '@ktx/llm';
 import YAML from 'yaml';
-import type { AgentRunnerService, AgentToolSet } from '../agent/index.js';
+import type { AgentRunnerPort, AgentToolSet } from '../agent/index.js';
 import { AgentRunnerService as DefaultAgentRunnerService } from '../agent/index.js';
 import { localConnectionInfoFromConfig, type KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
@@ -99,7 +99,7 @@ const LOCAL_SHAPE_WARNING = 'Local ingest validates semantic-layer YAML shape on
 export interface CreateLocalBundleIngestRuntimeOptions {
   project: KtxLocalProject;
   adapters: SourceAdapter[];
-  agentRunner?: AgentRunnerService;
+  agentRunner?: AgentRunnerPort;
   llmProvider?: KtxLlmProvider;
   llmDebugRequestFile?: string;
   memoryModel?: string;
@@ -577,7 +577,7 @@ function localIngestLlmProviderGuardMessage(projectDir: string): string {
 }
 
 function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   llmProvider?: KtxLlmProvider;
 } {
   const llmProvider =

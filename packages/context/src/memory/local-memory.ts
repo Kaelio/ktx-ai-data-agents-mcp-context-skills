@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { KtxLlmProvider } from '@ktx/llm';
 import YAML from 'yaml';
-import { AgentRunnerService } from '../agent/index.js';
+import { AgentRunnerService, type AgentRunnerPort } from '../agent/index.js';
 import { localConnectionInfoFromConfig } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxFileStorePort, KtxFileWriteResult } from '../core/index.js';
 import { type KtxLogger, noopLogger, SessionWorktreeService } from '../core/index.js';
@@ -64,7 +64,7 @@ const LOCAL_SHAPE_WARNING = 'Local memory capture validates semantic-layer YAML 
 
 export interface CreateLocalProjectMemoryCaptureOptions {
   llmProvider?: KtxLlmProvider;
-  agentRunner?: AgentRunnerService;
+  agentRunner?: AgentRunnerPort;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };

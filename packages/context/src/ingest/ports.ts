@@ -1,5 +1,5 @@
 import type { KtxModelRole } from '@ktx/llm';
-import type { AgentRunnerService, AgentToolSet } from '../agent/index.js';
+import type { AgentRunnerPort, AgentToolSet } from '../agent/index.js';
 import type { KtxEmbeddingPort } from '../core/embedding.js';
 import type { GitService, KtxFileStorePort, KtxLogger, SessionOutcome } from '../core/index.js';
 import type { CaptureSession, MemoryAction, MemoryKnowledgeSlRefsPort } from '../memory/index.js';
@@ -349,7 +349,7 @@ export interface IngestBundleRunnerDeps {
   registry: SourceAdapterRegistryPort;
   diffSetService: DiffSetComputerPort;
   sessionWorktreeService: IngestSessionWorktreePort;
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   gitService: GitService;
   lockingService: IngestLockPort;
   storage: IngestStoragePort;

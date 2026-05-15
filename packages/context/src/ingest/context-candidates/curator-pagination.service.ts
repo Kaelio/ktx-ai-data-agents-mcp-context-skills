@@ -1,5 +1,5 @@
 import type { KtxModelRole } from '@ktx/llm';
-import type { AgentRunnerService, AgentToolSet } from '../../agent/index.js';
+import type { AgentRunnerPort, AgentToolSet } from '../../agent/index.js';
 import { type KtxLogger, noopLogger } from '../../core/index.js';
 import type { MemoryAction } from '../../memory/index.js';
 import type { ContextCandidateForDedup, CuratorPaginationPort, CuratorPaginationReport } from '../ports.js';
@@ -49,7 +49,7 @@ interface CuratorPaginationResult extends ReconciliationOutcome {
 
 export interface CuratorPaginationServiceDeps {
   store: ContextCandidateStorePort;
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   settings: CuratorPaginationSettings;
   logger?: KtxLogger;
 }

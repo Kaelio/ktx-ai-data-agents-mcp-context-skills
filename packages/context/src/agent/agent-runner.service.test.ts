@@ -7,6 +7,8 @@ vi.mock('ai', () => ({
 }));
 
 import { generateText } from 'ai';
+import { z } from 'zod';
+import { createAgentTool } from './agent-tool.js';
 import { AgentRunnerService, type RunLoopStepInfo } from './agent-runner.service.js';
 
 describe('AgentRunnerService.runLoop', () => {
@@ -42,7 +44,14 @@ describe('AgentRunnerService.runLoop', () => {
     (generateText as any).mockResolvedValue({ text: 'ok', toolCalls: [], steps: [] });
     const repairHandler = vi.fn();
     llmProvider.repairToolCallHandler.mockReturnValueOnce(repairHandler);
-    const tools = { noop: { description: 'noop', inputSchema: {}, execute: vi.fn() } };
+    const tools = {
+      noop: createAgentTool({
+        name: 'noop',
+        description: 'noop',
+        inputSchema: z.object({}),
+        execute: vi.fn(async () => 'ok'),
+      }),
+    };
     await runner.runLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: 'SYS',
@@ -55,12 +64,39 @@ describe('AgentRunnerService.runLoop', () => {
     expect(call.system).toEqual({ role: 'system', content: 'SYS' });
     expect(call.messages).toEqual([{ role: 'user', content: 'USR' }]);
     expect(call.prompt).toBeUndefined();
-    expect(call.tools).toEqual(tools);
+    expect(call.tools).toMatchObject({ noop: { description: 'noop' } });
     expect(call.stopWhen).toBe(17);
     expect(call.temperature).toBe(0);
     expect(call.experimental_repairToolCall).toBe(repairHandler);
     expect(llmProvider.getModel).toHaveBeenCalledWith('candidateExtraction');
     expect(llmProvider.repairToolCallHandler).toHaveBeenCalledWith({ source: 'ktx-agent-runner' });
+  });
+
+  it('converts AgentToolSet to AI SDK tools before generateText', async () => {
+    (generateText as any).mockResolvedValue({} as never);
+    await runner.runLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      toolSet: {
+        emit_candidate: createAgentTool({
+          name: 'emit_candidate',
+          description: 'Emit candidate',
+          inputSchema: z.object({ key: z.string() }),
+          execute: async ({ key }) => ({ markdown: key, structured: { key } }),
+        }),
+      },
+      stepBudget: 3,
+      telemetryTags: {},
+    });
+
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          emit_candidate: expect.objectContaining({ description: 'Emit candidate' }),
+        }),
+      }),
+    );
   });
 
   it('returns stopReason=natural when the loop completes without error', async () => {
@@ -289,11 +325,12 @@ describe('AgentRunnerService.runLoop', () => {
       systemPrompt: 'SECRET SYSTEM PROMPT',
       userPrompt: 'SECRET USER PROMPT',
       toolSet: {
-        emit_candidate: {
+        emit_candidate: createAgentTool({
+          name: 'emit_candidate',
           description: 'SECRET TOOL DESCRIPTION',
-          inputSchema: {},
-          execute: vi.fn(),
-        } as any,
+          inputSchema: z.object({}),
+          execute: vi.fn(async () => 'ok'),
+        }),
       },
       stepBudget: 10,
       telemetryTags: { operationName: 'ingest-bundle-wu', source: 'metabase', jobId: 'job-1', unitKey: 'cards/1' },

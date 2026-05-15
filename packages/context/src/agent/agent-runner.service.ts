@@ -1,7 +1,8 @@
 import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider, type KtxModelRole } from '@ktx/llm';
-import { generateText, stepCountIs, type TelemetrySettings, type Tool } from 'ai';
+import { generateText, stepCountIs, type TelemetrySettings, type ToolSet } from 'ai';
 import { noopLogger, type KtxLogger } from '../core/index.js';
 import { summarizeKtxLlmDebugRequest, type KtxLlmDebugRequestRecorder } from '../llm/index.js';
+import { toAiSdkToolSet, type AgentToolSet } from './agent-tool.js';
 
 export type RunLoopStopReason = 'budget' | 'natural' | 'error';
 
@@ -14,7 +15,7 @@ export interface RunLoopParams {
   modelRole: KtxModelRole;
   systemPrompt: string;
   userPrompt: string;
-  toolSet: Record<string, Tool>;
+  toolSet: AgentToolSet;
   stepBudget: number;
   telemetryTags: Record<string, string>;
   onStepFinish?: (info: RunLoopStepInfo) => void | Promise<void>;
@@ -23,6 +24,10 @@ export interface RunLoopParams {
 export interface RunLoopResult {
   stopReason: RunLoopStopReason;
   error?: Error;
+}
+
+export interface AgentRunnerPort {
+  runLoop(params: RunLoopParams): Promise<RunLoopResult>;
 }
 
 export interface AgentTelemetryPort {
@@ -36,7 +41,7 @@ export interface AgentRunnerServiceDeps {
   logger?: KtxLogger;
 }
 
-export class AgentRunnerService {
+export class AgentRunnerService implements AgentRunnerPort {
   private readonly logger: KtxLogger;
 
   constructor(private readonly deps: AgentRunnerServiceDeps) {
@@ -47,11 +52,12 @@ export class AgentRunnerService {
     let stepIndex = 0;
     try {
       const model = this.deps.llmProvider.getModel(params.modelRole);
+      const aiToolSet = toAiSdkToolSet(params.toolSet);
       const builder = new KtxMessageBuilder(this.deps.llmProvider);
       const built = builder.wrapSimple({
         system: params.systemPrompt,
         messages: [{ role: 'user', content: params.userPrompt }],
-        tools: params.toolSet,
+        tools: aiToolSet,
         model,
       });
       const promptMessages = splitKtxSystemMessages(built.messages);
@@ -79,7 +85,7 @@ export class AgentRunnerService {
         }),
         ...(promptMessages.system ? { system: promptMessages.system } : {}),
         messages: promptMessages.messages,
-        tools: built.tools as Record<string, Tool>,
+        tools: built.tools as ToolSet,
         onStepFinish: async () => {
           stepIndex += 1;
           if (!params.onStepFinish) {

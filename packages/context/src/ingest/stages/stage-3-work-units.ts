@@ -1,4 +1,4 @@
-import type { AgentRunnerService, AgentToolSet } from '@ktx/context/agent';
+import type { AgentRunnerPort, AgentToolSet } from '@ktx/context/agent';
 import type { KtxModelRole } from '@ktx/llm';
 import type { CaptureSession, MemoryAction } from '../../memory/index.js';
 import { listTouchedSlSources, type TouchedSlSource } from '../../tools/index.js';
@@ -13,7 +13,7 @@ export interface TouchedValidationResult {
 
 export interface WorkUnitExecutionDeps {
   sessionWorktreeGit: { revParseHead(): Promise<string | null> };
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   validateTouchedSources: (touched: TouchedSlSource[]) => Promise<TouchedValidationResult>;
   resetHardTo: (targetSha: string) => Promise<void>;
   buildSystemPrompt: (wu: WorkUnit) => string;

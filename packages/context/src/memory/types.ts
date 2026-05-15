@@ -1,4 +1,4 @@
-import type { AgentRunnerService, AgentToolSet } from '../agent/index.js';
+import type { AgentRunnerPort, AgentToolSet } from '../agent/index.js';
 import type { GitService, KtxFileStorePort, KtxLogger, SessionWorktreeService } from '../core/index.js';
 import type { PromptService } from '../prompts/index.js';
 import type { SkillsRegistryService } from '../skills/index.js';
@@ -149,7 +149,7 @@ export interface MemoryAgentServiceDeps {
   slSourcesRepository: SlSourcesIndexPort;
   sessionWorktreeService: SessionWorktreeService<MemoryFileStorePort>;
   semanticLayerSourceReconciler: MemorySlSourceReconcilerPort;
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   slValidator: SlValidatorPort<SlValidationDeps>;
   toolsetFactory: MemoryToolsetFactoryPort;
   telemetry?: MemoryTelemetryPort;

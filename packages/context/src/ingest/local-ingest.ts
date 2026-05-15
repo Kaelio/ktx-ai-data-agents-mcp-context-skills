@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import type { KtxLlmProvider } from '@ktx/llm';
-import type { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerPort } from '../agent/index.js';
 import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxLogger } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
@@ -28,7 +28,7 @@ export interface RunLocalIngestOptions {
   trigger?: IngestTrigger;
   jobId?: string;
   memoryFlow?: MemoryFlowEventSink;
-  agentRunner?: AgentRunnerService;
+  agentRunner?: AgentRunnerPort;
   llmProvider?: KtxLlmProvider;
   llmDebugRequestFile?: string;
   memoryModel?: string;
@@ -167,7 +167,7 @@ async function runScheduledPullJob(options: {
   trigger?: IngestTrigger;
   jobId?: string;
   memoryFlow?: MemoryFlowEventSink;
-  agentRunner?: AgentRunnerService;
+  agentRunner?: AgentRunnerPort;
   llmProvider?: KtxLlmProvider;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
