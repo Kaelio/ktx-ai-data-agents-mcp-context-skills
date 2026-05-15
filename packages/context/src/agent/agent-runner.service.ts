@@ -11,6 +11,14 @@ export interface RunLoopStepInfo {
   stepBudget: number;
 }
 
+export interface RunLoopToolFailure {
+  toolName: string;
+  input: unknown;
+  toolCallId?: string;
+  error: string;
+  durationMs?: number;
+}
+
 export interface RunLoopParams {
   modelRole: KtxModelRole;
   systemPrompt: string;
@@ -19,6 +27,7 @@ export interface RunLoopParams {
   stepBudget: number;
   telemetryTags: Record<string, string>;
   onStepFinish?: (info: RunLoopStepInfo) => void | Promise<void>;
+  onToolFailure?: (failure: RunLoopToolFailure) => void | Promise<void>;
 }
 
 export interface RunLoopResult {

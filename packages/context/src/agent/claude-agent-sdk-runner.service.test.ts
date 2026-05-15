@@ -127,4 +127,103 @@ describe('ClaudeAgentSdkRunnerService', () => {
       message: 'Only KTX MCP tools are available in this session.',
     });
   });
+
+  it('reports SDK tool failures through the run-loop callback', async () => {
+    const query = vi.fn(() =>
+      asyncMessages([{ type: 'result', subtype: 'success', terminal_reason: 'completed', result: 'done' }]),
+    );
+    const failures: unknown[] = [];
+    const runner = new ClaudeAgentSdkRunnerService({
+      projectDir: '/tmp/project',
+      modelSlots: {},
+      query: query as never,
+    });
+
+    await runner.runLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      stepBudget: 1,
+      telemetryTags: {},
+      toolSet: {},
+      onToolFailure: async (failure) => {
+        failures.push(failure);
+      },
+    });
+
+    const options = (query as any).mock.calls[0][0].options;
+    const hook = options.hooks.PostToolUseFailure[0].hooks[0];
+    const output = await hook(
+      {
+        hook_event_name: 'PostToolUseFailure',
+        session_id: 'session-1',
+        transcript_path: '/tmp/project/transcript.jsonl',
+        cwd: '/tmp/project',
+        tool_name: 'mcp__ktx__read_raw_span',
+        tool_input: { path: 42 },
+        tool_use_id: 'tool-1',
+        error: 'Input validation failed: expected path to be a string',
+        duration_ms: 12,
+      },
+      'tool-1',
+      { signal: new AbortController().signal },
+    );
+
+    expect(output).toEqual({
+      continue: true,
+      hookSpecificOutput: { hookEventName: 'PostToolUseFailure' },
+    });
+    expect(failures).toEqual([
+      {
+        toolName: 'read_raw_span',
+        input: { path: 42 },
+        toolCallId: 'tool-1',
+        error: 'Input validation failed: expected path to be a string',
+        durationMs: 12,
+      },
+    ]);
+  });
+
+  it('passes SDK tool-use identifiers to KTX tool execution', async () => {
+    const query = vi.fn(() =>
+      asyncMessages([{ type: 'result', subtype: 'success', terminal_reason: 'completed', result: 'done' }]),
+    );
+    const execute = vi.fn(async ({ value }: { value: string }) => ({
+      markdown: `pong ${value}`,
+      structured: { value },
+    }));
+    const toolMock = vi.fn((name, description, inputSchema, handler) => ({
+      name,
+      description,
+      inputSchema,
+      handler,
+    }));
+    const runner = new ClaudeAgentSdkRunnerService({
+      projectDir: '/tmp/project',
+      modelSlots: {},
+      query: query as never,
+      tool: toolMock as never,
+    });
+
+    await runner.runLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      stepBudget: 1,
+      telemetryTags: {},
+      toolSet: {
+        ping: createAgentTool({
+          name: 'ping',
+          description: 'Ping',
+          inputSchema: z.object({ value: z.string() }),
+          execute,
+        }),
+      },
+    });
+
+    const handler = toolMock.mock.calls[0][3];
+    await handler({ value: 'Ada' }, { toolUseID: 'tool-42' });
+
+    expect(execute).toHaveBeenCalledWith({ value: 'Ada' }, { toolCallId: 'tool-42' });
+  });
 });

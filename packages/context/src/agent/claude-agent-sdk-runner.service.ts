@@ -3,6 +3,7 @@ import {
   query,
   tool,
   type CanUseTool,
+  type HookCallbackMatcher,
   type SDKMessage,
   type SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
@@ -37,6 +38,19 @@ const BUILT_IN_TOOLS = [
   'WebSearch',
   'Write',
 ];
+
+function normalizeSdkToolName(toolName: string): string {
+  return toolName.startsWith('mcp__ktx__') ? toolName.slice('mcp__ktx__'.length) : toolName;
+}
+
+function sdkToolCallId(extra: unknown): string | undefined {
+  if (!extra || typeof extra !== 'object') {
+    return undefined;
+  }
+  const record = extra as Record<string, unknown>;
+  const id = record.toolUseID ?? record.tool_use_id ?? record.toolCallId;
+  return typeof id === 'string' ? id : undefined;
+}
 
 export interface ClaudeAgentSdkRunnerServiceDeps {
   projectDir: string;
@@ -75,6 +89,7 @@ export class ClaudeAgentSdkRunnerService implements AgentRunnerPort {
   private async consumeQuery(params: RunLoopParams): Promise<SDKResultMessage | undefined> {
     let result: SDKResultMessage | undefined;
     let stepIndex = 0;
+    const hooks = this.toolFailureHooks(params);
     const session = this.query({
       prompt: params.userPrompt,
       options: {
@@ -96,6 +111,7 @@ export class ClaudeAgentSdkRunnerService implements AgentRunnerPort {
         disallowedTools: BUILT_IN_TOOLS,
         permissionMode: 'dontAsk',
         canUseTool: this.canUseKtxTool,
+        ...(hooks ? { hooks } : {}),
       },
     });
 
@@ -118,9 +134,39 @@ export class ClaudeAgentSdkRunnerService implements AgentRunnerPort {
     return model ? { model } : {};
   }
 
+  private toolFailureHooks(
+    params: RunLoopParams,
+  ): Partial<Record<'PostToolUseFailure', HookCallbackMatcher[]>> | undefined {
+    if (!params.onToolFailure) {
+      return undefined;
+    }
+
+    const hook: HookCallbackMatcher['hooks'][number] = async (input) => {
+      if (input.hook_event_name !== 'PostToolUseFailure') {
+        return { continue: true };
+      }
+      await params.onToolFailure?.({
+        toolName: normalizeSdkToolName(input.tool_name),
+        input: input.tool_input,
+        toolCallId: input.tool_use_id,
+        error: input.error,
+        ...(typeof input.duration_ms === 'number' ? { durationMs: input.duration_ms } : {}),
+      });
+      return {
+        continue: true,
+        hookSpecificOutput: { hookEventName: 'PostToolUseFailure' as const },
+      };
+    };
+
+    return { PostToolUseFailure: [{ hooks: [hook] }] };
+  }
+
   private toSdkTool(definition: AgentToolDefinition) {
-    return this.tool(definition.name, definition.description, definition.inputSchema.shape, async (args) => {
-      const output = await definition.execute(definition.inputSchema.parse(args), {});
+    return this.tool(definition.name, definition.description, definition.inputSchema.shape, async (args, extra) => {
+      const toolCallId = sdkToolCallId(extra);
+      const output = await definition.execute(definition.inputSchema.parse(args), {
+        ...(toolCallId ? { toolCallId } : {}),
+      });
       return { content: [{ type: 'text' as const, text: agentToolOutputToText(output) }] };
     });
   }

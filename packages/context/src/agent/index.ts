@@ -10,5 +10,6 @@ export type {
   RunLoopResult,
   RunLoopStepInfo,
   RunLoopStopReason,
+  RunLoopToolFailure,
 } from './agent-runner.service.js';
 export { AgentRunnerService } from './agent-runner.service.js';
