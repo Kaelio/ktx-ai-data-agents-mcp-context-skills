@@ -3,10 +3,12 @@ title: Introduction
 description: How KTX gives analytics agents trusted context for warehouse work.
 ---
 
-<div className="not-prose mb-14">
-  <div className="mb-8">
+import { ProductMechanics } from "@/components/product-mechanics";
+
+<div className="not-prose mb-10">
+  <div>
     <h1
-      className="text-4xl font-extrabold tracking-tight lg:text-5xl"
+      className="max-w-full text-3xl font-extrabold tracking-tight break-words sm:text-4xl lg:text-5xl"
       style={{
         fontFamily: 'var(--font-display)',
         background: 'linear-gradient(180deg, var(--color-fd-foreground) 0%, color-mix(in oklch, var(--color-fd-foreground) 75%, var(--color-fd-primary)) 100%)',
@@ -18,62 +20,42 @@ description: How KTX gives analytics agents trusted context for warehouse work.
         letterSpacing: '0',
       }}
     >
-      Make analytics context{'\n'}usable by agents
+      Make analytics context usable by agents
     </h1>
-    <p className="mt-4 text-lg text-fd-muted-foreground max-w-2xl" style={{ lineHeight: '1.7' }}>
-      KTX turns warehouse metadata, semantic definitions, and business knowledge
-      into reviewable project files that agents can use while planning, querying,
-      and updating analytics work.
+    <p className="mt-4 max-w-2xl text-lg text-fd-muted-foreground" style={{ lineHeight: '1.7' }}>
+      {'KTX turns warehouse metadata, semantic definitions, and business knowledge into reviewable project files that agents can use while planning, querying, and updating analytics work.'}
     </p>
-  </div>
-  <div className="flex flex-wrap gap-3">
-    <a
-      href="/docs/getting-started/quickstart"
-      className="inline-flex h-10 items-center rounded-lg bg-fd-primary px-5 text-sm font-medium text-fd-primary-foreground transition-colors hover:opacity-90"
-    >
-      Get Started
-    </a>
-    <a
-      href="/docs/concepts/the-context-layer"
-      className="inline-flex h-10 items-center rounded-lg border border-fd-border bg-fd-background px-5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-muted"
-    >
-      The Context Layer
-    </a>
-    <a
-      href="/docs/guides/building-context"
-      className="inline-flex h-10 items-center rounded-lg border border-fd-border bg-fd-background px-5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-muted"
-    >
-      Building Context
-    </a>
   </div>
 </div>
 
-## Who KTX is for
+<ProductMechanics />
+
+## What agents can do with KTX
 
 KTX is built for analytics engineers and data teams who want data agents to
-work on real analytics systems - not just generate one-off SQL.
+work on real analytics systems, not just generate one-off SQL.
 
-Use KTX when you want agents to:
+Use it when agents need to:
 
-- **Generate SQL** from approved measures and joins
-- **Repair semantic definitions** through reviewable diffs
-- **Explain metric provenance** with warehouse evidence
-- **Work alongside** dbt, LookML, MetricFlow, Looker, Metabase, and modern BI platforms
+- **Generate SQL** from approved measures, dimensions, joins, and filters
+- **Explain provenance** with wiki context and warehouse evidence
+- **Repair context** through reviewable YAML and Markdown diffs
+- **Work alongside** dbt, LookML, MetricFlow, Looker, Metabase, and warehouses
 
-Works with SQLite, PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, and SQL
-Server.
+KTX works with SQLite, PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, and
+SQL Server.
 
-## Explore the docs
+## Read next
 
 <Cards>
   <Card title="Quickstart" href="/docs/getting-started/quickstart">
     Set up KTX and build your first context in under 10 minutes.
   </Card>
-  <Card title="Concepts" href="/docs/concepts/the-context-layer">
-    Understand what a context layer is and why agents need one.
-  </Card>
   <Card title="Guides" href="/docs/guides/building-context">
     Hands-on workflows for scanning, ingesting, writing, and serving.
+  </Card>
+  <Card title="Writing Context" href="/docs/guides/writing-context">
+    Edit semantic-layer YAML and wiki Markdown safely.
   </Card>
   <Card title="CLI Reference" href="/docs/cli-reference/ktx-setup">
     Complete flag and subcommand reference for every KTX command.
