@@ -155,12 +155,140 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 1 });
   });
 
-  it('rejects settings-derived agents and non-KTX MCP servers from init messages', async () => {
+  it('treats host-discovered commands skills and agents as non-fatal init metadata for text and auth probe', async () => {
+    const hostDiscoveredInit = initMessage({
+      slash_commands: ['/help', '/compact', '/clear', '/user-command'],
+      skills: ['pdf', 'docx'],
+      agents: ['claude', 'Explore', 'general-purpose'],
+    });
+    const textQuery = vi.fn((_input: any) => stream([hostDiscoveredInit, resultMessage({ result: 'hello' })]));
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query: textQuery,
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' },
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).resolves.toBe('hello');
+    const textOptions = textQuery.mock.calls[0][0].options;
+    expect(textOptions).toMatchObject({
+      settingSources: [],
+      skills: [],
+      plugins: [],
+      tools: [],
+      allowedTools: [],
+      permissionMode: 'dontAsk',
+      persistSession: false,
+      env: expect.not.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test' }),
+    });
+    expect(textOptions.disallowedTools).toEqual(expect.arrayContaining(['Agent', 'Task', 'Bash']));
+    expect(await textOptions.canUseTool('Agent', {}, { signal: new AbortController().signal, toolUseID: 'agent' })).toMatchObject({
+      behavior: 'deny',
+      toolUseID: 'agent',
+    });
+    expect(await textOptions.canUseTool('Skill', {}, { signal: new AbortController().signal, toolUseID: 'skill' })).toMatchObject({
+      behavior: 'deny',
+      toolUseID: 'skill',
+    });
+    expect(
+      await textOptions.canUseTool('SlashCommand', {}, { signal: new AbortController().signal, toolUseID: 'slash' }),
+    ).toMatchObject({
+      behavior: 'deny',
+      toolUseID: 'slash',
+    });
+
+    const probeQuery = vi.fn((_input: any) => stream([hostDiscoveredInit, resultMessage({ result: 'ok' })]));
+    await expect(
+      runClaudeCodeAuthProbe({
+        projectDir: '/tmp/project',
+        model: 'sonnet',
+        query: probeQuery,
+        env: { ANTHROPIC_AUTH_TOKEN: 'token', HOME: '/Users/test' },
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(probeQuery.mock.calls[0][0].options).toMatchObject({
+      settingSources: [],
+      skills: [],
+      plugins: [],
+      tools: [],
+      allowedTools: [],
+      permissionMode: 'dontAsk',
+      persistSession: false,
+      env: expect.objectContaining({ HOME: '/Users/test' }),
+    });
+    expect(probeQuery.mock.calls[0][0].options.env).not.toEqual(
+      expect.objectContaining({ ANTHROPIC_AUTH_TOKEN: 'token' }),
+    );
+  });
+
+  it('allows host-discovered context during agent loops while requiring exact KTX MCP tools and servers', async () => {
     const query = vi.fn((_input: any) =>
       stream([
         initMessage({
-          agents: ['project-agent'],
+          tools: ['mcp__ktx__load_skill'],
+          mcp_servers: [{ name: 'ktx', status: 'connected' }],
+          slash_commands: ['/help', '/compact', '/clear'],
+          skills: ['memory-agent', 'doc-reader'],
+          agents: ['claude', 'Plan', 'Explore'],
+        }),
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [] },
+          parent_tool_use_id: null,
+          uuid: '00000000-0000-4000-8000-000000000006',
+          session_id: 'session-id',
+        } as unknown as SDKMessage,
+        resultMessage({ subtype: 'error_max_turns', is_error: true }),
+      ]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+    });
+
+    await expect(
+      runtime.runAgentLoop({
+        modelRole: 'default',
+        systemPrompt: 'system',
+        userPrompt: 'user',
+        toolSet: {
+          load_skill: {
+            name: 'load_skill',
+            description: 'Load skill.',
+            inputSchema: z.object({ name: z.string() }),
+            execute: async () => ({ markdown: 'loaded' }),
+          },
+        },
+        stepBudget: 1,
+        telemetryTags: { operationName: 'test' },
+      }),
+    ).resolves.toEqual({ stopReason: 'budget' });
+
+    const options = query.mock.calls[0][0].options;
+    expect(options.allowedTools).toEqual(['mcp__ktx__load_skill']);
+    expect(await options.canUseTool('mcp__ktx__load_skill', {}, { signal: new AbortController().signal, toolUseID: '1' })).toEqual({
+      behavior: 'allow',
+      toolUseID: '1',
+    });
+    expect(await options.canUseTool('Task', {}, { signal: new AbortController().signal, toolUseID: '2' })).toMatchObject({
+      behavior: 'deny',
+      toolUseID: '2',
+    });
+    expect(await options.canUseTool('Skill', {}, { signal: new AbortController().signal, toolUseID: '3' })).toMatchObject({
+      behavior: 'deny',
+      toolUseID: '3',
+    });
+  });
+
+  it('still rejects unexpected tools, missing KTX tools, plugins, and non-KTX MCP servers from init messages', async () => {
+    const query = vi.fn((_input: any) =>
+      stream([
+        initMessage({
+          tools: ['Bash'],
           mcp_servers: [{ name: 'filesystem', status: 'connected' }],
+          plugins: [{ name: 'host-plugin', path: '/tmp/plugin' }],
         }),
         resultMessage({ result: 'hello' }),
       ]),
@@ -172,8 +300,21 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       env: {},
     });
 
-    await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).rejects.toThrow(
-      /Claude Code runtime isolation failed: .*mcp_servers=filesystem.*agents=project-agent/,
+    await expect(
+      runtime.generateText({
+        role: 'default',
+        prompt: 'say hello',
+        tools: {
+          load_skill: {
+            name: 'load_skill',
+            description: 'Load skill.',
+            inputSchema: z.object({ name: z.string() }),
+            execute: async () => ({ markdown: 'loaded' }),
+          },
+        },
+      }),
+    ).rejects.toThrow(
+      /Claude Code runtime isolation failed: .*tools=Bash.*missing_tools=mcp__ktx__load_skill.*mcp_servers=filesystem.*plugins=host-plugin/,
     );
   });
 
