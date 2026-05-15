@@ -1,5 +1,7 @@
 export type { AgentToolCallOptions, AgentToolDefinition, AgentToolOutput, AgentToolSet } from './agent-tool.js';
 export { agentToolOutputToText, assertAgentToolSet, createAgentTool, toAiSdkTool, toAiSdkToolSet } from './agent-tool.js';
+export type { ClaudeAgentSdkRunnerServiceDeps } from './claude-agent-sdk-runner.service.js';
+export { ClaudeAgentSdkRunnerService } from './claude-agent-sdk-runner.service.js';
 export type {
   AgentRunnerPort,
   AgentRunnerServiceDeps,
