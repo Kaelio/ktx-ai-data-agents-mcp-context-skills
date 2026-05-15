@@ -97,6 +97,9 @@ describe('local ingest adapters', () => {
       async analyzeBatch() {
         return new Map();
       },
+      async validateReadOnly() {
+        return { ok: true };
+      },
     };
     const adapters = createDefaultLocalIngestAdapters(project, {
       historicSql: {
@@ -140,6 +143,9 @@ describe('local ingest adapters', () => {
           async analyzeBatch() {
             return new Map();
           },
+          async validateReadOnly() {
+            return { ok: true };
+          },
         },
         reader,
         queryClient,
@@ -165,6 +171,9 @@ describe('local ingest adapters', () => {
           },
           async analyzeBatch() {
             return new Map();
+          },
+          async validateReadOnly() {
+            return { ok: true };
           },
         },
         postgresQueryClient: {
@@ -257,6 +266,9 @@ describe('local ingest adapters', () => {
           },
           async analyzeBatch() {
             return new Map();
+          },
+          async validateReadOnly() {
+            return { ok: true };
           },
         },
         postgresQueryClient: {

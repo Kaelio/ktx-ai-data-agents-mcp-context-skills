@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WarehouseCatalogService } from '../../../scan/warehouse-catalog.js';
 import type { BaseTool, ToolContext } from '../../../tools/index.js';
 import { DiscoverDataTool } from './discover-data.tool.js';
-import type { WarehouseCatalogService } from './warehouse-catalog.service.js';
 
 describe('DiscoverDataTool', () => {
   const wikiSearchTool = { call: vi.fn() } as unknown as BaseTool & { call: ReturnType<typeof vi.fn> };
@@ -36,7 +36,7 @@ describe('DiscoverDataTool', () => {
     catalog.searchByName.mockResolvedValue([
       {
         kind: 'table',
-        connectionName: 'warehouse',
+        connectionId: 'warehouse',
         ref: { catalog: null, db: 'public', name: 'orders' },
         display: 'public.orders',
         matchedOn: 'name',
@@ -45,28 +45,28 @@ describe('DiscoverDataTool', () => {
   });
 
   it('groups wiki, semantic layer, and raw schema hits with routing hints', async () => {
-    const result = await tool.call({ query: 'orders', connectionName: 'warehouse', limit: 5 }, context);
+    const result = await tool.call({ query: 'orders', connectionId: 'warehouse', limit: 5 }, context);
 
     expect(result.markdown).toContain('## Wiki Pages');
     expect(result.markdown).toContain('use `wiki_read(blockKey)` for full content');
     expect(result.markdown).toContain('## Semantic Layer Sources');
     expect(result.markdown).toContain('use `sl_read_source(sourceName)` for the YAML');
     expect(result.markdown).toContain('## Raw Warehouse Schema');
-    expect(result.markdown).toContain('use `entity_details({connectionName, targets: [{display}]})`');
+    expect(result.markdown).toContain('use `entity_details({connectionId, targets: [{display}]})`');
     expect(result.structured.raw?.hits).toHaveLength(1);
   });
 
-  it('includes connectionName on raw schema hits so entity_details can follow up', async () => {
+  it('includes connectionId on raw schema hits so entity_details can follow up', async () => {
     const multiConnectionContext: ToolContext = {
       ...context,
       session: { allowedConnectionNames: new Set(['warehouse', 'analytics']) } as any,
     };
-    catalog.searchByName.mockImplementation(async (connectionName: string, query: string) => [
+    catalog.searchByName.mockImplementation(async (connectionId: string, query: string) => [
       {
         kind: 'table',
-        connectionName,
-        ref: { catalog: null, db: 'public', name: `${connectionName}_${query}` },
-        display: `public.${connectionName}_${query}`,
+        connectionId,
+        ref: { catalog: null, db: 'public', name: `${connectionId}_${query}` },
+        display: `public.${connectionId}_${query}`,
         matchedOn: 'name',
       },
     ]);
@@ -75,16 +75,16 @@ describe('DiscoverDataTool', () => {
 
     expect(catalog.searchByName).toHaveBeenCalledWith('analytics', 'orders', 10);
     expect(catalog.searchByName).toHaveBeenCalledWith('warehouse', 'orders', 10);
-    expect(result.markdown).toContain('connectionName=analytics');
-    expect(result.markdown).toContain('connectionName=warehouse');
+    expect(result.markdown).toContain('connectionId=analytics');
+    expect(result.markdown).toContain('connectionId=warehouse');
     expect(result.markdown).toContain(
-      'entity_details({connectionName: "analytics", targets: [{display: "public.analytics_orders"}]})',
+      'entity_details({connectionId: "analytics", targets: [{display: "public.analytics_orders"}]})',
     );
-    expect(result.structured.raw?.hits.map((hit) => hit.connectionName)).toEqual(['analytics', 'warehouse']);
+    expect(result.structured.raw?.hits.map((hit) => hit.connectionId)).toEqual(['analytics', 'warehouse']);
   });
 
   it('refuses explicit out-of-scope connection names', async () => {
-    const result = await tool.call({ query: 'orders', connectionName: 'billing' }, context);
+    const result = await tool.call({ query: 'orders', connectionId: 'billing' }, context);
 
     expect(result.markdown).toContain('Connection "billing" is not available to this ingest stage.');
     expect(result.structured).toEqual({ wiki: null, sl: null, raw: null });
@@ -99,7 +99,7 @@ describe('DiscoverDataTool', () => {
       structured: { sourceName: 'orders' },
     });
 
-    const result = await tool.call({ sourceName: 'orders', connectionName: 'warehouse' }, context);
+    const result = await tool.call({ sourceName: 'orders', connectionId: 'warehouse' }, context);
 
     expect(slDiscoverTool.call).toHaveBeenCalledWith({ sourceName: 'orders', connectionId: 'warehouse' }, context);
     expect(wikiSearchTool.call).not.toHaveBeenCalled();
@@ -112,8 +112,20 @@ describe('DiscoverDataTool', () => {
     slDiscoverTool.call.mockResolvedValueOnce({ markdown: '', structured: { totalSources: 0, sources: [] } });
     catalog.searchByName.mockResolvedValueOnce([]);
 
-    const result = await tool.call({ query: 'customer source', connectionName: 'warehouse' }, context);
+    const result = await tool.call({ query: 'customer source', connectionId: 'warehouse' }, context);
 
     expect(result.markdown).toContain('No matches for "customer source" across wiki, semantic layer, or raw warehouse schema.');
+  });
+
+  it('uses connectionId as the optional connection filter', () => {
+    const legacyConnectionField = ['connection', 'Name'].join('');
+
+    expect(tool.parseInput({ query: 'orders', connectionId: 'warehouse', limit: 5 })).toEqual({
+      query: 'orders',
+      connectionId: 'warehouse',
+      limit: 5,
+    });
+
+    expect(() => tool.parseInput({ query: 'orders', [legacyConnectionField]: 'warehouse', limit: 5 })).toThrow();
   });
 });

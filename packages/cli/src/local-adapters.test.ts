@@ -18,6 +18,9 @@ function sqlAnalysisStub() {
     async analyzeBatch() {
       return new Map();
     },
+    async validateReadOnly() {
+      return { ok: true };
+    },
   };
 }
 

@@ -83,6 +83,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         ],
         ['bad-parse', { tablesTouched: [], columnsByClause: {}, error: 'parse failed' }],
       ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
     };
 
     await stageHistoricSqlAggregatedSnapshot({
@@ -207,6 +208,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
           },
         ],
       ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
     };
 
     await stageHistoricSqlAggregatedSnapshot({
@@ -283,6 +285,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
           },
         ],
       ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
     };
 
     await stageHistoricSqlAggregatedSnapshot({
@@ -403,6 +406,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
           },
         ],
       ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
     };
 
     await stageHistoricSqlAggregatedSnapshot({

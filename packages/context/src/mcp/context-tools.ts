@@ -143,6 +143,45 @@ const scanArtifactReadSchema = z.object({
   path: z.string().min(1),
 });
 
+const entityDetailsTableRefSchema = z.object({
+  catalog: z.string().nullable(),
+  db: z.string().nullable(),
+  name: z.string().min(1),
+});
+
+const entityDetailsSchema = z.object({
+  connectionId: connectionIdSchema,
+  entities: z
+    .array(
+      z.object({
+        table: z.union([z.string().min(1), entityDetailsTableRefSchema]),
+        columns: z.array(z.string().min(1)).optional(),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+
+const dictionarySearchSchema = z.object({
+  values: z.array(z.string().min(1)).min(1).max(20),
+  connectionId: connectionIdSchema.optional(),
+});
+
+const discoverDataKindSchema = z.enum(['wiki', 'sl_source', 'sl_measure', 'sl_dimension', 'table', 'column']);
+
+const discoverDataSchema = z.object({
+  query: z.string().min(1),
+  connectionId: connectionIdSchema.optional(),
+  kinds: z.array(discoverDataKindSchema).optional(),
+  limit: z.number().int().min(1).max(50).default(15).optional(),
+});
+
+const sqlExecutionSchema = z.object({
+  connectionId: connectionIdSchema,
+  sql: z.string().min(1),
+  maxRows: z.number().int().min(1).max(10_000).default(1000).optional(),
+});
+
 export function jsonToolResult<T extends object>(structuredContent: T): KtxMcpToolResult<T> {
   return {
     content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
@@ -358,6 +397,81 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
             },
           }),
         ),
+    );
+  }
+
+  if (ports.entityDetails) {
+    const entityDetails = ports.entityDetails;
+    registerParsedTool(
+      server,
+      'entity_details',
+      {
+        title: 'Entity Details',
+        description: 'Read raw table and column metadata from the latest KTX live-database scan snapshot.',
+        inputSchema: entityDetailsSchema.shape,
+      },
+      entityDetailsSchema,
+      async (input) => jsonToolResult(await entityDetails.read(input)),
+    );
+  }
+
+  if (ports.dictionarySearch) {
+    const dictionarySearch = ports.dictionarySearch;
+    registerParsedTool(
+      server,
+      'dictionary_search',
+      {
+        title: 'Dictionary Search',
+        description:
+          'Search profile-sampled warehouse values and report matching connection/source/column locations plus non-authoritative miss reasons.',
+        inputSchema: dictionarySearchSchema.shape,
+      },
+      dictionarySearchSchema,
+      async (input) => jsonToolResult(await dictionarySearch.search(input)),
+    );
+  }
+
+  if (ports.discover) {
+    const discover = ports.discover;
+    registerParsedTool(
+      server,
+      'discover_data',
+      {
+        title: 'Discover Data',
+        description:
+          'Search across KTX wiki pages, semantic-layer sources/measures/dimensions, and raw warehouse schema refs.',
+        inputSchema: discoverDataSchema.shape,
+      },
+      discoverDataSchema,
+      async (input) => jsonToolResult(await discover.search(input)),
+    );
+  }
+
+  if (ports.sqlExecution) {
+    const sqlExecution = ports.sqlExecution;
+    registerParsedTool(
+      server,
+      'sql_execution',
+      {
+        title: 'SQL Execution',
+        description:
+          'Execute one parser-validated read-only SQL query against a configured KTX connection and return structured rows.',
+        inputSchema: sqlExecutionSchema.shape,
+      },
+      sqlExecutionSchema,
+      async (input) => {
+        try {
+          return jsonToolResult(
+            await sqlExecution.execute({
+              connectionId: input.connectionId,
+              sql: input.sql,
+              maxRows: input.maxRows ?? 1000,
+            }),
+          );
+        } catch (error) {
+          return jsonErrorToolResult(error instanceof Error ? error.message : String(error));
+        }
+      },
     );
   }
 

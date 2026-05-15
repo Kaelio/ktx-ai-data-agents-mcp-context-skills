@@ -41,12 +41,6 @@ export const NPM_ARTIFACT_PACKAGES = [{ name: PUBLIC_NPM_PACKAGE_NAME, packageRo
 
 export const CLI_PYTHON_ASSET_MANIFEST = 'manifest.json';
 
-const CONNECTOR_PACKAGE_NAMES = INTERNAL_NPM_WORKSPACE_PACKAGES
-  .map((packageInfo) => packageInfo.name)
-  .filter((packageName) => packageName.startsWith('@ktx/connector-'));
-
-const NPM_ARTIFACT_BUILD_ORDER = ['@ktx/llm', '@ktx/context', ...CONNECTOR_PACKAGE_NAMES, '@ktx/cli'];
-
 function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
@@ -84,18 +78,19 @@ export function packageArtifactLayout(rootDir = scriptRootDir()) {
 }
 
 export function buildArtifactCommands(layout) {
-  const packagesByName = new Map(INTERNAL_NPM_WORKSPACE_PACKAGES.map((packageInfo) => [packageInfo.name, packageInfo]));
-  const npmBuildCommands = NPM_ARTIFACT_BUILD_ORDER.map((packageName) => {
-    const packageInfo = packagesByName.get(packageName);
-    if (!packageInfo) {
-      throw new Error(`Unknown npm artifact build package: ${packageName}`);
-    }
-    return {
-      command: 'pnpm',
-      args: ['--filter', packageInfo.name, 'run', 'build'],
-      cwd: layout.rootDir,
-    };
-  });
+  // One recursive pnpm invocation; topology comes from workspace deps in
+  // each package.json, parallelism from --workspace-concurrency.
+  const npmBuildCommand = {
+    command: 'pnpm',
+    args: [
+      '--filter',
+      './packages/*',
+      '--workspace-concurrency=10',
+      'run',
+      'build',
+    ],
+    cwd: layout.rootDir,
+  };
   const publicPackageCommand = {
     command: process.execPath,
     args: ['scripts/build-public-npm-package.mjs'],
@@ -103,7 +98,7 @@ export function buildArtifactCommands(layout) {
   };
 
   return [
-    ...npmBuildCommands,
+    npmBuildCommand,
     {
       command: process.execPath,
       args: ['scripts/build-python-runtime-wheel.mjs'],
@@ -929,21 +924,13 @@ async function buildArtifacts(layout) {
   await mkdir(layout.npmDir, { recursive: true });
   await mkdir(layout.pythonDir, { recursive: true });
 
-  const commands = buildArtifactCommands(layout);
-  const npmBuildCount = NPM_ARTIFACT_BUILD_ORDER.length;
-  const npmPackStart = commands.length - 1;
+  const [npmBuildCommand, wheelCommand, publicPackageCommand] = buildArtifactCommands(layout);
 
-  for (const command of commands.slice(0, npmBuildCount)) {
-    await runCommand(command.command, command.args, { cwd: command.cwd });
-  }
-  for (const command of commands.slice(npmBuildCount, npmPackStart)) {
-    await runCommand(command.command, command.args, { cwd: command.cwd });
-  }
+  await runCommand(npmBuildCommand.command, npmBuildCommand.args, { cwd: npmBuildCommand.cwd });
+  await runCommand(wheelCommand.command, wheelCommand.args, { cwd: wheelCommand.cwd });
   const pythonArtifacts = await findPythonArtifacts(layout.pythonDir);
   await copyRuntimeWheelAssets(layout, pythonArtifacts);
-  for (const command of commands.slice(npmPackStart)) {
-    await runCommand(command.command, command.args, { cwd: command.cwd });
-  }
+  await runCommand(publicPackageCommand.command, publicPackageCommand.args, { cwd: publicPackageCommand.cwd });
 
   for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
     await assertPathExists(layout.npmTarballs[packageInfo.name], `${packageInfo.name} tarball`);

@@ -203,11 +203,11 @@ describe('KtxDescriptionGenerator', () => {
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
         temperature: 0.2,
+        system: expect.objectContaining({
+          role: 'system',
+          content: expect.stringContaining('Please provide a concise description in 12 words or less.'),
+        }),
         messages: expect.arrayContaining([
-          expect.objectContaining({
-            role: 'system',
-            content: expect.stringContaining('Please provide a concise description in 12 words or less.'),
-          }),
           expect.objectContaining({
             role: 'user',
             content: expect.stringContaining('<column_name> status </column_name>'),
@@ -215,6 +215,8 @@ describe('KtxDescriptionGenerator', () => {
         ]),
       }),
     );
+    const lastCall = vi.mocked(generateText).mock.calls.at(-1)?.[0];
+    expect(lastCall?.messages?.some((message) => message.role === 'system')).toBe(false);
   });
 
   it('samples through the connector when column values are not pre-fetched', async () => {
@@ -389,5 +391,291 @@ describe('KtxDescriptionGenerator', () => {
 
     expect(cache.set).toHaveBeenCalledWith('warehouse.public.orders', 'Commerce orders');
     expect(cache.set).toHaveBeenCalledWith('__connection:Warehouse', 'Commerce orders');
+  });
+});
+
+describe('KtxDescriptionGenerator resilience', () => {
+  function createLogger() {
+    return {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  }
+
+  it('retries sampleTable on transient failure and uses sampled rows when it eventually succeeds', async () => {
+    const sampleTable = vi
+      .fn<NonNullable<KtxScanConnector['sampleTable']>>()
+      .mockRejectedValueOnce(new Error('pool: transient ECONNRESET'))
+      .mockRejectedValueOnce(new Error('pool: transient ECONNRESET'))
+      .mockResolvedValue({
+        headers: ['id', 'status'],
+        rows: [
+          [1, 'paid'],
+          [2, 'refunded'],
+        ],
+        totalRows: 2,
+      });
+    const connector: KtxScanConnector = {
+      ...createConnector(),
+      sampleTable,
+    };
+    const logger = createLogger();
+    const warnings: Array<{ code: string; table?: string }> = [];
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createLlmProvider('Commerce orders'),
+      logger,
+      onWarning: (warning) => warnings.push({ code: warning.code, ...(warning.table ? { table: warning.table } : {}) }),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24, concurrencyLimit: 2 },
+    });
+
+    const description = await generator.generateTableDescription({
+      connectionId: 'conn-1',
+      connector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      table: { catalog: null, db: 'public', name: 'orders' },
+    });
+
+    expect(description).toBe('Commerce orders');
+    expect(sampleTable).toHaveBeenCalledTimes(3);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(warnings).toEqual([]);
+  });
+
+  it('falls back to metadata-only prompt when sampleTable retries exhaust', async () => {
+    const sampleTable = vi
+      .fn<NonNullable<KtxScanConnector['sampleTable']>>()
+      .mockRejectedValue(new Error('pool: connection refused'));
+    const connector: KtxScanConnector = {
+      ...createConnector(),
+      sampleTable,
+    };
+    const logger = createLogger();
+    const warnings: Array<{ code: string; table?: string; metadata?: Record<string, unknown> }> = [];
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createLlmProvider('Customer reference data'),
+      logger,
+      onWarning: (warning) =>
+        warnings.push({
+          code: warning.code,
+          ...(warning.table ? { table: warning.table } : {}),
+          ...(warning.metadata ? { metadata: warning.metadata } : {}),
+        }),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24, concurrencyLimit: 2 },
+    });
+
+    const description = await generator.generateTableDescription({
+      connectionId: 'conn-1',
+      connector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'customers',
+        columns: [
+          { name: 'id', nativeType: 'uuid' },
+          { name: 'email', nativeType: 'text', comment: 'Primary contact email' },
+        ],
+      },
+    });
+
+    expect(description).toBe('Customer reference data');
+    expect(sampleTable).toHaveBeenCalledTimes(3);
+    expect(warnings.map((warning) => warning.code)).toEqual(['sampling_failed', 'description_fallback_used']);
+    expect(warnings[1]?.metadata?.reason).toBe('sampling_failed');
+    const userPrompt = (vi.mocked(generateText).mock.calls.at(-1)?.[0] as { messages: Array<{ role: string; content: string }> })
+      .messages.find((message) => message.role === 'user')?.content;
+    expect(userPrompt).toContain('Columns (metadata only, no sample rows)');
+    expect(userPrompt).toContain('email (text)');
+    expect(userPrompt).toContain('Primary contact email');
+  });
+
+  it('emits enrichment_failed and returns null when both sampling and metadata-only LLM fail', async () => {
+    const sampleTable = vi
+      .fn<NonNullable<KtxScanConnector['sampleTable']>>()
+      .mockRejectedValue(new Error('pool: connection refused'));
+    const connector: KtxScanConnector = {
+      ...createConnector(),
+      sampleTable,
+    };
+    const warnings: string[] = [];
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createFailingLlmProvider(),
+      onWarning: (warning) => warnings.push(warning.code),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const description = await generator.generateTableDescription({
+      connectionId: 'conn-1',
+      connector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      table: { catalog: null, db: 'public', name: 'orphan', columns: [{ name: 'id' }] },
+    });
+
+    expect(description).toBeNull();
+    expect(warnings).toEqual(['sampling_failed', 'enrichment_failed']);
+  });
+
+  it('uses metadata-only fallback when connector has no sampleTable', async () => {
+    const connector = createConnector();
+    const samplerWithoutTable: KtxScanConnector = {
+      ...connector,
+      sampleTable: undefined,
+    };
+    const warnings: string[] = [];
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createLlmProvider('Orders mart'),
+      onWarning: (warning) => warnings.push(warning.code),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const description = await generator.generateTableDescription({
+      connectionId: 'conn-1',
+      connector: samplerWithoutTable,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'mart_orders',
+        columns: [{ name: 'order_id', nativeType: 'uuid' }],
+      },
+    });
+
+    expect(description).toBe('Orders mart');
+    expect(warnings).toEqual(['connector_capability_missing', 'description_fallback_used']);
+  });
+
+  it('aborts retry loop when the scan context signal fires', async () => {
+    const controller = new AbortController();
+    const sampleTable = vi.fn<NonNullable<KtxScanConnector['sampleTable']>>().mockImplementation(async () => {
+      controller.abort();
+      throw new Error('first attempt blew up');
+    });
+    const connector: KtxScanConnector = {
+      ...createConnector(),
+      sampleTable,
+    };
+    const warnings: string[] = [];
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createLlmProvider('should not be called'),
+      onWarning: (warning) => warnings.push(warning.code),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    await expect(
+      generator.generateTableDescription({
+        connectionId: 'conn-1',
+        connector,
+        context: { runId: 'run-1', signal: controller.signal },
+        dataSourceType: 'POSTGRESQL',
+        table: { catalog: null, db: 'public', name: 'orders' },
+      }),
+    ).rejects.toThrow('aborted');
+
+    expect(sampleTable).toHaveBeenCalledTimes(1);
+    expect(warnings).toEqual([]);
+  });
+
+  it('generates column descriptions from rawDescriptions when sampleColumn is unavailable', async () => {
+    const samplerWithoutColumn: KtxScanConnector = {
+      ...createConnector(),
+      sampleColumn: undefined,
+    };
+    const logger = createLogger();
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createLlmProvider('Payment lifecycle state'),
+      logger,
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const result = await generator.generateColumnDescriptions({
+      connectionId: 'conn-1',
+      connector: samplerWithoutColumn,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      supportsNestedAnalysis: false,
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        columns: [{ name: 'status', rawDescriptions: { db: 'order lifecycle state' } }],
+      },
+    });
+
+    expect(result.columnDescriptions).toEqual([['status', 'Payment lifecycle state']]);
+    expect(logger.warn).toHaveBeenCalled();
+    const userPrompt = (
+      vi.mocked(generateText).mock.calls.at(-1)?.[0] as { messages: Array<{ role: string; content: string }> }
+    ).messages.find((message) => message.role === 'user')?.content;
+    expect(userPrompt).toContain('<sample_values> unavailable </sample_values>');
+    expect(userPrompt).toContain('<db_documentation> order lifecycle state </db_documentation>');
+  });
+
+  it('generates column descriptions from rawDescriptions when sampleColumn retries exhaust', async () => {
+    const sampleColumn = vi
+      .fn<NonNullable<KtxScanConnector['sampleColumn']>>()
+      .mockRejectedValue(new Error('pool: connection refused'));
+    const flakyConnector: KtxScanConnector = {
+      ...createConnector(),
+      sampleColumn,
+    };
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createLlmProvider('Customer reference identifier'),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const result = await generator.generateColumnDescriptions({
+      connectionId: 'conn-1',
+      connector: flakyConnector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      supportsNestedAnalysis: false,
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        columns: [{ name: 'customer_id', rawDescriptions: { db: 'FK to customers.id' } }],
+      },
+    });
+
+    expect(sampleColumn).toHaveBeenCalledTimes(3);
+    expect(result.columnDescriptions).toEqual([['customer_id', 'Customer reference identifier']]);
+  });
+
+  it('skips column LLM call only when neither samples nor rawDescriptions are available', async () => {
+    const sampleColumn = vi
+      .fn<NonNullable<KtxScanConnector['sampleColumn']>>()
+      .mockResolvedValue({ values: [null, null], nullCount: 2, distinctCount: 0 });
+    const connector: KtxScanConnector = {
+      ...createConnector(),
+      sampleColumn,
+    };
+    vi.mocked(generateText).mockClear();
+    const generator = new KtxDescriptionGenerator({
+      llmProvider: createLlmProvider('should not be called'),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const result = await generator.generateColumnDescriptions({
+      connectionId: 'conn-1',
+      connector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      supportsNestedAnalysis: false,
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        columns: [{ name: 'opaque_blob' }],
+      },
+    });
+
+    expect(result.columnDescriptions).toEqual([['opaque_blob', null]]);
+    expect(generateText).not.toHaveBeenCalled();
   });
 });

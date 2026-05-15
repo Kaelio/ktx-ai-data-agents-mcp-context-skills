@@ -1,6 +1,7 @@
 export { createKtxEmbeddingProvider } from './embedding-provider.js';
 export { runKtxEmbeddingHealthCheck } from './embedding-health.js';
-export { KtxMessageBuilder } from './message-builder.js';
+export { KtxMessageBuilder, splitKtxSystemMessages } from './message-builder.js';
+export type { KtxSplitSystemMessagesResult } from './message-builder.js';
 export type { KtxEmbeddingHealthCheckOptions, KtxEmbeddingHealthCheckResult } from './embedding-health.js';
 export type { KtxEmbeddingProviderDeps } from './embedding-provider.js';
 export type { KtxLlmHealthCheckDeps, KtxLlmHealthCheckOptions, KtxLlmHealthCheckResult } from './model-health.js';

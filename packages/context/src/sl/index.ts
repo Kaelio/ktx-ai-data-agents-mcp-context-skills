@@ -25,6 +25,18 @@ export {
 } from './semantic-layer.service.js';
 export { loadLatestSlDictionaryEntries } from './sl-dictionary-profile.js';
 export type { SlDictionaryEntry } from './sl-dictionary-profile.js';
+export { createKtxDictionarySearchService } from './dictionary-search.js';
+export type {
+  KtxDictionarySearchCoverage,
+  KtxDictionarySearchInput,
+  KtxDictionarySearchMatch,
+  KtxDictionarySearchMiss,
+  KtxDictionarySearchMissReason,
+  KtxDictionarySearchResponse,
+  KtxDictionarySearchSearchedConnection,
+  KtxDictionarySearchStatus,
+  KtxDictionarySearchValueResult,
+} from './dictionary-search.js';
 export { buildSemanticLayerSourceSearchText, SlSearchService } from './sl-search.service.js';
 export { SqliteSlSourcesIndex, type SqliteSlSourcesIndexOptions } from './sqlite-sl-sources-index.js';
 export * from './local-sl.js';

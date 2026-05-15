@@ -4,10 +4,10 @@ import type { SlConnectionCatalogPort } from '../../../sl/index.js';
 import { BaseTool, type ToolContext, type ToolOutput } from '../../../tools/index.js';
 
 const sqlExecutionInputSchema = z.object({
-  connectionName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
+  connectionId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
   sql: z.string().min(1),
   rowLimit: z.number().int().positive().max(1000).optional().default(100),
-});
+}).strict();
 
 type SqlExecutionInput = z.input<typeof sqlExecutionInputSchema>;
 
@@ -54,9 +54,9 @@ export class SqlExecutionTool extends BaseTool<typeof sqlExecutionInputSchema> {
 
   async call(input: SqlExecutionInput, context: ToolContext): Promise<ToolOutput<SqlExecutionStructured>> {
     const allowed = context.session?.allowedConnectionNames;
-    if (allowed && !allowed.has(input.connectionName)) {
+    if (allowed && !allowed.has(input.connectionId)) {
       return {
-        markdown: `Connection "${input.connectionName}" is not available to this ingest stage.`,
+        markdown: `Connection "${input.connectionId}" is not available to this ingest stage.`,
         structured: {
           headers: [],
           rows: [],
@@ -83,7 +83,7 @@ export class SqlExecutionTool extends BaseTool<typeof sqlExecutionInputSchema> {
     }
 
     try {
-      const result = await this.connections.executeQuery(input.connectionName, wrappedSql);
+      const result = await this.connections.executeQuery(input.connectionId, wrappedSql);
       const headers = result.headers ?? [];
       const rows = result.rows ?? [];
       const rowCount = result.totalRows ?? rows.length;

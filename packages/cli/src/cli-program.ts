@@ -5,6 +5,7 @@ import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerIngestCommands } from './commands/ingest-commands.js';
 import { registerWikiCommands } from './commands/knowledge-commands.js';
+import { registerMcpCommands } from './commands/mcp-commands.js';
 import { registerSetupCommands } from './commands/setup-commands.js';
 import { registerSlCommands } from './commands/sl-commands.js';
 import { registerStatusCommands } from './commands/status-commands.js';
@@ -55,9 +56,11 @@ type CommandPathNode = CommandWithGlobalOptions & {
   parent?: CommandPathNode | null;
 };
 
-const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status']);
+const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'mcp']);
 const COMMANDS_THAT_CREATE_PROJECT = new Set(['setup', 'ktx dev init']);
 const COMMANDS_WITH_OWN_MISSING_PROJECT_HANDLING = new Set(['status']);
+const GLOBAL_OPTIONS_WITH_VALUE = new Set(['--project-dir']);
+const GLOBAL_OPTIONS_WITHOUT_VALUE = new Set(['--debug', '--help', '-h', '--version', '-v']);
 
 class KtxProjectMissingAbortError extends Error {
   readonly isKtxProjectMissingAbort = true;
@@ -72,24 +75,6 @@ function isKtxProjectMissingAbortError(error: unknown): error is KtxProjectMissi
     (typeof error === 'object' && error !== null && (error as { isKtxProjectMissingAbort?: unknown }).isKtxProjectMissingAbort === true)
   );
 }
-const REMOVED_COMMAND_PATHS = new Set([
-  'scan',
-  'wiki read',
-  'wiki write',
-]);
-const GLOBAL_OPTIONS_WITH_VALUE = new Set(['--project-dir']);
-const OPTIONS_WITH_VALUE = new Set([
-  '--project-dir',
-  '--query-history-window-days',
-  '--user-id',
-  '--limit',
-  '--format',
-  '--connection-id',
-  '--source-name',
-  '--query-file',
-  '--max-rows',
-]);
-
 export interface CommandWithGlobalOptions {
   opts: () => object;
   optsWithGlobals?: () => object;
@@ -336,43 +321,32 @@ function formatCliError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function commandPathFromArgv(argv: string[]): string[] {
-  const path: string[] = [];
-  for (let index = 0; index < argv.length && path.length < 2; index += 1) {
+function firstTopLevelCommandToken(argv: string[]): string | null {
+  for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === undefined) {
       continue;
     }
     if (arg === '--') {
-      break;
+      return null;
     }
-    if ((path.length === 0 ? GLOBAL_OPTIONS_WITH_VALUE : OPTIONS_WITH_VALUE).has(arg)) {
+    if (GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
       index += 1;
       continue;
     }
-    const optionsWithValue = path.length === 0 ? GLOBAL_OPTIONS_WITH_VALUE : OPTIONS_WITH_VALUE;
-    if ([...optionsWithValue].some((option) => arg.startsWith(`${option}=`))) {
+    if ([...GLOBAL_OPTIONS_WITH_VALUE].some((option) => arg.startsWith(`${option}=`))) {
       continue;
     }
-    if (path.length === 0 && arg === '--debug') {
+    if (GLOBAL_OPTIONS_WITHOUT_VALUE.has(arg) || arg.startsWith('-')) {
       continue;
     }
-    if (arg.startsWith('-')) {
-      continue;
-    }
-    path.push(arg);
+    return arg;
   }
-  return path;
+  return null;
 }
 
-function removedCommandName(argv: string[]): string | null {
-  const path = commandPathFromArgv(argv);
-  if (path.length === 0) {
-    return null;
-  }
-
-  const pathKey = path.join(' ');
-  return REMOVED_COMMAND_PATHS.has(pathKey) ? path.at(-1) ?? null : null;
+function isKnownTopLevelCommand(program: Command, commandName: string): boolean {
+  return program.commands.some((command) => command.name() === commandName || command.aliases().includes(commandName));
 }
 
 async function runBareInteractiveCommand(
@@ -439,6 +413,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   registerWikiCommands(program, context);
   registerSlCommands(program, context);
   registerStatusCommands(program, context);
+  registerMcpCommands(program, context);
   registerDevCommands(program, context);
 
   return program;
@@ -489,9 +464,9 @@ export async function runCommanderKtxCli(
     return 0;
   }
 
-  const removedCommand = removedCommandName(argv);
-  if (removedCommand) {
-    io.stderr.write(`error: unknown command '${removedCommand}'\n`);
+  const topLevelCommand = firstTopLevelCommandToken(argv);
+  if (topLevelCommand && !isKnownTopLevelCommand(program, topLevelCommand)) {
+    io.stderr.write(`error: unknown command '${topLevelCommand}'\n`);
     return 1;
   }
 

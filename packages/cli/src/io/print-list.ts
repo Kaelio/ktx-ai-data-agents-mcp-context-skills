@@ -43,13 +43,13 @@ export interface PrintListArgs<Row> {
   io: KtxCliIo;
 }
 
-export interface KtxJsonResultEnvelope<T> {
+interface KtxJsonResultEnvelope<T> {
   kind: string;
   data: T;
   meta?: Record<string, unknown>;
 }
 
-export function writeJsonResult<T>(io: KtxCliIo, envelope: KtxJsonResultEnvelope<T>): void {
+function writeJsonResult<T>(io: KtxCliIo, envelope: KtxJsonResultEnvelope<T>): void {
   io.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
 }
 

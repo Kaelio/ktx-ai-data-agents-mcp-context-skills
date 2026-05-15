@@ -101,7 +101,7 @@ Use this to understand what data is available before querying through the semant
     // If inspecting a specific source — show the SL interface (columns, measures, joins)
     // without the raw SQL. Use `sl_read_source` to see the full YAML including SQL.
     if (sourceName) {
-      const sources = await semanticLayerService.loadAllSources(connectionId);
+      const { sources } = await semanticLayerService.loadAllSources(connectionId);
       const source = sources.find((s) => s.name === sourceName);
       if (!source) {
         return {
@@ -151,7 +151,7 @@ Use this to understand what data is available before querying through the semant
     // Load sources from all connections in parallel
     const results = await Promise.all(
       connections.map(async (conn) => {
-        const sources = await semanticLayerService.loadAllSources(conn.id);
+        const { sources } = await semanticLayerService.loadAllSources(conn.id);
         let filtered = sources;
         if (query) {
           filtered = await this.filterByQuery(conn.id, sources, query);
@@ -213,7 +213,7 @@ Use this to understand what data is available before querying through the semant
     connectionName: string,
     query?: string,
   ): Promise<ToolOutput<SlDiscoverStructured>> {
-    const sources = await semanticLayerService.loadAllSources(connectionId);
+    const { sources } = await semanticLayerService.loadAllSources(connectionId);
 
     if (sources.length === 0) {
       return {

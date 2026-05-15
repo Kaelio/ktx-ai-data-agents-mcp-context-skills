@@ -133,10 +133,15 @@ pnpm install --frozen-lockfile --prefer-offline
 echo "Rebuilding native JS dependencies..."
 pnpm run native:rebuild
 
-echo "Building KTX packages..."
-pnpm run build
+echo "Building KTX runtime artifacts..."
+# Builds every internal package (llm/context/connectors/cli) before producing
+# the wheel + npm tarball, so a separate `pnpm run build` would be redundant.
+pnpm run artifacts:build
 
 echo "Running KTX setup doctor..."
-node packages/cli/dist/bin.js status --no-input
+# Run from a temp dir so `ktx status` doesn't walk up into a parent ktx.yaml
+# (e.g. ~/ktx.yaml) and report on an unrelated project.
+KTX_CLI_BIN="$PWD/packages/cli/dist/bin.js"
+( cd "${TMPDIR:-/tmp}" && node "$KTX_CLI_BIN" status --no-input )
 
 echo "=== Setup complete ==="

@@ -10,6 +10,15 @@ export {
   assertSearchBackendCapabilities,
   assertSearchBackendConformanceCase,
 } from './backend-conformance.js';
+export { createKtxDiscoverDataService } from './discover.js';
+export type {
+  KtxDiscoverDataInput,
+  KtxDiscoverDataKind,
+  KtxDiscoverDataMatchedOn,
+  KtxDiscoverDataRef,
+  KtxDiscoverDataResponse,
+  KtxDiscoverDataServiceOptions,
+} from './discover.js';
 export { HybridSearchCore } from './hybrid-search-core.js';
 export { defaultLaneCandidatePoolLimit, normalizeSearchQuery } from './query.js';
 export {

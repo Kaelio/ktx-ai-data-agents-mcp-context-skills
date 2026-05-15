@@ -300,7 +300,7 @@ export class IngestBundleRunner {
     const blocks = await Promise.all(
       connectionIds.map(async (connectionId) => {
         try {
-          const sources = await this.deps.semanticLayerService.loadAllSources(connectionId);
+          const { sources } = await this.deps.semanticLayerService.loadAllSources(connectionId);
           const names = sources.map((source) => source.name).sort((left, right) => left.localeCompare(right));
           const body = names.length > 0 ? names.join('\n') : '(no sources yet)';
           return `## ${connectionId}\n${body}`;
@@ -329,7 +329,7 @@ export class IngestBundleRunner {
   ): Promise<boolean> {
     for (const connectionId of connectionIds) {
       try {
-        const sources = await semanticLayerService.loadAllSources(connectionId);
+        const { sources } = await semanticLayerService.loadAllSources(connectionId);
         if (sources.some((source) => semanticSourceMatchesTableRef(source, tableRef))) {
           return true;
         }
@@ -1211,7 +1211,7 @@ export class IngestBundleRunner {
         ].sort();
         for (const connectionId of touchedConnections) {
           try {
-            const allSources = await this.deps.semanticLayerService.loadAllSources(connectionId);
+            const { sources: allSources } = await this.deps.semanticLayerService.loadAllSources(connectionId);
             await this.deps.slSearchService.indexSources(connectionId, allSources);
           } catch (err) {
             this.logger.warn(

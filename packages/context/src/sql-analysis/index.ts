@@ -9,4 +9,5 @@ export type {
   SqlAnalysisLiteralSlot,
   SqlAnalysisLiteralSlotType,
   SqlAnalysisPort,
+  SqlReadOnlyValidationResult,
 } from './ports.js';

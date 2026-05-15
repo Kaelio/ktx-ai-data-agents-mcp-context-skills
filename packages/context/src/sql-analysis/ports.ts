@@ -38,10 +38,16 @@ export interface SqlAnalysisBatchResult {
   error?: string | null;
 }
 
+export interface SqlReadOnlyValidationResult {
+  ok: boolean;
+  error?: string | null;
+}
+
 export interface SqlAnalysisPort {
   analyzeForFingerprint(sql: string, dialect: SqlAnalysisDialect): Promise<SqlAnalysisFingerprintResult>;
   analyzeBatch(
     items: SqlAnalysisBatchItem[],
     dialect: SqlAnalysisDialect,
   ): Promise<Map<string, SqlAnalysisBatchResult>>;
+  validateReadOnly(sql: string, dialect: SqlAnalysisDialect): Promise<SqlReadOnlyValidationResult>;
 }

@@ -1,10 +1,10 @@
 import type { KtxFileStorePort } from '../../../core/index.js';
 import type { SlConnectionCatalogPort } from '../../../sl/index.js';
+import { WarehouseCatalogService } from '../../../scan/warehouse-catalog.js';
 import type { BaseTool, ToolContext } from '../../../tools/index.js';
 import { DiscoverDataTool } from './discover-data.tool.js';
 import { EntityDetailsTool } from './entity-details.tool.js';
 import { SqlExecutionTool } from './sql-execution.tool.js';
-import { WarehouseCatalogService } from './warehouse-catalog.service.js';
 
 export function createWarehouseVerificationTools(deps: {
   connections: SlConnectionCatalogPort;

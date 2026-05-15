@@ -12,7 +12,7 @@ A MetricFlow `semantic_model` maps to an SL source; MetricFlow `measures` map to
 
 | MetricFlow | KTX form | Notes |
 |---|---|---|
-| `semantic_model: X { model: ref('t') }` with measures + dimensions | **Overlay** at `<connId>/X.yaml` with `measures`, `columns` (computed), `joins` | The `model:` ref resolves to a manifest table. |
+| `semantic_model: X { model: ref('t') }` with measures + dimensions | **Overlay** at `<connId>/X.yaml` with `measures`, computed-only `columns`, `column_overrides`, `joins` | The `model:` ref resolves to a manifest table. |
 | `semantic_model: X { model: source('s','t') }` | **Overlay** at `<connId>/X.yaml` over table `t`. | Same shape; `source()` still resolves to a physical table. |
 | `semantic_model: X { model: <literal> }` with no manifest entry | **Standalone** with explicit `sql:`, `grain:`, `columns:` | Happens when the dbt manifest isn't available. |
 | `semantic_model: Y { extends: X }` | **Merge** Y's measures/dimensions/entities into X's overlay, or write a single overlay named for the most-derived child (Y) containing both X's and Y's primitives | Do not emit a second overlay for X - flatten. |
@@ -42,16 +42,16 @@ Before writing a wiki page or SL source on any topic:
 Before emitting any `schema.table` or `schema.table.column` into a wiki body,
 SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 
-2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
+2. `entity_details({connectionId, targets: [{display: "<identifier>"}]})` -
    confirm the identifier resolves; inspect native types, FK/PK, and
    sampleValues.
 3. For literal values from the source, such as status codes or plan tiers,
    check whether they appear in `entity_details` sampleValues for the relevant
    column. If sampleValues is short or the sample may have missed real values,
-   run a `sql_execution` probe with the same warehouse connection name:
-   `sql_execution({connectionName, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
+   run a `sql_execution` probe with the same warehouse connection id:
+   `sql_execution({connectionId, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
 4. If the candidate identifier still does not resolve, do one of:
-   - Use `sql_execution({connectionName, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
+   - Use `sql_execution({connectionId, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
      If it errors, the identifier is fictional.
    - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
      citing the exact raw path that mentioned it.
@@ -82,9 +82,9 @@ The `model:` field on a semantic_model is a string like `ref('table_name')`, `so
 
 If `sl_discover` errors because no such table exists, use `discover_data` and
 `entity_details` to find the warehouse target. If a SQL probe is still needed,
-call `sql_execution` with the same warehouse connection name, for example:
-`sql_execution({connectionName: "warehouse", sql: "SELECT 1 FROM analytics.orders LIMIT 0"})`.
-**Never invent column names** - every column in `columns:`, `grain:`, and
+call `sql_execution` with the same warehouse connection id, for example:
+`sql_execution({connectionId: "warehouse", sql: "SELECT 1 FROM analytics.orders LIMIT 0"})`.
+**Never invent column names** - every column in computed `columns:`, `column_overrides:`, `grain:`, and
 `sql:` must be sourced from raw files, `entity_details`, or a successful SQL
 probe.
 

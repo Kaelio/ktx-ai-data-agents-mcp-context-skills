@@ -1,59 +1,167 @@
 ---
 title: Serving Agents
-description: Expose your context to Claude Code, Cursor, Codex, and other coding agents.
+description: Expose KTX context to Claude Code, Codex, Cursor, OpenCode, and custom agents.
 ---
 
-Once you've built and refined your context, expose it to coding agents through
-the public KTX CLI. Claude Code, Cursor, Codex, OpenCode, and custom agent
-workflows can call the same commands you use at a terminal.
+KTX serves agents through the public CLI and project-local instruction files.
+Agents do not need a separate server. They read the generated rules, call KTX
+commands, inspect local context files, and use JSON output when they need
+structured results.
 
-## CLI Commands
+## Recommended setup
 
-KTX public commands support JSON output for the context reads that agents use
-most often. Use `--project-dir` when the agent is not already running inside the
-KTX project directory.
-
-### Available commands
+Run the agent install step from a KTX project:
 
 ```bash
-# Check setup and context readiness
+ktx setup --agents
+```
+
+Or install a specific target:
+
+```bash
+ktx setup --agents --target codex
+```
+
+Supported targets:
+
+| Target | Generated project file |
+|--------|------------------------|
+| Claude Code | `.claude/skills/ktx/SKILL.md` |
+| Codex | `.agents/skills/ktx/SKILL.md` |
+| Cursor | `.cursor/rules/ktx.mdc` |
+| OpenCode | `.opencode/commands/ktx.md` |
+| Universal `.agents` | `.agents/skills/ktx/SKILL.md` |
+
+Claude Code and Codex also support global installs:
+
+```bash
+ktx setup --agents --target claude-code --global
+ktx setup --agents --target codex --global
+```
+
+KTX records installed files in `.ktx/agents/install-manifest.json`. Rerun
+`ktx setup --agents` after moving a checkout or reinstalling the CLI so the
+generated instructions point at the current CLI path.
+
+## Agent command set
+
+All supported agent clients use the same command surface. Use `--project-dir`
+when the agent is running outside the KTX project directory.
+
+### Readiness
+
+```bash
 ktx status --json
 ```
 
-**Semantic layer:**
+Agents should run this before relying on context. It reports project, LLM,
+embedding, database, context-source, context-build, and agent-integration
+readiness.
+
+### Semantic layer discovery
 
 ```bash
-# List sources
 ktx sl list --json
-ktx sl list --json --connection-id my-postgres
-ktx sl search "revenue" --json
+ktx sl list --connection-id warehouse --json
+ktx sl search "revenue" --json --limit 10
+```
 
-# Run a query from a JSON file
-ktx sl query --json \
-  --connection-id my-postgres \
-  --query-file query.json \
+Agents use these commands to discover source names, connection ids, measures,
+dimensions, and likely files to inspect.
+
+### Semantic-layer validation and queries
+
+```bash
+ktx sl validate orders --connection-id warehouse
+```
+
+Compile SQL before executing:
+
+```bash
+ktx sl query \
+  --connection-id warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.created_date \
+  --format sql
+```
+
+Execute only when the task calls for live data:
+
+```bash
+ktx sl query \
+  --connection-id warehouse \
+  --measure orders.total_revenue \
+  --dimension orders.status \
   --execute \
   --max-rows 100
 ```
 
-**Wiki:**
+For complex calls, agents can write a JSON query object and pass it with
+`--query-file`.
+
+### Wiki context
 
 ```bash
-# Search wiki pages
+ktx wiki list --json
 ktx wiki search "revenue recognition" --json --limit 10
 ```
 
-## Setting Up Your Agent
+Agents should search wiki context when a question depends on business
+definitions, metric caveats, process rules, or terms that are not obvious from
+schema names.
 
-The fastest way to connect an agent is through the setup wizard:
+### Context refresh
+
+Agents can refresh context when the user asks them to:
 
 ```bash
-ktx setup
+ktx ingest warehouse --fast
+ktx ingest --all
+ktx ingest text docs/revenue-notes.md --connection-id warehouse
 ```
 
-The agents step auto-detects installed tools and generates the right
-configuration. For manual setup or per-tool details, see the
-[Agent Clients](/docs/integrations/agent-clients) integration page.
+Use `--deep` only when LLM and embedding setup is ready and the user expects an
+AI-enriched refresh.
 
-After configuration, the agent can immediately call KTX commands to list
-sources, search wiki pages, and query your semantic layer.
+## Good agent behavior
+
+Agents should:
+
+- Run `ktx status --json` before using KTX context.
+- Use `ktx sl search` and `ktx wiki search` before writing SQL from memory.
+- Inspect the relevant YAML or Markdown files after search returns candidates.
+- Compile SQL with `ktx sl query --format sql` before executing.
+- Use `--max-rows` whenever executing a live query.
+- Validate edited semantic sources with `ktx sl validate`.
+- Keep generated context changes reviewable in git.
+
+Agents should not assume a background server, ORPC route, frontend app, or
+external migration system exists. KTX is a local context layer with a CLI and
+plain project files.
+
+## Manual setup
+
+Manual setup is useful for custom agents that can read project-local
+instructions but are not yet a named target.
+
+1. Install the universal target:
+
+   ```bash
+   ktx setup --agents --target universal
+   ```
+
+2. Configure the agent to read `.agents/skills/ktx/SKILL.md`.
+3. Open the agent in the KTX project directory.
+4. Ask it to run `ktx status --json` and summarize readiness.
+
+For per-client notes, see [Agent Clients](/docs/integrations/agent-clients).
+
+## Troubleshooting
+
+| Symptom | Likely cause | Recovery |
+|---------|--------------|----------|
+| Agent says KTX is unavailable | Agent did not load the generated instruction file | Rerun `ktx setup --agents --target <target>` and restart the agent session |
+| Agent command cannot find the project | Agent is running outside the KTX directory | Add `--project-dir <path>` or open the agent in the project root |
+| Generated rules point at a missing CLI path | CLI was moved, rebuilt, or reinstalled | Rerun `ktx setup --agents` |
+| Agent cannot find a metric | Context is missing or stale | Run `ktx sl search`, inspect source YAML, then refresh with `ktx ingest` if needed |
+| Agent query returns too many rows | The command executed without a result cap | Require `--max-rows` for executed queries |

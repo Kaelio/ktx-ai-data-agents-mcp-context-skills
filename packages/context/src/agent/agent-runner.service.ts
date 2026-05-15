@@ -1,4 +1,4 @@
-import { KtxMessageBuilder, type KtxLlmProvider, type KtxModelRole } from '@ktx/llm';
+import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider, type KtxModelRole } from '@ktx/llm';
 import { generateText, stepCountIs, type TelemetrySettings, type Tool } from 'ai';
 import { noopLogger, type KtxLogger } from '../core/index.js';
 import { summarizeKtxLlmDebugRequest, type KtxLlmDebugRequestRecorder } from '../llm/index.js';
@@ -36,14 +36,6 @@ export interface AgentRunnerServiceDeps {
   logger?: KtxLogger;
 }
 
-function splitSystemPromptMessages(messages: ReturnType<KtxMessageBuilder['wrapSimple']>['messages']) {
-  const systemMessages = messages.filter((message) => message.role === 'system');
-  return {
-    system: systemMessages.length === 0 ? undefined : systemMessages.length === 1 ? systemMessages[0] : systemMessages,
-    messages: messages.filter((message) => message.role !== 'system'),
-  };
-}
-
 export class AgentRunnerService {
   private readonly logger: KtxLogger;
 
@@ -62,7 +54,7 @@ export class AgentRunnerService {
         tools: params.toolSet,
         model,
       });
-      const promptMessages = splitSystemPromptMessages(built.messages);
+      const promptMessages = splitKtxSystemMessages(built.messages);
 
       await this.deps.debugRequestRecorder?.record(
         summarizeKtxLlmDebugRequest({

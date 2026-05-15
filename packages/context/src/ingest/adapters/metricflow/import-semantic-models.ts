@@ -71,7 +71,7 @@ export async function importMetricflowSemanticModels(
   let crossModelSourcesCreated = 0;
 
   const preexistingSourceNames = new Set(
-    (await semanticLayerService.loadAllSources(input.connectionId)).map((source) => source.name),
+    (await semanticLayerService.loadAllSources(input.connectionId)).sources.map((source) => source.name),
   );
   const modelContexts: MetricflowSemanticModelImportContext[] = [];
   const sourceNameByModelRef = new Map<string, string>();

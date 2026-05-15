@@ -8,7 +8,7 @@ function makeTool(overrides: Partial<Record<string, any>> = {}) {
     listManifestSourceNames: vi.fn().mockResolvedValue(['ACCOUNTS', 'ORDERS']),
     isManifestBacked: vi.fn().mockResolvedValue(false),
     loadSource: vi.fn().mockResolvedValue(null),
-    loadAllSources: vi.fn().mockResolvedValue([]),
+    loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
     validateWithProposedSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }),
     writeSource: vi.fn().mockResolvedValue({ commitHash: 'c1' }),
     deleteSource: vi.fn().mockResolvedValue(undefined),
@@ -59,7 +59,7 @@ describe('SlWriteSourceTool — session gating', () => {
       actions: [],
       semanticLayerService: {
         loadSource: vi.fn().mockResolvedValue(null),
-        loadAllSources: vi.fn().mockResolvedValue([]),
+        loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
         validateWithProposedSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }),
         writeSource: vi.fn().mockResolvedValue({ commitHash: 'c1' }),
         deleteSource: vi.fn().mockResolvedValue(undefined),
@@ -213,7 +213,7 @@ describe('SlWriteSourceTool — session gating', () => {
       ingest: { runId: 'run-1', jobId: 'job-1', syncId: 'sync-1', sourceKey: 'metabase' },
       semanticLayerService: {
         loadSource: vi.fn().mockResolvedValue(null),
-        loadAllSources: vi.fn().mockResolvedValue([]),
+        loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
         validateWithProposedSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }),
         writeSource: vi.fn().mockResolvedValue({ commitHash: 'c1' }),
         deleteSource: vi.fn().mockResolvedValue(undefined),

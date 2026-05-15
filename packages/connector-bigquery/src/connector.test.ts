@@ -100,7 +100,7 @@ const connection = {
   dataset_id: 'analytics',
   credentials_json: JSON.stringify({ project_id: 'project-1', client_email: 'reader@example.test' }),
   location: 'US',
-};
+} as const;
 
 describe('KtxBigQueryScanConnector', () => {
   it('resolves configuration safely', () => {

@@ -280,6 +280,30 @@ def test_sql_parse_table_identifier_endpoint() -> None:
     assert body["results"]["template"]["reason"] == "looker_template_unresolved"
 
 
+def test_sql_validate_read_only_endpoint() -> None:
+    client = TestClient(create_app())
+
+    ok_response = client.post(
+        "/sql/validate-read-only",
+        json={"dialect": "postgres", "sql": "select * from public.orders"},
+    )
+    bad_response = client.post(
+        "/sql/validate-read-only",
+        json={
+            "dialect": "postgres",
+            "sql": "with x as (insert into audit.events values (1) returning *) select * from x",
+        },
+    )
+
+    assert ok_response.status_code == 200
+    assert ok_response.json() == {"ok": True, "error": None}
+    assert bad_response.status_code == 200
+    assert bad_response.json() == {
+        "ok": False,
+        "error": "SQL contains read/write operation: Insert",
+    }
+
+
 def test_sql_analyze_batch_endpoint_returns_per_item_results() -> None:
     client = TestClient(create_app())
 

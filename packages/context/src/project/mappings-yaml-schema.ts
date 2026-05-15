@@ -1,5 +1,4 @@
 import * as z from 'zod';
-import type { KtxProjectConnectionConfig } from './config.js';
 
 const metabaseSyncModeSchema = z.enum(['ALL', 'ONLY', 'EXCEPT']);
 const positiveIntegerValueSchema = z.number().int().positive();
@@ -11,24 +10,48 @@ const metabaseSelectionsSchema = z
     items: z.array(positiveIntegerValueSchema).default([]),
   });
 
-const metabaseMappingsSchema = z
+export const metabaseMappingsSchema = z
   .object({
-    databaseMappings: z.record(z.string(), stringTargetSchema).default({}),
-    syncEnabled: z.record(z.string(), z.boolean()).default({}),
-    syncMode: metabaseSyncModeSchema.default('ALL'),
-    selections: metabaseSelectionsSchema.default({ collections: [], items: [] }),
-    defaultTagNames: z.array(z.string().min(1)).default([]),
-  });
+    databaseMappings: z
+      .record(z.string(), stringTargetSchema)
+      .default({})
+      .describe('Map of Metabase database ID (positive integer string) to KTX connection ID. Use null to explicitly unmap.'),
+    syncEnabled: z
+      .record(z.string(), z.boolean())
+      .default({})
+      .describe('Per-Metabase-database sync toggle, keyed by Metabase database ID string.'),
+    syncMode: metabaseSyncModeSchema
+      .default('ALL')
+      .describe('Sync scope: ALL ingests every mapped DB; ONLY restricts to syncEnabled=true; EXCEPT excludes syncEnabled=true.'),
+    selections: metabaseSelectionsSchema
+      .default({ collections: [], items: [] })
+      .describe('Optional Metabase collection and item IDs to scope ingest.'),
+    defaultTagNames: z
+      .array(z.string().min(1))
+      .default([])
+      .describe('Default tag names applied to ingested Metabase artifacts.'),
+  })
+  .describe('Metabase database-to-warehouse mapping and sync configuration.');
 
-const lookerMappingsSchema = z
+export const lookerMappingsSchema = z
   .object({
-    connectionMappings: z.record(z.string().min(1), stringTargetSchema).default({}),
-  });
+    connectionMappings: z
+      .record(z.string().min(1), stringTargetSchema)
+      .default({})
+      .describe('Map of Looker connection name to KTX connection ID. Use null to explicitly unmap.'),
+  })
+  .describe('Looker connection-to-warehouse mapping configuration.');
 
-const lookmlMappingsSchema = z
+export const lookmlMappingsSchema = z
   .object({
-    expectedLookerConnectionName: z.string().min(1).nullable().default(null),
-  });
+    expectedLookerConnectionName: z
+      .string()
+      .min(1)
+      .nullable()
+      .default(null)
+      .describe('Looker connection name that LookML models must declare; mismatches block sl_write_source at ingest time.'),
+  })
+  .describe('LookML connection-name expectation for ingest gating.');
 
 export type MetabaseMappingBootstrap = {
   adapter: 'metabase';
@@ -54,6 +77,11 @@ export type LookmlMappingBootstrap = {
 
 export type ConnectionMappingBootstrap = MetabaseMappingBootstrap | LookerMappingBootstrap | LookmlMappingBootstrap;
 
+type MappingConnectionInput = Record<string, unknown> & {
+  driver?: unknown;
+  mappings?: unknown;
+};
+
 function recordValue(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
@@ -66,13 +94,13 @@ function assertPositiveIntegerKeys(field: string, record: Record<string, unknown
   }
 }
 
-function driverOf(connection: KtxProjectConnectionConfig): string {
+function driverOf(connection: MappingConnectionInput): string {
   return String(connection.driver ?? '').toLowerCase();
 }
 
 export function parseMetabaseMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): MetabaseMappingBootstrap {
   const rawMappings = recordValue(connection.mappings);
   assertPositiveIntegerKeys('databaseMappings', recordValue(rawMappings.databaseMappings));
@@ -91,7 +119,7 @@ export function parseMetabaseMappingBootstrap(
 
 export function parseLookerMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): LookerMappingBootstrap {
   const parsed = lookerMappingsSchema.parse(recordValue(connection.mappings));
   return {
@@ -103,7 +131,7 @@ export function parseLookerMappingBootstrap(
 
 export function parseLookmlMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): LookmlMappingBootstrap {
   const parsed = lookmlMappingsSchema.parse(recordValue(connection.mappings));
   return {
@@ -115,7 +143,7 @@ export function parseLookmlMappingBootstrap(
 
 export function parseConnectionMappingBootstrap(
   connectionId: string,
-  connection: KtxProjectConnectionConfig,
+  connection: MappingConnectionInput,
 ): ConnectionMappingBootstrap | null {
   if (!connection.mappings || typeof connection.mappings !== 'object' || Array.isArray(connection.mappings)) {
     return null;

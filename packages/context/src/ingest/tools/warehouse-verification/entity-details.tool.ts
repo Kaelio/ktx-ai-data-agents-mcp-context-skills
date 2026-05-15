@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { KtxTableRef } from '../../../scan/types.js';
+import { WarehouseCatalogService, type TableDetail } from '../../../scan/warehouse-catalog.js';
 import { BaseTool, type ToolContext, type ToolOutput } from '../../../tools/index.js';
-import { WarehouseCatalogService, type TableDetail } from './warehouse-catalog.service.js';
 
 const targetSchema = z.union([
   z.object({ display: z.string().min(1) }),
@@ -14,9 +14,9 @@ const targetSchema = z.union([
 ]);
 
 const entityDetailsInputSchema = z.object({
-  connectionName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
+  connectionId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
   targets: z.array(targetSchema).min(1).max(50),
-});
+}).strict();
 
 type EntityDetailsInput = z.infer<typeof entityDetailsInputSchema>;
 type EntityDetailsTarget = EntityDetailsInput['targets'][number];
@@ -47,14 +47,14 @@ function appendMissingTargetMarkdown(parts: string[], target: EntityDetailsTarge
 
 async function resolveTarget(
   catalog: WarehouseCatalogService,
-  connectionName: string,
+  connectionId: string,
   target: EntityDetailsTarget,
 ): Promise<{ resolved: (KtxTableRef & { column?: string }) | null; candidates: KtxTableRef[] }> {
   if ('display' in target) {
-    return catalog.resolveDisplayTarget(connectionName, target.display);
+    return catalog.resolveDisplayTarget(connectionId, target.display);
   }
 
-  const candidateResolution = await catalog.resolveDisplayTarget(connectionName, targetLabel(target));
+  const candidateResolution = await catalog.resolveDisplayTarget(connectionId, targetLabel(target));
   return {
     resolved: {
       catalog: target.catalog,
@@ -107,18 +107,18 @@ export class EntityDetailsTool extends BaseTool<typeof entityDetailsInputSchema>
 
   async call(input: EntityDetailsInput, context: ToolContext): Promise<ToolOutput<EntityDetailsStructured>> {
     const allowed = allowedConnectionNames(context);
-    if (allowed && !allowed.has(input.connectionName)) {
+    if (allowed && !allowed.has(input.connectionId)) {
       return {
-        markdown: `Connection "${input.connectionName}" is not available to this ingest stage.`,
+        markdown: `Connection "${input.connectionId}" is not available to this ingest stage.`,
         structured: { resolved: [], missing: [], scanAvailable: false },
       };
     }
 
     const catalog = this.catalogFactory(context);
-    const scanAvailable = await catalog.hasScan(input.connectionName);
+    const scanAvailable = await catalog.hasScan(input.connectionId);
     if (!scanAvailable) {
       return {
-        markdown: `No live-database scan available for connection "${input.connectionName}"; run \`ktx scan\` first.`,
+        markdown: `No live-database scan available for connection "${input.connectionId}"; run \`ktx scan\` first.`,
         structured: { resolved: [], missing: [], scanAvailable: false },
       };
     }
@@ -128,13 +128,13 @@ export class EntityDetailsTool extends BaseTool<typeof entityDetailsInputSchema>
     const missing: EntityDetailsStructured['missing'] = [];
 
     for (const target of input.targets) {
-      const resolution = await resolveTarget(catalog, input.connectionName, target);
+      const resolution = await resolveTarget(catalog, input.connectionId, target);
       if (!resolution.resolved) {
         missing.push({ target, candidates: resolution.candidates });
         appendMissingTargetMarkdown(parts, target, resolution.candidates);
         continue;
       }
-      const detail = await catalog.getTable({ connectionName: input.connectionName, ...resolution.resolved });
+      const detail = await catalog.getTable({ connectionId: input.connectionId, ...resolution.resolved });
       if (!detail) {
         missing.push({ target, candidates: resolution.candidates });
         appendMissingTargetMarkdown(parts, target, resolution.candidates);

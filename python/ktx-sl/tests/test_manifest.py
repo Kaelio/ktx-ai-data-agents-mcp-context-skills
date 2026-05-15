@@ -205,12 +205,15 @@ class TestValidateOverlay:
             "descriptions": {"user": "Revenue-bearing orders"},
             "grain": ["id"],
             "measures": [{"name": "revenue", "expr": "sum(total)"}],
+            "column_overrides": [
+                {"name": "status", "descriptions": {"user": "Order lifecycle status"}}
+            ],
             "columns": [
                 {"name": "is_high_value", "expr": "total > 1000", "type": "boolean"}
             ],
             "exclude_columns": ["status"],
         }
-        errors = validate_overlay(data)
+        errors = validate_overlay(data, {"status", "total"})
         assert errors == []
 
     def test_validate_overlay_rejects_table(self):
@@ -225,14 +228,13 @@ class TestValidateOverlay:
         assert len(errors) == 1
         assert "sql" in errors[0].lower()
 
-    def test_validate_overlay_rejects_type_without_expr(self):
+    def test_validate_overlay_rejects_column_without_expr(self):
         data = {
             "name": "orders",
             "columns": [{"name": "status", "type": "string"}],
         }
         errors = validate_overlay(data)
         assert len(errors) == 1
-        assert "type" in errors[0].lower()
         assert "expr" in errors[0].lower()
 
     def test_validate_overlay_allows_type_with_expr(self):
@@ -242,6 +244,33 @@ class TestValidateOverlay:
         }
         errors = validate_overlay(data)
         assert errors == []
+
+    def test_validate_overlay_rejects_column_override_structural_fields(self):
+        data = {
+            "name": "orders",
+            "column_overrides": [
+                {
+                    "name": "status",
+                    "description": "Status",
+                    "type": "string",
+                    "expr": "status",
+                }
+            ],
+        }
+        errors = validate_overlay(data, {"status"})
+        assert len(errors) == 3
+        assert "descriptions" in errors[0]
+        assert "type" in errors[1]
+        assert "expr" in errors[2]
+
+    def test_validate_overlay_rejects_unknown_column_override(self):
+        data = {
+            "name": "orders",
+            "column_overrides": [{"name": "missing", "descriptions": {"user": "Nope"}}],
+        }
+        errors = validate_overlay(data, {"status"})
+        assert len(errors) == 1
+        assert "does not match" in errors[0]
 
 
 # ── Two-Tier Loading Tests ─────────────────────────────────────────
@@ -501,6 +530,77 @@ class TestTwoTierLoading:
         hv = next(c for c in sources["orders"].columns if c.name == "is_high_value")
         assert hv.expr == "total > 1000"
         assert hv.type == "boolean"
+
+    def test_overlay_column_overrides_patch_manifest_columns(self, tmp_path: Path):
+        schema_dir = tmp_path / "_schema"
+        _write_yaml(schema_dir / "public.yaml", _manifest_tables())
+
+        overlay = {
+            "name": "orders",
+            "column_overrides": [
+                {"name": "status", "descriptions": {"user": "Order lifecycle status"}}
+            ],
+        }
+        _write_yaml(tmp_path / "orders.yaml", overlay)
+        _write_yaml(tmp_path / "customers.yaml", {"name": "customers"})
+
+        loader = SourceLoader(tmp_path)
+        sources = loader.load_all()
+
+        status = next(c for c in sources["orders"].columns if c.name == "status")
+        assert status.type == "string"
+        assert status.description == "Order lifecycle status"
+        assert status.descriptions == {"user": "Order lifecycle status"}
+
+    def test_overlay_rejects_unknown_column_override(self, tmp_path: Path):
+        schema_dir = tmp_path / "_schema"
+        _write_yaml(schema_dir / "public.yaml", _manifest_tables())
+
+        overlay = {
+            "name": "orders",
+            "column_overrides": [
+                {"name": "missing", "descriptions": {"user": "No such column"}}
+            ],
+        }
+        _write_yaml(tmp_path / "orders.yaml", overlay)
+        _write_yaml(tmp_path / "customers.yaml", {"name": "customers"})
+
+        loader = SourceLoader(tmp_path)
+        with pytest.raises(ValueError, match="Column override 'missing'"):
+            loader.load_all()
+
+    def test_overlay_rejects_computed_column_name_collision(self, tmp_path: Path):
+        schema_dir = tmp_path / "_schema"
+        _write_yaml(schema_dir / "public.yaml", _manifest_tables())
+
+        overlay = {
+            "name": "orders",
+            "columns": [{"name": "status", "type": "string", "expr": "status"}],
+        }
+        _write_yaml(tmp_path / "orders.yaml", overlay)
+        _write_yaml(tmp_path / "customers.yaml", {"name": "customers"})
+
+        loader = SourceLoader(tmp_path)
+        with pytest.raises(ValueError, match="move it to 'column_overrides:'"):
+            loader.load_all()
+
+    def test_overlay_rejects_exclude_override_conflict(self, tmp_path: Path):
+        schema_dir = tmp_path / "_schema"
+        _write_yaml(schema_dir / "public.yaml", _manifest_tables())
+
+        overlay = {
+            "name": "orders",
+            "exclude_columns": ["status"],
+            "column_overrides": [
+                {"name": "status", "descriptions": {"user": "Hidden status"}}
+            ],
+        }
+        _write_yaml(tmp_path / "orders.yaml", overlay)
+        _write_yaml(tmp_path / "customers.yaml", {"name": "customers"})
+
+        loader = SourceLoader(tmp_path)
+        with pytest.raises(ValueError, match="conflict with exclude_columns"):
+            loader.load_all()
 
     def test_overlay_measures_set(self, tmp_path: Path):
         schema_dir = tmp_path / "_schema"

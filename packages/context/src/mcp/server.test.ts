@@ -6,11 +6,16 @@ import { createLocalProjectMemoryCapture } from '../memory/index.js';
 import { initKtxProject } from '../project/index.js';
 import { createKtxMcpServer } from './server.js';
 import type {
+  KtxDiscoverDataMcpPort,
+  KtxDictionarySearchMcpPort,
+  KtxEntityDetailsMcpPort,
   KtxIngestMcpPort,
   KtxKnowledgeMcpPort,
   KtxMcpContextPorts,
   KtxScanMcpPort,
   KtxSemanticLayerMcpPort,
+  KtxSqlExecutionMcpPort,
+  KtxSqlExecutionResponse,
   MemoryCapturePort,
 } from './types.js';
 
@@ -61,6 +66,242 @@ describe('createKtxMcpServer', () => {
       structuredContent: {
         connections: [{ id: 'warehouse', name: 'warehouse', connectionType: 'postgres' }],
       },
+    });
+  });
+
+  it('registers parser-gated sql_execution when the host provides a SQL execution port', async () => {
+    const fake = makeFakeServer();
+    const response: KtxSqlExecutionResponse = {
+      headers: ['status', 'count'],
+      headerTypes: ['text', 'bigint'],
+      rows: [['paid', 42]],
+      rowCount: 1,
+    };
+    const sqlExecution: KtxSqlExecutionMcpPort = {
+      execute: vi.fn<KtxSqlExecutionMcpPort['execute']>().mockResolvedValue(response),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: {
+        sqlExecution,
+      },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['sql_execution']);
+    await expect(
+      getTool(fake.tools, 'sql_execution').handler({
+        connectionId: 'warehouse',
+        sql: 'select status, count(*) from public.orders group by status',
+        maxRows: 50,
+      }),
+    ).resolves.toEqual({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              headers: ['status', 'count'],
+              headerTypes: ['text', 'bigint'],
+              rows: [['paid', 42]],
+              rowCount: 1,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+      structuredContent: {
+        headers: ['status', 'count'],
+        headerTypes: ['text', 'bigint'],
+        rows: [['paid', 42]],
+        rowCount: 1,
+      },
+    });
+    expect(sqlExecution.execute).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      sql: 'select status, count(*) from public.orders group by status',
+      maxRows: 50,
+    });
+  });
+
+  it('registers entity_details when the host provides an entity-details port', async () => {
+    const fake = makeFakeServer();
+    const entityDetails: KtxEntityDetailsMcpPort = {
+      read: vi.fn<KtxEntityDetailsMcpPort['read']>().mockResolvedValue({
+        results: [
+          {
+            ok: true,
+            connectionId: 'warehouse',
+            tableRef: { catalog: null, db: 'public', name: 'orders' },
+            display: 'public.orders',
+            kind: 'table',
+            comment: 'Customer orders',
+            estimatedRows: 12,
+            columns: [
+              {
+                name: 'id',
+                nativeType: 'integer',
+                normalizedType: 'integer',
+                dimensionType: 'number',
+                nullable: false,
+                primaryKey: true,
+                comment: null,
+              },
+            ],
+            foreignKeys: [],
+            snapshot: {
+              syncId: 'sync-1',
+              extractedAt: '2026-05-14T09:00:00.000Z',
+              scanRunId: 'scan-1',
+            },
+          },
+        ],
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { entityDetails },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['entity_details']);
+    await expect(
+      getTool(fake.tools, 'entity_details').handler({
+        connectionId: 'warehouse',
+        entities: [{ table: 'public.orders', columns: ['id'] }],
+      }),
+    ).resolves.toMatchObject({
+      structuredContent: {
+        results: [
+          {
+            ok: true,
+            connectionId: 'warehouse',
+            display: 'public.orders',
+            columns: [{ name: 'id' }],
+          },
+        ],
+      },
+    });
+    expect(entityDetails.read).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      entities: [{ table: 'public.orders', columns: ['id'] }],
+    });
+  });
+
+  it('registers dictionary_search when the host provides a dictionary-search port', async () => {
+    const fake = makeFakeServer();
+    const dictionarySearch: KtxDictionarySearchMcpPort = {
+      search: vi.fn<KtxDictionarySearchMcpPort['search']>().mockResolvedValue({
+        searched: [
+          {
+            connectionId: 'warehouse',
+            coverage: {
+              sampledRows: null,
+              valuesPerColumn: null,
+              profiledColumns: 1,
+              syncId: 'sync-1',
+              profiledAt: null,
+            },
+            status: 'ready',
+          },
+        ],
+        results: [
+          {
+            value: 'paid',
+            matches: [
+              {
+                connectionId: 'warehouse',
+                sourceName: 'orders',
+                columnName: 'status',
+                matchedValue: 'paid',
+                cardinality: 3,
+              },
+            ],
+            misses: [],
+          },
+        ],
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { dictionarySearch },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['dictionary_search']);
+    await expect(
+      getTool(fake.tools, 'dictionary_search').handler({
+        connectionId: 'warehouse',
+        values: ['paid'],
+      }),
+    ).resolves.toMatchObject({
+      structuredContent: {
+        searched: [{ connectionId: 'warehouse', status: 'ready' }],
+        results: [
+          {
+            value: 'paid',
+            matches: [{ connectionId: 'warehouse', sourceName: 'orders', columnName: 'status' }],
+            misses: [],
+          },
+        ],
+      },
+    });
+    expect(dictionarySearch.search).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      values: ['paid'],
+    });
+  });
+
+  it('registers discover_data when the host provides a discover port', async () => {
+    const fake = makeFakeServer();
+    const discover: KtxDiscoverDataMcpPort = {
+      search: vi.fn<KtxDiscoverDataMcpPort['search']>().mockResolvedValue([
+        {
+          kind: 'table',
+          id: 'public.orders',
+          score: 1,
+          summary: 'Orders table',
+          snippet: 'id, status',
+          matchedOn: 'name',
+          connectionId: 'warehouse',
+          tableRef: { catalog: null, db: 'public', name: 'orders' },
+        },
+      ]),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { discover },
+    });
+
+    expect(fake.tools.map((tool) => tool.name)).toEqual(['discover_data']);
+    await expect(
+      getTool(fake.tools, 'discover_data').handler({
+        query: 'orders',
+        connectionId: 'warehouse',
+        kinds: ['table'],
+        limit: 5,
+      }),
+    ).resolves.toMatchObject({
+      structuredContent: [
+        {
+          kind: 'table',
+          id: 'public.orders',
+          connectionId: 'warehouse',
+          tableRef: { catalog: null, db: 'public', name: 'orders' },
+        },
+      ],
+    });
+    expect(discover.search).toHaveBeenCalledWith({
+      query: 'orders',
+      connectionId: 'warehouse',
+      kinds: ['table'],
+      limit: 5,
     });
   });
 

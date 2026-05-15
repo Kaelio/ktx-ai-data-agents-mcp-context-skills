@@ -1,7 +1,11 @@
 import type { IngestReportSnapshot, MemoryFlowReplayInput, TableUsageOutput } from '../ingest/index.js';
 import type { MemoryCaptureService } from '../memory/index.js';
+import type { KtxEntityDetailsInput, KtxEntityDetailsResponse } from '../scan/entity-details.js';
 import type { KtxScanMode, KtxScanReport } from '../scan/index.js';
+import type { KtxDiscoverDataInput, KtxDiscoverDataResponse } from '../search/index.js';
 import type {
+  KtxDictionarySearchInput,
+  KtxDictionarySearchResponse,
   SemanticLayerQueryInput,
   SlDictionaryMatch,
   SlSearchLaneSummary,
@@ -312,10 +316,37 @@ export interface KtxScanMcpPort {
   readArtifact?(input: { runId: string; path: string }): Promise<KtxScanArtifactReadResponse | null>;
 }
 
+export interface KtxEntityDetailsMcpPort {
+  read(input: KtxEntityDetailsInput): Promise<KtxEntityDetailsResponse>;
+}
+
+export interface KtxDictionarySearchMcpPort {
+  search(input: KtxDictionarySearchInput): Promise<KtxDictionarySearchResponse>;
+}
+
+export interface KtxDiscoverDataMcpPort {
+  search(input: KtxDiscoverDataInput): Promise<KtxDiscoverDataResponse>;
+}
+
+export interface KtxSqlExecutionResponse {
+  headers: string[];
+  headerTypes?: string[];
+  rows: unknown[][];
+  rowCount: number;
+}
+
+export interface KtxSqlExecutionMcpPort {
+  execute(input: { connectionId: string; sql: string; maxRows: number }): Promise<KtxSqlExecutionResponse>;
+}
+
 export interface KtxMcpContextPorts {
   connections?: KtxConnectionsMcpPort;
   knowledge?: KtxKnowledgeMcpPort;
   semanticLayer?: KtxSemanticLayerMcpPort;
+  entityDetails?: KtxEntityDetailsMcpPort;
+  dictionarySearch?: KtxDictionarySearchMcpPort;
+  discover?: KtxDiscoverDataMcpPort;
+  sqlExecution?: KtxSqlExecutionMcpPort;
   ingest?: KtxIngestMcpPort;
   scan?: KtxScanMcpPort;
 }

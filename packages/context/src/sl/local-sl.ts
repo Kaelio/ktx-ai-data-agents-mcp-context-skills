@@ -12,6 +12,7 @@ import {
   type ManifestTableEntry,
   projectManifestEntry,
   SemanticLayerService,
+  toResolvedWire,
 } from './semantic-layer.service.js';
 import type { PgliteSlSearchPrototypeOwnerOptions } from './pglite-sl-search-prototype.js';
 import { loadLatestSlDictionaryEntries } from './sl-dictionary-profile.js';
@@ -240,7 +241,12 @@ export async function loadLocalSlSourceRecords(
     if (!base) {
       continue;
     }
-    const source = composeOverlay(base.source, parsed);
+    let source: SemanticLayerSource;
+    try {
+      source = composeOverlay(base.source, parsed);
+    } catch (error) {
+      throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+    }
     sources.set(name, {
       ...summarizeSemanticSource({ connectionId, path, source }),
       yaml: sourceToYaml(source),
@@ -253,11 +259,28 @@ export async function loadLocalSlSourceRecords(
 
 export async function validateLocalSlSource(
   rawYaml: string,
-  options?: { project?: KtxLocalProject; connectionId?: string },
+  options?: { project?: KtxLocalProject; connectionId?: string; sourceName?: string },
 ): Promise<LocalSlValidationResult> {
   try {
     const parsed = parseYamlRecord(rawYaml);
     const schema = parsed.table || parsed.sql ? sourceDefinitionSchema : sourceOverlaySchema;
+    if (schema === sourceOverlaySchema && Array.isArray(parsed.columns)) {
+      const sourceName = options?.sourceName ?? (typeof parsed.name === 'string' ? parsed.name : 'source');
+      const path =
+        options?.connectionId && isSafeConnectionId(options.connectionId)
+          ? `semantic-layer/${options.connectionId}/${sourceName}.yaml`
+          : `${sourceName}.yaml`;
+      const legacyColumnPatchErrors = parsed.columns
+        .filter((column): column is Record<string, unknown> => isRecord(column))
+        .filter((column) => typeof column.name === 'string' && (!column.expr || !column.type))
+        .map(
+          (column) =>
+            `${path}: column '${column.name}' patches a manifest column but is in 'columns:' — move it to 'column_overrides:'`,
+        );
+      if (legacyColumnPatchErrors.length > 0) {
+        return { valid: false, errors: legacyColumnPatchErrors };
+      }
+    }
     const result = schema.parse(parsed);
     const errors: string[] = [];
 
@@ -266,6 +289,10 @@ export async function validateLocalSlSource(
       errors.push(
         ...(await service.validatePhysicalTableReferences(options.connectionId, [result as SemanticLayerSource])),
       );
+    }
+
+    if ('table' in result || 'sql' in result) {
+      toResolvedWire(result as SemanticLayerSource);
     }
 
     return { valid: errors.length === 0, errors };

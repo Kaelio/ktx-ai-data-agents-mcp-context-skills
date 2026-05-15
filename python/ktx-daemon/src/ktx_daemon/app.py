@@ -51,7 +51,10 @@ from ktx_daemon.source_generation import (
 from ktx_daemon.sql_analysis import (
     AnalyzeSqlBatchRequest,
     AnalyzeSqlBatchResponse,
+    ValidateReadOnlySqlRequest,
+    ValidateReadOnlySqlResponse,
     analyze_sql_batch_response,
+    validate_read_only_sql_response,
 )
 from ktx_daemon.table_identifier import (
     ParseTableIdentifierBatchRequest,
@@ -196,6 +199,19 @@ def create_app(
             raise HTTPException(
                 status_code=500,
                 detail=f"Table identifier parsing failed: {error}",
+            ) from error
+
+    @app.post("/sql/validate-read-only", response_model=ValidateReadOnlySqlResponse)
+    async def sql_validate_read_only(
+        request: ValidateReadOnlySqlRequest,
+    ) -> ValidateReadOnlySqlResponse:
+        try:
+            return validate_read_only_sql_response(request)
+        except Exception as error:
+            logger.exception("SQL read-only validation failed: %s", error)
+            raise HTTPException(
+                status_code=500,
+                detail=f"SQL read-only validation failed: {error}",
             ) from error
 
     @app.post("/sql/analyze-batch", response_model=AnalyzeSqlBatchResponse)

@@ -1,13 +1,13 @@
 import { z } from 'zod';
+import { WarehouseCatalogService, type RawSchemaHit } from '../../../scan/warehouse-catalog.js';
 import { BaseTool, type ToolContext, type ToolOutput } from '../../../tools/index.js';
-import { WarehouseCatalogService, type RawSchemaHit } from './warehouse-catalog.service.js';
 
 const discoverDataInputSchema = z.object({
   query: z.string().optional(),
-  connectionName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/).optional(),
+  connectionId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/).optional(),
   limit: z.number().int().positive().max(50).optional().default(10),
   sourceName: z.string().optional(),
-});
+}).strict();
 
 type DiscoverDataInput = z.input<typeof discoverDataInputSchema>;
 
@@ -62,16 +62,16 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
 
   async call(input: DiscoverDataInput, context: ToolContext): Promise<ToolOutput<DiscoverDataStructured>> {
     const allowed = allowedConnectionNames(context);
-    if (input.connectionName && allowed && !allowed.has(input.connectionName)) {
+    if (input.connectionId && allowed && !allowed.has(input.connectionId)) {
       return {
-        markdown: `Connection "${input.connectionName}" is not available to this ingest stage.`,
+        markdown: `Connection "${input.connectionId}" is not available to this ingest stage.`,
         structured: { wiki: null, sl: null, raw: null },
       };
     }
 
     if (input.sourceName) {
       const sl = await this.deps.slDiscoverTool.call(
-        { sourceName: input.sourceName, connectionId: input.connectionName },
+        { sourceName: input.sourceName, connectionId: input.connectionId },
         context,
       );
       return { markdown: sl.markdown, structured: { wiki: null, sl: sl.structured, raw: null } };
@@ -93,7 +93,7 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
     }
 
     const slResult = await this.deps.slDiscoverTool.call(
-      { query: query || undefined, connectionId: input.connectionName },
+      { query: query || undefined, connectionId: input.connectionId },
       context,
     );
     if (totalSources(slResult.structured) > 0) {
@@ -107,23 +107,23 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
     }
 
     const catalog = this.deps.catalogFactory(context);
-    const connections = input.connectionName ? [input.connectionName] : [...(allowed ?? [])].sort();
+    const connections = input.connectionId ? [input.connectionId] : [...(allowed ?? [])].sort();
     const rawHits: RawSchemaHit[] = [];
-    for (const connectionName of connections) {
-      rawHits.push(...(await catalog.searchByName(connectionName, query, limit)));
+    for (const connectionId of connections) {
+      rawHits.push(...(await catalog.searchByName(connectionId, query, limit)));
     }
     if (rawHits.length > 0) {
       parts.push(
         '## Raw Warehouse Schema',
-        '> use `entity_details({connectionName, targets: [{display}]})` for full DDL + sample values',
+        '> use `entity_details({connectionId, targets: [{display}]})` for full DDL + sample values',
       );
       parts.push(
         rawHits
           .slice(0, limit)
           .map(
             (hit) =>
-              `- ${hit.kind}: ${hit.display} [connectionName=${hit.connectionName}] (matched on ${hit.matchedOn}) - ` +
-              `follow up with \`entity_details({connectionName: "${hit.connectionName}", targets: [{display: "${hit.display}"}]})\``,
+              `- ${hit.kind}: ${hit.display} [connectionId=${hit.connectionId}] (matched on ${hit.matchedOn}) - ` +
+              `follow up with \`entity_details({connectionId: "${hit.connectionId}", targets: [{display: "${hit.display}"}]})\``,
           )
           .join('\n'),
       );

@@ -62,7 +62,7 @@ Checks: all join targets exist, grain is valid, no missing references.
 
     const semanticLayerService = context.session?.semanticLayerService ?? this.semanticLayerService;
 
-    const sources = await semanticLayerService.loadAllSources(connectionId);
+    const { sources } = await semanticLayerService.loadAllSources(connectionId);
     if (sources.length === 0) {
       return this.buildOutput(true, [], '(all)', {
         validationErrors: ['No sources found for this connection.'],

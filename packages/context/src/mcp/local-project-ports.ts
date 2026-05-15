@@ -18,6 +18,7 @@ import {
 import { createLocalKtxEmbeddingProviderFromConfig, KtxIngestEmbeddingPortAdapter } from '../llm/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import {
+  createKtxEntityDetailsService,
   getLocalScanReport,
   getLocalScanStatus,
   type KtxConnectionDriver,
@@ -26,8 +27,11 @@ import {
   type LocalScanMcpOptions,
   runLocalScan,
 } from '../scan/index.js';
+import { createKtxDiscoverDataService } from '../search/index.js';
+import type { SqlAnalysisDialect, SqlAnalysisPort } from '../sql-analysis/index.js';
 import {
   compileLocalSlQuery,
+  createKtxDictionarySearchService,
   type LocalSlSourceSearchResult,
   type LocalSlSourceSummary,
   listLocalSlSources,
@@ -44,6 +48,7 @@ import type {
   KtxScanArtifactReadResponse,
   KtxScanArtifactSummary,
   KtxScanArtifactType,
+  KtxSqlExecutionResponse,
 } from './types.js';
 
 const LOCAL_AUTHOR = 'ktx';
@@ -53,6 +58,7 @@ const SL_SHAPE_WARNING = 'Local stdio validation checks YAML shape only; Python 
 interface CreateLocalProjectMcpContextPortsOptions {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
+  sqlAnalysis?: SqlAnalysisPort;
   localIngest?: LocalIngestMcpOptions;
   localScan?: LocalScanMcpOptions;
   embeddingService?: KtxEmbeddingPort | null;
@@ -75,6 +81,10 @@ function dialectForDriver(driver: string | undefined): string {
     DATABRICKS: 'databricks',
   };
   return map[normalized] ?? 'postgres';
+}
+
+function sqlAnalysisDialectForDriver(driver: string | undefined): SqlAnalysisDialect {
+  return dialectForDriver(driver) as SqlAnalysisDialect;
 }
 
 function assertSafePathToken(kind: string, value: string): string {
@@ -378,6 +388,53 @@ function statusFromIngestReport(report: IngestReportSnapshot): KtxIngestStatusRe
   };
 }
 
+async function executeValidatedReadOnlySql(
+  project: KtxLocalProject,
+  options: CreateLocalProjectMcpContextPortsOptions,
+  input: { connectionId: string; sql: string; maxRows: number },
+): Promise<KtxSqlExecutionResponse> {
+  const connectionId = assertSafeConnectionId(input.connectionId);
+  const connection = project.config.connections[connectionId];
+  if (!connection) {
+    throw new Error(`Connection "${connectionId}" is not configured in ktx.yaml`);
+  }
+  if (!options.sqlAnalysis) {
+    throw new Error('sql_execution requires parser-backed SQL validation.');
+  }
+  const validation = await options.sqlAnalysis.validateReadOnly(input.sql, sqlAnalysisDialectForDriver(connection.driver));
+  if (!validation.ok) {
+    throw new Error(validation.error ?? 'SQL is not read-only.');
+  }
+  const createConnector = options.localScan?.createConnector;
+  if (!createConnector) {
+    throw new Error('sql_execution requires a local scan connector factory.');
+  }
+
+  let connector: KtxScanConnector | null = null;
+  try {
+    connector = await createConnector(connectionId);
+    if (!connector.capabilities.readOnlySql || !connector.executeReadOnly) {
+      throw new Error(`Connection "${connectionId}" does not support read-only SQL execution.`);
+    }
+    const result = await connector.executeReadOnly(
+      {
+        connectionId,
+        sql: input.sql,
+        maxRows: input.maxRows,
+      },
+      { runId: 'mcp-sql-execution' },
+    );
+    return {
+      headers: result.headers,
+      ...(result.headerTypes ? { headerTypes: result.headerTypes } : {}),
+      rows: result.rows,
+      rowCount: result.rowCount ?? result.rows.length,
+    };
+  } finally {
+    await cleanupConnector(connector);
+  }
+}
+
 export function createLocalProjectMcpContextPorts(
   project: KtxLocalProject,
   options: CreateLocalProjectMcpContextPortsOptions = {},
@@ -575,7 +632,30 @@ export function createLocalProjectMcpContextPorts(
         });
       },
     },
+    entityDetails: {
+      async read(input) {
+        return createKtxEntityDetailsService(project).read(input);
+      },
+    },
+    dictionarySearch: {
+      async search(input) {
+        return createKtxDictionarySearchService(project).search(input);
+      },
+    },
+    discover: {
+      async search(input) {
+        return createKtxDiscoverDataService(project, { userId: 'local', embeddingService }).search(input);
+      },
+    },
   };
+
+  if (options.sqlAnalysis && options.localScan?.createConnector) {
+    ports.sqlExecution = {
+      async execute(input) {
+        return executeValidatedReadOnlySql(project, options, input);
+      },
+    };
+  }
 
   if (options.localIngest) {
     ports.ingest = {

@@ -298,6 +298,18 @@ function descriptionTable(table: KtxSchemaTable): KtxDescriptionColumnTable {
   };
 }
 
+function tableMetadataColumns(table: KtxSchemaTable): Array<{
+  name: string;
+  nativeType?: string | null;
+  comment?: string | null;
+}> {
+  return table.columns.map((column) => ({
+    name: column.name,
+    nativeType: column.nativeType ?? null,
+    comment: column.comment ?? null,
+  }));
+}
+
 function embeddingBatchSize(maxBatchSize: number): number {
   return Number.isInteger(maxBatchSize) && maxBatchSize > 0 ? maxBatchSize : 100;
 }
@@ -308,9 +320,19 @@ async function generateDescriptions(input: {
   context: KtxScanContext;
   providers: KtxLocalScanEnrichmentProviders;
   progress?: KtxProgressPort;
+  warnings?: KtxScanWarning[];
 }): Promise<KtxLocalScanEnrichmentResult['descriptionUpdates']> {
+  const warningSink = input.warnings;
   const generator = new KtxDescriptionGenerator({
     llmProvider: input.providers.llm,
+    ...(input.context.logger ? { logger: input.context.logger } : {}),
+    ...(warningSink
+      ? {
+          onWarning: (warning: KtxScanWarning) => {
+            warningSink.push(warning);
+          },
+        }
+      : {}),
     settings: {
       columnMaxWords: 16,
       tableMaxWords: 24,
@@ -355,6 +377,7 @@ async function generateDescriptions(input: {
             db: table.db,
             name: table.name,
             rawDescriptions: table.comment ? { db: table.comment } : {},
+            columns: tableMetadataColumns(table),
           },
         });
         return {
@@ -559,6 +582,7 @@ export async function runLocalScanEnrichment(
           context: input.context,
           providers,
           progress: descriptionProgress,
+          warnings,
         }),
     });
     const embeddingProgress = progress?.startPhase(0.2);

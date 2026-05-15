@@ -16,6 +16,7 @@ import {
   red,
   yellow,
 } from './io/symbols.js';
+import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 
 type ProjectStatusLevel = 'ok' | 'warn' | 'fail';
 type ProjectVerdict = 'ready' | 'partial' | 'blocked';
@@ -75,6 +76,8 @@ interface WarningItem {
   message: string;
   fix?: string;
 }
+
+const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -139,7 +142,7 @@ function buildLlmStatus(config: KtxProjectLlmConfig, env: NodeJS.ProcessEnv): Ll
       backend,
       model,
       status: 'fail',
-      detail: 'no LLM configured — ktx ask will not work',
+      detail: 'no LLM configured; research agent will not run',
       fix: 'Run: ktx setup (choose an LLM provider)',
     };
   }
@@ -578,7 +581,7 @@ function buildVerdict(
   if (llm.status === 'fail') {
     return {
       verdict: 'blocked',
-      reason: 'LLM not configured — `ktx ask` will not work.',
+      reason: 'LLM not configured; research agent will not run.',
       nextActions: ['ktx setup'],
     };
   }
@@ -612,7 +615,7 @@ function buildVerdict(
     return {
       verdict: 'ready',
       reason: 'Ready.',
-      nextActions: ['ktx scan', 'ktx wiki', 'ktx sl ask "…"'],
+      nextActions: [...PROJECT_READY_COMMANDS],
     };
   }
 

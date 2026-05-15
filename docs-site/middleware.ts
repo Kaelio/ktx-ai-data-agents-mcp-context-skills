@@ -12,12 +12,13 @@ export function middleware(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
-  if (!pathname.startsWith("/docs/") || pathname.endsWith(".md")) {
+  const docsIndex = pathname.indexOf("/docs/");
+  if (docsIndex < 0 || pathname.endsWith(".md")) {
     return NextResponse.next();
   }
 
   const rewriteUrl = request.nextUrl.clone();
-  rewriteUrl.pathname = `/llms.mdx${pathname}`;
+  rewriteUrl.pathname = `${pathname.slice(0, docsIndex)}/llms.mdx${pathname.slice(docsIndex)}`;
 
   return NextResponse.rewrite(rewriteUrl);
 }

@@ -509,4 +509,11 @@ describe('generateKtxProjectConfigJsonSchema', () => {
     const relationships = scan?.properties?.relationships as { properties?: Record<string, { description?: string }> };
     expect(relationships?.properties?.acceptThreshold?.description).toMatch(/auto-accepted/);
   });
+
+  it('emits the mappings shapes under connections', () => {
+    const serialized = JSON.stringify(schema);
+    expect(serialized).toContain('databaseMappings');
+    expect(serialized).toContain('connectionMappings');
+    expect(serialized).toContain('expectedLookerConnectionName');
+  });
 });

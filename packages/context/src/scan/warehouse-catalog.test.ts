@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { initKtxProject, type KtxLocalProject } from '../../../project/index.js';
-import { WarehouseCatalogService } from './warehouse-catalog.service.js';
+import { initKtxProject, type KtxLocalProject } from '../project/index.js';
+import { WarehouseCatalogService } from './warehouse-catalog.js';
 
 describe('WarehouseCatalogService', () => {
   let tempDir: string;
@@ -18,8 +18,8 @@ describe('WarehouseCatalogService', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  async function seedLiveDatabaseScan(connectionName = 'warehouse', syncId = 'sync-2', driver = 'postgres') {
-    const root = `raw-sources/${connectionName}/live-database/${syncId}`;
+  async function seedLiveDatabaseScan(connectionId = 'warehouse', syncId = 'sync-2', driver = 'postgres') {
+    const root = `raw-sources/${connectionId}/live-database/${syncId}`;
     const tableRef = {
       catalog: driver === 'bigquery' ? 'analytics' : null,
       db: driver === 'sqlite' ? null : 'public',
@@ -27,7 +27,7 @@ describe('WarehouseCatalogService', () => {
     };
     await project.fileStore.writeFile(
       `${root}/connection.json`,
-      JSON.stringify({ connectionId: connectionName, driver, extractedAt: '2026-05-12T00:00:00.000Z' }, null, 2),
+      JSON.stringify({ connectionId, driver, extractedAt: '2026-05-12T00:00:00.000Z' }, null, 2),
       'ktx',
       'ktx@example.com',
       'seed connection',
@@ -75,7 +75,7 @@ describe('WarehouseCatalogService', () => {
       `${root}/enrichment/relationship-profile.json`,
       JSON.stringify(
         {
-          connectionId: connectionName,
+          connectionId,
           driver,
           sqlAvailable: true,
           queryCount: 3,
@@ -113,10 +113,10 @@ describe('WarehouseCatalogService', () => {
     const catalog = new WarehouseCatalogService({ fileStore: project.fileStore });
 
     await expect(catalog.getLatestSyncId('warehouse')).resolves.toBe('sync-2');
-    const detail = await catalog.getTable({ connectionName: 'warehouse', catalog: null, db: 'public', name: 'orders' });
+    const detail = await catalog.getTable({ connectionId: 'warehouse', catalog: null, db: 'public', name: 'orders' });
 
     expect(detail).toMatchObject({
-      connectionName: 'warehouse',
+      connectionId: 'warehouse',
       display: 'public.orders',
       rowCount: 12,
       columns: [
@@ -124,11 +124,20 @@ describe('WarehouseCatalogService', () => {
         { name: 'status', nativeType: 'text', sampleValues: ['paid', 'refunded'], distinctCount: 2 },
       ],
     });
+    expect(detail).not.toHaveProperty(['connection', 'Name'].join(''));
+
+    const hits = await catalog.searchByName('warehouse', 'orders', 5);
+    expect(hits[0]).toMatchObject({
+      kind: 'table',
+      connectionId: 'warehouse',
+      display: 'public.orders',
+    });
+    expect(hits[0]).not.toHaveProperty(['connection', 'Name'].join(''));
   });
 
   it('returns scanAvailable=false when no live-database scan exists', async () => {
     const catalog = new WarehouseCatalogService({ fileStore: project.fileStore });
-    await expect(catalog.getTable({ connectionName: 'missing', catalog: null, db: 'public', name: 'orders' })).resolves.toBeNull();
+    await expect(catalog.getTable({ connectionId: 'missing', catalog: null, db: 'public', name: 'orders' })).resolves.toBeNull();
     await expect(catalog.hasScan('missing')).resolves.toBe(false);
   });
 

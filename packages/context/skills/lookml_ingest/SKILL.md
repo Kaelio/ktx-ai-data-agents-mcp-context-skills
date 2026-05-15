@@ -12,7 +12,7 @@ LookML views map to SL sources, `measure:` to measures, `explore: { join: }` to 
 
 | LookML | KTX form | Notes |
 |---|---|---|
-| `view: X { sql_table_name: …; measure:/dimension:/join: }` | **Overlay** at `<connId>/X.yaml` with `measures`, `columns` (computed), `joins`, `segments` | Manifest-backed; inherit grain/columns |
+| `view: X { sql_table_name: …; measure:/dimension:/join: }` | **Overlay** at `<connId>/X.yaml` with `measures`, computed-only `columns`, `column_overrides`, `joins`, `segments` | Manifest-backed; inherit grain/columns |
 | `view: X { derived_table: { sql: … } }` | **Standalone** with top-level `sql:`, explicit `grain:` + `columns:` | No manifest entry exists |
 | `view: X { sql_always_where: <p> }` | **Standalone** with `sql: SELECT * FROM <base> WHERE <p>` | Enforcement, not opt-in |
 | `explore: { join: Y { sql_on: …; relationship: … } }` | `joins:` entry `{ to: Y, on: "<local> = Y.<col>", relationship: … }` | On the overlay or standalone |
@@ -64,16 +64,16 @@ Before writing a wiki page or SL source on any topic:
 Before emitting any `schema.table` or `schema.table.column` into a wiki body,
 SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 
-2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
+2. `entity_details({connectionId, targets: [{display: "<identifier>"}]})` -
    confirm the identifier resolves; inspect native types, FK/PK, and
    sampleValues.
 3. For literal values from the source, such as status codes or plan tiers,
    check whether they appear in `entity_details` sampleValues for the relevant
    column. If sampleValues is short or the sample may have missed real values,
-   run a `sql_execution` probe with the same warehouse connection name:
-   `sql_execution({connectionName, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
+   run a `sql_execution` probe with the same warehouse connection id:
+   `sql_execution({connectionId, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
 4. If the candidate identifier still does not resolve, do one of:
-   - Use `sql_execution({connectionName, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
+   - Use `sql_execution({connectionId, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
      If it errors, the identifier is fictional.
    - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
      citing the exact raw path that mentioned it.
@@ -85,11 +85,11 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 **Required flow before writing any overlay or standalone**:
 
 1. Call `sl_discover({ query: "<tableName>" })` for each base table you're about to touch. That returns the real columns.
-2. If the table isn't in the manifest, use the warehouse `connectionName`
+2. If the table isn't in the manifest, use the warehouse `connectionId`
    returned by `discover_data` or the target connection chosen from
    `sl_discover`, then call a dialect-appropriate SQL probe with that
-   connection name, for example:
-   `sql_execution({connectionName: "warehouse", sql: "SELECT 1 FROM analytics.orders LIMIT 0"})`.
+   connection id, for example:
+   `sql_execution({connectionId: "warehouse", sql: "SELECT 1 FROM analytics.orders LIMIT 0"})`.
    Replace `warehouse`, `analytics`, and `orders` with the verified connection,
    schema or dataset, and table from the WorkUnit evidence.
 3. Use only those names in `sql:`, `columns:`, and `grain:`. Map each `dimension_group` to ONE `{ name: <physical_col>, type: time, role: time }` entry - never one per timeframe.
@@ -136,7 +136,8 @@ KTX overlay at `<connId>/fct_labs.yaml`:
 
 ```yaml
 name: fct_labs
-description: "Lab-order fact table. One row per lab order event."
+descriptions:
+  user: "Lab-order fact table. One row per lab order event."
 columns:
   - name: is_byol
     type: boolean

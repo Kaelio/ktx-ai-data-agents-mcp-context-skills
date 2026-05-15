@@ -1,12 +1,12 @@
-import { getDialectForDriver } from '../../../connections/index.js';
-import type { KtxFileStorePort } from '../../../core/index.js';
+import { getDialectForDriver } from '../connections/index.js';
+import type { KtxFileStorePort } from '../core/index.js';
 import type {
   KtxConnectionDriver,
   KtxSchemaColumn,
   KtxSchemaForeignKey,
   KtxSchemaTable,
   KtxTableRef,
-} from '../../../scan/types.js';
+} from './types.js';
 
 type CatalogDriver = KtxConnectionDriver | 'sqlite3';
 
@@ -24,7 +24,7 @@ interface WarehouseColumnDetail extends KtxSchemaColumn {
 }
 
 export interface TableDetail {
-  connectionName: string;
+  connectionId: string;
   catalog: string | null;
   db: string | null;
   name: string;
@@ -40,14 +40,14 @@ export interface TableDetail {
 export type RawSchemaHit =
   | {
       kind: 'table';
-      connectionName: string;
+      connectionId: string;
       ref: KtxTableRef;
       display: string;
       matchedOn: 'name' | 'db' | 'comment' | 'description';
     }
   | {
       kind: 'column';
-      connectionName: string;
+      connectionId: string;
       ref: KtxTableRef & { column: string };
       display: string;
       matchedOn: 'name' | 'comment' | 'description';
@@ -80,7 +80,7 @@ interface RelationshipProfileArtifact {
 }
 
 interface ConnectionCatalog {
-  connectionName: string;
+  connectionId: string;
   syncId: string;
   driver: CatalogDriver;
   tables: KtxSchemaTable[];
@@ -250,21 +250,21 @@ export class WarehouseCatalogService {
 
   constructor(private readonly deps: WarehouseCatalogServiceDeps) {}
 
-  async hasScan(connectionName: string): Promise<boolean> {
-    return (await this.loadCatalog(connectionName)) !== null;
+  async hasScan(connectionId: string): Promise<boolean> {
+    return (await this.loadCatalog(connectionId)) !== null;
   }
 
-  async getLatestSyncId(connectionName: string): Promise<string | null> {
-    return (await this.loadCatalog(connectionName))?.syncId ?? null;
+  async getLatestSyncId(connectionId: string): Promise<string | null> {
+    return (await this.loadCatalog(connectionId))?.syncId ?? null;
   }
 
-  async listTables(connectionName: string): Promise<KtxTableRef[]> {
-    const catalog = await this.loadCatalog(connectionName);
+  async listTables(connectionId: string): Promise<KtxTableRef[]> {
+    const catalog = await this.loadCatalog(connectionId);
     return catalog?.tables.map((table) => ({ catalog: table.catalog, db: table.db, name: table.name })) ?? [];
   }
 
-  async getTable(ref: { connectionName: string } & KtxTableRef): Promise<TableDetail | null> {
-    const catalog = await this.loadCatalog(ref.connectionName);
+  async getTable(ref: { connectionId: string } & KtxTableRef): Promise<TableDetail | null> {
+    const catalog = await this.loadCatalog(ref.connectionId);
     if (!catalog) {
       return null;
     }
@@ -277,7 +277,7 @@ export class WarehouseCatalogService {
     const profileColumns = catalog.profile?.columns ?? {};
 
     return {
-      connectionName: ref.connectionName,
+      connectionId: ref.connectionId,
       catalog: table.catalog,
       db: table.db,
       name: table.name,
@@ -310,14 +310,14 @@ export class WarehouseCatalogService {
   }
 
   async resolveDisplay(
-    connectionName: string,
+    connectionId: string,
     display: string,
   ): Promise<{
     resolved: KtxTableRef | null;
     candidates: KtxTableRef[];
     dialect: string;
   }> {
-    const catalog = await this.loadCatalog(connectionName);
+    const catalog = await this.loadCatalog(connectionId);
     if (!catalog) {
       return { resolved: null, candidates: [], dialect: 'unknown' };
     }
@@ -333,14 +333,14 @@ export class WarehouseCatalogService {
     return { resolved: { catalog: table.catalog, db: table.db, name: table.name }, candidates: [], dialect };
   }
 
-  async resolveDisplayTarget(connectionName: string, display: string): Promise<DisplayTargetResolution> {
-    const catalog = await this.loadCatalog(connectionName);
+  async resolveDisplayTarget(connectionId: string, display: string): Promise<DisplayTargetResolution> {
+    const catalog = await this.loadCatalog(connectionId);
     if (!catalog) {
       return { resolved: null, candidates: [], dialect: 'unknown' };
     }
 
     const dialect = getDialectForDriver(catalog.driver).type;
-    const tableResolution = await this.resolveDisplay(connectionName, display);
+    const tableResolution = await this.resolveDisplay(connectionId, display);
     if (tableResolution.resolved) {
       return tableResolution;
     }
@@ -367,8 +367,8 @@ export class WarehouseCatalogService {
     };
   }
 
-  async searchByName(connectionName: string, query: string, limit: number): Promise<RawSchemaHit[]> {
-    const catalog = await this.loadCatalog(connectionName);
+  async searchByName(connectionId: string, query: string, limit: number): Promise<RawSchemaHit[]> {
+    const catalog = await this.loadCatalog(connectionId);
     if (!catalog) {
       return [];
     }
@@ -378,7 +378,7 @@ export class WarehouseCatalogService {
       if (tableMatch) {
         hits.push({
           kind: 'table',
-          connectionName,
+          connectionId,
           ref: { catalog: table.catalog, db: table.db, name: table.name },
           display: formatDisplay(catalog.driver, table),
           matchedOn: tableMatch,
@@ -391,7 +391,7 @@ export class WarehouseCatalogService {
         }
         hits.push({
           kind: 'column',
-          connectionName,
+          connectionId,
           ref: { catalog: table.catalog, db: table.db, name: table.name, column: column.name },
           display: `${formatDisplay(catalog.driver, table)}.${column.name}`,
           matchedOn: columnMatch,
@@ -401,18 +401,18 @@ export class WarehouseCatalogService {
     return hits.slice(0, Math.max(0, limit));
   }
 
-  private loadCatalog(connectionName: string): Promise<ConnectionCatalog | null> {
-    const existing = this.catalogs.get(connectionName);
+  private loadCatalog(connectionId: string): Promise<ConnectionCatalog | null> {
+    const existing = this.catalogs.get(connectionId);
     if (existing) {
       return existing;
     }
-    const pending = this.readCatalog(connectionName);
-    this.catalogs.set(connectionName, pending);
+    const pending = this.readCatalog(connectionId);
+    this.catalogs.set(connectionId, pending);
     return pending;
   }
 
-  private async readCatalog(connectionName: string): Promise<ConnectionCatalog | null> {
-    const root = `raw-sources/${connectionName}/live-database`;
+  private async readCatalog(connectionId: string): Promise<ConnectionCatalog | null> {
+    const root = `raw-sources/${connectionId}/live-database`;
     const listed = await this.deps.fileStore.listFiles(root);
     const connectionFiles = listed.files.filter((file) => file.endsWith('/connection.json')).sort();
     const latestConnectionPath = connectionFiles.at(-1);
@@ -438,7 +438,7 @@ export class WarehouseCatalogService {
     }
 
     return {
-      connectionName,
+      connectionId,
       syncId,
       driver: connection.driver ?? profile?.driver ?? 'postgres',
       tables,

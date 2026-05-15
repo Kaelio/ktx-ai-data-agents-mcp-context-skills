@@ -100,7 +100,33 @@ measures:
 
 **Extract repeated filter bundles into named segments.** If the same predicate appears on multiple measures of the same source, lift it to a `segments[]` entry and have each measure reference it. One edit updates every measure that depends on it.
 
-**Never write a standalone file on a manifest-backed name.** If `sl_discover({ query: "<table-or-source-name>" })` finds an existing schema for that name, you MUST write an overlay (`name:` + `measures:`/`segments:`/`descriptions:` only - no `sql:`, `table:`, `grain:`, `columns:`, `joins:`). A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+**Never write a standalone file on a manifest-backed name.** If `sl_discover({ query: "<table-or-source-name>" })` finds an existing schema for that name, you MUST write an overlay. A standalone with `sql:` or `table:` on a manifest-backed name clobbers the inherited columns and joins; `sl_write_source` and `sl_validate` both reject this shape with a clear fix hint. Always run `sl_discover` before your first write on any existing name.
+
+Overlay before/after examples:
+
+```yaml
+# Wrong: patches an inherited manifest column through columns:
+name: fct_orders
+columns:
+  - name: status
+    descriptions:
+      user: "Order lifecycle status."
+```
+
+```yaml
+# Right: patch inherited columns with column_overrides:
+name: fct_orders
+column_overrides:
+  - name: status
+    descriptions:
+      user: "Order lifecycle status."
+columns:
+  - name: is_large_order
+    type: boolean
+    expr: "amount > 1000"
+```
+
+Overlay YAML may include `measures:`, `segments:`, `descriptions:`, `joins:`, `disable_joins:`, `exclude_columns:`, `column_overrides:`, and computed-only `columns:` entries with `expr` and `type`. Do not include `sql:`, `table:`, `grain:`, or base-table `columns:`.
 
 **Prefer overlay decomposition over standalone SQL sources.** Before reaching for `source_type: sql`, check whether the metric decomposes into measures on existing overlays (including cross-source derived measures). Use `source_type: sql` only when:
 - The metric requires per-user/per-entity derivation that cannot be expressed as a single `expr` (e.g., `EXISTS` over a time-windowed subset), OR
@@ -188,16 +214,16 @@ Before writing a wiki page or SL source on any topic:
 Before emitting any `schema.table` or `schema.table.column` into a wiki body,
 SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 
-2. `entity_details({connectionName, targets: [{display: "<identifier>"}]})` -
+2. `entity_details({connectionId, targets: [{display: "<identifier>"}]})` -
    confirm the identifier resolves; inspect native types, FK/PK, and
    sampleValues.
 3. For literal values from the source, such as status codes or plan tiers,
    check whether they appear in `entity_details` sampleValues for the relevant
    column. If sampleValues is short or the sample may have missed real values,
-   run a `sql_execution` probe with the same warehouse connection name:
-   `sql_execution({connectionName, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
+   run a `sql_execution` probe with the same warehouse connection id:
+   `sql_execution({connectionId, sql: "SELECT DISTINCT <col> FROM <ref> LIMIT 50"})`.
 4. If the candidate identifier still does not resolve, do one of:
-   - Use `sql_execution({connectionName, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
+   - Use `sql_execution({connectionId, sql: "SELECT 1 FROM <ref> LIMIT 0"})`.
      If it errors, the identifier is fictional.
    - Wrap the identifier in `[unverified - from <rawPath>]` in the wiki body,
      citing the exact raw path that mentioned it.
@@ -213,7 +239,7 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
 3. `sl_read_source({ connectionId, sourceName })` - read the raw YAML before editing.
 4. For modifications: `sl_edit_source({ connectionId, sourceName, yaml_edits: [{ oldText, newText, reason }] })` with exact-string replacements. `oldText` must match exactly and be unique in the file.
 5. For new sources or full rewrites: `sl_write_source({ connectionId, sourceName, source })` with the full structured source definition.
-6. For join discovery: use `sql_execution({connectionName: "warehouse", sql: "SELECT count(*) FROM public.orders o JOIN public.customers c ON c.id = o.customer_id LIMIT 20"})` with the target warehouse connection name and dialect-correct table names to verify the join key exists in both tables and assess cardinality before declaring the join.
+6. For join discovery: use `sql_execution({connectionId: "warehouse", sql: "SELECT count(*) FROM public.orders o JOIN public.customers c ON c.id = o.customer_id LIMIT 20"})` with the target warehouse connection id and dialect-correct table names to verify the join key exists in both tables and assess cardinality before declaring the join.
 7. Cross-reference knowledge: author the edge once on the **wiki** side via `sl_refs: [source_name]` in the page's front-matter. The reverse edge (wiki pages that cite an SL source) is derived automatically by the reconciler - do not add a `knowledge_refs:` field to SL YAMLs.
 8. `sl_validate` - run after writing or editing to surface schema issues, duplicate measure names, and cross-source validation errors. Read-only; the writes are already committed (the squash-at-end flow will collapse them into one commit).
 
@@ -289,7 +315,7 @@ Prior turn: user asked to correlate LTV with protocol count; assistant joined `f
 sl_read_source({ connectionId: "warehouse", sourceName: "fct_orders" })
   → no joins section yet
 sql_execution({
-  connectionName: "warehouse",
+  connectionId: "warehouse",
   sql: "SELECT COUNT(*), COUNT(DISTINCT a.admin_user_id) FROM public.fct_orders a JOIN public.fct_mau_multiprotocol b ON a.admin_user_id = b.admin_user_id LIMIT 1"
 })
   → confirms cardinality (many orders per MAU row = many_to_one)

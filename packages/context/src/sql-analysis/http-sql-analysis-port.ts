@@ -9,6 +9,7 @@ import type {
   SqlAnalysisLiteralSlot,
   SqlAnalysisLiteralSlotType,
   SqlAnalysisPort,
+  SqlReadOnlyValidationResult,
 } from './ports.js';
 
 export type KtxSqlAnalysisHttpJsonRunner = (
@@ -92,6 +93,14 @@ function requiredStringArray(raw: Record<string, unknown>, field: string): strin
   const value = raw[field];
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     throw new Error(`sql analysis response is missing string[] field ${field}`);
+  }
+  return value;
+}
+
+function requiredBoolean(raw: Record<string, unknown>, field: string): boolean {
+  const value = raw[field];
+  if (typeof value !== 'boolean') {
+    throw new Error(`sql analysis response is missing boolean field ${field}`);
   }
   return value;
 }
@@ -187,6 +196,14 @@ function mapBatchResponse(raw: Record<string, unknown>): Map<string, SqlAnalysis
   );
 }
 
+function mapReadOnlyValidation(raw: Record<string, unknown>): SqlReadOnlyValidationResult {
+  const error = optionalString(raw, 'error');
+  return {
+    ok: requiredBoolean(raw, 'ok'),
+    ...(error !== undefined ? { error } : {}),
+  };
+}
+
 export function createHttpSqlAnalysisPort(options: HttpSqlAnalysisPortOptions): SqlAnalysisPort {
   const requestJson = options.requestJson ?? postJson(options.baseUrl);
 
@@ -204,6 +221,13 @@ export function createHttpSqlAnalysisPort(options: HttpSqlAnalysisPortOptions): 
         items,
       });
       return mapBatchResponse(raw);
+    },
+    async validateReadOnly(sql: string, dialect: SqlAnalysisDialect) {
+      const raw = await requestJson('/sql/validate-read-only', {
+        dialect,
+        sql,
+      });
+      return mapReadOnlyValidation(raw);
     },
   };
 }

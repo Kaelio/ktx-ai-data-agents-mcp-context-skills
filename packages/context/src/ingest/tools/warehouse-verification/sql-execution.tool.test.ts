@@ -19,7 +19,7 @@ describe('SqlExecutionTool', () => {
     connections.executeQuery.mockResolvedValue({ headers: ['status'], rows: [['paid']], totalRows: 1 });
 
     const result = await tool.call(
-      { connectionName: 'warehouse', sql: 'select status from public.orders', rowLimit: 5 },
+      { connectionId: 'warehouse', sql: 'select status from public.orders', rowLimit: 5 },
       context,
     );
 
@@ -34,7 +34,7 @@ describe('SqlExecutionTool', () => {
   it.each(['insert into x values (1)', 'drop table x', 'vacuum'])('rejects mutating SQL: %s', async (sql) => {
     connections.executeQuery.mockClear();
 
-    const result = await tool.call({ connectionName: 'warehouse', sql }, context);
+    const result = await tool.call({ connectionId: 'warehouse', sql }, context);
 
     expect(result.markdown).toContain('Only read-only SELECT/WITH queries can be executed locally.');
     expect(connections.executeQuery).not.toHaveBeenCalled();
@@ -44,11 +44,35 @@ describe('SqlExecutionTool', () => {
     connections.executeQuery.mockRejectedValue(new Error('relation "orbit_analytics.customer" does not exist'));
 
     const result = await tool.call(
-      { connectionName: 'warehouse', sql: 'select 1 from orbit_analytics.customer', rowLimit: 1 },
+      { connectionId: 'warehouse', sql: 'select 1 from orbit_analytics.customer', rowLimit: 1 },
       context,
     );
 
     expect(result.markdown).toContain('relation "orbit_analytics.customer" does not exist');
     expect(result.structured.error).toContain('relation "orbit_analytics.customer" does not exist');
+  });
+
+  it('uses connectionId as the public input field', () => {
+    const legacyConnectionField = ['connection', 'Name'].join('');
+
+    expect(
+      tool.parseInput({
+        connectionId: 'warehouse',
+        sql: 'select 1',
+        rowLimit: 5,
+      }),
+    ).toEqual({
+      connectionId: 'warehouse',
+      sql: 'select 1',
+      rowLimit: 5,
+    });
+
+    expect(() =>
+      tool.parseInput({
+        [legacyConnectionField]: 'warehouse',
+        sql: 'select 1',
+        rowLimit: 5,
+      }),
+    ).toThrow();
   });
 });

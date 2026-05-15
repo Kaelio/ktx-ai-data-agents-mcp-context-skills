@@ -37,23 +37,28 @@ describe('setup agents', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('plans project-scoped CLI files for every target', () => {
+  it('plans project-scoped CLI and research files for every target', () => {
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'claude-code', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.claude/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(tempDir, '.claude/skills/ktx-research/SKILL.md'), role: 'research-skill' },
       { kind: 'file', path: join(tempDir, '.claude/rules/ktx.md'), role: 'rule' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'codex', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.agents/skills/ktx/SKILL.md'), role: 'skill' },
+      { kind: 'file', path: join(tempDir, '.agents/skills/ktx-research/SKILL.md'), role: 'research-skill' },
       { kind: 'file', path: join(tempDir, '.codex/instructions/ktx.md'), role: 'rule' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'cursor', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.cursor/rules/ktx.mdc') },
+      { kind: 'file', path: join(tempDir, '.cursor/rules/ktx-research.mdc'), role: 'research-skill' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'opencode', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.opencode/commands/ktx.md') },
+      { kind: 'file', path: join(tempDir, '.opencode/commands/ktx-research.md'), role: 'research-skill' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'universal', scope: 'project', mode: 'cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.agents/skills/ktx/SKILL.md') },
+      { kind: 'file', path: join(tempDir, '.agents/skills/ktx-research/SKILL.md'), role: 'research-skill' },
     ]);
   });
 
@@ -97,6 +102,31 @@ describe('setup agents', () => {
     expect(io.stderr()).toBe('');
   });
 
+  it('installs the research skill from the runtime asset', async () => {
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: true,
+          agents: true,
+          target: 'universal',
+          scope: 'project',
+          mode: 'cli',
+          skipAgents: false,
+        },
+        io.io,
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const researchSkill = await readFile(join(tempDir, '.agents/skills/ktx-research/SKILL.md'), 'utf-8');
+    expect(researchSkill).toContain('name: ktx-research');
+    expect(researchSkill).toContain('Always run `discover_data` before writing SQL.');
+    expect(researchSkill).toContain('Treat a `dictionary_search` miss as non-authoritative.');
+  });
+
   it('writes PATH-independent launcher commands for skills', async () => {
     const io = makeIo();
 
@@ -121,6 +151,178 @@ describe('setup agents', () => {
     expect(skill).toContain('status --json');
     expect(skill).toContain('sl query');
     expect(skill).not.toContain('sql execute');
+  });
+
+  it('writes Claude Code project MCP config and tracks the json key', async () => {
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: true,
+          agents: true,
+          target: 'claude-code',
+          scope: 'project',
+          mode: 'cli',
+          skipAgents: false,
+        },
+        io.io,
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    const mcpJson = JSON.parse(await readFile(join(tempDir, '.mcp.json'), 'utf-8')) as {
+      mcpServers: { ktx: { type: string; url: string; headers?: Record<string, string> } };
+    };
+    expect(mcpJson.mcpServers.ktx).toEqual({ type: 'http', url: 'http://localhost:7878/mcp' });
+    expect(await readKtxAgentInstallManifest(tempDir)).toMatchObject({
+      entries: expect.arrayContaining([{ kind: 'json-key', path: join(tempDir, '.mcp.json'), jsonPath: ['mcpServers', 'ktx'] }]),
+    });
+    expect(io.stdout()).toContain('Run `ktx mcp start` to enable the configured KTX MCP server.');
+  });
+
+  it('writes Cursor project MCP config', async () => {
+    const io = makeIo();
+
+    await runKtxSetupAgentsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        yes: true,
+        agents: true,
+        target: 'cursor',
+        scope: 'project',
+        mode: 'cli',
+        skipAgents: false,
+      },
+      io.io,
+    );
+
+    const cursorJson = JSON.parse(await readFile(join(tempDir, '.cursor/mcp.json'), 'utf-8')) as {
+      mcpServers: { ktx: { url: string; headers?: Record<string, string> } };
+    };
+    expect(cursorJson.mcpServers.ktx).toEqual({ url: 'http://localhost:7878/mcp' });
+  });
+
+  it('prints Codex and opencode snippets without mutating printed-only config files', async () => {
+    const codexIo = makeIo();
+    await runKtxSetupAgentsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        yes: true,
+        agents: true,
+        target: 'codex',
+        scope: 'project',
+        mode: 'cli',
+        skipAgents: false,
+      },
+      codexIo.io,
+    );
+    expect(codexIo.stdout()).toContain('[mcp_servers.ktx]');
+    expect(codexIo.stdout()).toContain('url = "http://localhost:7878/mcp"');
+
+    const opencodeIo = makeIo();
+    await runKtxSetupAgentsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        yes: true,
+        agents: true,
+        target: 'opencode',
+        scope: 'project',
+        mode: 'cli',
+        skipAgents: false,
+      },
+      opencodeIo.io,
+    );
+    expect(opencodeIo.stdout()).toContain('"mcp"');
+    expect(opencodeIo.stdout()).toContain('"type": "remote"');
+    await expect(readFile(join(tempDir, 'opencode.json'), 'utf-8')).rejects.toThrow();
+  });
+
+  it('uses MCP daemon state for port and token metadata without rendering literal tokens', async () => {
+    await mkdir(join(tempDir, '.ktx'), { recursive: true });
+    await writeFile(
+      join(tempDir, '.ktx/mcp.json'),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          pid: 999999,
+          host: '127.0.0.1',
+          port: 8787,
+          tokenAuth: true,
+          projectDir: tempDir,
+          startedAt: '2026-05-14T00:00:00.000Z',
+          logPath: join(tempDir, '.ktx/logs/mcp.log'),
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
+    const io = makeIo();
+    const previousToken = process.env.KTX_MCP_TOKEN;
+    process.env.KTX_MCP_TOKEN = 'secret-token';
+
+    try {
+      await runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: true,
+          agents: true,
+          target: 'claude-code',
+          scope: 'project',
+          mode: 'cli',
+          skipAgents: false,
+        },
+        io.io,
+      );
+
+      const rendered = JSON.stringify(JSON.parse(await readFile(join(tempDir, '.mcp.json'), 'utf-8')));
+      expect(rendered).toContain('http://127.0.0.1:8787/mcp');
+      expect(rendered).toContain('Bearer ${KTX_MCP_TOKEN}');
+      expect(rendered).not.toContain('secret-token');
+      expect(io.stdout()).toContain('Run `ktx mcp start` to enable the configured KTX MCP server.');
+    } finally {
+      if (previousToken === undefined) {
+        delete process.env.KTX_MCP_TOKEN;
+      } else {
+        process.env.KTX_MCP_TOKEN = previousToken;
+      }
+    }
+  });
+
+  it('writes Claude Code local MCP config under the project key in ~/.claude.json', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'ktx-setup-agents-home-'));
+    const previousHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      const io = makeIo();
+      await runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: true,
+          agents: true,
+          target: 'claude-code',
+          scope: 'local',
+          mode: 'cli',
+          skipAgents: false,
+        },
+        io.io,
+      );
+
+      const config = JSON.parse(await readFile(join(home, '.claude.json'), 'utf-8')) as {
+        projects: Record<string, { mcpServers: { ktx: { type: string; url: string } } }>;
+      };
+      expect(config.projects[tempDir].mcpServers.ktx).toEqual({ type: 'http', url: 'http://localhost:7878/mcp' });
+    } finally {
+      process.env.HOME = previousHome;
+      await rm(home, { recursive: true, force: true });
+    }
   });
 
   it('removes only manifest-listed files', async () => {
