@@ -36,7 +36,13 @@ describe('localConnectionToWarehouseDescriptor', () => {
   });
 
   it('returns null for non-warehouse adapters', () => {
-    expect(localConnectionToWarehouseDescriptor('looker', { driver: 'looker' })).toBeNull();
+    expect(
+      localConnectionToWarehouseDescriptor('looker', {
+        driver: 'looker',
+        base_url: 'https://looker.example.com',
+        client_id: 'client',
+      }),
+    ).toBeNull();
   });
 });
 
@@ -48,7 +54,9 @@ describe('local connection info helpers', () => {
   });
 
   it('keeps non-warehouse adapter labels for display-only local connection surfaces', () => {
-    expect(localConnectionTypeForConfig('prod-metabase', { driver: 'metabase' })).toBe('metabase');
+    expect(localConnectionTypeForConfig('prod-metabase', { driver: 'metabase', api_url: 'https://metabase.example.com' })).toBe(
+      'metabase',
+    );
     expect(localConnectionTypeForConfig('missing-driver', {} as never)).toBe('unknown');
   });
 

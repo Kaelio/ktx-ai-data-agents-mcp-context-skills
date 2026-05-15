@@ -213,7 +213,11 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       if (!source) {
         throw new Error(`Semantic-layer source "${args.connectionId}/${args.sourceName}" was not found`);
       }
-      const result = await validateLocalSlSource(source.yaml, { project, connectionId: args.connectionId });
+      const result = await validateLocalSlSource(source.yaml, {
+        project,
+        connectionId: args.connectionId,
+        sourceName: args.sourceName,
+      });
       if (!result.valid) {
         for (const error of result.errors) {
           io.stderr.write(`${error}\n`);

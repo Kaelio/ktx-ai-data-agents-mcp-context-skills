@@ -311,7 +311,7 @@ describe('setup status', () => {
         '    url: env:DATABASE_URL',
         '  metabase:',
         '    driver: metabase',
-        '    url: env:METABASE_URL',
+        '    api_url: https://metabase.example.test',
         '    api_key_ref: env:METABASE_API_KEY',
         '    warehouse_connection_id: warehouse',
         'llm:',

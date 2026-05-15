@@ -489,15 +489,17 @@ describe('runKtxConnection', () => {
   it('rejects unknown drivers with a helpful error', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });
-    await writeConnections(projectDir, {
-      mystery: { driver: 'duckdb' },
-    });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      'connections:\n  mystery:\n    driver: duckdb\n',
+      'utf-8',
+    );
     const io = makeIo();
 
     await expect(
       runKtxConnection({ command: 'test', projectDir, connectionId: 'mystery' }, io.io),
     ).resolves.toBe(1);
-    expect(io.stderr()).toContain('uses driver "duckdb"');
-    expect(io.stderr()).toContain('Supported:');
+    expect(io.stderr()).toContain('connections.mystery.driver');
+    expect(io.stderr()).toContain('postgres');
   });
 });

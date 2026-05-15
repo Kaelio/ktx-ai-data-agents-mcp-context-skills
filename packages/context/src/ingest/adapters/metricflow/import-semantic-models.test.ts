@@ -38,7 +38,7 @@ describe('importMetricflowSemanticModels', () => {
     const scoped = {
       getManifestEntry: vi.fn().mockResolvedValue(null),
       isManifestBacked: vi.fn().mockResolvedValue(false),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       loadSource: vi.fn().mockResolvedValue(null),
       writeSource: vi.fn().mockResolvedValue({ warnings: [] }),
     };
@@ -104,7 +104,7 @@ describe('importMetricflowSemanticModels', () => {
     const scoped = {
       getManifestEntry: vi.fn().mockResolvedValue(null),
       isManifestBacked: vi.fn().mockResolvedValue(false),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       loadSource: vi.fn().mockImplementation((connectionId: string, sourceName: string) =>
         Promise.resolve(sourceName === 'orders' ? { name: 'orders' } : null),
       ),
@@ -139,7 +139,7 @@ describe('importMetricflowSemanticModels', () => {
     const scoped = {
       getManifestEntry: vi.fn().mockResolvedValue(null),
       isManifestBacked: vi.fn().mockResolvedValue(false),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       loadSource: vi.fn().mockResolvedValue(null),
       writeSource: vi.fn().mockRejectedValueOnce(new Error('cannot write orders')).mockResolvedValue({ warnings: [] }),
     };
@@ -190,7 +190,7 @@ describe('importMetricflowSemanticModels', () => {
       isManifestBacked: vi.fn().mockImplementation(async (_connectionId: string, sourceName: string) => {
         return sourceName === 'orders';
       }),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       loadSource: vi.fn().mockResolvedValue(null),
       writeSource: vi.fn().mockImplementation(async (_connectionId: string, source: (typeof written)[number]) => {
         written.push(source);
@@ -268,7 +268,7 @@ describe('importMetricflowSemanticModels', () => {
       isManifestBacked: vi.fn().mockImplementation(async (_connectionId: string, sourceName: string) => {
         return sourceName === 'orders';
       }),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       loadSource: vi.fn().mockResolvedValue(null),
       writeSource: vi.fn().mockResolvedValue({ warnings: [] }),
     };
@@ -311,7 +311,7 @@ describe('importMetricflowSemanticModels', () => {
     const scoped = {
       getManifestEntry: vi.fn().mockResolvedValue(null),
       isManifestBacked: vi.fn().mockResolvedValue(false),
-      loadAllSources: vi.fn().mockResolvedValue([]),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
       loadSource: vi.fn().mockResolvedValue(null),
       writeSource: vi
         .fn()

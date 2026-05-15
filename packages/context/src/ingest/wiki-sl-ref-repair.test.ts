@@ -44,23 +44,26 @@ describe('repairWikiSlRefs', () => {
       })),
     };
     const semanticLayerService = {
-      loadAllSources: vi.fn(async () => [
-        {
-          name: 'mart_customer_health',
-          grain: [],
-          columns: [],
-          joins: [],
-          measures: [{ name: 'high_risk_account_count', expr: 'count(*)' }],
-          segments: [{ name: 'high_risk', expr: "risk_level = 'high'" }],
-        },
-        {
-          name: 'int_procurement_qualifying_actions',
-          grain: [],
-          columns: [],
-          joins: [],
-          measures: [],
-        },
-      ]),
+      loadAllSources: vi.fn(async () => ({
+        sources: [
+          {
+            name: 'mart_customer_health',
+            grain: [],
+            columns: [],
+            joins: [],
+            measures: [{ name: 'high_risk_account_count', expr: 'count(*)' }],
+            segments: [{ name: 'high_risk', expr: "risk_level = 'high'" }],
+          },
+          {
+            name: 'int_procurement_qualifying_actions',
+            grain: [],
+            columns: [],
+            joins: [],
+            measures: [],
+          },
+        ],
+        loadErrors: [],
+      })),
     };
 
     const result = await repairWikiSlRefs({

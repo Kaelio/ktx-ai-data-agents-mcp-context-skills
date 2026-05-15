@@ -12,7 +12,7 @@ A MetricFlow `semantic_model` maps to an SL source; MetricFlow `measures` map to
 
 | MetricFlow | KTX form | Notes |
 |---|---|---|
-| `semantic_model: X { model: ref('t') }` with measures + dimensions | **Overlay** at `<connId>/X.yaml` with `measures`, `columns` (computed), `joins` | The `model:` ref resolves to a manifest table. |
+| `semantic_model: X { model: ref('t') }` with measures + dimensions | **Overlay** at `<connId>/X.yaml` with `measures`, computed-only `columns`, `column_overrides`, `joins` | The `model:` ref resolves to a manifest table. |
 | `semantic_model: X { model: source('s','t') }` | **Overlay** at `<connId>/X.yaml` over table `t`. | Same shape; `source()` still resolves to a physical table. |
 | `semantic_model: X { model: <literal> }` with no manifest entry | **Standalone** with explicit `sql:`, `grain:`, `columns:` | Happens when the dbt manifest isn't available. |
 | `semantic_model: Y { extends: X }` | **Merge** Y's measures/dimensions/entities into X's overlay, or write a single overlay named for the most-derived child (Y) containing both X's and Y's primitives | Do not emit a second overlay for X - flatten. |
@@ -84,7 +84,7 @@ If `sl_discover` errors because no such table exists, use `discover_data` and
 `entity_details` to find the warehouse target. If a SQL probe is still needed,
 call `sql_execution` with the same warehouse connection id, for example:
 `sql_execution({connectionId: "warehouse", sql: "SELECT 1 FROM analytics.orders LIMIT 0"})`.
-**Never invent column names** - every column in `columns:`, `grain:`, and
+**Never invent column names** - every column in computed `columns:`, `column_overrides:`, `grain:`, and
 `sql:` must be sourced from raw files, `entity_details`, or a successful SQL
 probe.
 

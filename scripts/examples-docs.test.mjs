@@ -168,7 +168,7 @@ describe('standalone example docs', () => {
       'ktx status --json',
       'ktx sl list --json',
       'ktx sl search "revenue" --json',
-      'ktx sl query --json',
+      'ktx sl query',
       'ktx wiki search "revenue recognition" --json',
     ]) {
       assert.match(servingAgents, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -183,7 +183,8 @@ describe('standalone example docs', () => {
     assert.match(connectionReference, /ktx connection test my-warehouse/);
     assert.match(connectionReference, /ktx connection test --all/);
     assert.match(quickstart, /Connection test passed/);
-    assert.match(quickstart, /Driver: PostgreSQL .* Status: ok/);
+    assert.match(connectionReference, /Driver: postgres/);
+    assert.match(connectionReference, /Status: ok/);
   });
 
   it('documents public npm and managed runtime usage', async () => {
@@ -195,7 +196,6 @@ describe('standalone example docs', () => {
     assert.match(quickstart, publicPackagePattern('npm install -g {package}'));
     assert.match(quickstart, /ktx dev runtime install --feature local-embeddings --yes/);
     assert.match(quickstart, /ktx dev runtime start --feature local-embeddings/);
-    assert.match(quickstart, /Install `uv`, run `ktx dev runtime status`/);
     assert.match(packageArtifacts, /requires `uv` on `PATH`/);
     assert.match(packageArtifacts, /ktx dev runtime status/);
     assert.match(packageArtifacts, /ktx dev runtime status/);
@@ -255,15 +255,15 @@ describe('standalone example docs', () => {
     assert.match(ingestReference, /ktx ingest <connectionId>/);
     assert.match(ingestReference, /ktx ingest --all --deep/);
     assert.match(ingestReference, /--query-history-window-days <days>/);
-    assert.match(buildingContext, /ktx ingest <connection-id>/);
+    assert.match(buildingContext, /ktx ingest <connectionId>/);
     assert.match(buildingContext, /ktx ingest --all/);
     assert.match(contextSources, /ktx ingest <connectionId>/);
     assert.match(contextAsCode, /ktx ingest --all --no-input/);
     assert.match(quickstart, /schema context/);
     assert.match(primarySources, /context:\n      queryHistory:/);
     assert.match(rootReadme, /Databases configured: yes \(postgres-warehouse\)/);
-    assert.match(quickstart, /Databases:\n  postgres-warehouse: deep context complete/);
-    assert.match(quickstart, /Databases configured: yes \(postgres-warehouse\)/);
+    assert.match(quickstart, /Databases:\n  warehouse: deep context complete/);
+    assert.match(quickstart, /Databases configured: yes \(warehouse\)/);
     assert.match(setupReference, /Databases configured: yes \(postgres-warehouse\)/);
     assert.doesNotMatch(rootReadme, new RegExp(['Primary sources', 'configured'].join(' ')));
     assert.doesNotMatch(quickstart, new RegExp(['Primary', 'sources'].join(' ')));

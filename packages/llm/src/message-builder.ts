@@ -1,6 +1,28 @@
-import type { LanguageModel, ModelMessage, ToolSet } from 'ai';
+import type { LanguageModel, ModelMessage, SystemModelMessage, ToolSet } from 'ai';
 import { isAnthropicProtocolModel } from './model-provider.js';
 import type { KtxLlmProvider, KtxPromptCacheTtl, KtxPromptParts } from './types.js';
+
+export interface KtxSplitSystemMessagesResult {
+  system: SystemModelMessage | SystemModelMessage[] | undefined;
+  messages: ModelMessage[];
+}
+
+export function splitKtxSystemMessages(messages: readonly ModelMessage[]): KtxSplitSystemMessagesResult {
+  const systemMessages: SystemModelMessage[] = [];
+  const otherMessages: ModelMessage[] = [];
+  for (const message of messages) {
+    if (message.role === 'system') {
+      systemMessages.push(message);
+    } else {
+      otherMessages.push(message);
+    }
+  }
+  return {
+    system:
+      systemMessages.length === 0 ? undefined : systemMessages.length === 1 ? systemMessages[0] : systemMessages,
+    messages: otherMessages,
+  };
+}
 
 type ToolMap = ToolSet | Record<string, Record<string, unknown>>;
 

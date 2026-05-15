@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ── Source Definition Models ──────────────────────────────────────────
@@ -105,6 +105,8 @@ class DefaultTimeDimensionDbt(BaseModel):
 
 
 class SourceDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     description: str | None = None
     descriptions: dict[str, str] | None = None
@@ -123,6 +125,8 @@ class SourceDefinition(BaseModel):
     def validate_source(self) -> SourceDefinition:
         if self.description is None:
             self.description = _resolve_description_map(self.descriptions)
+        if not self.table and not self.sql:
+            raise ValueError("resolved source must have 'table' or 'sql'")
         if self.table and self.sql:
             raise ValueError("'table' and 'sql' are mutually exclusive")
         if not self.grain:

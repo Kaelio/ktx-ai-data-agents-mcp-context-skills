@@ -166,11 +166,11 @@ describe('relationship LLM proposals', () => {
     });
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
+        system: expect.objectContaining({
+          role: 'system',
+          content: expect.stringContaining('You are helping KTX review possible SQL relationships'),
+        }),
         messages: expect.arrayContaining([
-          expect.objectContaining({
-            role: 'system',
-            content: expect.stringContaining('You are helping KTX review possible SQL relationships'),
-          }),
           expect.objectContaining({
             role: 'user',
             content: expect.stringContaining('"tables"'),
@@ -178,9 +178,12 @@ describe('relationship LLM proposals', () => {
         ]),
       }),
     );
-    const call = (generateText.mock.calls as unknown as Array<[{ messages: Array<{ role: string; content: string }> }]>)[0]?.[0];
+    const call = (
+      generateText.mock.calls as unknown as Array<[{ messages: Array<{ role: string; content: string }> }]>
+    )[0]?.[0];
     const userMessage = call?.messages.find((m) => m.role === 'user');
     expect(userMessage?.content).not.toContain('You are helping KTX review possible SQL relationships');
+    expect(call?.messages.some((m) => m.role === 'system')).toBe(false);
   });
 
   it('skips deterministic providers without calling generateText', async () => {

@@ -404,6 +404,41 @@ describe('local scan enrichment', () => {
     expect(result.resolvedRelationships).toBeNull();
   });
 
+  it('forwards context.logger and emits warnings when sampleTable fails repeatedly', async () => {
+    const failingConnector: KtxScanConnector = {
+      ...connector(),
+      sampleTable: vi.fn(async () => {
+        throw new Error('pool: ECONNRESET');
+      }),
+    };
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const result = await runLocalScanEnrichment({
+      connectionId: 'warehouse',
+      mode: 'enriched',
+      detectRelationships: false,
+      connector: failingConnector,
+      context: { runId: 'scan-run-warnings', logger },
+      providers: createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 6 }),
+    });
+
+    const codes = result.warnings.map((warning) => warning.code);
+    expect(codes).toContain('sampling_failed');
+    expect(codes).toContain('description_fallback_used');
+    expect(result.warnings.some((warning) => warning.table === 'customers')).toBe(true);
+    expect(logger.warn).toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalled();
+    // Each of the two tables produced sampling_failed + description_fallback_used, so 2 + 2 = 4 warnings minimum.
+    expect(result.warnings.length).toBeGreaterThanOrEqual(4);
+    // Sampling was retried 3× for each of the 2 tables = 6 calls
+    expect(failingConnector.sampleTable).toHaveBeenCalledTimes(6);
+  });
+
   it('runs configured deterministic enrichment with descriptions and embeddings', async () => {
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',

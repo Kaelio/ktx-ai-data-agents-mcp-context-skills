@@ -27,6 +27,161 @@ The industry has moved through three distinct approaches to getting AI and data 
 
 A context layer is the infrastructure that gives agents the business knowledge they need to produce correct analytics artifacts. It includes a semantic layer - that's a critical component - but it's not the whole thing.
 
+<div
+  className="not-prose my-10 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="How KTX turns source systems into agent-ready context"
+>
+  <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
+    <p className="mb-1 text-xs font-semibold uppercase text-fd-primary">
+      {"How KTX works"}
+    </p>
+    <p className="max-w-3xl text-sm leading-6 text-fd-muted-foreground">
+      {"KTX pulls structured metadata and human knowledge from your analytics stack, reconciles it into reviewable files, then gives agents a trusted surface for search, SQL generation, validation, and edits."}
+    </p>
+  </div>
+
+  <div className="grid gap-0 lg:grid-cols-[1.05fr_2.1rem_0.95fr_2.1rem_1.15fr_2.1rem_0.95fr]">
+    <section className="bg-fd-background p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"Source systems"}
+      </p>
+      <div className="space-y-2">
+        <div className="border-l-2 border-fd-primary bg-fd-card px-3 py-2">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"Warehouses"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"schemas, types, row counts, constraints, query history"}
+          </p>
+        </div>
+        <div className="border-l-2 border-amber-500 bg-fd-card px-3 py-2">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"Modeling tools"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"dbt, MetricFlow, LookML"}
+          </p>
+        </div>
+        <div className="border-l-2 border-orange-500 bg-fd-card px-3 py-2">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"BI systems"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"Looker explores, Metabase questions, dashboards"}
+          </p>
+        </div>
+        <div className="border-l-2 border-slate-500 bg-fd-card px-3 py-2 dark:border-cyan-200">
+          <p className="text-sm font-semibold text-fd-foreground">
+            {"Notion and team knowledge"}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
+            {"runbooks, definitions, policies, analyst notes"}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
+
+    <section className="relative bg-[#102226] p-4 text-white dark:bg-[#0b181b]">
+      <div className="absolute inset-y-0 left-0 w-1 bg-fd-primary" />
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
+        {"KTX ingest"}
+      </p>
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">{"Extract"}</p>
+          <p className="mt-0.5 text-xs leading-5 text-cyan-50/75">
+            {"adapters read metadata, files, APIs, and warehouse evidence"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm font-semibold">{"Reconcile"}</p>
+          <p className="mt-0.5 text-xs leading-5 text-cyan-50/75">
+            {"the ingest agent merges new facts with existing context"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm font-semibold">{"Verify"}</p>
+          <p className="mt-0.5 text-xs leading-5 text-cyan-50/75">
+            {"validation and provenance make each write auditable"}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
+
+    <section className="bg-fd-background p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"KTX project"}
+      </p>
+      <dl className="grid gap-2 text-sm">
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">
+            {"semantic-layer/"}
+          </dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"sources, columns, joins, grain, measures, segments, filters"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">{"wiki/"}</dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"business definitions, rules, gotchas, semantic references"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">
+            {"raw-sources/"}
+          </dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"scan artifacts, extracted metadata, relationship evidence"}
+          </dd>
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+          <dt className="font-mono text-xs text-fd-foreground">{".ktx/"}</dt>
+          <dd className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"local indexes, embeddings, session state, caches"}
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
+
+    <section className="bg-fd-muted/35 p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"Agent workflows"}
+      </p>
+      <div className="space-y-2 text-sm">
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Search sources and wiki pages"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Compile trusted SQL"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Explain metrics and provenance"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Patch files, validate, open review"}
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div className="border-t border-dashed border-fd-border bg-fd-background px-5 py-3 text-sm text-fd-muted-foreground">
+    {"Reviewed agent and analyst edits flow back into the same YAML and Markdown files, so the next ingest run starts from the team's accepted context."}
+  </div>
+</div>
+
 KTX organizes context into four pillars:
 
 - Semantic sources

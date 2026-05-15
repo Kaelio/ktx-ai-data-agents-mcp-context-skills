@@ -127,7 +127,8 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
               `    - name: <measure_name>`,
               `      expr: "<expression>"`,
               `      description: "<what it measures>"`,
-              `Overlay shape: "name:" plus any of "measures:", "segments:", "descriptions:". Do NOT include "sql:", "table:", "grain:", "columns:", or "joins:" — those are inherited from the manifest.`,
+              `Overlay shape: "name:" plus any of "measures:", "segments:", "descriptions:", "joins:", "disable_joins:", "exclude_columns:", "column_overrides:", or computed-only "columns:" entries with expr + type.`,
+              `Do NOT include "sql:", "table:", "grain:", or base-table "columns:" — those are inherited from the manifest.`,
             ].join('\n'),
           ],
           sourceName,
@@ -181,7 +182,7 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
       const result = await semanticLayerService.writeSource(connectionId, source, author, authorEmail, commitMessage);
 
       if (!skipIndex) {
-        const allSources = await semanticLayerService.loadAllSources(connectionId);
+        const { sources: allSources } = await semanticLayerService.loadAllSources(connectionId);
         await this.slSearchService.indexSources(connectionId, allSources).catch(() => {});
       }
 

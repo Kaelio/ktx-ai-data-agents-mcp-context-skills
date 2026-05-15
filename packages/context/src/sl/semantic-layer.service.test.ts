@@ -2,13 +2,17 @@ import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ColumnNameCollisionError,
   composeOverlay,
+  ConflictingExcludeAndOverrideError,
   enrichColumnsFromManifest,
   findDanglingSegmentRefs,
   projectManifestEntry,
   SemanticLayerService,
+  toResolvedWire,
+  UnknownColumnOverrideError,
 } from './semantic-layer.service.js';
-import { sourceDefinitionSchema } from './schemas.js';
+import { resolvedSourceSchema, sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
 import type { SemanticLayerSource } from './types.js';
 
 const pythonPort = {
@@ -137,6 +141,69 @@ describe('composeOverlay', () => {
     expect(composed.columns.find((c) => c.name === 'admin_user_id')).toBeUndefined();
     expect(composed.columns.find((c) => c.name === 'is_byol')).toBeDefined();
     expect(composed.measures).toHaveLength(1);
+  });
+
+  it('applies column_overrides to same-named manifest columns', () => {
+    const overlay = {
+      name: 'fct_labs',
+      column_overrides: [
+        { name: 'lab_order_id', descriptions: { user: 'Primary key' } },
+        { name: 'admin_user_id', descriptions: { user: 'FK to admin_users' } },
+      ],
+    };
+    const composed = composeOverlay(baseTable, overlay);
+    // No duplicate columns appended — same-named overlay entries merged onto the base.
+    expect(composed.columns).toHaveLength(3);
+    const labOrder = composed.columns.find((c) => c.name === 'lab_order_id');
+    expect(labOrder?.type).toBe('string');
+    expect(labOrder?.descriptions).toEqual({ user: 'Primary key' });
+    const adminUser = composed.columns.find((c) => c.name === 'admin_user_id');
+    expect(adminUser?.type).toBe('string');
+    expect(adminUser?.descriptions).toEqual({ user: 'FK to admin_users' });
+  });
+
+  it('appends computed columns alongside column overrides', () => {
+    const overlay = {
+      name: 'fct_labs',
+      column_overrides: [
+        { name: 'lab_order_id', descriptions: { user: 'PK doc' } },
+      ],
+      columns: [
+        { name: 'is_byol', type: 'boolean', expr: "lab_type = 'byol'" },
+      ],
+    };
+    const composed = composeOverlay(baseTable, overlay);
+    expect(composed.columns).toHaveLength(4);
+    expect(composed.columns.find((c) => c.name === 'is_byol')?.expr).toBe("lab_type = 'byol'");
+    expect(composed.columns.find((c) => c.name === 'lab_order_id')?.type).toBe('string');
+  });
+
+  it('rejects column_overrides that target unknown manifest columns', () => {
+    expect(() =>
+      composeOverlay(baseTable, {
+        name: 'fct_labs',
+        column_overrides: [{ name: 'missing', descriptions: { user: 'Nope' } }],
+      }),
+    ).toThrow(UnknownColumnOverrideError);
+  });
+
+  it('rejects computed columns whose names collide with manifest columns', () => {
+    expect(() =>
+      composeOverlay(baseTable, {
+        name: 'fct_labs',
+        columns: [{ name: 'lab_order_id', type: 'string', expr: 'lab_order_id' }],
+      }),
+    ).toThrow(ColumnNameCollisionError);
+  });
+
+  it('rejects exclude/override conflicts before applying exclusions', () => {
+    expect(() =>
+      composeOverlay(baseTable, {
+        name: 'fct_labs',
+        exclude_columns: ['lab_order_id'],
+        column_overrides: [{ name: 'lab_order_id', descriptions: { user: 'Hidden PK' } }],
+      }),
+    ).toThrow(ConflictingExcludeAndOverrideError);
   });
 
   it('merges overlay descriptions (plural) with base descriptions keyed by source', () => {
@@ -418,6 +485,62 @@ describe('sourceDefinitionSchema', () => {
   });
 });
 
+describe('sourceOverlaySchema', () => {
+  it('accepts column_overrides and keeps columns computed-only', () => {
+    const result = sourceOverlaySchema.safeParse({
+      name: 'orders',
+      column_overrides: [{ name: 'status', descriptions: { user: 'Lifecycle status' } }],
+      columns: [{ name: 'is_paid', type: 'boolean', expr: "status = 'paid'" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects typeless overlay columns and singular description on overrides', () => {
+    const result = sourceOverlaySchema.safeParse({
+      name: 'orders',
+      column_overrides: [{ name: 'status', description: 'Lifecycle status' }],
+      columns: [{ name: 'status', descriptions: { user: 'Lifecycle status' } }],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join('.'));
+      expect(paths).toContain('column_overrides.0');
+      expect(paths).toContain('columns.0.type');
+      expect(paths).toContain('columns.0.expr');
+    }
+  });
+});
+
+describe('toResolvedWire', () => {
+  it('strips TS-only authoring and provenance fields before the Python boundary', () => {
+    const wire = toResolvedWire({
+      name: 'orders',
+      table: 'public.orders',
+      inherits_columns_from: 'orders',
+      grain: ['id'],
+      columns: [{ name: 'id', type: 'string' }],
+      joins: [{ to: 'customers', on: 'orders.customer_id = customers.id', relationship: 'many_to_one', source: 'formal' }],
+      measures: [],
+      usage: {
+        narrative: 'Frequently queried orders.',
+        frequencyTier: 'high',
+        commonFilters: ['status'],
+        commonJoins: [],
+      },
+    });
+
+    expect(wire).toEqual({
+      name: 'orders',
+      table: 'public.orders',
+      grain: ['id'],
+      columns: [{ name: 'id', type: 'string' }],
+      joins: [{ to: 'customers', on: 'orders.customer_id = customers.id', relationship: 'many_to_one' }],
+      measures: [],
+    });
+    expect(resolvedSourceSchema.parse(wire)).toEqual(wire);
+  });
+});
+
 describe('projectManifestEntry', () => {
   it('projects manifest usage onto the semantic-layer source', () => {
     const source = projectManifestEntry('orders', {
@@ -537,7 +660,8 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
       ].join('\n'),
     });
 
-    const sources = await service.loadAllSources('conn-1');
+    const { sources, loadErrors } = await service.loadAllSources('conn-1');
+    expect(loadErrors).toEqual([]);
 
     expect(sources[0]).toMatchObject({
       name: 'orders',
@@ -601,7 +725,8 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
       return Promise.reject(new Error(`Unexpected readFile: ${path}`));
     });
 
-    const sources = await service.loadAllSources('conn-1');
+    const { sources, loadErrors } = await service.loadAllSources('conn-1');
+    expect(loadErrors).toEqual([]);
     const aav = sources.find((s) => s.name === 'aav_consignments');
     expect(aav).toBeDefined();
     expect(aav?.columns).toEqual([
@@ -646,7 +771,8 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
       });
     });
 
-    const sources = await service.loadAllSources('conn-1');
+    const { sources, loadErrors } = await service.loadAllSources('conn-1');
+    expect(loadErrors).toEqual([]);
     const aav = sources.find((s) => s.name === 'aav_consignments');
     expect(aav?.columns[0].type).toBe('string');
   });
@@ -670,7 +796,8 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
       ].join('\n'),
     });
 
-    const sources = await service.loadAllSources('conn-1');
+    const { sources, loadErrors } = await service.loadAllSources('conn-1');
+    expect(loadErrors).toEqual([]);
     const aav = sources.find((s) => s.name === 'aav_consignments');
     expect(aav?.columns).toEqual([{ name: 'FOO', type: 'string' }]);
   });
@@ -693,13 +820,41 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
       ].join('\n'),
     });
 
-    const sources = await service.loadAllSources('conn-1');
+    const { sources, loadErrors } = await service.loadAllSources('conn-1');
+    expect(loadErrors).toEqual([]);
 
     expect(sources[0]).toMatchObject({
       name: 'orders',
       descriptions: { user: 'Finance orders used for invoice reconciliation.' },
       columns: [{ name: 'id', type: 'string', descriptions: { user: 'Stable order identifier.' } }],
     });
+  });
+
+  it('reports file-attributed errors for legacy overlay column patches', async () => {
+    const schemaPath = 'semantic-layer/conn-1/_schema/marts.yaml';
+    const overlayPath = 'semantic-layer/conn-1/orders.yaml';
+    configService.listFiles.mockResolvedValue({ files: [schemaPath, overlayPath] });
+    configService.readFile.mockImplementation((path: string) => {
+      if (path === schemaPath) {
+        return Promise.resolve({
+          content: [
+            'tables:',
+            '  orders:',
+            '    table: public.orders',
+            '    columns:',
+            '      - { name: id, type: string, pk: true }',
+          ].join('\n'),
+        });
+      }
+      return Promise.resolve({
+        content: ['name: orders', 'columns:', '  - name: id', '    descriptions: { user: "Stable id." }'].join('\n'),
+      });
+    });
+
+    const { loadErrors } = await service.loadAllSources('conn-1');
+
+    expect(loadErrors.join('\n')).toContain(overlayPath);
+    expect(loadErrors.join('\n')).toContain("move it to 'column_overrides:'");
   });
 });
 

@@ -15,6 +15,7 @@ export {
   serializeKtxProjectConfig,
   validateKtxProjectConfig,
 } from './config.js';
+export type { KtxConnectionConfig } from './driver-schemas.js';
 export type { LocalGitFileStoreDeps } from './local-git-file-store.js';
 export { LocalGitFileStore } from './local-git-file-store.js';
 export { ktxLocalStateDbPath } from './local-state-db.js';

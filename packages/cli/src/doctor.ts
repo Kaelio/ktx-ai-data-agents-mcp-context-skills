@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { KtxConfigIssue } from '@ktx/context/project';
+import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 import type { BuildProjectStatusOptions } from './status-project.js';
 
 const execFileAsync = promisify(execFile);
@@ -287,7 +288,7 @@ interface RenderOptions {
   command?: 'setup' | 'project';
 }
 
-const NEXT_STEPS_PROJECT = ['ktx scan', 'ktx wiki', 'ktx sl ask "…"'];
+const NEXT_STEPS_PROJECT = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
 export function formatDoctorReport(report: DoctorReport, options: Partial<RenderOptions> = {}): string {
   const opts: RenderOptions = {

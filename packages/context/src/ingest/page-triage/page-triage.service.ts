@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { KtxMessageBuilder, type KtxLlmProvider } from '@ktx/llm';
+import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider } from '@ktx/llm';
 import { generateText, type ToolSet } from 'ai';
 import pLimit from 'p-limit';
 import { z } from 'zod';
@@ -346,10 +346,12 @@ export class PageTriageService {
       tools: {},
       model,
     });
+    const split = splitKtxSystemMessages(built.messages);
     const result = await this.runGenerateText({
       model,
       temperature: 0,
-      messages: built.messages,
+      ...(split.system ? { system: split.system } : {}),
+      messages: split.messages,
       tools: built.tools as ToolSet,
     });
     return result.text;
