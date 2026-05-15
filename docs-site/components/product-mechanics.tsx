@@ -20,8 +20,8 @@ const sourceInputs = [
     accent: "border-amber-500",
   },
   {
-    name: "Notion and docs",
-    detail: "definitions, policies, caveats, analyst notes",
+    name: "Company documentation",
+    detail: "Notion, policies, caveats, analyst notes",
     signal: "links business language back to semantic references",
     accent: "border-slate-500 dark:border-cyan-200",
   },
