@@ -44,7 +44,11 @@ execution, or deterministic output.
   of model selection for every LLM call.
 - Preserve KTX's curated tool boundaries. Claude Code built-ins,
   filesystem-discovered MCP servers, hooks, skills, plugins, agents, and slash
-  commands must not expand the tool surface for KTX agent loops.
+  commands must not become invokable in KTX agent loops. The Agent SDK init
+  message may still report host-discovered slash commands, skills, and agents;
+  KTX treats that metadata as diagnostic only and restricts execution through
+  `tools: []`, exact KTX MCP `allowedTools`, `disallowedTools`, and
+  deny-by-default `canUseTool`.
 - Keep embeddings independent. Claude does not provide embeddings; users keep
   configuring `ingest.embeddings` and scan/enrichment embeddings as they do
   today.
@@ -253,18 +257,34 @@ the required outcome is fixed:
 
 - Filesystem settings are not loaded. The SDK's documented default for an
   omitted `settingSources` is `["user", "project", "local"]`
-  (`@anthropic-ai/claude-agent-sdk@0.3.142` `sdk.d.ts:1690-1697`,
-  `sdk.mjs` default `W6$=["user","project","local"]`), which would inherit the
-  user's Claude Code hooks, skills, plugins, MCP servers, slash commands, and
-  agents. Every KTX `query()` call site - agent loops, text generation, object
-  generation, and the auth probe - MUST pass `settingSources: []` explicitly,
-  along with `skills: []`, `plugins: []`, `tools: []`, `persistSession: false`,
-  and no `mcpServers` entries other than the KTX MCP server (omitted entirely
-  when the call site does not expose tools). The implementation should assert
-  from the SDK init message that no unexpected settings-derived commands,
-  skills, agents, plugins, or MCP servers are active.
-- Skills are disabled with `skills: []`, and plugins are disabled with
-  `plugins: []`.
+  (`@anthropic-ai/claude-agent-sdk@0.3.142` `sdk.d.ts:1686-1695`),
+  which would inherit the user's Claude Code filesystem settings. Every KTX
+  `query()` call site - agent loops, text generation, object generation, and
+  the auth probe - MUST pass `settingSources: []` explicitly, along with
+  `skills: []`, `plugins: []`, `tools: []`, `persistSession: false`, and no
+  `mcpServers` entries other than the KTX MCP server (omitted entirely when
+  the call site does not expose tools). The implementation MUST assert from
+  the SDK init message that the controlled execution surface matches KTX's
+  expectations:
+
+  - `message.tools` equals the exact generated KTX MCP tool ids for the current
+    call.
+  - `message.mcp_servers` equals the expected KTX MCP server set: `[]` when the
+    call exposes no tools, or `["ktx"]` when it does.
+  - `message.plugins` is empty.
+
+  The implementation MUST NOT reject a run solely because
+  `message.slash_commands`, `message.skills`, or `message.agents` contain
+  host-discovered names. In `@anthropic-ai/claude-agent-sdk@0.3.142`, those
+  fields can report host discovery even when KTX passes the isolation options.
+  They are not part of the KTX execution surface when `tools: []`,
+  `allowedTools`, `disallowedTools`, and deny-by-default `canUseTool` are set.
+- `skills: []` is a context filter in the pinned SDK
+  (`sdk.d.ts:1697-1718`): unlisted skills are hidden from the model's skill
+  listing and rejected by the Skill tool, but discovered skill names may still
+  appear in init metadata. KTX must still pass `skills: []`.
+- Plugins are disabled with `plugins: []`, and the runtime asserts that
+  `message.plugins` is empty in the init message.
 - Built-in tools are disabled by setting `tools: []`. The pinned SDK type
   (`@anthropic-ai/claude-agent-sdk@0.3.142`, `sdk.d.ts`) documents `tools` as
   the base set of built-in tools, with `[]` meaning "disable all built-ins";
@@ -280,13 +300,13 @@ the required outcome is fixed:
   auto-allow without prompting). Treat `allowedTools` as auto-approval, not
   restriction.
 - Defense-in-depth restriction uses `canUseTool`. The KTX runtime supplies a
-  `canUseTool` handler that allows only tool names in the current KTX MCP
-  tool map and denies everything else, so a future SDK default that re-enables
-  built-ins or a misconfigured MCP server cannot expand the surface.
-- `disallowedTools` MAY additionally list the current built-in tool names
+  `canUseTool` handler that allows only tool names in the current KTX MCP tool
+  map and denies everything else, so host-discovered slash commands, skills,
+  agents, future SDK defaults, or a misconfigured MCP server cannot expand the
+  execution surface.
+- `disallowedTools` MUST additionally list the current built-in tool names
   (`Agent`, `Task`, `AskUserQuestion`, `Bash`, `Read`, `Edit`, `Write`, `Glob`,
-  `Grep`, `WebFetch`, `WebSearch`, `TodoWrite`) as redundant insurance, but is
-  not the primary restriction mechanism.
+  `Grep`, `WebFetch`, `WebSearch`, `TodoWrite`) as redundant insurance.
 - `cwd` is `project.projectDir`, resolved at startup via `resolveKtxProjectDir`,
   not `process.cwd()`.
 - Sessions are not persisted unless the plan identifies a concrete debugging
@@ -549,6 +569,10 @@ usable, not just that `~/.claude/` exists. Acceptable validation strategies:
   through `ANTHROPIC_API_KEY` or other provider credentials and hide a
   missing local Claude Code session). See "Agent SDK environment and auth
   boundary" above for the `env` denylist.
+  The auth probe MUST tolerate init messages with non-empty `slash_commands`,
+  `skills`, and `agents` when `message.tools` is empty, `message.mcp_servers`
+  is empty, `message.plugins` is empty, and the query options contain the KTX
+  isolation tuple. Host discovery metadata is not an auth failure.
 - An SDK-provided account/auth status method if the pinned version exposes one.
 - A docs-endorsed file-presence check only if the official SDK docs explicitly
   state that it proves auth usability.
@@ -618,9 +642,9 @@ Claude subscription limits.
   and `packages/context/src/memory/memory-agent.service.ts:128-152` currently
   return bare strings or plain objects and must be normalized at the
   descriptor boundary so both backends preserve the contract.
-- The Agent SDK skills docs say discovered skills can be controlled with the
-  `skills` option and disabled with `[]`; the runtime should set this
-  explicitly.
+- The Agent SDK skills docs say the `skills` option is a context filter rather
+  than a sandbox. KTX must pass `skills: []`, but must not assert that
+  `message.skills` is empty in the SDK init message.
 - `Options.env` in `@anthropic-ai/claude-agent-sdk@0.3.142`
   (`sdk.d.ts:1265-1279`) is the environment passed to the Claude Code
   process and defaults to `process.env`. Without an explicit `env`, the SDK
@@ -645,13 +669,17 @@ Claude subscription limits.
 7. Write tests proving page triage, scan/enrichment internals, memory capture,
    MCP-triggered local ingest, and normal local ingest all use the
    `claude-code` runtime when configured.
-8. Write tests proving a raw built-in Claude Code tool request is denied and
-   only `mcp__ktx__*` tools are available during KTX agent loops.
+8. Write tests proving a raw built-in Claude Code tool request is denied,
+   host-discovered Skill/Agent/SlashCommand requests are denied by `canUseTool`,
+   and only exact `mcp__ktx__*` tools are allowed during KTX agent loops.
 9. Write a test that asserts every KTX-originated `query()` invocation
    (agent loop, text generation, object generation, auth probe) is called
    with `settingSources: []`, `skills: []`, `plugins: []`, `tools: []`, and
    `persistSession: false`, by spying on the SDK entry point. The test must
-   fail if any path falls back to SDK defaults for those fields.
+   fail if any path falls back to SDK defaults for those fields. The test must
+   also prove that non-empty host-discovered `slash_commands`, `skills`, and
+   `agents` in the init message do not fail the auth probe or runtime when the
+   controlled tool, MCP server, and plugin surfaces match KTX expectations.
 10. Write a test that asserts `onStepFinish` is invoked the expected number
     of times for a fixed-budget `claude-code` agent loop, including the
     work-unit and reconciliation progress paths.
