@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join, normalize, resolve } from 'node:path';
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 
 interface ReadRawSpanDeps {
   stagedDir: string;
@@ -10,7 +10,8 @@ interface ReadRawSpanDeps {
 
 export function createReadRawSpanTool(deps: ReadRawSpanDeps) {
   const stagedRoot = resolve(deps.stagedDir);
-  return tool({
+  return createAgentTool({
+    name: 'read_raw_span',
     description:
       'Read a 1-based inclusive line range from a raw source file. Use this to resolve a provenance pointer like `file.lkml#L15-28` without loading the whole file into context.',
     inputSchema: z.object({

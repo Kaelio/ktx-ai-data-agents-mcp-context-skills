@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import { buildReconcileSystemPrompt, buildReconcileToolSet, buildReconcileUserPrompt } from './build-reconcile-context.js';
+
+const fakeTool = (name: string) =>
+  createAgentTool({
+    name,
+    description: name,
+    inputSchema: z.object({}),
+    execute: async () => `${name} output`,
+  });
 
 describe('buildReconcileSystemPrompt', () => {
   it('appends canonical pins when relevant pins are supplied', () => {
@@ -76,26 +86,16 @@ describe('buildReconcileUserPrompt', () => {
 describe('buildReconcileToolSet', () => {
   it('includes emit_unmapped_fallback with the reconciliation tools', () => {
     const toolSet = buildReconcileToolSet({
-      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
-      stageListTool: { stage_list: { description: 'stage list', inputSchema: {} as any, execute: vi.fn() } } as any,
-      stageDiffTool: { stage_diff: { description: 'stage diff', inputSchema: {} as any, execute: vi.fn() } } as any,
-      evictionListTool: {
-        eviction_list: { description: 'eviction list', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitConflictResolutionTool: {
-        emit_conflict_resolution: { description: 'conflict', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitEvictionDecisionTool: {
-        emit_eviction_decision: { description: 'eviction', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitArtifactResolutionTool: {
-        emit_artifact_resolution: { description: 'resolution', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitUnmappedFallbackTool: {
-        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      readRawSpanTool: { read_raw_span: { description: 'raw span', inputSchema: {} as any, execute: vi.fn() } } as any,
-      toolsetTools: { sl_write_source: {} as any, wiki_write: {} as any },
+      loadSkillTool: { load_skill: fakeTool('load_skill') },
+      stageListTool: { stage_list: fakeTool('stage_list') },
+      stageDiffTool: { stage_diff: fakeTool('stage_diff') },
+      evictionListTool: { eviction_list: fakeTool('eviction_list') },
+      emitConflictResolutionTool: { emit_conflict_resolution: fakeTool('emit_conflict_resolution') },
+      emitEvictionDecisionTool: { emit_eviction_decision: fakeTool('emit_eviction_decision') },
+      emitArtifactResolutionTool: { emit_artifact_resolution: fakeTool('emit_artifact_resolution') },
+      emitUnmappedFallbackTool: { emit_unmapped_fallback: fakeTool('emit_unmapped_fallback') },
+      readRawSpanTool: { read_raw_span: fakeTool('read_raw_span') },
+      toolsetTools: { sl_write_source: fakeTool('sl_write_source'), wiki_write: fakeTool('wiki_write') },
     });
 
     expect(Object.keys(toolSet).sort()).toEqual(
@@ -114,31 +114,30 @@ describe('buildReconcileToolSet', () => {
         'wiki_write',
       ].sort(),
     );
+    expect(toolSet.record_verification_ledger.inputSchema).toBeInstanceOf(z.ZodObject);
+    expect(toolSet.emit_conflict_resolution.name).toBe('emit_conflict_resolution');
   });
 
   it('requires the verification ledger before reconciliation write tools run', async () => {
     const slWrite = vi.fn().mockResolvedValue({ markdown: 'written', structured: { success: true } });
     const toolSet = buildReconcileToolSet({
-      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
-      stageListTool: { stage_list: { description: 'stage list', inputSchema: {} as any, execute: vi.fn() } } as any,
-      stageDiffTool: { stage_diff: { description: 'stage diff', inputSchema: {} as any, execute: vi.fn() } } as any,
-      evictionListTool: {
-        eviction_list: { description: 'eviction list', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitConflictResolutionTool: {
-        emit_conflict_resolution: { description: 'conflict', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitEvictionDecisionTool: {
-        emit_eviction_decision: { description: 'eviction', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitArtifactResolutionTool: {
-        emit_artifact_resolution: { description: 'resolution', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      emitUnmappedFallbackTool: {
-        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      readRawSpanTool: { read_raw_span: { description: 'raw span', inputSchema: {} as any, execute: vi.fn() } } as any,
-      toolsetTools: { sl_write_source: { description: 'sl write', inputSchema: {} as any, execute: slWrite } as any },
+      loadSkillTool: { load_skill: fakeTool('load_skill') },
+      stageListTool: { stage_list: fakeTool('stage_list') },
+      stageDiffTool: { stage_diff: fakeTool('stage_diff') },
+      evictionListTool: { eviction_list: fakeTool('eviction_list') },
+      emitConflictResolutionTool: { emit_conflict_resolution: fakeTool('emit_conflict_resolution') },
+      emitEvictionDecisionTool: { emit_eviction_decision: fakeTool('emit_eviction_decision') },
+      emitArtifactResolutionTool: { emit_artifact_resolution: fakeTool('emit_artifact_resolution') },
+      emitUnmappedFallbackTool: { emit_unmapped_fallback: fakeTool('emit_unmapped_fallback') },
+      readRawSpanTool: { read_raw_span: fakeTool('read_raw_span') },
+      toolsetTools: {
+        sl_write_source: createAgentTool({
+          name: 'sl_write_source',
+          description: 'sl write',
+          inputSchema: z.object({ connectionId: z.string(), sourceName: z.string() }),
+          execute: slWrite,
+        }),
+      },
     });
 
     const correction = await toolSet.sl_write_source.execute?.(

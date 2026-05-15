@@ -1,6 +1,5 @@
-import type { AgentRunnerService } from '@ktx/context/agent';
+import type { AgentRunnerService, AgentToolSet } from '@ktx/context/agent';
 import type { KtxModelRole } from '@ktx/llm';
-import type { Tool } from 'ai';
 import type { CaptureSession, MemoryAction } from '../../memory/index.js';
 import { listTouchedSlSources, type TouchedSlSource } from '../../tools/index.js';
 import type { WorkUnit } from '../types.js';
@@ -19,7 +18,7 @@ export interface WorkUnitExecutionDeps {
   resetHardTo: (targetSha: string) => Promise<void>;
   buildSystemPrompt: (wu: WorkUnit) => string;
   buildUserPrompt: (wu: WorkUnit) => string;
-  buildToolSet: (wu: WorkUnit) => Record<string, Tool>;
+  buildToolSet: (wu: WorkUnit) => AgentToolSet;
   captureSession: CaptureSession;
   sessionActions: MemoryAction[];
   modelRole: KtxModelRole;

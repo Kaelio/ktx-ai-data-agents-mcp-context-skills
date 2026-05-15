@@ -1,4 +1,4 @@
-import type { Tool, ToolSet } from 'ai';
+import type { AgentToolSet } from '../../agent/index.js';
 import { buildCanonicalPinsPromptBlock, type CanonicalPin } from '../canonical-pins.js';
 import { createLookerQueryToSlTool } from '../adapters/looker/tools/looker-query-to-sl.tool.js';
 import type { IngestProvenanceRow } from '../ports.js';
@@ -88,12 +88,12 @@ export interface BuildWuToolSetInput {
   sourceKey?: string;
   stagedDir: string;
   wu: WorkUnit;
-  loadSkillTool: Record<string, Tool>;
-  emitUnmappedFallbackTool: Record<string, Tool>;
-  toolsetTools: ToolSet;
+  loadSkillTool: AgentToolSet;
+  emitUnmappedFallbackTool: AgentToolSet;
+  toolsetTools: AgentToolSet;
 }
 
-function withoutWriteSlTools(toolset: ToolSet, wu: WorkUnit): ToolSet {
+function withoutWriteSlTools(toolset: AgentToolSet, wu: WorkUnit): AgentToolSet {
   if (!wu.slDisallowed) {
     return toolset;
   }
@@ -103,9 +103,10 @@ function withoutWriteSlTools(toolset: ToolSet, wu: WorkUnit): ToolSet {
   return next;
 }
 
-export function buildWuToolSet(input: BuildWuToolSetInput): ToolSet {
+export function buildWuToolSet(input: BuildWuToolSetInput): AgentToolSet {
   const allowedPaths = new Set<string>([...input.wu.rawFiles, ...input.wu.dependencyPaths]);
-  const lookerTools: ToolSet = input.sourceKey === 'looker' ? { looker_query_to_sl: createLookerQueryToSlTool() } : {};
+  const lookerTools: AgentToolSet =
+    input.sourceKey === 'looker' ? { looker_query_to_sl: createLookerQueryToSlTool() } : {};
   const state = createVerificationLedgerState();
   return withVerificationLedger(
     withoutWriteSlTools(

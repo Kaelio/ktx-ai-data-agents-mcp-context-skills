@@ -22,6 +22,7 @@ describe('local KTX LLM config', () => {
       },
       models: { default: 'env:KTX_MODEL', triage: 'anthropic/claude-haiku-4-5' },
       promptCaching: { enabled: false },
+      agentRunner: { backend: 'ai-sdk' },
     };
 
     expect(
@@ -45,6 +46,7 @@ describe('local KTX LLM config', () => {
       },
       models: { default: 'env:KTX_MODEL' },
       promptCaching: { enabled: true, vertexFallbackTo5m: true },
+      agentRunner: { backend: 'ai-sdk' },
     };
 
     expect(
@@ -69,6 +71,7 @@ describe('local KTX LLM config', () => {
         vertex: { location: 'env:MISSING_VERTEX_LOCATION' },
       },
       models: { default: 'claude-sonnet-4-6' },
+      agentRunner: { backend: 'ai-sdk' },
     };
 
     expect(
@@ -88,6 +91,7 @@ describe('local KTX LLM config', () => {
       createLocalKtxLlmProviderFromConfig({
         provider: { backend: 'none' },
         models: {},
+        agentRunner: { backend: 'ai-sdk' },
       }),
     ).toBeNull();
   });
@@ -101,6 +105,7 @@ describe('local KTX LLM config', () => {
           anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
         },
         models: { default: 'claude-sonnet-4-6' },
+        agentRunner: { backend: 'ai-sdk' },
       },
       { env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, createKtxLlmProvider }, // pragma: allowlist secret
     );
@@ -121,6 +126,7 @@ describe('local KTX LLM config', () => {
         gateway: { base_url: 'https://gateway.example/v1' },
       },
       models: { default: 'anthropic/claude-sonnet-4-6' },
+      agentRunner: { backend: 'ai-sdk' },
     });
 
     expect(provider?.promptCachingConfig()).toMatchObject({

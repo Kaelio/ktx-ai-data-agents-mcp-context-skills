@@ -820,6 +820,7 @@ describe('local scan enrichment', () => {
           gateway: {},
         },
         models: { default: 'provider/language-model' },
+        agentRunner: { backend: 'ai-sdk' },
       },
       {
         createKtxLlmProvider: createKtxLlmProvider as any,

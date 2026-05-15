@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import type { ArtifactResolutionRecord, StageIndex } from '../stages/stage-index.types.js';
 
 interface EmitArtifactResolutionDeps {
@@ -17,7 +17,8 @@ function sameArtifactResolution(left: ArtifactResolutionRecord, right: ArtifactR
 }
 
 export function createEmitArtifactResolutionTool(deps: EmitArtifactResolutionDeps) {
-  return tool({
+  return createAgentTool({
+    name: 'emit_artifact_resolution',
     description:
       'Record one explicit artifact resolution for ingest provenance. Use when reconciliation merges or subsumes an artifact without creating a new wiki or SL write action.',
     inputSchema: z.object({

@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import { buildWuSystemPrompt, buildWuToolSet, buildWuUserPrompt } from './build-wu-context.js';
+
+const fakeTool = (name: string) =>
+  createAgentTool({
+    name,
+    description: name,
+    inputSchema: z.object({}),
+    execute: async () => `${name} output`,
+  });
 
 describe('buildWuUserPrompt', () => {
   it('includes rawFiles, dependencyPaths, peerFileIndex, and priorProvenance when present', () => {
@@ -56,11 +66,9 @@ describe('buildWuToolSet', () => {
     const toolSet = buildWuToolSet({
       stagedDir: '/tmp/staged',
       wu: { unitKey: 'u1', rawFiles: ['a.yml'], peerFileIndex: [], dependencyPaths: ['dep.yml'] },
-      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
-      emitUnmappedFallbackTool: {
-        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      toolsetTools: { wiki_search: {} as any, sl_write_source: {} as any },
+      loadSkillTool: { load_skill: fakeTool('load_skill') },
+      emitUnmappedFallbackTool: { emit_unmapped_fallback: fakeTool('emit_unmapped_fallback') },
+      toolsetTools: { wiki_write: fakeTool('wiki_write') },
     });
     expect(Object.keys(toolSet).sort()).toEqual(
       [
@@ -69,10 +77,11 @@ describe('buildWuToolSet', () => {
         'read_raw_file',
         'read_raw_span',
         'record_verification_ledger',
-        'sl_write_source',
-        'wiki_search',
+        'wiki_write',
       ].sort(),
     );
+    expect(toolSet.record_verification_ledger.inputSchema).toBeInstanceOf(z.ZodObject);
+    expect(toolSet.wiki_write.name).toBe('wiki_write');
   });
 
   it('requires the verification ledger before write-capable tools run', async () => {
@@ -80,11 +89,16 @@ describe('buildWuToolSet', () => {
     const toolSet = buildWuToolSet({
       stagedDir: '/tmp/staged',
       wu: { unitKey: 'u1', rawFiles: ['a.yml'], peerFileIndex: [], dependencyPaths: [] },
-      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
-      emitUnmappedFallbackTool: {
-        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      toolsetTools: { wiki_write: { description: 'write', inputSchema: {} as any, execute: wikiWrite } as any },
+      loadSkillTool: { load_skill: fakeTool('load_skill') },
+      emitUnmappedFallbackTool: { emit_unmapped_fallback: fakeTool('emit_unmapped_fallback') },
+      toolsetTools: {
+        wiki_write: createAgentTool({
+          name: 'wiki_write',
+          description: 'write',
+          inputSchema: z.object({ key: z.string() }),
+          execute: wikiWrite,
+        }),
+      },
     });
 
     const correction = await toolSet.wiki_write.execute?.({ key: 'customer-rules' }, { toolCallId: 't1' } as any);
@@ -112,11 +126,9 @@ describe('buildWuToolSet', () => {
       sourceKey: 'looker',
       stagedDir: '/tmp/staged',
       wu: { unitKey: 'looker-look-20', rawFiles: ['looks/20.json'], peerFileIndex: [], dependencyPaths: [] },
-      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
-      emitUnmappedFallbackTool: {
-        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      toolsetTools: { wiki_search: {} as any, sl_write_source: {} as any },
+      loadSkillTool: { load_skill: fakeTool('load_skill') },
+      emitUnmappedFallbackTool: { emit_unmapped_fallback: fakeTool('emit_unmapped_fallback') },
+      toolsetTools: { wiki_search: fakeTool('wiki_search'), sl_write_source: fakeTool('sl_write_source') },
     });
 
     expect(Object.keys(toolSet).sort()).toEqual(
@@ -138,11 +150,9 @@ describe('buildWuToolSet', () => {
       sourceKey: 'metabase',
       stagedDir: '/tmp/staged',
       wu: { unitKey: 'metabase-col-1', rawFiles: ['cards/1.json'], peerFileIndex: [], dependencyPaths: [] },
-      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
-      emitUnmappedFallbackTool: {
-        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
-      toolsetTools: { wiki_search: {} as any, sl_write_source: {} as any },
+      loadSkillTool: { load_skill: fakeTool('load_skill') },
+      emitUnmappedFallbackTool: { emit_unmapped_fallback: fakeTool('emit_unmapped_fallback') },
+      toolsetTools: { wiki_search: fakeTool('wiki_search'), sl_write_source: fakeTool('sl_write_source') },
     });
 
     expect(Object.keys(toolSet)).not.toContain('looker_query_to_sl');
@@ -160,15 +170,13 @@ describe('buildWuToolSet', () => {
         slDisallowed: true,
         slDisallowedReason: 'lookml_connection_mismatch',
       },
-      loadSkillTool: { load_skill: { description: 'load', inputSchema: {} as any, execute: vi.fn() } } as any,
-      emitUnmappedFallbackTool: {
-        emit_unmapped_fallback: { description: 'fallback', inputSchema: {} as any, execute: vi.fn() },
-      } as any,
+      loadSkillTool: { load_skill: fakeTool('load_skill') },
+      emitUnmappedFallbackTool: { emit_unmapped_fallback: fakeTool('emit_unmapped_fallback') },
       toolsetTools: {
-        sl_write_source: {} as any,
-        sl_edit_source: {} as any,
-        sl_read_source: {} as any,
-        wiki_search: {} as any,
+        sl_write_source: fakeTool('sl_write_source'),
+        sl_edit_source: fakeTool('sl_edit_source'),
+        sl_read_source: fakeTool('sl_read_source'),
+        wiki_search: fakeTool('wiki_search'),
       },
     });
 

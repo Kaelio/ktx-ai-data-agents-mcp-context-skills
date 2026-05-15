@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../../../agent/index.js';
 import type { ToolOutput } from '../../../../tools/index.js';
 import { type ParsedTargetTable, stagedLookerQuerySchema } from '../types.js';
 
@@ -160,7 +160,8 @@ export function buildLookerSlProposal(raw: LookerQueryToSlInput): LookerSlPropos
 }
 
 export function createLookerQueryToSlTool() {
-  return tool({
+  return createAgentTool({
+    name: 'looker_query_to_sl',
     description:
       'Given one staged Looker query JSON, return a conservative proposal for SL measures, dimensions, reusable filters, and triage priority. The proposal is advisory; verify with SL tools before writing.',
     inputSchema: lookerQueryToSlInputSchema,
@@ -170,13 +171,6 @@ export function createLookerQueryToSlTool() {
         markdown: formatLookerSlProposal(structured),
         structured,
       };
-    },
-    toModelOutput: ({ output }) => {
-      const markdown =
-        output && typeof output === 'object' && 'markdown' in output
-          ? String((output as { markdown: unknown }).markdown)
-          : String(output);
-      return { type: 'content', value: [{ type: 'text', text: markdown }] };
     },
   });
 }

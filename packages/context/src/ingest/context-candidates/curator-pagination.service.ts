@@ -1,6 +1,5 @@
 import type { KtxModelRole } from '@ktx/llm';
-import type { ToolSet } from 'ai';
-import type { AgentRunnerService } from '../../agent/index.js';
+import type { AgentRunnerService, AgentToolSet } from '../../agent/index.js';
 import { type KtxLogger, noopLogger } from '../../core/index.js';
 import type { MemoryAction } from '../../memory/index.js';
 import type { ContextCandidateForDedup, CuratorPaginationPort, CuratorPaginationReport } from '../ports.js';
@@ -38,7 +37,7 @@ export interface CuratorPaginationInput {
   modelRole: KtxModelRole;
   buildSystemPrompt: () => string;
   buildUserPrompt: (input: CuratorPaginationPromptInput) => string;
-  buildToolSet: (passNumber: number) => ToolSet;
+  buildToolSet: (passNumber: number) => AgentToolSet;
   getReconciliationActions: () => MemoryAction[];
   onStepFinish?: (info: { passNumber: number; stepIndex: number; stepBudget: number }) => void;
 }

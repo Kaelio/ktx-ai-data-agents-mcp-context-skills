@@ -200,7 +200,7 @@ const makeDeps = () => {
   const slValidator = { validateSingleSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }) };
   const toolsetFactory = {
     createIngestWuToolset: vi.fn().mockReturnValue({
-      toAiSdkTools: vi.fn().mockReturnValue({}),
+      toAgentTools: vi.fn().mockReturnValue({}),
       getAllTools: vi.fn().mockReturnValue([]),
       getToolNames: vi.fn().mockReturnValue([]),
     }),
@@ -419,7 +419,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
       sessions.push(toolSession);
       return {
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toAgentTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
         getToolNames: vi.fn().mockReturnValue([]),
       };
@@ -591,7 +591,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
       currentToolSession = toolSession;
       return {
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toAgentTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
         getToolNames: vi.fn().mockReturnValue([]),
       };
@@ -663,7 +663,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
       currentToolSession = toolSession;
       return {
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toAgentTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
         getToolNames: vi.fn().mockReturnValue([]),
       };
@@ -834,7 +834,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
   it('stores memory-flow provenance and transcript summaries in the ingest report body', async () => {
     const deps = makeDeps();
     deps.toolsetFactory.createIngestWuToolset.mockReturnValue({
-      toAiSdkTools: vi.fn().mockReturnValue({
+      toAgentTools: vi.fn().mockReturnValue({
         read_raw_span: {
           description: 'read a raw span',
           inputSchema: {},
@@ -1376,7 +1376,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
       currentToolSession = toolSession;
       return {
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toAgentTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
         getToolNames: vi.fn().mockReturnValue([]),
       };
@@ -1933,7 +1933,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
         currentToolSession = toolSession;
         return {
-          toAiSdkTools: vi.fn().mockReturnValue({}),
+          toAgentTools: vi.fn().mockReturnValue({}),
           getAllTools: vi.fn().mockReturnValue([]),
           getToolNames: vi.fn().mockReturnValue([]),
         };

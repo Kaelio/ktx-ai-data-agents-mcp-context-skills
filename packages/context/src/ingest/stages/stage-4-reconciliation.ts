@@ -1,6 +1,5 @@
-import type { AgentRunnerService } from '@ktx/context/agent';
+import type { AgentRunnerService, AgentToolSet } from '@ktx/context/agent';
 import type { KtxModelRole } from '@ktx/llm';
-import type { ToolSet } from 'ai';
 import type { EvictionUnit } from '../types.js';
 import type { StageIndex } from './stage-index.types.js';
 
@@ -10,7 +9,7 @@ export interface ReconciliationContext {
   agentRunner: AgentRunnerService;
   buildSystemPrompt: (idx: StageIndex, ev: EvictionUnit | undefined) => string;
   buildUserPrompt: (idx: StageIndex, ev: EvictionUnit | undefined) => string;
-  buildToolSet: () => ToolSet;
+  buildToolSet: () => AgentToolSet;
   modelRole: KtxModelRole;
   stepBudget: number;
   sourceKey: string;

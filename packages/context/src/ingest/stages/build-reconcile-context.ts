@@ -1,4 +1,4 @@
-import type { Tool, ToolSet } from 'ai';
+import type { AgentToolSet } from '../../agent/index.js';
 import { buildCanonicalPinsPromptBlock, type CanonicalPin } from '../canonical-pins.js';
 import {
   createVerificationLedgerState,
@@ -181,19 +181,19 @@ export function buildReconcileUserPrompt(
 }
 
 export interface ReconcileToolSetInput {
-  loadSkillTool: Record<string, Tool>;
-  stageListTool: Record<string, Tool>;
-  stageDiffTool: Record<string, Tool>;
-  evictionListTool: Record<string, Tool>;
-  emitConflictResolutionTool: Record<string, Tool>;
-  emitEvictionDecisionTool: Record<string, Tool>;
-  emitArtifactResolutionTool: Record<string, Tool>;
-  emitUnmappedFallbackTool: Record<string, Tool>;
-  readRawSpanTool: Record<string, Tool>;
-  toolsetTools: ToolSet;
+  loadSkillTool: AgentToolSet;
+  stageListTool: AgentToolSet;
+  stageDiffTool: AgentToolSet;
+  evictionListTool: AgentToolSet;
+  emitConflictResolutionTool: AgentToolSet;
+  emitEvictionDecisionTool: AgentToolSet;
+  emitArtifactResolutionTool: AgentToolSet;
+  emitUnmappedFallbackTool: AgentToolSet;
+  readRawSpanTool: AgentToolSet;
+  toolsetTools: AgentToolSet;
 }
 
-export function buildReconcileToolSet(input: ReconcileToolSetInput): ToolSet {
+export function buildReconcileToolSet(input: ReconcileToolSetInput): AgentToolSet {
   const state = createVerificationLedgerState();
   return withVerificationLedger(
     {

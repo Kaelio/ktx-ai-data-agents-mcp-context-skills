@@ -1,5 +1,5 @@
-import type { Tool } from 'ai';
 import { describe, expect, it } from 'vitest';
+import type { AgentToolDefinition } from '../../agent/index.js';
 import type { StageIndex } from '../stages/stage-index.types.js';
 import { createEmitArtifactResolutionTool } from './emit-artifact-resolution.tool.js';
 import { createEmitConflictResolutionTool } from './emit-conflict-resolution.tool.js';
@@ -17,11 +17,8 @@ function makeStageIndex(): StageIndex {
   };
 }
 
-async function executeTool<Input>(tool: Tool<Input, string>, input: NoInfer<Input>) {
-  if (!tool.execute) {
-    throw new Error('tool is not executable');
-  }
-  return (await tool.execute(input, { toolCallId: 'tool-call-1', messages: [] })) as string;
+async function executeTool<Input>(tool: AgentToolDefinition<any>, input: NoInfer<Input>) {
+  return (await tool.execute(input, { toolCallId: 'tool-call-1' })) as string;
 }
 
 describe('reconciliation emit tools', () => {

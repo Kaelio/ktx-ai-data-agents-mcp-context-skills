@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import type { StageIndex, UnmappedFallbackRecord, UnmappedFallbackReason } from '../stages/stage-index.types.js';
 
 interface EmitUnmappedFallbackDeps {
@@ -61,7 +61,8 @@ function requiresMissingTableValidation(reason: UnmappedFallbackReason): boolean
 }
 
 export function createEmitUnmappedFallbackTool(deps: EmitUnmappedFallbackDeps) {
-  return tool({
+  return createAgentTool({
+    name: 'emit_unmapped_fallback',
     description:
       'Record one unmapped fallback decision for the final IngestReport. The rawPath must be available to the current ingest stage. The tool generates the canonical detail from the structured reason and optional tableRef; use clarification only to add context that does not contradict the reason code.',
     inputSchema: z.object({

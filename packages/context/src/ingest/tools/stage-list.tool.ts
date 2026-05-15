@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import type { StageIndex } from '../stages/stage-index.types.js';
 
 export interface StageListDeps {
@@ -11,7 +11,8 @@ function formatActionDetail(detail: string): string {
 }
 
 export function createStageListTool(deps: StageListDeps) {
-  return tool({
+  return createAgentTool({
+    name: 'stage_list',
     description:
       'List every write made by Stage 3 WorkUnits in this job. Each entry has the unitKey, raw files, and the action set (SL sources touched, wiki pages written).',
     inputSchema: z.object({}),

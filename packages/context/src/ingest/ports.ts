@@ -314,7 +314,7 @@ export interface CuratorPaginationPort {
       items: ReconcileCandidateForPrompt[];
       runState: ReconcilePromptRunState;
     }) => string;
-    buildToolSet: (passNumber: number) => ToolSet;
+    buildToolSet: (passNumber: number) => AgentToolSet;
     getReconciliationActions: () => MemoryAction[];
     onStepFinish?: (info: { passNumber: number; stepIndex: number; stepBudget: number }) => void;
   }): Promise<ReconciliationOutcome & { report: CuratorPaginationReport; warnings: string[] }>;

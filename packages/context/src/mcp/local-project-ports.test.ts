@@ -617,6 +617,7 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.llm = {
       provider: { backend: 'none' },
       models: {},
+      agentRunner: { backend: 'ai-sdk' },
     };
 
     const sourceDir = join(tempDir, 'source');
@@ -1265,6 +1266,7 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.llm = {
       provider: { backend: 'none' },
       models: {},
+      agentRunner: { backend: 'ai-sdk' },
     };
     const sourceDir = join(project.projectDir, 'upload');
     await mkdir(join(sourceDir, 'orders'), { recursive: true });
@@ -1442,6 +1444,7 @@ describe('createLocalProjectMcpContextPorts', () => {
     project.config.llm = {
       provider: { backend: 'none' },
       models: {},
+      agentRunner: { backend: 'ai-sdk' },
     };
     const agentRunner = new TestAgentRunner();
     const ports = createLocalProjectMcpContextPorts(project, {

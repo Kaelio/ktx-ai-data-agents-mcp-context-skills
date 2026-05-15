@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import type { EvictionAppliedRecord, StageIndex } from '../stages/stage-index.types.js';
 
 interface EmitEvictionDecisionDeps {
@@ -15,7 +15,8 @@ function sameEvictionArtifact(left: EvictionAppliedRecord, right: EvictionApplie
 
 export function createEmitEvictionDecisionTool(deps: EmitEvictionDecisionDeps) {
   const allowedPaths = new Set(deps.deletedRawPaths);
-  return tool({
+  return createAgentTool({
+    name: 'emit_eviction_decision',
     description:
       'Record one eviction decision for the final IngestReport. The rawPath must come from the current Eviction Set.',
     inputSchema: z.object({

@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import { memoryActionIdentity } from '../action-identity.js';
 import type { StageIndex } from '../stages/stage-index.types.js';
 
@@ -8,7 +8,8 @@ export interface StageDiffDeps {
 }
 
 export function createStageDiffTool(deps: StageDiffDeps) {
-  return tool({
+  return createAgentTool({
+    name: 'stage_diff',
     description:
       'Compare two WorkUnits by their writes. SL writes overlap only when target connection and artifact key both match; same-key SL actions on different target connections are non-overlapping.',
     inputSchema: z.object({

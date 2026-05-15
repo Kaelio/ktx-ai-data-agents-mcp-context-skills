@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join, normalize, resolve } from 'node:path';
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 
 interface ReadRawFileDeps {
   stagedDir: string;
@@ -12,7 +12,8 @@ const MAX_READ_RAW_FILE_BYTES = 120_000;
 
 export function createReadRawFileTool(deps: ReadRawFileDeps) {
   const stagedRoot = resolve(deps.stagedDir);
-  return tool({
+  return createAgentTool({
+    name: 'read_raw_file',
     description:
       "Read the full text content of a raw source file inside this WorkUnit. `path` must be relative to the staged bundle root (no leading slash, no `..`) and must appear in the WorkUnit's rawFiles or dependencyPaths list.",
     inputSchema: z.object({

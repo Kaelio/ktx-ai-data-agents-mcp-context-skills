@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../../agent/index.js';
 import { historicSqlEvidencePath, serializeHistoricSqlEvidence } from './evidence.js';
 import { patternOutputSchema, tableUsageOutputSchema } from './skill-schemas.js';
 
@@ -91,12 +91,15 @@ function evidenceEnvelope(input: EmitHistoricSqlEvidenceInput, connectionId: str
 }
 
 export function createEmitHistoricSqlEvidenceTool(defaultContext?: EmitHistoricSqlEvidenceToolContext) {
-  return tool({
+  return createAgentTool({
+    name: 'emit_historic_sql_evidence',
     description:
       'Record typed historic-SQL evidence for deterministic projection. Use this instead of wiki_write, sl_write_source, sl_edit_source, or context_candidate_write during historic-SQL WorkUnits.',
     inputSchema: emitHistoricSqlEvidenceInputSchema,
     execute: async (input, options): Promise<string> => {
-      const context = (options.experimental_context as EmitHistoricSqlEvidenceToolContext | undefined) ?? defaultContext;
+      const context =
+        ((options as { experimental_context?: EmitHistoricSqlEvidenceToolContext }).experimental_context ??
+          defaultContext);
       const ingest = context?.session?.ingest;
       const configService = context?.session?.configService;
       if (!ingest || ingest.sourceKey !== 'historic-sql' || !configService || !context?.connectionId) {

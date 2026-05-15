@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z } from 'zod';
+import { createAgentTool } from '../../agent/index.js';
 import type { ConflictResolvedRecord, StageIndex } from '../stages/stage-index.types.js';
 
 interface EmitConflictResolutionDeps {
@@ -7,7 +7,8 @@ interface EmitConflictResolutionDeps {
 }
 
 export function createEmitConflictResolutionTool(deps: EmitConflictResolutionDeps) {
-  return tool({
+  return createAgentTool({
+    name: 'emit_conflict_resolution',
     description:
       'Record one conflict resolution decision for the final IngestReport. Call after resolving or flagging a cross-WorkUnit conflict.',
     inputSchema: z.object({

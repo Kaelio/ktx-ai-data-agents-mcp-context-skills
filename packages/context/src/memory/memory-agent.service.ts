@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tool } from 'ai';
 import * as YAML from 'yaml';
 import { z } from 'zod';
+import { createAgentTool } from '../agent/index.js';
 import { type KtxLogger, noopLogger } from '../core/index.js';
 import {
   revertSourceToPreHead,
@@ -126,7 +126,8 @@ export class MemoryAgentService {
     };
 
     const loadSkillTool = {
-      load_skill: tool({
+      load_skill: createAgentTool({
+        name: 'load_skill',
         description:
           'Load a skill to get specialized instructions. Call this when a skill listed in the system prompt matches the current task.',
         inputSchema: z.object({
@@ -212,7 +213,7 @@ export class MemoryAgentService {
         modelRole: 'candidateExtraction',
         systemPrompt,
         userPrompt: prompt,
-        toolSet: { ...toolset.toAiSdkTools(toolContext), ...loadSkillTool },
+        toolSet: { ...toolset.toAgentTools(toolContext), ...loadSkillTool },
         stepBudget,
         telemetryTags: {
           operationName: 'memory-agent-ingest',

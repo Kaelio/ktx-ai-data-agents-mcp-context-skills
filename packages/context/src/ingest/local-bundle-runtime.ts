@@ -540,7 +540,7 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
   }
 
   createIngestWuToolset(session: ToolSession, options?: { includeContextEvidenceTools?: boolean }): IngestToolsetLike {
-    const sourceTools: Record<string, Tool> =
+    const sourceTools: AgentToolSet =
       session.ingest?.sourceKey === 'historic-sql'
         ? {
             emit_historic_sql_evidence: createEmitHistoricSqlEvidenceTool({

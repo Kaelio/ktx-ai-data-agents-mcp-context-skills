@@ -124,11 +124,11 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
     slValidator: { validateSingleSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }) },
     toolsetFactory: {
       createIngestWuToolset: vi.fn().mockReturnValue({
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toAgentTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
       }),
       createToolset: vi.fn().mockReturnValue({
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toAgentTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
       }),
     },

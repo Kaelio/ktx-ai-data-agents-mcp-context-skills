@@ -1,8 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { type Tool, tool } from 'ai';
 import pLimit from 'p-limit';
 import { z } from 'zod';
+import { createAgentTool, type AgentToolSet } from '../agent/index.js';
 import { type KtxLogger, noopLogger } from '../core/index.js';
 import type { CaptureSession, MemoryAction } from '../memory/index.js';
 import type { SemanticLayerService, SemanticLayerSource, SlValidationDeps } from '../sl/index.js';
@@ -694,8 +694,9 @@ export class IngestBundleRunner {
           };
 
           const skillsLoadedPerWu: string[] = [];
-          const loadSkillTool: Record<string, Tool> = {
-            load_skill: tool({
+          const loadSkillTool: AgentToolSet = {
+            load_skill: createAgentTool({
+              name: 'load_skill',
               description:
                 'Load a skill to get specialized instructions. Call this when a skill listed in the system prompt matches the current task.',
               inputSchema: z.object({ name: z.string() }),
@@ -765,7 +766,7 @@ export class IngestBundleRunner {
                     wu: wuInner,
                     loadSkillTool,
                     emitUnmappedFallbackTool: wuEmitUnmappedFallbackTool,
-                    toolsetTools: wuToolset.toAiSdkTools(wuToolContext),
+                    toolsetTools: wuToolset.toAgentTools(wuToolContext),
                   }),
                   join(transcriptDir, `${wuInner.unitKey}.jsonl`),
                   wuInner.unitKey,
@@ -921,8 +922,9 @@ export class IngestBundleRunner {
         ingest: ingestToolMetadata,
         session: rcToolSession,
       };
-      const rcLoadSkill: Record<string, Tool> = {
-        load_skill: tool({
+      const rcLoadSkill: AgentToolSet = {
+        load_skill: createAgentTool({
+          name: 'load_skill',
           description: 'Load a skill.',
           inputSchema: z.object({ name: z.string() }),
           execute: async ({ name }) => {
@@ -1026,7 +1028,7 @@ export class IngestBundleRunner {
                 emitArtifactResolutionTool: rcEmitArtifactResolutionTool,
                 emitUnmappedFallbackTool: rcEmitUnmappedFallbackTool,
                 readRawSpanTool: rcRawSpanTool,
-                toolsetTools: rcToolset.toAiSdkTools(rcToolContext),
+                toolsetTools: rcToolset.toAgentTools(rcToolContext),
               }),
               join(transcriptDir, 'reconcile.jsonl'),
               'reconcile',
@@ -1075,7 +1077,7 @@ export class IngestBundleRunner {
                 emitArtifactResolutionTool: rcEmitArtifactResolutionTool,
                 emitUnmappedFallbackTool: rcEmitUnmappedFallbackTool,
                 readRawSpanTool: rcRawSpanTool,
-                toolsetTools: rcToolset.toAiSdkTools(rcToolContext),
+                toolsetTools: rcToolset.toAgentTools(rcToolContext),
               }),
               join(transcriptDir, 'reconcile.jsonl'),
               'reconcile',

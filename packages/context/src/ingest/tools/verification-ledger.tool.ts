@@ -1,5 +1,5 @@
-import { tool, type ToolExecuteFunction, type ToolExecutionOptions, type ToolSet } from 'ai';
 import { z } from 'zod';
+import { createAgentTool, type AgentToolDefinition, type AgentToolSet } from '../../agent/index.js';
 
 const verificationLedgerInputSchema = z.object({
   summary: z.string().min(1).max(2000),
@@ -37,31 +37,31 @@ export function createVerificationLedgerState(): VerificationLedgerState {
   return { entries: [] };
 }
 
-export function withVerificationLedger(tools: ToolSet, state: VerificationLedgerState): ToolSet {
-  const wrapped: ToolSet = {};
+export function withVerificationLedger(tools: AgentToolSet, state: VerificationLedgerState): AgentToolSet {
+  const wrapped: AgentToolSet = {};
   for (const [name, original] of Object.entries(tools)) {
-    if (!WRITE_TOOL_NAMES.has(name) || typeof original.execute !== 'function') {
+    if (!WRITE_TOOL_NAMES.has(name)) {
       wrapped[name] = original;
       continue;
     }
-    const originalExecute = original.execute;
-    const guardedExecute: ToolExecuteFunction<unknown, unknown> = async (
-      input: unknown,
-      opts: ToolExecutionOptions,
-    ) => {
-      if (state.entries.length === 0) {
-        return verificationRequiredOutput(name);
-      }
-      return (originalExecute as ToolExecuteFunction<unknown, unknown>)(input, opts);
+    const guardedTool: AgentToolDefinition<any> = {
+      ...original,
+      execute: async (input, options) => {
+        if (state.entries.length === 0) {
+          return verificationRequiredOutput(name);
+        }
+        return original.execute(input, options);
+      },
     };
-    wrapped[name] = { ...original, execute: guardedExecute };
+    wrapped[name] = guardedTool;
   }
   wrapped.record_verification_ledger = createRecordVerificationLedgerTool(state);
   return wrapped;
 }
 
 function createRecordVerificationLedgerTool(state: VerificationLedgerState) {
-  return tool({
+  return createAgentTool({
+    name: 'record_verification_ledger',
     description:
       'Record the pre-write verification ledger required by loaded ingest skills. Call this before wiki/SL/fallback writes to state what was verified, which tool calls support it, and what remains intentionally unverified.',
     inputSchema: verificationLedgerInputSchema,

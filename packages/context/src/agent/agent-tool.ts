@@ -5,7 +5,7 @@ export interface AgentToolCallOptions {
   toolCallId?: string;
 }
 
-export type AgentToolOutput = string | { markdown: string; structured?: unknown };
+export type AgentToolOutput = string | { markdown: string; structured?: unknown } | Record<string, unknown>;
 
 export interface AgentToolDefinition<TInputSchema extends ZodObject<ZodRawShape> = ZodObject<ZodRawShape>> {
   name: string;
@@ -35,7 +35,13 @@ export function assertAgentToolSet(toolSet: AgentToolSet): void {
 
 export function agentToolOutputToText(output: AgentToolOutput): string {
   if (output && typeof output === 'object' && 'markdown' in output) {
-    return output.markdown;
+    const markdown = output.markdown;
+    if (typeof markdown === 'string') {
+      return markdown;
+    }
+  }
+  if (output && typeof output === 'object') {
+    return JSON.stringify(output);
   }
   return String(output);
 }
