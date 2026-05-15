@@ -2,9 +2,9 @@
   <img src="assets/ktx-lockup.svg" alt="KTX" width="500" />
 </h1>
 
-<h2 align="center">
+<h1 align="center">
   The context layer for analytics agents
-</h2>
+</h1>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@kaelio/ktx"><img src="https://img.shields.io/npm/v/@kaelio/ktx?style=flat-square&color=f97316" alt="npm version" /></a>
