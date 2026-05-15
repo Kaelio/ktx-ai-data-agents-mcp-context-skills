@@ -315,14 +315,14 @@ function padVisual(text: string, width: number): string {
 }
 
 function renderTestAll(io: KtxCliIo, rows: ReadonlyArray<ConnectionTestRow>): void {
-  io.stdout.write(`${SYMBOLS.barStart}  connection test --all\n`);
-  io.stdout.write(`${SYMBOLS.bar}\n`);
+  io.stdout.write(`${bold('connection test --all')}\n`);
 
   if (rows.length === 0) {
-    io.stdout.write(`${SYMBOLS.barEnd}  No connections configured. Run \`ktx setup\` to add one.\n`);
+    io.stdout.write(`\n  No connections configured. Run \`ktx setup\` to add one.\n\n`);
     return;
   }
 
+  io.stdout.write('\n');
   const okLabel = green('✓ ok');
   const failLabel = red('✗ failed');
   const idWidth = Math.max(...rows.map((r) => r.connectionId.length));
@@ -334,17 +334,17 @@ function renderTestAll(io: KtxCliIo, rows: ReadonlyArray<ConnectionTestRow>): vo
     const driver = dim(padVisual(row.driver, driverWidth));
     const status = padVisual(row.ok ? okLabel : failLabel, statusWidth);
     const detail = dim(row.detail);
-    io.stdout.write(`${SYMBOLS.bar}  ${SYMBOLS.item} ${id}  ${driver}  ${status}  ${detail}\n`);
+    io.stdout.write(`  ${id}  ${driver}  ${status}  ${detail}\n`);
   }
 
   const failed = rows.filter((r) => !r.ok).length;
   const passed = rows.length - failed;
-  io.stdout.write(`${SYMBOLS.bar}\n`);
+  io.stdout.write('\n');
   const summary =
     failed === 0
       ? `${rows.length} tested ${dim(SYMBOLS.middot)} ${green(`${passed} passed`)}`
       : `${rows.length} tested ${dim(SYMBOLS.middot)} ${green(`${passed} passed`)} ${dim(SYMBOLS.middot)} ${red(`${failed} failed`)}`;
-  io.stdout.write(`${SYMBOLS.barEnd}  ${summary}\n`);
+  io.stdout.write(`${summary}\n`);
 }
 
 async function runTestAll(

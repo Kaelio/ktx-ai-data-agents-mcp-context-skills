@@ -202,19 +202,18 @@ function printListPretty<Row extends object>(args: PrintListArgs<Row>): void {
   const { io, command, rows, columns, groupBy, emptyMessage, emptyHint } = args;
   const unit = args.unit ?? 'result';
 
-  io.stdout.write(`${SYMBOLS.barStart}  ${command}\n`);
-  io.stdout.write(`${SYMBOLS.bar}\n`);
+  io.stdout.write(`${bold(command)}\n`);
 
   if (rows.length === 0) {
+    io.stdout.write(`\n  ${emptyMessage}\n`);
     if (emptyHint !== undefined && emptyHint !== '') {
-      io.stdout.write(`${SYMBOLS.bar}  ${emptyMessage}\n`);
-      io.stdout.write(`${SYMBOLS.bar}  ${dim(emptyHint)}\n`);
-      io.stdout.write(`${SYMBOLS.barEnd}  ${dim(`0 ${unit}s`)}\n`);
-    } else {
-      io.stdout.write(`${SYMBOLS.barEnd}  ${emptyMessage}\n`);
+      io.stdout.write(`  ${dim(emptyHint)}\n`);
     }
+    io.stdout.write('\n');
     return;
   }
+
+  io.stdout.write('\n');
 
   const resolved = resolveColumns(columns, groupBy);
 
@@ -231,14 +230,14 @@ function printListPretty<Row extends object>(args: PrintListArgs<Row>): void {
   for (const [groupValue, groupRowList] of buckets) {
     if (groupBy) {
       io.stdout.write(
-        `${SYMBOLS.bar}  ${SYMBOLS.group} ${bold(groupValue)} ${dim(`(${pluralize(groupRowList.length, unit)})`)}\n`,
+        `  ${bold(groupValue)} ${dim(`(${pluralize(groupRowList.length, unit)})`)}\n`,
       );
     }
     for (const row of groupRowList) {
       const segments: string[] = [];
 
       resolved.badge.forEach((col, idx) => {
-        segments.push(dim(formatCellValue(col, row).padStart(badgeWidths[idx] ?? 0)));
+        segments.push(formatCellValue(col, row).padStart(badgeWidths[idx] ?? 0));
       });
 
       if (resolved.name) {
@@ -265,10 +264,10 @@ function printListPretty<Row extends object>(args: PrintListArgs<Row>): void {
       if (optionalSuffix.length > 0) segments.push(optionalSuffix);
 
       const indent = groupBy ? '    ' : '  ';
-      io.stdout.write(`${SYMBOLS.bar}${indent}${SYMBOLS.item} ${segments.join('  ')}\n`);
+      io.stdout.write(`${indent}${segments.join('  ')}\n`);
     }
+    io.stdout.write('\n');
   }
 
-  io.stdout.write(`${SYMBOLS.bar}\n`);
-  io.stdout.write(`${SYMBOLS.barEnd}  ${pluralize(rows.length, unit)}\n`);
+  io.stdout.write(`${pluralize(rows.length, unit)}\n`);
 }
