@@ -101,8 +101,29 @@ operations that are better served by a `ktx`-CLI flow (and a future
 
 `connection_list` is retained because in multi-connection projects, the agent
 needs a way to enumerate available connections before issuing a `sql_execution`
-or `sl_query` against a specific one. Single-connection projects continue to
-auto-resolve when `connectionId` is omitted.
+or `sl_query` against a specific one.
+
+**`connectionId` resolution per retained tool** (auto-resolution exists today
+only on the local SL path; do not broaden it as part of this spec):
+
+| Tool | `connectionId` | Auto-resolves to single connection if omitted? |
+|---|---|---|
+| `connection_list` | n/a | n/a |
+| `discover_data` | optional | no — search is run unscoped when omitted |
+| `wiki_search` | n/a | n/a |
+| `wiki_read` | n/a | n/a |
+| `entity_details` | required | no |
+| `dictionary_search` | optional | no — search is run unscoped when omitted |
+| `sl_read_source` | required | no |
+| `sl_query` | optional | yes — `resolveLocalConnectionId` (`packages/context/src/sl/local-query.ts`) auto-resolves when the project has exactly one connection |
+| `sql_execution` | required | no |
+| `memory_ingest` | optional | no — omitted means "global" knowledge |
+| `memory_ingest_status` | n/a | n/a |
+
+The skill update in §3 must reflect this matrix: when `connection_list` shows
+multiple connections, the agent always passes `connectionId` for the required
+tools and for `sl_query`/`discover_data`/`dictionary_search` whenever the user
+intent pins a specific warehouse.
 
 #### 1.2 Removed from MCP registration
 
@@ -124,6 +145,26 @@ Replaces `memory_capture`. The change is a rename + a slightly relaxed input
 contract; the underlying `MemoryCaptureService` is reused as-is and renamed to
 `MemoryIngestService`. No alias, no migration shim — per the standing
 no-back-compat rule, the rename is atomic with the SKILL update.
+
+**Mapping `memory_ingest` input → `MemoryAgentInput`** (defined in
+`packages/context/src/memory/types.ts`):
+
+| `MemoryAgentInput` field | Value supplied by `memory_ingest` handler |
+|---|---|
+| `userId` | `userContext.userId` (existing pattern) |
+| `chatId` | `mcp-${randomUUID()}` (existing pattern) |
+| `userMessage` | input.`content` |
+| `assistantMessage` | omitted |
+| `connectionId` | input.`connectionId` (when provided) |
+| `sourceType` | `'external_ingest'` |
+
+The free-form markdown is routed into `userMessage` (not `assistantMessage`)
+because the memory agent's `sourceType: 'external_ingest'` path treats the
+single payload as the canonical content to triage. The CLI text-ingest path in
+`packages/cli/src/text-ingest.ts` already uses a different mapping (synthetic
+`userMessage` + content as `assistantMessage`); this spec does not change that
+path. If a future cleanup wants to unify the two ingest entry points, that is a
+separate spec.
 
 **Input schema:**
 
@@ -294,7 +335,18 @@ const slQueryDimensionSchema = z.preprocess(
 ```
 
 **`entityDetailsTableRefSchema`** — accept `{ schema, table }` (BigQuery /
-SQL-style convention) as an alias for `{ db, name }`.
+SQL-style convention) as an alias for `{ db, name }`. Today's schema requires
+`catalog`, `db`, and `name` (`packages/context/src/mcp/context-tools.ts:169`),
+so the alias path must also default `catalog` to `null` to satisfy the
+validator. Either of the two equivalent shapes below is acceptable; the
+implementation plan picks one:
+
+1. Make `catalog` (and `db`) `.nullable().default(null)` so the alias path
+   doesn't have to set them, and bare `{ schema, table }` is accepted with
+   `catalog === null`, `db === schema`, `name === table`.
+2. Have the preprocess unconditionally fill missing `catalog`/`db` with `null`.
+
+Acceptance criterion: a tool call with `{ table: { schema: "public", table: "orders" } }` parses successfully and resolves to `{ catalog: null, db: "public", name: "orders" }`. Existing callers passing `{ catalog, db, name }` continue to work unchanged.
 
 ```typescript
 const entityDetailsTableRefSchema = z.preprocess(
@@ -303,6 +355,7 @@ const entityDetailsTableRefSchema = z.preprocess(
       const obj = { ...(value as Record<string, unknown>) };
       if (!('db' in obj) && typeof obj.schema === 'string') obj.db = obj.schema;
       if (!('name' in obj) && typeof obj.table === 'string') obj.name = obj.table;
+      if (!('catalog' in obj)) obj.catalog = null;
       return obj;
     }
     return value;
@@ -321,23 +374,60 @@ drift.
 
 #### 2.6 Type-narrow `jsonToolResult`
 
+The goal is to forbid arrays at compile time without breaking the existing
+`interface`-typed response shapes (e.g. `KtxKnowledgeSearchResponse` in
+`packages/context/src/mcp/types.ts`). `Record<string, unknown>` is **not**
+acceptable as the constraint because TypeScript interfaces without an index
+signature are not assignable to it; using it would cause widespread compile
+failures on valid object responses.
+
+Use a non-array object constraint instead, e.g.:
+
 ```typescript
-export function jsonToolResult<T extends Record<string, unknown>>(
+type NonArrayObject = object & { length?: never };
+
+export function jsonToolResult<T extends NonArrayObject>(
   structuredContent: T,
 ): KtxMcpToolResult<T> { ... }
 ```
 
-`T extends Record<string, unknown>` instead of `T extends object` means arrays
-no longer satisfy the constraint at compile time. Catches the entire
-`discover_data` array-as-`structuredContent` bug class. Pure defensive type
-change; no runtime effect on current code.
+Acceptance criteria:
 
-#### 2.7 Document the `toResolvedWire` invariant
+- A bare array literal at a call site fails to type-check (catches the
+  `discover_data` bug class).
+- Every existing `interface`-typed response (`KtxKnowledgeSearchResponse`,
+  `KtxSemanticLayerQueryResponse`, `KtxSqlExecutionResponse`,
+  `KtxEntityDetailsResponse`, `KtxDictionarySearchResponse`,
+  `KtxDiscoverDataResponse`, `KtxConnectionTestResponse`,
+  `KtxSemanticLayerReadResponse`, `KtxSemanticLayerListResponse`,
+  `KtxKnowledgePage`, memory capture/status response shapes) continues to
+  type-check at every existing `jsonToolResult` call site without modification.
 
-Add a doc comment on `KtxSemanticLayerComputePort.query` (and
-`.validateSources`) stating that callers must pass `toResolvedWire`-sanitized
+Implementation plan can substitute an equivalent narrowing if it is more
+idiomatic; the contract is "no arrays, no breaking interface assignability."
+Pure defensive type change; no runtime effect on current code.
+
+#### 2.7 Enforce the `toResolvedWire` invariant
+
+Add a doc comment on `KtxSemanticLayerComputePort.query` and
+`.validateSources` stating that callers must pass `toResolvedWire`-sanitized
 sources to prevent the daemon `usage`-leak bug from regressing if a new code
 path bypasses `SemanticLayerService`.
+
+The doc comment alone is not sufficient — there is already an unsanitized
+caller. `loadComputableSources` in
+`packages/context/src/mcp/local-project-ports.ts` (~line 311) parses YAML and
+pushes the raw record into `validateSources`
+(`packages/context/src/mcp/local-project-ports.ts:586`). It must be brought into
+conformance by sanitizing each record with `toResolvedWire` before handing it
+to `validateSources`, mirroring the existing sanitization in
+`packages/context/src/sl/local-query.ts:76`. Acceptance criterion: every
+`KtxSemanticLayerComputePort.query` and `.validateSources` call site in the
+repo passes `toResolvedWire`-sanitized records, verified by code review and
+covered by the existing `local-query.test.ts` / `local-project-ports.test.ts`
+tests for the relevant paths. Note that `sl_validate` is removed from MCP
+registration (§1.2) but the underlying port keeps backing the CLI, so the
+invariant must hold for the CLI path too.
 
 #### 2.8 Progress notifications — `sql_execution` + `sl_query`
 
@@ -415,9 +505,16 @@ Three landings, each independently mergeable, in this order:
 - Update all tests for the removed/renamed tools.
 - Update `docs-site/content/docs/integrations/agent-clients.mdx` if it lists
   the available MCP tools.
+- Update `packages/cli/src/mcp-server-factory.ts` and
+  `packages/cli/src/text-ingest.ts` (plus their tests) to reflect the
+  `MemoryCapture*` → `MemoryIngest*` rename. Both files import
+  `createLocalProjectMemoryCapture` and use a `memoryCapture` variable, so the
+  rename does cross the CLI boundary even though the tool surface used by the
+  CLI is unchanged. Re-export rename in `packages/context/src/memory/index.ts`
+  is part of this PR.
 
-The CLI keeps using the removed tools' implementations directly — no CLI
-changes required in this PR.
+The CLI's runtime use of the removed admin-tool implementations is unchanged —
+only the memory rename touches CLI code.
 
 ### PR 2 — Polish kit
 
@@ -468,6 +565,23 @@ transports; the other four clients (Codex, Cursor, OpenCode, universal) share
 one of these transports and their config files are static. Spin up `ktx mcp
 stdio` and `ktx mcp start`, call each retained tool through both transports,
 verify response shape against `outputSchema`.
+
+### Required commands
+
+The named test files include slow tests that are excluded from the default
+`@ktx/context` `test` script and live in `test:slow`
+(`packages/context/package.json:127-128`). Implementation must run both:
+
+```bash
+pnpm --filter @ktx/context run test
+pnpm --filter @ktx/context run test:slow
+pnpm --filter @ktx/context run type-check
+pnpm run dead-code
+```
+
+When `docs-site/content/docs/integrations/agent-clients.mdx` is touched, also
+run the docs-site checks declared in `docs-site/package.json` (lint/build) so
+stale tool lists or anchors fail CI rather than ship.
 
 ### Red-green regression
 
