@@ -27,10 +27,8 @@ import {
 
 export type KtxSetupContextBuildStatus =
   | 'not_started'
-  | 'running'
   | 'completed'
   | 'failed'
-  | 'interrupted'
   | 'stale';
 
 export interface KtxSetupContextCommands {
@@ -84,7 +82,6 @@ export interface KtxSetupContextStepArgs {
   forcePrompt?: boolean;
   allowEmpty?: boolean;
   prompt?: boolean;
-  autoWatch?: boolean;
   cliVersion?: string;
   runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
 }
@@ -154,14 +151,8 @@ function normalizeState(projectDir: string, value: unknown): KtxSetupContextStat
   }
   const record = value as Record<string, unknown>;
   const rawStatus = typeof record.status === 'string' ? record.status : 'not_started';
-  const legacyActive = rawStatus === 'detached' || rawStatus === 'paused' || rawStatus === 'running';
-  const status: KtxSetupContextBuildStatus = legacyActive
-    ? 'stale'
-    : rawStatus === 'completed' ||
-        rawStatus === 'failed' ||
-        rawStatus === 'interrupted' ||
-        rawStatus === 'not_started' ||
-        rawStatus === 'stale'
+  const status: KtxSetupContextBuildStatus =
+    rawStatus === 'completed' || rawStatus === 'failed' || rawStatus === 'not_started' || rawStatus === 'stale'
       ? rawStatus
       : 'not_started';
   const runId = typeof record.runId === 'string' && record.runId.length > 0 ? record.runId : undefined;
@@ -187,11 +178,7 @@ function normalizeState(projectDir: string, value: unknown): KtxSetupContextStat
       ? record.retryableFailedTargets.filter((item): item is string => typeof item === 'string')
       : [],
     commands: contextBuildCommands(projectDir, runId),
-    ...(typeof record.failureReason === 'string'
-      ? { failureReason: record.failureReason }
-      : legacyActive
-        ? { failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.' }
-        : {}),
+    ...(typeof record.failureReason === 'string' ? { failureReason: record.failureReason } : {}),
     ...(normalizeSourceProgress(record.sourceProgress) ? { sourceProgress: normalizeSourceProgress(record.sourceProgress) } : {}),
   };
 }
@@ -552,9 +539,9 @@ async function runBuild(
   const now = deps.now ?? (() => new Date());
   const runId = deps.runIdFactory?.() ?? runIdFactory();
   const startedAt = now().toISOString();
-  const runningState: KtxSetupContextState = {
+  const incompleteState: KtxSetupContextState = {
     runId,
-    status: 'running',
+    status: 'stale',
     startedAt,
     updatedAt: startedAt,
     primarySourceConnectionIds: targets.primarySourceConnectionIds,
@@ -563,8 +550,9 @@ async function runBuild(
     artifactPaths: [],
     retryableFailedTargets: [],
     commands: contextBuildCommands(args.projectDir, runId),
+    failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
   };
-  await writeKtxSetupContextState(args.projectDir, runningState);
+  await writeKtxSetupContextState(args.projectDir, incompleteState);
 
   let lastSourceProgress: ContextBuildSourceProgressUpdate[] | undefined;
   const contextBuild = deps.runContextBuild ?? runContextBuild;
@@ -584,7 +572,7 @@ async function runBuild(
           const resolvedDir = resolve(args.projectDir);
           mkdirSync(join(resolvedDir, '.ktx', 'setup'), { recursive: true });
           const progressState = normalizeState(resolvedDir, {
-            ...runningState,
+            ...incompleteState,
             sourceProgress: sources,
             updatedAt: new Date().toISOString(),
           });
@@ -600,7 +588,7 @@ async function runBuild(
   if (buildResult.exitCode !== 0) {
     const updatedAt = now().toISOString();
     await writeKtxSetupContextState(args.projectDir, {
-      ...runningState,
+      ...incompleteState,
       status: 'failed',
       updatedAt,
       reportIds: completedReportIds,
@@ -616,7 +604,7 @@ async function runBuild(
   if (!readiness.ready) {
     const updatedAt = now().toISOString();
     await writeKtxSetupContextState(args.projectDir, {
-      ...runningState,
+      ...incompleteState,
       status: 'failed',
       updatedAt,
       reportIds: completedReportIds,
@@ -635,13 +623,14 @@ async function runBuild(
   await markContextComplete(project.projectDir);
   const completedAt = now().toISOString();
   await writeKtxSetupContextState(args.projectDir, {
-    ...runningState,
+    ...incompleteState,
     status: 'completed',
     updatedAt: completedAt,
     completedAt,
     reportIds: completedReportIds,
     artifactPaths: completedArtifactPaths,
     retryableFailedTargets: [],
+    failureReason: undefined,
     ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
   });
   writeSuccess(project, readiness, targets, io);

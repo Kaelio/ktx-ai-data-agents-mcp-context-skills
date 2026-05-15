@@ -163,10 +163,7 @@ type KtxSetupFlowStatus =
   | 'skipped'
   | 'back'
   | 'missing-input'
-  | 'failed'
-  | 'detached'
-  | 'paused'
-  | 'interrupted';
+  | 'failed';
 
 export interface KtxSetupEntryMenuPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
@@ -408,10 +405,6 @@ function setupContextReady(status: KtxSetupStatus): boolean {
   return status.context.ready;
 }
 
-function setupContextActive(status: KtxSetupStatus): boolean {
-  return status.context.status === 'running';
-}
-
 function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
   io.stderr.write('KTX context is not ready for agents.\n\n');
   io.stderr.write(`Build context first:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
@@ -451,27 +444,22 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     args.inputMode !== 'disabled' &&
     !args.agents &&
     (io.stdout.isTTY === true || deps.entryMenuDeps?.prompts !== undefined);
-  let autoWatchActiveBuild = false;
 
   setupLoop: while (true) {
     entryAction = undefined;
     if (canShowEntryMenu) {
       const status = await readKtxSetupStatus(args.projectDir);
-      if (setupContextActive(status)) {
-        autoWatchActiveBuild = true;
-      } else {
-        entryAction = (await runKtxSetupEntryMenu(status, deps.entryMenuDeps)).action;
-        if (entryAction === 'exit') {
-          (deps.entryMenuDeps?.prompts ?? createEntryMenuPromptAdapter()).cancel('Setup cancelled.');
-          return 0;
-        }
-        if (entryAction === 'status') {
-          io.stdout.write(formatKtxSetupStatus(status));
-          return 0;
-        }
-        if (entryAction === 'demo') {
-          return await runKtxSetupDemoFromEntryMenu(args, io, deps);
-        }
+      entryAction = (await runKtxSetupEntryMenu(status, deps.entryMenuDeps)).action;
+      if (entryAction === 'exit') {
+        (deps.entryMenuDeps?.prompts ?? createEntryMenuPromptAdapter()).cancel('Setup cancelled.');
+        return 0;
+      }
+      if (entryAction === 'status') {
+        io.stdout.write(formatKtxSetupStatus(status));
+        return 0;
+      }
+      if (entryAction === 'demo') {
+        return await runKtxSetupDemoFromEntryMenu(args, io, deps);
       }
     }
 
@@ -499,30 +487,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     const agentsRequested = args.agents || entryAction === 'agents';
     const currentStatus = await readKtxSetupStatus(projectResult.projectDir);
     let readyAction: string | undefined;
-
-    if (args.inputMode !== 'disabled' && !agentsRequested && setupContextActive(currentStatus)) {
-      const contextRunner =
-        deps.context ?? ((contextArgs, contextIo) => runKtxSetupContextStep(contextArgs, contextIo, deps.contextDeps));
-      const contextResult = await contextRunner(
-        {
-          projectDir: projectResult.projectDir,
-          inputMode: args.inputMode,
-          allowEmpty: true,
-          ...(autoWatchActiveBuild ? { autoWatch: true } : {}),
-        },
-        io,
-      );
-      autoWatchActiveBuild = false;
-      if (contextResult.status === 'back') {
-        continue;
-      }
-      if (contextResult.status === 'failed' || contextResult.status === 'missing-input') {
-        return 1;
-      }
-      if (contextResult.status !== 'ready') {
-        return 0;
-      }
-    }
 
     if (args.inputMode !== 'disabled' && !agentsRequested) {
       if (isKtxSetupReady(currentStatus)) {

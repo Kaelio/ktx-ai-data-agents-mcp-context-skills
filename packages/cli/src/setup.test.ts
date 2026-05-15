@@ -7,7 +7,7 @@ import { writeKtxSetupState } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
-import { contextBuildCommands, readKtxSetupContextState, writeKtxSetupContextState } from './setup-context.js';
+import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
 import { runDemoTour } from './setup-demo-tour.js';
 import { formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from './setup.js';
 
@@ -276,7 +276,7 @@ describe('setup status', () => {
     });
     await writeKtxSetupContextState(tempDir, {
       runId: 'setup-context-local-abc123',
-      status: 'running',
+      status: 'stale',
       startedAt: '2026-05-09T10:00:00.000Z',
       updatedAt: '2026-05-09T10:01:00.000Z',
       primarySourceConnectionIds: ['warehouse'],
@@ -285,6 +285,7 @@ describe('setup status', () => {
       artifactPaths: [],
       retryableFailedTargets: [],
       commands: contextBuildCommands(tempDir, 'setup-context-local-abc123'),
+      failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
     });
 
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
@@ -1617,40 +1618,6 @@ describe('setup status', () => {
 
     expect(agents).not.toHaveBeenCalled();
     expect(io.stderr()).toContain('KTX context is not ready for agents.');
-  });
-
-  it('does not offer background watch choices from setup status', async () => {
-    await writeFile(
-      join(tempDir, 'ktx.yaml'),
-      [
-        'setup:',
-        '  database_connection_ids:',
-        '    - warehouse',
-        'connections:',
-        '  warehouse:',
-        '    driver: postgres',
-        '    url: env:DATABASE_URL',
-        '',
-      ].join('\n'),
-      'utf-8',
-    );
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-stale',
-      status: 'running',
-      startedAt: '2026-05-09T09:00:00.000Z',
-      updatedAt: '2026-05-09T09:00:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: [],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-stale'),
-    });
-
-    const status = await readKtxSetupStatus(tempDir);
-    expect(status.context.status).toBe('stale');
-    const state = await readKtxSetupContextState(tempDir);
-    expect(state.status).toBe('stale');
   });
 
   it('routes a ready project menu selection to agent setup', async () => {
