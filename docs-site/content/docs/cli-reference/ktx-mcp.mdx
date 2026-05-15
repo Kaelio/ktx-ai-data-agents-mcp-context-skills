@@ -1,0 +1,70 @@
+---
+title: "ktx mcp"
+description: "Run the KTX MCP HTTP server for agent clients."
+---
+
+`ktx mcp` starts, stops, inspects, and tails the local KTX MCP server for a KTX
+project. Use it when an agent client connects through MCP instead of generated
+CLI instructions.
+
+## Command signature
+
+```bash
+ktx mcp <subcommand> [options]
+```
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `start` | Start the KTX MCP HTTP server |
+| `stop` | Stop the KTX MCP daemon |
+| `status` | Show daemon status, URL, PID, token mode, and project path |
+| `logs` | Print the daemon log |
+
+## `mcp start` Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--host <host>` | Host to bind | `127.0.0.1` |
+| `--port <n>` | Port to bind | `7878` |
+| `--token <token>` | Bearer token for non-loopback binding | `KTX_MCP_TOKEN` |
+| `--foreground` | Run the server in the foreground | `false` |
+| `--allowed-host <host>` | Additional allowed Host header; repeatable | - |
+| `--allowed-origin <origin>` | Allowed browser Origin header; repeatable | - |
+
+## `mcp logs` Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--follow` | Follow log output | `false` |
+
+## Examples
+
+```bash
+# Start the daemon on localhost
+ktx mcp start
+
+# Check status
+ktx mcp status
+
+# Tail logs
+ktx mcp logs --follow
+
+# Run in the foreground on a custom port
+ktx mcp start --port 8787 --foreground
+```
+
+## Security notes
+
+The default host is loopback-only. If you bind to a non-loopback host, configure
+a bearer token with `--token <token>` or `KTX_MCP_TOKEN` and restrict allowed
+hosts and origins for browser clients.
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| No KTX project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | Run from a KTX project or pass `--project-dir <path>` |
+| Non-loopback host rejected | The server needs token auth before binding beyond localhost | Pass `--token <token>` or set `KTX_MCP_TOKEN` |
+| Client cannot connect | Host, port, token, allowed host, or allowed origin does not match the client | Check `ktx mcp status`, then restart with explicit `--host`, `--port`, `--allowed-host`, and `--allowed-origin` values |

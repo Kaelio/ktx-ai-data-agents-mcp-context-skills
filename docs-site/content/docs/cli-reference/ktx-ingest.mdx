@@ -29,14 +29,16 @@ connections when you use `--all`.
 | `--deep` | Use AI-enriched database ingest | Stored connection default, or `fast` |
 | `--query-history` | Include database query-history usage patterns | Stored connection default |
 | `--no-query-history` | Skip database query-history usage patterns for this run | Stored connection default |
-| `--query-history-window-days <days>` | Query-history lookback window for this run | Stored connection default |
+| `--query-history-window-days <days>` | BigQuery/Snowflake query-history lookback window for this run | Stored connection default |
 | `--plain` | Print plain text output | `true` |
 | `--json` | Print JSON output | `false` |
 | `--no-input` | Disable interactive terminal input | — |
 
 `--fast` and `--deep` are mutually exclusive. Depth flags apply only to
 database connections. Query-history flags apply only to database connections
-that support query history. Query-history ingest runs after schema ingest and
+that support query history. The window flag applies to BigQuery and Snowflake;
+Postgres reads the current `pg_stat_statements` aggregate data instead of a
+time-windowed history table. Query-history ingest runs after schema ingest and
 requires deep ingest readiness.
 
 When `--all` selects both databases and context sources, database ingest runs
@@ -70,6 +72,7 @@ ktx ingest warehouse --deep
 
 # Include query-history usage patterns
 ktx ingest warehouse --deep --query-history
+# Set the lookback window for BigQuery or Snowflake query history
 ktx ingest warehouse --query-history-window-days 30
 
 # Build a source connection

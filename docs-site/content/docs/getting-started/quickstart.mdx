@@ -51,8 +51,8 @@ For scripted setup, pass the project directory explicitly:
 ktx setup --project-dir ./analytics
 ```
 
-If setup exits early, rerun `ktx setup` in the same directory. KTX tracks
-completed setup steps and resumes from the remaining work.
+If setup exits early, rerun `ktx setup` in the same directory. KTX keeps local
+setup progress under `.ktx/setup/` and resumes from the remaining work.
 
 ## Step 2: Configure the LLM
 
@@ -122,7 +122,8 @@ Database ready
 
 PostgreSQL, BigQuery, and Snowflake can also enable query-history ingest. Query
 history helps KTX learn common query patterns, joins, service-account filters,
-and warehouse-specific usage.
+and warehouse-specific usage. BigQuery and Snowflake support a lookback window;
+Postgres reads the current `pg_stat_statements` aggregate data instead.
 
 ## Step 5: Add context sources
 
@@ -200,7 +201,7 @@ KTX writes plain files so people and agents can inspect changes in git.
 
 | Path | Purpose |
 |------|---------|
-| `ktx.yaml` | Project configuration for LLMs, embeddings, connections, context sources, and setup state |
+| `ktx.yaml` | Project configuration for LLMs, embeddings, connections, context sources, and query-history settings |
 | `.ktx/secrets/*` | Local secret files referenced from `ktx.yaml`; do not commit these |
 | `.ktx/setup/*` | Local setup and context-build state |
 | `.ktx/agents/install-manifest.json` | Manifest used to manage installed agent files |

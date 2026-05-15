@@ -60,21 +60,25 @@ semantic-layer/<connection-id>/<source-name>.yaml
 
 ```yaml
 name: orders
-description: Customer orders with booked revenue.
+descriptions:
+  user: Customer orders with booked revenue.
 table: public.orders
 grain:
   - order_id
 columns:
   - name: order_id
     type: string
-    description: Unique order identifier.
+    descriptions:
+      user: Unique order identifier.
   - name: order_date
     type: time
     role: time
-    description: Date the order was placed.
+    descriptions:
+      user: Date the order was placed.
   - name: total_amount
     type: number
-    description: Booked order value in USD.
+    descriptions:
+      user: Booked order value in USD.
 measures:
   - name: total_revenue
     expr: SUM(total_amount)
@@ -85,7 +89,8 @@ measures:
 
 ```yaml
 name: orders
-description: Customer orders with line-item totals.
+descriptions:
+  user: Customer orders with line-item totals.
 table: public.orders
 grain:
   - order_id
@@ -93,26 +98,31 @@ grain:
 columns:
   - name: order_id
     type: string
-    description: Unique order identifier.
+    descriptions:
+      user: Unique order identifier.
 
   - name: order_date
     type: time
     role: time
-    description: Date the order was placed.
+    descriptions:
+      user: Date the order was placed.
 
   - name: status
     type: string
     visibility: public
-    description: Current order status.
+    descriptions:
+      user: Current order status.
 
   - name: _etl_loaded_at
     type: time
     visibility: hidden
-    description: Internal load timestamp.
+    descriptions:
+      user: Internal load timestamp.
 
   - name: total_amount
     type: number
-    description: Order total in USD.
+    descriptions:
+      user: Order total in USD.
 
 measures:
   - name: total_revenue
@@ -149,9 +159,10 @@ joins:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Source identifier. Use lowercase words and underscores. |
+| `descriptions` | No | Description map keyed by source, such as `user`, `dbt`, or `ai`. |
 | `table` or `sql` | Yes | Database table or custom SQL expression. Use exactly one. |
 | `grain` | Yes | Columns that uniquely identify a row at the source grain. |
-| `columns` | No | Column definitions with type, role, visibility, and descriptions. |
+| `columns` | Yes | Non-empty column definitions with type, role, visibility, and descriptions. |
 | `measures` | No | Aggregation expressions such as `SUM`, `COUNT`, and `AVG`. |
 | `segments` | No | Named predicates agents can reuse. |
 | `joins` | No | Relationships to other semantic sources. |
@@ -165,7 +176,7 @@ joins:
 | Column | `type` | Yes | Agent-facing type: `string`, `number`, `time`, or `boolean`. |
 | Column | `role` | No | Special role such as `time` for default time dimensions. |
 | Column | `visibility` | No | `public`, `internal`, or `hidden`. |
-| Column | `description` | Strongly recommended | Business meaning and usage notes. |
+| Column | `descriptions` | Strongly recommended | Description map keyed by source, such as `user`, `dbt`, or `ai`. |
 | Measure | `name` | Yes | Queryable metric name. |
 | Measure | `expr` | Yes | SQL aggregation expression at the source grain. |
 | Measure | `filter` | No | SQL predicate applied only to this measure. |
