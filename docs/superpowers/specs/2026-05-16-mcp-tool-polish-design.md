@@ -187,18 +187,27 @@ its `MemoryAgentInput` type are unchanged.
 |---|---|
 | `userId` | `userContext.userId` (existing pattern) |
 | `chatId` | `mcp-${randomUUID()}` (existing pattern) |
-| `userMessage` | input.`content` |
-| `assistantMessage` | omitted |
+| `userMessage` | synthetic framing string, e.g. `Ingest external knowledge into KTX memory.` |
+| `assistantMessage` | input.`content` |
 | `connectionId` | input.`connectionId` (when provided) |
 | `sourceType` | `'external_ingest'` |
 
-The free-form markdown is routed into `userMessage` (not `assistantMessage`)
-because the memory agent's `sourceType: 'external_ingest'` path treats the
-single payload as the canonical content to triage. The CLI text-ingest path in
-`packages/cli/src/text-ingest.ts` already uses a different mapping (synthetic
-`userMessage` + content as `assistantMessage`); this spec does not change that
-path. If a future cleanup wants to unify the two ingest entry points, that is a
-separate spec.
+The free-form markdown is routed into `assistantMessage` (not `userMessage`)
+with a synthetic framing `userMessage`, mirroring the existing CLI text-ingest
+path (`packages/cli/src/text-ingest.ts:295-302`). This mapping is required so
+that `detectCaptureSignals`
+(`packages/context/src/memory/capture-signals.ts:14`) can fire its
+`assistantMessage`-keyed cues — SQL aggregates, LookML structure, and
+definition tables — for artifact-like content. Routing content into
+`userMessage` would lose those signals and silently degrade triage parity with
+CLI ingest. The existing memory-agent prompt and tests already expect this
+shape; no changes to the memory agent itself are required.
+
+Acceptance criterion: an MCP `memory_ingest` call with the same markdown
+content as a CLI `ktx ingest text` invocation must produce identical
+`CaptureSignals` (knowledge / sl / dialect / reasons) — covered by a parity
+test that feeds the same fixture content through both ingest entry points and
+asserts equal `detectCaptureSignals` output.
 
 **Input schema:**
 
@@ -245,6 +254,33 @@ const memoryIngestSchema = z.object({
 renamed only.
 
 ### 2. Per-tool polish kit
+
+#### 2.0 Registration topology — memory tools must share the polish path
+
+Today `memory_capture` / `memory_capture_status` are registered in
+`packages/context/src/mcp/server.ts` via direct `deps.server.registerTool`
+calls (`server.ts:23,45`), **bypassing** `registerParsedTool` in
+`context-tools.ts`. If left as-is, the polish kit below
+(annotations, `outputSchema`, in-band error wrapping, per-field `.describe()`)
+would not apply to `memory_ingest` / `memory_ingest_status`, contradicting the
+"all 11 tools" acceptance criteria.
+
+Therefore, as part of the polish-kit PR (PR 2), one of the following must
+happen — the implementation plan picks:
+
+1. **Preferred:** Move `memory_ingest` and `memory_ingest_status` registration
+   into `registerKtxContextTools` so they go through `registerParsedTool` like
+   every other tool. The `MemoryIngestPort` becomes a `contextTools.memoryIngest`
+   port and the standalone `registerMemoryCaptureTools` helper in `server.ts`
+   is deleted.
+2. **Acceptable fallback:** Keep `registerMemoryIngestTools` in `server.ts`
+   but rewrite it to call `registerParsedTool` (exported from
+   `context-tools.ts`) so the same annotations / `outputSchema` /
+   error-wrapping plumbing is applied uniformly.
+
+Either way, every checklist item in §§2.1–2.4 must apply to the two memory
+tools, and the §Verification annotations and `outputSchema` tests must cover
+them.
 
 #### 2.1 Tool annotations
 
@@ -324,11 +360,33 @@ that fixed `order_by` model drift in this session).
 
 #### 2.4 In-band error wrapping in `registerParsedTool`
 
-Per MCP spec, tools return errors as `isError: true` + text content, not
-JSON-RPC errors. Move the try/catch into the `registerParsedTool` helper so
-every tool consistently surfaces handler exceptions and Zod parse failures as
+Per MCP spec, tools return handler/runtime errors as `isError: true` + text
+content, not JSON-RPC errors. Move the try/catch into the `registerParsedTool`
+helper so every tool consistently surfaces handler exceptions as
 `jsonErrorToolResult`. `sql_execution`'s local try/catch is removed (the
 helper handles it).
+
+**Scope — what becomes in-band vs. what stays JSON-RPC.** The MCP SDK
+pre-validates incoming arguments against the registered `inputSchema` before
+the tool callback runs, and surfaces validation failures as
+`McpError(InvalidParams)` / JSON-RPC errors
+(`@modelcontextprotocol/sdk/dist/esm/server/mcp.js` `validateToolInput`,
+~line 166). KTX cannot intercept those without forking the SDK and we will not.
+Therefore:
+
+- Schema-validation failures on input → remain JSON-RPC `InvalidParams` errors,
+  emitted by the SDK before our handler runs. This is the documented MCP
+  behavior; clients already handle it.
+- Handler exceptions, port/driver errors, and any post-validation runtime
+  errors thrown inside the tool body → wrapped in-band as
+  `{ isError: true, content: [{ type: 'text', ... }] }` by
+  `registerParsedTool`'s catch.
+- The redundant `inputSchema.parse(input)` inside `registerParsedTool` may be
+  kept as defense-in-depth (e.g., for the rare path where the SDK was given a
+  raw shape and a downstream change loosens validation) or removed; either is
+  acceptable. If kept, parse failures here are wrapped in-band as well, but in
+  practice they are unreachable for valid SDK registrations because the SDK
+  has already parsed against the same schema.
 
 ```typescript
 function registerParsedTool<TInput extends z.ZodType, TOutput extends z.ZodType>(
@@ -351,6 +409,13 @@ function registerParsedTool<TInput extends z.ZodType, TOutput extends z.ZodType>
 
 A small `formatToolError` helper renders Zod errors with `path: message` lines
 and falls through to `error.message` / `String(error)` for non-Zod cases.
+
+Acceptance tests in §Verification must therefore split the error path:
+
+- Bad input shape (rejected by SDK pre-validation) → expect a thrown
+  `McpError`/`InvalidParams` JSON-RPC error, not `isError: true`.
+- Handler-thrown / port-thrown error (e.g., unknown `connectionId`, driver
+  failure) → expect `{ isError: true, content: [{ type: 'text', ... }] }`.
 
 #### 2.5 Union-drift normalization
 
@@ -515,9 +580,25 @@ New:
 **Tool-name updates** throughout: every `memory_capture` reference becomes
 `memory_ingest`.
 
-**Multi-connection rule** added under `<rules>`:
+**Multi-connection rule** added under `<rules>` — phrased to match the §1.1
+connection matrix so the agent does not over-scope unscoped tools:
 
-> When `connection_list` shows multiple connections, route each tool call with an explicit `connectionId`. Don't assume; if the user's intent doesn't pin a connection, ask.
+> When `connection_list` shows multiple connections, pass an explicit
+> `connectionId` to every tool that takes one **and where user intent pins a
+> specific warehouse**. The matrix is:
+>
+> - **Required:** `entity_details`, `sl_read_source`, `sql_execution`.
+> - **Required when user intent is warehouse-specific (including any wording
+>   like "in our warehouse" / "this warehouse"):** `memory_ingest` — without
+>   `connectionId`, the memory agent cannot update the semantic layer and the
+>   knowledge will land as wiki-only.
+> - **Pass when intent pins a warehouse, otherwise omit for unscoped
+>   discovery:** `sl_query`, `discover_data`, `dictionary_search`.
+> - **Never pass `connectionId` (the tool does not accept one):**
+>   `connection_list`, `wiki_search`, `wiki_read`, `memory_ingest_status`.
+>
+> If intent is ambiguous for a required-or-scoped tool, ask the user which
+> warehouse before calling — do not guess.
 
 **One new worked example** demonstrating user-driven ingest:
 
@@ -663,9 +744,13 @@ session.
   flow get the updated SKILL the next time they re-run setup.
 - **`outputSchema` validation breaks a client that doesn't tolerate
   unrecognized JSON Schema keywords.** Mitigated by emitting `outputSchema`
-  with the same Draft-07 dialect the MCP SDK already produces for
-  `inputSchema`; the spec uses SHOULD-validate semantics, not MUST. The
-  snapshot test catches drift; the multi-client smoke confirms compatibility.
+  via the same `server.registerTool` path that already produces `inputSchema`,
+  so both schemas are serialized by the MCP SDK as JSON Schema 2020-12 (the
+  dialect the SDK's tool-list types declare —
+  `@modelcontextprotocol/sdk/.../types.js` `inputSchema` / `outputSchema`
+  fields, and Appendix B). The spec uses SHOULD-validate semantics, not MUST.
+  The snapshot test catches drift; the multi-client smoke confirms
+  compatibility.
 - **Progress notifications increase notification volume for clients that
   poll.** Mitigated by stage-based emission (3-4 events per call max). Clients
   that don't support progress simply ignore the events.
@@ -692,7 +777,7 @@ None at design time. Open items for the implementation plan:
 | Change | File |
 |---|---|
 | Tool registration removed (14 tools) | `packages/context/src/mcp/context-tools.ts` |
-| Memory rename | `packages/context/src/mcp/server.ts`, `packages/context/src/memory/*` |
+| Memory rename + route memory_ingest tools through the shared polish path (§2.0) | `packages/context/src/mcp/server.ts`, `packages/context/src/mcp/context-tools.ts`, `packages/context/src/memory/*` |
 | Local ports update | `packages/context/src/mcp/local-project-ports.ts` |
 | Port types update | `packages/context/src/mcp/types.ts` |
 | Annotations, outputSchema, describe, error wrapping, union preprocess | `packages/context/src/mcp/context-tools.ts` |
