@@ -86,26 +86,28 @@ function assertInitIsolation(
   if (message.type !== 'system' || message.subtype !== 'init') {
     return;
   }
+  const activeToolIds = new Set(message.tools);
   const unexpectedTools = message.tools.filter((toolName) => !allowedToolIds.has(toolName));
+  const missingTools = [...allowedToolIds].filter((toolName) => !activeToolIds.has(toolName));
   const activeMcpServerNames = message.mcp_servers.map((server) => server.name);
   const unexpectedMcpServers = activeMcpServerNames.filter((name) => !expectedMcpServerNames.has(name));
   const missingMcpServers = [...expectedMcpServerNames].filter((name) => !activeMcpServerNames.includes(name));
-  const unexpectedAgents = message.agents ?? [];
+  const unexpectedPlugins = message.plugins.map((plugin) => plugin.name);
   if (
     unexpectedTools.length > 0 ||
+    missingTools.length > 0 ||
     unexpectedMcpServers.length > 0 ||
     missingMcpServers.length > 0 ||
-    message.slash_commands.length > 0 ||
-    message.skills.length > 0 ||
-    message.plugins.length > 0 ||
-    unexpectedAgents.length > 0
+    unexpectedPlugins.length > 0
   ) {
     throw new Error(
-      `Claude Code runtime isolation failed: tools=${unexpectedTools.join(',') || '(none)'} mcp_servers=${
-        unexpectedMcpServers.join(',') || '(none)'
-      } missing_mcp_servers=${missingMcpServers.join(',') || '(none)'} slash_commands=${
+      `Claude Code runtime isolation failed: tools=${unexpectedTools.join(',') || '(none)'} missing_tools=${
+        missingTools.join(',') || '(none)'
+      } mcp_servers=${unexpectedMcpServers.join(',') || '(none)'} missing_mcp_servers=${
+        missingMcpServers.join(',') || '(none)'
+      } plugins=${unexpectedPlugins.join(',') || '(none)'} host_slash_commands=${
         message.slash_commands.length
-      } skills=${message.skills.length} plugins=${message.plugins.length} agents=${unexpectedAgents.join(',') || '(none)'}`,
+      } host_skills=${message.skills.length} host_agents=${message.agents?.join(',') || '(none)'}`,
     );
   }
 }
