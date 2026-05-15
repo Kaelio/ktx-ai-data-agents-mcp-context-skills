@@ -48,13 +48,10 @@ light extraction still run.
 
 ## Non-goals
 
-- **Global `ktx scan` parity in the first plan.** The required target is
-  end-to-end `ktx ingest`. `ktx scan` has separate non-agent LLM consumers
-  (`packages/context/src/scan/description-generation.ts`,
-  `packages/context/src/scan/relationship-llm-proposal.ts`,
-  `packages/context/src/scan/local-scan.ts`). The config and runtime design must
-  avoid accidental gateway fall-through for these paths, but the plan may either
-  adapt them in the same pass or fail them clearly until scan support is planned.
+- **Non-ingest LLM surfaces.** The required target is end-to-end `ktx ingest`.
+  Other internal LLM consumers are out of scope for this spec. The config and
+  runtime design must still avoid accidental gateway fall-through when
+  `llm.provider.backend` is `claude-code`.
 - **Tool-call repair parity.** The AI SDK runner uses
   `experimental_repairToolCall` (`packages/llm/src/repair.ts:35-88`). The Claude
   Agent SDK has no transparent same-step repair hook. MVP behavior is next-turn
@@ -173,9 +170,9 @@ Implementation implications:
   each KTX role to the configured model string for the current call. The plan
   must decide and test the accepted model aliases, for example `sonnet`,
   `opus`, `haiku`, or full Claude model IDs supported by the SDK.
-- If a non-ingest path such as `ktx scan` sees `backend: claude-code` before it
-  has been ported, it must fail fast with a clear "not supported for this command
-  yet" message. It must not silently route to gateway.
+- If non-ingest code sees `backend: claude-code` before it has been ported, it
+  must fail fast with a clear unsupported-backend message. It must not silently
+  route to gateway.
 
 ## Claude Agent SDK runtime behavior
 
@@ -346,15 +343,13 @@ Claude subscription limits.
 
 1. Confirm exact TypeScript option names and result-message discriminants
    against the pinned `@anthropic-ai/claude-agent-sdk` version.
-2. Decide whether to port `ktx scan` non-agent LLM consumers in the same pass or
-   fail them clearly for `claude-code` until a scan-specific plan exists.
-3. Define the final `KtxGenerationPort` and `AgentRunnerPort` file locations and
+2. Define the final `KtxGenerationPort` and `AgentRunnerPort` file locations and
    package exports.
-4. Define model alias validation for `sonnet`, `opus`, `haiku`, and full model
+3. Define model alias validation for `sonnet`, `opus`, `haiku`, and full model
    IDs.
-5. Define the auth probe and make setup/status/doctor report actionable
+4. Define the auth probe and make setup/status/doctor report actionable
    messages.
-6. Write tests that prove page triage is constructed and called under
+5. Write tests that prove page triage is constructed and called under
    `llm.provider.backend: claude-code`.
-7. Write tests that prove a raw built-in Claude Code tool request is denied and
+6. Write tests that prove a raw built-in Claude Code tool request is denied and
    only `mcp__ktx__*` tools are available during ingest.
