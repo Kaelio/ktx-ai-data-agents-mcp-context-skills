@@ -82,7 +82,11 @@ export function registerMcpCommands(program: Command, context: KtxCliCommandCont
         allowedOrigins: options.allowedOrigin,
         binPath: binPath(),
       });
-      context.io.stdout.write(`KTX MCP daemon started: ${result.url}\n`);
+      context.io.stdout.write(
+        result.status === 'started'
+          ? `KTX MCP daemon started: ${result.url}\n`
+          : `KTX MCP daemon already running: ${result.url}\n`,
+      );
     });
 
   mcp

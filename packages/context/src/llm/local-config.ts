@@ -145,11 +145,23 @@ export function resolveLocalKtxEmbeddingConfig(
       batchSize: config.batchSize,
     };
   }
+  if (config.backend === 'openai') {
+    const openai = resolvedProviderConfig(config.openai, env);
+    if (!openai?.apiKey) {
+      return null;
+    }
+    return {
+      backend: config.backend,
+      model: config.model ?? 'deterministic',
+      dimensions: config.dimensions,
+      openai,
+      batchSize: config.batchSize,
+    };
+  }
   return {
     backend: config.backend,
     model: config.model ?? 'deterministic',
     dimensions: config.dimensions,
-    ...(resolvedProviderConfig(config.openai, env) ? { openai: resolvedProviderConfig(config.openai, env) } : {}),
     ...(config.sentenceTransformers
       ? {
           sentenceTransformers: {

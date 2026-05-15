@@ -186,6 +186,10 @@ function shouldSuppressProjectDirLine(path: string[], options: Record<string, un
     return true;
   }
 
+  if (commandPathKey === 'ktx mcp stdio') {
+    return true;
+  }
+
   if (
     commandPathKey === 'ktx status' &&
     typeof options.projectDir !== 'string' &&

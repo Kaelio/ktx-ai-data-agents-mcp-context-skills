@@ -1,3 +1,4 @@
+import process from 'node:process';
 import type { Readable, Writable } from 'node:stream';
 import { loadKtxProject } from '@ktx/context/project';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -32,14 +33,32 @@ export async function runKtxMcpStdioServer(options: RunKtxMcpStdioServerOptions)
       cliVersion: options.cliVersion ?? '0.0.0-private',
       io: protocolIo,
     }));
-  const transport = new StdioServerTransport(options.stdin, options.stdout);
+  const stdin = options.stdin ?? process.stdin;
+  const transport = new StdioServerTransport(stdin, options.stdout);
 
   await new Promise<void>((resolve, reject) => {
-    transport.onclose = resolve;
+    let settled = false;
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      stdin.off('end', closeTransport);
+      stdin.off('close', closeTransport);
+      callback();
+    };
+    const closeTransport = () => {
+      transport.close().catch((error: unknown) => {
+        settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+      });
+    };
+    transport.onclose = () => settle(resolve);
     transport.onerror = (error) => {
       options.io?.stderr.write(`KTX MCP stdio transport error: ${error.message}\n`);
-      reject(error);
+      settle(() => reject(error));
     };
-    createMcpServer().connect(transport).catch(reject);
+    stdin.once('end', closeTransport);
+    stdin.once('close', closeTransport);
+    createMcpServer().connect(transport).catch((error: unknown) => {
+      settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+    });
   });
 }

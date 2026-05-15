@@ -709,15 +709,18 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
 
   const status = await readKtxSetupStatus(projectResult.projectDir);
   io.stdout.write(formatKtxSetupStatus(status));
-  setupUi.note(
-    formatSetupNextStepLines({
-      setupReady: setupStatusReady(status),
-      hasContextTargets: setupHasContextTargets(status),
-      contextReady: setupContextReady(status),
-      agentIntegrationReady: status.agents.some((agent) => agent.ready),
-    }).join('\n'),
-    'What you can do next',
-    io,
-  );
+  const focusedOnAgents = args.agents || entryAction === 'agents';
+  if (!focusedOnAgents) {
+    setupUi.note(
+      formatSetupNextStepLines({
+        setupReady: setupStatusReady(status),
+        hasContextTargets: setupHasContextTargets(status),
+        contextReady: setupContextReady(status),
+        agentIntegrationReady: status.agents.some((agent) => agent.ready),
+      }).join('\n'),
+      'What you can do next',
+      io,
+    );
+  }
   return 0;
 }

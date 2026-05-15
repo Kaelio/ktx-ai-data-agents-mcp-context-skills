@@ -2,6 +2,7 @@ import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { loadLocalSlSourceRecords } from './local-sl.js';
+import { toResolvedWire } from './semantic-layer.service.js';
 import type { SemanticLayerQueryExecutionResult, SemanticLayerQueryInput } from './types.js';
 
 const COMPILE_ONLY_REASON =
@@ -77,8 +78,8 @@ async function loadComputableSources(
   connectionId: string,
 ): Promise<Record<string, unknown>[]> {
   return (await loadLocalSlSourceRecords(project, { connectionId: assertSafeConnectionId(connectionId) }))
-    .map((record) => ({ ...record.source }))
-    .filter((source) => source.table || source.sql);
+    .filter((record) => record.source.table || record.source.sql)
+    .map((record) => toResolvedWire(record.source) as unknown as Record<string, unknown>);
 }
 
 function headersFromColumns(columns: Array<Record<string, unknown>>): string[] {

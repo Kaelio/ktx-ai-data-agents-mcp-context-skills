@@ -89,13 +89,36 @@ const slQueryDimensionSchema = z.union([
   }),
 ]);
 
-const slQueryOrderBySchema = z.union([
-  z.string(),
+const slQueryOrderBySchema = z.preprocess(
+  (value) => {
+    if (typeof value === 'string') {
+      return { field: value };
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = { ...(value as Record<string, unknown>) };
+      if (!('field' in obj) && typeof obj.id === 'string') {
+        obj.field = obj.id;
+      }
+      if (!('direction' in obj) && 'desc' in obj) {
+        obj.direction = obj.desc === true ? 'desc' : 'asc';
+      }
+      return obj;
+    }
+    return value;
+  },
   z.object({
-    field: z.string().min(1),
-    direction: z.enum(['asc', 'desc']).default('asc'),
+    field: z
+      .string()
+      .min(1)
+      .describe(
+        'Field/measure/dimension id to order by, e.g. "orders.created_at", a dimension key like "mart_nrr_quarterly.quarter_label", or a measure alias.',
+      ),
+    direction: z
+      .enum(['asc', 'desc'])
+      .default('asc')
+      .describe('Sort direction: "asc" or "desc". Defaults to "asc".'),
   }),
-]);
+);
 
 const slQuerySchema = z.object({
   connectionId: connectionIdSchema.optional(),
@@ -378,7 +401,10 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       'sl_query',
       {
         title: 'Semantic Layer Query',
-        description: 'Execute a semantic-layer query and return rows, headers, SQL, and the query plan.',
+        description:
+          'Execute a semantic-layer query and return rows, headers, SQL, and the query plan. ' +
+          'order_by items use the shape {"field": "orders.created_at", "direction": "asc"|"desc"}; ' +
+          'a bare string is treated as field with direction "asc".',
         inputSchema: slQuerySchema.shape,
       },
       slQuerySchema,
@@ -443,7 +469,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
         inputSchema: discoverDataSchema.shape,
       },
       discoverDataSchema,
-      async (input) => jsonToolResult(await discover.search(input)),
+      async (input) => jsonToolResult({ refs: await discover.search(input) }),
     );
   }
 

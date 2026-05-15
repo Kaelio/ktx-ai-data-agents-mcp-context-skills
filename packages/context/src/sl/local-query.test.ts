@@ -182,6 +182,46 @@ grain: []
     });
   });
 
+  it('strips authoring-only fields (usage, inherits_columns_from) before sending sources to the daemon', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      `tables:
+  invoices:
+    table: public.invoices
+    columns:
+      - name: invoice_id
+        type: number
+        pk: true
+      - name: amount
+        type: number
+    usage:
+      narrative: Activation policy windows table for invoice analytics.
+      frequencyTier: mid
+      commonFilters:
+        - amount
+      commonGroupBys: []
+      commonJoins: []
+      staleSince: null
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add manifest shard with usage',
+    );
+
+    await compileLocalSlQuery(project, {
+      connectionId: 'warehouse',
+      query: { measures: ['sum(invoices.amount)'], dimensions: [] },
+      compute,
+    });
+
+    const lastCall = (compute.query as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    const invoices = lastCall?.sources.find((s: Record<string, unknown>) => s.name === 'invoices');
+    expect(invoices).toBeDefined();
+    expect(invoices).not.toHaveProperty('usage');
+    expect(invoices).not.toHaveProperty('inherits_columns_from');
+    expect(invoices).not.toHaveProperty('source_type');
+  });
+
   it('resolves the only configured connection when connectionId is omitted', async () => {
     await compileLocalSlQuery(project, {
       query: { measures: ['orders.order_count'], dimensions: [] },

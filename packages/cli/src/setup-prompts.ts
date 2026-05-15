@@ -138,9 +138,13 @@ export function createKtxSetupPromptAdapter(options: KtxSetupPromptAdapterOption
   };
 }
 
+interface KtxSetupNoteOptions {
+  format?: (line: string) => string;
+}
+
 export interface KtxSetupUiAdapter {
   intro(title: string, io: KtxCliIo): void;
-  note(message: string, title: string, io: KtxCliIo): void;
+  note(message: string, title: string, io: KtxCliIo, options?: KtxSetupNoteOptions): void;
 }
 
 function isWritableTtyOutput(output: KtxCliIo['stdout']): output is KtxCliIo['stdout'] & Writable {
@@ -160,9 +164,12 @@ export function createKtxSetupUiAdapter(): KtxSetupUiAdapter {
       }
       io.stdout.write(`${title}\n`);
     },
-    note(message, title, io) {
+    note(message, title, io, options) {
       if (isWritableTtyOutput(io.stdout)) {
-        note(message, title, { output: io.stdout });
+        note(message, title, {
+          output: io.stdout,
+          ...(options?.format ? { format: options.format } : {}),
+        });
         return;
       }
       io.stdout.write(`\n${title}:\n`);

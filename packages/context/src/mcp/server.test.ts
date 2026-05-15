@@ -256,6 +256,51 @@ describe('createKtxMcpServer', () => {
     });
   });
 
+  it('sl_query normalizes order_by from cube-style {id, desc} and bare strings to {field, direction}', async () => {
+    const fake = makeFakeServer();
+    const semanticLayer: KtxSemanticLayerMcpPort = {
+      listSources: vi.fn(),
+      readSource: vi.fn(),
+      writeSource: vi.fn(),
+      validate: vi.fn(),
+      query: vi.fn<KtxSemanticLayerMcpPort['query']>().mockResolvedValue({
+        sql: '',
+        headers: [],
+        rows: [],
+        totalRows: 0,
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { semanticLayer },
+    });
+
+    await getTool(fake.tools, 'sl_query').handler({
+      connectionId: 'warehouse',
+      measures: ['orders.count'],
+      order_by: [
+        { field: 'orders.total', direction: 'desc' },
+        { id: 'orders.quarter_label', desc: false },
+        { id: 'orders.created_at', desc: true },
+        'orders.segment',
+      ],
+    });
+
+    expect(semanticLayer.query).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      query: expect.objectContaining({
+        order_by: [
+          { field: 'orders.total', direction: 'desc' },
+          { field: 'orders.quarter_label', direction: 'asc' },
+          { field: 'orders.created_at', direction: 'desc' },
+          { field: 'orders.segment', direction: 'asc' },
+        ],
+      }),
+    });
+  });
+
   it('registers discover_data when the host provides a discover port', async () => {
     const fake = makeFakeServer();
     const discover: KtxDiscoverDataMcpPort = {
@@ -288,14 +333,16 @@ describe('createKtxMcpServer', () => {
         limit: 5,
       }),
     ).resolves.toMatchObject({
-      structuredContent: [
-        {
-          kind: 'table',
-          id: 'public.orders',
-          connectionId: 'warehouse',
-          tableRef: { catalog: null, db: 'public', name: 'orders' },
-        },
-      ],
+      structuredContent: {
+        refs: [
+          {
+            kind: 'table',
+            id: 'public.orders',
+            connectionId: 'warehouse',
+            tableRef: { catalog: null, db: 'public', name: 'orders' },
+          },
+        ],
+      },
     });
     expect(discover.search).toHaveBeenCalledWith({
       query: 'orders',

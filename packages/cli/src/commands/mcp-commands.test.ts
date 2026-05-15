@@ -56,6 +56,33 @@ describe('registerMcpCommands', () => {
     expect(startDaemon).not.toHaveBeenCalled();
   });
 
+  it('prints "already running" when startDaemon reports already-running', async () => {
+    const program = new Command().exitOverride().option('--project-dir <path>');
+    const startDaemon = vi.fn().mockResolvedValue({
+      status: 'already-running',
+      url: 'http://127.0.0.1:7878/mcp',
+      state: {
+        schemaVersion: 1,
+        pid: 4242,
+        host: '127.0.0.1',
+        port: 7878,
+        tokenAuth: false,
+        projectDir: '/tmp/ktx-already',
+        startedAt: '2026-05-14T00:00:00.000Z',
+        logPath: '/tmp/ktx-already/.ktx/logs/mcp.log',
+      },
+    });
+    const context = makeContext({ deps: { mcp: { startDaemon } } });
+    registerMcpCommands(program, context);
+
+    await program.parseAsync(['--project-dir', '/tmp/ktx-already', 'mcp', 'start'], { from: 'user' });
+
+    expect(startDaemon).toHaveBeenCalledTimes(1);
+    expect(context.io.stdout.write).toHaveBeenCalledWith(
+      'KTX MCP daemon already running: http://127.0.0.1:7878/mcp\n',
+    );
+  });
+
   it('runs the stdio server with the resolved project directory', async () => {
     const program = new Command().exitOverride().option('--project-dir <path>');
     const runStdioServer = vi.fn().mockResolvedValue(undefined);
