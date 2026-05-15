@@ -191,7 +191,18 @@ KTX organizes context into four pillars:
 
 Each pillar covers a different kind of context agents need before they can safely write SQL, update semantic definitions, or explain an analytics result.
 
-**Semantic sources** are YAML definitions that describe your data in terms agents can reason about. Each source maps to a table or SQL query, declares its grain, defines typed columns, specifies valid joins, and exposes named measures with optional filters. This is where "revenue means `sum(amount)` excluding refunds" lives.
+**Semantic sources** are YAML definitions that describe your data in terms
+agents can reason about:
+
+- source tables or SQL queries;
+- row grain;
+- typed columns;
+- valid joins;
+- named measures, filters, and segments.
+
+This is where "revenue means `sum(amount)` excluding refunds" lives. For the
+join graph, fan-out protections, and execution mechanics, read
+[Semantic Layer Internals](/docs/concepts/semantic-layer-internals).
 
 ```yaml
 name: orders
