@@ -102,7 +102,7 @@ Add these tests inside `describe('ClaudeCodeKtxLlmRuntime', ...)` in
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
       query: objectQuery,
-      env: { ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod', PATH: '/usr/bin' },
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod', PATH: '/usr/bin' }, // pragma: allowlist secret
     });
 
     await expect(objectRuntime.generateObject({ role: 'default', prompt: 'json', schema })).resolves.toEqual({
@@ -112,7 +112,7 @@ Add these tests inside `describe('ClaudeCodeKtxLlmRuntime', ...)` in
       expect.objectContaining({ PATH: '/usr/bin' }),
     );
     expect(objectQuery.mock.calls[0][0].options.env).not.toEqual(
-      expect.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod' }),
+      expect.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod' }), // pragma: allowlist secret
     );
 
     const agentQuery = vi.fn((_input: any) =>

@@ -77,6 +77,7 @@ describe('scanFileContent', () => {
 
     assert.equal(scanFileContent('scripts/local-embeddings-runtime-smoke.mjs', `@${name}/ktx`).length, 0);
     assert.equal(scanFileContent('scripts/package-artifacts.test.mjs', `${name}-ktx`).length, 0);
+    assert.equal(scanFileContent('scripts/public-npm-release-metadata.mjs', `@${name}/ktx`).length, 0);
     assert.equal(scanFileContent('scripts/publish-public-npm-package.test.mjs', `@${name}/ktx`).length, 0);
     assert.equal(scanFileContent('packages/cli/src/managed-python-runtime.ts', `${name}_ktx`).length, 0);
   });

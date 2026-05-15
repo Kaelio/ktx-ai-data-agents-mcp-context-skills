@@ -946,7 +946,7 @@ function initMessage(overrides: Partial<Extract<SDKMessage, { type: 'system' }>>
   return {
     type: 'system',
     subtype: 'init',
-    apiKeySource: 'none',
+    apiKeySource: 'none', // pragma: allowlist secret
     claude_code_version: '0.3.142',
     cwd: '/tmp/project',
     tools: [],
@@ -988,7 +988,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
       query,
-      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' },
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' }, // pragma: allowlist secret
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).resolves.toBe('hello');
@@ -1078,7 +1078,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
   it('auth probe uses isolation options and a scrubbed env', async () => {
     const query = vi.fn(() => stream([initMessage(), resultMessage({ result: 'ok' })]));
 
-    await expect(runClaudeCodeAuthProbe({ projectDir: '/tmp/project', model: 'sonnet', query, env: { ANTHROPIC_API_KEY: 'sk-ant-test' } })).resolves.toEqual({ ok: true });
+    await expect(runClaudeCodeAuthProbe({ projectDir: '/tmp/project', model: 'sonnet', query, env: { ANTHROPIC_API_KEY: 'sk-ant-test' } })).resolves.toEqual({ ok: true }); // pragma: allowlist secret
     expect(query.mock.calls[0][0].options).toMatchObject({
       settingSources: [],
       skills: [],

@@ -16,7 +16,7 @@ function initMessage(overrides: Partial<Extract<SDKMessage, { type: 'system'; su
   return {
     type: 'system',
     subtype: 'init',
-    apiKeySource: 'none' as never,
+    apiKeySource: 'none' as never, // pragma: allowlist secret
     claude_code_version: '0.3.142',
     cwd: '/tmp/project',
     tools: [],
@@ -64,7 +64,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
       query,
-      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' },
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' }, // pragma: allowlist secret
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).resolves.toBe('hello');
@@ -166,7 +166,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
       query: textQuery,
-      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' },
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' }, // pragma: allowlist secret
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).resolves.toBe('hello');
@@ -327,7 +327,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
       query: objectQuery,
-      env: { ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod', PATH: '/usr/bin' },
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod', PATH: '/usr/bin' }, // pragma: allowlist secret
     });
 
     await expect(objectRuntime.generateObject({ role: 'default', prompt: 'json', schema })).resolves.toEqual({
@@ -335,7 +335,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     });
     expect(objectQuery.mock.calls[0][0].options.env).toEqual(expect.objectContaining({ PATH: '/usr/bin' }));
     expect(objectQuery.mock.calls[0][0].options.env).not.toEqual(
-      expect.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod' }),
+      expect.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod' }), // pragma: allowlist secret
     );
 
     const agentQuery = vi.fn((_input: any) =>
@@ -435,7 +435,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     const query = vi.fn((_input: any) => stream([initMessage(), resultMessage({ result: 'ok' })]));
 
     await expect(
-      runClaudeCodeAuthProbe({ projectDir: '/tmp/project', model: 'sonnet', query, env: { ANTHROPIC_API_KEY: 'sk-ant-test' } }),
+      runClaudeCodeAuthProbe({ projectDir: '/tmp/project', model: 'sonnet', query, env: { ANTHROPIC_API_KEY: 'sk-ant-test' } }), // pragma: allowlist secret
     ).resolves.toEqual({ ok: true });
     expect(query.mock.calls[0][0].options).toMatchObject({
       settingSources: [],

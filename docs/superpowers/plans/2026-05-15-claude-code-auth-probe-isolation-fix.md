@@ -286,7 +286,7 @@ with these tests:
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
       query: textQuery,
-      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' },
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', PATH: '/usr/bin' }, // pragma: allowlist secret
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).resolves.toBe('hello');
