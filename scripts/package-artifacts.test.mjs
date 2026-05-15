@@ -31,12 +31,6 @@ async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-const INTERNAL_BUILD_PACKAGE_NAMES = INTERNAL_NPM_WORKSPACE_PACKAGES.map((packageInfo) => packageInfo.name);
-const CONNECTOR_PACKAGE_NAMES = INTERNAL_BUILD_PACKAGE_NAMES.filter((packageName) =>
-  packageName.startsWith('@ktx/connector-'),
-);
-const NPM_BUILD_PACKAGE_ORDER = ['@ktx/llm', '@ktx/context', ...CONNECTOR_PACKAGE_NAMES, '@ktx/cli'];
-
 async function writeReleaseMetadataInputs(root) {
   for (const packageInfo of INTERNAL_NPM_WORKSPACE_PACKAGES) {
     await mkdir(join(root, packageInfo.packageRoot), { recursive: true });
@@ -81,24 +75,17 @@ describe('packageArtifactLayout', () => {
 });
 
 describe('buildArtifactCommands', () => {
-  it('builds TypeScript packages and the runtime wheel before packing npm artifacts', () => {
+  it('builds TypeScript packages in parallel topology, then the runtime wheel, then packs npm artifacts', () => {
     const layout = packageArtifactLayout('/repo/ktx');
     const commands = buildArtifactCommands(layout);
 
     assert.deepEqual(
-      commands.slice(0, NPM_BUILD_PACKAGE_ORDER.length).map((command) => [command.command, command.args]),
-      NPM_BUILD_PACKAGE_ORDER.map((packageName) => ['pnpm', ['--filter', packageName, 'run', 'build']]),
-    );
-    assert.deepEqual(
-      commands.slice(NPM_BUILD_PACKAGE_ORDER.length, NPM_BUILD_PACKAGE_ORDER.length + 1).map((command) => [
-        command.command,
-        command.args,
-      ]),
-      [[process.execPath, ['scripts/build-python-runtime-wheel.mjs']]],
-    );
-    assert.deepEqual(
-      commands.slice(NPM_BUILD_PACKAGE_ORDER.length + 1).map((command) => [command.command, command.args]),
-      [[process.execPath, ['scripts/build-public-npm-package.mjs']]],
+      commands.map((command) => [command.command, command.args]),
+      [
+        ['pnpm', ['--filter', './packages/*', '--workspace-concurrency=10', 'run', 'build']],
+        [process.execPath, ['scripts/build-python-runtime-wheel.mjs']],
+        [process.execPath, ['scripts/build-public-npm-package.mjs']],
+      ],
     );
   });
 });
