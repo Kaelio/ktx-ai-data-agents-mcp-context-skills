@@ -54,7 +54,7 @@ test("product mechanics component covers source-specific context and SQL expansi
     ".ktx/",
     "sl_refs",
     "Company documentation",
-    "Notion",
+    "Notion pages",
     "Metabase",
     "query history",
     "extract evidence",

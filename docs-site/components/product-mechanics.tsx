@@ -21,7 +21,7 @@ const sourceInputs = [
   },
   {
     name: "Company documentation",
-    detail: "Notion, policies, caveats, analyst notes",
+    detail: "Notion pages, policies, caveats, analyst notes",
     signal: "links business language back to semantic references",
     accent: "border-slate-500 dark:border-cyan-200",
   },
