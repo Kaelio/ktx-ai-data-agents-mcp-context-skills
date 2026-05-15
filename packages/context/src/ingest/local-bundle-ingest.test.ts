@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import YAML from 'yaml';
-import { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerPort, RunLoopParams } from '../llm/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import { makeLocalGitRepo } from '../test/make-local-git-repo.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,16 +13,12 @@ import { createDefaultLocalIngestAdapters, localPullConfigForAdapter } from './l
 import { getLocalIngestStatus, runLocalIngest } from './local-ingest.js';
 import type { ChunkResult, DiffSet, SourceAdapter } from './types.js';
 
-class TestAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn().mockResolvedValue({ stopReason: 'natural' as const });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
+class TestAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn().mockResolvedValue({ stopReason: 'natural' as const });
 }
 
-class LookerSlWritingAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: any) => {
+class LookerSlWritingAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'looker-explore-ecommerce-orders'
@@ -31,130 +27,100 @@ class LookerSlWritingAgentRunner extends AgentRunnerService {
       if (!ledger?.execute) {
         throw new Error('record_verification_ledger tool was not available to the Looker WorkUnit');
       }
-      await ledger.execute(
-        {
-          summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
-          verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
-          unverifiedIdentifiers: [],
-        },
-        { toolCallId: 'looker-verification-ledger', messages: [] },
-      );
+      await ledger.execute({
+        summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
+        verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
+        unverifiedIdentifiers: [],
+      });
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
         throw new Error('sl_write_source tool was not available to the Looker WorkUnit');
       }
-      const result = await slWrite.execute(
-        {
-          connectionId: 'prod-warehouse',
-          sourceName: 'looker__ecommerce__orders',
-          source: {
-            name: 'looker__ecommerce__orders',
-            table: 'public.orders',
-            grain: ['id'],
-            columns: [
-              { name: 'id', type: 'number' },
-              { name: 'revenue', type: 'number' },
-            ],
-            measures: [{ name: 'total_revenue', expr: 'sum(revenue)' }],
-          },
+      const result = await slWrite.execute({
+        connectionId: 'prod-warehouse',
+        sourceName: 'looker__ecommerce__orders',
+        source: {
+          name: 'looker__ecommerce__orders',
+          table: 'public.orders',
+          grain: ['id'],
+          columns: [
+            { name: 'id', type: 'number' },
+            { name: 'revenue', type: 'number' },
+          ],
+          measures: [{ name: 'total_revenue', expr: 'sum(revenue)' }],
         },
-        { toolCallId: 'looker-sl-write' },
-      );
-      if (!result.structured.success) {
+      });
+      if (!(result.structured as { success?: boolean } | undefined)?.success) {
         throw new Error(result.markdown);
       }
     }
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
-class WikiWritingAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: any) => {
+class WikiWritingAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (params.telemetryTags?.operationName === 'ingest-bundle-wu') {
       const ledger = params.toolSet.record_verification_ledger;
       if (!ledger?.execute) {
         throw new Error('record_verification_ledger tool was not available to the WorkUnit');
       }
-      await ledger.execute(
-        {
-          summary: 'Test fixture writes wiki-only context with no warehouse identifiers.',
-          verifiedIdentifiers: [],
-          unverifiedIdentifiers: [],
-        },
-        { toolCallId: 'wiki-verification-ledger', messages: [] },
-      );
+      await ledger.execute({
+        summary: 'Test fixture writes wiki-only context with no warehouse identifiers.',
+        verifiedIdentifiers: [],
+        unverifiedIdentifiers: [],
+      });
       const wikiWrite = params.toolSet.wiki_write;
       if (!wikiWrite?.execute) {
         throw new Error('wiki_write tool was not available to the WorkUnit');
       }
-      const result = await wikiWrite.execute(
-        {
-          key: 'orders_context',
-          summary: 'Orders source context',
-          content: 'Orders are purchase records used for revenue analysis.',
-          tags: ['orders'],
-        },
-        { toolCallId: 'wiki-write' },
-      );
-      if (!result.structured.success) {
+      const result = await wikiWrite.execute({
+        key: 'orders_context',
+        summary: 'Orders source context',
+        content: 'Orders are purchase records used for revenue analysis.',
+        tags: ['orders'],
+      });
+      if (!(result.structured as { success?: boolean } | undefined)?.success) {
         throw new Error(result.markdown);
       }
     }
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
-class WikiWritingWithRawPathAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: any) => {
+class WikiWritingWithRawPathAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (params.telemetryTags?.operationName === 'ingest-bundle-wu') {
       const ledger = params.toolSet.record_verification_ledger;
       if (!ledger?.execute) {
         throw new Error('record_verification_ledger tool was not available to the WorkUnit');
       }
-      await ledger.execute(
-        {
-          summary: 'Test fixture writes wiki-only context with explicit raw provenance and no warehouse identifiers.',
-          verifiedIdentifiers: [],
-          unverifiedIdentifiers: [],
-        },
-        { toolCallId: 'wiki-raw-path-verification-ledger', messages: [] },
-      );
+      await ledger.execute({
+        summary: 'Test fixture writes wiki-only context with explicit raw provenance and no warehouse identifiers.',
+        verifiedIdentifiers: [],
+        unverifiedIdentifiers: [],
+      });
       const wikiWrite = params.toolSet.wiki_write;
       if (!wikiWrite?.execute) {
         throw new Error('wiki_write tool was not available to the WorkUnit');
       }
-      const result = await wikiWrite.execute(
-        {
-          key: 'orders_context',
-          summary: 'Orders source context',
-          content: 'Orders are purchase records used for revenue analysis.',
-          tags: ['orders'],
-          rawPaths: ['orders/orders.json'],
-        },
-        { toolCallId: 'wiki-write' },
-      );
-      if (!result.structured.success) {
+      const result = await wikiWrite.execute({
+        key: 'orders_context',
+        summary: 'Orders source context',
+        content: 'Orders are purchase records used for revenue analysis.',
+        tags: ['orders'],
+        rawPaths: ['orders/orders.json'],
+      });
+      if (!(result.structured as { success?: boolean } | undefined)?.success) {
         throw new Error(result.markdown);
       }
     }
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
-class HistoricSqlEvidenceAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: any) => {
+class HistoricSqlEvidenceAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'historic-sql-table-public-orders'
@@ -163,31 +129,24 @@ class HistoricSqlEvidenceAgentRunner extends AgentRunnerService {
       if (!emitEvidence?.execute) {
         throw new Error('emit_historic_sql_evidence tool was not available to the historic-SQL WorkUnit');
       }
-      const result = await emitEvidence.execute(
-        {
-          kind: 'table_usage',
-          table: 'public.orders',
-          rawPath: 'tables/public.orders.json',
-          usage: {
-            narrative: 'Orders are repeatedly queried by lifecycle status.',
-            frequencyTier: 'high',
-            commonFilters: ['status'],
-            commonJoins: [],
-            staleSince: null,
-          },
+      const result = await emitEvidence.execute({
+        kind: 'table_usage',
+        table: 'public.orders',
+        rawPath: 'tables/public.orders.json',
+        usage: {
+          narrative: 'Orders are repeatedly queried by lifecycle status.',
+          frequencyTier: 'high',
+          commonFilters: ['status'],
+          commonJoins: [],
+          staleSince: null,
         },
-        { toolCallId: 'historic-sql-evidence' },
-      );
-      if (!String(result).includes('Recorded historic-SQL table_usage evidence')) {
-        throw new Error(`Unexpected historic-SQL evidence result: ${String(result)}`);
+      });
+      if (!result.markdown.includes('Recorded historic-SQL table_usage evidence')) {
+        throw new Error(`Unexpected historic-SQL evidence result: ${result.markdown}`);
       }
     }
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
 class HistoricSqlEvidenceTestAdapter implements SourceAdapter {

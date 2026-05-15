@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerPort } from '../llm/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
@@ -16,6 +16,10 @@ type RuntimeWithConnectionDeps = {
     };
   };
 };
+
+function testAgentRunner(): AgentRunnerPort {
+  return { runLoop: vi.fn().mockResolvedValue({ stopReason: 'natural' as const }) };
+}
 
 describe('createLocalBundleIngestRuntime', () => {
   let tempDir: string;
@@ -89,7 +93,7 @@ describe('createLocalBundleIngestRuntime', () => {
   });
 
   it('builds runner deps with local SQLite stores and context tools enabled', async () => {
-    const agentRunner = new AgentRunnerService({ llmProvider: { getModel: () => ({}) as never } as any });
+    const agentRunner = testAgentRunner();
 
     const runtime = createLocalBundleIngestRuntime({
       project,
@@ -120,7 +124,7 @@ describe('createLocalBundleIngestRuntime', () => {
       project_id: 'acme',
       dataset_id: 'warehouse',
     };
-    const agentRunner = new AgentRunnerService({ llmProvider: { getModel: () => ({}) as never } as any });
+    const agentRunner = testAgentRunner();
 
     const runtime = createLocalBundleIngestRuntime({
       project,
@@ -140,7 +144,7 @@ describe('createLocalBundleIngestRuntime', () => {
   });
 
   it('passes project connection config to local ingest query executors', async () => {
-    const agentRunner = new AgentRunnerService({ llmProvider: { getModel: () => ({}) as never } as any });
+    const agentRunner = testAgentRunner();
     const queryExecutor = {
       execute: vi.fn(async () => ({
         headers: ['answer'],

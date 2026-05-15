@@ -1,24 +1,20 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerPort, RunLoopParams } from '../llm/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initKtxProject, type KtxLocalProject } from '../project/index.js';
 import { LocalMetabaseDiscoveryCache } from './adapters/metabase/local-source-state-store.js';
 import { getLocalIngestStatus, runLocalMetabaseIngest } from './local-ingest.js';
 import type { ChunkResult, FetchContext, SourceAdapter } from './types.js';
 
-class TestAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: Parameters<AgentRunnerService['runLoop']>[0]) => {
+class TestAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (params.userPrompt.includes('metabase-db-2')) {
       return { stopReason: 'error' as const, error: new Error('database 2 failed') };
     }
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
 class FakeMetabaseSourceAdapter implements SourceAdapter {

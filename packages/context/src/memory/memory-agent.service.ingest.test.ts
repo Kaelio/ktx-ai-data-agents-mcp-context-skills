@@ -18,7 +18,6 @@ import { MemoryAgentService } from './memory-agent.service.js';
 
 interface BuiltMocks {
   appSettings: any;
-  llmProvider: any;
   prompt: any;
   eventTracker: any;
   telemetry: any;
@@ -66,7 +65,6 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
         llm: { memoryIngestionModel: 'test-model' },
       },
     },
-    llmProvider: { getModel: vi.fn().mockReturnValue({}) },
     prompt: { loadPrompt: vi.fn().mockResolvedValue('base framing') },
     eventTracker: { trackEvent: vi.fn(), createTelemetryIntegration: vi.fn().mockReturnValue(undefined) },
     telemetry: {

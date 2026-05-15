@@ -1,4 +1,4 @@
-import { generateKtxText, type KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import type {
   KtxColumnSampleInput,
   KtxColumnSampleResult,
@@ -778,8 +778,7 @@ export class KtxDescriptionGenerator {
 
   private async generateAiDescription(prompt: KtxDescriptionPrompt, _operationName: string): Promise<string | null> {
     try {
-      const text = await generateKtxText({
-        runtime: this.llmRuntime,
+      const text = await this.llmRuntime.generateText({
         role: 'candidateExtraction',
         system: prompt.system,
         prompt: prompt.user,

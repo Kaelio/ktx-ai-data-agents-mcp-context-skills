@@ -4,7 +4,6 @@ import { AiSdkKtxLlmRuntime, type AgentTelemetryPort } from '../llm/ai-sdk-runti
 import type { KtxLlmDebugRequestRecorder } from '../llm/debug-request-recorder.js';
 import type { AgentRunnerPort, RunLoopParams, RunLoopResult } from '../llm/runtime-port.js';
 export type {
-  AgentRunnerPort,
   RunLoopParams,
   RunLoopResult,
   RunLoopStepInfo,

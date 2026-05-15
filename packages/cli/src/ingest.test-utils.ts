@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { AgentRunnerService, type RunLoopParams } from '@ktx/context/agent';
+import type { AgentRunnerPort, RunLoopParams } from '@ktx/context';
 import {
   KtxYamlMetabaseSourceStateReader,
   LocalMetabaseDiscoveryCache,
@@ -255,8 +255,8 @@ export function failedLocalBundleRun(input: RunLocalIngestOptions, jobId: string
   };
 }
 
-export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: RunLoopParams) => {
+export class CliLookerSlWritingAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'looker-explore-ecommerce-orders'
@@ -294,18 +294,10 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
     }
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
-export class CliMetabaseAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async () => ({ stopReason: 'natural' as const }));
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
+export class CliMetabaseAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async () => ({ stopReason: 'natural' as const }));
 }
 
 export class CliMetabaseSourceAdapter implements SourceAdapter {

@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerPort } from '../llm/index.js';
 import { FakeSourceAdapter, type MemoryFlowReplayInput } from '../ingest/index.js';
 import { initKtxProject } from '../project/index.js';
 import {
@@ -14,12 +14,8 @@ import {
 import { writeLocalSlSource } from '../sl/index.js';
 import { createLocalProjectMcpContextPorts } from './local-project-ports.js';
 
-class TestAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn().mockResolvedValue({ stopReason: 'natural' as const });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
+class TestAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn().mockResolvedValue({ stopReason: 'natural' as const });
 }
 
 describe('createLocalProjectMcpContextPorts', () => {
