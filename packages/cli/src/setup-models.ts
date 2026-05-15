@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { resolveLocalKtxLlmConfig } from '@ktx/context';
+import { resolveLocalKtxLlmConfig, runClaudeCodeAuthProbe } from '@ktx/context';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   type KtxProjectConfig,
@@ -53,7 +53,7 @@ export interface AnthropicModelChoice {
   recommended: boolean;
 }
 
-export type KtxSetupLlmBackend = 'anthropic' | 'vertex';
+export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code';
 
 export interface KtxSetupModelPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
@@ -68,6 +68,11 @@ export interface KtxSetupModelDeps {
   prompts?: KtxSetupModelPromptAdapter;
   listModels?: (apiKey: string) => Promise<AnthropicModelChoice[]>;
   healthCheck?: (config: KtxLlmConfig) => Promise<KtxLlmHealthCheckResult>;
+  claudeCodeAuthProbe?: (input: {
+    projectDir: string;
+    model: string;
+    env?: NodeJS.ProcessEnv;
+  }) => Promise<{ ok: true } | { ok: false; message: string }>;
   readGcloudProject?: () => Promise<string | undefined>;
   listGcloudProjects?: () => Promise<GcloudProjectChoice[]>;
   spinner?: () => KtxCliSpinner;
@@ -252,7 +257,7 @@ export function isKtxSetupLlmConfigReady(config: KtxProjectLlmConfig): boolean {
     return typeof resolved.vertex?.location === 'string' && resolved.vertex.location.trim().length > 0;
   }
 
-  return resolved.backend === 'anthropic' || resolved.backend === 'gateway';
+  return resolved.backend === 'anthropic' || resolved.backend === 'gateway' || resolved.backend === 'claude-code';
 }
 
 function hasUsableConfiguredLlm(config: KtxProjectConfig): boolean {
@@ -263,9 +268,18 @@ function buildProjectLlmConfig(
   existing: KtxProjectLlmConfig,
   provider:
     | { backend: 'anthropic'; credentialRef: string }
-    | { backend: 'vertex'; vertex: { project?: string; location: string } },
+    | { backend: 'vertex'; vertex: { project?: string; location: string } }
+    | { backend: 'claude-code' },
   model: string,
 ): KtxProjectLlmConfig {
+  if (provider.backend === 'claude-code') {
+    return {
+      provider: { backend: 'claude-code' },
+      models: { ...existing.models, default: model },
+      promptCaching: existing.promptCaching,
+    };
+  }
+
   if (provider.backend === 'vertex') {
     return {
       provider: {
@@ -480,16 +494,21 @@ async function chooseBackend(
   }
   const choice = await prompts.select({
     message: 'Which LLM provider should KTX use?',
-    options: [
-      { value: 'anthropic', label: 'Anthropic API' },
-      { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
-      { value: 'back', label: 'Back' },
-    ],
+      options: [
+        { value: 'anthropic', label: 'Anthropic API' },
+        { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
+        { value: 'claude-code', label: 'Local Claude Code session' },
+        { value: 'back', label: 'Back' },
+      ],
   });
   if (choice === 'back') {
     return { status: 'back' };
   }
-  return { status: 'ready', backend: choice === 'vertex' ? 'vertex' : 'anthropic', prompted: true };
+  return {
+    status: 'ready',
+    backend: choice === 'vertex' || choice === 'claude-code' ? choice : 'anthropic',
+    prompted: true,
+  };
 }
 
 function resolveProvidedVertexRef(
@@ -807,7 +826,8 @@ async function persistLlmConfig(
   projectDir: string,
   provider:
     | { backend: 'anthropic'; credentialRef: string }
-    | { backend: 'vertex'; vertex: { project?: string; location: string } },
+    | { backend: 'vertex'; vertex: { project?: string; location: string } }
+    | { backend: 'claude-code' },
   model: string,
 ): Promise<void> {
   const project = await loadKtxProject({ projectDir });
@@ -916,6 +936,19 @@ export async function runKtxSetupAnthropicModelStep(
       io.stderr.write('Choose a different Vertex AI project, location, or model, or Back.\n');
       attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
       continue;
+    }
+
+    if (backendChoice.backend === 'claude-code') {
+      const model = backendArgs.anthropicModel ?? 'sonnet';
+      const probe = deps.claudeCodeAuthProbe ?? runClaudeCodeAuthProbe;
+      const health = await probe({ projectDir: args.projectDir, model, env: deps.env ?? process.env });
+      if (!health.ok) {
+        io.stderr.write(`${health.message}\n`);
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      await persistLlmConfig(args.projectDir, { backend: 'claude-code' }, model);
+      io.stdout.write(`│  LLM ready: yes (${model})\n`);
+      return { status: 'ready', projectDir: args.projectDir };
     }
 
     const credential = await chooseCredentialRef(backendArgs, io, deps);

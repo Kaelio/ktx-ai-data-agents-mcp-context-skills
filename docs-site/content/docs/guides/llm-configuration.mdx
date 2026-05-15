@@ -1,0 +1,48 @@
+---
+title: LLM configuration
+description: Configure KTX LLM providers, model roles, and prompt caching.
+---
+
+KTX uses the top-level `llm` block in `ktx.yaml` for text generation,
+structured extraction, and ingest or memory agent loops.
+
+## Backends
+
+Set `llm.provider.backend` to one of these values:
+
+- `anthropic`: Use the Anthropic API through `ANTHROPIC_API_KEY` or the
+  configured `api_key` reference.
+- `vertex`: Use Vertex AI Anthropic models through Google Cloud credentials.
+- `gateway`: Use AI Gateway-compatible Anthropic model ids.
+- `claude-code`: Use your local Claude Code session through the Claude Agent
+  SDK. KTX removes provider-routing environment variables from Claude Code
+  child processes, so this backend doesn't silently fall back to
+  `ANTHROPIC_API_KEY`, Vertex, Gateway, or Bedrock credentials.
+
+## Claude Code
+
+Use aliases or full Claude model ids in `llm.models`:
+
+```yaml
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: sonnet
+    reconcile: sonnet
+    repair: sonnet
+```
+
+`claude-code` keeps KTX tool boundaries intact. KTX exposes only the MCP tools
+needed for the current KTX agent loop and disables Claude Code built-in tools,
+filesystem settings, skills, plugins, agents, hooks, and slash commands.
+
+## Prompt caching
+
+`llm.promptCaching` has partial parity on `claude-code`. KTX doesn't pass
+Anthropic cache-control markers to the Claude Agent SDK. Status and doctor warn
+when you configure prompt-cache TTL, tool, or history fields that the Claude
+Agent SDK backend ignores.

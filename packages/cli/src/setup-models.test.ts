@@ -61,7 +61,12 @@ function makePromptAdapter(options: {
       if (message.includes('LLM provider')) {
         providerPromptCount += 1;
         const nextProviderChoice = selectValues[0];
-        if (nextProviderChoice === 'anthropic' || nextProviderChoice === 'vertex' || nextProviderChoice === 'back') {
+        if (
+          nextProviderChoice === 'anthropic' ||
+          nextProviderChoice === 'vertex' ||
+          nextProviderChoice === 'claude-code' ||
+          nextProviderChoice === 'back'
+        ) {
           return selectValues.shift() ?? nextProviderChoice;
         }
         if (options.credentialChoice === 'back' && providerPromptCount > 1) {
@@ -178,6 +183,30 @@ describe('setup Anthropic model step', () => {
         ]),
       }),
     );
+  });
+
+  it('configures Claude Code backend and validates local auth', async () => {
+    const io = makeIo();
+    const authProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'claude-code',
+        skipLlm: false,
+      },
+      io.io,
+      { claudeCodeAuthProbe: authProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm).toMatchObject({
+      provider: { backend: 'claude-code' },
+      models: { default: 'sonnet' },
+    });
+    expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
   });
 
   it('returns from Anthropic credential Back to provider selection', async () => {

@@ -58,6 +58,10 @@ ktx ingest --all --deep
 Deep ingest needs LLM and embedding readiness. If those providers are not
 configured, run `ktx setup` or use `--fast`.
 
+When you use `claude-code`, KTX still controls the tool surface for ingest and
+memory capture. Claude Code built-in tools, discovered MCP servers, hooks,
+skills, plugins, agents, and slash commands are not exposed to KTX agent loops.
+
 ## Query history
 
 PostgreSQL, BigQuery, and Snowflake can add query-history context. This helps

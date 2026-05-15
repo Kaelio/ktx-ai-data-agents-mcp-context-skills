@@ -265,36 +265,30 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
       if (!ledger?.execute) {
         throw new Error('record_verification_ledger tool was not available to the Looker WorkUnit');
       }
-      await ledger.execute(
-        {
-          summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
-          verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
-          unverifiedIdentifiers: [],
-        },
-        { toolCallId: 'cli-looker-verification-ledger', messages: [] },
-      );
+      await ledger.execute({
+        summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
+        verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
+        unverifiedIdentifiers: [],
+      });
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
         throw new Error('sl_write_source tool was not available to the Looker WorkUnit');
       }
-      const result = await slWrite.execute(
-        {
-          connectionId: 'prod-warehouse',
-          sourceName: 'looker__ecommerce__orders',
-          source: {
-            name: 'looker__ecommerce__orders',
-            table: 'public.orders',
-            grain: ['id'],
-            columns: [
-              { name: 'id', type: 'number' },
-              { name: 'revenue', type: 'number' },
-            ],
-            measures: [{ name: 'total_revenue', expr: 'sum(revenue)' }],
-          },
+      const result = await slWrite.execute({
+        connectionId: 'prod-warehouse',
+        sourceName: 'looker__ecommerce__orders',
+        source: {
+          name: 'looker__ecommerce__orders',
+          table: 'public.orders',
+          grain: ['id'],
+          columns: [
+            { name: 'id', type: 'number' },
+            { name: 'revenue', type: 'number' },
+          ],
+          measures: [{ name: 'total_revenue', expr: 'sum(revenue)' }],
         },
-        { toolCallId: 'cli-looker-sl-write', messages: [] },
-      );
-      if (!result.structured.success) {
+      });
+      if (!(result.structured as { success?: boolean } | undefined)?.success) {
         throw new Error(result.markdown);
       }
     }

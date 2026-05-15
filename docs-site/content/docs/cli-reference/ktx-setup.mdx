@@ -51,7 +51,8 @@ scripted project creation. They are not shown in `ktx setup --help`.
 
 | Flag | Description |
 |------|-------------|
-| `--llm-backend <backend>` | LLM backend: `anthropic` or `vertex` |
+| `--llm-backend <backend>` | LLM backend: `anthropic`, `vertex`, or `claude-code` |
+| `--llm-backend claude-code` | Use the local Claude Code session for KTX LLM calls |
 | `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key |
 | `--anthropic-api-key-file <path>` | File containing the Anthropic API key |
 | `--anthropic-model <model>` | Anthropic model ID to validate and save |
@@ -61,7 +62,8 @@ scripted project creation. They are not shown in `ktx setup --help`.
 
 Choose only one Anthropic credential source. Anthropic credential flags are only
 valid with the Anthropic backend; Vertex flags are only valid with the Vertex
-backend.
+backend. The `claude-code` backend uses local Claude Code authentication instead
+of Anthropic API key or Vertex flags.
 
 ### Embeddings
 

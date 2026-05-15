@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { runClaudeCodeAuthProbe } from '@ktx/context';
 import type {
   KtxConfigIssue,
   KtxLocalProject,
@@ -70,6 +71,12 @@ interface WarningItem {
   fix?: string;
 }
 
+type ClaudeCodeAuthProbe = (input: {
+  projectDir: string;
+  model: string;
+  env?: NodeJS.ProcessEnv;
+}) => Promise<{ ok: true } | { ok: false; message: string }>;
+
 const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -127,7 +134,15 @@ function envHint(value: unknown): string | undefined {
   return undefined;
 }
 
-function buildLlmStatus(config: KtxProjectLlmConfig, env: NodeJS.ProcessEnv): LlmStatus {
+async function buildLlmStatus(
+  config: KtxProjectLlmConfig,
+  options: {
+    projectDir: string;
+    env: NodeJS.ProcessEnv;
+    claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
+  },
+): Promise<LlmStatus> {
+  const env = options.env;
   const backend = config.provider.backend;
   const model = config.models?.default;
   if (backend === 'none') {
@@ -177,6 +192,26 @@ function buildLlmStatus(config: KtxProjectLlmConfig, env: NodeJS.ProcessEnv): Ll
       status: 'warn',
       detail: hint ? `key missing (env: ${hint})` : 'key missing',
       fix: hint ? `Set ${hint}` : 'Set the gateway api_key or rerun `ktx setup`',
+    };
+  }
+  if (backend === 'claude-code') {
+    const modelName = model ?? 'sonnet';
+    const probe = options.claudeCodeAuthProbe ?? runClaudeCodeAuthProbe;
+    const auth = await probe({ projectDir: options.projectDir, model: modelName, env });
+    if (auth.ok) {
+      return {
+        backend,
+        model: modelName,
+        status: 'ok',
+        detail: 'local Claude Code session authenticated',
+      };
+    }
+    return {
+      backend,
+      model: modelName,
+      status: 'fail',
+      detail: auth.message,
+      fix: 'Authenticate Claude Code locally with the Claude Code CLI, then rerun `ktx status`.',
     };
   }
   return { backend, model, status: 'warn', detail: 'unknown LLM backend' };
@@ -474,6 +509,13 @@ function buildPipelineStatus(config: KtxProjectConfig): PipelineStatus {
   };
 }
 
+function ignoredClaudeCodePromptCachingFields(config: KtxProjectLlmConfig): string[] {
+  if (config.provider.backend !== 'claude-code' || !config.promptCaching) {
+    return [];
+  }
+  return Object.keys(config.promptCaching).map((key) => `llm.promptCaching.${key}`);
+}
+
 function buildStorageStatus(config: KtxProjectConfig): StorageStatus {
   return {
     state: config.storage.state,
@@ -561,6 +603,14 @@ function buildWarnings(
     });
   }
 
+  const ignored = ignoredClaudeCodePromptCachingFields(config.llm);
+  if (ignored.length > 0) {
+    warnings.push({
+      message: `claude-code ignores ${ignored.join(', ')} because the Claude Agent SDK does not expose KTX prompt-cache TTL, tool, or history markers.`,
+      fix: 'Remove those promptCaching fields or use anthropic, vertex, or gateway when those cache knobs are required.',
+    });
+  }
+
   return warnings;
 }
 
@@ -622,6 +672,7 @@ function buildVerdict(
 export interface BuildProjectStatusOptions {
   env?: NodeJS.ProcessEnv;
   postgresQueryHistoryProbe?: PostgresQueryHistoryProbe;
+  claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
   configIssues?: KtxConfigIssue[];
 }
 
@@ -642,7 +693,11 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
   const config = project.config;
 
   const configStatus = buildConfigStatus(options.configIssues);
-  const llm = buildLlmStatus(config.llm, env);
+  const llm = await buildLlmStatus(config.llm, {
+    projectDir: project.projectDir,
+    env,
+    claudeCodeAuthProbe: options.claudeCodeAuthProbe,
+  });
   const embeddings = buildEmbeddingsStatus(config.ingest.embeddings, env);
   const storage = buildStorageStatus(config);
   const connections = Object.entries(config.connections).map(([name, conn]) =>

@@ -16,6 +16,12 @@ const config = {
   async redirects() {
     return [
       {
+        source: "/docs",
+        destination: "/docs/getting-started/introduction",
+        permanent: false,
+        basePath: false,
+      },
+      {
         source: "/:path*",
         has: [{ type: "host", value: "docs.ktx.sh" }],
         destination: "https://docs.kaelio.com/ktx/:path*",
