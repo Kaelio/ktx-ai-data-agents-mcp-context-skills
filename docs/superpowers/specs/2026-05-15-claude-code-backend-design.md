@@ -220,22 +220,30 @@ query({
     allowedTools: [/* exact mcp__ktx__<toolName> ids generated from the tool map */],
     canUseTool: ktxCanUseTool,
     permissionMode: "dontAsk",
-    persistSession: false
+    persistSession: false,
+    env: ktxClaudeCodeEnv
   }
 });
 ```
 
+`ktxClaudeCodeEnv` is the controlled environment described in
+"Agent SDK environment and auth boundary" below; it must be passed on every
+KTX `query()` call.
+
 For plain text generation:
 
 - Use the same `query()` runtime with `maxTurns: 1`.
-- Pass `settingSources: []`, `skills: []`, `plugins: []`, `tools: []`, and
-  `permissionMode: "dontAsk"`.
+- Pass `settingSources: []`, `skills: []`, `plugins: []`, `tools: []`,
+  `permissionMode: "dontAsk"`, `persistSession: false`, and
+  `env: ktxClaudeCodeEnv`.
 - Do not expose MCP tools unless the KTX call explicitly passed tools.
 - Return the final result message text.
 
 For structured object generation:
 
-- Use the Agent SDK structured output option for JSON schema output.
+- Use the same `query()` runtime with the Agent SDK structured output option
+  for JSON schema output, plus the same isolation tuple including
+  `env: ktxClaudeCodeEnv`.
 - Convert KTX Zod schemas at the runtime boundary.
 - Parse and validate the returned object with the original KTX schema before
   returning it to the caller.
@@ -283,6 +291,55 @@ the required outcome is fixed:
   not `process.cwd()`.
 - Sessions are not persisted unless the plan identifies a concrete debugging
   feature that needs persistence.
+
+## Agent SDK environment and auth boundary
+
+The Agent SDK's `query()` option `env` (`@anthropic-ai/claude-agent-sdk@0.3.142`
+`sdk.d.ts:1265-1279`) is the environment passed to the Claude Code child
+process and defaults to `process.env`. Without an explicit `env`, the SDK
+inherits the parent's environment, including any `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, gateway/AI-Gateway tokens,
+`GOOGLE_APPLICATION_CREDENTIALS` / `CLOUD_ML_REGION` (Vertex), and
+`AWS_*` (Bedrock) credentials — any of which can switch the Claude Code CLI's
+authentication source to API-key or another provider, bypassing the user's
+local Claude Code session. That would silently violate the core requirement
+that `claude-code` runs through the user's existing local Claude Code session
+and that there is no silent fallback to gateway, Anthropic API-key, or other
+provider execution.
+
+Every `claude-code` `query()` call site - agent loops, text generation,
+object generation, and the auth probe - MUST pass an explicit `env`
+(`ktxClaudeCodeEnv`) constructed from `process.env` with the following
+denylist removed:
+
+- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_AUTH_TOKEN`
+- `ANTHROPIC_BASE_URL`
+- `ANTHROPIC_MODEL` (provider-routing override)
+- `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`,
+  `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
+  `AWS_REGION`, `AWS_PROFILE`
+- `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`
+- Any future provider-routing variables the pinned SDK version documents
+
+The denylist is the source of truth and lives next to the runtime constructor
+so adding a variable is a single-file change.
+
+Acceptance criteria:
+
+- The constructed `ktxClaudeCodeEnv` does not contain any denylisted key, and
+  this is verified by a unit test that seeds each denylisted key in a fake
+  `process.env`.
+- The auth probe fails with the same "authenticate Claude Code locally"
+  message even when `ANTHROPIC_API_KEY` (or any other denylisted credential)
+  is present in `process.env` and no valid local Claude Code session exists.
+- Every KTX-originated `query()` invocation is spied to assert that `env`
+  was passed and that it does not contain any denylisted key; the test fails
+  if any code path falls back to the SDK default `process.env`.
+- The "no silent fallback" rule is preserved end-to-end: a machine with
+  `ANTHROPIC_API_KEY` set but no local Claude Code authentication still fails
+  setup/status/doctor on `claude-code`.
 
 ## Tool boundary
 
@@ -484,10 +541,14 @@ Acceptance criteria:
 usable, not just that `~/.claude/` exists. Acceptable validation strategies:
 
 - A minimal SDK probe call with `settingSources: []`, `skills: []`,
-  `plugins: []`, `tools: []`, `persistSession: false`, no `mcpServers`, and
-  `maxTurns: 1`. The probe MUST NOT rely on the SDK's documented default for
-  these fields, because the default for `settingSources` is
-  `["user", "project", "local"]` and loads filesystem settings.
+  `plugins: []`, `tools: []`, `persistSession: false`, no `mcpServers`,
+  `env: ktxClaudeCodeEnv`, and `maxTurns: 1`. The probe MUST NOT rely on
+  the SDK's documented default for any of these fields, because the default
+  for `settingSources` is `["user", "project", "local"]` (loads filesystem
+  settings) and the default for `env` is `process.env` (can route auth
+  through `ANTHROPIC_API_KEY` or other provider credentials and hide a
+  missing local Claude Code session). See "Agent SDK environment and auth
+  boundary" above for the `env` denylist.
 - An SDK-provided account/auth status method if the pinned version exposes one.
 - A docs-endorsed file-presence check only if the official SDK docs explicitly
   state that it proves auth usability.
@@ -560,6 +621,13 @@ Claude subscription limits.
 - The Agent SDK skills docs say discovered skills can be controlled with the
   `skills` option and disabled with `[]`; the runtime should set this
   explicitly.
+- `Options.env` in `@anthropic-ai/claude-agent-sdk@0.3.142`
+  (`sdk.d.ts:1265-1279`) is the environment passed to the Claude Code
+  process and defaults to `process.env`. Without an explicit `env`, the SDK
+  inherits the parent environment, including any provider-routing variables
+  (`ANTHROPIC_API_KEY`, Vertex/Bedrock credentials, gateway tokens) that
+  could change the active authentication source of the Claude Code CLI and
+  hide a missing local Claude Code session.
 
 ## Open items for the implementation plan
 
@@ -587,3 +655,16 @@ Claude subscription limits.
 10. Write a test that asserts `onStepFinish` is invoked the expected number
     of times for a fixed-budget `claude-code` agent loop, including the
     work-unit and reconciliation progress paths.
+11. Write a test that asserts every KTX-originated `query()` invocation
+    (agent loop, text generation, object generation, auth probe) is called
+    with an explicit `env` and that none of the denylisted provider-routing
+    variables (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+    `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`, `ANTHROPIC_VERTEX_PROJECT_ID`,
+    `CLOUD_ML_REGION`, `GOOGLE_APPLICATION_CREDENTIALS`,
+    `GOOGLE_CLOUD_PROJECT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+    `AWS_SESSION_TOKEN`, `AWS_REGION`, `AWS_PROFILE`,
+    `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`) are present in
+    that env, by seeding each variable in a fake `process.env`. The test
+    must also assert that the auth probe still fails when
+    `ANTHROPIC_API_KEY` is set in `process.env` but no local Claude Code
+    session exists.
