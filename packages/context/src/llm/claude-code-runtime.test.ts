@@ -155,6 +155,133 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 1 });
   });
 
+  it('rejects settings-derived agents and non-KTX MCP servers from init messages', async () => {
+    const query = vi.fn((_input: any) =>
+      stream([
+        initMessage({
+          agents: ['project-agent'],
+          mcp_servers: [{ name: 'filesystem', status: 'connected' }],
+        }),
+        resultMessage({ result: 'hello' }),
+      ]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).rejects.toThrow(
+      /Claude Code runtime isolation failed: .*mcp_servers=filesystem.*agents=project-agent/,
+    );
+  });
+
+  it('passes scrubbed env to object generation and agent loops', async () => {
+    const schema = z.object({ answer: z.string() });
+    const objectQuery = vi.fn((_input: any) =>
+      stream([initMessage(), resultMessage({ structured_output: { answer: 'yes' } })]),
+    );
+    const objectRuntime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query: objectQuery,
+      env: { ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod', PATH: '/usr/bin' },
+    });
+
+    await expect(objectRuntime.generateObject({ role: 'default', prompt: 'json', schema })).resolves.toEqual({
+      answer: 'yes',
+    });
+    expect(objectQuery.mock.calls[0][0].options.env).toEqual(expect.objectContaining({ PATH: '/usr/bin' }));
+    expect(objectQuery.mock.calls[0][0].options.env).not.toEqual(
+      expect.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod' }),
+    );
+
+    const agentQuery = vi.fn((_input: any) =>
+      stream([
+        initMessage({ tools: ['mcp__ktx__load_skill'], mcp_servers: [{ name: 'ktx', status: 'connected' }] }),
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [] },
+          parent_tool_use_id: null,
+          uuid: '00000000-0000-4000-8000-000000000004',
+          session_id: 'session-id',
+        } as unknown as SDKMessage,
+        resultMessage({ subtype: 'error_max_turns', is_error: true }),
+      ]),
+    );
+    const agentRuntime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query: agentQuery,
+      env: { ANTHROPIC_AUTH_TOKEN: 'token', CLAUDE_CODE_USE_VERTEX: '1', HOME: '/Users/test' },
+    });
+
+    await agentRuntime.runAgentLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      toolSet: {
+        load_skill: {
+          name: 'load_skill',
+          description: 'Load skill.',
+          inputSchema: z.object({ name: z.string() }),
+          execute: async () => ({ markdown: 'loaded' }),
+        },
+      },
+      stepBudget: 1,
+      telemetryTags: { operationName: 'test' },
+    });
+    expect(agentQuery.mock.calls[0][0].options.env).toEqual(expect.objectContaining({ HOME: '/Users/test' }));
+    expect(agentQuery.mock.calls[0][0].options.env).not.toEqual(
+      expect.objectContaining({ ANTHROPIC_AUTH_TOKEN: 'token', CLAUDE_CODE_USE_VERTEX: '1' }),
+    );
+  });
+
+  it('logs and ignores onStepFinish callback errors', async () => {
+    const query = vi.fn((_input: any) =>
+      stream([
+        initMessage(),
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [] },
+          parent_tool_use_id: null,
+          uuid: '00000000-0000-4000-8000-000000000005',
+          session_id: 'session-id',
+        } as unknown as SDKMessage,
+        resultMessage({ subtype: 'success', terminal_reason: 'completed' }),
+      ]),
+    );
+    const logger = {
+      debug: vi.fn(),
+      log: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      logger,
+    });
+
+    await expect(
+      runtime.runAgentLoop({
+        modelRole: 'default',
+        systemPrompt: 'system',
+        userPrompt: 'user',
+        toolSet: {},
+        stepBudget: 1,
+        telemetryTags: { operationName: 'test' },
+        onStepFinish: async () => {
+          throw new Error('callback exploded');
+        },
+      }),
+    ).resolves.toEqual({ stopReason: 'natural' });
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('callback exploded'));
+  });
+
   it('maps max-turn terminal reasons to budget', () => {
     expect(mapClaudeCodeStopReason(resultMessage({ subtype: 'error_max_turns' }))).toBe('budget');
     expect(mapClaudeCodeStopReason(resultMessage({ terminal_reason: 'max_turns' }))).toBe('budget');

@@ -78,23 +78,40 @@ function modelForRole(modelSlots: ClaudeCodeKtxLlmRuntimeDeps['modelSlots'], rol
   return resolveClaudeCodeModel(modelSlots[role] ?? modelSlots.default);
 }
 
-function assertInitIsolation(message: SDKMessage, allowedToolIds: Set<string>): void {
+function assertInitIsolation(
+  message: SDKMessage,
+  allowedToolIds: Set<string>,
+  expectedMcpServerNames: Set<string>,
+): void {
   if (message.type !== 'system' || message.subtype !== 'init') {
     return;
   }
   const unexpectedTools = message.tools.filter((toolName) => !allowedToolIds.has(toolName));
+  const activeMcpServerNames = message.mcp_servers.map((server) => server.name);
+  const unexpectedMcpServers = activeMcpServerNames.filter((name) => !expectedMcpServerNames.has(name));
+  const missingMcpServers = [...expectedMcpServerNames].filter((name) => !activeMcpServerNames.includes(name));
+  const unexpectedAgents = message.agents ?? [];
   if (
     unexpectedTools.length > 0 ||
+    unexpectedMcpServers.length > 0 ||
+    missingMcpServers.length > 0 ||
     message.slash_commands.length > 0 ||
     message.skills.length > 0 ||
-    message.plugins.length > 0
+    message.plugins.length > 0 ||
+    unexpectedAgents.length > 0
   ) {
     throw new Error(
-      `Claude Code runtime isolation failed: tools=${unexpectedTools.join(',') || '(none)'} slash_commands=${
+      `Claude Code runtime isolation failed: tools=${unexpectedTools.join(',') || '(none)'} mcp_servers=${
+        unexpectedMcpServers.join(',') || '(none)'
+      } missing_mcp_servers=${missingMcpServers.join(',') || '(none)'} slash_commands=${
         message.slash_commands.length
-      } skills=${message.skills.length} plugins=${message.plugins.length}`,
+      } skills=${message.skills.length} plugins=${message.plugins.length} agents=${unexpectedAgents.join(',') || '(none)'}`,
     );
   }
+}
+
+function expectedMcpServerNames(tools: KtxRuntimeToolSet | undefined): Set<string> {
+  return tools && Object.keys(tools).length > 0 ? new Set(['ktx']) : new Set();
 }
 
 function baseOptions(input: {
@@ -138,11 +155,12 @@ async function collectResult(params: {
   prompt: string;
   options: Options;
   allowedToolIds: Set<string>;
+  expectedMcpServerNames: Set<string>;
   onAssistantTurn?: () => Promise<void>;
 }): Promise<SDKResultMessage> {
   let result: SDKResultMessage | undefined;
   for await (const message of params.query({ prompt: params.prompt, options: params.options })) {
-    assertInitIsolation(message, params.allowedToolIds);
+    assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
     if (message.type === 'assistant' && message.parent_tool_use_id === null) {
       await params.onAssistantTurn?.();
     }
@@ -178,6 +196,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
       allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
+      expectedMcpServerNames: expectedMcpServerNames(input.tools),
     });
     const error = resultError(result);
     if (error) {
@@ -207,6 +226,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
       allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
+      expectedMcpServerNames: expectedMcpServerNames(input.tools),
     });
     const error = resultError(result);
     if (error) {
@@ -233,6 +253,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         prompt: params.userPrompt,
         options: { ...options, systemPrompt: params.systemPrompt },
         allowedToolIds: new Set(mcpToolIds(params.toolSet)),
+        expectedMcpServerNames: expectedMcpServerNames(params.toolSet),
         onAssistantTurn: async () => {
           stepIndex += 1;
           if (!params.onStepFinish) {
@@ -277,6 +298,7 @@ export async function runClaudeCodeAuthProbe(input: {
       prompt: 'Reply with exactly: ok',
       options,
       allowedToolIds: new Set(),
+      expectedMcpServerNames: new Set(),
     });
     const error = resultError(result);
     if (error) {
