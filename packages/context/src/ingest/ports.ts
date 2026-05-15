@@ -1,6 +1,5 @@
-import type { ToolSet } from 'ai';
 import type { KtxModelRole } from '@ktx/llm';
-import type { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerService, AgentToolSet } from '../agent/index.js';
 import type { KtxEmbeddingPort } from '../core/embedding.js';
 import type { GitService, KtxFileStorePort, KtxLogger, SessionOutcome } from '../core/index.js';
 import type { CaptureSession, MemoryAction, MemoryKnowledgeSlRefsPort } from '../memory/index.js';
@@ -163,7 +162,7 @@ export interface IngestCommitMessagePort {
 }
 
 export interface IngestToolsetLike {
-  toAiSdkTools(context: ToolContext): ToolSet;
+  toAgentTools(context: ToolContext): AgentToolSet;
 }
 
 export interface IngestToolsetFactoryPort {

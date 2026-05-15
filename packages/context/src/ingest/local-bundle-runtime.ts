@@ -2,9 +2,8 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { KtxLlmProvider } from '@ktx/llm';
-import type { Tool } from 'ai';
 import YAML from 'yaml';
-import type { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerService, AgentToolSet } from '../agent/index.js';
 import { AgentRunnerService as DefaultAgentRunnerService } from '../agent/index.js';
 import { localConnectionInfoFromConfig, type KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
@@ -456,12 +455,12 @@ class NoopKnowledgeEventPort implements KnowledgeEventPort {
 class LocalIngestToolSet implements IngestToolsetLike {
   constructor(
     private readonly tools: BaseTool[],
-    private readonly sourceTools: Record<string, Tool> = {},
+    private readonly sourceTools: AgentToolSet = {},
   ) {}
 
-  toAiSdkTools(context: ToolContext) {
+  toAgentTools(context: ToolContext) {
     return {
-      ...Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAiSdkTool(context)])),
+      ...Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAgentTool(context)])),
       ...this.sourceTools,
     };
   }

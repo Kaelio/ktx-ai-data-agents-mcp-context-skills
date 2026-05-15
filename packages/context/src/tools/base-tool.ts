@@ -1,5 +1,5 @@
-import { tool } from 'ai';
 import { z, type ZodType } from 'zod';
+import { createAgentTool, toAiSdkTool, type AgentToolDefinition } from '../agent/agent-tool.js';
 import { noopLogger, type KtxLogger } from '../core/index.js';
 import type { IngestToolMetadata, ToolSession } from './tool-session.js';
 
@@ -114,18 +114,16 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
     };
   }
 
-  toAiSdkTool(context: ToolContext): any {
+  toAgentTool(context: ToolContext): AgentToolDefinition<any> {
     const toolName = this.name;
-    const logger = this.logger;
 
-    return tool({
+    return createAgentTool({
+      name: toolName,
       description: this.description,
-      inputSchema: this.inputSchema,
+      inputSchema: this.inputSchema as any,
       execute: async (params, { toolCallId }) => {
-        // Create context copy with current toolCallId (safe for parallel execution)
-        const callContext = { ...context, toolCallId };
+        const callContext = { ...context, ...(toolCallId ? { toolCallId } : {}) };
 
-        // Record tool execution start (input generation has already been tracked via onChunk)
         if (callContext.timingTracker && toolCallId) {
           callContext.timingTracker.recordToolExecutionStart(callContext.messageId, toolName, toolCallId);
         }
@@ -136,8 +134,7 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
             throw new Error('Authentication required: userId must be provided in ToolContext');
           }
           const parsedInput = this.parseInput(params as Record<string, any>);
-          const result = await this.call(parsedInput, callContext);
-          return result;
+          return await this.call(parsedInput, callContext);
         } catch (error) {
           state = 'error';
           this.logger.error(
@@ -151,17 +148,11 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
           }
         }
       },
-      // Send only markdown to the LLM; tool callers still receive the structured output.
-      toModelOutput: ({ output }) => {
-        if (output && typeof output === 'object' && 'markdown' in output) {
-          return { type: 'content', value: [{ type: 'text', text: output.markdown as string }] };
-        }
-        if (typeof output !== 'string') {
-          logger.warn(`Tool ${toolName} returned unexpected output type: ${typeof output}. Coercing to string.`);
-        }
-        return { type: 'content', value: [{ type: 'text', text: String(output) }] };
-      },
     });
+  }
+
+  toAiSdkTool(context: ToolContext): any {
+    return toAiSdkTool(this.toAgentTool(context));
   }
 
   parseInput(input: Record<string, any>): z.infer<TInput> {

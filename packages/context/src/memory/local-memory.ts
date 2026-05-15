@@ -386,8 +386,8 @@ class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
 class LocalMemoryToolSet implements MemoryToolSetLike {
   constructor(private readonly tools: BaseTool[]) {}
 
-  toAiSdkTools(context: ToolContext) {
-    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAiSdkTool(context)]));
+  toAgentTools(context: ToolContext) {
+    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.toAgentTool(context)]));
   }
 }
 
