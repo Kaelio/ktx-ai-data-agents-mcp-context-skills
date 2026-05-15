@@ -139,7 +139,7 @@ function stripAnsi(s: string): string {
 }
 
 describe('printList — pretty mode', () => {
-  it('renders a Clack-style header, grouped rows, and footer', () => {
+  it('renders a bold header, grouped rows, and footer', () => {
     const r = recorder();
     printList<SlRow>({
       rows: [ORDERS, USERS],
@@ -152,13 +152,14 @@ describe('printList — pretty mode', () => {
       io: r.io,
     });
     const out = stripAnsi(r.out());
-    expect(out).toContain(`${SYMBOLS.barStart}  sl list`);
-    expect(out).toContain(`${SYMBOLS.group} warehouse`);
+    expect(out).toContain('sl list');
+    expect(out).toContain('warehouse');
     expect(out).toContain('(2 sources)');
-    expect(out).toMatch(new RegExp(`${escapeRegExp(SYMBOLS.item)} orders\\s+5 cols ${escapeRegExp(SYMBOLS.middot)} 3 measures ${escapeRegExp(SYMBOLS.middot)} 1 join\\b`));
-    expect(out).toMatch(new RegExp(`${escapeRegExp(SYMBOLS.item)} users\\s+8 cols ${escapeRegExp(SYMBOLS.middot)} 2 measures ${escapeRegExp(SYMBOLS.middot)} 2 joins\\b`));
+    expect(out).toMatch(/orders\s+5 cols/);
+    expect(out).toMatch(new RegExp(`3 measures ${escapeRegExp(SYMBOLS.middot)} 1 join\\b`));
+    expect(out).toMatch(new RegExp(`2 measures ${escapeRegExp(SYMBOLS.middot)} 2 joins\\b`));
     expect(out).toContain(`${SYMBOLS.emDash} User profile + auth`);
-    expect(out).toContain(`${SYMBOLS.barEnd}  2 sources`);
+    expect(out).toContain('2 sources');
   });
 
   it('renders an empty-state message when no rows', () => {
@@ -174,11 +175,11 @@ describe('printList — pretty mode', () => {
       io: r.io,
     });
     const out = stripAnsi(r.out());
-    expect(out).toContain(`${SYMBOLS.barStart}  sl list`);
-    expect(out).toContain(`${SYMBOLS.barEnd}  No semantic-layer sources found in /tmp/proj`);
+    expect(out).toContain('sl list');
+    expect(out).toContain('No semantic-layer sources found in /tmp/proj');
   });
 
-  it('renders empty-state with hint and zero-count footer when emptyHint is provided', () => {
+  it('renders empty-state with hint when emptyHint is provided', () => {
     const r = recorder();
     printList<SlRow>({
       rows: [],
@@ -192,9 +193,8 @@ describe('printList — pretty mode', () => {
       io: r.io,
     });
     const out = stripAnsi(r.out());
-    expect(out).toContain(`${SYMBOLS.bar}  No sources matched "foo"`);
-    expect(out).toContain(`${SYMBOLS.bar}  Run \`ktx sl list\` to see available sources.`);
-    expect(out).toContain(`${SYMBOLS.barEnd}  0 sources`);
+    expect(out).toContain('No sources matched "foo"');
+    expect(out).toContain('Run `ktx sl list` to see available sources.');
   });
 
   it('singularizes the footer when there is one row', () => {
@@ -210,7 +210,7 @@ describe('printList — pretty mode', () => {
       io: r.io,
     });
     const out = stripAnsi(r.out());
-    expect(out).toContain(`${SYMBOLS.barEnd}  1 source`);
+    expect(out).toContain('1 source');
   });
 
   it('uses the provided unit in pluralization and group counts', () => {
@@ -236,10 +236,10 @@ describe('printList — pretty mode', () => {
     });
     const out = stripAnsi(r.out());
     expect(out).toContain('(2 pages)');
-    expect(out).toContain(`${SYMBOLS.barEnd}  2 pages`);
+    expect(out).toContain('2 pages');
   });
 
-  it('renders a leading dim badge column with prettyFormat in pretty mode', () => {
+  it('renders a leading badge column with prettyFormat in pretty mode', () => {
     const r = recorder();
     interface SearchRow { score: number; scope: string; key: string; summary: string }
     const SEARCH_COLUMNS: ReadonlyArray<PrintListColumn<SearchRow>> = [
@@ -270,9 +270,8 @@ describe('printList — pretty mode', () => {
       io: r.io,
     });
     const out = stripAnsi(r.out());
-    // Badge displays as right-padded percentage before the name column.
-    expect(out).toMatch(new RegExp(`${escapeRegExp(SYMBOLS.item)} 87%\\s+alpha\\s+`));
-    expect(out).toMatch(new RegExp(`${escapeRegExp(SYMBOLS.item)}  4%\\s+beta\\s+`));
+    expect(out).toMatch(/87%\s+alpha\s+/);
+    expect(out).toMatch(/4%\s+beta\s+/);
   });
 
   it('emits the badge column in plain mode using its plain prefix', () => {

@@ -15,11 +15,6 @@ function detectUnicodeSupport(env: NodeJS.ProcessEnv = process.env): boolean {
 const unicode = detectUnicodeSupport();
 
 export const SYMBOLS = {
-  bar: unicode ? '│' : '|',
-  barStart: unicode ? '◇' : 'o',
-  barEnd: unicode ? '└' : '—',
-  group: unicode ? '●' : '*',
-  item: unicode ? '◆' : '*',
   middot: unicode ? '·' : '-',
   emDash: unicode ? '—' : '--',
 } as const;
@@ -42,4 +37,8 @@ export function green(text: string): string {
 
 export function red(text: string): string {
   return styleText('red', text);
+}
+
+export function yellow(text: string): string {
+  return styleText('yellow', text);
 }

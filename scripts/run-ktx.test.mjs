@@ -4,10 +4,18 @@ import { runWorkspaceKtx } from './run-ktx.mjs';
 
 function freshBuildFs() {
   return {
-    stat: async (path) => ({
-      mtimeMs: path.endsWith('/packages/cli/dist/bin.js') ? 2000 : 1000,
-      isDirectory: () => path.endsWith('/src') || path.endsWith('/packages'),
-    }),
+    stat: async (path) => {
+      if (path.endsWith('/.ktx-build-stamp')) {
+        return { mtimeMs: 2000, isDirectory: () => false };
+      }
+      if (path.endsWith('/packages/cli/dist/bin.js')) {
+        return { mtimeMs: 2000, isDirectory: () => false };
+      }
+      return {
+        mtimeMs: 1000,
+        isDirectory: () => path.endsWith('/src') || path.endsWith('/packages'),
+      };
+    },
     readdir: async (path) => {
       if (path.endsWith('/packages')) {
         return [{ name: 'cli', isDirectory: () => true }];
@@ -108,6 +116,7 @@ test('runWorkspaceKtx drops a leading npm argument separator', async () => {
 test('runWorkspaceKtx builds the workspace CLI before running it when dist is missing', async () => {
   const calls = [];
   const logs = [];
+  const writes = [];
   let binExists = false;
 
   const exitCode = await runWorkspaceKtx(['setup', 'demo', '--mode', 'replay', '--no-input', '--viz'], {
@@ -124,6 +133,9 @@ test('runWorkspaceKtx builds the workspace CLI before running it when dist is mi
         return { stdout: 'build ok\n', stderr: '' };
       }
       return { stdout: 'Replay complete\n', stderr: '' };
+    },
+    writeFile: async (path, contents) => {
+      writes.push({ path, contents });
     },
     stdout: { write: (chunk) => logs.push(['stdout', chunk]) },
     stderr: { write: (chunk) => logs.push(['stderr', chunk]) },
@@ -145,20 +157,32 @@ test('runWorkspaceKtx builds the workspace CLI before running it when dist is mi
     ['stdout', 'build ok\n'],
     ['stdout', 'Replay complete\n'],
   ]);
+  assert.deepEqual(writes, [
+    { path: '/workspace/ktx/packages/cli/dist/.ktx-build-stamp', contents: '' },
+  ]);
 });
 
-test('runWorkspaceKtx rebuilds before running when workspace sources are newer than dist', async () => {
+test('runWorkspaceKtx rebuilds before running when workspace sources are newer than the build stamp', async () => {
   const calls = [];
   const logs = [];
+  const writes = [];
   let sourceMtimeMs = 3000;
 
   const exitCode = await runWorkspaceKtx(['status', '--json', '--no-input'], {
     rootDir: '/workspace/ktx',
     access: async () => undefined,
-    stat: async (path) => ({
-      mtimeMs: path.endsWith('/packages/cli/dist/bin.js') ? 2000 : sourceMtimeMs,
-      isDirectory: () => path.endsWith('/src') || path.endsWith('/packages'),
-    }),
+    stat: async (path) => {
+      if (path.endsWith('/.ktx-build-stamp')) {
+        return { mtimeMs: 2000, isDirectory: () => false };
+      }
+      if (path.endsWith('/packages/cli/dist/bin.js')) {
+        return { mtimeMs: 2000, isDirectory: () => false };
+      }
+      return {
+        mtimeMs: sourceMtimeMs,
+        isDirectory: () => path.endsWith('/src') || path.endsWith('/packages'),
+      };
+    },
     readdir: async (path) => {
       if (path.endsWith('/packages')) {
         return [{ name: 'context', isDirectory: () => true }];
@@ -176,6 +200,9 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
       }
       return { stdout: '{"status":"ready"}\n', stderr: '' };
     },
+    writeFile: async (path, contents) => {
+      writes.push({ path, contents });
+    },
     stdout: { write: (chunk) => logs.push(['stdout', chunk]) },
     stderr: { write: (chunk) => logs.push(['stderr', chunk]) },
   });
@@ -192,5 +219,117 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
     ['stderr', 'KTX CLI build output is stale. Rebuilding it now with `pnpm run build`...\n'],
     ['stdout', 'build ok\n'],
     ['stdout', '{"status":"ready"}\n'],
+  ]);
+  assert.deepEqual(writes, [
+    { path: '/workspace/ktx/packages/cli/dist/.ktx-build-stamp', contents: '' },
+  ]);
+});
+
+test('runWorkspaceKtx skips rebuild when only bin.js is older than sources but stamp is fresh', async () => {
+  const calls = [];
+  const logs = [];
+  const writes = [];
+
+  const exitCode = await runWorkspaceKtx(['status'], {
+    rootDir: '/workspace/ktx',
+    access: async () => undefined,
+    stat: async (path) => {
+      if (path.endsWith('/.ktx-build-stamp')) {
+        return { mtimeMs: 5000, isDirectory: () => false };
+      }
+      if (path.endsWith('/packages/cli/dist/bin.js')) {
+        return { mtimeMs: 1000, isDirectory: () => false };
+      }
+      return {
+        mtimeMs: 3000,
+        isDirectory: () => path.endsWith('/src') || path.endsWith('/packages'),
+      };
+    },
+    readdir: async (path) => {
+      if (path.endsWith('/packages')) {
+        return [{ name: 'cli', isDirectory: () => true }];
+      }
+      if (path.endsWith('/src')) {
+        return [{ name: 'setup.ts', isDirectory: () => false }];
+      }
+      return [];
+    },
+    execFile: async (command, args, options) => {
+      calls.push({ command, args, cwd: options.cwd });
+      return { stdout: 'KTX status\n', stderr: '' };
+    },
+    writeFile: async (path, contents) => {
+      writes.push({ path, contents });
+    },
+    stdout: { write: (chunk) => logs.push(['stdout', chunk]) },
+    stderr: { write: (chunk) => logs.push(['stderr', chunk]) },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(
+    calls.map((call) => [call.command, call.args]),
+    [[process.execPath, ['/workspace/ktx/packages/cli/dist/bin.js', 'status']]],
+  );
+  assert.deepEqual(writes, []);
+  assert.deepEqual(logs, [['stdout', 'KTX status\n']]);
+});
+
+test('runWorkspaceKtx rebuilds when stamp is missing even if bin.js exists', async () => {
+  const calls = [];
+  const logs = [];
+  const writes = [];
+
+  const exitCode = await runWorkspaceKtx(['status'], {
+    rootDir: '/workspace/ktx',
+    access: async () => undefined,
+    stat: async (path) => {
+      if (path.endsWith('/.ktx-build-stamp')) {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      }
+      if (path.endsWith('/packages/cli/dist/bin.js')) {
+        return { mtimeMs: 2000, isDirectory: () => false };
+      }
+      return {
+        mtimeMs: 1000,
+        isDirectory: () => path.endsWith('/src') || path.endsWith('/packages'),
+      };
+    },
+    readdir: async (path) => {
+      if (path.endsWith('/packages')) {
+        return [{ name: 'cli', isDirectory: () => true }];
+      }
+      if (path.endsWith('/src')) {
+        return [{ name: 'bin.ts', isDirectory: () => false }];
+      }
+      return [];
+    },
+    execFile: async (command, args, options) => {
+      calls.push({ command, args, cwd: options.cwd });
+      if (command === 'pnpm') {
+        return { stdout: 'build ok\n', stderr: '' };
+      }
+      return { stdout: 'KTX status\n', stderr: '' };
+    },
+    writeFile: async (path, contents) => {
+      writes.push({ path, contents });
+    },
+    stdout: { write: (chunk) => logs.push(['stdout', chunk]) },
+    stderr: { write: (chunk) => logs.push(['stderr', chunk]) },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(
+    calls.map((call) => [call.command, call.args]),
+    [
+      ['pnpm', ['run', 'build']],
+      [process.execPath, ['/workspace/ktx/packages/cli/dist/bin.js', 'status']],
+    ],
+  );
+  assert.deepEqual(logs[0], [
+    'stderr',
+    'KTX CLI build output is stale. Rebuilding it now with `pnpm run build`...\n',
+  ]);
+  assert.deepEqual(writes, [
+    { path: '/workspace/ktx/packages/cli/dist/.ktx-build-stamp', contents: '' },
   ]);
 });

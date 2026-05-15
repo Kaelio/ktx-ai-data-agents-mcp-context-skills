@@ -198,7 +198,7 @@ describe('setup context build state', () => {
 
     await writeKtxSetupContextState(tempDir, {
       runId: 'setup-context-local-abc123',
-      status: 'running',
+      status: 'stale',
       startedAt: '2026-05-09T10:00:00.000Z',
       updatedAt: '2026-05-09T10:00:00.000Z',
       primarySourceConnectionIds: ['warehouse'],
@@ -207,6 +207,7 @@ describe('setup context build state', () => {
       artifactPaths: [],
       retryableFailedTargets: [],
       commands: contextBuildCommands(tempDir, 'setup-context-local-abc123'),
+      failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
       sourceProgress: [
         {
           connectionId: 'warehouse',
@@ -623,34 +624,13 @@ describe('setup context build state', () => {
     expect(io.stderr()).toContain('No databases or context sources are configured for a KTX context build.');
   });
 
-  it('normalizes legacy detached and paused setup context states to stale', async () => {
-    await writeReadyProject(tempDir);
-    await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-old',
-      status: 'detached' as never,
-      startedAt: '2026-05-09T09:00:00.000Z',
-      updatedAt: '2026-05-09T09:00:00.000Z',
-      primarySourceConnectionIds: ['warehouse'],
-      contextSourceConnectionIds: [],
-      reportIds: [],
-      artifactPaths: [],
-      retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-old'),
-    });
-
-    await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
-      status: 'stale',
-      failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
-    });
-  });
-
-  it('starts a fresh foreground build when a stale running state is found', async () => {
+  it('starts a fresh foreground build when stale state is found', async () => {
     await writeReadyProject(tempDir, {
       connections: { warehouse: { driver: 'postgres', readonly: true, context: { depth: 'fast' } } },
     });
     await writeKtxSetupContextState(tempDir, {
-      runId: 'setup-context-local-running',
-      status: 'running',
+      runId: 'setup-context-local-stale',
+      status: 'stale',
       startedAt: '2026-05-09T09:00:00.000Z',
       updatedAt: '2026-05-09T09:00:00.000Z',
       primarySourceConnectionIds: ['warehouse'],
@@ -658,7 +638,8 @@ describe('setup context build state', () => {
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-running'),
+      commands: contextBuildCommands(tempDir, 'setup-context-local-stale'),
+      failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
     });
     const io = makeIo();
     const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
