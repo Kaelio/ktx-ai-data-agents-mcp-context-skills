@@ -39,6 +39,7 @@ export interface KtxCliDeps {
     stopDaemon?: typeof import('./managed-mcp-daemon.js').stopKtxMcpDaemon;
     readStatus?: typeof import('./managed-mcp-daemon.js').readKtxMcpDaemonStatus;
     runServer?: typeof import('./mcp-http-server.js').runKtxMcpHttpServer;
+    runStdioServer?: typeof import('./mcp-stdio-server.js').runKtxMcpStdioServer;
   };
 }
 

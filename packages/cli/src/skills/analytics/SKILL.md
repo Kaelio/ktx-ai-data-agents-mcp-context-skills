@@ -1,23 +1,25 @@
 ---
-name: ktx-research
-description: Use when answering a question that needs data from a KTX-connected database - investigating, analyzing, "how many", "show me", "what's the breakdown of", finding records by value, exploring tables, comparing periods, or any data-investigation request. Triggers even when the user does not say "research"; if the answer requires querying a configured KTX connection, this skill applies.
+name: ktx-analytics
+description: Use when answering a question that needs data from a KTX-connected database - investigating, analyzing, "how many", "show me", "what's the breakdown of", finding records by value, exploring tables, comparing periods, explaining metrics, or any data-analysis request. Triggers even when the user does not say "analytics"; if the answer requires querying a configured KTX connection, this skill applies.
 ---
 
-# KTX Research Workflow
+# KTX Analytics Workflow
 
-You have access to KTX MCP tools for investigating data. Follow this workflow.
+You have access to KTX MCP tools for data discovery, semantic-layer analysis, raw read-only SQL, wiki context, and memory capture. Follow this workflow.
 
 <workflow>
-1. **Discover** - call `discover_data` first to see what exists across wiki, semantic-layer sources, and raw tables. Returns refs only.
+1. **Discover** - call `discover_data` first to see what exists across wiki pages, semantic-layer sources, metrics, dimensions, raw tables, and columns. Returns refs only.
 2. **Inspect top hits in parallel** - for each promising ref:
    - `kind: 'wiki'` -> `wiki_read`
    - `kind: 'sl_source'`, `kind: 'sl_measure'`, or `kind: 'sl_dimension'` -> `sl_read_source`
    - `kind: 'table'` or `kind: 'column'` -> `entity_details`
-3. **Resolve literals** - if the user named a value such as "Acme Corp" or "status=shipped", call `dictionary_search` to find which column holds it.
-4. **Query** -
+3. **Resolve business values** - if the user named a value such as "Acme Corp", "enterprise", or "status=shipped", call `dictionary_search` to find which column holds it.
+4. **Plan the analysis** - identify the grain, metrics, dimensions, filters, time window, and expected row limits before querying.
+5. **Query** -
    - Prefer `sl_query` when the semantic layer covers the question.
    - Use `sql_execution` only for questions the semantic layer does not cover.
-5. **Capture learnings** - at the end of the turn, call `memory_capture` so future turns benefit. Skip when the answer carries no durable knowledge.
+6. **Validate and explain** - sanity-check totals, filters, null handling, and time zones. State the source tables or semantic-layer objects used.
+7. **Capture durable learnings** - at the end of the turn, call `memory_capture` when the investigation produced reusable business context, metric definitions, or schema knowledge.
 </workflow>
 
 <rules>
@@ -26,6 +28,8 @@ You have access to KTX MCP tools for investigating data. Follow this workflow.
 - Read entity details before writing SQL against an unfamiliar table. Do not assume column names.
 - Treat `sql_execution` as read-only. Writes are rejected by the server.
 - Validate value mentions with `dictionary_search` instead of guessing case or spelling. Treat a `dictionary_search` miss as non-authoritative. The index is built from profile-sampled values, so a missing value may simply have been outside the sample. Follow up with `sql_execution` against the most plausible columns before concluding the value is absent.
+- Show compact result tables for small outputs. For broad results, summarize the top findings and mention the applied limit.
+- Ask a concise clarification only when the metric, date range, entity, or grain is genuinely ambiguous and cannot be inferred from context.
 </rules>
 
 <examples>

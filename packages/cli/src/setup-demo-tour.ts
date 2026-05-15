@@ -375,7 +375,7 @@ export async function runDemoTour(
           yes: false,
           agents: true,
           scope: 'project',
-          mode: 'cli',
+          mode: 'mcp-cli',
           skipAgents: false,
         },
         io,

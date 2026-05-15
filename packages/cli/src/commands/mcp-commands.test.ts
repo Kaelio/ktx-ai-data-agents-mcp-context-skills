@@ -35,6 +35,7 @@ describe('registerMcpCommands', () => {
       'serve-internal',
       'start',
       'status',
+      'stdio',
       'stop',
     ]);
     expect(
@@ -53,5 +54,22 @@ describe('registerMcpCommands', () => {
       'Binding KTX MCP to 0.0.0.0 requires --token or KTX_MCP_TOKEN',
     );
     expect(startDaemon).not.toHaveBeenCalled();
+  });
+
+  it('runs the stdio server with the resolved project directory', async () => {
+    const program = new Command().exitOverride().option('--project-dir <path>');
+    const runStdioServer = vi.fn().mockResolvedValue(undefined);
+    const context = makeContext({ deps: { mcp: { runStdioServer } } });
+    registerMcpCommands(program, context);
+
+    await expect(program.parseAsync(['--project-dir', '/tmp/ktx6', 'mcp', 'stdio'], { from: 'user' })).resolves.toBe(
+      program,
+    );
+
+    expect(runStdioServer).toHaveBeenCalledWith({
+      projectDir: '/tmp/ktx6',
+      cliVersion: '0.0.0-test',
+      io: context.io,
+    });
   });
 });

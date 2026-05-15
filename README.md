@@ -6,6 +6,8 @@
   <strong>The context layer for analytics agents</strong>
 </p>
 
+<p align="center">by Kaelio</p>
+
 <p align="center">
   <a href="https://www.npmjs.com/package/@kaelio/ktx"><img src="https://img.shields.io/npm/v/@kaelio/ktx?style=flat-square&color=f97316" alt="npm version" /></a>
   <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/branch/main/graph/badge.svg" alt="Codecov" /></a>
@@ -161,11 +163,23 @@ source packages for development, not public release artifacts.
 
 ## Use KTX with agents
 
-KTX integrates with coding agents through CLI skills. The setup wizard
-configures this automatically.
+KTX exposes context to end-user agents through MCP tools. The CLI remains the
+admin surface for setup, ingest, status, daemon lifecycle, and debugging.
 
-**CLI skills** - the agent calls `ktx` commands directly through a skill file
-installed in your agent's config (e.g., `.claude/skills/ktx/SKILL.md`):
+```bash
+ktx mcp start
+ktx setup --agents
+```
+
+During agent setup, choose **MCP tools + analytics skill** for client agents.
+Choose **MCP tools + analytics skill + admin CLI skill** only when a developer
+or operator agent also needs pinned `ktx` admin commands.
+
+The analytics skill teaches client agents the MCP workflow: discover data,
+prefer semantic-layer measures, inspect entity details before raw SQL, and
+capture durable learnings. Admin CLI skills call `ktx` commands directly
+through a skill file installed in your agent's config, for example
+`.claude/skills/ktx/SKILL.md`:
 
 ```bash
 ktx sl query --measure orders.revenue --dimension orders.status --format sql
@@ -173,8 +187,11 @@ ktx wiki search "revenue definition"
 ktx sl validate orders
 ```
 
-Supported agents: Claude Code, Codex, Cursor, OpenCode, and any agent that
-reads `.agents/` skills.
+Supported client agents: Claude Code, Claude Desktop, Codex, Cursor, OpenCode,
+and clients that can use the printed MCP endpoint or `.agents` admin skills.
+Claude Desktop setup generates `.ktx/agents/claude/ktx-plugin.zip`, which
+bundles the analytics skill and a local `ktx mcp stdio` server config for
+Claude Desktop's plugin installer.
 
 ## Workspace packages
 

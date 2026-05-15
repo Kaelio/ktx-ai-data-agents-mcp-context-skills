@@ -15,6 +15,7 @@ import {
   stopKtxMcpDaemon,
 } from '../managed-mcp-daemon.js';
 import { buildMcpSecurityConfig, runKtxMcpHttpServer } from '../mcp-http-server.js';
+import { runKtxMcpStdioServer } from '../mcp-stdio-server.js';
 
 function tokenFromOption(value: string | undefined): string | undefined {
   return value ?? process.env.KTX_MCP_TOKEN;
@@ -26,6 +27,17 @@ function binPath(): string {
 
 export function registerMcpCommands(program: Command, context: KtxCliCommandContext): void {
   const mcp = program.command('mcp').description('Run the KTX MCP HTTP server');
+
+  mcp
+    .command('stdio')
+    .description('Run the KTX MCP server over stdio')
+    .action(async (_options, command) => {
+      await (context.deps.mcp?.runStdioServer ?? runKtxMcpStdioServer)({
+        projectDir: resolveCommandProjectDir(command),
+        cliVersion: context.packageInfo.version,
+        io: context.io,
+      });
+    });
 
   mcp
     .command('start')

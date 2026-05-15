@@ -1,17 +1,25 @@
 ---
 title: Agent Clients
-description: Set up KTX with Claude Code, Cursor, Codex, and OpenCode.
+description: Set up KTX with Claude Code, Claude Desktop, Cursor, Codex, and OpenCode.
 ---
 
-KTX integrates with coding agents through CLI skills and command files. These
-files teach agents to call public `ktx` commands directly from the terminal for
-semantic-layer context and wiki knowledge.
+KTX exposes context to end-user agents through MCP tools. The CLI remains the
+admin surface for setup, ingest, status, daemon lifecycle, and debugging.
 
-Run `ktx setup` and select your agent targets, or configure manually using the
-snippets below. Setup pins generated skill files to the KTX CLI path that
-created them, so agents do not need `ktx` on `PATH`.
+Run `ktx setup` and select your client agent targets, or configure manually
+using the snippets below. Choose **MCP tools + analytics skill** for client
+agents. Choose **MCP tools + analytics skill + admin CLI skill** only when a
+developer or operator agent also needs pinned `ktx` admin commands.
 
 ## Install with setup
+
+Start the MCP server before connecting an end-user agent:
+
+```bash
+ktx mcp start
+```
+
+Then install client integration:
 
 ```bash
 ktx setup --agents
@@ -23,7 +31,8 @@ Use `--target` for one target:
 ktx setup --agents --target codex
 ```
 
-Use `--global` only with `claude-code` or `codex`:
+Use `--global` only with `claude-code` or `codex`. Claude Desktop always
+generates a project-local plugin ZIP:
 
 ```bash
 ktx setup --agents --target claude-code --global
@@ -34,19 +43,54 @@ KTX records installed files in `.ktx/agents/install-manifest.json`. That
 manifest lets status checks report agent readiness and lets future cleanup
 remove only files KTX installed.
 
+The interactive command asks two questions:
+
+```txt
+◆  How should client agents connect to this KTX project?
+│  ○ MCP tools + analytics skill
+│  ○ MCP tools + analytics skill + admin CLI skill
+└
+
+◆  Which agent targets should KTX install?
+│  ◻ Claude Code
+│  ◻ Claude Desktop
+│  ◻ Codex
+│  ◻ Cursor
+│  ◻ OpenCode
+│  ◻ Universal .agents
+└
+```
+
+When every selected target supports both project and global setup, the command
+also asks where to install supported agent config:
+
+```txt
+◆  Where should KTX install supported agent config?
+│  ○ Project
+│  ○ Global
+└
+```
+
 ## Generated files
 
-| Target | Project-scoped files | Global files |
-|--------|----------------------|--------------|
-| Claude Code | `.claude/skills/ktx/SKILL.md`, `.claude/rules/ktx.md` | `~/.claude/skills/ktx/SKILL.md`, `~/.claude/rules/ktx.md` |
-| Codex | `.agents/skills/ktx/SKILL.md`, `.codex/instructions/ktx.md` | `$CODEX_HOME/skills/ktx/SKILL.md`, `$CODEX_HOME/instructions/ktx.md` |
-| Cursor | `.cursor/rules/ktx.mdc` | Not supported |
-| OpenCode | `.opencode/commands/ktx.md` | Not supported |
-| Universal `.agents` | `.agents/skills/ktx/SKILL.md` | Not supported |
+KTX writes MCP client configuration and an analytics skill by default. It writes
+admin CLI skills only when you choose **MCP tools + analytics skill + admin CLI
+skill**.
 
-Skill files list pinned `ktx` commands. Rule files tell the agent when KTX is
-appropriate, such as data schemas, metrics, dimensions, database structure, and
-SQL questions.
+| Target | MCP tools + analytics skill | Adds with admin CLI skill |
+|--------|------------------------------|---------------------------|
+| Claude Code | `.mcp.json`, `.claude/skills/ktx-analytics/SKILL.md` | `.claude/skills/ktx/SKILL.md`, `.claude/rules/ktx.md` |
+| Claude Desktop | `.ktx/agents/claude/ktx-plugin.zip` with analytics skill and local stdio MCP config | Adds `skills/ktx/SKILL.md` inside the plugin ZIP |
+| Codex | Printed snippet for `~/.codex/config.toml`, `.agents/skills/ktx-analytics/SKILL.md` | `.agents/skills/ktx/SKILL.md`, `.codex/instructions/ktx.md` |
+| Cursor | `.cursor/mcp.json`, `.cursor/rules/ktx-analytics.mdc` | `.cursor/rules/ktx.mdc` |
+| OpenCode | Printed snippet for `opencode.json`, `.opencode/commands/ktx-analytics.md` | `.opencode/commands/ktx.md` |
+| Universal `.agents` | Printed MCP endpoint, `.agents/skills/ktx-analytics/SKILL.md` | `.agents/skills/ktx/SKILL.md` |
+
+MCP config gives agents access to KTX context tools such as discovery,
+semantic-layer queries, wiki search, SQL execution, and memory capture. The
+analytics skill explains how to use those tools for semantic-layer-first
+analysis. Optional admin skill and rule files list pinned CLI commands for
+developer or operator agents.
 
 ## Claude Code
 
@@ -56,12 +100,15 @@ During setup, select **Claude Code** from the agent targets. KTX writes:
 
 | Scope | Files |
 |-------|-------|
-| Project | `.claude/skills/ktx/SKILL.md`, `.claude/rules/ktx.md` |
-| Global | `~/.claude/skills/ktx/SKILL.md`, `~/.claude/rules/ktx.md` |
+| Project | `.mcp.json`, `.claude/skills/ktx-analytics/SKILL.md`; optional `.claude/skills/ktx/SKILL.md`, `.claude/rules/ktx.md` |
+| Global | `~/.claude.json`, `~/.claude/skills/ktx-analytics/SKILL.md`; optional `~/.claude/skills/ktx/SKILL.md`, `~/.claude/rules/ktx.md` |
 
 Both project-scoped and global installations are supported.
 
 ### Manual CLI skills configuration
+
+Use manual CLI skills only for developer or operator agents that need admin
+commands. End-user data agents use MCP.
 
 Create `.claude/skills/ktx/SKILL.md`:
 
@@ -75,13 +122,14 @@ Available commands:
 - `ktx status --json --project-dir /path/to/project`
 - `ktx sl list --json --project-dir /path/to/project`
 - `ktx sl search '<text>' --json --project-dir /path/to/project --connection-id '<id>'`
-- `ktx sl query --json --project-dir /path/to/project --connection-id '<id>' --query-file '<path>' --execute --max-rows 100`
+- `ktx sl query --json --project-dir /path/to/project --connection-id '<id>'`
 - `ktx wiki search '<query>' --json --project-dir /path/to/project --limit 10`
 ```
 
 ### Workflow tips
 
 - Claude Code discovers skills automatically from `.claude/skills/`.
+- Claude Code reads MCP config from `.mcp.json` for project-scoped MCP tools.
 - Claude rules in `.claude/rules/` tell Claude when KTX should be used.
 - Global installation makes KTX available in all projects without per-project setup.
 - Keep generated skills committed only when your team wants project-local agent instructions in git.
@@ -96,18 +144,43 @@ During setup, select **Cursor** from the agent targets. KTX writes:
 
 | Mode | File |
 |------|------|
-| CLI rules | `.cursor/rules/ktx.mdc` |
+| MCP tools + analytics skill | `.cursor/mcp.json`, `.cursor/rules/ktx-analytics.mdc` |
+| Admin CLI rules | `.cursor/rules/ktx.mdc` |
 
 Cursor supports project-scoped installation only.
 
 ### Manual CLI rules configuration
 
-Create `.cursor/rules/ktx.mdc` with the same content structure as the Claude Code `SKILL.md` file. Cursor rules use the `.mdc` extension but support the same markdown command definitions.
+Use manual CLI rules only for developer or operator agents that need admin
+commands. End-user data agents use MCP.
+
+Create `.cursor/rules/ktx.mdc` with the same content structure as the Claude
+Code `SKILL.md` file. Cursor rules use the `.mdc` extension but support the
+same markdown command definitions.
 
 ### Workflow tips
 
 - Cursor rules in `.cursor/rules/` are automatically loaded into agent context.
 - Project-scoped installs keep KTX command guidance close to the analytics context repository.
+
+---
+
+## Claude Desktop
+
+During setup, select **Claude Desktop** from the agent targets. KTX generates a
+local Claude plugin ZIP at `.ktx/agents/claude/ktx-plugin.zip`. The plugin
+contains the KTX analytics skill and a local stdio MCP config that runs:
+
+```bash
+ktx --project-dir /path/to/project mcp stdio
+```
+
+If you choose **MCP tools + analytics skill + admin CLI skill**, the plugin ZIP
+also includes the admin `ktx` skill.
+
+Install the generated ZIP from Claude Desktop's plugin UI. If you move the KTX
+checkout or project directory, rerun `ktx setup --agents` and reinstall the
+regenerated plugin.
 
 ---
 
@@ -119,15 +192,19 @@ During setup, select **Codex** from the agent targets. KTX writes:
 
 | Scope | Files |
 |-------|-------|
-| Project | `.agents/skills/ktx/SKILL.md`, `.codex/instructions/ktx.md` |
-| Global | `$CODEX_HOME/skills/ktx/SKILL.md`, `$CODEX_HOME/instructions/ktx.md` |
+| Project | MCP snippet, `.agents/skills/ktx-analytics/SKILL.md`; optional `.agents/skills/ktx/SKILL.md`, `.codex/instructions/ktx.md` |
+| Global | MCP snippet, `$CODEX_HOME/skills/ktx-analytics/SKILL.md`; optional `$CODEX_HOME/skills/ktx/SKILL.md`, `$CODEX_HOME/instructions/ktx.md` |
 
 Both project-scoped and global installations are supported. `CODEX_HOME`
 defaults to `~/.codex`.
 
 ### Manual CLI skills configuration
 
-Create `.agents/skills/ktx/SKILL.md` with the same content structure as Claude Code's `SKILL.md`.
+Use manual CLI skills only for developer or operator agents that need admin
+commands. End-user data agents use MCP.
+
+Create `.agents/skills/ktx/SKILL.md` with the same content structure as Claude
+Code's `SKILL.md`.
 
 ### Workflow tips
 
@@ -146,13 +223,18 @@ During setup, select **OpenCode** from the agent targets. KTX writes:
 
 | Mode | File |
 |------|------|
-| CLI commands | `.opencode/commands/ktx.md` |
+| MCP tools + analytics skill | Snippet for `opencode.json`, `.opencode/commands/ktx-analytics.md` |
+| Admin CLI commands | `.opencode/commands/ktx.md` |
 
 OpenCode supports project-scoped installation only.
 
 ### Manual CLI commands configuration
 
-Create `.opencode/commands/ktx.md` with the same command definitions as Claude Code's `SKILL.md`.
+Use manual CLI commands only for developer or operator agents that need admin
+commands. End-user data agents use MCP.
+
+Create `.opencode/commands/ktx.md` with the same command definitions as Claude
+Code's `SKILL.md`.
 
 ### Workflow tips
 
@@ -163,7 +245,7 @@ Create `.opencode/commands/ktx.md` with the same command definitions as Claude C
 
 ## Command reference
 
-All supported agent clients call the same KTX CLI commands:
+Admin CLI skills call the same KTX CLI commands:
 
 | Command | Description |
 |---------|-------------|
@@ -183,9 +265,11 @@ All supported agent clients call the same KTX CLI commands:
 
 ## Comparison
 
-| | Claude Code | Cursor | Codex | OpenCode |
-|---|---|---|---|---|
-| CLI skills | Yes | Yes (.mdc) | Yes | Yes |
-| Global install | Yes | No | Yes | No |
-| Rule or instruction file | `.claude/rules/ktx.md` | `.cursor/rules/ktx.mdc` | `.codex/instructions/ktx.md` | `.opencode/commands/ktx.md` |
-| Skill file | `.claude/skills/ktx/SKILL.md` | Not separate | `.agents/skills/ktx/SKILL.md` | Not separate |
+| | Claude Code | Claude Desktop | Cursor | Codex | OpenCode |
+|---|---|---|---|---|---|
+| MCP tools | Yes | Local stdio via plugin | Yes | Snippet | Snippet |
+| Analytics skill | `.claude/skills/ktx-analytics/SKILL.md` | Included in plugin ZIP | `.cursor/rules/ktx-analytics.mdc` | `.agents/skills/ktx-analytics/SKILL.md` | `.opencode/commands/ktx-analytics.md` |
+| Admin CLI skills | Optional | Optional in plugin ZIP | Optional (.mdc) | Optional | Optional |
+| Global install | Yes | Project-local ZIP | No | Yes | No |
+| Rule or instruction file | `.claude/rules/ktx.md` | Plugin `SETUP.md` | `.cursor/rules/ktx.mdc` | `.codex/instructions/ktx.md` | `.opencode/commands/ktx.md` |
+| Skill file | `.claude/skills/ktx/SKILL.md` | `skills/ktx/SKILL.md` in plugin ZIP | Not separate | `.agents/skills/ktx/SKILL.md` | Not separate |

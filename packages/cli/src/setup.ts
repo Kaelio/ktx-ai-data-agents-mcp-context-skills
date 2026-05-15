@@ -309,12 +309,15 @@ export async function readKtxSetupStatus(projectDir: string): Promise<KtxSetupSt
   const databaseIds = project.config.setup?.database_connection_ids ?? Object.keys(project.config.connections);
   const databasesComplete = completedSteps.includes('databases');
   const manifest = await readKtxAgentInstallManifest(resolvedProjectDir);
-  const agents =
-    manifest?.installs.map((install) => ({
+  const agentMap = new Map<string, { target: string; scope: string; ready: boolean }>();
+  for (const install of manifest?.installs ?? []) {
+    agentMap.set(`${install.target}:${install.scope}`, {
       target: install.target,
       scope: install.scope,
       ready: true,
-    })) ?? [];
+    });
+  }
+  const agents = [...agentMap.values()];
 
   return {
     project: { path: resolvedProjectDir, ready: true, name: basename(project.projectDir) || project.projectDir },
@@ -696,7 +699,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             agents: true,
             ...(args.target ? { target: args.target } : {}),
             scope: args.agentScope ?? 'project',
-            mode: 'cli',
+            mode: 'mcp',
             skipAgents: false,
           },
           io,

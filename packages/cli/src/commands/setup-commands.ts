@@ -218,6 +218,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .addOption(
       new Option('--target <target>', 'Agent target').choices([
         'claude-code',
+        'claude-desktop',
         'codex',
         'cursor',
         'opencode',
