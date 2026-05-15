@@ -86,6 +86,9 @@ describe('setup agents', () => {
     expect(skill).toContain('must not print secrets');
     expect(skill).toContain('status --json');
     expect(skill).toContain('sl list --json');
+    expect(skill).toContain('sl query');
+    expect(skill).toContain('--format json');
+    expect(skill).not.toContain('sl query --json');
     expect(skill).not.toContain('agent ');
     expect(skill).not.toContain('sql execute');
     expect(await readKtxAgentInstallManifest(tempDir)).toMatchObject({
@@ -120,6 +123,8 @@ describe('setup agents', () => {
     expect(skill).not.toContain('`ktx agent');
     expect(skill).toContain('status --json');
     expect(skill).toContain('sl query');
+    expect(skill).toContain('--format json');
+    expect(skill).not.toContain('sl query --json');
     expect(skill).not.toContain('sql execute');
   });
 
