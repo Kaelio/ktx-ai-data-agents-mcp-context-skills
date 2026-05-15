@@ -576,8 +576,9 @@ function nextLocalJobId(): string {
 function localIngestLlmProviderGuardMessage(projectDir: string): string {
   return [
     'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, or claude-code, or an injected agentRunner.',
-    'Configure an Anthropic provider, then rerun ingest:',
-    `  ktx setup --project-dir ${projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+    'Configure a local Claude Code session or API-backed LLM, then rerun ingest:',
+    `  ktx setup --project-dir ${projectDir} --llm-backend claude-code --no-input`,
+    `  ktx setup --project-dir ${projectDir} --llm-backend anthropic --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
   ].join('\n');
 }
 
