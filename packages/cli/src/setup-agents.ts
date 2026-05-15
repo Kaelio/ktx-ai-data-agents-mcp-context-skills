@@ -947,7 +947,7 @@ export async function runKtxSetupAgentsStep(
           '',
           bold('2. Install the KTX plugin'),
           '   Open Claude Desktop → Settings → Plugins and install from file:',
-          `   ${dim(pluginPath)}`,
+          `   📦 ${dim(pluginPath)}`,
         ].join('\n');
       }
     }
@@ -963,7 +963,9 @@ export async function runKtxSetupAgentsStep(
       io,
     );
     if (claudeDesktopTutorial) {
-      setupUi.note(claudeDesktopTutorial, 'Finish Claude Desktop setup', io);
+      setupUi.note(claudeDesktopTutorial, 'Finish Claude Desktop setup', io, {
+        format: (line) => line,
+      });
     }
     const nextStepBlocks: string[] = [];
     for (const notice of notices) nextStepBlocks.push(notice);

@@ -708,9 +708,11 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
   await commitSetupConfigChanges(projectResult.projectDir);
 
   const status = await readKtxSetupStatus(projectResult.projectDir);
-  io.stdout.write(formatKtxSetupStatus(status));
   const focusedOnAgents = args.agents || entryAction === 'agents';
   if (!focusedOnAgents) {
+    setupUi.note(formatKtxSetupStatus(status).trimEnd(), 'Project status', io, {
+      format: (line) => line,
+    });
     setupUi.note(
       formatSetupNextStepLines({
         setupReady: setupStatusReady(status),
