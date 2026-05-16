@@ -412,10 +412,7 @@ function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
 }
 
 function setupRuntimeInstallPolicy(args: Extract<KtxSetupArgs, { command: 'run' }>): 'prompt' | 'auto' | 'never' {
-  if (args.yes) {
-    return 'auto';
-  }
-  return args.inputMode === 'disabled' ? 'never' : 'prompt';
+  return args.inputMode === 'disabled' && !args.yes ? 'never' : 'auto';
 }
 
 async function commitSetupConfigChanges(projectDir: string): Promise<void> {

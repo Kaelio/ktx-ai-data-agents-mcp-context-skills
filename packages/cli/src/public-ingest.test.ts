@@ -421,11 +421,18 @@ describe('runKtxPublicIngest', () => {
 
   it('runs query history after schema ingest with current-run window override', async () => {
     const io = makeIo();
+    const runtimeIo = makeIo({ isTTY: true });
     const project = deepReadyProject({
       warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true, windowDays: 90 } } },
     });
     const runScan = vi.fn(async () => 0);
     const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async () => 0);
+    const deps = {
+      loadProject: vi.fn(async () => project),
+      runScan,
+      runIngest,
+      runtimeIo: runtimeIo.io,
+    } as KtxPublicIngestDeps & { runtimeIo: typeof runtimeIo.io };
 
     await expect(
       runKtxPublicIngest(
@@ -442,13 +449,14 @@ describe('runKtxPublicIngest', () => {
           queryHistoryWindowDays: 30,
         },
         io.io,
-        { loadProject: vi.fn(async () => project), runScan, runIngest },
+        deps,
       ),
     ).resolves.toBe(0);
 
     expect(runScan).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'warehouse', mode: 'enriched' }),
       expect.anything(),
+      expect.objectContaining({ runtimeIo: runtimeIo.io }),
     );
     expect(runIngest).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -461,6 +469,7 @@ describe('runKtxPublicIngest', () => {
         historicSqlPullConfigOverride: expect.objectContaining({ dialect: 'postgres', windowDays: 30 }),
       }),
       expect.anything(),
+      expect.objectContaining({ runtimeIo: runtimeIo.io }),
     );
   });
 
