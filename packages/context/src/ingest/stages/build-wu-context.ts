@@ -1,6 +1,6 @@
-import type { Tool, ToolSet } from 'ai';
 import { buildCanonicalPinsPromptBlock, type CanonicalPin } from '../canonical-pins.js';
 import { createLookerQueryToSlTool } from '../adapters/looker/tools/looker-query-to-sl.tool.js';
+import { createRuntimeToolDescriptorFromAiTool, type KtxRuntimeToolSet } from '../../llm/index.js';
 import type { IngestProvenanceRow } from '../ports.js';
 import { createReadRawFileTool } from '../tools/read-raw-file.tool.js';
 import { createReadRawSpanTool } from '../tools/read-raw-span.tool.js';
@@ -88,12 +88,12 @@ export interface BuildWuToolSetInput {
   sourceKey?: string;
   stagedDir: string;
   wu: WorkUnit;
-  loadSkillTool: Record<string, Tool>;
-  emitUnmappedFallbackTool: Record<string, Tool>;
-  toolsetTools: ToolSet;
+  loadSkillTool: KtxRuntimeToolSet;
+  emitUnmappedFallbackTool: KtxRuntimeToolSet;
+  toolsetTools: KtxRuntimeToolSet;
 }
 
-function withoutWriteSlTools(toolset: ToolSet, wu: WorkUnit): ToolSet {
+function withoutWriteSlTools(toolset: KtxRuntimeToolSet, wu: WorkUnit): KtxRuntimeToolSet {
   if (!wu.slDisallowed) {
     return toolset;
   }
@@ -103,9 +103,12 @@ function withoutWriteSlTools(toolset: ToolSet, wu: WorkUnit): ToolSet {
   return next;
 }
 
-export function buildWuToolSet(input: BuildWuToolSetInput): ToolSet {
+export function buildWuToolSet(input: BuildWuToolSetInput): KtxRuntimeToolSet {
   const allowedPaths = new Set<string>([...input.wu.rawFiles, ...input.wu.dependencyPaths]);
-  const lookerTools: ToolSet = input.sourceKey === 'looker' ? { looker_query_to_sl: createLookerQueryToSlTool() } : {};
+  const lookerTools: KtxRuntimeToolSet =
+    input.sourceKey === 'looker'
+      ? { looker_query_to_sl: createRuntimeToolDescriptorFromAiTool('looker_query_to_sl', createLookerQueryToSlTool()) }
+      : {};
   const state = createVerificationLedgerState();
   return withVerificationLedger(
     withoutWriteSlTools(
@@ -114,8 +117,14 @@ export function buildWuToolSet(input: BuildWuToolSetInput): ToolSet {
         ...lookerTools,
         ...input.loadSkillTool,
         ...input.emitUnmappedFallbackTool,
-        read_raw_file: createReadRawFileTool({ stagedDir: input.stagedDir, allowedPaths }),
-        read_raw_span: createReadRawSpanTool({ stagedDir: input.stagedDir, allowedPaths }),
+        read_raw_file: createRuntimeToolDescriptorFromAiTool(
+          'read_raw_file',
+          createReadRawFileTool({ stagedDir: input.stagedDir, allowedPaths }),
+        ),
+        read_raw_span: createRuntimeToolDescriptorFromAiTool(
+          'read_raw_span',
+          createReadRawSpanTool({ stagedDir: input.stagedDir, allowedPaths }),
+        ),
       },
       input.wu,
     ),

@@ -1,4 +1,4 @@
-import type { KtxLlmProvider } from '@ktx/llm';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import type { KtxScanRelationshipConfig } from '../project/config.js';
 import type { KtxEnrichedRelationship, KtxEnrichedSchema, KtxRelationshipUpdate } from './enrichment-types.js';
 import {
@@ -15,10 +15,7 @@ import {
   type KtxResolvedRelationshipDiscoveryCandidate,
   resolveKtxRelationshipGraph,
 } from './relationship-graph-resolver.js';
-import {
-  type KtxRelationshipLlmProposalGenerateText,
-  proposeKtxRelationshipCandidatesWithLlm,
-} from './relationship-llm-proposal.js';
+import { proposeKtxRelationshipCandidatesWithLlm } from './relationship-llm-proposal.js';
 import {
   createKtxRelationshipProfileCache,
   type KtxRelationshipProfileArtifact,
@@ -42,8 +39,7 @@ export interface DiscoverKtxRelationshipsInput {
   schema: KtxEnrichedSchema;
   context: KtxScanContext;
   settings: KtxScanRelationshipConfig;
-  llmProvider?: KtxLlmProvider | null;
-  generateText?: KtxRelationshipLlmProposalGenerateText;
+  llmRuntime?: KtxLlmRuntimePort | null;
 }
 
 export interface DiscoverKtxRelationshipsResult {
@@ -246,11 +242,10 @@ export async function discoverKtxRelationships(
         connectionId: input.connectionId,
         schema: input.schema,
         profile,
-        llmProvider: input.llmProvider ?? null,
+        llmRuntime: input.llmRuntime ?? null,
         settings: {
           maxTablesPerBatch: input.settings.maxLlmTablesPerBatch,
         },
-        generateText: input.generateText,
       })
     : { candidates: [], warnings: [], llmCalls: 0, summary: 'skipped' as const };
   const candidates = mergeKtxRelationshipDiscoveryCandidates([

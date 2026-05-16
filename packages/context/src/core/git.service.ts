@@ -105,6 +105,12 @@ export class GitService {
         this.logger.log('Initialized git repository');
       }
 
+      // Keep any auto-maintenance triggered by writes in-process. Detached maintenance can
+      // keep object-pack directories alive briefly after awaited git commands complete,
+      // which makes temp-project cleanup flaky in CI.
+      await this.git.addConfig('gc.autoDetach', 'false');
+      await this.git.addConfig('maintenance.autoDetach', 'false');
+
       // Ensure HEAD always resolves to a commit so callers (e.g., the memory-agent squash flow)
       // can rely on `revParseHead()` returning a SHA. Idempotent: skip if HEAD already exists.
       const head = await this.revParseHead();

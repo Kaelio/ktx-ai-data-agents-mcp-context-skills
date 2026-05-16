@@ -1,10 +1,10 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { KtxLlmProvider } from '@ktx/llm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import YAML from 'yaml';
 import type { SourceAdapter } from '../ingest/index.js';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import { filterSnapshotTables, getLocalScanReport, getLocalScanStatus, resolveEnabledTables, runLocalScan } from './local-scan.js';
 import type { KtxQueryResult, KtxReadOnlyQueryInput, KtxSchemaSnapshot, KtxSchemaTable } from './types.js';
@@ -79,25 +79,11 @@ function relationshipSqlResult(
   throw new Error(`Unexpected relationship SQL: ${input.sql}`);
 }
 
-function deterministicLlmProvider(): KtxLlmProvider {
+function deterministicLlmRuntime(): KtxLlmRuntimePort {
   return {
-    getModel: () => ({ provider: 'deterministic', modelId: 'deterministic' }) as never,
-    getModelByName: () => ({ provider: 'deterministic', modelId: 'deterministic' }) as never,
-    cacheMarker: () => undefined,
-    repairToolCallHandler: (() => undefined) as never,
-    thinkingProviderOptions: () => ({}),
-    telemetryConfig: () => undefined,
-    promptCachingConfig: () => ({
-      enabled: false,
-      systemTtl: '1h',
-      toolsTtl: '1h',
-      historyTtl: '5m',
-      cacheSystem: true,
-      cacheTools: true,
-      cacheHistory: true,
-      vertexFallbackTo5m: false,
-    }),
-    activeBackend: () => 'gateway',
+    generateText: vi.fn(async (input) => `Deterministic description for ${input.prompt.slice(0, 64).trim() || 'data source'}`),
+    generateObject: vi.fn(async () => ({ pkCandidates: [], fkCandidates: [] }) as never),
+    runAgentLoop: vi.fn(),
   };
 }
 
@@ -571,7 +557,7 @@ describe('local scan', () => {
       llmProposals: false,
       maxLlmTablesPerBatch: 7,
     };
-    const getModel = vi.fn(() => ({ modelId: 'provider/language-model', provider: 'gateway' }));
+    const generateObject = vi.fn(async () => ({ pkCandidates: [], fkCandidates: [] }));
     const connector = {
       id: 'test:warehouse',
       driver: 'postgres' as const,
@@ -650,9 +636,9 @@ describe('local scan', () => {
       detectRelationships: true,
       connector,
       enrichmentProviders: {
-        llm: {
-          ...deterministicLlmProvider(),
-          getModel: getModel as never,
+        llmRuntime: {
+          ...deterministicLlmRuntime(),
+          generateObject: generateObject as never,
         },
         embedding: {
           dimensions: 8,
@@ -668,7 +654,7 @@ describe('local scan', () => {
 
     expect(result.report.relationships.accepted).toBe(1);
     expect(result.report.enrichment.llmRelationshipValidation).toBe('skipped');
-    expect(getModel).not.toHaveBeenCalledWith('candidateExtraction');
+    expect(generateObject).not.toHaveBeenCalled();
   });
 
   it('accepts no-declared-constraint relationships and writes relationship artifacts', async () => {
@@ -1206,7 +1192,7 @@ describe('local scan', () => {
       mode: 'enriched',
       connector,
       enrichmentProviders: {
-        llm: deterministicLlmProvider(),
+        llmRuntime: deterministicLlmRuntime(),
         embedding: {
           dimensions: 8,
           maxBatchSize: 64,
@@ -1314,7 +1300,7 @@ describe('local scan', () => {
         return { values: ['1'], nullCount: 0, distinctCount: 1 };
       },
     };
-    const llm = deterministicLlmProvider();
+    const llmRuntime = deterministicLlmRuntime();
 
     const first = await runLocalScan({
       project,
@@ -1323,7 +1309,7 @@ describe('local scan', () => {
       mode: 'enriched',
       connector,
       enrichmentProviders: {
-        llm,
+        llmRuntime,
         embedding: {
           dimensions: 8,
           maxBatchSize: 64,
@@ -1344,7 +1330,7 @@ describe('local scan', () => {
     });
     expect(first.report.enrichment.embeddings).toBe('failed');
 
-    const getModel = vi.spyOn(llm, 'getModel');
+    const generateObject = vi.spyOn(llmRuntime, 'generateObject');
     const retry = await runLocalScan({
       project,
       adapters: [fetchOnlyAdapter()],
@@ -1352,7 +1338,7 @@ describe('local scan', () => {
       mode: 'enriched',
       connector,
       enrichmentProviders: {
-        llm,
+        llmRuntime,
         embedding: {
           dimensions: 8,
           maxBatchSize: 64,
@@ -1373,8 +1359,8 @@ describe('local scan', () => {
       failedStages: [],
     });
     expect(retry.report.enrichment.embeddings).toBe('completed');
-    expect(getModel).toHaveBeenCalledTimes(1);
-    expect(getModel).toHaveBeenCalledWith('candidateExtraction');
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    expect(generateObject).toHaveBeenCalledWith(expect.objectContaining({ role: 'candidateExtraction' }));
     expect(embeddingAttempts).toBe(2);
 
     const reportPath = retry.report.artifactPaths.reportPath;

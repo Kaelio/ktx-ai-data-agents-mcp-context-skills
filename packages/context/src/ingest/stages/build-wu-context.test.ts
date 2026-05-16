@@ -87,21 +87,18 @@ describe('buildWuToolSet', () => {
       toolsetTools: { wiki_write: { description: 'write', inputSchema: {} as any, execute: wikiWrite } as any },
     });
 
-    const correction = await toolSet.wiki_write.execute?.({ key: 'customer-rules' }, { toolCallId: 't1' } as any);
+    const correction = await toolSet.wiki_write.execute?.({ key: 'customer-rules' });
 
     expect(wikiWrite).not.toHaveBeenCalled();
     expect(correction).toMatchObject({ structured: { success: false, reason: 'verification_ledger_required' } });
     expect(String((correction as any).markdown)).toContain('record_verification_ledger');
 
-    await toolSet.record_verification_ledger.execute?.(
-      {
-        summary: 'No warehouse identifiers will be emitted in this wiki write.',
-        verifiedIdentifiers: [],
-        unverifiedIdentifiers: [],
-      },
-      { toolCallId: 't2' } as any,
-    );
-    const written = await toolSet.wiki_write.execute?.({ key: 'customer-rules' }, { toolCallId: 't3' } as any);
+    await toolSet.record_verification_ledger.execute?.({
+      summary: 'No warehouse identifiers will be emitted in this wiki write.',
+      verifiedIdentifiers: [],
+      unverifiedIdentifiers: [],
+    });
+    const written = await toolSet.wiki_write.execute?.({ key: 'customer-rules' });
 
     expect(wikiWrite).toHaveBeenCalledTimes(1);
     expect(written).toMatchObject({ structured: { success: true } });

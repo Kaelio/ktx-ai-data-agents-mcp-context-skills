@@ -1,5 +1,5 @@
-import type { KtxLlmProvider } from '@ktx/llm';
 import pLimit from 'p-limit';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import { buildDefaultKtxProjectConfig, type KtxScanRelationshipConfig } from '../project/config.js';
 import { type KtxDescriptionColumnTable, KtxDescriptionGenerator } from './description-generation.js';
 import { buildKtxColumnEmbeddingText } from './embedding-text.js';
@@ -49,7 +49,7 @@ export interface DeterministicLocalScanEnrichmentProviderOptions {
 }
 
 export interface KtxLocalScanEnrichmentProviders {
-  llm: KtxLlmProvider;
+  llmRuntime: KtxLlmRuntimePort;
   embedding: KtxEmbeddingPort;
 }
 
@@ -190,7 +190,7 @@ export function createDeterministicLocalScanEnrichmentProviders(
   const dimensions = options.embeddingDimensions ?? 8;
   const maxBatchSize = options.maxBatchSize ?? 64;
   return {
-    llm: deterministicLlmProvider(),
+    llmRuntime: deterministicLlmRuntime(),
     embedding: {
       dimensions,
       maxBatchSize,
@@ -201,41 +201,16 @@ export function createDeterministicLocalScanEnrichmentProviders(
   };
 }
 
-function deterministicLlmProvider(): KtxLlmProvider {
-  const model = { modelId: 'deterministic-scan', provider: 'deterministic' };
+function deterministicLlmRuntime(): KtxLlmRuntimePort {
   return {
-    getModel() {
-      return model as ReturnType<KtxLlmProvider['getModel']>;
+    async generateText(input) {
+      return `Deterministic description for ${input.prompt.slice(0, 64).trim() || 'data source'}`;
     },
-    getModelByName() {
-      return model as ReturnType<KtxLlmProvider['getModelByName']>;
+    async generateObject() {
+      return { pkCandidates: [], fkCandidates: [] } as never;
     },
-    cacheMarker() {
-      return undefined;
-    },
-    repairToolCallHandler() {
-      throw new Error('deterministic scan provider does not support tool-call repair');
-    },
-    thinkingProviderOptions() {
-      return {};
-    },
-    telemetryConfig() {
-      return undefined;
-    },
-    promptCachingConfig() {
-      return {
-        enabled: false,
-        systemTtl: '1h',
-        toolsTtl: '1h',
-        historyTtl: '5m',
-        cacheSystem: true,
-        cacheTools: true,
-        cacheHistory: true,
-        vertexFallbackTo5m: false,
-      };
-    },
-    activeBackend() {
-      return 'gateway';
+    async runAgentLoop() {
+      return { stopReason: 'natural' };
     },
   };
 }
@@ -324,7 +299,7 @@ async function generateDescriptions(input: {
 }): Promise<KtxLocalScanEnrichmentResult['descriptionUpdates']> {
   const warningSink = input.warnings;
   const generator = new KtxDescriptionGenerator({
-    llmProvider: input.providers.llm,
+    llmRuntime: input.providers.llmRuntime,
     ...(input.context.logger ? { logger: input.context.logger } : {}),
     ...(warningSink
       ? {
@@ -643,7 +618,7 @@ export async function runLocalScanEnrichment(
           schema,
           context: input.context,
           settings: relationshipSettings,
-          llmProvider: input.providers?.llm ?? null,
+          llmRuntime: input.providers?.llmRuntime ?? null,
         });
 
         await relationshipProgress?.update(

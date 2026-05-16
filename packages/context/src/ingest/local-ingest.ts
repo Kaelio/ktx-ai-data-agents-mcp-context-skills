@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
-import type { KtxLlmProvider } from '@ktx/llm';
-import type { AgentRunnerService } from '../agent/index.js';
 import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxLogger } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
+import type { AgentRunnerPort, KtxLlmRuntimePort } from '../llm/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/index.js';
 import { planMetabaseFanoutChildren } from './adapters/metabase/fanout-planner.js';
@@ -28,8 +27,8 @@ export interface RunLocalIngestOptions {
   trigger?: IngestTrigger;
   jobId?: string;
   memoryFlow?: MemoryFlowEventSink;
-  agentRunner?: AgentRunnerService;
-  llmProvider?: KtxLlmProvider;
+  agentRunner?: AgentRunnerPort;
+  llmRuntime?: KtxLlmRuntimePort;
   llmDebugRequestFile?: string;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
@@ -41,7 +40,7 @@ export interface LocalIngestMcpOptions
   extends Pick<
     RunLocalIngestOptions,
     | 'agentRunner'
-    | 'llmProvider'
+    | 'llmRuntime'
     | 'memoryModel'
     | 'semanticLayerCompute'
     | 'queryExecutor'
@@ -167,8 +166,8 @@ async function runScheduledPullJob(options: {
   trigger?: IngestTrigger;
   jobId?: string;
   memoryFlow?: MemoryFlowEventSink;
-  agentRunner?: AgentRunnerService;
-  llmProvider?: KtxLlmProvider;
+  agentRunner?: AgentRunnerPort;
+  llmRuntime?: KtxLlmRuntimePort;
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
@@ -221,7 +220,7 @@ export async function runLocalIngest(options: RunLocalIngestOptions): Promise<Lo
       jobId,
       memoryFlow: options.memoryFlow,
       agentRunner: options.agentRunner,
-      llmProvider: options.llmProvider,
+      llmRuntime: options.llmRuntime,
       memoryModel: options.memoryModel,
       semanticLayerCompute: options.semanticLayerCompute,
       queryExecutor: options.queryExecutor,
@@ -406,7 +405,7 @@ export async function runLocalMetabaseIngest(
         jobId: childJobId,
         memoryFlow: options.memoryFlow,
         agentRunner: options.agentRunner,
-        llmProvider: options.llmProvider,
+        llmRuntime: options.llmRuntime,
         memoryModel: options.memoryModel,
         semanticLayerCompute: options.semanticLayerCompute,
         queryExecutor: options.queryExecutor,

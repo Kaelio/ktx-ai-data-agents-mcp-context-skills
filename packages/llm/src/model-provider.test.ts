@@ -302,4 +302,14 @@ describe('createKtxLlmProvider', () => {
     expect(provider.promptCachingConfig().enabled).toBe(false);
     expect(provider.cacheMarker('1h', 'claude-sonnet-4-6')).toBeUndefined();
   });
+
+  it('throws instead of falling through when an unsupported LLM backend is passed to the AI SDK provider factory', () => {
+    expect(() =>
+      createKtxLlmProvider({
+        backend: 'claude-code',
+        modelSlots: { default: 'sonnet' },
+        promptCaching: { enabled: false },
+      }),
+    ).toThrow('claude-code is not an AI SDK LanguageModel backend');
+  });
 });

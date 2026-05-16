@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Module-level mock for 'ai' so generateText is a stub. This file is separate from
@@ -15,7 +18,6 @@ import { MemoryAgentService } from './memory-agent.service.js';
 
 interface BuiltMocks {
   appSettings: any;
-  llmProvider: any;
   prompt: any;
   eventTracker: any;
   telemetry: any;
@@ -63,7 +65,6 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
         llm: { memoryIngestionModel: 'test-model' },
       },
     },
-    llmProvider: { getModel: vi.fn().mockReturnValue({}) },
     prompt: { loadPrompt: vi.fn().mockResolvedValue('base framing') },
     eventTracker: { trackEvent: vi.fn(), createTelemetryIntegration: vi.fn().mockReturnValue(undefined) },
     telemetry: {
@@ -124,11 +125,11 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
     slValidator: { validateSingleSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }) },
     toolsetFactory: {
       createIngestWuToolset: vi.fn().mockReturnValue({
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toRuntimeTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
       }),
       createToolset: vi.fn().mockReturnValue({
-        toAiSdkTools: vi.fn().mockReturnValue({}),
+        toRuntimeTools: vi.fn().mockReturnValue({}),
         getAllTools: vi.fn().mockReturnValue([]),
       }),
     },
@@ -239,6 +240,39 @@ describe('MemoryAgentService.ingest — session-branch orchestration', () => {
     );
 
     expect(result.commitHash).toBe('cafebabe');
+  });
+
+  it('normalizes load_skill output to markdown while preserving structured payload', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-memory-skill-'));
+    const skillDir = join(tempDir, 'memory_agent');
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, 'SKILL.md'), '---\nname: memory_agent\n---\nSkill body', 'utf-8');
+    try {
+      const agentRunner = {
+        runLoop: vi.fn(async (params: any) => {
+          const result = await params.toolSet.load_skill.execute({ name: 'memory_agent' });
+          expect(result.markdown).toContain('memory_agent');
+          expect(result.structured).toMatchObject({ name: 'memory_agent' });
+          return { stopReason: 'natural' as const };
+        }),
+      };
+      const mocks = buildMocks({
+        agentRunner,
+        skillsRegistry: {
+          listSkills: vi.fn().mockResolvedValue([{ name: 'memory_agent', path: skillDir }]),
+          buildSkillsPrompt: vi.fn().mockReturnValue(''),
+          getSkill: vi.fn().mockResolvedValue({ name: 'memory_agent', path: skillDir }),
+          stripFrontmatter: vi.fn().mockReturnValue('Skill body'),
+        },
+      });
+      const svc = buildService(mocks);
+
+      await svc.ingest(baseInput);
+
+      expect(agentRunner.runLoop).toHaveBeenCalled();
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('logs prompt debug output when KTX_MEMORY_AGENT_DEBUG_PROMPTS is enabled', async () => {

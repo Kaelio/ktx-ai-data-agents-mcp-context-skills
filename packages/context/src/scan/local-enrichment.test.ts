@@ -356,7 +356,7 @@ describe('local scan enrichment', () => {
 
   it('honors scan relationship config when LLM proposals are disabled', async () => {
     const providers = createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 3 });
-    const getModel = vi.fn(() => ({ modelId: 'provider/language-model', provider: 'gateway' }));
+    const generateObject = vi.fn();
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
       mode: 'relationships',
@@ -365,9 +365,9 @@ describe('local scan enrichment', () => {
       context: { runId: 'scan-run-llm-disabled' },
       providers: {
         ...providers,
-        llm: {
-          ...providers.llm,
-          getModel: getModel as never,
+        llmRuntime: {
+          ...providers.llmRuntime,
+          generateObject: generateObject as never,
         },
       },
       relationshipSettings: {
@@ -378,7 +378,7 @@ describe('local scan enrichment', () => {
     });
 
     expect(result.summary.llmRelationshipValidation).toBe('skipped');
-    expect(getModel).not.toHaveBeenCalledWith('candidateExtraction');
+    expect(generateObject).not.toHaveBeenCalled();
   });
 
   it('skips relationship detection when scan relationships are disabled', async () => {
@@ -628,7 +628,7 @@ describe('local scan enrichment', () => {
       connector: scanConnector,
       context: { runId: 'scan-run-batched-embeddings' },
       providers: {
-        llm: deterministicProviders.llm,
+        llmRuntime: deterministicProviders.llmRuntime,
         embedding: {
           dimensions: 3,
           maxBatchSize: 2,
@@ -658,7 +658,7 @@ describe('local scan enrichment', () => {
       providerIdentity: { provider: 'deterministic', embeddingDimensions: 6 },
     });
 
-    const getModel = vi.spyOn(providers.llm, 'getModel');
+    const generateText = vi.spyOn(providers.llmRuntime, 'generateText');
     const embedBatch = vi.spyOn(providers.embedding, 'embedBatch');
     const second = await runLocalScanEnrichment({
       connectionId: 'warehouse',
@@ -676,7 +676,7 @@ describe('local scan enrichment', () => {
     expect(first.state.resumedStages).toEqual([]);
     expect(second.state.resumedStages).toEqual(['descriptions', 'embeddings', 'relationships']);
     expect(second.state.completedStages).toEqual(['descriptions', 'embeddings', 'relationships']);
-    expect(getModel).not.toHaveBeenCalled();
+    expect(generateText).not.toHaveBeenCalled();
     expect(embedBatch).not.toHaveBeenCalled();
     expect(second.descriptionUpdates).toEqual(first.descriptionUpdates);
     expect(second.embeddingUpdates).toEqual(first.embeddingUpdates);
@@ -711,7 +711,7 @@ describe('local scan enrichment', () => {
         tables: [{ ...firstTable, name: 'customers' }],
       })),
     };
-    const getModel = vi.spyOn(providers.llm, 'getModel');
+    const generateText = vi.spyOn(providers.llmRuntime, 'generateText');
 
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
@@ -727,7 +727,7 @@ describe('local scan enrichment', () => {
 
     expect(result.state.resumedStages).toEqual([]);
     expect(result.state.completedStages).toEqual(['descriptions', 'embeddings', 'relationships']);
-    expect(getModel).toHaveBeenCalled();
+    expect(generateText).toHaveBeenCalled();
   });
 
   it('runs providerless enriched scans as relationship-only discovery enrichment', async () => {

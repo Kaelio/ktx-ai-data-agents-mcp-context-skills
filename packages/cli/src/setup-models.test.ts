@@ -61,7 +61,12 @@ function makePromptAdapter(options: {
       if (message.includes('LLM provider')) {
         providerPromptCount += 1;
         const nextProviderChoice = selectValues[0];
-        if (nextProviderChoice === 'anthropic' || nextProviderChoice === 'vertex' || nextProviderChoice === 'back') {
+        if (
+          nextProviderChoice === 'anthropic' ||
+          nextProviderChoice === 'vertex' ||
+          nextProviderChoice === 'claude-code' ||
+          nextProviderChoice === 'back'
+        ) {
           return selectValues.shift() ?? nextProviderChoice;
         }
         if (options.credentialChoice === 'back' && providerPromptCount > 1) {
@@ -178,6 +183,100 @@ describe('setup Anthropic model step', () => {
         ]),
       }),
     );
+  });
+
+  it('configures Claude Code backend and validates local auth', async () => {
+    const io = makeIo();
+    const authProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'claude-code',
+        skipLlm: false,
+      },
+      io.io,
+      { claudeCodeAuthProbe: authProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm).toMatchObject({
+      provider: { backend: 'claude-code' },
+      models: { default: 'sonnet' },
+    });
+    expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
+  });
+
+  it('prompts for the Claude Code model during interactive setup', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['claude-code', 'opus'] });
+    const authProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
+      io.io,
+      { prompts, claudeCodeAuthProbe: authProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Claude Code model should KTX use?'),
+        options: [
+          { value: 'sonnet', label: 'Claude Sonnet', hint: 'recommended' },
+          { value: 'opus', label: 'Claude Opus' },
+          { value: 'haiku', label: 'Claude Haiku' },
+          { value: 'manual', label: 'Enter a Claude Code model ID manually' },
+          { value: 'back', label: 'Back' },
+        ],
+      }),
+    );
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm).toMatchObject({
+      provider: { backend: 'claude-code' },
+      models: { default: 'opus' },
+    });
+    expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'opus' }));
+  });
+
+  it('warns during Claude Code setup when existing prompt-caching fields will be ignored', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        '  promptCaching:',
+        '    enabled: true',
+        '    systemTtl: 1h',
+        '    toolsTtl: 1h',
+        '    historyTtl: 5m',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'claude-code',
+        skipLlm: false,
+      },
+      io.io,
+      {
+        claudeCodeAuthProbe: async () => ({ ok: true as const }),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('claude-code ignores llm.promptCaching.systemTtl');
+    expect(io.stderr()).toContain('Claude Agent SDK does not expose KTX prompt-cache TTL, tool, or history markers');
   });
 
   it('returns from Anthropic credential Back to provider selection', async () => {
@@ -649,7 +748,7 @@ describe('setup Anthropic model step', () => {
     expect(io.stderr()).not.toContain('--skip-llm');
   });
 
-  it('does not recommend skipping when non-interactive setup is missing an Anthropic model', async () => {
+  it('does not recommend skipping when non-interactive setup is missing an LLM model', async () => {
     const io = makeIo();
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
 
@@ -666,7 +765,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('missing-input');
     expect(healthCheck).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain('Missing Anthropic model: pass --anthropic-model.');
+    expect(io.stderr()).toContain('Missing LLM model: pass --llm-model.');
     expect(io.stderr()).not.toContain('--skip-llm');
   });
 

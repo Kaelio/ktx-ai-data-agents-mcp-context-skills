@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AgentRunnerService } from '../agent/index.js';
+import type { AgentRunnerPort } from '../llm/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
@@ -16,6 +16,10 @@ type RuntimeWithConnectionDeps = {
     };
   };
 };
+
+function testAgentRunner(): AgentRunnerPort {
+  return { runLoop: vi.fn().mockResolvedValue({ stopReason: 'natural' as const }) };
+}
 
 describe('createLocalBundleIngestRuntime', () => {
   let tempDir: string;
@@ -55,15 +59,42 @@ describe('createLocalBundleIngestRuntime', () => {
       }),
     ).toThrow(
       [
-        'ktx ingest requires llm.provider.backend: anthropic, vertex, or gateway, or an injected agentRunner.',
-        `Configure an Anthropic provider, then rerun ingest:`,
-        `  ktx setup --project-dir ${project.projectDir} --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+        'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, or claude-code, or an injected agentRunner.',
+        'Configure a local Claude Code session or API-backed LLM, then rerun ingest:',
+        `  ktx setup --project-dir ${project.projectDir} --llm-backend claude-code --no-input`,
+        `  ktx setup --project-dir ${project.projectDir} --llm-backend anthropic --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
       ].join('\n'),
     );
   });
 
+  it('uses a runtime-backed agent runner when claude-code is configured', () => {
+    const runtime = {
+      generateText: vi.fn(),
+      generateObject: vi.fn(),
+      runAgentLoop: vi.fn(async () => ({ stopReason: 'natural' as const })),
+    };
+    project.config.llm = {
+      provider: { backend: 'claude-code' },
+      models: { default: 'sonnet' },
+      promptCaching: { enabled: false },
+    };
+    const createLlmRuntime = vi.fn(() => runtime);
+
+    const created = createLocalBundleIngestRuntime({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      createLlmRuntime,
+    });
+
+    expect(created).toBeDefined();
+    expect(createLlmRuntime).toHaveBeenCalledWith(
+      project.config.llm,
+      expect.objectContaining({ projectDir: project.projectDir }),
+    );
+  });
+
   it('builds runner deps with local SQLite stores and context tools enabled', async () => {
-    const agentRunner = new AgentRunnerService({ llmProvider: { getModel: () => ({}) as never } as any });
+    const agentRunner = testAgentRunner();
 
     const runtime = createLocalBundleIngestRuntime({
       project,
@@ -94,7 +125,7 @@ describe('createLocalBundleIngestRuntime', () => {
       project_id: 'acme',
       dataset_id: 'warehouse',
     };
-    const agentRunner = new AgentRunnerService({ llmProvider: { getModel: () => ({}) as never } as any });
+    const agentRunner = testAgentRunner();
 
     const runtime = createLocalBundleIngestRuntime({
       project,
@@ -114,7 +145,7 @@ describe('createLocalBundleIngestRuntime', () => {
   });
 
   it('passes project connection config to local ingest query executors', async () => {
-    const agentRunner = new AgentRunnerService({ llmProvider: { getModel: () => ({}) as never } as any });
+    const agentRunner = testAgentRunner();
     const queryExecutor = {
       execute: vi.fn(async () => ({
         headers: ['answer'],

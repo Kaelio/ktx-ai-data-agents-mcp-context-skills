@@ -3,7 +3,7 @@ import YAML from 'yaml';
 import * as z from 'zod';
 import { connectionConfigSchema } from './driver-schemas.js';
 
-const KTX_LLM_BACKENDS = ['none', 'anthropic', 'vertex', 'gateway'] as const;
+const KTX_LLM_BACKENDS = ['none', 'anthropic', 'vertex', 'gateway', 'claude-code'] as const;
 const KTX_EMBEDDING_BACKENDS = ['none', 'deterministic', 'openai', 'sentence-transformers'] as const;
 const KTX_PROMPT_CACHE_TTLS = ['5m', '1h'] as const;
 const KTX_ENRICHMENT_MODES = ['none', 'deterministic', 'llm'] as const;
@@ -46,7 +46,9 @@ const llmProviderSchema = z
     backend: z
       .enum(KTX_LLM_BACKENDS)
       .default('none')
-      .describe('LLM provider backend. "none" disables LLM features; "anthropic" / "vertex" / "gateway" require the matching nested credentials block.'),
+      .describe(
+        'LLM provider backend. "none" disables LLM features; "anthropic" / "vertex" / "gateway" require the matching nested credentials block; "claude-code" uses the local Claude Code session.',
+      ),
     vertex: vertexProviderSchema.optional().describe('Vertex AI credentials, used when backend is "vertex".'),
     anthropic: apiCredentialsSchema.optional().describe('Anthropic API credentials, used when backend is "anthropic".'),
     gateway: apiCredentialsSchema.optional().describe('AI Gateway credentials, used when backend is "gateway".'),

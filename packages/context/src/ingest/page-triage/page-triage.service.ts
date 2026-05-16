@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider } from '@ktx/llm';
-import { generateText, type ToolSet } from 'ai';
 import pLimit from 'p-limit';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../../core/index.js';
+import type { KtxLlmRuntimePort } from '../../llm/index.js';
 import type { PromptService } from '../../prompts/index.js';
 import type { InsertContextCandidateInput } from '../context-candidates/index.js';
 import type { JsonValue } from '../ports.js';
@@ -100,20 +99,17 @@ export interface PageTriageSettings {
 
 export interface PageTriageServiceDeps {
   store: PageTriageStorePort;
-  llmProvider: KtxLlmProvider;
+  llmRuntime: KtxLlmRuntimePort;
   settings: PageTriageSettings;
   promptService: PromptService;
   logger?: KtxLogger;
-  generateText?: typeof generateText;
 }
 
 export class PageTriageService {
   private readonly logger: KtxLogger;
-  private readonly runGenerateText: typeof generateText;
 
   constructor(private readonly deps: PageTriageServiceDeps) {
     this.logger = deps.logger ?? noopLogger;
-    this.runGenerateText = deps.generateText ?? generateText;
   }
 
   async triageRun(args: PageTriageRunArgs): Promise<PageTriageRunResult> {
@@ -339,22 +335,12 @@ export class PageTriageService {
     jobId: string;
     unitKey: string;
   }): Promise<string> {
-    const model = this.deps.llmProvider.getModel('triage');
-    const built = new KtxMessageBuilder(this.deps.llmProvider).wrapSimple({
+    return this.deps.llmRuntime.generateText({
+      role: 'triage',
       system: params.system,
-      messages: [{ role: 'user', content: params.prompt }],
-      tools: {},
-      model,
-    });
-    const split = splitKtxSystemMessages(built.messages);
-    const result = await this.runGenerateText({
-      model,
+      prompt: params.prompt,
       temperature: 0,
-      ...(split.system ? { system: split.system } : {}),
-      messages: split.messages,
-      tools: built.tools as ToolSet,
     });
-    return result.text;
   }
 
   private async buildClassifierSystem(): Promise<string> {

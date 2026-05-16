@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { AgentRunnerService, type RunLoopParams } from '@ktx/context/agent';
+import type { AgentRunnerPort, RunLoopParams } from '@ktx/context';
 import {
   KtxYamlMetabaseSourceStateReader,
   LocalMetabaseDiscoveryCache,
@@ -255,8 +255,8 @@ export function failedLocalBundleRun(input: RunLocalIngestOptions, jobId: string
   };
 }
 
-export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: RunLoopParams) => {
+export class CliLookerSlWritingAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (
       params.telemetryTags?.operationName === 'ingest-bundle-wu' &&
       params.telemetryTags?.unitKey === 'looker-explore-ecommerce-orders'
@@ -265,53 +265,39 @@ export class CliLookerSlWritingAgentRunner extends AgentRunnerService {
       if (!ledger?.execute) {
         throw new Error('record_verification_ledger tool was not available to the Looker WorkUnit');
       }
-      await ledger.execute(
-        {
-          summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
-          verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
-          unverifiedIdentifiers: [],
-        },
-        { toolCallId: 'cli-looker-verification-ledger', messages: [] },
-      );
+      await ledger.execute({
+        summary: 'Test fixture verified Looker explore target identifiers before writing SL.',
+        verifiedIdentifiers: ['prod-warehouse', 'public.orders'],
+        unverifiedIdentifiers: [],
+      });
       const slWrite = params.toolSet.sl_write_source;
       if (!slWrite?.execute) {
         throw new Error('sl_write_source tool was not available to the Looker WorkUnit');
       }
-      const result = await slWrite.execute(
-        {
-          connectionId: 'prod-warehouse',
-          sourceName: 'looker__ecommerce__orders',
-          source: {
-            name: 'looker__ecommerce__orders',
-            table: 'public.orders',
-            grain: ['id'],
-            columns: [
-              { name: 'id', type: 'number' },
-              { name: 'revenue', type: 'number' },
-            ],
-            measures: [{ name: 'total_revenue', expr: 'sum(revenue)' }],
-          },
+      const result = await slWrite.execute({
+        connectionId: 'prod-warehouse',
+        sourceName: 'looker__ecommerce__orders',
+        source: {
+          name: 'looker__ecommerce__orders',
+          table: 'public.orders',
+          grain: ['id'],
+          columns: [
+            { name: 'id', type: 'number' },
+            { name: 'revenue', type: 'number' },
+          ],
+          measures: [{ name: 'total_revenue', expr: 'sum(revenue)' }],
         },
-        { toolCallId: 'cli-looker-sl-write', messages: [] },
-      );
-      if (!result.structured.success) {
+      });
+      if (!(result.structured as { success?: boolean } | undefined)?.success) {
         throw new Error(result.markdown);
       }
     }
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
-export class CliMetabaseAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async () => ({ stopReason: 'natural' as const }));
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
+export class CliMetabaseAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async () => ({ stopReason: 'natural' as const }));
 }
 
 export class CliMetabaseSourceAdapter implements SourceAdapter {

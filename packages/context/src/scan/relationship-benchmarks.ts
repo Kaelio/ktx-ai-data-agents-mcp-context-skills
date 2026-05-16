@@ -6,6 +6,7 @@ import { gunzipSync } from 'node:zlib';
 import Database from 'better-sqlite3';
 import YAML from 'yaml';
 import { z } from 'zod';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import type { KtxEnrichedRelationship, KtxEnrichedSchema, KtxRelationshipType } from './enrichment-types.js';
 import { snapshotToKtxEnrichedSchema } from './local-enrichment.js';
 import type { KtxRelationshipDiscoveryCandidate } from './relationship-candidates.js';
@@ -13,7 +14,6 @@ import {
   generateKtxRelationshipDiscoveryCandidates,
   mergeKtxRelationshipDiscoveryCandidates,
 } from './relationship-candidates.js';
-import type { KtxLlmProvider } from '@ktx/llm';
 import { proposeKtxRelationshipCandidatesWithLlm } from './relationship-llm-proposal.js';
 import {
   discoverKtxCompositeRelationships,
@@ -527,7 +527,7 @@ export function isKtxRelationshipBenchmarkTuningEligible(input: {
 }
 
 export function ktxRelationshipBenchmarkDetectorWithLlm(
-  llmProvider: KtxLlmProvider,
+  llmRuntime: KtxLlmRuntimePort,
 ): KtxRelationshipBenchmarkDetector {
   return {
     async detect(input) {
@@ -566,7 +566,7 @@ export function ktxRelationshipBenchmarkDetectorWithLlm(
               connectionId: input.snapshot.connectionId,
               schema: input.schema,
               profile: profiles,
-              llmProvider,
+              llmRuntime,
             });
       const candidates = mergeKtxRelationshipDiscoveryCandidates([
         ...broadRelationshipCandidates,

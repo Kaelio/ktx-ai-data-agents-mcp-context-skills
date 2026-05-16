@@ -264,7 +264,6 @@ export type {
 } from './relationship-graph-resolver.js';
 export { resolveKtxRelationshipGraph } from './relationship-graph-resolver.js';
 export type {
-  KtxRelationshipLlmProposalGenerateText,
   KtxRelationshipLlmProposalResult,
   KtxRelationshipLlmProposalSettings,
   ProposeKtxRelationshipCandidatesWithLlmInput,

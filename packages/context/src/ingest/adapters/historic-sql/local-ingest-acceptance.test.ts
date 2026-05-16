@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import YAML from 'yaml';
-import { AgentRunnerService } from '../../../agent/index.js';
+import type { AgentRunnerPort, RunLoopParams } from '../../../llm/index.js';
 import { initKtxProject, loadKtxProject, type KtxLocalProject } from '../../../project/index.js';
 import {
   type SqlAnalysisBatchItem,
@@ -47,8 +47,8 @@ class AcceptanceHistoricSqlReader implements HistoricSqlReader {
   }
 }
 
-class HistoricSqlAcceptanceAgentRunner extends AgentRunnerService {
-  override runLoop = vi.fn(async (params: any) => {
+class HistoricSqlAcceptanceAgentRunner implements AgentRunnerPort {
+  runLoop = vi.fn(async (params: RunLoopParams) => {
     if (params.telemetryTags?.operationName !== 'ingest-bundle-wu') {
       return { stopReason: 'natural' as const };
     }
@@ -59,78 +59,65 @@ class HistoricSqlAcceptanceAgentRunner extends AgentRunnerService {
     }
 
     if (params.telemetryTags.unitKey === 'historic-sql-table-public-orders') {
-      const result = await emitEvidence.execute(
-        {
-          kind: 'table_usage',
-          table: 'public.orders',
-          rawPath: 'tables/public.orders.json',
-          usage: {
-            narrative: 'Analysts repeatedly inspect paid order lifecycle by customer segment.',
-            frequencyTier: 'high',
-            commonFilters: ['status'],
-            commonGroupBys: ['status', 'segment'],
-            commonJoins: [{ table: 'public.customers', on: ['customer_id', 'id'] }],
-            staleSince: null,
-          },
+      const result = await emitEvidence.execute({
+        kind: 'table_usage',
+        table: 'public.orders',
+        rawPath: 'tables/public.orders.json',
+        usage: {
+          narrative: 'Analysts repeatedly inspect paid order lifecycle by customer segment.',
+          frequencyTier: 'high',
+          commonFilters: ['status'],
+          commonGroupBys: ['status', 'segment'],
+          commonJoins: [{ table: 'public.customers', on: ['customer_id', 'id'] }],
+          staleSince: null,
         },
-        { toolCallId: 'historic-sql-orders-usage' },
-      );
-      if (!String(result).includes('Recorded historic-SQL table_usage evidence')) {
-        throw new Error(`Unexpected orders evidence result: ${String(result)}`);
+      });
+      if (!result.markdown.includes('Recorded historic-SQL table_usage evidence')) {
+        throw new Error(`Unexpected orders evidence result: ${result.markdown}`);
       }
     }
 
     if (params.telemetryTags.unitKey === 'historic-sql-table-public-customers') {
-      const result = await emitEvidence.execute(
-        {
-          kind: 'table_usage',
-          table: 'public.customers',
-          rawPath: 'tables/public.customers.json',
-          usage: {
-            narrative: 'Customers provide segment context for paid order lifecycle analysis.',
-            frequencyTier: 'mid',
-            commonFilters: [],
-            commonGroupBys: ['segment'],
-            commonJoins: [{ table: 'public.orders', on: ['id', 'customer_id'] }],
-            staleSince: null,
-          },
+      const result = await emitEvidence.execute({
+        kind: 'table_usage',
+        table: 'public.customers',
+        rawPath: 'tables/public.customers.json',
+        usage: {
+          narrative: 'Customers provide segment context for paid order lifecycle analysis.',
+          frequencyTier: 'mid',
+          commonFilters: [],
+          commonGroupBys: ['segment'],
+          commonJoins: [{ table: 'public.orders', on: ['id', 'customer_id'] }],
+          staleSince: null,
         },
-        { toolCallId: 'historic-sql-customers-usage' },
-      );
-      if (!String(result).includes('Recorded historic-SQL table_usage evidence')) {
-        throw new Error(`Unexpected customers evidence result: ${String(result)}`);
+      });
+      if (!result.markdown.includes('Recorded historic-SQL table_usage evidence')) {
+        throw new Error(`Unexpected customers evidence result: ${result.markdown}`);
       }
     }
 
     if (params.telemetryTags.unitKey === 'historic-sql-patterns-part-0001') {
-      const result = await emitEvidence.execute(
-        {
-          kind: 'pattern',
-          rawPath: 'patterns-input/part-0001.json',
-          pattern: {
-            slug: 'paid-order-lifecycle',
-            title: 'Paid Order Lifecycle',
-            narrative: 'Analysts join orders and customers to compare paid order lifecycle by segment.',
-            definitionSql:
-              'select o.status, c.segment, count(*) from public.orders o join public.customers c on c.id = o.customer_id group by o.status, c.segment',
-            tablesInvolved: ['public.orders', 'public.customers'],
-            slRefs: ['orders', 'customers'],
-            constituentTemplateIds: ['pg:orders-lifecycle'],
-          },
+      const result = await emitEvidence.execute({
+        kind: 'pattern',
+        rawPath: 'patterns-input/part-0001.json',
+        pattern: {
+          slug: 'paid-order-lifecycle',
+          title: 'Paid Order Lifecycle',
+          narrative: 'Analysts join orders and customers to compare paid order lifecycle by segment.',
+          definitionSql:
+            'select o.status, c.segment, count(*) from public.orders o join public.customers c on c.id = o.customer_id group by o.status, c.segment',
+          tablesInvolved: ['public.orders', 'public.customers'],
+          slRefs: ['orders', 'customers'],
+          constituentTemplateIds: ['pg:orders-lifecycle'],
         },
-        { toolCallId: 'historic-sql-pattern' },
-      );
-      if (!String(result).includes('Recorded historic-SQL pattern evidence')) {
-        throw new Error(`Unexpected pattern evidence result: ${String(result)}`);
+      });
+      if (!result.markdown.includes('Recorded historic-SQL pattern evidence')) {
+        throw new Error(`Unexpected pattern evidence result: ${result.markdown}`);
       }
     }
 
     return { stopReason: 'natural' as const };
   });
-
-  constructor() {
-    super({ llmProvider: { getModel: () => ({}) as never } as never });
-  }
 }
 
 function acceptanceSqlAnalysis(): SqlAnalysisPort {

@@ -21,7 +21,11 @@ describe('PageTriageService', () => {
   };
   let promptService: { loadPrompt: ReturnType<typeof vi.fn<(name: string) => Promise<string>>> };
   let adapter: { triageSupported: true; getTriageSignals: ReturnType<typeof vi.fn> };
-  let generateTextMock: ReturnType<typeof vi.fn>;
+  let llmRuntime: {
+    generateText: ReturnType<typeof vi.fn>;
+    generateObject: ReturnType<typeof vi.fn>;
+    runAgentLoop: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     stagedDir = await mkdtemp(join(tmpdir(), 'page-triage-'));
@@ -88,31 +92,16 @@ describe('PageTriageService', () => {
         .fn<(name: string) => Promise<string>>()
         .mockImplementation((name) => Promise.resolve(`prompt:${name}`)),
     };
-    generateTextMock = vi.fn();
+    llmRuntime = {
+      generateText: vi.fn(),
+      generateObject: vi.fn(),
+      runAgentLoop: vi.fn(),
+    };
     service = new PageTriageService({
       store: repository as any,
-      llmProvider: {
-        getModel: vi.fn().mockReturnValue('model'),
-        getModelByName: vi.fn(),
-        cacheMarker: vi.fn(),
-        repairToolCallHandler: vi.fn(),
-        thinkingProviderOptions: vi.fn(),
-        telemetryConfig: vi.fn(),
-        promptCachingConfig: vi.fn(() => ({
-          enabled: false,
-          systemTtl: '1h',
-          toolsTtl: '1h',
-          historyTtl: '5m',
-          cacheSystem: true,
-          cacheTools: true,
-          cacheHistory: true,
-          vertexFallbackTo5m: false,
-        })),
-        activeBackend: vi.fn(() => 'anthropic'),
-      } as any,
+      llmRuntime: llmRuntime as any,
       settings: triageSettings,
       promptService: promptService as any,
-      generateText: generateTextMock as any,
     });
   });
 
@@ -121,10 +110,10 @@ describe('PageTriageService', () => {
   });
 
   it('writes light-lane candidates and keeps the page out of full WorkUnits', async () => {
-    generateTextMock
-      .mockResolvedValueOnce({ text: JSON.stringify({ lane: 'light', reason: 'short durable policy' }) } as any)
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
+    llmRuntime.generateText
+      .mockResolvedValueOnce(JSON.stringify({ lane: 'light', reason: 'short durable policy' }))
+      .mockResolvedValueOnce(
+        JSON.stringify({
           candidates: [
             {
               candidateKey: 'support-handoff-owner',
@@ -142,7 +131,7 @@ describe('PageTriageService', () => {
             },
           ],
         }),
-      } as any);
+      );
 
     const result = await service.triageRun({
       stagedDir,
@@ -171,6 +160,7 @@ describe('PageTriageService', () => {
     });
     expect(result.fullRawPaths.has('pages/page-1/page.md')).toBe(false);
     expect(adapter.getTriageSignals).toHaveBeenCalledWith(stagedDir, 'page-1');
+    expect(llmRuntime.generateText).toHaveBeenCalledWith(expect.objectContaining({ role: 'triage' }));
     expect(repository.setDocumentTriageLane).toHaveBeenCalledWith('run-1', 'pages/page-1/page.md', 'light');
     expect(repository.insertCandidate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -225,23 +215,20 @@ describe('PageTriageService', () => {
       }
       return Promise.resolve(`prompt:${name}`);
     });
-    generateTextMock
+    llmRuntime.generateText
       .mockImplementationOnce((args: any) => {
-        const systemMessage = args.system ?? args.messages.find((m: { role: string }) => m.role === 'system');
-        const userMessage = args.messages.find((m: { role: string }) => m.role === 'user');
-        const systemText =
-          typeof systemMessage === 'string' ? systemMessage : (systemMessage.content as string);
-        const userText = userMessage.content as string;
+        const systemText = args.system as string;
+        const userText = args.prompt as string;
         expect(systemText).toContain(
           'Reusable templates and scripts are durable knowledge regardless of subject matter.',
         );
         expect(systemText).toContain('Date-titled standups are still skip; named templates and scripts are not.');
         expect(userText).toContain('Cold Call Script');
         expect(userText).not.toContain('Reusable templates and scripts are durable knowledge');
-        return { text: JSON.stringify({ lane: 'light', reason: 'reusable sales script' }) } as any;
+        return JSON.stringify({ lane: 'light', reason: 'reusable sales script' });
       })
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
+      .mockResolvedValueOnce(
+        JSON.stringify({
           candidates: [
             {
               candidateKey: 'cold-call-script',
@@ -259,7 +246,7 @@ describe('PageTriageService', () => {
             },
           ],
         }),
-      } as any);
+      );
 
     const result = await service.triageRun({
       stagedDir,
@@ -312,9 +299,7 @@ describe('PageTriageService', () => {
       'utf-8',
     );
 
-    generateTextMock.mockResolvedValue({
-      text: JSON.stringify({ lane: 'full', reason: 'durable policy page' }),
-    } as any);
+    llmRuntime.generateText.mockResolvedValue(JSON.stringify({ lane: 'full', reason: 'durable policy page' }));
 
     const result = await service.triageRun({
       stagedDir,
@@ -351,7 +336,7 @@ describe('PageTriageService', () => {
   });
 
   it('falls back to full when classifier output is malformed', async () => {
-    generateTextMock.mockResolvedValueOnce({ text: 'not-json' } as any);
+    llmRuntime.generateText.mockResolvedValueOnce('not-json');
 
     const result = await service.triageRun({
       stagedDir,
@@ -370,8 +355,8 @@ describe('PageTriageService', () => {
   });
 
   it('promotes a light page to full when light extraction fails', async () => {
-    generateTextMock
-      .mockResolvedValueOnce({ text: JSON.stringify({ lane: 'light', reason: 'short durable policy' }) } as any)
+    llmRuntime.generateText
+      .mockResolvedValueOnce(JSON.stringify({ lane: 'light', reason: 'short durable policy' }))
       .mockRejectedValueOnce(new Error('provider unavailable'));
 
     const result = await service.triageRun({
@@ -405,7 +390,7 @@ describe('PageTriageService', () => {
     });
 
     expect(result).toEqual({ enabled: false, report: undefined, fullRawPaths: new Set<string>(), warnings: [] });
-    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(llmRuntime.generateText).not.toHaveBeenCalled();
     expect(repository.setDocumentTriageLane).not.toHaveBeenCalled();
   });
 });

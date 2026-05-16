@@ -86,11 +86,11 @@ export interface KtxIngestDeps {
   renderStoredMemoryFlow?: typeof renderMemoryFlowTui;
   startLiveMemoryFlow?: typeof startLiveMemoryFlowTui;
   env?: NodeJS.ProcessEnv;
-  localIngestOptions?: Pick<
-    RunLocalIngestOptions,
-    | 'agentRunner'
-    | 'llmProvider'
-    | 'memoryModel'
+ localIngestOptions?: Pick<
+   RunLocalIngestOptions,
+   | 'agentRunner'
+    | 'llmRuntime'
+   | 'memoryModel'
     | 'semanticLayerCompute'
     | 'queryExecutor'
     | 'logger'

@@ -1,21 +1,26 @@
 {
   "schemaVersion": 1,
+  "publicNpmPackageVersion": "0.1.0-rc.1",
   "releaseMode": "npm-public-release-ready",
   "npm": {
     "publish": true,
     "registry": null,
     "access": "public",
     "tag": "next",
-    "packages": ["@kaelio/ktx"]
+    "packages": [
+      "@kaelio/ktx"
+    ]
   },
   "python": {
     "publish": false,
     "repository": null,
-    "packages": ["kaelio-ktx"]
+    "packages": [
+      "kaelio-ktx"
+    ]
   },
   "publishedPackageSmoke": {
     "packageName": "@kaelio/ktx",
-    "version": "0.1.0-rc.0",
+    "version": "0.1.0-rc.1",
     "registry": null
   },
   "runtimeInstaller": {

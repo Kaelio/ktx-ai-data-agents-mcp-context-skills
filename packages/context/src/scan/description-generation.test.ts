@@ -31,46 +31,32 @@ function createCache(initial: Record<string, string> = {}): KtxDescriptionCacheP
 function createLlmProvider(text = 'generated description') {
   vi.mocked(generateText).mockResolvedValue({ text } as never);
   return {
-    getModel: vi.fn().mockReturnValue({ modelId: 'claude-sonnet-4-6', provider: 'anthropic' }),
-    getModelByName: vi.fn(),
-    cacheMarker: vi.fn(),
-    repairToolCallHandler: vi.fn(),
-    thinkingProviderOptions: vi.fn(),
-    telemetryConfig: vi.fn(),
-    promptCachingConfig: vi.fn(() => ({
-      enabled: false,
-      systemTtl: '1h',
-      toolsTtl: '1h',
-      historyTtl: '5m',
-      cacheSystem: true,
-      cacheTools: true,
-      cacheHistory: true,
-      vertexFallbackTo5m: false,
-    })),
-    activeBackend: vi.fn(() => 'anthropic'),
+    generateText: vi.fn(async (input) => {
+      const result = await generateText({
+        system: input.system ? { role: 'system', content: input.system } : undefined,
+        messages: [{ role: 'user', content: input.prompt }],
+        temperature: input.temperature,
+      } as never);
+      return result.text;
+    }),
+    generateObject: vi.fn(),
+    runAgentLoop: vi.fn(),
   } as any;
 }
 
 function createFailingLlmProvider(message = 'timeout exceeded when trying to connect') {
   vi.mocked(generateText).mockRejectedValue(new Error(message) as never);
   return {
-    getModel: vi.fn().mockReturnValue({ modelId: 'claude-sonnet-4-6', provider: 'anthropic' }),
-    getModelByName: vi.fn(),
-    cacheMarker: vi.fn(),
-    repairToolCallHandler: vi.fn(),
-    thinkingProviderOptions: vi.fn(),
-    telemetryConfig: vi.fn(),
-    promptCachingConfig: vi.fn(() => ({
-      enabled: false,
-      systemTtl: '1h',
-      toolsTtl: '1h',
-      historyTtl: '5m',
-      cacheSystem: true,
-      cacheTools: true,
-      cacheHistory: true,
-      vertexFallbackTo5m: false,
-    })),
-    activeBackend: vi.fn(() => 'anthropic'),
+    generateText: vi.fn(async (input) => {
+      const result = await generateText({
+        system: input.system ? { role: 'system', content: input.system } : undefined,
+        messages: [{ role: 'user', content: input.prompt }],
+        temperature: input.temperature,
+      } as never);
+      return result.text;
+    }),
+    generateObject: vi.fn(),
+    runAgentLoop: vi.fn(),
   } as any;
 }
 
@@ -158,10 +144,10 @@ describe('KTX description prompt builders', () => {
 describe('KtxDescriptionGenerator', () => {
   it('generates column descriptions with pre-fetched values, cache hits, and word-limit metadata', async () => {
     const cache = createCache({ 'warehouse.public.orders.cached_status': 'Cached status description' });
-    const llmProvider = createLlmProvider('Payment state');
+    const llmRuntime = createLlmProvider('Payment state');
     const connector = createConnector();
     const generator = new KtxDescriptionGenerator({
-      llmProvider,
+      llmRuntime,
       cache,
       settings: {
         columnMaxWords: 12,
@@ -222,7 +208,7 @@ describe('KtxDescriptionGenerator', () => {
   it('samples through the connector when column values are not pre-fetched', async () => {
     const connector = createConnector();
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Current order state'),
+      llmRuntime: createLlmProvider('Current order state'),
       settings: {
         columnMaxWords: 12,
         tableMaxWords: 18,
@@ -271,7 +257,7 @@ describe('KtxDescriptionGenerator', () => {
       })),
     };
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Generated through sampler'),
+      llmRuntime: createLlmProvider('Generated through sampler'),
       settings: {
         columnMaxWords: 12,
         tableMaxWords: 18,
@@ -310,7 +296,7 @@ describe('KtxDescriptionGenerator', () => {
     const cache = createCache();
     const connector = createConnector();
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createFailingLlmProvider(),
+      llmRuntime: createFailingLlmProvider(),
       cache,
       settings: {
         columnMaxWords: 12,
@@ -355,7 +341,7 @@ describe('KtxDescriptionGenerator', () => {
     const cache = createCache();
     const connector = createConnector();
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Commerce orders'),
+      llmRuntime: createLlmProvider('Commerce orders'),
       cache,
       settings: {
         columnMaxWords: 12,
@@ -424,7 +410,7 @@ describe('KtxDescriptionGenerator resilience', () => {
     const logger = createLogger();
     const warnings: Array<{ code: string; table?: string }> = [];
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Commerce orders'),
+      llmRuntime: createLlmProvider('Commerce orders'),
       logger,
       onWarning: (warning) => warnings.push({ code: warning.code, ...(warning.table ? { table: warning.table } : {}) }),
       settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24, concurrencyLimit: 2 },
@@ -455,7 +441,7 @@ describe('KtxDescriptionGenerator resilience', () => {
     const logger = createLogger();
     const warnings: Array<{ code: string; table?: string; metadata?: Record<string, unknown> }> = [];
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Customer reference data'),
+      llmRuntime: createLlmProvider('Customer reference data'),
       logger,
       onWarning: (warning) =>
         warnings.push({
@@ -503,7 +489,7 @@ describe('KtxDescriptionGenerator resilience', () => {
     };
     const warnings: string[] = [];
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createFailingLlmProvider(),
+      llmRuntime: createFailingLlmProvider(),
       onWarning: (warning) => warnings.push(warning.code),
       settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
     });
@@ -528,7 +514,7 @@ describe('KtxDescriptionGenerator resilience', () => {
     };
     const warnings: string[] = [];
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Orders mart'),
+      llmRuntime: createLlmProvider('Orders mart'),
       onWarning: (warning) => warnings.push(warning.code),
       settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
     });
@@ -562,7 +548,7 @@ describe('KtxDescriptionGenerator resilience', () => {
     };
     const warnings: string[] = [];
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('should not be called'),
+      llmRuntime: createLlmProvider('should not be called'),
       onWarning: (warning) => warnings.push(warning.code),
       settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
     });
@@ -588,7 +574,7 @@ describe('KtxDescriptionGenerator resilience', () => {
     };
     const logger = createLogger();
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Payment lifecycle state'),
+      llmRuntime: createLlmProvider('Payment lifecycle state'),
       logger,
       settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
     });
@@ -625,7 +611,7 @@ describe('KtxDescriptionGenerator resilience', () => {
       sampleColumn,
     };
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('Customer reference identifier'),
+      llmRuntime: createLlmProvider('Customer reference identifier'),
       settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
     });
 
@@ -657,7 +643,7 @@ describe('KtxDescriptionGenerator resilience', () => {
     };
     vi.mocked(generateText).mockClear();
     const generator = new KtxDescriptionGenerator({
-      llmProvider: createLlmProvider('should not be called'),
+      llmRuntime: createLlmProvider('should not be called'),
       settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
     });
 

@@ -55,7 +55,14 @@ describe('AgentRunnerService.runLoop', () => {
     expect(call.system).toEqual({ role: 'system', content: 'SYS' });
     expect(call.messages).toEqual([{ role: 'user', content: 'USR' }]);
     expect(call.prompt).toBeUndefined();
-    expect(call.tools).toEqual(tools);
+    expect(call.tools.noop).toEqual(
+      expect.objectContaining({
+        description: 'noop',
+        inputSchema: {},
+        execute: expect.any(Function),
+        toModelOutput: expect.any(Function),
+      }),
+    );
     expect(call.stopWhen).toBe(17);
     expect(call.temperature).toBe(0);
     expect(call.experimental_repairToolCall).toBe(repairHandler);

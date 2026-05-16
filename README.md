@@ -34,7 +34,7 @@ SQLite.
 ## Quick Start
 
 ```bash
-npm install -g @kaelio/ktx
+pnpm add --global @kaelio/ktx
 ktx setup
 ktx status
 ```

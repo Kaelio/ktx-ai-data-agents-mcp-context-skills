@@ -1,6 +1,8 @@
 import { tool } from 'ai';
 import { z, type ZodType } from 'zod';
 import { noopLogger, type KtxLogger } from '../core/index.js';
+import type { KtxRuntimeToolDescriptor } from '../llm/runtime-port.js';
+import { normalizeKtxRuntimeToolOutput } from '../llm/runtime-tools.js';
 import type { IngestToolMetadata, ToolSession } from './tool-session.js';
 
 export interface ToolOutput<T = unknown> {
@@ -162,6 +164,23 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
         return { type: 'content', value: [{ type: 'text', text: String(output) }] };
       },
     });
+  }
+
+  toRuntimeTool(context: ToolContext): KtxRuntimeToolDescriptor {
+    const toolName = this.name;
+    return {
+      name: toolName,
+      description: this.description,
+      inputSchema: this.inputSchema as unknown as KtxRuntimeToolDescriptor['inputSchema'],
+      execute: async (params) => {
+        const callContext = { ...context };
+        if (!callContext.userId) {
+          throw new Error('Authentication required: userId must be provided in ToolContext');
+        }
+        const parsedInput = this.parseInput(params as Record<string, any>);
+        return normalizeKtxRuntimeToolOutput(await this.call(parsedInput, callContext));
+      },
+    };
   }
 
   parseInput(input: Record<string, any>): z.infer<TInput> {

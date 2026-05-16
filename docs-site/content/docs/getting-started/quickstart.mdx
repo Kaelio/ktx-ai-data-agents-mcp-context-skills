@@ -59,12 +59,13 @@ setup progress under `.ktx/setup/` and resumes from the remaining work.
 KTX uses a Claude model for ingest agents that turn schemas, SQL, BI metadata,
 and documents into semantic-layer sources and wiki context.
 
-Setup supports two LLM provider paths:
+Setup supports three LLM provider paths:
 
 | Provider | Use when | Credential model |
 |----------|----------|------------------|
 | Anthropic API | You have an Anthropic API key | `ANTHROPIC_API_KEY` or a local `file:` secret |
 | Google Vertex AI for Anthropic Claude | Your organization runs Claude through Google Cloud | Application Default Credentials plus Vertex project and location |
+| Claude Code | You want KTX to use your local Claude Code session | Claude Code local authentication |
 
 For Anthropic API, setup can read the key from the environment or save a pasted
 key to `.ktx/secrets/anthropic-api-key`. `ktx.yaml` stores an `env:` or `file:`
@@ -73,6 +74,27 @@ reference, not the raw key.
 For Vertex AI, setup uses Google Application Default Credentials. It can read
 your active `gcloud` project, list visible projects, or accept explicit
 `--vertex-project` and `--vertex-location` values.
+
+To use your local Claude Code session instead of an API key, set:
+
+```yaml
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: sonnet
+    reconcile: sonnet
+    repair: sonnet
+```
+
+`claude-code` uses the Claude Code authentication already configured on your
+machine. It doesn't use `ANTHROPIC_API_KEY`, Vertex credentials, AI Gateway
+tokens, or Bedrock credentials. In non-interactive setup, pass
+`--llm-model opus`, `--llm-model sonnet`, `--llm-model haiku`, or a full Claude
+model ID to select the Claude Code model.
 
 Setup checks the selected model before saving. Anthropic API setup fetches live
 Claude model choices when possible and falls back to bundled defaults if model

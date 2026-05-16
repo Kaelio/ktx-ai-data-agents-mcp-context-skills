@@ -6,10 +6,15 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
+import {
+  PUBLIC_NPM_PACKAGE_NAME,
+  publicNpmPackageVersion,
+} from './public-npm-release-metadata.mjs';
+
 const execFileAsync = promisify(execFile);
 
-export const PUBLIC_NPM_PACKAGE_NAME = '@kaelio/ktx';
-export const PUBLIC_NPM_PACKAGE_VERSION = '0.1.0-rc.0';
+export const PUBLIC_NPM_PACKAGE_VERSION = publicNpmPackageVersion();
+export { PUBLIC_NPM_PACKAGE_NAME };
 
 export function publicNpmPackageTarballName(version = PUBLIC_NPM_PACKAGE_VERSION) {
   return `kaelio-ktx-${version}.tgz`;

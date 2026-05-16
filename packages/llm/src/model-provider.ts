@@ -175,14 +175,18 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
       return (modelId) => vertex(modelId);
     }
 
-    const gateway = (deps.createGateway ?? createGateway)({
-      ...(config.gateway?.apiKey ? { apiKey: config.gateway.apiKey } : {}),
-      ...(config.gateway?.baseURL ? { baseURL: config.gateway.baseURL } : {}),
-      headers: {
-        'anthropic-beta': ANTHROPIC_BETA_HEADER,
-      },
-    });
-    return (modelId) => gateway(modelId);
+    if (config.backend === 'gateway') {
+      const gateway = (deps.createGateway ?? createGateway)({
+        ...(config.gateway?.apiKey ? { apiKey: config.gateway.apiKey } : {}),
+        ...(config.gateway?.baseURL ? { baseURL: config.gateway.baseURL } : {}),
+        headers: {
+          'anthropic-beta': ANTHROPIC_BETA_HEADER,
+        },
+      });
+      return (modelId) => gateway(modelId);
+    }
+
+    throw new Error(`${config.backend} is not an AI SDK LanguageModel backend; use KtxLlmRuntimePort`);
   }
 }
 

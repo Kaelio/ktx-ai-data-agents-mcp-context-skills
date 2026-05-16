@@ -1,5 +1,5 @@
-import { tool, type ToolExecuteFunction, type ToolExecutionOptions, type ToolSet } from 'ai';
 import { z } from 'zod';
+import type { KtxRuntimeToolDescriptor, KtxRuntimeToolSet } from '../../llm/index.js';
 
 const verificationLedgerInputSchema = z.object({
   summary: z.string().min(1).max(2000),
@@ -37,22 +37,19 @@ export function createVerificationLedgerState(): VerificationLedgerState {
   return { entries: [] };
 }
 
-export function withVerificationLedger(tools: ToolSet, state: VerificationLedgerState): ToolSet {
-  const wrapped: ToolSet = {};
+export function withVerificationLedger(tools: KtxRuntimeToolSet, state: VerificationLedgerState): KtxRuntimeToolSet {
+  const wrapped: KtxRuntimeToolSet = {};
   for (const [name, original] of Object.entries(tools)) {
     if (!WRITE_TOOL_NAMES.has(name) || typeof original.execute !== 'function') {
       wrapped[name] = original;
       continue;
     }
     const originalExecute = original.execute;
-    const guardedExecute: ToolExecuteFunction<unknown, unknown> = async (
-      input: unknown,
-      opts: ToolExecutionOptions,
-    ) => {
+    const guardedExecute = async (input: unknown) => {
       if (state.entries.length === 0) {
         return verificationRequiredOutput(name);
       }
-      return (originalExecute as ToolExecuteFunction<unknown, unknown>)(input, opts);
+      return originalExecute(input);
     };
     wrapped[name] = { ...original, execute: guardedExecute };
   }
@@ -60,8 +57,9 @@ export function withVerificationLedger(tools: ToolSet, state: VerificationLedger
   return wrapped;
 }
 
-function createRecordVerificationLedgerTool(state: VerificationLedgerState) {
-  return tool({
+function createRecordVerificationLedgerTool(state: VerificationLedgerState): KtxRuntimeToolDescriptor {
+  return {
+    name: 'record_verification_ledger',
     description:
       'Record the pre-write verification ledger required by loaded ingest skills. Call this before wiki/SL/fallback writes to state what was verified, which tool calls support it, and what remains intentionally unverified.',
     inputSchema: verificationLedgerInputSchema,
@@ -78,7 +76,7 @@ function createRecordVerificationLedgerTool(state: VerificationLedgerState) {
         structured: { success: true, entry },
       };
     },
-  });
+  };
 }
 
 function verificationRequiredOutput(toolName: string) {

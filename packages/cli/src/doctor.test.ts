@@ -464,6 +464,44 @@ describe('runKtxDoctor', () => {
     delete process.env.OPENAI_API_KEY;
   });
 
+  it('reports Claude Code auth failures and ignored prompt-caching fields in project doctor output', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'llm:',
+        '  provider:',
+        '    backend: claude-code',
+        '  models:',
+        '    default: sonnet',
+        '  promptCaching:',
+        '    enabled: true',
+        '    systemTtl: 1h',
+        '    toolsTtl: 1h',
+        '    historyTtl: 5m',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {
+          claudeCodeAuthProbe: async () => ({
+            ok: false as const,
+            message: 'Authenticate Claude Code locally.',
+          }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(testIo.stdout()).toContain('claude-code');
+    expect(testIo.stdout()).toContain('Authenticate Claude Code locally');
+    expect(testIo.stdout()).toContain('claude-code ignores llm.promptCaching');
+  });
+
   it('includes Postgres query-history readiness in project doctor output', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     process.env.OPENAI_API_KEY = 'test-key'; // pragma: allowlist secret

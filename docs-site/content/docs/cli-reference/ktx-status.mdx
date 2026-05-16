@@ -47,6 +47,10 @@ ktx status --project-dir ./analytics
 `ktx status` prints grouped doctor checks. Agents should use
 `ktx status --json --no-input` when they need to branch on readiness state.
 
+For `llm.provider.backend: claude-code`, `ktx status` checks that the local
+Claude Code session is usable. If auth fails, run the Claude Code CLI login
+flow, then rerun `ktx status`.
+
 ```json
 {
   "title": "KTX project doctor",

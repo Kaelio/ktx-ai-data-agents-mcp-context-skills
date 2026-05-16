@@ -1,7 +1,6 @@
 import type { KtxModelRole } from '@ktx/llm';
-import type { ToolSet } from 'ai';
-import type { AgentRunnerService } from '../../agent/index.js';
 import { type KtxLogger, noopLogger } from '../../core/index.js';
+import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../llm/index.js';
 import type { MemoryAction } from '../../memory/index.js';
 import type { ContextCandidateForDedup, CuratorPaginationPort, CuratorPaginationReport } from '../ports.js';
 import type {
@@ -38,7 +37,7 @@ export interface CuratorPaginationInput {
   modelRole: KtxModelRole;
   buildSystemPrompt: () => string;
   buildUserPrompt: (input: CuratorPaginationPromptInput) => string;
-  buildToolSet: (passNumber: number) => ToolSet;
+  buildToolSet: (passNumber: number) => KtxRuntimeToolSet;
   getReconciliationActions: () => MemoryAction[];
   onStepFinish?: (info: { passNumber: number; stepIndex: number; stepBudget: number }) => void;
 }
@@ -50,7 +49,7 @@ interface CuratorPaginationResult extends ReconciliationOutcome {
 
 export interface CuratorPaginationServiceDeps {
   store: ContextCandidateStorePort;
-  agentRunner: AgentRunnerService;
+  agentRunner: AgentRunnerPort;
   settings: CuratorPaginationSettings;
   logger?: KtxLogger;
 }

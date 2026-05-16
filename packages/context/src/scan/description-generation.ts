@@ -1,5 +1,4 @@
-import type { KtxLlmProvider } from '@ktx/llm';
-import { generateKtxText } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import type {
   KtxColumnSampleInput,
   KtxColumnSampleResult,
@@ -120,7 +119,7 @@ export interface KtxGenerateDataSourceDescriptionInput {
 }
 
 export interface KtxDescriptionGeneratorOptions {
-  llmProvider: KtxLlmProvider;
+  llmRuntime: KtxLlmRuntimePort;
   cache?: KtxDescriptionCachePort;
   logger?: KtxScanLoggerPort;
   onWarning?: (warning: KtxScanWarning) => void;
@@ -400,14 +399,14 @@ Data source type: ${input.dataSourceType}`;
 }
 
 export class KtxDescriptionGenerator {
-  private readonly llmProvider: KtxLlmProvider;
+  private readonly llmRuntime: KtxLlmRuntimePort;
   private readonly cache?: KtxDescriptionCachePort;
   private readonly logger?: KtxScanLoggerPort;
   private readonly onWarning?: (warning: KtxScanWarning) => void;
   private readonly settings: ResolvedKtxDescriptionGenerationSettings;
 
   constructor(options: KtxDescriptionGeneratorOptions) {
-    this.llmProvider = options.llmProvider;
+    this.llmRuntime = options.llmRuntime;
     this.cache = options.cache;
     this.logger = options.logger;
     this.onWarning = options.onWarning;
@@ -779,8 +778,7 @@ export class KtxDescriptionGenerator {
 
   private async generateAiDescription(prompt: KtxDescriptionPrompt, _operationName: string): Promise<string | null> {
     try {
-      const text = await generateKtxText({
-        llmProvider: this.llmProvider,
+      const text = await this.llmRuntime.generateText({
         role: 'candidateExtraction',
         system: prompt.system,
         prompt: prompt.user,
