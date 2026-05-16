@@ -1,3 +1,9 @@
+## [0.1.0-rc.4](https://github.com/kaelio/ktx/compare/v0.1.0-rc.3...v0.1.0-rc.4) (2026-05-16)
+
+### Bug Fixes
+
+* **release:** use npm trusted publishing ([ceb578e](https://github.com/kaelio/ktx/commit/ceb578e0f64572ee15ebe0fb74e6d1f743c010fd))
+
 ## [0.1.0-rc.3](https://github.com/kaelio/ktx/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-05-16)
 
 ### Bug Fixes
