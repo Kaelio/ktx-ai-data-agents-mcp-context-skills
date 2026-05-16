@@ -34,13 +34,26 @@ SQLite.
 ## Quick Start
 
 ```bash
-pnpm add --global @kaelio/ktx
+npm install -g @kaelio/ktx
 ktx setup
 ktx status
 ```
 
 `ktx setup` creates or resumes a local KTX project, configures providers and
 connections, builds context, and installs agent integration.
+
+Example `ktx status` output after setup:
+
+```text
+KTX project: /home/user/analytics
+Project ready: yes
+LLM ready: yes (claude-sonnet-4-6)
+Embeddings ready: yes (text-embedding-3-small)
+Databases configured: yes (postgres-warehouse)
+Context sources configured: yes (dbt-main)
+KTX context built: yes
+Agent integration ready: yes (codex:project)
+```
 
 ## Common Commands
 

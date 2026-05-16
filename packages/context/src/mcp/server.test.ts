@@ -201,7 +201,9 @@ describe('createKtxMcpServer', () => {
     const toolNames = result.tools.map((tool) => tool.name).sort();
     expect(toolNames).toEqual([...retainedToolNames].sort());
 
-    await expect(result.tools).toMatchFileSnapshot('__snapshots__/mcp-tools-list.json');
+    await expect(`${JSON.stringify(result.tools, null, 2)}\n`).toMatchFileSnapshot(
+      '__snapshots__/mcp-tools-list.json',
+    );
   });
 
   it('registers context tools without memory capture tools when memory capture is omitted', async () => {
