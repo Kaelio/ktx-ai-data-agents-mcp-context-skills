@@ -192,7 +192,7 @@ describe('standalone example docs', () => {
     const quickstart = await readText('docs-site/content/docs/getting-started/quickstart.mdx');
     const packageArtifacts = await readText('examples/package-artifacts/README.md');
 
-    assert.match(rootReadme, publicPackagePattern('npm install -g {package}'));
+    assert.match(rootReadme, publicPackagePattern('pnpm add --global {package}'));
     assert.match(quickstart, publicPackagePattern('npm install -g {package}'));
     assert.match(quickstart, /ktx dev runtime install --feature local-embeddings --yes/);
     assert.match(quickstart, /ktx dev runtime start --feature local-embeddings/);
@@ -261,7 +261,7 @@ describe('standalone example docs', () => {
     assert.match(contextAsCode, /ktx ingest --all --no-input/);
     assert.match(quickstart, /schema context/);
     assert.match(primarySources, /context:\n      queryHistory:/);
-    assert.match(rootReadme, /Databases configured: yes \(postgres-warehouse\)/);
+    assert.match(rootReadme, /`ktx ingest <id>` \| Build context for one connection/);
     assert.match(quickstart, /Databases:\n  warehouse: deep context complete/);
     assert.match(quickstart, /Databases configured: yes \(warehouse\)/);
     assert.match(setupReference, /Databases configured: yes \(postgres-warehouse\)/);
