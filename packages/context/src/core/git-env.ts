@@ -25,5 +25,5 @@ function sanitizedGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
 }
 
 export function createSimpleGit(baseDir: string): SimpleGit {
-  return simpleGit({ baseDir }).env(sanitizedGitEnv());
+  return simpleGit({ baseDir, unsafe: { allowUnsafeAskPass: true } }).env(sanitizedGitEnv());
 }

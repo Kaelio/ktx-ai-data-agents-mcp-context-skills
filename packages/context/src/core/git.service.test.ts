@@ -59,6 +59,34 @@ describe('GitService', () => {
       expect(config).toMatch(/\[gc]\n\s+autoDetach = false/);
       expect(config).toMatch(/\[maintenance]\n\s+autoDetach = false/);
     });
+
+    it('initializes when release automation sets GIT_ASKPASS', async () => {
+      const releaseEnvDir = await mkdtemp(join(tmpdir(), 'git-service-release-env-'));
+      const previousAskPass = process.env.GIT_ASKPASS;
+      process.env.GIT_ASKPASS = 'echo';
+
+      try {
+        const releaseEnvService = new GitService({
+          storage: { configDir: releaseEnvDir, homeDir: releaseEnvDir },
+          git: {
+            userName: 'Test User',
+            userEmail: 'test@example.com',
+            bootstrapMessage: 'Initialize test config repo',
+            bootstrapAuthor: 'test-system',
+            bootstrapAuthorEmail: 'system@example.com',
+          },
+        });
+
+        await expect(releaseEnvService.onModuleInit()).resolves.toBeUndefined();
+      } finally {
+        if (previousAskPass === undefined) {
+          delete process.env.GIT_ASKPASS;
+        } else {
+          process.env.GIT_ASKPASS = previousAskPass;
+        }
+        await rm(releaseEnvDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('commitFile `created` flag', () => {

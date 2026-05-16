@@ -3,6 +3,7 @@ import { type SimpleGit, simpleGit } from 'simple-git';
 const SANITIZED_GIT_ENV_KEYS = [
   'EDITOR',
   'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_ASKPASS',
   'GIT_CONFIG',
   'GIT_CONFIG_COUNT',
   'GIT_CONFIG_GLOBAL',
@@ -31,5 +32,5 @@ export function createSimpleGit(baseDir?: string): SimpleGit {
   for (const key of SANITIZED_GIT_ENV_KEYS) {
     delete env[key];
   }
-  return simpleGit(baseDir).env(env);
+  return simpleGit({ baseDir, unsafe: { allowUnsafeAskPass: true } }).env(env);
 }
