@@ -276,6 +276,43 @@ grain: []
     });
   });
 
+  it('emits progress while compiling and executing a local semantic-layer query', async () => {
+    const progress: Array<{ progress: number; message: string }> = [];
+    const queryExecutor = {
+      execute: vi.fn(async () => ({
+        headers: ['status', 'order_count'],
+        rows: [['paid', 2]],
+        totalRows: 1,
+        command: 'SELECT',
+        rowCount: 1,
+      })),
+    };
+
+    const result = await compileLocalSlQuery(project, {
+      connectionId: 'warehouse',
+      query: {
+        measures: ['orders.order_count'],
+        dimensions: ['orders.status'],
+        limit: 25,
+      },
+      compute,
+      execute: true,
+      maxRows: 10,
+      queryExecutor,
+      onProgress: (event) => {
+        progress.push({ progress: event.progress, message: event.message });
+      },
+    });
+
+    expect(result.totalRows).toBe(1);
+    expect(progress).toEqual([
+      { progress: 0, message: 'Compiling query' },
+      { progress: 0.3, message: 'Generating SQL' },
+      { progress: 0.6, message: 'Executing' },
+      { progress: 1, message: 'Fetched 1 rows' },
+    ]);
+  });
+
   it('requires a query executor for executed mode', async () => {
     await expect(
       compileLocalSlQuery(project, {

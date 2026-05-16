@@ -244,6 +244,50 @@ describe('createLocalProjectMcpContextPorts', () => {
     expect(connector.cleanup).toHaveBeenCalled();
   });
 
+  it('emits sql_execution progress stages from local MCP ports', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      url: 'env:DATABASE_URL',
+    };
+    const connector = testConnector(testSnapshot(), {
+      headers: ['id'],
+      headerTypes: ['integer'],
+      rows: [[1]],
+      totalRows: 1,
+      rowCount: 1,
+    });
+    const createConnector = vi.fn(async () => connector);
+    const sqlAnalysis = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(),
+      validateReadOnly: vi.fn(async () => ({ ok: true, error: null })),
+    };
+    const progress: Array<{ progress: number; message: string }> = [];
+    const ports = createLocalProjectMcpContextPorts(project, {
+      sqlAnalysis,
+      localScan: {
+        createConnector,
+      },
+    });
+
+    const result = await ports.sqlExecution?.execute(
+      { connectionId: 'warehouse', sql: 'select id from public.orders', maxRows: 5 },
+      {
+        onProgress: (event) => {
+          progress.push({ progress: event.progress, message: event.message });
+        },
+      },
+    );
+
+    expect(result?.rowCount).toBe(1);
+    expect(progress).toEqual([
+      { progress: 0, message: 'Validating SQL' },
+      { progress: 0.3, message: 'Executing' },
+      { progress: 1, message: 'Fetched 1 rows' },
+    ]);
+  });
+
   it('rejects MCP SQL before connector execution when parser validation fails', async () => {
     const project = await initKtxProject({ projectDir: tempDir });
     project.config.connections.warehouse = {

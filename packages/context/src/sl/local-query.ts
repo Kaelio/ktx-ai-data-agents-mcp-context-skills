@@ -1,5 +1,6 @@
 import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
+import type { KtxMcpProgressCallback } from '../mcp/types.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { loadLocalSlSourceRecords } from './local-sl.js';
 import { toResolvedWire } from './semantic-layer.service.js';
@@ -15,6 +16,7 @@ export interface CompileLocalSlQueryOptions {
   execute?: boolean;
   maxRows?: number;
   queryExecutor?: KtxSqlQueryExecutorPort;
+  onProgress?: KtxMcpProgressCallback;
 }
 
 export interface CompileLocalSlQueryResult extends SemanticLayerQueryExecutionResult {
@@ -92,15 +94,20 @@ export async function compileLocalSlQuery(
   project: KtxLocalProject,
   options: CompileLocalSlQueryOptions,
 ): Promise<CompileLocalSlQueryResult> {
+  await options.onProgress?.({ progress: 0, message: 'Compiling query' });
   const connectionId = resolveLocalConnectionId(project, options.connectionId);
   const dialect = dialectForDriver(project.config.connections[connectionId]?.driver);
+  const sources = await loadComputableSources(project, connectionId);
+
+  await options.onProgress?.({ progress: 0.3, message: 'Generating SQL' });
   const response = await options.compute.query({
-    sources: await loadComputableSources(project, connectionId),
+    sources,
     dialect,
     query: options.query,
   });
 
   if (!options.execute) {
+    await options.onProgress?.({ progress: 1, message: 'Fetched 0 rows' });
     return {
       connectionId,
       dialect: response.dialect,
@@ -123,6 +130,7 @@ export async function compileLocalSlQuery(
   }
 
   const maxRows = options.maxRows ?? options.query.limit;
+  await options.onProgress?.({ progress: 0.6, message: 'Executing' });
   const execution = await options.queryExecutor.execute({
     connectionId,
     projectDir: project.projectDir,
@@ -130,6 +138,7 @@ export async function compileLocalSlQuery(
     sql: response.sql,
     maxRows,
   });
+  await options.onProgress?.({ progress: 1, message: `Fetched ${execution.totalRows} rows` });
 
   return {
     connectionId,

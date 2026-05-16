@@ -8,7 +8,7 @@ import { createKtxDiscoverDataService } from '../search/index.js';
 import type { SqlAnalysisDialect, SqlAnalysisPort } from '../sql-analysis/index.js';
 import { compileLocalSlQuery, createKtxDictionarySearchService } from '../sl/index.js';
 import { readLocalKnowledgePage, searchLocalKnowledgePages } from '../wiki/local-knowledge.js';
-import type { KtxMcpContextPorts, KtxSqlExecutionResponse } from './types.js';
+import type { KtxMcpContextPorts, KtxMcpProgressCallback, KtxSqlExecutionResponse } from './types.js';
 
 interface CreateLocalProjectMcpContextPortsOptions {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
@@ -83,7 +83,9 @@ async function executeValidatedReadOnlySql(
   project: KtxLocalProject,
   options: CreateLocalProjectMcpContextPortsOptions,
   input: { connectionId: string; sql: string; maxRows: number },
+  onProgress?: KtxMcpProgressCallback,
 ): Promise<KtxSqlExecutionResponse> {
+  await onProgress?.({ progress: 0, message: 'Validating SQL' });
   const connectionId = assertSafeConnectionId(input.connectionId);
   const connection = project.config.connections[connectionId];
   if (!connection) {
@@ -107,6 +109,7 @@ async function executeValidatedReadOnlySql(
     if (!connector.capabilities.readOnlySql || !connector.executeReadOnly) {
       throw new Error(`Connection "${connectionId}" does not support read-only SQL execution.`);
     }
+    await onProgress?.({ progress: 0.3, message: 'Executing' });
     const result = await connector.executeReadOnly(
       {
         connectionId,
@@ -115,12 +118,14 @@ async function executeValidatedReadOnlySql(
       },
       { runId: 'mcp-sql-execution' },
     );
-    return {
+    const response = {
       headers: result.headers,
       ...(result.headerTypes ? { headerTypes: result.headerTypes } : {}),
       rows: result.rows,
       rowCount: result.rowCount ?? result.rows.length,
     };
+    await onProgress?.({ progress: 1, message: `Fetched ${response.rowCount} rows` });
+    return response;
   } finally {
     await cleanupConnector(connector);
   }
@@ -194,7 +199,7 @@ export function createLocalProjectMcpContextPorts(
           return null;
         }
       },
-      async query(input) {
+      async query(input, executionOptions) {
         if (!options.semanticLayerCompute) {
           throw new Error('sl_query requires a semantic-layer query adapter.');
         }
@@ -205,6 +210,7 @@ export function createLocalProjectMcpContextPorts(
           execute: Boolean(options.queryExecutor),
           maxRows: input.query.limit,
           queryExecutor: options.queryExecutor,
+          onProgress: executionOptions?.onProgress,
         });
       },
     },
@@ -227,8 +233,8 @@ export function createLocalProjectMcpContextPorts(
 
   if (options.sqlAnalysis && options.localScan?.createConnector) {
     ports.sqlExecution = {
-      async execute(input) {
-        return executeValidatedReadOnlySql(project, options, input);
+      async execute(input, executionOptions) {
+        return executeValidatedReadOnlySql(project, options, input, executionOptions?.onProgress);
       },
     };
   }
