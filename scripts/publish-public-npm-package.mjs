@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 
 import { packageArtifactLayout } from './package-artifacts.mjs';
 import { releaseReadinessReport } from './release-readiness.mjs';
 
-const execFileAsync = promisify(execFile);
+export const NPM_PUBLISH_TIMEOUT_MS = 180_000;
 
 export function resolvePublishMode(args = process.argv.slice(2)) {
   return { live: args.includes('--publish') };
@@ -23,7 +22,7 @@ export function requireNpmPublicReleaseReady(report) {
 
 export function buildNpmPublishCommand(tarballPath, publish, mode) {
   return {
-    command: 'pnpm',
+    command: 'npm',
     args: [
       'publish',
       tarballPath,
@@ -31,7 +30,7 @@ export function buildNpmPublishCommand(tarballPath, publish, mode) {
       publish.access,
       '--tag',
       publish.tag,
-      ...(mode.live ? [] : ['--dry-run', '--no-git-checks']),
+      ...(mode.live ? [] : ['--dry-run']),
     ],
     env: publish.registry ? { npm_config_registry: publish.registry } : {},
   };
@@ -47,10 +46,42 @@ async function assertFileExists(path) {
 
 async function runPublishCommand(command) {
   process.stdout.write(`$ ${command.command} ${command.args.join(' ')}\n`);
-  await execFileAsync(command.command, command.args, {
-    env: { ...process.env, ...command.env },
-    encoding: 'utf8',
-    maxBuffer: 1024 * 1024 * 20,
+
+  await new Promise((resolvePromise, reject) => {
+    let settled = false;
+    const child = spawn(command.command, command.args, {
+      env: { ...process.env, ...command.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const settle = (callback, value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      callback(value);
+    };
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+      settle(reject, new Error(`Timed out after ${NPM_PUBLISH_TIMEOUT_MS}ms while publishing npm package`));
+    }, NPM_PUBLISH_TIMEOUT_MS);
+
+    child.stdout.on('data', (chunk) => {
+      process.stdout.write(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      process.stderr.write(chunk);
+    });
+    child.on('error', (error) => {
+      settle(reject, error);
+    });
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        settle(resolvePromise);
+        return;
+      }
+      settle(reject, new Error(`npm publish failed with ${signal ? `signal ${signal}` : `exit code ${code}`}`));
+    });
   });
 }
 
