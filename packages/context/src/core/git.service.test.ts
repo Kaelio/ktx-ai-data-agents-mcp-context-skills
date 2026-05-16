@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -51,6 +51,13 @@ describe('GitService', () => {
       await service.onModuleInit();
       const after = await service.revParseHead();
       expect(after).toBe(before);
+    });
+
+    it('keeps git auto-maintenance attached for deterministic cleanup', async () => {
+      const config = await readFile(join(tempDir, '.git', 'config'), 'utf-8');
+
+      expect(config).toMatch(/\[gc]\n\s+autoDetach = false/);
+      expect(config).toMatch(/\[maintenance]\n\s+autoDetach = false/);
     });
   });
 
