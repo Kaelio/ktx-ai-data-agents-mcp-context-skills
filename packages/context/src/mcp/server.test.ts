@@ -475,21 +475,17 @@ describe('createKtxMcpServer', () => {
   });
 
   it('runs MCP memory_ingest against a local project memory port', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-mcp-local-memory-'));
-    try {
-      const project = await initKtxProject({ projectDir: tempDir });
-      let receivedInput: MemoryAgentInput | undefined;
-      const agentRunner = {
-        runLoop: async ({
-          input,
-          toolSet,
-        }: {
-          input: MemoryAgentInput;
-          toolSet: Record<string, { execute: (input: unknown, options?: { toolCallId?: string }) => Promise<unknown> }>;
-        }) => {
-          receivedInput = input;
-          await toolSet.load_skill.execute({ name: 'wiki_capture' });
-          await toolSet.wiki_write.execute(
+      const tempDir = await mkdtemp(join(tmpdir(), 'ktx-mcp-local-memory-'));
+      try {
+        const project = await initKtxProject({ projectDir: tempDir });
+        const agentRunner = {
+          runLoop: async ({
+            toolSet,
+          }: {
+            toolSet: Record<string, { execute: (input: unknown, options?: { toolCallId?: string }) => Promise<unknown> }>;
+          }) => {
+            await toolSet.load_skill.execute({ name: 'wiki_capture' });
+            await toolSet.wiki_write.execute(
             {
               key: 'arr',
               summary: 'ARR definition',
@@ -504,6 +500,7 @@ describe('createKtxMcpServer', () => {
         agentRunner: agentRunner as never,
         runIdFactory: () => 'memory-run-mcp',
       });
+      const ingestSpy = vi.spyOn(memoryIngest, 'ingest');
       const fake = makeFakeServer();
 
       createKtxMcpServer({
@@ -520,7 +517,7 @@ describe('createKtxMcpServer', () => {
         structuredContent: { runId: 'memory-run-mcp' },
       });
       await memoryIngest.waitForRun('memory-run-mcp');
-      expect(receivedInput).toMatchObject({
+      expect(ingestSpy).toHaveBeenCalledWith({
         userId: 'local',
         chatId: expect.stringMatching(/^mcp-/),
         userMessage: 'Ingest external knowledge into KTX memory.',

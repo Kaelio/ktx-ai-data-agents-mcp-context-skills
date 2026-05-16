@@ -1,5 +1,5 @@
 import { createDefaultKtxMcpServer, createLocalProjectMcpContextPorts } from '@ktx/context/mcp';
-import { createLocalProjectMemoryCapture } from '@ktx/context/memory';
+import { createLocalProjectMemoryIngest } from '@ktx/context/memory';
 import type { KtxLocalProject } from '@ktx/context/project';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -41,17 +41,13 @@ export async function createKtxMcpServerFactory(input: {
     localScan: {
       createConnector: async (connectionId) => createKtxCliScanConnector(input.project, connectionId),
     },
-    localIngest: {
-      semanticLayerCompute,
-      queryExecutor,
-    },
   });
 
-  let memoryCapture: ReturnType<typeof createLocalProjectMemoryCapture> | undefined;
+  let memoryIngest: ReturnType<typeof createLocalProjectMemoryIngest> | undefined;
   try {
-    memoryCapture = createLocalProjectMemoryCapture(input.project, { semanticLayerCompute, queryExecutor });
+    memoryIngest = createLocalProjectMemoryIngest(input.project, { semanticLayerCompute, queryExecutor });
   } catch (error) {
-    input.io?.stderr.write(`KTX MCP memory_capture disabled: ${error instanceof Error ? error.message : String(error)}\n`);
+    input.io?.stderr.write(`KTX MCP memory_ingest disabled: ${error instanceof Error ? error.message : String(error)}\n`);
   }
 
   return () =>
@@ -59,7 +55,9 @@ export async function createKtxMcpServerFactory(input: {
       name: 'ktx',
       version: input.cliVersion,
       userContext: { userId: 'local' },
-      contextTools,
-      memoryCapture,
+      contextTools: {
+        ...contextTools,
+        ...(memoryIngest ? { memoryIngest } : {}),
+      },
     });
 }
