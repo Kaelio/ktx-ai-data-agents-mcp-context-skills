@@ -14,6 +14,7 @@ describe('release workflow', () => {
     assert.match(workflow, /publish_live:/);
     assert.match(workflow, /default: false/);
     assert.match(workflow, /^  contents: write$/m);
+    assert.match(workflow, /^  id-token: write$/m);
     assert.match(workflow, /fetch-depth: 0/);
     assert.match(workflow, /registry-url: "https:\/\/registry\.npmjs\.org"/);
     assert.match(workflow, /Prepare next prerelease branch/);
@@ -24,7 +25,7 @@ describe('release workflow', () => {
     assert.match(workflow, /KTX_RELEASE_KIND: \$\{\{ inputs.release_kind \}\}/);
     assert.match(workflow, /KTX_PRERELEASE_BRANCH: next/);
     assert.match(workflow, /FORCE_RELEASE: \$\{\{ inputs.force_release \}\}/);
-    assert.match(workflow, /NODE_AUTH_TOKEN: \$\{\{ secrets.NPM_TOKEN \}\}/);
+    assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN/);
     assert.doesNotMatch(workflow, /^  push:/m);
     assert.doesNotMatch(workflow, /^  pull_request:/m);
   });

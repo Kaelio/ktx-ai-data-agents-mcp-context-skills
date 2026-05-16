@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: ktx-release-${{ github.ref }}
@@ -124,4 +125,3 @@ jobs:
           KTX_RELEASE_KIND: ${{ inputs.release_kind }}
           KTX_PRERELEASE_BRANCH: next
           FORCE_RELEASE: ${{ inputs.force_release }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
