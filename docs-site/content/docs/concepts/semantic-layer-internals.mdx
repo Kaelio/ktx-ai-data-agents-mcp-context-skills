@@ -1,12 +1,15 @@
 ---
 title: Semantic Layer Internals
-description: How KTX uses join graphs, grain, and relationship metadata to turn context into safe SQL.
+description: How KTX turns reviewed context, grain, and relationship evidence into safe SQL for agents.
 ---
 
-KTX is a context layer for agents. This page focuses on the semantic execution
-layer: the subsystem that turns reviewed context into safe SQL.
+## Why query planning needs context
 
-Read it as four mechanics:
+Agents can generate SQL from schema alone, but safe analytics SQL needs more
+than table names. KTX uses reviewed context to understand grain, joins, measures,
+filters, and where aggregation must happen.
+
+Read this page as four mechanics:
 
 - context files feed the semantic engine;
 - evidence becomes a join graph with grain and relationship metadata;
@@ -15,8 +18,9 @@ Read it as four mechanics:
 
 ## Where the semantic layer fits
 
-The semantic layer is the engine that makes KTX context actionable for SQL
-generation. It uses source YAML, wiki context, scan evidence, and provenance.
+This planner is one subsystem inside KTX's broader context layer. It uses source
+YAML, wiki context, scan evidence, and provenance to make context actionable for
+SQL generation.
 
 <div
   className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
