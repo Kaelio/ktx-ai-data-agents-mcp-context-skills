@@ -7,12 +7,16 @@
     "registry": null,
     "access": "public",
     "tag": "next",
-    "packages": ["@kaelio/ktx"]
+    "packages": [
+      "@kaelio/ktx"
+    ]
   },
   "python": {
     "publish": false,
     "repository": null,
-    "packages": ["kaelio-ktx"]
+    "packages": [
+      "kaelio-ktx"
+    ]
   },
   "publishedPackageSmoke": {
     "packageName": "@kaelio/ktx",
