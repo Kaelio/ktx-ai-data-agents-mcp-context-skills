@@ -17,7 +17,7 @@ export interface KtxMcpToolResult<T extends NonArrayObject = NonArrayObject> {
   isError?: true;
 }
 
-export interface KtxMcpProgressEvent {
+interface KtxMcpProgressEvent {
   progress: number;
   total?: number;
   message: string;
