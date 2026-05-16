@@ -24,10 +24,11 @@ other branches.
 
 Before you publish, confirm these requirements:
 
-- The repository has an Actions secret named `NPM_TOKEN`.
-- `NPM_TOKEN` is a granular npm token that can publish `@kaelio/ktx`.
-- The token can publish non-interactively if the npm account or package uses
-  two-factor authentication for writes.
+- npm Trusted Publishing is configured for `@kaelio/ktx`.
+- The trusted publisher points at the `Kaelio/ktx` repository and the
+  `.github/workflows/release.yml` workflow.
+- The workflow keeps `id-token: write` permission so npm can verify the
+  GitHub Actions run through OpenID Connect.
 - The repository has a baseline semantic-release tag for the latest published
   package version, such as `v0.1.0-rc.1`.
 
@@ -99,8 +100,11 @@ The artifact packaging and readiness scripts read `publicNpmPackageVersion`
 from `release-policy.json`, so manual version edits in build scripts aren't
 needed for rc releases.
 
-## Trusted Publishing follow-up
+## npm authentication
 
-This workflow uses `NPM_TOKEN` today. Move to npm Trusted Publishing after the
-final publish command path is verified for the package manager and workflow
-filename configured in npm package settings.
+The release workflow publishes through npm Trusted Publishing. It doesn't use
+an `NPM_TOKEN` secret, and the publish step doesn't set `NODE_AUTH_TOKEN`.
+
+If npm returns an authentication error, check the Trusted Publishing settings
+for the `@kaelio/ktx` package before adding token-based authentication back to
+the workflow.
