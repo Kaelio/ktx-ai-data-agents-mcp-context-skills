@@ -2,7 +2,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
 import { spawn } from 'node:child_process';
-import type { SemanticLayerQueryInput, SemanticLayerSource } from '../sl/index.js';
+import type { ResolvedSemanticLayerSource, SemanticLayerQueryInput } from '../sl/types.js';
 
 export interface KtxSemanticLayerComputeQueryResult {
   sql: string;
@@ -54,13 +54,21 @@ export interface KtxSemanticLayerSourceGenerationResult {
 }
 
 export interface KtxSemanticLayerComputePort {
+  /**
+   * Callers must pass sources sanitized through toResolvedWire. The Python
+   * daemon rejects authoring-only fields such as usage and inherits_columns_from.
+   */
   query(input: {
-    sources: Array<Record<string, unknown> | SemanticLayerSource>;
+    sources: ResolvedSemanticLayerSource[];
     query: SemanticLayerQueryInput;
     dialect: string;
   }): Promise<KtxSemanticLayerComputeQueryResult>;
+  /**
+   * Callers must pass sources sanitized through toResolvedWire. The Python
+   * daemon rejects authoring-only fields such as usage and inherits_columns_from.
+   */
   validateSources(input: {
-    sources: Array<Record<string, unknown> | SemanticLayerSource>;
+    sources: ResolvedSemanticLayerSource[];
     dialect: string;
     recentlyTouched?: string[];
   }): Promise<KtxSemanticLayerComputeValidationResult>;

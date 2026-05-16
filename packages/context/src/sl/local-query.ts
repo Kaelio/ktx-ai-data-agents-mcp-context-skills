@@ -76,10 +76,10 @@ function resolveLocalConnectionId(project: KtxLocalProject, requested: string | 
 async function loadComputableSources(
   project: KtxLocalProject,
   connectionId: string,
-): Promise<Record<string, unknown>[]> {
+): Promise<ReturnType<typeof toResolvedWire>[]> {
   return (await loadLocalSlSourceRecords(project, { connectionId: assertSafeConnectionId(connectionId) }))
     .filter((record) => record.source.table || record.source.sql)
-    .map((record) => toResolvedWire(record.source) as unknown as Record<string, unknown>);
+    .map((record) => toResolvedWire(record.source));
 }
 
 function headersFromColumns(columns: Array<Record<string, unknown>>): string[] {
