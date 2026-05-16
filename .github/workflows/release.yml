@@ -68,19 +68,60 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --all-packages
 
+      - name: Prepare next prerelease branch
+        if: ${{ inputs.release_kind == 'rc' }}
+        run: |
+          set -euo pipefail
+
+          source_sha="$(git rev-parse HEAD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin "${KTX_PRERELEASE_BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "${KTX_PRERELEASE_BRANCH}"
+            git checkout -B "${KTX_PRERELEASE_BRANCH}" "origin/${KTX_PRERELEASE_BRANCH}"
+            git merge --no-edit "${source_sha}"
+          else
+            git checkout -B "${KTX_PRERELEASE_BRANCH}" "${source_sha}"
+          fi
+
+          git push --set-upstream origin "HEAD:${KTX_PRERELEASE_BRANCH}"
+        env:
+          KTX_PRERELEASE_BRANCH: next
+
       - name: Dry-run semantic release
         if: ${{ !inputs.publish_live }}
-        run: pnpm run semantic-release:dry-run
+        run: |
+          set -euo pipefail
+
+          if [ "${KTX_RELEASE_KIND}" = "rc" ]; then
+            export GITHUB_REF="refs/heads/${KTX_PRERELEASE_BRANCH}"
+            export GITHUB_REF_NAME="${KTX_PRERELEASE_BRANCH}"
+            export GITHUB_SHA="$(git rev-parse HEAD)"
+          fi
+
+          pnpm run semantic-release:dry-run
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KTX_RELEASE_KIND: ${{ inputs.release_kind }}
+          KTX_PRERELEASE_BRANCH: next
           FORCE_RELEASE: ${{ inputs.force_release }}
 
       - name: Create semantic release
         if: ${{ inputs.publish_live }}
-        run: pnpm run semantic-release
+        run: |
+          set -euo pipefail
+
+          if [ "${KTX_RELEASE_KIND}" = "rc" ]; then
+            export GITHUB_REF="refs/heads/${KTX_PRERELEASE_BRANCH}"
+            export GITHUB_REF_NAME="${KTX_PRERELEASE_BRANCH}"
+            export GITHUB_SHA="$(git rev-parse HEAD)"
+          fi
+
+          pnpm run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KTX_RELEASE_KIND: ${{ inputs.release_kind }}
+          KTX_PRERELEASE_BRANCH: next
           FORCE_RELEASE: ${{ inputs.force_release }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

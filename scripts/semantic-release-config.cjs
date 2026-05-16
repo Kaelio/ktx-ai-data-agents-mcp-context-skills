@@ -82,6 +82,10 @@ function releaseKind(env) {
   return env.KTX_RELEASE_KIND || env.INPUT_RELEASE_KIND || 'rc';
 }
 
+function prereleaseBranch(env) {
+  return env.KTX_PRERELEASE_BRANCH || env.INPUT_PRERELEASE_BRANCH || 'next';
+}
+
 function releaseTag(kind) {
   return kind === 'rc' ? 'next' : 'latest';
 }
@@ -91,7 +95,7 @@ function releaseBranches(env = process.env) {
   const kind = releaseKind(env);
 
   if (kind === 'rc') {
-    return [{ name: branch, prerelease: 'rc', channel: 'next' }];
+    return ['main', { name: prereleaseBranch(env), prerelease: 'rc', channel: 'next' }];
   }
 
   if (kind === 'stable') {
@@ -170,6 +174,7 @@ function createReleaseConfig(env = process.env) {
 
 module.exports = {
   createReleaseConfig,
+  prereleaseBranch,
   releaseBranches,
   releaseKind,
   releaseTag,

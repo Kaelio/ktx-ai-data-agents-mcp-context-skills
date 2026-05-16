@@ -10,14 +10,15 @@ function releaseExecOptions(config) {
 }
 
 describe('semantic-release config', () => {
-  it('configures manual rc releases on the selected branch with next channel', () => {
+  it('configures rc releases on a dedicated next prerelease branch', () => {
     assert.equal(releaseKind({ KTX_RELEASE_KIND: 'rc' }), 'rc');
     assert.equal(releaseTag('rc'), 'next');
-    assert.deepEqual(releaseBranches({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'release-candidate' }), [
-      { name: 'release-candidate', prerelease: 'rc', channel: 'next' },
+    assert.deepEqual(releaseBranches({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'main' }), [
+      'main',
+      { name: 'next', prerelease: 'rc', channel: 'next' },
     ]);
 
-    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'release-candidate' });
+    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'main' });
     assert.match(
       releaseExecOptions(config).prepareCmd,
       /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "next"/,
