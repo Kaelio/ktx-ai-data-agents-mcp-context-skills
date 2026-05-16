@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MemoryAgentInput, MemoryAgentResult, MemoryAgentService } from './index.js';
-import { MemoryCaptureService, type MemoryRunStorePort } from './memory-runs.js';
+import { MemoryIngestService, type MemoryRunStorePort } from './memory-runs.js';
 
 class InMemoryRunStore implements MemoryRunStorePort {
   readonly rows = new Map<
@@ -74,32 +74,32 @@ function deferred<T>() {
 }
 
 function buildService(): {
-  capture: MemoryCaptureService;
+  ingest: MemoryIngestService;
   store: InMemoryRunStore;
-  ingest: ReturnType<typeof vi.fn>;
+  memoryAgentIngest: ReturnType<typeof vi.fn>;
   run: ReturnType<typeof deferred<MemoryAgentResult>>;
 } {
   const store = new InMemoryRunStore();
   const run = deferred<MemoryAgentResult>();
-  const ingest = vi.fn<MemoryAgentService['ingest']>().mockReturnValue(run.promise);
-  const memoryAgent = { ingest };
+  const memoryAgentIngest = vi.fn<MemoryAgentService['ingest']>().mockReturnValue(run.promise);
+  const memoryAgent = { ingest: memoryAgentIngest };
   return {
-    capture: new MemoryCaptureService({ memoryAgent, runs: store }),
+    ingest: new MemoryIngestService({ memoryAgent, runs: store }),
     store,
-    ingest,
+    memoryAgentIngest,
     run,
   };
 }
 
-describe('MemoryCaptureService', () => {
-  it('creates a run, executes memory capture, and stores a done summary', async () => {
+describe('MemoryIngestService', () => {
+  it('creates a run, executes memory ingest, and stores a done summary', async () => {
     const result: MemoryAgentResult = {
       signalDetected: true,
       actions: [{ target: 'wiki', type: 'created', key: 'revenue', detail: 'captured revenue definition' }],
       skillsLoaded: ['wiki_capture'],
       commitHash: 'abc123',
     };
-    const { capture, store, ingest, run } = buildService();
+    const { ingest, store, memoryAgentIngest, run } = buildService();
 
     const input: MemoryAgentInput = {
       userId: 'user-1',
@@ -109,21 +109,21 @@ describe('MemoryCaptureService', () => {
       connectionId: '00000000-0000-0000-0000-000000000001',
     };
 
-    const started = await capture.capture(input);
+    const started = await ingest.ingest(input);
 
     expect(started.runId).toBe('run-1');
-    expect(ingest).toHaveBeenCalledWith(input);
-    await expect(capture.status(started.runId)).resolves.toMatchObject({
+    expect(memoryAgentIngest).toHaveBeenCalledWith(input);
+    await expect(ingest.status(started.runId)).resolves.toMatchObject({
       runId: 'run-1',
       status: 'running',
-      stage: 'capturing',
+      stage: 'ingesting',
       done: false,
     });
 
     run.resolve(result);
-    await capture.waitForRun(started.runId);
+    await ingest.waitForRun(started.runId);
 
-    const status = await capture.status(started.runId);
+    const status = await ingest.status(started.runId);
     expect(status).toEqual({
       runId: 'run-1',
       stage: 'done',
@@ -142,10 +142,10 @@ describe('MemoryCaptureService', () => {
     expect(store.rows.get('run-1')?.inputHash).toHaveLength(64);
   });
 
-  it('stores no-signal captures as done with empty captured arrays', async () => {
-    const { capture, run } = buildService();
+  it('stores no-signal ingests as done with empty captured arrays', async () => {
+    const { ingest, run } = buildService();
 
-    const started = await capture.capture({
+    const started = await ingest.ingest({
       userId: 'user-1',
       chatId: 'chat-2',
       userMessage: 'Thanks.',
@@ -157,9 +157,9 @@ describe('MemoryCaptureService', () => {
       skillsLoaded: [],
       commitHash: null,
     });
-    await capture.waitForRun(started.runId);
+    await ingest.waitForRun(started.runId);
 
-    await expect(capture.status(started.runId)).resolves.toMatchObject({
+    await expect(ingest.status(started.runId)).resolves.toMatchObject({
       done: true,
       status: 'done',
       captured: { wiki: [], sl: [], xrefs: [] },
@@ -172,16 +172,16 @@ describe('MemoryCaptureService', () => {
     const memoryAgent = {
       ingest: vi.fn<MemoryAgentService['ingest']>().mockRejectedValue(new Error('LLM provider missing')),
     };
-    const capture = new MemoryCaptureService({ memoryAgent, runs: store });
+    const ingest = new MemoryIngestService({ memoryAgent, runs: store });
 
-    const started = await capture.capture({
+    const started = await ingest.ingest({
       userId: 'user-1',
       chatId: 'chat-3',
       userMessage: 'Remember this.',
     });
-    await capture.waitForRun(started.runId);
+    await ingest.waitForRun(started.runId);
 
-    await expect(capture.status(started.runId)).resolves.toMatchObject({
+    await expect(ingest.status(started.runId)).resolves.toMatchObject({
       done: true,
       status: 'error',
       stage: 'error',
@@ -191,8 +191,8 @@ describe('MemoryCaptureService', () => {
   });
 
   it('returns null for an unknown run id', async () => {
-    const { capture } = buildService();
+    const { ingest } = buildService();
 
-    await expect(capture.status('missing')).resolves.toBeNull();
+    await expect(ingest.status('missing')).resolves.toBeNull();
   });
 });

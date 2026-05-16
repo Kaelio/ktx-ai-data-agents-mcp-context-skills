@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initKtxProject } from '../project/index.js';
-import { createLocalProjectMemoryCapture } from './local-memory.js';
+import { createLocalProjectMemoryIngest } from './local-memory.js';
 import { LocalMemoryRunStore } from './local-memory-runs.js';
 
 vi.mock('ai', () => ({
@@ -77,7 +77,7 @@ describe('LocalMemoryRunStore', () => {
   });
 });
 
-describe('createLocalProjectMemoryCapture', () => {
+describe('createLocalProjectMemoryIngest', () => {
   let tempDir: string;
 
   beforeEach(async () => {
@@ -110,13 +110,13 @@ describe('createLocalProjectMemoryCapture', () => {
       },
     };
 
-    const capture = createLocalProjectMemoryCapture(project, {
+    const ingest = createLocalProjectMemoryIngest(project, {
       agentRunner: agentRunner as never,
       runIdFactory: () => 'memory-run-1',
     });
 
     await expect(
-      capture.capture({
+      ingest.ingest({
         userId: 'local-user',
         chatId: 'chat-1',
         userMessage: 'define revenue as paid order value net of refunds',
@@ -124,12 +124,12 @@ describe('createLocalProjectMemoryCapture', () => {
         sourceType: 'external_ingest',
       }),
     ).resolves.toEqual({ runId: 'memory-run-1' });
-    await capture.waitForRun('memory-run-1');
+    await ingest.waitForRun('memory-run-1');
 
     await expect(access(join(project.projectDir, '.ktx/db.sqlite'))).resolves.toBeUndefined();
     await expectPathMissing(join(project.projectDir, '.ktx/memory-runs/memory-run-1.json'));
 
-    await expect(capture.status('memory-run-1')).resolves.toMatchObject({
+    await expect(ingest.status('memory-run-1')).resolves.toMatchObject({
       runId: 'memory-run-1',
       status: 'done',
       done: true,
@@ -172,12 +172,12 @@ describe('createLocalProjectMemoryCapture', () => {
       },
     };
 
-    const capture = createLocalProjectMemoryCapture(project, {
+    const ingest = createLocalProjectMemoryIngest(project, {
       agentRunner: agentRunner as never,
       runIdFactory: () => 'memory-run-2',
     });
 
-    await capture.capture({
+    await ingest.ingest({
       userId: 'local-user',
       chatId: 'chat-2',
       userMessage: 'going forward define orders count as count of public orders',
@@ -185,12 +185,12 @@ describe('createLocalProjectMemoryCapture', () => {
       connectionId: 'warehouse',
       sourceType: 'external_ingest',
     });
-    await capture.waitForRun('memory-run-2');
+    await ingest.waitForRun('memory-run-2');
 
     await expect(access(join(project.projectDir, '.ktx/db.sqlite'))).resolves.toBeUndefined();
     await expectPathMissing(join(project.projectDir, '.ktx/memory-runs/memory-run-2.json'));
 
-    await expect(capture.status('memory-run-2')).resolves.toMatchObject({
+    await expect(ingest.status('memory-run-2')).resolves.toMatchObject({
       runId: 'memory-run-2',
       status: 'done',
       captured: { wiki: [], sl: ['orders'], xrefs: [] },

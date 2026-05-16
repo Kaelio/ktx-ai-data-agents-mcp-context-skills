@@ -47,7 +47,7 @@ import {
 } from '../wiki/index.js';
 import { LocalMemoryRunStore } from './local-memory-runs.js';
 import { MemoryAgentService } from './memory-agent.service.js';
-import { MemoryCaptureService } from './memory-runs.js';
+import { MemoryIngestService } from './memory-runs.js';
 import type {
   MemoryConnectionPort,
   MemoryFileStorePort,
@@ -60,9 +60,9 @@ import type {
 const promptsDir = fileURLToPath(new URL('../../prompts', import.meta.url));
 const skillsDir = fileURLToPath(new URL('../../skills', import.meta.url));
 const LOCAL_AUTHOR = { name: 'KTX Local', email: 'local@ktx.local' };
-const LOCAL_SHAPE_WARNING = 'Local memory capture validates semantic-layer YAML shape only.';
+const LOCAL_SHAPE_WARNING = 'Local memory ingest validates semantic-layer YAML shape only.';
 
-export interface CreateLocalProjectMemoryCaptureOptions {
+export interface CreateLocalProjectMemoryIngestOptions {
   llmProvider?: KtxLlmProvider;
   agentRunner?: AgentRunnerService;
   memoryModel?: string;
@@ -72,10 +72,10 @@ export interface CreateLocalProjectMemoryCaptureOptions {
   logger?: KtxLogger;
 }
 
-export function createLocalProjectMemoryCapture(
+export function createLocalProjectMemoryIngest(
   project: KtxLocalProject,
-  options: CreateLocalProjectMemoryCaptureOptions = {},
-): MemoryCaptureService {
+  options: CreateLocalProjectMemoryIngestOptions = {},
+): MemoryIngestService {
   const logger = options.logger ?? noopLogger;
   const rootFileStore = new LocalMemoryFileStore(project.fileStore);
   const embedding = new NoopEmbeddingPort();
@@ -137,7 +137,7 @@ export function createLocalProjectMemoryCapture(
     toolsetFactory,
     logger,
   });
-  return new MemoryCaptureService({
+  return new MemoryIngestService({
     memoryAgent,
     runs: new LocalMemoryRunStore({ projectDir: project.projectDir, idFactory: options.runIdFactory }),
   });
@@ -145,7 +145,7 @@ export function createLocalProjectMemoryCapture(
 
 function requireLlmProvider(provider: KtxLlmProvider | null | undefined): KtxLlmProvider {
   if (!provider) {
-    throw new Error('createLocalProjectMemoryCapture requires llm.provider.backend or an injected agentRunner');
+    throw new Error('createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner');
   }
   return provider;
 }
