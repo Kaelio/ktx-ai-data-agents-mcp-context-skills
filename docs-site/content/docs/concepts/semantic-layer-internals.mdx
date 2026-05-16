@@ -4,128 +4,309 @@ description: How KTX uses join graphs, grain, and relationship metadata to turn 
 ---
 
 KTX is a context layer for agents. This page focuses on the semantic execution
-subsystem: the part that turns reviewed YAML context into safe SQL.
+layer: the subsystem that turns reviewed context into safe SQL.
 
-Read it as a pipeline:
+Read it as four mechanics:
 
-```text
-context files + warehouse evidence
-          |
-          v
-join graph with grain and relationship metadata
-          |
-          v
-fan-out checks + aggregate-locality planning
-          |
-          v
-canonical SQL -> dialect SQL
-```
+- context files feed the semantic engine;
+- evidence becomes a join graph with grain and relationship metadata;
+- review keeps the graph current;
+- query planning avoids fan-out and ambiguous joins.
 
-## Where it fits
+## Where the semantic layer fits
 
-The semantic layer is not the whole product. It is the engine that makes KTX
-context actionable for SQL generation.
+The semantic layer is the engine that makes KTX context actionable for SQL
+generation. It uses source YAML, wiki context, scan evidence, and provenance.
 
-| Input | Used for |
-|-------|----------|
-| `semantic-layer/` | Sources, columns, joins, grain, measures, filters, and segments |
-| `wiki/` | Business definitions, caveats, and metric explanations |
-| `raw-sources/` | Schema scans, imported metadata, keys, and relationship evidence |
-| Provenance | Ingest decisions, review history, and replay context |
+<div
+  className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="How context inputs flow through the semantic layer into agent workflows"
+>
+  <div className="grid gap-0 lg:grid-cols-[1fr_2rem_1.12fr_2rem_1fr]">
+    <section className="bg-fd-background p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"Context inputs"}
+      </p>
+      <div className="grid gap-2 text-sm">
+        <div className="border-l-2 border-fd-primary bg-fd-card px-3 py-2">
+          <p className="font-mono text-xs text-fd-foreground">semantic-layer/</p>
+          <p className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"source YAML, measures, joins, grain"}
+          </p>
+        </div>
+        <div className="border-l-2 border-amber-500 bg-fd-card px-3 py-2">
+          <p className="font-mono text-xs text-fd-foreground">wiki/</p>
+          <p className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"business rules, definitions, caveats"}
+          </p>
+        </div>
+        <div className="border-l-2 border-orange-500 bg-fd-card px-3 py-2">
+          <p className="font-mono text-xs text-fd-foreground">raw-sources/</p>
+          <p className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"schema scans, keys, imported metadata"}
+          </p>
+        </div>
+        <div className="border-l-2 border-slate-500 bg-fd-card px-3 py-2 dark:border-cyan-200">
+          <p className="font-mono text-xs text-fd-foreground">provenance</p>
+          <p className="mt-1 text-xs leading-5 text-fd-muted-foreground">
+            {"ingest decisions and review history"}
+          </p>
+        </div>
+      </div>
+    </section>
 
-Agents use the result to:
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
 
-- search semantic sources and wiki pages;
-- compile trusted SQL instead of guessing joins;
-- explain metric meaning and provenance;
-- patch YAML or Markdown and validate the diff.
+    <section className="relative bg-[#102226] p-5 text-white dark:bg-[#0b181b]">
+      <div className="absolute inset-y-0 left-0 w-1 bg-fd-primary" />
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
+        {"Semantic layer engine"}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-md border border-cyan-100/20 bg-white/8 px-3 py-2">
+          <p className="text-sm font-semibold">Join graph</p>
+          <p className="mt-1 text-xs leading-5 text-cyan-50/75">
+            {"sources as nodes, joins as typed edges"}
+          </p>
+        </div>
+        <div className="rounded-md border border-cyan-100/20 bg-white/8 px-3 py-2">
+          <p className="text-sm font-semibold">Grain</p>
+          <p className="mt-1 text-xs leading-5 text-cyan-50/75">
+            {"row identity before aggregation"}
+          </p>
+        </div>
+        <div className="rounded-md border border-cyan-100/20 bg-white/8 px-3 py-2">
+          <p className="text-sm font-semibold">Measures</p>
+          <p className="mt-1 text-xs leading-5 text-cyan-50/75">
+            {"verified formulas and filters"}
+          </p>
+        </div>
+        <div className="rounded-md border border-cyan-100/20 bg-white/8 px-3 py-2">
+          <p className="whitespace-nowrap break-normal text-sm font-semibold">Relationships</p>
+          <p className="mt-1 text-xs leading-5 text-cyan-50/75">
+            {"many_to_one, one_to_many, one_to_one"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 rounded-md border border-cyan-100/20 bg-cyan-50/10 px-3 py-2 text-sm">
+        {"Safe query planning before SQL is generated."}
+      </div>
+    </section>
+
+    <div className="hidden items-center justify-center bg-fd-background lg:flex" aria-hidden="true">
+      <span className="h-px w-full bg-fd-border" />
+    </div>
+
+    <section className="bg-fd-muted/35 p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"Agent workflows"}
+      </p>
+      <div className="space-y-2 text-sm">
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Search sources and wiki pages"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Compile trusted SQL"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Explain metrics and provenance"}
+        </div>
+        <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
+          {"Patch files and validate review"}
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
 
 ## Join graph
 
-A semantic source is a node. A join is a typed edge with a condition and a
-relationship. The graph lets KTX choose valid paths and detect row-multiplying
-paths before SQL is generated.
+A semantic source is a node. A join is a typed edge. KTX uses the graph to
+choose valid paths and detect row-multiplying joins before SQL is generated.
 
-```text
-customers <- many_to_one <- orders -> one_to_many -> order_items
-grain: customer_id          grain: order_id       grain: order_id, line_id
-```
+| Relationship | Planning impact |
+|--------------|-----------------|
+| `many_to_one` | Usually safe for adding dimensions |
+| `one_to_many` | Can multiply measures and trigger fan-out handling |
+| `one_to_one` | Usually safe when keys are correct |
+| Equal-cost paths | Ambiguous unless aliases or explicit joins disambiguate |
 
-| Relationship | What it means | Planning impact |
-|--------------|---------------|-----------------|
-| `many_to_one` | Many fact rows point to one dimension row | Usually safe for adding dimensions |
-| `one_to_many` | One row expands into many child rows | Can multiply measures and trigger fan-out handling |
-| `one_to_one` | Both sides preserve row identity | Usually safe when keys are correct |
-| Ambiguous path | Multiple equal-cost paths connect sources | Requires aliases or a safer explicit path |
+<figure
+  className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card p-4 shadow-sm"
+  aria-label="Example semantic join graph"
+>
+  <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr]">
+    <div className="rounded-md border border-fd-border bg-fd-background px-4 py-3">
+      <p className="text-sm font-semibold text-fd-foreground">customers</p>
+      <p className="mt-1 text-xs text-fd-muted-foreground">grain: customer_id</p>
+    </div>
+    <div className="rounded-md border-2 border-fd-primary bg-fd-background px-4 py-3">
+      <p className="text-sm font-semibold text-fd-foreground">orders</p>
+      <p className="mt-1 text-xs text-fd-muted-foreground">grain: order_id</p>
+    </div>
+    <div className="rounded-md border border-fd-border bg-fd-background px-4 py-3">
+      <p className="text-sm font-semibold text-fd-foreground">order_items</p>
+      <p className="mt-1 text-xs text-fd-muted-foreground">grain: order_id, line_id</p>
+    </div>
+  </div>
+  <div className="my-3 grid gap-2 text-center text-xs font-medium text-fd-muted-foreground md:grid-cols-[1fr_1fr]">
+    <div>orders -> customers: many_to_one</div>
+    <div>orders -> order_items: one_to_many</div>
+  </div>
+  <figcaption className="mt-4 border-t border-fd-border pt-3 text-left text-xs leading-5 text-fd-muted-foreground">
+    <span className="font-medium text-fd-foreground">{"Example: "}</span>
+    {"refunds joins to orders. Used carefully, it explains net revenue. Joined naively, it can duplicate order-level measures."}
+  </figcaption>
+</figure>
 
 The graph is bidirectional for planning. If `orders -> customers` is
-`many_to_one`, the reverse path is `one_to_many`; KTX keeps that distinction
-instead of treating every join as neutral.
+`many_to_one`, the reverse path is `one_to_many`.
 
-## How KTX builds the graph
+## Building and maintaining the graph
 
-KTX starts from evidence, then writes reviewable source YAML. The accepted graph
-is the plain-file diff your team approves.
+KTX starts from evidence, writes reviewable source YAML, and treats the merged
+diff as the accepted graph.
 
 | Evidence | What it contributes |
 |----------|---------------------|
-| Declared primary keys | Initial row grain for each source |
-| Declared foreign keys | Formal join candidates and relationship direction |
-| Inferred relationships | Useful edges when warehouses lack constraints |
-| dbt, MetricFlow, and LookML imports | Existing metrics, dimensions, entities, explores, and joins |
-| Query history | Join and filter patterns agents should respect |
+| Declared primary keys | Initial row grain |
+| Declared foreign keys | Formal join candidates |
+| Inferred relationships | Edges when warehouses lack constraints |
+| dbt, MetricFlow, and LookML imports | Existing metrics, dimensions, explores, and joins |
+| Query history | Real join and filter patterns |
 | Analyst review | Final authority before context is merged |
 
-## Maintenance loop
+<div
+  className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="Semantic layer maintenance loop"
+>
+  <div className="border-b border-fd-border bg-fd-muted/35 px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+      {"Semantic maintenance loop"}
+    </p>
+    <p className="mt-1 text-sm leading-6 text-fd-muted-foreground">
+      {"Every accepted correction becomes input to the next graph build."}
+    </p>
+  </div>
+  <div className="p-4">
+    <div className="-mx-4 overflow-x-auto px-4">
+      <div className="relative mx-auto h-[460px] w-[720px] max-w-none md:w-full md:max-w-[760px]">
+        <svg
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full text-fd-primary"
+          fill="none"
+          viewBox="0 0 760 460"
+        >
+          <g
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeOpacity="0.68"
+            strokeWidth="2.5"
+          >
+            <path d="M 352 80 H 384" />
+            <path d="M 600 80 H 668 V 150" />
+            <path d="M 632 284 V 378 H 626" />
+            <path d="M 408 378 H 376" />
+            <path d="M 160 378 H 96 V 308" />
+            <path d="M 128 172 V 80 H 140" />
+          </g>
+          <g fill="currentColor" fillOpacity="0.96" stroke="none">
+            <polygon points="0,0 -14,-7 -14,7" transform="translate(398 80)" />
+            <polygon points="0,0 -14,-7 -14,7" transform="translate(668 164) rotate(90)" />
+            <polygon points="0,0 -14,-7 -14,7" transform="translate(612 378) rotate(180)" />
+            <polygon points="0,0 -14,-7 -14,7" transform="translate(362 378) rotate(180)" />
+            <polygon points="0,0 -14,-7 -14,7" transform="translate(96 294) rotate(270)" />
+            <polygon points="0,0 -14,-7 -14,7" transform="translate(154 80)" />
+          </g>
+        </svg>
 
-Semantic correctness changes when schemas, metrics, and business definitions
-change. KTX keeps that loop explicit.
+        <div className="absolute left-1/2 top-1/2 flex h-32 w-56 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-md border border-fd-primary/50 bg-fd-background px-4 py-4 text-center shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-primary">
+            {"reviewed context"}
+          </p>
+          <p className="mt-2 text-sm font-semibold leading-6 text-fd-foreground">
+            {"The accepted graph becomes the starting point for the next build."}
+          </p>
+        </div>
 
-```text
-ingest evidence
-      |
-      v
-draft YAML diff
-      |
-      v
-validate relationships and query shapes
-      |
-      v
-analyst review
-      |
-      v
-agent use
-      |
-      v
-corrections become new evidence
-```
-
-This matters when a source gains a key, a metric changes definition, or an
-analyst corrects a relationship. The next agent starts from the reviewed
-context, not a hidden runtime state.
+        <div className="absolute left-[160px] top-6 h-28 w-48 rounded-md border-2 border-fd-primary bg-fd-background px-4 py-3 text-sm shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+            {"Step 1"}
+          </p>
+          <p className="mt-1 font-semibold text-fd-foreground">{"ingest evidence"}</p>
+          <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+            {"scan schemas, imports, and accepted files"}
+          </p>
+        </div>
+        <div className="absolute left-[408px] top-6 h-28 w-48 rounded-md border border-fd-border bg-fd-background px-4 py-3 text-sm shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+            {"Step 2"}
+          </p>
+          <p className="mt-1 font-semibold text-fd-foreground">{"YAML diff"}</p>
+          <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+            {"draft source, join, grain, and measure changes"}
+          </p>
+        </div>
+        <div className="absolute left-[536px] top-[172px] h-28 w-48 rounded-md border border-fd-border bg-fd-background px-4 py-3 text-sm shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+            {"Step 3"}
+          </p>
+          <p className="mt-1 font-semibold text-fd-foreground">{"validation"}</p>
+          <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+            {"check relationships, syntax, and unsafe query shapes"}
+          </p>
+        </div>
+        <div className="absolute left-[408px] top-[322px] h-28 w-48 rounded-md border border-fd-border bg-fd-background px-4 py-3 text-sm shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+            {"Step 4"}
+          </p>
+          <p className="mt-1 font-semibold text-fd-foreground">{"analyst review"}</p>
+          <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+            {"accept, edit, or reject generated context"}
+          </p>
+        </div>
+        <div className="absolute left-[160px] top-[322px] h-28 w-48 rounded-md border border-fd-border bg-fd-background px-4 py-3 text-sm shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+            {"Step 5"}
+          </p>
+          <p className="mt-1 font-semibold text-fd-foreground">{"agent use"}</p>
+          <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+            {"serve context to search, explain, and query"}
+          </p>
+        </div>
+        <div className="absolute left-8 top-[172px] h-28 w-48 rounded-md border border-fd-primary/70 bg-fd-background px-4 py-3 text-sm shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+            {"Step 6"}
+          </p>
+          <p className="mt-1 font-semibold text-fd-foreground">{"corrections"}</p>
+          <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+            {"agent and analyst fixes become new evidence"}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 ## Modeling problems
 
 Fan-out is the classic failure mode: an order-level measure joins to line-item
-rows before aggregation, so one order becomes many rows and revenue is counted
-more than once.
+rows before aggregation, so one order becomes many rows.
 
 | Problem | What happens | How KTX handles it |
 |---------|--------------|--------------------|
-| Order measure joins to `order_items` | `orders.revenue` repeats once per item | Detect the `one_to_many` path and pre-aggregate the order measure |
-| Two fact sources share `customers` | Measures multiply across a shared dimension | Treat it as a chasm trap and plan each fact locally |
-| Filter crosses a `one_to_many` path | Filtering after the join changes measure grain | Reject or localize the filter |
-| Equal-cost paths connect the same sources | Join choice is ambiguous | Prefer safer paths or require aliases |
-
-Many-to-many questions usually appear as multiple `one_to_many` paths or
-independent fact sources. KTX treats those shapes as fan-out or chasm risks
-unless the query can be planned at a safe grain.
+| Order measure joins to `order_items` | `orders.revenue` repeats once per item | Detect `one_to_many` and pre-aggregate |
+| Two fact sources share `customers` | Measures multiply across the shared dimension | Treat as a chasm trap and plan each fact locally |
+| Filter crosses `one_to_many` | Filtering changes measure grain | Reject or localize the filter |
+| Equal-cost paths connect sources | Join choice is ambiguous | Prefer safer paths or require aliases |
 
 ## Execution planning
 
 The planner resolves sources, chooses a join tree, checks relationship paths,
-and decides whether the query can use a simple shape or needs aggregate
-locality.
+and picks a simple or aggregate-locality SQL shape.
 
 | Naive SQL shape | Semantic-layer SQL shape |
 |-----------------|--------------------------|
@@ -134,33 +315,49 @@ locality.
 | Trust the shortest textual join path | Prefer safe relationship paths and reject disconnected sources |
 | Let dimension grain differ across facts | Raise when asymmetric dimensions would fan out another measure |
 
-Unsafe shape:
-
-```sql
-select customers.segment, sum(orders.amount)
-from orders
-join order_items on order_items.order_id = orders.id
-join customers on customers.id = orders.customer_id
-group by customers.segment;
-```
-
-KTX shape:
-
-```sql
-with orders_agg as (
-  select customer_id, sum(amount) as revenue
+<div
+  className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="Fan-out safe execution shape"
+>
+  <div className="grid gap-0 md:grid-cols-2">
+    <section className="border-b border-fd-border bg-fd-background p-4 md:border-b-0 md:border-r">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"Unsafe shape"}
+      </p>
+      <pre className="overflow-x-auto rounded-md bg-fd-muted p-3 text-xs leading-5 text-fd-foreground">
+{`orders
+  join order_items
+  join customers
+group by customer_segment
+sum(orders.amount)`}
+      </pre>
+      <p className="mt-3 text-sm text-fd-muted-foreground">
+        {"The order measure is exposed to line-item fan-out before aggregation."}
+      </p>
+    </section>
+    <section className="bg-fd-background p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        {"KTX shape"}
+      </p>
+      <pre className="overflow-x-auto rounded-md border border-fd-border bg-fd-muted p-3 text-xs leading-5 text-fd-foreground">
+{`orders_agg as (
+  select customer_id, sum(amount) revenue
   from orders
   group by customer_id
 )
-select customers.segment, sum(orders_agg.revenue)
+select customers.segment, sum(revenue)
 from orders_agg
-join customers on customers.id = orders_agg.customer_id
-group by customers.segment;
-```
+join customers`}
+      </pre>
+      <p className="mt-3 text-sm text-fd-muted-foreground">
+        {"KTX pre-aggregates fact measures at their own grain before joining dimensions."}
+      </p>
+    </section>
+  </div>
+</div>
 
 The result is structured planning: validated sources, typed relationships,
-graph search, fan-out detection, aggregate locality, and final dialect
-transpilation.
+graph search, fan-out detection, aggregate locality, and dialect transpilation.
 
 ## Agent usage notes
 
@@ -173,4 +370,4 @@ as unsafe.
 | Explain why KTX asks for `grain` and relationship types | Join graph | [Writing Context](/docs/guides/writing-context) |
 | Diagnose duplicated measures after a join | Modeling problems | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Explain safe SQL generation | Execution planning | [ktx sl](/docs/cli-reference/ktx-sl) |
-| Describe how semantic context stays current | Maintenance loop | [Context as Code](/docs/concepts/context-as-code) |
+| Describe how semantic context stays current | Building and maintaining the graph | [Context as Code](/docs/concepts/context-as-code) |
