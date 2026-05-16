@@ -6,6 +6,8 @@
   The context layer for analytics agents
 </h1>
 
+<p align="center">by Kaelio</p>
+
 <p align="center">
   <a href="https://www.npmjs.com/package/@kaelio/ktx"><img src="https://img.shields.io/npm/v/@kaelio/ktx?style=flat-square&color=f97316" alt="npm version" /></a>
   <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/branch/main/graph/badge.svg" alt="Codecov" /></a>
@@ -39,6 +41,19 @@ ktx status
 
 `ktx setup` creates or resumes a local KTX project, configures providers and
 connections, builds context, and installs agent integration.
+
+Example `ktx status` output after setup:
+
+```text
+KTX project: /home/user/analytics
+Project ready: yes
+LLM ready: yes (claude-sonnet-4-6)
+Embeddings ready: yes (text-embedding-3-small)
+Databases configured: yes (postgres-warehouse)
+Context sources configured: yes (dbt-main)
+KTX context built: yes
+Agent integration ready: yes (codex:project)
+```
 
 ## Common Commands
 
@@ -91,6 +106,49 @@ ktx sl search "revenue" --json
 ktx wiki search "refund policy" --json
 ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 ```
+
+During agent setup, choose **MCP tools + analytics skill** for client agents.
+Choose **MCP tools + analytics skill + admin CLI skill** only when a developer
+or operator agent also needs pinned `ktx` admin commands.
+
+The analytics skill teaches client agents the MCP workflow: discover data,
+prefer semantic-layer measures, inspect entity details before raw SQL, and
+capture durable learnings. Admin CLI skills call `ktx` commands directly
+through a skill file installed in your agent's config:
+
+```bash
+ktx sl query --measure orders.revenue --dimension orders.status --format sql
+ktx wiki search "revenue definition"
+ktx sl validate orders
+```
+
+Supported client agents: Claude Code, Claude Desktop, Codex, Cursor, OpenCode,
+and clients that can use the printed MCP endpoint or `.agents` admin skills.
+Claude Desktop setup registers a local `ktx mcp stdio` server in Claude
+Desktop's config and generates `.ktx/agents/claude/ktx-plugin.zip` with the
+analytics skill.
+
+The release artifact manifest contains the public npm tarball and the bundled
+`kaelio-ktx` runtime wheel. The `python/ktx-sl` and `python/ktx-daemon`
+directories remain source packages for development, not public release
+artifacts.
+
+## Workspace packages
+
+| Package | Purpose |
+|---------|---------|
+| `packages/cli` | CLI entry point |
+| `packages/context` | Core context engine |
+| `packages/llm` | LLM and embedding providers |
+| `packages/connector-bigquery` | BigQuery scan connector |
+| `packages/connector-clickhouse` | ClickHouse scan connector |
+| `packages/connector-mysql` | MySQL scan connector |
+| `packages/connector-postgres` | Postgres scan connector |
+| `packages/connector-snowflake` | Snowflake scan connector |
+| `packages/connector-sqlite` | SQLite scan connector |
+| `packages/connector-sqlserver` | SQL Server scan connector |
+| `python/ktx-sl` | Semantic-layer query planning |
+| `python/ktx-daemon` | Portable compute service |
 
 ## Development
 

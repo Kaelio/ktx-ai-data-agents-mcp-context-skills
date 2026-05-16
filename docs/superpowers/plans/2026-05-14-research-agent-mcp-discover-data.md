@@ -903,14 +903,16 @@ Add this test after the `dictionary_search` registration test:
         limit: 5,
       }),
     ).resolves.toMatchObject({
-      structuredContent: [
-        {
-          kind: 'table',
-          id: 'public.orders',
-          connectionId: 'warehouse',
-          tableRef: { catalog: null, db: 'public', name: 'orders' },
-        },
-      ],
+      structuredContent: {
+        refs: [
+          {
+            kind: 'table',
+            id: 'public.orders',
+            connectionId: 'warehouse',
+            tableRef: { catalog: null, db: 'public', name: 'orders' },
+          },
+        ],
+      },
     });
     expect(discover.search).toHaveBeenCalledWith({
       query: 'orders',

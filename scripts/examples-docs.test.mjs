@@ -261,6 +261,7 @@ describe('standalone example docs', () => {
     assert.match(contextAsCode, /ktx ingest --all --no-input/);
     assert.match(quickstart, /schema context/);
     assert.match(primarySources, /context:\n      queryHistory:/);
+    assert.match(rootReadme, /`ktx ingest <id>` \| Build context for one connection/);
     assert.match(quickstart, /Databases:\n  warehouse: deep context complete/);
     assert.match(quickstart, /Databases configured: yes \(warehouse\)/);
     assert.match(setupReference, /Databases configured: yes \(postgres-warehouse\)/);

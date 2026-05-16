@@ -27,7 +27,7 @@ function replayInput(): MemoryFlowReplayInput {
         { unitKey: 'customers', target: 'sl', action: 'updated', key: 'orbit_demo.customers', summary: 'customer metrics', rawFiles: ['customers'], status: 'success' },
       ],
       provenance: [{ rawPath: 'orders', artifactKind: 'wiki', artifactKey: 'wiki/orders.md', actionType: 'wiki_written' }],
-      transcripts: [{ unitKey: 'orders', path: '/tmp/t.jsonl', toolCallCount: 2, errorCount: 0, toolNames: ['read_raw_span', 'wiki_write'] }],
+      transcripts: [{ unitKey: 'orders', path: '/tmp/t.jsonl', toolCallCount: 2, errorCount: 0, toolNames: ['read_raw_span', 'memory_ingest'] }],
     },
     events: [
       { type: 'source_acquired', adapter: 'live-database', trigger: 'manual_resync', fileCount: 2 },

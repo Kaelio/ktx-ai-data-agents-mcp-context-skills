@@ -1,6 +1,6 @@
 import { readFile as fsReadFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
-import { createLocalProjectMemoryCapture, type MemoryAgentInput, type MemoryCaptureStatus } from '@ktx/context/memory';
+import { createLocalProjectMemoryIngest, type MemoryAgentInput, type MemoryIngestStatus } from '@ktx/context/memory';
 import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
 import type { KtxCliIo } from './cli-runtime.js';
 import { createRepainter, initViewState, renderContextBuildView, type ContextBuildTargetState } from './context-build-view.js';
@@ -17,10 +17,10 @@ export interface KtxTextIngestArgs {
   failFast: boolean;
 }
 
-export interface TextMemoryCapturePort {
-  capture(input: MemoryAgentInput): Promise<{ runId: string }>;
+export interface TextMemoryIngestPort {
+  ingest(input: MemoryAgentInput): Promise<{ runId: string }>;
   waitForRun(runId: string): Promise<void>;
-  status(runId: string): Promise<MemoryCaptureStatus | null>;
+  status(runId: string): Promise<MemoryIngestStatus | null>;
 }
 
 interface TextIngestItem {
@@ -32,14 +32,14 @@ interface TextIngestResult {
   label: string;
   runId: string | null;
   status: 'done' | 'error';
-  captured: MemoryCaptureStatus['captured'];
+  captured: MemoryIngestStatus['captured'];
   commitHash: string | null;
   error: string | null;
 }
 
 export interface KtxTextIngestDeps {
   loadProject?: (options: { projectDir: string }) => Promise<KtxLocalProject>;
-  createMemoryCapture?: (project: KtxLocalProject) => TextMemoryCapturePort;
+  createMemoryIngest?: (project: KtxLocalProject) => TextMemoryIngestPort;
   readFile?: (path: string) => Promise<string>;
   readStdin?: () => Promise<string>;
   now?: () => number;
@@ -48,8 +48,8 @@ export interface KtxTextIngestDeps {
 const INLINE_TEXT_LABEL_MAX_LENGTH = 50;
 const ANSI_ESCAPE_PATTERN = /\x1B\[[0-?]*[ -/]*[@-~]/g;
 
-function defaultCreateMemoryCapture(project: KtxLocalProject): TextMemoryCapturePort {
-  return createLocalProjectMemoryCapture(project);
+function defaultCreateMemoryIngest(project: KtxLocalProject): TextMemoryIngestPort {
+  return createLocalProjectMemoryIngest(project);
 }
 
 async function defaultReadStdin(): Promise<string> {
@@ -65,7 +65,7 @@ async function defaultReadFile(path: string): Promise<string> {
   return await fsReadFile(path, 'utf-8');
 }
 
-function emptyCaptured(): MemoryCaptureStatus['captured'] {
+function emptyCaptured(): MemoryIngestStatus['captured'] {
   return { wiki: [], sl: [], xrefs: [] };
 }
 
@@ -182,7 +182,7 @@ function renderTextIngestView(state: ReturnType<typeof initViewState>, styled: b
   });
 }
 
-function summarizeCaptured(captured: MemoryCaptureStatus['captured']): string {
+function summarizeCaptured(captured: MemoryIngestStatus['captured']): string {
   const parts = [
     `wiki=${captured.wiki.length}`,
     `sl=${captured.sl.length}`,
@@ -191,7 +191,7 @@ function summarizeCaptured(captured: MemoryCaptureStatus['captured']): string {
   return parts.join(', ');
 }
 
-function resultFromStatus(label: string, status: MemoryCaptureStatus): TextIngestResult {
+function resultFromStatus(label: string, status: MemoryIngestStatus): TextIngestResult {
   return {
     label,
     runId: status.runId,
@@ -251,7 +251,7 @@ export async function runKtxTextIngest(
   }
 
   const project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
-  const memoryCapture = (deps.createMemoryCapture ?? defaultCreateMemoryCapture)(project);
+  const memoryIngest = (deps.createMemoryIngest ?? defaultCreateMemoryIngest)(project);
   const now = deps.now ?? (() => Date.now());
   const batchId = now();
   const state = initViewState(items.map((item) => makeTarget(item.label)));
@@ -292,7 +292,7 @@ export async function runKtxTextIngest(
       let runId: string | null = null;
       let result: TextIngestResult;
       try {
-        const captureInput: MemoryAgentInput = {
+        const ingestInput: MemoryAgentInput = {
           userId: args.userId,
           chatId: `cli-text-ingest-${batchId}-${index + 1}`,
           userMessage: `Ingest external text artifact ${artifactReference(item.label)} into KTX memory.`,
@@ -300,12 +300,12 @@ export async function runKtxTextIngest(
           ...(args.connectionId ? { connectionId: args.connectionId } : {}),
           sourceType: 'external_ingest',
         };
-        const capture = await memoryCapture.capture(captureInput);
-        runId = capture.runId;
-        await memoryCapture.waitForRun(runId);
-        const status = await memoryCapture.status(runId);
+        const ingest = await memoryIngest.ingest(ingestInput);
+        runId = ingest.runId;
+        await memoryIngest.waitForRun(runId);
+        const status = await memoryIngest.status(runId);
         if (!status) {
-          throw new Error(`Memory capture run "${runId}" was not found.`);
+          throw new Error(`Memory ingest run "${runId}" was not found.`);
         }
         result = resultFromStatus(item.label, status);
       } catch (error) {

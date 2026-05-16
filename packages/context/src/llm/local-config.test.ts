@@ -191,6 +191,36 @@ describe('local KTX embedding config', () => {
     expect(resolveLocalKtxEmbeddingConfig(config, {})).toBeNull();
   });
 
+  it('returns null when backend is openai but no apiKey is resolvable from env', () => {
+    const config: KtxProjectEmbeddingConfig = {
+      backend: 'openai',
+      model: 'text-embedding-3-small',
+      dimensions: 1536,
+      openai: { api_key: 'env:OPENAI_API_KEY' }, // pragma: allowlist secret
+    };
+
+    expect(resolveLocalKtxEmbeddingConfig(config, {})).toBeNull();
+  });
+
+  it('resolves openai embedding config from env', () => {
+    const config: KtxProjectEmbeddingConfig = {
+      backend: 'openai',
+      model: 'text-embedding-3-small',
+      dimensions: 1536,
+      openai: { api_key: 'env:OPENAI_API_KEY' }, // pragma: allowlist secret
+    };
+
+    expect(
+      resolveLocalKtxEmbeddingConfig(config, { OPENAI_API_KEY: 'sk-test' }), // pragma: allowlist secret
+    ).toEqual({
+      backend: 'openai',
+      model: 'text-embedding-3-small',
+      dimensions: 1536,
+      openai: { apiKey: 'sk-test' }, // pragma: allowlist secret
+      batchSize: undefined,
+    });
+  });
+
   it('constructs deterministic embeddings from the default project config', () => {
     const createKtxEmbeddingProvider = vi.fn(() => ({}) as never);
     const provider = createLocalKtxEmbeddingProviderFromConfig(

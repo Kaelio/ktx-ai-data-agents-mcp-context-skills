@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MemoryCaptureStatus } from '@ktx/context/memory';
+import type { MemoryIngestStatus } from '@ktx/context/memory';
 import type { KtxLocalProject } from '@ktx/context/project';
-import { runKtxTextIngest, type TextMemoryCapturePort } from './text-ingest.js';
+import { runKtxTextIngest, type TextMemoryIngestPort } from './text-ingest.js';
 
 function makeIo(options: { isTTY?: boolean } = {}) {
   let stdout = '';
@@ -25,18 +25,18 @@ function makeIo(options: { isTTY?: boolean } = {}) {
   };
 }
 
-function fakeCapture(
+function fakeIngest(
   options: {
     failRunIds?: Set<string>;
     missingStatusRunIds?: Set<string>;
     events?: string[];
   } = {},
-): TextMemoryCapturePort {
+): TextMemoryIngestPort {
   let next = 1;
   return {
-    capture: vi.fn(async () => {
+    ingest: vi.fn(async () => {
       const runId = `run-${next++}`;
-      options.events?.push(`capture:${runId}`);
+      options.events?.push(`ingest:${runId}`);
       return { runId };
     }),
     waitForRun: vi.fn(async (runId: string) => {
@@ -51,26 +51,26 @@ function fakeCapture(
         return {
           runId,
           status: 'error',
-          stage: 'capturing',
+          stage: 'ingesting',
           done: true,
           captured: { wiki: [], sl: [], xrefs: [] },
           error: `${runId} failed`,
           commitHash: null,
           skillsLoaded: [],
           signalDetected: false,
-        } satisfies MemoryCaptureStatus;
+        } satisfies MemoryIngestStatus;
       }
       return {
         runId,
         status: 'done',
-        stage: 'capturing',
+        stage: 'ingesting',
         done: true,
         captured: { wiki: [`wiki-${runId}`], sl: [`sl-${runId}`], xrefs: [] },
         error: null,
         commitHash: `commit-${runId}`,
         skillsLoaded: ['wiki_capture', 'sl'],
         signalDetected: true,
-      } satisfies MemoryCaptureStatus;
+      } satisfies MemoryIngestStatus;
     }),
   };
 }
@@ -80,11 +80,11 @@ function fakeProject(projectDir = '/tmp/project'): KtxLocalProject {
 }
 
 describe('runKtxTextIngest', () => {
-  it('captures repeated inline text sequentially with generated internal chat ids', async () => {
+  it('ingests repeated inline text sequentially with generated internal chat ids', async () => {
     const io = makeIo();
     const events: string[] = [];
-    const capture = fakeCapture({ events });
-    const createMemoryCapture = vi.fn(() => capture);
+    const ingest = fakeIngest({ events });
+    const createMemoryIngest = vi.fn(() => ingest);
 
     await expect(
       runKtxTextIngest(
@@ -99,14 +99,14 @@ describe('runKtxTextIngest', () => {
         io.io,
         {
           loadProject: vi.fn(async () => fakeProject()),
-          createMemoryCapture,
+          createMemoryIngest,
           now: () => 1_700_000_000_000,
         },
       ),
     ).resolves.toBe(0);
 
-    expect(createMemoryCapture).toHaveBeenCalledWith({ projectDir: '/tmp/project' });
-    expect(capture.capture).toHaveBeenNthCalledWith(
+    expect(createMemoryIngest).toHaveBeenCalledWith({ projectDir: '/tmp/project' });
+    expect(ingest.ingest).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         userId: 'local-cli',
@@ -116,7 +116,7 @@ describe('runKtxTextIngest', () => {
         sourceType: 'external_ingest',
       }),
     );
-    expect(capture.capture).toHaveBeenNthCalledWith(
+    expect(ingest.ingest).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         chatId: 'cli-text-ingest-1700000000000-2',
@@ -124,8 +124,8 @@ describe('runKtxTextIngest', () => {
         assistantMessage: 'Orders are completed purchases.',
       }),
     );
-    expect(capture.capture).not.toHaveBeenCalledWith(expect.objectContaining({ connectionId: expect.anything() }));
-    expect(events).toEqual(['capture:run-1', 'wait:run-1', 'status:run-1', 'capture:run-2', 'wait:run-2', 'status:run-2']);
+    expect(ingest.ingest).not.toHaveBeenCalledWith(expect.objectContaining({ connectionId: expect.anything() }));
+    expect(events).toEqual(['ingest:run-1', 'wait:run-1', 'status:run-1', 'ingest:run-2', 'wait:run-2', 'status:run-2']);
     expect(JSON.parse(io.stdout())).toMatchObject({
       status: 'done',
       results: [
@@ -147,7 +147,7 @@ describe('runKtxTextIngest', () => {
 
   it('loads files and stdin as batch items and passes a global connection id', async () => {
     const io = makeIo();
-    const capture = fakeCapture();
+    const ingest = fakeIngest();
 
     await expect(
       runKtxTextIngest(
@@ -163,7 +163,7 @@ describe('runKtxTextIngest', () => {
         io.io,
         {
           loadProject: vi.fn(async () => fakeProject()),
-          createMemoryCapture: vi.fn(() => capture),
+          createMemoryIngest: vi.fn(() => ingest),
           readFile: vi.fn(async (path) => `file:${path}`),
           readStdin: vi.fn(async () => 'stdin content'),
           now: () => 10,
@@ -171,7 +171,7 @@ describe('runKtxTextIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(capture.capture).toHaveBeenNthCalledWith(
+    expect(ingest.ingest).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         connectionId: 'warehouse',
@@ -180,7 +180,7 @@ describe('runKtxTextIngest', () => {
         assistantMessage: 'file:/tmp/docs/revenue.md',
       }),
     );
-    expect(capture.capture).toHaveBeenNthCalledWith(
+    expect(ingest.ingest).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         connectionId: 'warehouse',
@@ -194,9 +194,9 @@ describe('runKtxTextIngest', () => {
     expect(io.stdout()).toContain('stdin');
   });
 
-  it('uses bounded inline text previews as labels in plain output and capture metadata', async () => {
+  it('uses bounded inline text previews as labels in plain output and ingest metadata', async () => {
     const io = makeIo();
-    const capture = fakeCapture();
+    const ingest = fakeIngest();
     const longText = `This inline note is intentionally long ${'x'.repeat(120)}`;
 
     await expect(
@@ -212,7 +212,7 @@ describe('runKtxTextIngest', () => {
         io.io,
         {
           loadProject: vi.fn(async () => fakeProject()),
-          createMemoryCapture: vi.fn(() => capture),
+          createMemoryIngest: vi.fn(() => ingest),
           now: () => 10,
         },
       ),
@@ -225,19 +225,19 @@ describe('runKtxTextIngest', () => {
     expect(output).not.toContain('text-1');
     expect(output).not.toContain(longText);
 
-    expect(capture.capture).toHaveBeenNthCalledWith(
+    expect(ingest.ingest).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         userMessage: 'Ingest external text artifact "remember to call me Andrey" into KTX memory.',
       }),
     );
-    expect(capture.capture).toHaveBeenNthCalledWith(
+    expect(ingest.ingest).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         userMessage: 'Ingest external text artifact "first line second line" into KTX memory.',
       }),
     );
-    expect(capture.capture).toHaveBeenNthCalledWith(
+    expect(ingest.ingest).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
         userMessage: 'Ingest external text artifact "This inline note is intentionally long xxxxxxxx..." into KTX memory.',
@@ -247,7 +247,7 @@ describe('runKtxTextIngest', () => {
 
   it('continues after an item failure by default and stops when failFast is set', async () => {
     const continueIo = makeIo();
-    const continueCapture = fakeCapture({ failRunIds: new Set(['run-1']) });
+    const continueIngest = fakeIngest({ failRunIds: new Set(['run-1']) });
 
     await expect(
       runKtxTextIngest(
@@ -262,12 +262,12 @@ describe('runKtxTextIngest', () => {
         continueIo.io,
         {
           loadProject: vi.fn(async () => fakeProject()),
-          createMemoryCapture: vi.fn(() => continueCapture),
+          createMemoryIngest: vi.fn(() => continueIngest),
         },
       ),
     ).resolves.toBe(1);
 
-    expect(continueCapture.capture).toHaveBeenCalledTimes(2);
+    expect(continueIngest.ingest).toHaveBeenCalledTimes(2);
     expect(JSON.parse(continueIo.stdout())).toMatchObject({
       status: 'failed',
       results: [
@@ -277,7 +277,7 @@ describe('runKtxTextIngest', () => {
     });
 
     const failFastIo = makeIo();
-    const failFastCapture = fakeCapture({ failRunIds: new Set(['run-1']) });
+    const failFastIngest = fakeIngest({ failRunIds: new Set(['run-1']) });
 
     await expect(
       runKtxTextIngest(
@@ -292,12 +292,12 @@ describe('runKtxTextIngest', () => {
         failFastIo.io,
         {
           loadProject: vi.fn(async () => fakeProject()),
-          createMemoryCapture: vi.fn(() => failFastCapture),
+          createMemoryIngest: vi.fn(() => failFastIngest),
         },
       ),
     ).resolves.toBe(1);
 
-    expect(failFastCapture.capture).toHaveBeenCalledTimes(1);
+    expect(failFastIngest.ingest).toHaveBeenCalledTimes(1);
     expect(JSON.parse(failFastIo.stdout()).results).toHaveLength(1);
   });
 
@@ -314,7 +314,7 @@ describe('runKtxTextIngest', () => {
           failFast: false,
         },
         noInputIo.io,
-        { loadProject: vi.fn(), createMemoryCapture: vi.fn() },
+        { loadProject: vi.fn(), createMemoryIngest: vi.fn() },
       ),
     ).resolves.toBe(1);
     expect(noInputIo.stderr()).toContain('Provide at least one text item');
@@ -331,7 +331,7 @@ describe('runKtxTextIngest', () => {
           failFast: false,
         },
         emptyIo.io,
-        { loadProject: vi.fn(), createMemoryCapture: vi.fn() },
+        { loadProject: vi.fn(), createMemoryIngest: vi.fn() },
       ),
     ).resolves.toBe(1);
     expect(emptyIo.stderr()).toContain('Text item "text-1" is empty');

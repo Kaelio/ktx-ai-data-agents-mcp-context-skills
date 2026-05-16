@@ -143,7 +143,9 @@ or `entity_details` tools.
 }
 ```
 
-**Output:** array of refs, each:
+**Output:** `{ refs: Ref[] }` — the MCP protocol requires `structuredContent`
+to be a JSON object, so the array of matches is wrapped under `refs`. Each
+ref is shaped:
 
 ```typescript
 {

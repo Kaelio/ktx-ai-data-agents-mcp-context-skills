@@ -1,16 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { createDefaultKtxMcpServer, createLocalProjectMcpContextPorts } from '@ktx/context/mcp';
-import { createLocalProjectMemoryCapture } from '@ktx/context/memory';
-import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { loadKtxProject } from '@ktx/context/project';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
-import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
-import { createKtxCliScanConnector } from './local-scan-connectors.js';
-import { createManagedPythonSemanticLayerComputePort } from './managed-python-command.js';
-import { createManagedDaemonSqlAnalysisPort } from './managed-python-http.js';
+import { createKtxMcpServerFactory } from './mcp-server-factory.js';
 
 const DEFAULT_ALLOWED_HOSTS = ['localhost', '127.0.0.1', '::1'] as const;
 
@@ -124,13 +119,6 @@ export interface RunKtxMcpHttpServerOptions extends McpSecurityConfigInput {
   loadProject?: typeof loadKtxProject;
 }
 
-function noopIo(): KtxCliIo {
-  return {
-    stdout: { write() {} },
-    stderr: { write() {} },
-  };
-}
-
 function writeJson(res: ServerResponse, status: number, body: object): void {
   const payload = `${JSON.stringify(body)}\n`;
   res.writeHead(status, {
@@ -159,55 +147,6 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return raw.trim().length === 0 ? undefined : (JSON.parse(raw) as unknown);
 }
 
-async function defaultMcpServerFactory(input: {
-  project: KtxLocalProject;
-  projectDir: string;
-  cliVersion: string;
-  io?: KtxCliIo;
-}): Promise<() => McpServer> {
-  const io = input.io ?? noopIo();
-  const queryExecutor = createKtxCliIngestQueryExecutor(input.project);
-  const semanticLayerCompute = await createManagedPythonSemanticLayerComputePort({
-    cliVersion: input.cliVersion,
-    installPolicy: 'auto',
-    io,
-  });
-  const sqlAnalysis = createManagedDaemonSqlAnalysisPort({
-    cliVersion: input.cliVersion,
-    projectDir: input.projectDir,
-    installPolicy: 'auto',
-    io,
-  });
-  const contextTools = createLocalProjectMcpContextPorts(input.project, {
-    semanticLayerCompute,
-    queryExecutor,
-    sqlAnalysis,
-    localScan: {
-      createConnector: async (connectionId) => createKtxCliScanConnector(input.project, connectionId),
-    },
-    localIngest: {
-      semanticLayerCompute,
-      queryExecutor,
-    },
-  });
-
-  let memoryCapture: ReturnType<typeof createLocalProjectMemoryCapture> | undefined;
-  try {
-    memoryCapture = createLocalProjectMemoryCapture(input.project, { semanticLayerCompute, queryExecutor });
-  } catch (error) {
-    input.io?.stderr.write(`KTX MCP memory_capture disabled: ${error instanceof Error ? error.message : String(error)}\n`);
-  }
-
-  return () =>
-    createDefaultKtxMcpServer({
-      name: 'ktx',
-      version: input.cliVersion,
-      userContext: { userId: 'local' },
-      contextTools,
-      memoryCapture,
-    });
-}
-
 function listenerPort(server: Server, fallback: number): number {
   const address = server.address();
   return typeof address === 'object' && address ? address.port : fallback;
@@ -233,7 +172,7 @@ export async function runKtxMcpHttpServer(options: RunKtxMcpHttpServerOptions): 
       : undefined;
   const createMcpServer =
     options.createMcpServer ??
-    (await defaultMcpServerFactory({
+    (await createKtxMcpServerFactory({
       project: project!,
       projectDir: options.projectDir,
       cliVersion: options.cliVersion ?? '0.0.0-private',

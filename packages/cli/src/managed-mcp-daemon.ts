@@ -121,11 +121,25 @@ export async function startKtxMcpDaemon(options: {
   portAvailable?: (host: string, port: number) => Promise<boolean>;
   spawnDaemon?: typeof defaultSpawnDaemon;
   now?: () => Date;
-}): Promise<{ status: 'started'; state: KtxMcpDaemonState; url: string }> {
+}): Promise<{ status: 'started' | 'already-running'; state: KtxMcpDaemonState; url: string }> {
   const existing = await readState(options.projectDir).catch(() => undefined);
   const processAlive = options.processAlive ?? defaultProcessAlive;
   if (existing && processAlive(existing.pid)) {
-    throw new Error(`KTX MCP daemon is already recorded at http://${existing.host}:${existing.port}/mcp`);
+    const sameConfig =
+      existing.host === options.host &&
+      existing.port === options.port &&
+      existing.tokenAuth === Boolean(options.token);
+    if (sameConfig) {
+      return {
+        status: 'already-running',
+        state: existing,
+        url: `http://${existing.host}:${existing.port}/mcp`,
+      };
+    }
+    throw new Error(
+      `KTX MCP daemon is already running at http://${existing.host}:${existing.port}/mcp ` +
+        'with a different configuration. Run `ktx mcp stop` first, then start again.',
+    );
   }
   const portAvailable = options.portAvailable ?? defaultPortAvailable;
   if (!(await portAvailable(options.host, options.port))) {

@@ -9,7 +9,7 @@ import type {
   RunLocalScanOptions,
 } from '@ktx/context/scan';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCliScanProgress, runKtxScan } from './scan.js';
+import { createCliScanProgress, runKtxScan, type KtxScanDeps } from './scan.js';
 
 const sqlServerExtractSchema = vi.hoisted(() =>
   vi.fn(async (connectionId: string) => ({
@@ -392,6 +392,7 @@ describe('runKtxScan', () => {
       }),
     );
     const io = makeIo();
+    const runtimeIo = makeIo({ isTTY: true });
 
     await expect(
       runKtxScan(
@@ -406,7 +407,9 @@ describe('runKtxScan', () => {
           runtimeInstallPolicy: 'auto',
         },
         io.io,
-        { runLocalScan, createLocalIngestAdapters },
+        { runLocalScan, createLocalIngestAdapters, runtimeIo: runtimeIo.io } as KtxScanDeps & {
+          runtimeIo: typeof runtimeIo.io;
+        },
       ),
     ).resolves.toBe(0);
 
@@ -415,7 +418,7 @@ describe('runKtxScan', () => {
         cliVersion: '0.2.0',
         projectDir: tempDir,
         installPolicy: 'auto',
-        io: io.io,
+        io: runtimeIo.io,
       },
     });
   });

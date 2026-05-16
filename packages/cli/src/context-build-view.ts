@@ -1022,6 +1022,7 @@ export async function runContextBuild(
       const progressDeps: KtxPublicIngestDeps = {
         scanProgress: createContextBuildProgressPort(updateSchemaPhase),
         ingestProgress: updateIngestPhase,
+        runtimeIo: io,
         onPhaseStart,
         onPhaseEnd,
       };

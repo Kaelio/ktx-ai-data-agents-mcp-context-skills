@@ -8,13 +8,13 @@ export {
   stepBudgetFor,
 } from './capture-signals.js';
 export { MemoryAgentService } from './memory-agent.service.js';
-export { createLocalProjectMemoryCapture, type CreateLocalProjectMemoryCaptureOptions } from './local-memory.js';
+export { createLocalProjectMemoryIngest, type CreateLocalProjectMemoryIngestOptions } from './local-memory.js';
 export { LocalMemoryRunStore, type LocalMemoryRunStoreOptions } from './local-memory-runs.js';
 export {
-  MemoryCaptureService,
-  type MemoryCaptureServiceDeps,
-  type MemoryCaptureStartResult,
-  type MemoryCaptureStatus,
+  MemoryIngestService,
+  type MemoryIngestServiceDeps,
+  type MemoryIngestStartResult,
+  type MemoryIngestStatus,
   type MemoryRunRecord,
   type MemoryRunStatus,
   type MemoryRunStorePort,

@@ -1,5 +1,16 @@
+import { randomUUID } from 'node:crypto';
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import type { KtxMcpContextPorts, KtxMcpServerLike, KtxMcpToolResult, KtxMcpUserContext } from './types.js';
+import type { MemoryAgentInput } from '../memory/index.js';
+import type {
+  KtxMcpContextPorts,
+  KtxMcpProgressCallback,
+  KtxMcpServerLike,
+  KtxMcpToolHandlerContext,
+  KtxMcpToolResult,
+  KtxMcpUserContext,
+  NonArrayObject,
+} from './types.js';
 
 export interface RegisterKtxContextToolsDeps {
   server: KtxMcpServerLike;
@@ -8,181 +19,433 @@ export interface RegisterKtxContextToolsDeps {
 }
 
 const connectionIdSchema = z.string().min(1);
+const unknownRecordSchema = z.record(z.string(), z.unknown());
+const tableRefSchema = z.object({
+  catalog: z.string().nullable(),
+  db: z.string().nullable(),
+  name: z.string(),
+});
+
+const toolAnnotations = {
+  connection_list: { title: 'Connection List', readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  discover_data: { title: 'Discover Data', readOnlyHint: true, openWorldHint: false },
+  wiki_search: { title: 'Wiki Search', readOnlyHint: true, openWorldHint: false },
+  wiki_read: { title: 'Wiki Read', readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  entity_details: { title: 'Entity Details', readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  dictionary_search: { title: 'Dictionary Search', readOnlyHint: true, openWorldHint: false },
+  sl_read_source: { title: 'Semantic Layer Read Source', readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  sl_query: { title: 'Semantic Layer Query', readOnlyHint: true, openWorldHint: false },
+  sql_execution: { title: 'SQL Execution', readOnlyHint: true, openWorldHint: false },
+  memory_ingest: { title: 'Memory Ingest', destructiveHint: true, openWorldHint: false },
+  memory_ingest_status: { title: 'Memory Ingest Status', readOnlyHint: true, openWorldHint: false },
+} satisfies Record<string, ToolAnnotations>;
+
+const toolDescriptions = {
+  connection_list:
+    'List configured read-only data connections available to this KTX project. Use this before connection-scoped tools when the project may have multiple warehouses.',
+  discover_data:
+    'Search across KTX wiki pages, semantic-layer sources, measures, dimensions, raw tables, and columns. Example: discover_data({ query: "monthly orders by customer", connectionId: "warehouse", kinds: ["sl_source", "table"] }).',
+  wiki_search:
+    'Search KTX wiki pages for reusable business context. Example: wiki_search({ query: "revenue recognition", limit: 5 }).',
+  wiki_read: 'Read a KTX wiki page by key returned from wiki_search. Example: wiki_read({ key: "global/revenue" }).',
+  entity_details:
+    'Read table and column metadata from the latest live-database scan snapshot. Example: entity_details({ connectionId: "warehouse", entities: [{ table: { schema: "public", table: "orders" }, columns: ["id"] }] }).',
+  dictionary_search:
+    'Search profile-sampled warehouse values to locate likely source columns for business values. Example: dictionary_search({ values: ["Acme Corp"], connectionId: "warehouse" }).',
+  sl_read_source:
+    'Read a semantic-layer YAML source by connection id and source name. Example: sl_read_source({ connectionId: "warehouse", sourceName: "orders" }).',
+  sl_query:
+    'Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: "warehouse", measures: ["orders.order_count"], dimensions: [{ dimension: "orders.created_at", granularity: "month" }] }).',
+  sql_execution:
+    'Execute one parser-validated read-only SQL query against a configured KTX connection. Example: sql_execution({ connectionId: "warehouse", sql: "select count(*) from public.orders", maxRows: 100 }).',
+  memory_ingest:
+    'Ingest free-form markdown knowledge into durable KTX memory. Use this for business rules, metric definitions, schema gotchas, recurring findings, or explicit user requests to remember something. Example: memory_ingest({ connectionId: "warehouse", content: "ARR is reported in cents in this warehouse." }).',
+  memory_ingest_status:
+    'Read the current or final status for a memory ingest run. Example: memory_ingest_status({ runId: "memory-run-1" }).',
+} satisfies Record<string, string>;
 
 const connectionListSchema = z.object({});
 
-const connectionTestSchema = z.object({
-  connectionId: connectionIdSchema,
-});
-
 const knowledgeSearchSchema = z.object({
-  query: z.string().min(1),
-  limit: z.number().int().min(1).max(50).default(10),
+  query: z.string().min(1).describe('Natural-language wiki search query, e.g. "revenue recognition policy".'),
+  limit: z.number().int().min(1).max(50).default(10).describe('Maximum wiki pages to return. Defaults to 10.'),
 });
 
 const knowledgeReadSchema = z.object({
-  key: z.string().min(1),
-});
-
-const historicSqlUsageFrontmatterSchema = z.object({
-  executions: z.number().int().nonnegative(),
-  distinct_users: z.number().int().nonnegative(),
-  first_seen: z.string().min(1),
-  last_seen: z.string().min(1),
-  p50_runtime_ms: z.number().nonnegative().nullable(),
-  p95_runtime_ms: z.number().nonnegative().nullable(),
-  error_rate: z.number().min(0).max(1),
-  rows_produced: z.number().int().nonnegative().optional(),
-});
-
-const knowledgeWriteSchema = z.object({
-  key: z.string().min(1).max(120),
-  summary: z.string().min(1).max(200),
-  content: z.string().min(1),
-  tags: z.array(z.string()).optional(),
-  refs: z.array(z.string()).optional(),
-  sl_refs: z.array(z.string()).optional(),
-  source: z.string().optional(),
-  intent: z.string().optional(),
-  tables: z.array(z.string()).optional(),
-  representative_sql: z.string().optional(),
-  usage: historicSqlUsageFrontmatterSchema.optional(),
-  fingerprints: z.array(z.string()).optional(),
-});
-
-const slListSourcesSchema = z.object({
-  connectionId: connectionIdSchema.optional(),
-  query: z.string().min(1).optional(),
+  key: z.string().min(1).describe('Wiki page key returned by wiki_search, e.g. "global/revenue".'),
 });
 
 const slReadSourceSchema = z.object({
-  connectionId: connectionIdSchema,
-  sourceName: z.string().min(1),
-});
-
-const slWriteSourceSchema = z.object({
-  connectionId: connectionIdSchema,
-  sourceName: z.string().regex(/^[a-z0-9][a-z0-9_]*$/, 'Source name must be snake_case'),
-  yaml: z.string().min(1).optional(),
-  source: z.record(z.string(), z.unknown()).optional(),
-  delete: z.boolean().optional(),
-});
-
-const slValidateSchema = z.object({
-  connectionId: connectionIdSchema,
-  names: z.array(z.string().min(1)).optional(),
+  connectionId: connectionIdSchema.describe('Connection id that owns the semantic-layer source.'),
+  sourceName: z.string().min(1).describe('Semantic-layer source name without ".yaml", e.g. "orders".'),
 });
 
 const slQueryMeasureSchema = z.union([
-  z.string(),
+  z.string().describe('Semantic-layer measure key, e.g. "orders.order_count".'),
   z.object({
-    expr: z.string().min(1),
-    name: z.string().min(1),
+    expr: z.string().min(1).describe('Ad hoc aggregate expression, e.g. "sum(orders.amount)".'),
+    name: z.string().min(1).describe('Alias for the ad hoc measure, e.g. "gross_revenue".'),
   }),
 ]);
 
-const slQueryDimensionSchema = z.union([
-  z.string(),
+const slQueryDimensionSchema = z.preprocess(
+  (value) => {
+    if (typeof value === 'string') return { field: value };
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = { ...(value as Record<string, unknown>) };
+      if (!('field' in obj) && typeof obj.dimension === 'string') obj.field = obj.dimension;
+      return obj;
+    }
+    return value;
+  },
   z.object({
-    field: z.string().min(1),
-    granularity: z.string().min(1).optional(),
+    field: z.string().min(1).describe('Dimension to group by, e.g. "orders.created_at" or "orders.status".'),
+    granularity: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Time grain for time dimensions: day, week, month, quarter, or year.'),
   }),
-]);
+);
 
-const slQueryOrderBySchema = z.union([
-  z.string(),
+const slQueryOrderBySchema = z.preprocess(
+  (value) => {
+    if (typeof value === 'string') {
+      return { field: value };
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = { ...(value as Record<string, unknown>) };
+      if (!('field' in obj) && typeof obj.id === 'string') {
+        obj.field = obj.id;
+      }
+      if (!('direction' in obj) && 'desc' in obj) {
+        obj.direction = obj.desc === true ? 'desc' : 'asc';
+      }
+      return obj;
+    }
+    return value;
+  },
   z.object({
-    field: z.string().min(1),
-    direction: z.enum(['asc', 'desc']).default('asc'),
+    field: z
+      .string()
+      .min(1)
+      .describe(
+        'Field/measure/dimension id to order by, e.g. "orders.created_at", a dimension key like "mart_nrr_quarterly.quarter_label", or a measure alias.',
+      ),
+    direction: z
+      .enum(['asc', 'desc'])
+      .default('asc')
+      .describe('Sort direction: "asc" or "desc". Defaults to "asc".'),
   }),
-]);
+);
 
 const slQuerySchema = z.object({
-  connectionId: connectionIdSchema.optional(),
-  measures: z.array(slQueryMeasureSchema).min(1),
-  dimensions: z.array(slQueryDimensionSchema).default([]),
-  filters: z.array(z.string()).default([]),
-  segments: z.array(z.string()).default([]),
-  order_by: z.array(slQueryOrderBySchema).default([]),
-  limit: z.number().int().min(0).default(1000),
-  include_empty: z.boolean().default(true),
+  connectionId: connectionIdSchema
+    .optional()
+    .describe('Connection id to query. Omit only when the project has exactly one configured connection.'),
+  measures: z.array(slQueryMeasureSchema).min(1).describe('Measures to select. Use semantic-layer keys when available.'),
+  dimensions: z
+    .array(slQueryDimensionSchema)
+    .default([])
+    .describe('Dimensions to group by. Strings and {dimension, granularity} are accepted.'),
+  filters: z
+    .array(z.string().describe('Semantic-layer filter expression, e.g. "orders.status = paid".'))
+    .default([])
+    .describe('Semantic-layer filter expressions to apply.'),
+  segments: z
+    .array(z.string().describe('Semantic-layer segment key to apply.'))
+    .default([])
+    .describe('Semantic-layer segment keys to apply.'),
+  order_by: z
+    .array(slQueryOrderBySchema)
+    .default([])
+    .describe('Sort clauses. Strings and Cube-style {id, desc} are accepted.'),
+  limit: z.number().int().min(0).default(1000).describe('Maximum rows to return. Defaults to 1000.'),
+  include_empty: z.boolean().default(true).describe('Whether to include empty dimension groups. Defaults to true.'),
 });
 
-const ingestTriggerSchema = z.object({
-  adapter: z.string().min(1),
-  connectionId: connectionIdSchema,
-  config: z.unknown().optional(),
-  trigger: z.enum(['upload', 'scheduled_pull', 'manual_resync']).default('manual_resync'),
-});
-
-const ingestStatusSchema = z.object({
-  runId: z.string().min(1),
-});
-
-const ingestReportSchema = z.object({
-  runId: z.string().min(1),
-});
-
-const ingestReplaySchema = z.object({
-  runId: z.string().min(1),
-});
-
-const scanTriggerSchema = z.object({
-  connectionId: connectionIdSchema,
-  mode: z.enum(['structural', 'relationships', 'enriched']).default('structural'),
-  detectRelationships: z.boolean().default(false),
-  dryRun: z.boolean().default(false),
-});
-
-const scanStatusSchema = z.object({
-  runId: z.string().min(1),
-});
-
-const scanArtifactReadSchema = z.object({
-  runId: z.string().min(1),
-  path: z.string().min(1),
-});
-
-const entityDetailsTableRefSchema = z.object({
-  catalog: z.string().nullable(),
-  db: z.string().nullable(),
-  name: z.string().min(1),
-});
+const entityDetailsTableRefSchema = z.preprocess(
+  (value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = { ...(value as Record<string, unknown>) };
+      if (!('db' in obj) && typeof obj.schema === 'string') obj.db = obj.schema;
+      if (!('name' in obj) && typeof obj.table === 'string') obj.name = obj.table;
+      if (!('catalog' in obj)) obj.catalog = null;
+      return obj;
+    }
+    return value;
+  },
+  z.object({
+    catalog: z.string().nullable().describe('Catalog/project/database. Use null when not applicable.'),
+    db: z.string().nullable().describe('Schema/database/dataset. Use null when not applicable.'),
+    name: z.string().min(1).describe('Table name.'),
+  }),
+);
 
 const entityDetailsSchema = z.object({
-  connectionId: connectionIdSchema,
+  connectionId: connectionIdSchema.describe('Connection id whose latest scan snapshot should be read.'),
   entities: z
     .array(
       z.object({
-        table: z.union([z.string().min(1), entityDetailsTableRefSchema]),
-        columns: z.array(z.string().min(1)).optional(),
+        table: z
+          .union([z.string().min(1), entityDetailsTableRefSchema])
+          .describe('Table display string or object ref. {schema, table} is accepted as an alias for {db, name}.'),
+        columns: z
+          .array(z.string().min(1).describe('Column name to inspect.'))
+          .optional()
+          .describe('Optional column filter.'),
       }),
     )
     .min(1)
-    .max(20),
+    .max(20)
+    .describe('Tables or columns to inspect. Maximum 20 entities.'),
 });
 
 const dictionarySearchSchema = z.object({
-  values: z.array(z.string().min(1)).min(1).max(20),
-  connectionId: connectionIdSchema.optional(),
+  values: z
+    .array(z.string().min(1).describe('Business value to locate, e.g. "Acme Corp" or "enterprise".'))
+    .min(1)
+    .max(20)
+    .describe('Values to search for in sampled warehouse dictionaries.'),
+  connectionId: connectionIdSchema
+    .optional()
+    .describe('Optional connection id. Pass it when user intent pins a specific warehouse.'),
 });
 
 const discoverDataKindSchema = z.enum(['wiki', 'sl_source', 'sl_measure', 'sl_dimension', 'table', 'column']);
 
 const discoverDataSchema = z.object({
-  query: z.string().min(1),
-  connectionId: connectionIdSchema.optional(),
-  kinds: z.array(discoverDataKindSchema).optional(),
-  limit: z.number().int().min(1).max(50).default(15).optional(),
+  query: z.string().min(1).describe('Natural-language discovery query, e.g. "monthly orders by customer".'),
+  connectionId: connectionIdSchema
+    .optional()
+    .describe('Optional connection id. Pass it when user intent pins a specific warehouse.'),
+  kinds: z.array(discoverDataKindSchema.describe('Reference kind to include.')).optional().describe('Optional kind filter.'),
+  limit: z.number().int().min(1).max(50).default(15).optional().describe('Maximum refs to return. Defaults to 15.'),
 });
 
 const sqlExecutionSchema = z.object({
-  connectionId: connectionIdSchema,
-  sql: z.string().min(1),
-  maxRows: z.number().int().min(1).max(10_000).default(1000).optional(),
+  connectionId: connectionIdSchema.describe('Connection id to execute against. Required for raw SQL.'),
+  sql: z.string().min(1).describe('Parser-validated read-only SQL, e.g. "select count(*) from public.orders".'),
+  maxRows: z.number().int().min(1).max(10_000).default(1000).optional().describe('Maximum rows to return. Defaults to 1000.'),
 });
 
-export function jsonToolResult<T extends object>(structuredContent: T): KtxMcpToolResult<T> {
+const memoryIngestSchema = z.object({
+  content: z
+    .string()
+    .min(1)
+    .describe(
+      'Free-form markdown to ingest. Include the knowledge itself plus any context (source, the user question, why this came up) that the memory agent should consider when triaging into wiki/SL.',
+    ),
+  connectionId: connectionIdSchema
+    .optional()
+    .describe(
+      'Scope this memory to a specific connection. Required when the knowledge is warehouse-specific, including measure definitions, schema gotchas, or anything tied to a particular warehouse. Omit only for global wiki knowledge.',
+    ),
+});
+
+const memoryIngestStatusSchema = z.object({
+  runId: z.string().min(1).describe('The memory ingest run id returned by memory_ingest.'),
+});
+
+const connectionListOutputSchema = z.object({
+  connections: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      connectionType: z.string(),
+    }),
+  ),
+});
+
+const wikiSearchOutputSchema = z.object({
+  results: z.array(
+    z.object({
+      key: z.string(),
+      path: z.string(),
+      scope: z.enum(['GLOBAL', 'USER']),
+      summary: z.string(),
+      score: z.number(),
+      matchReasons: z.array(z.string()).optional(),
+      lanes: z
+        .array(
+          z.object({
+            lane: z.string(),
+            status: z.string(),
+            requestedCandidatePoolLimit: z.number(),
+            effectiveCandidatePoolLimit: z.number(),
+            returnedCandidateCount: z.number(),
+            weight: z.number(),
+            reason: z.string().optional(),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+  totalFound: z.number(),
+});
+
+const wikiReadOutputSchema = z.object({
+  key: z.string(),
+  summary: z.string(),
+  content: z.string(),
+  scope: z.enum(['GLOBAL', 'USER']),
+  tags: z.array(z.string()).optional(),
+  refs: z.array(z.string()).optional(),
+  slRefs: z.array(z.string()).optional(),
+});
+
+const slReadSourceOutputSchema = z.object({
+  sourceName: z.string(),
+  yaml: z.string(),
+});
+
+const slQueryOutputSchema = z.object({
+  connectionId: z.string().optional(),
+  dialect: z.string().optional(),
+  sql: z.string(),
+  headers: z.array(z.string()),
+  rows: z.array(z.array(z.unknown())),
+  totalRows: z.number(),
+  plan: unknownRecordSchema.optional(),
+});
+
+const entityDetailsSnapshotOutputSchema = z.object({
+  syncId: z.string(),
+  extractedAt: z.string(),
+  scanRunId: z.string().nullable(),
+});
+
+const entityDetailsColumnOutputSchema = z.object({
+  name: z.string(),
+  nativeType: z.string(),
+  normalizedType: z.string(),
+  dimensionType: z.enum(['time', 'string', 'number', 'boolean']),
+  nullable: z.boolean(),
+  primaryKey: z.boolean(),
+  comment: z.string().nullable(),
+});
+
+const entityDetailsForeignKeyOutputSchema = z.object({
+  fromColumn: z.string(),
+  toCatalog: z.string().nullable(),
+  toDb: z.string().nullable(),
+  toTable: z.string(),
+  toColumn: z.string(),
+  constraintName: z.string().nullable(),
+});
+
+const entityDetailsOutputSchema = z.object({
+  results: z.array(
+    z.union([
+      z.object({
+        ok: z.literal(true),
+        connectionId: z.string(),
+        tableRef: tableRefSchema,
+        display: z.string(),
+        kind: z.enum(['table', 'view', 'external', 'event_stream']),
+        comment: z.string().nullable(),
+        estimatedRows: z.number().nullable(),
+        columns: z.array(entityDetailsColumnOutputSchema),
+        foreignKeys: z.array(entityDetailsForeignKeyOutputSchema),
+        snapshot: entityDetailsSnapshotOutputSchema,
+      }),
+      z.object({
+        ok: z.literal(false),
+        connectionId: z.string(),
+        table: z.union([z.string(), tableRefSchema]),
+        snapshot: entityDetailsSnapshotOutputSchema.optional(),
+        error: z.object({
+          code: z.enum(['scan_missing', 'table_not_found', 'ambiguous_table', 'column_not_found']),
+          message: z.string(),
+          candidates: z
+            .union([z.array(z.object({ tableRef: tableRefSchema, display: z.string() })), z.array(z.string())])
+            .optional(),
+        }),
+      }),
+    ]),
+  ),
+});
+
+const dictionarySearchOutputSchema = z.object({
+  searched: z.array(
+    z.object({
+      connectionId: z.string(),
+      coverage: z.object({
+        sampledRows: z.number().nullable(),
+        valuesPerColumn: z.number().nullable(),
+        profiledColumns: z.number(),
+        syncId: z.string().nullable(),
+        profiledAt: z.string().nullable(),
+      }),
+      status: z.enum(['ready', 'no_profile_artifact', 'no_candidate_columns']),
+    }),
+  ),
+  results: z.array(
+    z.object({
+      value: z.string(),
+      matches: z.array(
+        z.object({
+          connectionId: z.string(),
+          sourceName: z.string(),
+          columnName: z.string(),
+          matchedValue: z.string(),
+          cardinality: z.number().nullable(),
+        }),
+      ),
+      misses: z.array(
+        z.object({
+          connectionId: z.string(),
+          reason: z.enum(['no_profile_artifact', 'no_candidate_columns', 'value_not_in_sample']),
+        }),
+      ),
+    }),
+  ),
+});
+
+const discoverDataOutputSchema = z.object({
+  refs: z.array(
+    z.object({
+      kind: discoverDataKindSchema,
+      id: z.string(),
+      score: z.number(),
+      summary: z.string().nullable(),
+      snippet: z.string().nullable(),
+      matchedOn: z.enum(['name', 'display', 'description', 'comment', 'expr', 'sample_value', 'body']),
+      connectionId: z.string().optional(),
+      tableRef: tableRefSchema.optional(),
+      columnName: z.string().optional(),
+    }),
+  ),
+});
+
+const sqlExecutionOutputSchema = z.object({
+  headers: z.array(z.string()),
+  headerTypes: z.array(z.string()).optional(),
+  rows: z.array(z.array(z.unknown())),
+  rowCount: z.number(),
+});
+
+const memoryIngestOutputSchema = z.object({
+  runId: z.string(),
+});
+
+const memoryIngestStatusOutputSchema = z.object({
+  runId: z.string(),
+  status: z.enum(['running', 'done', 'error']),
+  stage: z.string(),
+  done: z.boolean(),
+  captured: z.object({
+    wiki: z.array(z.string()),
+    sl: z.array(z.string()),
+    xrefs: z.array(z.string()),
+  }),
+  error: z.string().nullable(),
+  commitHash: z.string().nullable(),
+  skillsLoaded: z.array(z.string()),
+  signalDetected: z.boolean(),
+});
+
+export function jsonToolResult<T extends NonArrayObject>(structuredContent: T): KtxMcpToolResult<T> {
   return {
     content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
     structuredContent,
@@ -196,14 +459,53 @@ export function jsonErrorToolResult(text: string): KtxMcpToolResult<Record<strin
   };
 }
 
+function formatToolError(error: unknown): string {
+  if (error instanceof z.ZodError) {
+    return error.issues
+      .map((issue) => `${issue.path.length > 0 ? issue.path.join('.') : '<root>'}: ${issue.message}`)
+      .join('\n');
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function mcpProgressCallback(context?: KtxMcpToolHandlerContext): KtxMcpProgressCallback | undefined {
+  const progressToken = context?._meta?.progressToken;
+  if (progressToken === undefined || !context?.sendNotification) {
+    return undefined;
+  }
+  return async (event) => {
+    await context.sendNotification?.({
+      method: 'notifications/progress',
+      params: {
+        progressToken,
+        progress: event.progress,
+        ...(event.total !== undefined ? { total: event.total } : {}),
+        message: event.message,
+      },
+    });
+  };
+}
+
 function registerParsedTool<TSchema extends z.ZodType>(
   server: KtxMcpServerLike,
   name: string,
-  config: { title: string; description: string; inputSchema: unknown },
+  config: {
+    title: string;
+    description: string;
+    inputSchema: unknown;
+    outputSchema: unknown;
+    annotations: ToolAnnotations;
+  },
   schema: TSchema,
-  handler: (input: z.infer<TSchema>) => Promise<KtxMcpToolResult>,
+  handler: (input: z.infer<TSchema>, context?: KtxMcpToolHandlerContext) => Promise<KtxMcpToolResult>,
 ): void {
-  server.registerTool(name, config, async (input) => handler(schema.parse(input)));
+  server.registerTool(name, config, async (input, context) => {
+    try {
+      return await handler(schema.parse(input), context);
+    } catch (error) {
+      return jsonErrorToolResult(formatToolError(error));
+    }
+  });
 }
 
 export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void {
@@ -215,32 +517,15 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       server,
       'connection_list',
       {
-        title: 'Connection List',
-        description: 'List configured read-only data connections available to the KTX project.',
+        title: toolAnnotations.connection_list.title!,
+        description: toolDescriptions.connection_list,
         inputSchema: connectionListSchema.shape,
+        outputSchema: connectionListOutputSchema,
+        annotations: toolAnnotations.connection_list,
       },
       connectionListSchema,
       async () => jsonToolResult({ connections: await connections.list() }),
     );
-
-    if (connections.test) {
-      registerParsedTool(
-        server,
-        'connection_test',
-        {
-          title: 'Connection Test',
-          description: 'Test a configured standalone KTX connection through the host-provided scan connector.',
-          inputSchema: connectionTestSchema.shape,
-        },
-        connectionTestSchema,
-        async (input) => {
-          const result = await connections.test?.({ connectionId: input.connectionId });
-          return result
-            ? jsonToolResult(result)
-            : jsonErrorToolResult(`Connection "${input.connectionId}" was not found.`);
-        },
-      );
-    }
   }
 
   if (ports.knowledge) {
@@ -249,9 +534,11 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       server,
       'wiki_search',
       {
-        title: 'Wiki Search',
-        description: 'Search KTX wiki pages and return ranked summaries.',
+        title: toolAnnotations.wiki_search.title!,
+        description: toolDescriptions.wiki_search,
         inputSchema: knowledgeSearchSchema.shape,
+        outputSchema: wikiSearchOutputSchema,
+        annotations: toolAnnotations.wiki_search,
       },
       knowledgeSearchSchema,
       async (input) =>
@@ -268,9 +555,11 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       server,
       'wiki_read',
       {
-        title: 'Wiki Read',
-        description: 'Read a KTX wiki page by key.',
+        title: toolAnnotations.wiki_read.title!,
+        description: toolDescriptions.wiki_read,
         inputSchema: knowledgeReadSchema.shape,
+        outputSchema: wikiReadOutputSchema,
+        annotations: toolAnnotations.wiki_read,
       },
       knowledgeReadSchema,
       async (input) => {
@@ -278,58 +567,19 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
         return page ? jsonToolResult(page) : jsonErrorToolResult(`Wiki page "${input.key}" was not found.`);
       },
     );
-
-    registerParsedTool(
-      server,
-      'wiki_write',
-      {
-        title: 'Wiki Write',
-        description: 'Create or replace a KTX wiki page and its SL references.',
-        inputSchema: knowledgeWriteSchema.shape,
-      },
-      knowledgeWriteSchema,
-      async (input) =>
-        jsonToolResult(
-          await knowledge.write({
-            userId: userContext.userId,
-            key: input.key,
-            summary: input.summary,
-            content: input.content,
-            tags: input.tags,
-            refs: input.refs,
-            slRefs: input.sl_refs,
-            source: input.source,
-            intent: input.intent,
-            tables: input.tables,
-            representativeSql: input.representative_sql,
-            usage: input.usage,
-            fingerprints: input.fingerprints,
-          }),
-        ),
-    );
   }
 
   if (ports.semanticLayer) {
     const semanticLayer = ports.semanticLayer;
     registerParsedTool(
       server,
-      'sl_list_sources',
-      {
-        title: 'Semantic Layer List Sources',
-        description: 'List semantic-layer sources, optionally filtered by connection or search query.',
-        inputSchema: slListSourcesSchema.shape,
-      },
-      slListSourcesSchema,
-      async (input) => jsonToolResult(await semanticLayer.listSources(input)),
-    );
-
-    registerParsedTool(
-      server,
       'sl_read_source',
       {
-        title: 'Semantic Layer Read Source',
-        description: 'Read a semantic-layer YAML source by connection id and source name.',
+        title: toolAnnotations.sl_read_source.title!,
+        description: toolDescriptions.sl_read_source,
         inputSchema: slReadSourceSchema.shape,
+        outputSchema: slReadSourceOutputSchema,
+        annotations: toolAnnotations.sl_read_source,
       },
       slReadSourceSchema,
       async (input) => {
@@ -342,61 +592,35 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
 
     registerParsedTool(
       server,
-      'sl_write_source',
-      {
-        title: 'Semantic Layer Write Source',
-        description: 'Create, replace, or delete a semantic-layer source.',
-        inputSchema: slWriteSourceSchema.shape,
-      },
-      slWriteSourceSchema,
-      async (input) =>
-        jsonToolResult(
-          await semanticLayer.writeSource({
-            connectionId: input.connectionId,
-            sourceName: input.sourceName,
-            yaml: input.yaml,
-            source: input.source,
-            delete: input.delete,
-          }),
-        ),
-    );
-
-    registerParsedTool(
-      server,
-      'sl_validate',
-      {
-        title: 'Semantic Layer Validate',
-        description: 'Validate semantic-layer sources for a connection.',
-        inputSchema: slValidateSchema.shape,
-      },
-      slValidateSchema,
-      async (input) => jsonToolResult(await semanticLayer.validate(input)),
-    );
-
-    registerParsedTool(
-      server,
       'sl_query',
       {
-        title: 'Semantic Layer Query',
-        description: 'Execute a semantic-layer query and return rows, headers, SQL, and the query plan.',
+        title: toolAnnotations.sl_query.title!,
+        description: toolDescriptions.sl_query,
         inputSchema: slQuerySchema.shape,
+        outputSchema: slQueryOutputSchema,
+        annotations: toolAnnotations.sl_query,
       },
       slQuerySchema,
-      async (input) =>
-        jsonToolResult(
-          await semanticLayer.query({
-            connectionId: input.connectionId,
-            query: {
-              measures: input.measures,
-              dimensions: input.dimensions,
-              filters: input.filters,
-              segments: input.segments,
-              order_by: input.order_by,
-              limit: input.limit,
-              include_empty: input.include_empty,
+      async (input, context) => {
+        const onProgress = mcpProgressCallback(context);
+        return jsonToolResult(
+          await semanticLayer.query(
+            {
+              connectionId: input.connectionId,
+              query: {
+                measures: input.measures,
+                dimensions: input.dimensions,
+                filters: input.filters,
+                segments: input.segments,
+                order_by: input.order_by,
+                limit: input.limit,
+                include_empty: input.include_empty,
+              },
             },
-          }),
-        ),
+            onProgress ? { onProgress } : undefined,
+          ),
+        );
+      },
     );
   }
 
@@ -406,9 +630,11 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       server,
       'entity_details',
       {
-        title: 'Entity Details',
-        description: 'Read raw table and column metadata from the latest KTX live-database scan snapshot.',
+        title: toolAnnotations.entity_details.title!,
+        description: toolDescriptions.entity_details,
         inputSchema: entityDetailsSchema.shape,
+        outputSchema: entityDetailsOutputSchema,
+        annotations: toolAnnotations.entity_details,
       },
       entityDetailsSchema,
       async (input) => jsonToolResult(await entityDetails.read(input)),
@@ -421,10 +647,11 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       server,
       'dictionary_search',
       {
-        title: 'Dictionary Search',
-        description:
-          'Search profile-sampled warehouse values and report matching connection/source/column locations plus non-authoritative miss reasons.',
+        title: toolAnnotations.dictionary_search.title!,
+        description: toolDescriptions.dictionary_search,
         inputSchema: dictionarySearchSchema.shape,
+        outputSchema: dictionarySearchOutputSchema,
+        annotations: toolAnnotations.dictionary_search,
       },
       dictionarySearchSchema,
       async (input) => jsonToolResult(await dictionarySearch.search(input)),
@@ -437,13 +664,14 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       server,
       'discover_data',
       {
-        title: 'Discover Data',
-        description:
-          'Search across KTX wiki pages, semantic-layer sources/measures/dimensions, and raw warehouse schema refs.',
+        title: toolAnnotations.discover_data.title!,
+        description: toolDescriptions.discover_data,
         inputSchema: discoverDataSchema.shape,
+        outputSchema: discoverDataOutputSchema,
+        annotations: toolAnnotations.discover_data,
       },
       discoverDataSchema,
-      async (input) => jsonToolResult(await discover.search(input)),
+      async (input) => jsonToolResult({ refs: await discover.search(input) }),
     );
   }
 
@@ -453,171 +681,70 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       server,
       'sql_execution',
       {
-        title: 'SQL Execution',
-        description:
-          'Execute one parser-validated read-only SQL query against a configured KTX connection and return structured rows.',
+        title: toolAnnotations.sql_execution.title!,
+        description: toolDescriptions.sql_execution,
         inputSchema: sqlExecutionSchema.shape,
+        outputSchema: sqlExecutionOutputSchema,
+        annotations: toolAnnotations.sql_execution,
       },
       sqlExecutionSchema,
-      async (input) => {
-        try {
-          return jsonToolResult(
-            await sqlExecution.execute({
+      async (input, context) => {
+        const onProgress = mcpProgressCallback(context);
+        return jsonToolResult(
+          await sqlExecution.execute(
+            {
               connectionId: input.connectionId,
               sql: input.sql,
               maxRows: input.maxRows ?? 1000,
-            }),
-          );
-        } catch (error) {
-          return jsonErrorToolResult(error instanceof Error ? error.message : String(error));
-        }
+            },
+            onProgress ? { onProgress } : undefined,
+          ),
+        );
       },
     );
   }
 
-  if (ports.ingest) {
-    const ingest = ports.ingest;
+  if (ports.memoryIngest) {
+    const memoryIngest = ports.memoryIngest;
     registerParsedTool(
       server,
-      'ingest_trigger',
+      'memory_ingest',
       {
-        title: 'Ingest Trigger',
-        description: 'Trigger a KTX ingest run for an adapter and connection.',
-        inputSchema: ingestTriggerSchema.shape,
+        title: toolAnnotations.memory_ingest.title!,
+        description: toolDescriptions.memory_ingest,
+        inputSchema: memoryIngestSchema.shape,
+        outputSchema: memoryIngestOutputSchema,
+        annotations: toolAnnotations.memory_ingest,
       },
-      ingestTriggerSchema,
-      async (input) => jsonToolResult(await ingest.trigger(input)),
-    );
-
-    registerParsedTool(
-      server,
-      'ingest_status',
-      {
-        title: 'Ingest Status',
-        description:
-          'Read the current or final status for an ingest run, including local diff and work-unit summaries when available.',
-        inputSchema: ingestStatusSchema.shape,
-      },
-      ingestStatusSchema,
+      memoryIngestSchema,
       async (input) => {
-        const status = await ingest.status(input);
-        return status ? jsonToolResult(status) : jsonErrorToolResult(`Ingest run "${input.runId}" was not found.`);
+        const ingestInput: MemoryAgentInput = {
+          userId: userContext.userId,
+          chatId: `mcp-${randomUUID()}`,
+          userMessage: 'Ingest external knowledge into KTX memory.',
+          assistantMessage: input.content,
+          connectionId: input.connectionId,
+          sourceType: 'external_ingest',
+        };
+        return jsonToolResult(await memoryIngest.ingest(ingestInput));
       },
-    );
-
-    if (ingest.report) {
-      registerParsedTool(
-        server,
-        'ingest_report',
-        {
-          title: 'Ingest Report',
-          description: 'Read the stored canonical KTX ingest report for a local run id, job id, or report id.',
-          inputSchema: ingestReportSchema.shape,
-        },
-        ingestReportSchema,
-        async (input) => {
-          const report = await ingest.report?.(input);
-          return report ? jsonToolResult(report) : jsonErrorToolResult(`Ingest report "${input.runId}" was not found.`);
-        },
-      );
-    }
-
-    if (ingest.replay) {
-      registerParsedTool(
-        server,
-        'ingest_replay',
-        {
-          title: 'Ingest Replay',
-          description: 'Read the memory-flow replay snapshot for a stored canonical KTX ingest run.',
-          inputSchema: ingestReplaySchema.shape,
-        },
-        ingestReplaySchema,
-        async (input) => {
-          const replay = await ingest.replay?.(input);
-          return replay ? jsonToolResult(replay) : jsonErrorToolResult(`Ingest replay "${input.runId}" was not found.`);
-        },
-      );
-    }
-  }
-
-  if (ports.scan) {
-    const scan = ports.scan;
-    registerParsedTool(
-      server,
-      'scan_trigger',
-      {
-        title: 'Scan Trigger',
-        description: 'Run a standalone KTX structural connection scan and return its report summary.',
-        inputSchema: scanTriggerSchema.shape,
-      },
-      scanTriggerSchema,
-      async (input) => jsonToolResult(await scan.trigger(input)),
     );
 
     registerParsedTool(
       server,
-      'scan_status',
+      'memory_ingest_status',
       {
-        title: 'Scan Status',
-        description: 'Read the current or final status for a standalone KTX scan run.',
-        inputSchema: scanStatusSchema.shape,
+        title: toolAnnotations.memory_ingest_status.title!,
+        description: toolDescriptions.memory_ingest_status,
+        inputSchema: memoryIngestStatusSchema.shape,
+        outputSchema: memoryIngestStatusOutputSchema,
+        annotations: toolAnnotations.memory_ingest_status,
       },
-      scanStatusSchema,
+      memoryIngestStatusSchema,
       async (input) => {
-        const status = await scan.status(input);
-        return status ? jsonToolResult(status) : jsonErrorToolResult(`Scan run "${input.runId}" was not found.`);
+        const status = await memoryIngest.status(input.runId);
+        return status ? jsonToolResult(status) : jsonErrorToolResult(`Memory ingest run "${input.runId}" was not found.`);
       },
     );
-
-    registerParsedTool(
-      server,
-      'scan_report',
-      {
-        title: 'Scan Report',
-        description: 'Read a standalone KTX scan report by run id.',
-        inputSchema: scanStatusSchema.shape,
-      },
-      scanStatusSchema,
-      async (input) => {
-        const report = await scan.report(input);
-        return report ? jsonToolResult(report) : jsonErrorToolResult(`Scan report "${input.runId}" was not found.`);
-      },
-    );
-
-    if (scan.listArtifacts) {
-      registerParsedTool(
-        server,
-        'scan_list_artifacts',
-        {
-          title: 'Scan List Artifacts',
-          description: 'List report, raw-source, manifest, and enrichment artifact paths for a standalone KTX scan run.',
-          inputSchema: scanStatusSchema.shape,
-        },
-        scanStatusSchema,
-        async (input) => {
-          const result = await scan.listArtifacts?.({ runId: input.runId });
-          return result ? jsonToolResult(result) : jsonErrorToolResult(`Scan run "${input.runId}" was not found.`);
-        },
-      );
-    }
-
-    if (scan.readArtifact) {
-      registerParsedTool(
-        server,
-        'scan_read_artifact',
-        {
-          title: 'Scan Read Artifact',
-          description: 'Read one artifact that belongs to a standalone KTX scan run.',
-          inputSchema: scanArtifactReadSchema.shape,
-        },
-        scanArtifactReadSchema,
-        async (input) => {
-          const result = await scan.readArtifact?.({ runId: input.runId, path: input.path });
-          return result
-            ? jsonToolResult(result)
-            : jsonErrorToolResult(`Scan artifact "${input.path}" was not found for run "${input.runId}".`);
-        },
-      );
-    }
   }
 }

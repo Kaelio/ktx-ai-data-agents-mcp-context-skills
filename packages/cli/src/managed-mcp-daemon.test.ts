@@ -94,6 +94,78 @@ describe('managed MCP daemon lifecycle', () => {
     );
   });
 
+  it('returns already-running without spawning when the daemon is alive at the same host/port', async () => {
+    await mkdir(join(projectDir, '.ktx'), { recursive: true });
+    await writeFile(join(projectDir, '.ktx/mcp.json'), `${JSON.stringify(state(projectDir), null, 2)}\n`);
+    const spawnDaemon = vi.fn(() => child(9999));
+
+    const result = await startKtxMcpDaemon({
+      projectDir,
+      cliVersion: '0.0.0-test',
+      host: '127.0.0.1',
+      port: 7878,
+      allowedHosts: [],
+      allowedOrigins: [],
+      binPath: '/repo/packages/cli/dist/bin.js',
+      spawnDaemon,
+      processAlive: vi.fn(() => true),
+      portAvailable: vi.fn(async () => true),
+    });
+
+    expect(result.status).toBe('already-running');
+    expect(result.url).toBe('http://127.0.0.1:7878/mcp');
+    expect(result.state.pid).toBe(4242);
+    expect(spawnDaemon).not.toHaveBeenCalled();
+  });
+
+  it('throws when the recorded daemon uses a different host or port', async () => {
+    await mkdir(join(projectDir, '.ktx'), { recursive: true });
+    await writeFile(join(projectDir, '.ktx/mcp.json'), `${JSON.stringify(state(projectDir), null, 2)}\n`);
+    const spawnDaemon = vi.fn(() => child(9999));
+
+    await expect(
+      startKtxMcpDaemon({
+        projectDir,
+        cliVersion: '0.0.0-test',
+        host: '127.0.0.1',
+        port: 9000,
+        allowedHosts: [],
+        allowedOrigins: [],
+        binPath: '/repo/packages/cli/dist/bin.js',
+        spawnDaemon,
+        processAlive: vi.fn(() => true),
+        portAvailable: vi.fn(async () => true),
+      }),
+    ).rejects.toThrow(/different configuration[\s\S]*ktx mcp stop/);
+    expect(spawnDaemon).not.toHaveBeenCalled();
+  });
+
+  it('throws when token-auth presence differs from the recorded daemon', async () => {
+    await mkdir(join(projectDir, '.ktx'), { recursive: true });
+    await writeFile(
+      join(projectDir, '.ktx/mcp.json'),
+      `${JSON.stringify(state(projectDir, { tokenAuth: false }), null, 2)}\n`,
+    );
+    const spawnDaemon = vi.fn(() => child(9999));
+
+    await expect(
+      startKtxMcpDaemon({
+        projectDir,
+        cliVersion: '0.0.0-test',
+        host: '127.0.0.1',
+        port: 7878,
+        token: 'secret-token',
+        allowedHosts: [],
+        allowedOrigins: [],
+        binPath: '/repo/packages/cli/dist/bin.js',
+        spawnDaemon,
+        processAlive: vi.fn(() => true),
+        portAvailable: vi.fn(async () => true),
+      }),
+    ).rejects.toThrow(/different configuration/);
+    expect(spawnDaemon).not.toHaveBeenCalled();
+  });
+
   it('reports running when the process is alive and health passes', async () => {
     await mkdir(join(projectDir, '.ktx'), { recursive: true });
     await writeFile(join(projectDir, '.ktx/mcp.json'), `${JSON.stringify(state(projectDir), null, 2)}\n`);

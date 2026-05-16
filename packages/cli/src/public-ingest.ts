@@ -94,6 +94,7 @@ export interface KtxPublicIngestDeps {
   ) => Promise<{ exitCode: number }>;
   scanProgress?: KtxProgressPort;
   ingestProgress?: (update: KtxIngestProgressUpdate) => void;
+  runtimeIo?: KtxCliIo;
   onPhaseStart?: (phaseKey: KtxPublicIngestPhaseKey) => void;
   onPhaseEnd?: (phaseKey: KtxPublicIngestPhaseKey, status: 'done' | 'failed' | 'skipped', summary?: string) => void;
 }
@@ -719,10 +720,13 @@ export async function executePublicIngestTarget(
     const runScan = deps.runScan ?? runKtxScan;
     const capturedScanIo = deps.scanProgress ? null : createCapturedPublicIngestIo();
     const scanIo = capturedScanIo ?? io;
+    const scanDeps = {
+      ...(deps.scanProgress ? { progress: deps.scanProgress } : {}),
+      ...(deps.runtimeIo ? { runtimeIo: deps.runtimeIo } : {}),
+    };
     deps.onPhaseStart?.('database-schema');
-    const scanExitCode = deps.scanProgress
-      ? await runScan(scanArgs, scanIo, { progress: deps.scanProgress })
-      : await runScan(scanArgs, scanIo);
+    const scanExitCode =
+      Object.keys(scanDeps).length > 0 ? await runScan(scanArgs, scanIo, scanDeps) : await runScan(scanArgs, scanIo);
     if (scanExitCode !== 0) {
       deps.onPhaseEnd?.('database-schema', 'failed');
       if (target.queryHistory?.enabled === true) {
@@ -759,10 +763,15 @@ export async function executePublicIngestTarget(
       };
       const capturedIngestIo = deps.ingestProgress ? null : createCapturedPublicIngestIo();
       const ingestIo = capturedIngestIo ?? io;
+      const ingestDeps = {
+        ...(deps.ingestProgress ? { progress: deps.ingestProgress } : {}),
+        ...(deps.runtimeIo ? { runtimeIo: deps.runtimeIo } : {}),
+      };
       deps.onPhaseStart?.('query-history');
-      const qhExitCode = deps.ingestProgress
-        ? await runIngest(ingestArgs, ingestIo, { progress: deps.ingestProgress })
-        : await runIngest(ingestArgs, ingestIo);
+      const qhExitCode =
+        Object.keys(ingestDeps).length > 0
+          ? await runIngest(ingestArgs, ingestIo, ingestDeps)
+          : await runIngest(ingestArgs, ingestIo);
       if (qhExitCode !== 0) {
         deps.onPhaseEnd?.('query-history', 'failed');
         return markTargetResult(
@@ -795,10 +804,15 @@ export async function executePublicIngestTarget(
   const runIngest = deps.runIngest ?? runKtxIngest;
   const capturedIngestIo = deps.ingestProgress ? null : createCapturedPublicIngestIo();
   const ingestIo = capturedIngestIo ?? io;
+  const ingestDeps = {
+    ...(deps.ingestProgress ? { progress: deps.ingestProgress } : {}),
+    ...(deps.runtimeIo ? { runtimeIo: deps.runtimeIo } : {}),
+  };
   deps.onPhaseStart?.('source-ingest');
-  const exitCode = deps.ingestProgress
-    ? await runIngest(ingestArgs, ingestIo, { progress: deps.ingestProgress })
-    : await runIngest(ingestArgs, ingestIo);
+  const exitCode =
+    Object.keys(ingestDeps).length > 0
+      ? await runIngest(ingestArgs, ingestIo, ingestDeps)
+      : await runIngest(ingestArgs, ingestIo);
   deps.onPhaseEnd?.('source-ingest', exitCode === 0 ? 'done' : 'failed');
   return markTargetResult(
     target,

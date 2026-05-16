@@ -11,7 +11,7 @@ import {
 } from '@ktx/context/ingest';
 import { initKtxProject, ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type KtxIngestArgs, runKtxIngest } from './ingest.js';
+import { type KtxIngestArgs, type KtxIngestDeps, runKtxIngest } from './ingest.js';
 import type { KtxCliLocalIngestAdaptersOptions } from './local-adapters.js';
 import {
   CliLookerSlWritingAgentRunner,
@@ -1110,6 +1110,7 @@ describe('runKtxIngest', () => {
       completedLocalBundleRun(input, input.jobId ?? 'local-job-1'),
     );
     const io = makeIo();
+    const runtimeIo = makeIo({ isTTY: true });
 
     await expect(
       runKtxIngest(
@@ -1127,6 +1128,9 @@ describe('runKtxIngest', () => {
           createAdapters,
           runLocalIngest: runLocal,
           jobIdFactory: () => 'local-job-1',
+          runtimeIo: runtimeIo.io,
+        } as KtxIngestDeps & {
+          runtimeIo: typeof runtimeIo.io;
         },
       ),
     ).resolves.toBe(0);
@@ -1135,7 +1139,7 @@ describe('runKtxIngest', () => {
       cliVersion: '0.2.0',
       projectDir,
       installPolicy: 'auto',
-      io: io.io,
+      io: runtimeIo.io,
     };
     expect(createAdapters).toHaveBeenCalledWith(
       expect.objectContaining({ projectDir }),

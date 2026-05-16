@@ -182,6 +182,46 @@ grain: []
     });
   });
 
+  it('strips authoring-only fields (usage, inherits_columns_from) before sending sources to the daemon', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      `tables:
+  invoices:
+    table: public.invoices
+    columns:
+      - name: invoice_id
+        type: number
+        pk: true
+      - name: amount
+        type: number
+    usage:
+      narrative: Activation policy windows table for invoice analytics.
+      frequencyTier: mid
+      commonFilters:
+        - amount
+      commonGroupBys: []
+      commonJoins: []
+      staleSince: null
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add manifest shard with usage',
+    );
+
+    await compileLocalSlQuery(project, {
+      connectionId: 'warehouse',
+      query: { measures: ['sum(invoices.amount)'], dimensions: [] },
+      compute,
+    });
+
+    const lastCall = (compute.query as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    const invoices = lastCall?.sources.find((s: Record<string, unknown>) => s.name === 'invoices');
+    expect(invoices).toBeDefined();
+    expect(invoices).not.toHaveProperty('usage');
+    expect(invoices).not.toHaveProperty('inherits_columns_from');
+    expect(invoices).not.toHaveProperty('source_type');
+  });
+
   it('resolves the only configured connection when connectionId is omitted', async () => {
     await compileLocalSlQuery(project, {
       query: { measures: ['orders.order_count'], dimensions: [] },
@@ -234,6 +274,43 @@ grain: []
       maxRows: 10,
       rowCount: 1,
     });
+  });
+
+  it('emits progress while compiling and executing a local semantic-layer query', async () => {
+    const progress: Array<{ progress: number; message: string }> = [];
+    const queryExecutor = {
+      execute: vi.fn(async () => ({
+        headers: ['status', 'order_count'],
+        rows: [['paid', 2]],
+        totalRows: 1,
+        command: 'SELECT',
+        rowCount: 1,
+      })),
+    };
+
+    const result = await compileLocalSlQuery(project, {
+      connectionId: 'warehouse',
+      query: {
+        measures: ['orders.order_count'],
+        dimensions: ['orders.status'],
+        limit: 25,
+      },
+      compute,
+      execute: true,
+      maxRows: 10,
+      queryExecutor,
+      onProgress: (event) => {
+        progress.push({ progress: event.progress, message: event.message });
+      },
+    });
+
+    expect(result.totalRows).toBe(1);
+    expect(progress).toEqual([
+      { progress: 0, message: 'Compiling query' },
+      { progress: 0.3, message: 'Generating SQL' },
+      { progress: 0.6, message: 'Executing' },
+      { progress: 1, message: 'Fetched 1 rows' },
+    ]);
   });
 
   it('requires a query executor for executed mode', async () => {

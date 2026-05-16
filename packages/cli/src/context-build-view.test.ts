@@ -994,6 +994,37 @@ describe('runContextBuild', () => {
     );
   });
 
+  it('threads the original runtime IO into captured target execution', async () => {
+    const io = makeIo({ isTTY: true });
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true } } },
+    });
+    const executeTarget = vi.fn(async (target) => successResult(target.connectionId, target.driver, target.operation));
+
+    await runContextBuild(
+      project,
+      {
+        projectDir: '/tmp/project',
+        inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+      },
+      io.io,
+      { executeTarget, now: () => 1000 },
+    );
+
+    expect(executeTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'warehouse' }),
+      expect.objectContaining({ runtimeInstallPolicy: 'auto' }),
+      expect.objectContaining({
+        stdout: expect.objectContaining({ isTTY: false }),
+      }),
+      expect.objectContaining({
+        runtimeIo: io.io,
+      }),
+    );
+  });
+
   it('calls onSourceProgress when sources start and finish', async () => {
     const io = makeIo();
     const project = projectWithConnections({

@@ -232,7 +232,10 @@ describe('setup status', () => {
           version: 1,
           projectDir: tempDir,
           installedAt: '2026-05-07T00:00:00.000Z',
-          installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+          installs: [
+            { target: 'codex', scope: 'project', mode: 'mcp' },
+            { target: 'codex', scope: 'project', mode: 'mcp-cli' },
+          ],
           entries: [],
         },
         null,
@@ -1051,6 +1054,53 @@ describe('setup status', () => {
     );
   });
 
+  it('auto-installs the managed runtime by default during setup', async () => {
+    const io = makeIo();
+    const embeddings = vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir }));
+    const context = vi.fn(async () => ({ status: 'failed' as const, projectDir: tempDir }));
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'new',
+          agents: false,
+          agentScope: 'project',
+          skipAgents: true,
+          inputMode: 'auto',
+          yes: false,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: false,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        io.io,
+        {
+          embeddings,
+          context,
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(embeddings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+      }),
+      io.io,
+    );
+    expect(context).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+      }),
+      io.io,
+    );
+  });
+
   it('lets Back from embedding setup return to the model step instead of exiting', async () => {
     const testIo = makeIo();
     const modelResults = [
@@ -1467,7 +1517,7 @@ describe('setup status', () => {
             return {
               status: 'ready',
               projectDir: tempDir,
-              installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+              installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
             };
           },
         },
@@ -1519,7 +1569,7 @@ describe('setup status', () => {
           agents: async () => ({
             status: 'ready',
             projectDir: tempDir,
-            installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+            installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
           }),
         },
       ),
@@ -1570,7 +1620,7 @@ describe('setup status', () => {
             return {
               status: 'ready',
               projectDir: tempDir,
-              installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+              installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
             };
           },
         },
@@ -1585,7 +1635,7 @@ describe('setup status', () => {
     const agents = vi.fn(async () => ({
       status: 'ready' as const,
       projectDir: tempDir,
-      installs: [{ target: 'codex' as const, scope: 'project' as const, mode: 'cli' as const }],
+      installs: [{ target: 'codex' as const, scope: 'project' as const, mode: 'mcp-cli' as const }],
     }));
     await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
 
@@ -1654,7 +1704,7 @@ describe('setup status', () => {
           version: 1,
           projectDir: tempDir,
           installedAt: '2026-05-07T00:00:00.000Z',
-          installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+          installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
           entries: [],
         },
         null,
@@ -1717,7 +1767,7 @@ describe('setup status', () => {
             return {
               status: 'ready',
               projectDir: tempDir,
-              installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+              installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
             };
           },
         },
@@ -1809,7 +1859,7 @@ describe('setup status', () => {
             return {
               status: 'ready',
               projectDir: tempDir,
-              installs: [{ target: 'codex', scope: 'project', mode: 'cli' }],
+              installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
             };
           },
         },
@@ -1826,7 +1876,7 @@ describe('setup status', () => {
     const agents = vi.fn(async () => ({
       status: 'ready' as const,
       projectDir: tempDir,
-      installs: [{ target: 'universal' as const, scope: 'project' as const, mode: 'cli' as const }],
+      installs: [{ target: 'universal' as const, scope: 'project' as const, mode: 'mcp-cli' as const }],
     }));
 
     await expect(

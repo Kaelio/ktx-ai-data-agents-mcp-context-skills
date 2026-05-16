@@ -21,16 +21,16 @@ export interface MemoryRunStorePort {
   findById(id: string): Promise<MemoryRunRecord | null>;
 }
 
-export interface MemoryCaptureServiceDeps {
+export interface MemoryIngestServiceDeps {
   memoryAgent: Pick<MemoryAgentService, 'ingest'>;
   runs: MemoryRunStorePort;
 }
 
-export interface MemoryCaptureStartResult {
+export interface MemoryIngestStartResult {
   runId: string;
 }
 
-export interface MemoryCaptureStatus {
+export interface MemoryIngestStatus {
   runId: string;
   status: MemoryRunStatus;
   stage: string;
@@ -55,7 +55,7 @@ function inputHash(input: MemoryAgentInput): string {
   return createHash('sha256').update(stableInput).digest('hex');
 }
 
-function capturedKeys(actions: MemoryAction[]): MemoryCaptureStatus['captured'] {
+function capturedKeys(actions: MemoryAction[]): MemoryIngestStatus['captured'] {
   const wiki = new Set<string>();
   const sl = new Set<string>();
   const xrefs = new Set<string>();
@@ -78,20 +78,20 @@ function capturedKeys(actions: MemoryAction[]): MemoryCaptureStatus['captured'] 
   };
 }
 
-export class MemoryCaptureService {
+export class MemoryIngestService {
   private readonly inFlight = new Map<string, Promise<void>>();
 
-  constructor(private readonly deps: MemoryCaptureServiceDeps) {}
+  constructor(private readonly deps: MemoryIngestServiceDeps) {}
 
-  async capture(input: MemoryAgentInput): Promise<MemoryCaptureStartResult> {
+  async ingest(input: MemoryAgentInput): Promise<MemoryIngestStartResult> {
     const row = await this.deps.runs.createRunning({
       inputHash: inputHash(input),
       chatId: input.chatId,
     });
 
-    await this.deps.runs.markRunning(row.id, 'capturing');
+    await this.deps.runs.markRunning(row.id, 'ingesting');
 
-    const run = this.runCapture(row.id, input);
+    const run = this.runIngest(row.id, input);
     this.inFlight.set(row.id, run);
     run.finally(() => this.inFlight.delete(row.id)).catch(() => undefined);
 
@@ -102,7 +102,7 @@ export class MemoryCaptureService {
     await this.inFlight.get(runId);
   }
 
-  private async runCapture(runId: string, input: MemoryAgentInput): Promise<void> {
+  private async runIngest(runId: string, input: MemoryAgentInput): Promise<void> {
     try {
       const outputSummary = await this.deps.memoryAgent.ingest(input);
       await this.deps.runs.markDone(runId, outputSummary);
@@ -111,7 +111,7 @@ export class MemoryCaptureService {
     }
   }
 
-  async status(runId: string): Promise<MemoryCaptureStatus | null> {
+  async status(runId: string): Promise<MemoryIngestStatus | null> {
     const row = await this.deps.runs.findById(runId);
     if (!row) {
       return null;

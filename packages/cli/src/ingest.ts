@@ -97,6 +97,7 @@ export interface KtxIngestDeps {
     | 'pullConfigOptions'
   >;
   progress?: (update: KtxIngestProgressUpdate) => void;
+  runtimeIo?: KtxIngestIo;
 }
 
 function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
@@ -615,7 +616,7 @@ export async function runKtxIngest(
         (deps.runLocalIngest || deps.runLocalMetabaseIngest ? () => [] : createKtxCliLocalIngestAdapters);
       const executeLocalIngest = deps.runLocalIngest ?? runLocalIngest;
       const localIngestOptions = deps.localIngestOptions ?? {};
-      const managedDaemon = managedDaemonOptionsForIngestRun(args, io);
+      const managedDaemon = managedDaemonOptionsForIngestRun(args, deps.runtimeIo ?? io);
       const operationalLogger = createCliOperationalLogger(io, args.outputMode);
       const adapterOptions = {
         ...(localIngestOptions.pullConfigOptions ?? {}),

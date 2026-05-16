@@ -30,6 +30,7 @@ export interface KtxScanDeps {
   runLocalScan?: typeof runLocalScan;
   createLocalIngestAdapters?: typeof createKtxCliLocalIngestAdapters;
   progress?: KtxProgressPort;
+  runtimeIo?: KtxCliIo;
 }
 
 function shouldUseStyledOutput(io: KtxCliIo): boolean {
@@ -313,7 +314,7 @@ export function createCliScanProgress(
 export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps: KtxScanDeps = {}): Promise<number> {
   try {
     const project = await loadKtxProject({ projectDir: args.projectDir });
-    const managedDaemon = managedDaemonOptionsForScanRun(args, io);
+    const managedDaemon = managedDaemonOptionsForScanRun(args, deps.runtimeIo ?? io);
     const connector =
       args.mode !== 'structural' || args.detectRelationships
         ? await createKtxCliScanConnector(project, args.connectionId)
