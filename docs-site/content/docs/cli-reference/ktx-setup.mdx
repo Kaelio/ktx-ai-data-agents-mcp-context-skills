@@ -53,9 +53,10 @@ scripted project creation. They are not shown in `ktx setup --help`.
 |------|-------------|
 | `--llm-backend <backend>` | LLM backend: `anthropic`, `vertex`, or `claude-code` |
 | `--llm-backend claude-code` | Use the local Claude Code session for KTX LLM calls |
+| `--llm-model <model>` | LLM model ID or backend model alias to validate and save |
 | `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key |
 | `--anthropic-api-key-file <path>` | File containing the Anthropic API key |
-| `--anthropic-model <model>` | Anthropic model ID to validate and save |
+| `--anthropic-model <model>` | Legacy alias for `--llm-model` |
 | `--vertex-project <project>` | Vertex AI project ID, `env:NAME`, or `file:/path` reference |
 | `--vertex-location <location>` | Vertex AI location, `env:NAME`, or `file:/path` reference |
 | `--skip-llm` | Leave LLM setup incomplete |
@@ -63,7 +64,8 @@ scripted project creation. They are not shown in `ktx setup --help`.
 Choose only one Anthropic credential source. Anthropic credential flags are only
 valid with the Anthropic backend; Vertex flags are only valid with the Vertex
 backend. The `claude-code` backend uses local Claude Code authentication instead
-of Anthropic API key or Vertex flags.
+of Anthropic API key or Vertex flags. For Claude Code, `--llm-model` accepts
+`sonnet`, `opus`, `haiku`, or a full Claude model ID.
 
 ### Embeddings
 
@@ -143,6 +145,12 @@ ktx setup
 
 # Run setup for a specific project directory
 ktx setup --project-dir ./analytics
+
+# Use Claude Code with Opus for KTX LLM calls
+ktx setup \
+  --project-dir ./analytics \
+  --llm-backend claude-code \
+  --llm-model opus
 
 # Script a Postgres connection that reads its URL from the environment
 ktx setup \

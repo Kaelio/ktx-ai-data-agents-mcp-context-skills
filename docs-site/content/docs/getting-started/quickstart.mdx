@@ -92,7 +92,9 @@ llm:
 
 `claude-code` uses the Claude Code authentication already configured on your
 machine. It doesn't use `ANTHROPIC_API_KEY`, Vertex credentials, AI Gateway
-tokens, or Bedrock credentials.
+tokens, or Bedrock credentials. In non-interactive setup, pass
+`--llm-model opus`, `--llm-model sonnet`, `--llm-model haiku`, or a full Claude
+model ID to select the Claude Code model.
 
 Setup checks the selected model before saving. Anthropic API setup fetches live
 Claude model choices when possible and falls back to bundled defaults if model

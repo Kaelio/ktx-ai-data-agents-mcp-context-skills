@@ -447,4 +447,18 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       env: expect.not.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test' }),
     });
   });
+
+  it('reports unsupported Claude Code models without framing them as auth failures', async () => {
+    await expect(
+      runClaudeCodeAuthProbe({
+        projectDir: '/tmp/project',
+        model: 'gpt-5',
+        query: vi.fn(),
+        env: {},
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: 'Unsupported Claude Code model "gpt-5". Use sonnet, opus, haiku, or a claude-* model id.',
+    });
+  });
 });

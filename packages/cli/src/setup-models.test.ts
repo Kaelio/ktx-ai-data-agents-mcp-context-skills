@@ -209,6 +209,38 @@ describe('setup Anthropic model step', () => {
     expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
   });
 
+  it('prompts for the Claude Code model during interactive setup', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['claude-code', 'opus'] });
+    const authProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
+      io.io,
+      { prompts, claudeCodeAuthProbe: authProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Claude Code model should KTX use?'),
+        options: [
+          { value: 'sonnet', label: 'Claude Sonnet', hint: 'recommended' },
+          { value: 'opus', label: 'Claude Opus' },
+          { value: 'haiku', label: 'Claude Haiku' },
+          { value: 'manual', label: 'Enter a Claude Code model ID manually' },
+          { value: 'back', label: 'Back' },
+        ],
+      }),
+    );
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm).toMatchObject({
+      provider: { backend: 'claude-code' },
+      models: { default: 'opus' },
+    });
+    expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'opus' }));
+  });
+
   it('warns during Claude Code setup when existing prompt-caching fields will be ignored', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -716,7 +748,7 @@ describe('setup Anthropic model step', () => {
     expect(io.stderr()).not.toContain('--skip-llm');
   });
 
-  it('does not recommend skipping when non-interactive setup is missing an Anthropic model', async () => {
+  it('does not recommend skipping when non-interactive setup is missing an LLM model', async () => {
     const io = makeIo();
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
 
@@ -733,7 +765,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('missing-input');
     expect(healthCheck).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain('Missing Anthropic model: pass --anthropic-model.');
+    expect(io.stderr()).toContain('Missing LLM model: pass --llm-model.');
     expect(io.stderr()).not.toContain('--skip-llm');
   });
 

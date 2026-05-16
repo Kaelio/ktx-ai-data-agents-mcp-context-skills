@@ -21,7 +21,7 @@ Set `llm.provider.backend` to one of these values:
 
 ## Claude Code
 
-Use aliases or full Claude model ids in `llm.models`:
+Use aliases or full Claude model IDs in `llm.models`:
 
 ```yaml
 llm:
@@ -35,6 +35,16 @@ llm:
     reconcile: sonnet
     repair: sonnet
 ```
+
+During setup, choose the Claude Code backend interactively or pass the model in
+automation:
+
+```bash
+ktx setup --llm-backend claude-code --llm-model opus --no-input
+```
+
+For Claude Code, `sonnet`, `opus`, and `haiku` map to the current KTX defaults.
+You can also pass a full Claude model ID, such as `claude-opus-4-7`.
 
 `claude-code` keeps KTX tool boundaries intact. KTX exposes only the MCP tools
 needed for the current KTX agent loop, disables Claude Code built-in tools,

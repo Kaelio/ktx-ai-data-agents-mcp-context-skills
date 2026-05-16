@@ -288,10 +288,20 @@ export async function runClaudeCodeAuthProbe(input: {
   query?: QueryFn;
   env?: NodeJS.ProcessEnv;
 }): Promise<{ ok: true } | { ok: false; message: string }> {
+  let model: string;
+  try {
+    model = resolveClaudeCodeModel(input.model);
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+
   try {
     const options = baseOptions({
       projectDir: input.projectDir,
-      model: resolveClaudeCodeModel(input.model),
+      model,
       env: input.env,
       maxTurns: 1,
     });

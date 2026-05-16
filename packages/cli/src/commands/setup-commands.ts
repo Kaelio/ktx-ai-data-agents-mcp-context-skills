@@ -97,6 +97,7 @@ function shouldShowSetupEntryMenu(
     llmBackend?: KtxSetupLlmBackend;
     anthropicApiKeyEnv?: string;
     anthropicApiKeyFile?: string;
+    llmModel?: string;
     anthropicModel?: string;
     vertexProject?: string;
     vertexLocation?: string;
@@ -171,6 +172,7 @@ function shouldShowSetupEntryMenu(
     'llmBackend',
     'anthropicApiKeyEnv',
     'anthropicApiKeyFile',
+    'llmModel',
     'anthropicModel',
     'vertexProject',
     'vertexLocation',
@@ -236,6 +238,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .addOption(
       new Option('--anthropic-api-key-file <path>', 'File containing the Anthropic API key').hideHelp(),
     )
+    .addOption(new Option('--llm-model <model>', 'LLM model ID or backend model alias').hideHelp())
     .addOption(new Option('--anthropic-model <model>', 'Anthropic model ID to validate and save').hideHelp())
     .addOption(new Option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path').hideHelp())
     .addOption(new Option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path').hideHelp())
@@ -361,6 +364,11 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       context.setExitCode(1);
       return;
     }
+    if (options.llmModel && options.anthropicModel) {
+      context.io.stderr.write('Choose only one LLM model flag: --llm-model or --anthropic-model.\n');
+      context.setExitCode(1);
+      return;
+    }
     if (
       options.llmBackend &&
       options.llmBackend !== 'anthropic' &&
@@ -426,6 +434,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ...(options.llmBackend ? { llmBackend: options.llmBackend } : {}),
       ...(options.anthropicApiKeyEnv ? { anthropicApiKeyEnv: options.anthropicApiKeyEnv } : {}),
       ...(options.anthropicApiKeyFile ? { anthropicApiKeyFile: options.anthropicApiKeyFile } : {}),
+      ...(options.llmModel ? { llmModel: options.llmModel } : {}),
       ...(options.anthropicModel ? { anthropicModel: options.anthropicModel } : {}),
       ...(options.vertexProject ? { vertexProject: options.vertexProject } : {}),
       ...(options.vertexLocation ? { vertexLocation: options.vertexLocation } : {}),

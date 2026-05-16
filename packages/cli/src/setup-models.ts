@@ -36,6 +36,7 @@ export interface KtxSetupModelArgs {
   llmBackend?: KtxSetupLlmBackend;
   anthropicApiKeyEnv?: string;
   anthropicApiKeyFile?: string;
+  llmModel?: string;
   anthropicModel?: string;
   vertexProject?: string;
   vertexLocation?: string;
@@ -98,6 +99,12 @@ const VERTEX_ANTHROPIC_MODELS: AnthropicModelChoice[] = [
   { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', recommended: false },
   { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', recommended: false },
   { id: 'claude-opus-4-1', label: 'Claude Opus 4.1', recommended: false },
+];
+
+const CLAUDE_CODE_MODELS: AnthropicModelChoice[] = [
+  { id: 'sonnet', label: 'Claude Sonnet', recommended: true },
+  { id: 'opus', label: 'Claude Opus', recommended: false },
+  { id: 'haiku', label: 'Claude Haiku', recommended: false },
 ];
 
 const HIDDEN_ANTHROPIC_MODEL_PATTERNS = [
@@ -471,10 +478,14 @@ function requestedBackend(args: KtxSetupModelArgs): KtxSetupLlmBackend | undefin
   if (args.vertexProject || args.vertexLocation) {
     return 'vertex';
   }
-  if (args.anthropicApiKeyEnv || args.anthropicApiKeyFile || args.anthropicModel) {
+  if (args.anthropicApiKeyEnv || args.anthropicApiKeyFile || args.llmModel || args.anthropicModel) {
     return 'anthropic';
   }
   return undefined;
+}
+
+function requestedModel(args: KtxSetupModelArgs): string | undefined {
+  return args.llmModel ?? args.anthropicModel;
 }
 
 async function chooseBackend(
@@ -731,11 +742,12 @@ async function chooseModel(
   io: KtxCliIo,
   deps: KtxSetupModelDeps,
 ): Promise<ChooseModelResult> {
-  if (args.anthropicModel) {
-    return { status: 'ready', model: args.anthropicModel };
+  const providedModel = requestedModel(args);
+  if (providedModel) {
+    return { status: 'ready', model: providedModel };
   }
   if (args.inputMode === 'disabled') {
-    io.stderr.write('Missing Anthropic model: pass --anthropic-model.\n');
+    io.stderr.write('Missing LLM model: pass --llm-model.\n');
     return { status: 'missing-input' };
   }
 
@@ -788,11 +800,12 @@ async function chooseModel(
 }
 
 async function chooseVertexModel(args: KtxSetupModelArgs, io: KtxCliIo, deps: KtxSetupModelDeps): Promise<ChooseModelResult> {
-  if (args.anthropicModel) {
-    return { status: 'ready', model: args.anthropicModel };
+  const providedModel = requestedModel(args);
+  if (providedModel) {
+    return { status: 'ready', model: providedModel };
   }
   if (args.inputMode === 'disabled') {
-    io.stderr.write('Missing Anthropic model: pass --anthropic-model.\n');
+    io.stderr.write('Missing LLM model: pass --llm-model.\n');
     return { status: 'missing-input' };
   }
 
@@ -817,6 +830,44 @@ async function chooseVertexModel(args: KtxSetupModelArgs, io: KtxCliIo, deps: Kt
     const manual = await prompts.text({
       message: withTextInputNavigation('Anthropic model ID'),
       placeholder: selectableModels.find((model) => model.recommended)?.id ?? selectableModels[0]?.id,
+    });
+    if (manual === undefined) {
+      return { status: 'back' };
+    }
+    return manual.trim() ? { status: 'ready', model: manual.trim() } : { status: 'missing-input' };
+  }
+  return { status: 'ready', model: choice };
+}
+
+async function chooseClaudeCodeModel(args: KtxSetupModelArgs, deps: KtxSetupModelDeps): Promise<ChooseModelResult> {
+  const providedModel = requestedModel(args);
+  if (providedModel) {
+    return { status: 'ready', model: providedModel };
+  }
+  if (args.inputMode === 'disabled') {
+    return { status: 'ready', model: 'sonnet' };
+  }
+
+  const prompts = deps.prompts ?? createPromptAdapter();
+  const choice = await prompts.select({
+    message: `Which Claude Code model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
+    options: [
+      ...CLAUDE_CODE_MODELS.map((model) => ({
+        value: model.id,
+        label: model.label,
+        ...(model.recommended ? { hint: 'recommended' } : {}),
+      })),
+      { value: 'manual', label: 'Enter a Claude Code model ID manually' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (choice === 'back') {
+    return { status: 'back' };
+  }
+  if (choice === 'manual') {
+    const manual = await prompts.text({
+      message: withTextInputNavigation('Claude Code model ID'),
+      placeholder: CLAUDE_CODE_MODELS.find((model) => model.recommended)?.id ?? CLAUDE_CODE_MODELS[0]?.id,
     });
     if (manual === undefined) {
       return { status: 'back' };
@@ -877,6 +928,7 @@ export async function runKtxSetupAnthropicModelStep(
     !args.llmBackend &&
     !args.anthropicApiKeyEnv &&
     !args.anthropicApiKeyFile &&
+    !args.llmModel &&
     !args.anthropicModel &&
     !args.vertexProject &&
     !args.vertexLocation
@@ -943,23 +995,33 @@ export async function runKtxSetupAnthropicModelStep(
     }
 
     if (backendChoice.backend === 'claude-code') {
-      const model = backendArgs.anthropicModel ?? 'sonnet';
+      const model = await chooseClaudeCodeModel(backendArgs, deps);
+      if (model.status === 'back' && backendChoice.prompted) {
+        attemptArgs = buildInteractiveRetryArgs(args);
+        continue;
+      }
+      if (model.status === 'invalid-credential') {
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      if (model.status !== 'ready') {
+        return { status: model.status, projectDir: args.projectDir };
+      }
       const probe = deps.claudeCodeAuthProbe ?? runClaudeCodeAuthProbe;
-      const health = await probe({ projectDir: args.projectDir, model, env: deps.env ?? process.env });
+      const health = await probe({ projectDir: args.projectDir, model: model.model, env: deps.env ?? process.env });
       if (!health.ok) {
         io.stderr.write(`${health.message}\n`);
         return { status: 'failed', projectDir: args.projectDir };
       }
       const warning = formatClaudeCodePromptCachingWarning(
         ignoredClaudeCodePromptCachingFields(
-          buildProjectLlmConfig(project.config.llm, { backend: 'claude-code' }, model),
+          buildProjectLlmConfig(project.config.llm, { backend: 'claude-code' }, model.model),
         ),
       );
       if (warning) {
         io.stderr.write(`${warning}\n`);
       }
-      await persistLlmConfig(args.projectDir, { backend: 'claude-code' }, model);
-      io.stdout.write(`│  LLM ready: yes (${model})\n`);
+      await persistLlmConfig(args.projectDir, { backend: 'claude-code' }, model.model);
+      io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
 
