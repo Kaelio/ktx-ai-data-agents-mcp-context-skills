@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: How KTX gives analytics agents trusted context for warehouse work.
+description: What KTX is, how it works, and where to start.
 ---
 
 import { ProductMechanics } from "@/components/product-mechanics";
@@ -23,29 +23,39 @@ import { ProductMechanics } from "@/components/product-mechanics";
       Make analytics context usable by agents
     </h1>
     <p className="mt-4 max-w-2xl text-lg text-fd-muted-foreground" style={{ lineHeight: '1.7' }}>
-      {'KTX turns warehouse metadata, semantic definitions, and business knowledge into reviewable project files that agents can use while planning, querying, and updating analytics work.'}
+      {'KTX turns warehouse metadata, semantic definitions, BI usage, and team knowledge into local files and runtime tools that database agents can trust.'}
     </p>
   </div>
 </div>
 
+## Why KTX
+
+- Schemas show columns, not business rules.
+- Agents need trusted metrics, joins, filters, caveats, and provenance.
+- KTX captures that context before agents write SQL, docs, or semantic edits.
+
+## What KTX creates
+
+| Path | What it gives agents |
+|------|----------------------|
+| `semantic-layer/` | Measures, dimensions, joins, grain, filters, segments |
+| `wiki/` | Business definitions, caveats, policies, analyst notes |
+| `raw-sources/` | Extracted metadata, scan output, relationship evidence |
+| `.ktx/` | Local indexes, embeddings, setup state, runtime data |
+
 <ProductMechanics />
 
-## What agents can do with KTX
-
-KTX is built for analytics engineers and data teams who want data agents to
-work on real analytics systems, not just generate one-off SQL.
-
-Use it when agents need to:
+## Use it for
 
 - **Generate SQL** from approved measures, dimensions, joins, and filters
 - **Explain provenance** with wiki context and warehouse evidence
 - **Repair context** through reviewable YAML and Markdown diffs
 - **Work alongside** dbt, LookML, MetricFlow, Looker, Metabase, and warehouses
 
-KTX works with SQLite, PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, and
-SQL Server.
+Databases: SQLite, PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL
+Server.
 
-## Read next
+## Start here
 
 <Cards>
   <Card title="Quickstart" href="/docs/getting-started/quickstart">
@@ -60,16 +70,7 @@ SQL Server.
   <Card title="CLI Reference" href="/docs/cli-reference/ktx-setup">
     Complete flag and subcommand reference for every KTX command.
   </Card>
+  <Card title="AI Resources" href="/docs/ai-resources">
+    Machine-readable docs and agent-facing setup notes.
+  </Card>
 </Cards>
-
-## Agent usage notes
-
-| Agent task | Read next |
-|------------|-----------|
-| Discover machine-readable docs | [AI Resources](/docs/ai-resources) |
-| Learn how a coding assistant should approach KTX | [Agent Quickstart](/docs/ai-resources/agent-quickstart) |
-| Set up a new KTX project | [Quickstart](/docs/getting-started/quickstart) |
-| Explain what problem KTX solves | [The Context Layer](/docs/concepts/the-context-layer) |
-| Scan a database and ingest metadata | [Building Context](/docs/guides/building-context) |
-| Edit semantic sources or wiki pages | [Writing Context](/docs/guides/writing-context) |
-| Look up exact command flags | [CLI Reference](/docs/cli-reference/ktx-setup) |

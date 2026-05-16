@@ -1,31 +1,48 @@
 import type { ReactNode } from "react";
 
+type SourceInput = {
+  name: string;
+  sources: string[];
+  detail: string;
+  signal: string;
+  accent: string;
+};
+
 const sourceInputs = [
   {
-    name: "Warehouse schema",
+    name: "Database structure",
+    sources: [
+      "Postgres",
+      "Snowflake",
+      "BigQuery",
+      "and many others",
+    ],
     detail: "tables, columns, types, constraints, row counts",
     signal: "grounds definitions in live database structure",
     accent: "border-fd-primary",
   },
   {
-    name: "Metabase and query history",
+    name: "BI and usage evidence",
+    sources: ["Metabase", "Looker"],
     detail: "historic SQL, questions, dashboards, usage patterns",
     signal: "extracts joins, filters, grain, and trusted examples",
     accent: "border-orange-500",
   },
   {
-    name: "dbt, MetricFlow, LookML",
+    name: "Semantic modeling",
+    sources: ["dbt", "MetricFlow", "LookML"],
     detail: "models, metrics, dimensions, explores, joins",
     signal: "maps existing modeling logic into semantic entities",
     accent: "border-amber-500",
   },
   {
     name: "Company documentation",
-    detail: "Notion pages, policies, caveats, analyst notes",
+    sources: ["Notion"],
+    detail: "Notion pages, policies, caveats",
     signal: "links business language back to semantic references",
     accent: "border-slate-500 dark:border-cyan-200",
   },
-];
+] satisfies SourceInput[];
 
 const ingestSteps = [
   {
@@ -99,20 +116,16 @@ export function ProductMechanics() {
       aria-labelledby="mechanics-title"
     >
       <div className="max-w-3xl">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fd-primary">
-          Product mechanics
-        </p>
         <h2
           id="mechanics-title"
           className="text-xl font-semibold tracking-normal text-fd-foreground sm:text-2xl"
           style={{ fontFamily: "var(--font-display)" }}
         >
-          A semantic compiler for analytics agents
+          How KTX works
         </h2>
         <p className="mt-3 text-sm leading-6 text-fd-muted-foreground">
-          KTX builds typed semantic files, links wiki context back to those
-          entities, validates the model against database evidence, then compiles
-          agent requests into executable SQL.
+          KTX reads source evidence, writes local context files, and gives
+          agents semantic search, validation, SQL, and provenance.
         </p>
       </div>
 
@@ -133,41 +146,44 @@ function IngestionDiagram() {
       <DiagramHeader
         eyebrow="Ingestion"
         id="ingestion-diagram-title"
-        title="Messy source evidence becomes structured state"
-        body="The important step is reconciliation: KTX turns loose evidence into files agents can validate, edit, and compile against."
+        title="Build context from source evidence"
+        body="KTX reconciles loose metadata, SQL, BI usage, and documentation into files agents can validate and edit."
       />
 
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <section className="border-b border-fd-border p-4 lg:border-r lg:border-b-0">
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)]">
+        <section className="flex flex-col border-b border-fd-border p-4 lg:border-r lg:border-b-0">
           <ColumnLabel>Inputs KTX reads</ColumnLabel>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid flex-1 auto-rows-fr gap-2">
             {sourceInputs.map((source) => (
               <div
                 key={source.name}
-                className={`border-l-2 bg-fd-background px-3 py-2 ${source.accent}`}
+                className={`grid min-h-0 gap-2 border-l-2 bg-fd-background px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(6.5rem,0.42fr)] sm:items-center ${source.accent}`}
               >
-                <p className="text-sm font-semibold text-fd-foreground">
-                  {source.name}
-                </p>
-                <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
-                  {source.detail}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-fd-primary">
-                  {source.signal}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-fd-foreground">
+                    {source.name}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-4 text-fd-muted-foreground">
+                    {source.detail}
+                  </p>
+                  <p className="mt-1 text-xs leading-4 text-fd-primary">
+                    {source.signal}
+                  </p>
+                </div>
+                <SourceList sources={source.sources} />
               </div>
             ))}
           </div>
         </section>
 
-        <section className="bg-fd-muted/35 p-4">
-          <ColumnLabel>KTX builds the model</ColumnLabel>
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)]">
-            <div className="rounded-md border border-fd-border bg-[#102226] p-4 text-white dark:bg-[#0b181b]">
+        <section className="flex flex-col bg-fd-muted/35 p-4">
+          <ColumnLabel>KTX transforms evidence</ColumnLabel>
+          <div className="flex flex-col gap-3">
+            <div className="rounded-md border border-fd-border bg-[#102226] p-3 text-white dark:bg-[#0b181b]">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
-                Ingest pipeline
+                KTX builds the model
               </p>
-              <ol className="space-y-3">
+              <ol className="grid gap-3">
                 {ingestSteps.map((step, index) => (
                   <PipelineStep
                     key={step.title}
@@ -180,10 +196,15 @@ function IngestionDiagram() {
               </ol>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              {artifacts.map((artifact) => (
-                <Artifact key={artifact.path} {...artifact} />
-              ))}
+            <div className="border-t border-fd-border/80 pt-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+                Outputs KTX writes
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {artifacts.map((artifact) => (
+                  <Artifact key={artifact.path} {...artifact} />
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -201,8 +222,8 @@ function RuntimeDiagram() {
       <DiagramHeader
         eyebrow="Runtime"
         id="runtime-diagram-title"
-        title="A tiny semantic request becomes a planned, executable query"
-        body="The agent names the business intent. KTX resolves the semantic model, checks the shape, compiles SQL, and can execute with row limits."
+        title="Run agent requests through the model"
+        body="Agents send business intent. KTX resolves fields, checks joins and grain, compiles SQL, and can execute with row limits."
       />
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
@@ -374,7 +395,7 @@ function PipelineStep({
         <span
           className={
             dark
-              ? "mt-0.5 block break-words text-xs leading-5 text-cyan-50/75"
+            ? "mt-0.5 block break-words text-xs leading-5 text-cyan-50/75"
               : "mt-0.5 block break-words text-xs leading-5 text-fd-muted-foreground"
           }
         >
@@ -390,6 +411,42 @@ function ColumnLabel({ children }: { children: ReactNode }) {
     <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
       {children}
     </p>
+  );
+}
+
+function SourceList({
+  sources,
+}: {
+  sources: string[];
+}) {
+  return (
+    <div
+      className="min-w-0 border-t border-fd-border/70 pt-2 sm:border-t-0 sm:border-l sm:pl-3 sm:pt-0"
+      aria-label="Sources"
+    >
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-fd-muted-foreground/80">
+        Sources
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {sources.map((source) =>
+          source === "and many others" ? (
+            <span
+              key={source}
+              className="px-0.5 py-0.5 text-[10px] font-medium leading-4 text-fd-muted-foreground/85"
+            >
+              {source}
+            </span>
+          ) : (
+            <span
+              key={source}
+              className="rounded border border-fd-border bg-fd-card/75 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-fd-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+            >
+              {source}
+            </span>
+          ),
+        )}
+      </div>
+    </div>
   );
 }
 
