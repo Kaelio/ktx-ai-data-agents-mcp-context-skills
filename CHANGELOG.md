@@ -1,3 +1,9 @@
+## [0.1.0-rc.3](https://github.com/kaelio/ktx/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-05-16)
+
+### Bug Fixes
+
+* **release:** make npm publish noninteractive ([45374fa](https://github.com/kaelio/ktx/commit/45374fa3abd9007bdcb17d28d832d21a74cca2ff))
+
 ## [0.1.0-rc.2](https://github.com/kaelio/ktx/compare/v0.1.0-rc.1...v0.1.0-rc.2) (2026-05-16)
 
 ### Bug Fixes
