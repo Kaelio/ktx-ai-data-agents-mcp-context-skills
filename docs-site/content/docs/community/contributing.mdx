@@ -1,9 +1,32 @@
 ---
 title: Contributing
-description: How to contribute to KTX.
+description: Contribute to KTX through code, docs, connectors, and examples.
 ---
 
-KTX is an open-source project and welcomes contributions - bug fixes, new connectors, documentation improvements, and feature proposals. This page covers how to set up a development environment, navigate the repository, run tests, and submit changes.
+KTX is an open-source context layer for database agents. The project welcomes
+focused contributions that improve setup, integrations, CLI behavior,
+documentation, connector coverage, and examples.
+
+## Where to start
+
+| Goal | Start here |
+|------|------------|
+| Prepare a local development checkout | [Development setup](#development-setup) |
+| Understand the workspace layout | [Repository structure](#repository-structure) |
+| Run verification before a pull request | [Running tests](#running-tests) |
+| Add a database connector | [Adding a connector](#adding-a-connector) |
+| Update docs for a user-visible CLI or setup change | [PR guidelines](#pr-guidelines) |
+
+## Contribution areas
+
+| Area | Good first context |
+|------|--------------------|
+| CLI and setup | `packages/cli`, especially setup steps, command definitions, status checks, and smoke tests |
+| Context engine | `packages/context`, including project config, ingest orchestration, and semantic search |
+| Connectors | `packages/connector-*`, plus connector-specific tests and integration docs |
+| Python semantic layer | `python/ktx-sl` for planning and SQL generation |
+| Python daemon | `python/ktx-daemon` for the portable runtime API |
+| Documentation | `docs-site/content/docs` for public docs and `docs-site/tests` for docs behavior |
 
 ## Development setup
 
@@ -27,7 +50,9 @@ pnpm install
 uv sync --all-groups
 ```
 
-`pnpm install` sets up all TypeScript packages in the workspace. `uv sync --all-groups` installs Python dependencies for the semantic layer and daemon, including dev and test groups.
+`pnpm install` sets up all TypeScript packages in the workspace.
+`uv sync --all-groups` installs Python dependencies for the semantic layer and
+daemon, including dev and test groups.
 
 ### Build
 
@@ -55,7 +80,8 @@ changes.
 
 ## Repository structure
 
-KTX is a pnpm + uv workspace. TypeScript packages live in `packages/`, Python projects in `python/`.
+KTX is a pnpm + uv workspace. TypeScript packages live in `packages/`, Python
+projects in `python/`.
 
 ```text
 packages/
@@ -80,7 +106,8 @@ scripts/                # Workspace scripts (benchmarks, verification, release)
 docs-site/              # Documentation site (Fumadocs)
 ```
 
-All TypeScript packages are ESM (`"type": "module"`) and use `NodeNext` module resolution. The Python projects use `pyproject.toml` for dependency management.
+All TypeScript packages are ESM (`"type": "module"`) and use `NodeNext` module
+resolution. The Python projects use `pyproject.toml` for dependency management.
 
 ## Running tests
 
@@ -138,7 +165,8 @@ uv run pytest -q
 
 ## Adding a connector
 
-Database connectors live in `packages/connector-<name>/`. Each connector implements the `KtxScanConnector` interface from `@ktx/context`.
+Database connectors live in `packages/connector-<name>/`. Each connector
+implements the `KtxScanConnector` interface from `@ktx/context`.
 
 ### Step 1: Scaffold the package
 
@@ -193,11 +221,15 @@ Optional methods for richer scanning:
 
 ### Step 3: Add a dialect
 
-The dialect class handles database-specific concerns: identifier quoting, type mapping (native types to normalized types), and query generation for sampling and statistics.
+The dialect class handles database-specific concerns: identifier quoting, type
+mapping from native types to normalized types, and query generation for sampling
+and statistics.
 
 ### Step 4: Wire it up
 
-Register the new connector driver in `packages/context` so the CLI and scan engine can instantiate it. Look at how existing connectors are registered for the pattern.
+Register the new connector driver in `packages/context` so the CLI and scan
+engine can instantiate it. Look at how existing connectors are registered for
+the pattern.
 
 ### Step 5: Test
 
@@ -207,13 +239,14 @@ pnpm --filter @ktx/connector-<name> run type-check
 pnpm --filter @ktx/connector-<name> run test
 ```
 
-Use `packages/connector-sqlite/` as a minimal reference and `packages/connector-postgres/` as a full-featured one.
+Use `packages/connector-sqlite/` as a minimal reference and
+`packages/connector-postgres/` as a full-featured one.
 
 ## Code conventions
 
 - **TypeScript**: strict types, no `any`, no `as unknown as`. Use `zod` schemas for runtime validation at CLI and config boundaries. Follow the `camelCaseSchema` / `PascalCaseType` naming convention for Zod schemas and inferred types.
 - **Python**: type hints on all new code, `pathlib` over `os.path`, explicit exception types over broad `except Exception`, `logger.exception()` for caught exceptions. Use `sqlglot` for SQL parsing - never regex.
-- **Dependencies**: `pnpm` for Node packages (never `npm` or `bun`), `uv` for Python (never `pip`).
+- **Dependencies**: `pnpm` for Node packages, `uv` for Python.
 - **Dead code**: remove it. Don't leave commented-out code, unused wrappers, or empty directories.
 
 ## PR guidelines
@@ -224,20 +257,26 @@ Before submitting a pull request:
 2. **Build if you changed exports** - run `pnpm run build` to verify package exports and `dist/` expectations still align.
 3. **Keep changes focused** - one logical change per PR. Don't bundle unrelated refactors.
 4. **Follow existing patterns** - match the style and conventions of surrounding code. The codebase favors explicit over clever.
-5. **Don't commit artifacts** - `node_modules/`, `.venv/`, `dist/`, coverage output, and local databases should not be committed.
+5. **Update docs for user-visible changes** - update `docs-site/content/docs/` when setup, CLI, configuration, or integration behavior changes.
+6. **Don't commit artifacts** - `node_modules/`, `.venv/`, `dist/`, coverage output, and local databases should not be committed.
 
-For larger features or architectural changes, open an issue first to discuss the approach.
+For larger features or architectural changes, open an issue first to discuss the
+approach.
 
 ## Agent usage notes
 
-Use this page when an agent is modifying the KTX repository itself rather than using KTX in an analytics project.
+Use this page when an agent is modifying the KTX repository itself rather than
+using KTX in an analytics project.
 
 | Agent task | Command or section |
 |------------|--------------------|
 | Prepare the workspace | `pnpm install`, `pnpm run setup:dev`, `uv sync --all-groups` |
 | Verify TypeScript changes | `pnpm run type-check`, `pnpm run test`, or package-filtered equivalents |
 | Verify Python changes | `uv run pytest -q` and `uv run pre-commit run --files <files>` |
-| Add a connector | Adding a connector |
-| Check style expectations | Code conventions |
+| Add a connector | [Adding a connector](#adding-a-connector) |
+| Check style expectations | [Code conventions](#code-conventions) |
 
-Common recovery path: if a check fails because generated files or local runtimes are missing, run the setup commands first. If a check fails because of a real type, lint, or test error, fix the source file and rerun the smallest failing check before broadening verification.
+Common recovery path: if a check fails because generated files or local
+runtimes are missing, run the setup commands first. If a check fails because of
+a real type, lint, or test error, fix the source file and rerun the smallest
+failing check before broadening verification.
