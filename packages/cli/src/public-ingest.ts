@@ -663,16 +663,35 @@ function createCapturedPublicIngestIo(): CapturedPublicIngestIo {
 
 const INTERNAL_STATUS_LINE_RE =
   /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
+const ACTIONABLE_FAILURE_LINE_RE =
+  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
+const RUNTIME_BACKED_RETRY_LINE_RE = /^Then retry the runtime-backed KTX command\.?$/;
 
-function firstCapturedFailureLine(output: string): string | undefined {
-  return output
+function capturedFailureMessage(output: string): string | undefined {
+  const lines = output
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .filter((line) => !line.startsWith('KTX scan completed'))
     .filter((line) => !INTERNAL_STATUS_LINE_RE.test(line))
-    .map(publicIngestOutputLine)
-    .find((line) => line.length > 0);
+    .map(publicIngestOutputLine);
+
+  const actionableIndex = lines.findIndex((line) => ACTIONABLE_FAILURE_LINE_RE.test(line));
+  if (actionableIndex < 0) {
+    return lines.find((line) => line.length > 0);
+  }
+
+  const firstLine = lines[actionableIndex];
+  if (!firstLine?.startsWith('Missing bundled Python runtime manifest')) {
+    return firstLine;
+  }
+
+  const followupLines = lines
+    .slice(actionableIndex + 1)
+    .filter((line) => !RUNTIME_BACKED_RETRY_LINE_RE.test(line))
+    .filter((line) => !/\bRetry:\s/.test(line))
+    .filter((line) => line.startsWith('In a source checkout, build the local runtime assets with:'));
+  return [firstLine, ...followupLines].join('\n');
 }
 
 export async function executePublicIngestTarget(
@@ -737,7 +756,7 @@ export async function executePublicIngestTarget(
         args,
         'failed',
         'database-schema',
-        capturedScanIo ? firstCapturedFailureLine(capturedScanIo.capturedOutput()) : undefined,
+        capturedScanIo ? capturedFailureMessage(capturedScanIo.capturedOutput()) : undefined,
       );
     }
     deps.onPhaseEnd?.('database-schema', 'done');
@@ -779,7 +798,7 @@ export async function executePublicIngestTarget(
           args,
           'failed',
           'query-history',
-          capturedIngestIo ? firstCapturedFailureLine(capturedIngestIo.capturedOutput()) : undefined,
+          capturedIngestIo ? capturedFailureMessage(capturedIngestIo.capturedOutput()) : undefined,
         );
       }
       deps.onPhaseEnd?.('query-history', 'done');
@@ -819,7 +838,7 @@ export async function executePublicIngestTarget(
     args,
     exitCode === 0 ? 'done' : 'failed',
     'source-ingest',
-    capturedIngestIo ? firstCapturedFailureLine(capturedIngestIo.capturedOutput()) : undefined,
+    capturedIngestIo ? capturedFailureMessage(capturedIngestIo.capturedOutput()) : undefined,
   );
 }
 

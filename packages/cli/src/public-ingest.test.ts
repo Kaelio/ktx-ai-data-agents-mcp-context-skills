@@ -829,6 +829,43 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('historic-sql');
   });
 
+  it('prints the runtime artifact build hint for missing query-history runtime assets', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async (_args, ingestIo) => {
+      ingestIo.stderr.write('Missing bundled Python runtime manifest: /repo/packages/cli/assets/python/manifest.json\n');
+      ingestIo.stderr.write('In a source checkout, build the local runtime assets with: pnpm run artifacts:build\n');
+      ingestIo.stderr.write('Then retry the runtime-backed KTX command.\n');
+      return 1;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stdout()).toContain('Missing bundled Python runtime manifest');
+    expect(io.stdout()).toContain(
+      'In a source checkout, build the local runtime assets with: pnpm run artifacts:build',
+    );
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
+  });
+
   it('fails deep-readiness targets before work starts while continuing independent --all targets', async () => {
     const io = makeIo();
     const project = projectWithConnections({
