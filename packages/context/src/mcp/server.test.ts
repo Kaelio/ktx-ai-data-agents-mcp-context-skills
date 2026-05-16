@@ -1,6 +1,8 @@
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createLocalProjectMemoryIngest,
@@ -8,13 +10,15 @@ import {
   type MemoryAgentInput,
 } from '../memory/index.js';
 import { initKtxProject } from '../project/index.js';
-import { createKtxMcpServer } from './server.js';
+import { jsonToolResult } from './context-tools.js';
+import { createDefaultKtxMcpServer, createKtxMcpServer } from './server.js';
 import type {
   KtxDiscoverDataMcpPort,
   KtxDictionarySearchMcpPort,
   KtxEntityDetailsMcpPort,
   KtxKnowledgeMcpPort,
   KtxMcpContextPorts,
+  KtxMcpToolHandlerContext,
   KtxSemanticLayerMcpPort,
   KtxSqlExecutionMcpPort,
   KtxSqlExecutionResponse,
@@ -23,8 +27,14 @@ import type {
 
 type RegisteredTool = {
   name: string;
-  config: { title?: string; description?: string; inputSchema: unknown };
-  handler: (input: Record<string, unknown>) => Promise<unknown>;
+  config: {
+    title?: string;
+    description?: string;
+    inputSchema: unknown;
+    outputSchema?: unknown;
+    annotations?: Record<string, unknown>;
+  };
+  handler: (input: Record<string, unknown>, context?: KtxMcpToolHandlerContext) => Promise<unknown>;
 };
 
 function makeFakeServer() {
@@ -47,7 +57,153 @@ function getTool(tools: RegisteredTool[], name: string): RegisteredTool {
   return found;
 }
 
+const retainedToolNames = [
+  'connection_list',
+  'dictionary_search',
+  'discover_data',
+  'entity_details',
+  'memory_ingest',
+  'memory_ingest_status',
+  'sl_query',
+  'sl_read_source',
+  'sql_execution',
+  'wiki_read',
+  'wiki_search',
+] as const;
+
+function makeAllContextTools(): KtxMcpContextPorts {
+  return {
+    connections: {
+      list: vi.fn().mockResolvedValue([{ id: 'warehouse', name: 'Warehouse', connectionType: 'POSTGRES' }]),
+    },
+    knowledge: {
+      search: vi.fn<KtxKnowledgeMcpPort['search']>().mockResolvedValue({ results: [], totalFound: 0 }),
+      read: vi.fn<KtxKnowledgeMcpPort['read']>().mockResolvedValue({
+        key: 'revenue',
+        summary: 'Paid order value',
+        content: '# Revenue',
+        scope: 'GLOBAL',
+        tags: ['finance'],
+        refs: [],
+        slRefs: ['orders'],
+      }),
+    },
+    semanticLayer: {
+      readSource: vi.fn<KtxSemanticLayerMcpPort['readSource']>().mockResolvedValue({
+        sourceName: 'orders',
+        yaml: 'name: orders\n',
+      }),
+      query: vi.fn<KtxSemanticLayerMcpPort['query']>().mockResolvedValue({
+        sql: 'select 1',
+        headers: ['count'],
+        rows: [[1]],
+        totalRows: 1,
+        plan: { sources: ['orders'] },
+      }),
+    },
+    entityDetails: {
+      read: vi.fn<KtxEntityDetailsMcpPort['read']>().mockResolvedValue({ results: [] }),
+    },
+    dictionarySearch: {
+      search: vi.fn<KtxDictionarySearchMcpPort['search']>().mockResolvedValue({ searched: [], results: [] }),
+    },
+    discover: {
+      search: vi.fn<KtxDiscoverDataMcpPort['search']>().mockResolvedValue([]),
+    },
+    sqlExecution: {
+      execute: vi.fn<KtxSqlExecutionMcpPort['execute']>().mockResolvedValue({
+        headers: ['count'],
+        headerTypes: ['integer'],
+        rows: [[1]],
+        rowCount: 1,
+      }),
+    },
+    memoryIngest: {
+      ingest: vi.fn<MemoryIngestPort['ingest']>().mockResolvedValue({ runId: 'run-1' }),
+      status: vi.fn<MemoryIngestPort['status']>().mockResolvedValue({
+        runId: 'run-1',
+        status: 'done',
+        stage: 'done',
+        done: true,
+        captured: { wiki: [], sl: [], xrefs: [] },
+        error: null,
+        commitHash: null,
+        skillsLoaded: [],
+        signalDetected: false,
+      }),
+    },
+  };
+}
+
+async function listToolsThroughSdk(contextTools: KtxMcpContextPorts) {
+  const server = createDefaultKtxMcpServer({
+    name: 'ktx-test',
+    version: '0.0.0-test',
+    userContext: { userId: 'mcp-user' },
+    contextTools,
+  });
+  const client = new Client({ name: 'ktx-test-client', version: '0.0.0-test' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  try {
+    return await client.listTools();
+  } finally {
+    await client.close();
+    await server.close();
+  }
+}
+
 describe('createKtxMcpServer', () => {
+  it('registers annotations and output schemas for every retained tool', async () => {
+    const fake = makeFakeServer();
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'mcp-user' },
+      contextTools: makeAllContextTools(),
+    });
+
+    expect(fake.tools.map((tool) => tool.name).sort()).toEqual([...retainedToolNames].sort());
+
+    const expectedAnnotations: Record<string, Record<string, unknown>> = {
+      connection_list: { title: 'Connection List', readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      discover_data: { title: 'Discover Data', readOnlyHint: true, openWorldHint: false },
+      wiki_search: { title: 'Wiki Search', readOnlyHint: true, openWorldHint: false },
+      wiki_read: { title: 'Wiki Read', readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      entity_details: { title: 'Entity Details', readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      dictionary_search: { title: 'Dictionary Search', readOnlyHint: true, openWorldHint: false },
+      sl_read_source: {
+        title: 'Semantic Layer Read Source',
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      sl_query: { title: 'Semantic Layer Query', readOnlyHint: true, openWorldHint: false },
+      sql_execution: { title: 'SQL Execution', readOnlyHint: true, openWorldHint: false },
+      memory_ingest: { title: 'Memory Ingest', destructiveHint: true, openWorldHint: false },
+      memory_ingest_status: { title: 'Memory Ingest Status', readOnlyHint: true, openWorldHint: false },
+    };
+
+    for (const toolName of retainedToolNames) {
+      const tool = getTool(fake.tools, toolName);
+      expect(tool.config.title).toBe(expectedAnnotations[toolName]?.title);
+      expect(tool.config.annotations).toEqual(expectedAnnotations[toolName]);
+      expect(tool.config.outputSchema).toBeDefined();
+      const inputShape = tool.config.inputSchema as Record<string, { description?: string }>;
+      for (const inputSchema of Object.values(inputShape)) {
+        expect(inputSchema.description).toEqual(expect.any(String));
+      }
+    }
+  });
+
+  it('exposes annotations and output schemas through the SDK tools/list response', async () => {
+    const result = await listToolsThroughSdk(makeAllContextTools());
+    const toolNames = result.tools.map((tool) => tool.name).sort();
+    expect(toolNames).toEqual([...retainedToolNames].sort());
+
+    await expect(result.tools).toMatchFileSnapshot('__snapshots__/mcp-tools-list.json');
+  });
+
   it('registers context tools without memory capture tools when memory capture is omitted', async () => {
     const fake = makeFakeServer();
 
@@ -121,11 +277,14 @@ describe('createKtxMcpServer', () => {
         rowCount: 1,
       },
     });
-    expect(sqlExecution.execute).toHaveBeenCalledWith({
-      connectionId: 'warehouse',
-      sql: 'select status, count(*) from public.orders group by status',
-      maxRows: 50,
-    });
+    expect(sqlExecution.execute).toHaveBeenCalledWith(
+      {
+        connectionId: 'warehouse',
+        sql: 'select status, count(*) from public.orders group by status',
+        maxRows: 50,
+      },
+      undefined,
+    );
   });
 
   it('registers entity_details when the host provides an entity-details port', async () => {
@@ -287,17 +446,131 @@ describe('createKtxMcpServer', () => {
       ],
     });
 
-    expect(semanticLayer.query).toHaveBeenCalledWith({
-      connectionId: 'warehouse',
-      query: expect.objectContaining({
-        order_by: [
-          { field: 'orders.total', direction: 'desc' },
-          { field: 'orders.quarter_label', direction: 'asc' },
-          { field: 'orders.created_at', direction: 'desc' },
-          { field: 'orders.segment', direction: 'asc' },
-        ],
-      }),
+    expect(semanticLayer.query).toHaveBeenCalledWith(
+      {
+        connectionId: 'warehouse',
+        query: expect.objectContaining({
+          order_by: [
+            { field: 'orders.total', direction: 'desc' },
+            { field: 'orders.quarter_label', direction: 'asc' },
+            { field: 'orders.created_at', direction: 'desc' },
+            { field: 'orders.segment', direction: 'asc' },
+          ],
+        }),
+      },
+      undefined,
+    );
+  });
+
+  it('sl_query normalizes cube-style dimensions to field dimensions', async () => {
+    const fake = makeFakeServer();
+    const semanticLayer = makeAllContextTools().semanticLayer!;
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { semanticLayer },
     });
+
+    await getTool(fake.tools, 'sl_query').handler({
+      connectionId: 'warehouse',
+      measures: ['orders.count'],
+      dimensions: [{ dimension: 'orders.created_at', granularity: 'month' }, 'orders.status'],
+    });
+
+    expect(semanticLayer.query).toHaveBeenCalledWith(
+      {
+        connectionId: 'warehouse',
+        query: expect.objectContaining({
+          dimensions: [{ field: 'orders.created_at', granularity: 'month' }, { field: 'orders.status' }],
+        }),
+      },
+      undefined,
+    );
+  });
+
+  it('entity_details normalizes sql-style schema table refs', async () => {
+    const fake = makeFakeServer();
+    const entityDetails = makeAllContextTools().entityDetails!;
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { entityDetails },
+    });
+
+    await getTool(fake.tools, 'entity_details').handler({
+      connectionId: 'warehouse',
+      entities: [{ table: { schema: 'public', table: 'orders' }, columns: ['id'] }],
+    });
+
+    expect(entityDetails.read).toHaveBeenCalledWith({
+      connectionId: 'warehouse',
+      entities: [{ table: { catalog: null, db: 'public', name: 'orders' }, columns: ['id'] }],
+    });
+  });
+
+  it('wraps handler exceptions in-band for non-sql tools', async () => {
+    const fake = makeFakeServer();
+    const knowledge: KtxKnowledgeMcpPort = {
+      search: vi.fn<KtxKnowledgeMcpPort['search']>().mockRejectedValue(new Error('wiki index unavailable')),
+      read: vi.fn(),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { knowledge },
+    });
+
+    await expect(getTool(fake.tools, 'wiki_search').handler({ query: 'revenue' })).resolves.toEqual({
+      content: [{ type: 'text', text: 'wiki index unavailable' }],
+      isError: true,
+    });
+  });
+
+  it('wires sql_execution progress to MCP notifications when a progress token is present', async () => {
+    const fake = makeFakeServer();
+    const notifications: unknown[] = [];
+    const sqlExecution: KtxSqlExecutionMcpPort = {
+      execute: vi.fn<KtxSqlExecutionMcpPort['execute']>().mockImplementation(async (_input, options) => {
+        await options?.onProgress?.({ progress: 0, message: 'Validating SQL' });
+        await options?.onProgress?.({ progress: 0.3, message: 'Executing' });
+        await options?.onProgress?.({ progress: 1, message: 'Fetched 1 rows' });
+        return { headers: ['count'], rows: [[1]], rowCount: 1 };
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { sqlExecution },
+    });
+
+    await getTool(fake.tools, 'sql_execution').handler(
+      { connectionId: 'warehouse', sql: 'select 1' },
+      {
+        _meta: { progressToken: 'progress-1' },
+        sendNotification: async (notification) => {
+          notifications.push(notification);
+        },
+      },
+    );
+
+    expect(notifications).toEqual([
+      {
+        method: 'notifications/progress',
+        params: { progressToken: 'progress-1', progress: 0, message: 'Validating SQL' },
+      },
+      {
+        method: 'notifications/progress',
+        params: { progressToken: 'progress-1', progress: 0.3, message: 'Executing' },
+      },
+      {
+        method: 'notifications/progress',
+        params: { progressToken: 'progress-1', progress: 1, message: 'Fetched 1 rows' },
+      },
+    ]);
   });
 
   it('registers discover_data when the host provides a discover port', async () => {
@@ -700,17 +973,29 @@ describe('createKtxMcpServer', () => {
       filters: ['orders.status = paid'],
       limit: 25,
     });
-    expect(contextTools.semanticLayer?.query).toHaveBeenCalledWith({
-      connectionId: '00000000-0000-4000-8000-000000000001',
-      query: {
-        measures: ['orders.count'],
-        dimensions: ['orders.created_at'],
-        filters: ['orders.status = paid'],
-        segments: [],
-        order_by: [],
-        limit: 25,
-        include_empty: true,
+    expect(contextTools.semanticLayer?.query).toHaveBeenCalledWith(
+      {
+        connectionId: '00000000-0000-4000-8000-000000000001',
+        query: {
+          measures: ['orders.count'],
+          dimensions: [{ field: 'orders.created_at' }],
+          filters: ['orders.status = paid'],
+          segments: [],
+          order_by: [],
+          limit: 25,
+          include_empty: true,
+        },
       },
-    });
+      undefined,
+    );
+  });
+
+  it('keeps jsonToolResult typed to non-array objects', () => {
+    expect(jsonToolResult({ ok: true }).structuredContent).toEqual({ ok: true });
+
+    if (false) {
+      // @ts-expect-error bare arrays are not valid MCP structuredContent objects in KTX
+      jsonToolResult([]);
+    }
   });
 });

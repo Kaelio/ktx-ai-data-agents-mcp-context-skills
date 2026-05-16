@@ -9,10 +9,33 @@ export interface KtxMcpTextContent {
   text: string;
 }
 
-export interface KtxMcpToolResult<T extends object = object> {
+export type NonArrayObject = object & { length?: never };
+
+export interface KtxMcpToolResult<T extends NonArrayObject = NonArrayObject> {
   content: KtxMcpTextContent[];
   structuredContent?: T;
   isError?: true;
+}
+
+export interface KtxMcpProgressEvent {
+  progress: number;
+  total?: number;
+  message: string;
+}
+
+export type KtxMcpProgressCallback = (event: KtxMcpProgressEvent) => void | Promise<void>;
+
+export interface KtxMcpToolHandlerContext {
+  _meta?: { progressToken?: string | number; [key: string]: unknown };
+  sendNotification?: (notification: {
+    method: 'notifications/progress';
+    params: {
+      progressToken: string | number;
+      progress: number;
+      total?: number;
+      message?: string;
+    };
+  }) => Promise<void>;
 }
 
 export interface MemoryIngestPort {
@@ -31,8 +54,10 @@ export interface KtxMcpServerLike {
       title?: string;
       description?: string;
       inputSchema: unknown;
+      outputSchema?: unknown;
+      annotations?: Record<string, unknown>;
     },
-    handler: (input: Record<string, unknown>) => Promise<unknown>,
+    handler: (input: Record<string, unknown>, context?: KtxMcpToolHandlerContext) => Promise<unknown>,
   ): void;
 }
 
@@ -91,7 +116,10 @@ export interface KtxSemanticLayerQueryResponse {
 
 export interface KtxSemanticLayerMcpPort {
   readSource(input: { connectionId: string; sourceName: string }): Promise<KtxSemanticLayerReadResponse | null>;
-  query(input: { connectionId?: string; query: SemanticLayerQueryInput }): Promise<KtxSemanticLayerQueryResponse>;
+  query(
+    input: { connectionId?: string; query: SemanticLayerQueryInput },
+    options?: { onProgress?: KtxMcpProgressCallback },
+  ): Promise<KtxSemanticLayerQueryResponse>;
 }
 
 export interface KtxEntityDetailsMcpPort {
@@ -114,7 +142,10 @@ export interface KtxSqlExecutionResponse {
 }
 
 export interface KtxSqlExecutionMcpPort {
-  execute(input: { connectionId: string; sql: string; maxRows: number }): Promise<KtxSqlExecutionResponse>;
+  execute(
+    input: { connectionId: string; sql: string; maxRows: number },
+    options?: { onProgress?: KtxMcpProgressCallback },
+  ): Promise<KtxSqlExecutionResponse>;
 }
 
 export interface KtxMcpContextPorts {

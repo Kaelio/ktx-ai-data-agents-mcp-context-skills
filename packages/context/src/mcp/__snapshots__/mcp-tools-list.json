@@ -1,0 +1,1626 @@
+[
+  {
+    "_meta": undefined,
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Connection List",
+    },
+    "description": "List configured read-only data connections available to this KTX project. Use this before connection-scoped tools when the project may have multiple warehouses.",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {},
+      "type": "object",
+    },
+    "name": "connection_list",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "connections": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "connectionType": {
+                "type": "string",
+              },
+              "id": {
+                "type": "string",
+              },
+              "name": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+              "name",
+              "connectionType",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "connections",
+      ],
+      "type": "object",
+    },
+    "title": "Connection List",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Wiki Search",
+    },
+    "description": "Search KTX wiki pages for reusable business context. Example: wiki_search({ query: "revenue recognition", limit: 5 }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "limit": {
+          "default": 10,
+          "description": "Maximum wiki pages to return. Defaults to 10.",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "query": {
+          "description": "Natural-language wiki search query, e.g. "revenue recognition policy".",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "wiki_search",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "results": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+              },
+              "lanes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "effectiveCandidatePoolLimit": {
+                      "type": "number",
+                    },
+                    "lane": {
+                      "type": "string",
+                    },
+                    "reason": {
+                      "type": "string",
+                    },
+                    "requestedCandidatePoolLimit": {
+                      "type": "number",
+                    },
+                    "returnedCandidateCount": {
+                      "type": "number",
+                    },
+                    "status": {
+                      "type": "string",
+                    },
+                    "weight": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "lane",
+                    "status",
+                    "requestedCandidatePoolLimit",
+                    "effectiveCandidatePoolLimit",
+                    "returnedCandidateCount",
+                    "weight",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "matchReasons": {
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "path": {
+                "type": "string",
+              },
+              "scope": {
+                "enum": [
+                  "GLOBAL",
+                  "USER",
+                ],
+                "type": "string",
+              },
+              "score": {
+                "type": "number",
+              },
+              "summary": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "key",
+              "path",
+              "scope",
+              "summary",
+              "score",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "totalFound": {
+          "type": "number",
+        },
+      },
+      "required": [
+        "results",
+        "totalFound",
+      ],
+      "type": "object",
+    },
+    "title": "Wiki Search",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Wiki Read",
+    },
+    "description": "Read a KTX wiki page by key returned from wiki_search. Example: wiki_read({ key: "global/revenue" }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "key": {
+          "description": "Wiki page key returned by wiki_search, e.g. "global/revenue".",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "key",
+      ],
+      "type": "object",
+    },
+    "name": "wiki_read",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string",
+        },
+        "key": {
+          "type": "string",
+        },
+        "refs": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "scope": {
+          "enum": [
+            "GLOBAL",
+            "USER",
+          ],
+          "type": "string",
+        },
+        "slRefs": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "summary": {
+          "type": "string",
+        },
+        "tags": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "key",
+        "summary",
+        "content",
+        "scope",
+      ],
+      "type": "object",
+    },
+    "title": "Wiki Read",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Semantic Layer Read Source",
+    },
+    "description": "Read a semantic-layer YAML source by connection id and source name. Example: sl_read_source({ connectionId: "warehouse", sourceName: "orders" }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "connectionId": {
+          "description": "Connection id that owns the semantic-layer source.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "sourceName": {
+          "description": "Semantic-layer source name without ".yaml", e.g. "orders".",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "connectionId",
+        "sourceName",
+      ],
+      "type": "object",
+    },
+    "name": "sl_read_source",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "sourceName": {
+          "type": "string",
+        },
+        "yaml": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "sourceName",
+        "yaml",
+      ],
+      "type": "object",
+    },
+    "title": "Semantic Layer Read Source",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Semantic Layer Query",
+    },
+    "description": "Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: "warehouse", measures: ["orders.order_count"], dimensions: [{ dimension: "orders.created_at", granularity: "month" }] }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "connectionId": {
+          "description": "Connection id to query. Omit only when the project has exactly one configured connection.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "dimensions": {
+          "description": "Dimensions to group by. Strings and {dimension, granularity} are accepted.",
+          "items": {
+            "properties": {
+              "field": {
+                "description": "Dimension to group by, e.g. "orders.created_at" or "orders.status".",
+                "minLength": 1,
+                "type": "string",
+              },
+              "granularity": {
+                "description": "Time grain for time dimensions: day, week, month, quarter, or year.",
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "field",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "filters": {
+          "default": [],
+          "description": "Semantic-layer filter expressions to apply.",
+          "items": {
+            "description": "Semantic-layer filter expression, e.g. "orders.status = paid".",
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "include_empty": {
+          "default": true,
+          "description": "Whether to include empty dimension groups. Defaults to true.",
+          "type": "boolean",
+        },
+        "limit": {
+          "default": 1000,
+          "description": "Maximum rows to return. Defaults to 1000.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer",
+        },
+        "measures": {
+          "description": "Measures to select. Use semantic-layer keys when available.",
+          "items": {
+            "anyOf": [
+              {
+                "description": "Semantic-layer measure key, e.g. "orders.order_count".",
+                "type": "string",
+              },
+              {
+                "properties": {
+                  "expr": {
+                    "description": "Ad hoc aggregate expression, e.g. "sum(orders.amount)".",
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "name": {
+                    "description": "Alias for the ad hoc measure, e.g. "gross_revenue".",
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "expr",
+                  "name",
+                ],
+                "type": "object",
+              },
+            ],
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "order_by": {
+          "description": "Sort clauses. Strings and Cube-style {id, desc} are accepted.",
+          "items": {
+            "properties": {
+              "direction": {
+                "default": "asc",
+                "description": "Sort direction: "asc" or "desc". Defaults to "asc".",
+                "enum": [
+                  "asc",
+                  "desc",
+                ],
+                "type": "string",
+              },
+              "field": {
+                "description": "Field/measure/dimension id to order by, e.g. "orders.created_at", a dimension key like "mart_nrr_quarterly.quarter_label", or a measure alias.",
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "field",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "segments": {
+          "default": [],
+          "description": "Semantic-layer segment keys to apply.",
+          "items": {
+            "description": "Semantic-layer segment key to apply.",
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "measures",
+      ],
+      "type": "object",
+    },
+    "name": "sl_query",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "connectionId": {
+          "type": "string",
+        },
+        "dialect": {
+          "type": "string",
+        },
+        "headers": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "plan": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rows": {
+          "items": {
+            "items": {},
+            "type": "array",
+          },
+          "type": "array",
+        },
+        "sql": {
+          "type": "string",
+        },
+        "totalRows": {
+          "type": "number",
+        },
+      },
+      "required": [
+        "sql",
+        "headers",
+        "rows",
+        "totalRows",
+      ],
+      "type": "object",
+    },
+    "title": "Semantic Layer Query",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Entity Details",
+    },
+    "description": "Read table and column metadata from the latest live-database scan snapshot. Example: entity_details({ connectionId: "warehouse", entities: [{ table: { schema: "public", table: "orders" }, columns: ["id"] }] }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "connectionId": {
+          "description": "Connection id whose latest scan snapshot should be read.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "entities": {
+          "description": "Tables or columns to inspect. Maximum 20 entities.",
+          "items": {
+            "properties": {
+              "columns": {
+                "description": "Optional column filter.",
+                "items": {
+                  "description": "Column name to inspect.",
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "table": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  {
+                    "properties": {
+                      "catalog": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                          },
+                          {
+                            "type": "null",
+                          },
+                        ],
+                        "description": "Catalog/project/database. Use null when not applicable.",
+                      },
+                      "db": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                          },
+                          {
+                            "type": "null",
+                          },
+                        ],
+                        "description": "Schema/database/dataset. Use null when not applicable.",
+                      },
+                      "name": {
+                        "description": "Table name.",
+                        "minLength": 1,
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "catalog",
+                      "db",
+                      "name",
+                    ],
+                    "type": "object",
+                  },
+                ],
+                "description": "Table display string or object ref. {schema, table} is accepted as an alias for {db, name}.",
+              },
+            },
+            "type": "object",
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "type": "array",
+        },
+      },
+      "required": [
+        "connectionId",
+        "entities",
+      ],
+      "type": "object",
+    },
+    "name": "entity_details",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "results": {
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "columns": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "comment": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                            },
+                            {
+                              "type": "null",
+                            },
+                          ],
+                        },
+                        "dimensionType": {
+                          "enum": [
+                            "time",
+                            "string",
+                            "number",
+                            "boolean",
+                          ],
+                          "type": "string",
+                        },
+                        "name": {
+                          "type": "string",
+                        },
+                        "nativeType": {
+                          "type": "string",
+                        },
+                        "normalizedType": {
+                          "type": "string",
+                        },
+                        "nullable": {
+                          "type": "boolean",
+                        },
+                        "primaryKey": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "name",
+                        "nativeType",
+                        "normalizedType",
+                        "dimensionType",
+                        "nullable",
+                        "primaryKey",
+                        "comment",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "comment": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "connectionId": {
+                    "type": "string",
+                  },
+                  "display": {
+                    "type": "string",
+                  },
+                  "estimatedRows": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "foreignKeys": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "constraintName": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                            },
+                            {
+                              "type": "null",
+                            },
+                          ],
+                        },
+                        "fromColumn": {
+                          "type": "string",
+                        },
+                        "toCatalog": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                            },
+                            {
+                              "type": "null",
+                            },
+                          ],
+                        },
+                        "toColumn": {
+                          "type": "string",
+                        },
+                        "toDb": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                            },
+                            {
+                              "type": "null",
+                            },
+                          ],
+                        },
+                        "toTable": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "fromColumn",
+                        "toCatalog",
+                        "toDb",
+                        "toTable",
+                        "toColumn",
+                        "constraintName",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "kind": {
+                    "enum": [
+                      "table",
+                      "view",
+                      "external",
+                      "event_stream",
+                    ],
+                    "type": "string",
+                  },
+                  "ok": {
+                    "const": true,
+                    "type": "boolean",
+                  },
+                  "snapshot": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "extractedAt": {
+                        "type": "string",
+                      },
+                      "scanRunId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                          },
+                          {
+                            "type": "null",
+                          },
+                        ],
+                      },
+                      "syncId": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "syncId",
+                      "extractedAt",
+                      "scanRunId",
+                    ],
+                    "type": "object",
+                  },
+                  "tableRef": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "catalog": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                          },
+                          {
+                            "type": "null",
+                          },
+                        ],
+                      },
+                      "db": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                          },
+                          {
+                            "type": "null",
+                          },
+                        ],
+                      },
+                      "name": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "catalog",
+                      "db",
+                      "name",
+                    ],
+                    "type": "object",
+                  },
+                },
+                "required": [
+                  "ok",
+                  "connectionId",
+                  "tableRef",
+                  "display",
+                  "kind",
+                  "comment",
+                  "estimatedRows",
+                  "columns",
+                  "foreignKeys",
+                  "snapshot",
+                ],
+                "type": "object",
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "connectionId": {
+                    "type": "string",
+                  },
+                  "error": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "candidates": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "display": {
+                                  "type": "string",
+                                },
+                                "tableRef": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "catalog": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                        },
+                                        {
+                                          "type": "null",
+                                        },
+                                      ],
+                                    },
+                                    "db": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                        },
+                                        {
+                                          "type": "null",
+                                        },
+                                      ],
+                                    },
+                                    "name": {
+                                      "type": "string",
+                                    },
+                                  },
+                                  "required": [
+                                    "catalog",
+                                    "db",
+                                    "name",
+                                  ],
+                                  "type": "object",
+                                },
+                              },
+                              "required": [
+                                "tableRef",
+                                "display",
+                              ],
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
+                          {
+                            "items": {
+                              "type": "string",
+                            },
+                            "type": "array",
+                          },
+                        ],
+                      },
+                      "code": {
+                        "enum": [
+                          "scan_missing",
+                          "table_not_found",
+                          "ambiguous_table",
+                          "column_not_found",
+                        ],
+                        "type": "string",
+                      },
+                      "message": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "code",
+                      "message",
+                    ],
+                    "type": "object",
+                  },
+                  "ok": {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                  "snapshot": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "extractedAt": {
+                        "type": "string",
+                      },
+                      "scanRunId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                          },
+                          {
+                            "type": "null",
+                          },
+                        ],
+                      },
+                      "syncId": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "syncId",
+                      "extractedAt",
+                      "scanRunId",
+                    ],
+                    "type": "object",
+                  },
+                  "table": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "catalog": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                              },
+                              {
+                                "type": "null",
+                              },
+                            ],
+                          },
+                          "db": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                              },
+                              {
+                                "type": "null",
+                              },
+                            ],
+                          },
+                          "name": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "catalog",
+                          "db",
+                          "name",
+                        ],
+                        "type": "object",
+                      },
+                    ],
+                  },
+                },
+                "required": [
+                  "ok",
+                  "connectionId",
+                  "table",
+                  "error",
+                ],
+                "type": "object",
+              },
+            ],
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "results",
+      ],
+      "type": "object",
+    },
+    "title": "Entity Details",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Dictionary Search",
+    },
+    "description": "Search profile-sampled warehouse values to locate likely source columns for business values. Example: dictionary_search({ values: ["Acme Corp"], connectionId: "warehouse" }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "connectionId": {
+          "description": "Optional connection id. Pass it when user intent pins a specific warehouse.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "values": {
+          "description": "Values to search for in sampled warehouse dictionaries.",
+          "items": {
+            "description": "Business value to locate, e.g. "Acme Corp" or "enterprise".",
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "type": "array",
+        },
+      },
+      "required": [
+        "values",
+      ],
+      "type": "object",
+    },
+    "name": "dictionary_search",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "results": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "matches": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cardinality": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                        },
+                        {
+                          "type": "null",
+                        },
+                      ],
+                    },
+                    "columnName": {
+                      "type": "string",
+                    },
+                    "connectionId": {
+                      "type": "string",
+                    },
+                    "matchedValue": {
+                      "type": "string",
+                    },
+                    "sourceName": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "connectionId",
+                    "sourceName",
+                    "columnName",
+                    "matchedValue",
+                    "cardinality",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "misses": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "connectionId": {
+                      "type": "string",
+                    },
+                    "reason": {
+                      "enum": [
+                        "no_profile_artifact",
+                        "no_candidate_columns",
+                        "value_not_in_sample",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "connectionId",
+                    "reason",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "value": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "value",
+              "matches",
+              "misses",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "searched": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "connectionId": {
+                "type": "string",
+              },
+              "coverage": {
+                "additionalProperties": false,
+                "properties": {
+                  "profiledAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "profiledColumns": {
+                    "type": "number",
+                  },
+                  "sampledRows": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "syncId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "valuesPerColumn": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                },
+                "required": [
+                  "sampledRows",
+                  "valuesPerColumn",
+                  "profiledColumns",
+                  "syncId",
+                  "profiledAt",
+                ],
+                "type": "object",
+              },
+              "status": {
+                "enum": [
+                  "ready",
+                  "no_profile_artifact",
+                  "no_candidate_columns",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "connectionId",
+              "coverage",
+              "status",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "searched",
+        "results",
+      ],
+      "type": "object",
+    },
+    "title": "Dictionary Search",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Discover Data",
+    },
+    "description": "Search across KTX wiki pages, semantic-layer sources, measures, dimensions, raw tables, and columns. Example: discover_data({ query: "monthly orders by customer", connectionId: "warehouse", kinds: ["sl_source", "table"] }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "connectionId": {
+          "description": "Optional connection id. Pass it when user intent pins a specific warehouse.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "kinds": {
+          "description": "Optional kind filter.",
+          "items": {
+            "description": "Reference kind to include.",
+            "enum": [
+              "wiki",
+              "sl_source",
+              "sl_measure",
+              "sl_dimension",
+              "table",
+              "column",
+            ],
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "limit": {
+          "default": 15,
+          "description": "Maximum refs to return. Defaults to 15.",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "query": {
+          "description": "Natural-language discovery query, e.g. "monthly orders by customer".",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "discover_data",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "refs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "columnName": {
+                "type": "string",
+              },
+              "connectionId": {
+                "type": "string",
+              },
+              "id": {
+                "type": "string",
+              },
+              "kind": {
+                "enum": [
+                  "wiki",
+                  "sl_source",
+                  "sl_measure",
+                  "sl_dimension",
+                  "table",
+                  "column",
+                ],
+                "type": "string",
+              },
+              "matchedOn": {
+                "enum": [
+                  "name",
+                  "display",
+                  "description",
+                  "comment",
+                  "expr",
+                  "sample_value",
+                  "body",
+                ],
+                "type": "string",
+              },
+              "score": {
+                "type": "number",
+              },
+              "snippet": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "summary": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "tableRef": {
+                "additionalProperties": false,
+                "properties": {
+                  "catalog": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "db": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                      },
+                      {
+                        "type": "null",
+                      },
+                    ],
+                  },
+                  "name": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "catalog",
+                  "db",
+                  "name",
+                ],
+                "type": "object",
+              },
+            },
+            "required": [
+              "kind",
+              "id",
+              "score",
+              "summary",
+              "snippet",
+              "matchedOn",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "refs",
+      ],
+      "type": "object",
+    },
+    "title": "Discover Data",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "SQL Execution",
+    },
+    "description": "Execute one parser-validated read-only SQL query against a configured KTX connection. Example: sql_execution({ connectionId: "warehouse", sql: "select count(*) from public.orders", maxRows: 100 }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "connectionId": {
+          "description": "Connection id to execute against. Required for raw SQL.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "maxRows": {
+          "default": 1000,
+          "description": "Maximum rows to return. Defaults to 1000.",
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "sql": {
+          "description": "Parser-validated read-only SQL, e.g. "select count(*) from public.orders".",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "connectionId",
+        "sql",
+      ],
+      "type": "object",
+    },
+    "name": "sql_execution",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "headerTypes": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "headers": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "rowCount": {
+          "type": "number",
+        },
+        "rows": {
+          "items": {
+            "items": {},
+            "type": "array",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "headers",
+        "rows",
+        "rowCount",
+      ],
+      "type": "object",
+    },
+    "title": "SQL Execution",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "title": "Memory Ingest",
+    },
+    "description": "Ingest free-form markdown knowledge into durable KTX memory. Use this for business rules, metric definitions, schema gotchas, recurring findings, or explicit user requests to remember something. Example: memory_ingest({ connectionId: "warehouse", content: "ARR is reported in cents in this warehouse." }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "connectionId": {
+          "description": "Scope this memory to a specific connection. Required when the knowledge is warehouse-specific, including measure definitions, schema gotchas, or anything tied to a particular warehouse. Omit only for global wiki knowledge.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "content": {
+          "description": "Free-form markdown to ingest. Include the knowledge itself plus any context (source, the user question, why this came up) that the memory agent should consider when triaging into wiki/SL.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "content",
+      ],
+      "type": "object",
+    },
+    "name": "memory_ingest",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "runId": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "runId",
+      ],
+      "type": "object",
+    },
+    "title": "Memory Ingest",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Memory Ingest Status",
+    },
+    "description": "Read the current or final status for a memory ingest run. Example: memory_ingest_status({ runId: "memory-run-1" }).",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "runId": {
+          "description": "The memory ingest run id returned by memory_ingest.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "runId",
+      ],
+      "type": "object",
+    },
+    "name": "memory_ingest_status",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "captured": {
+          "additionalProperties": false,
+          "properties": {
+            "sl": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "wiki": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "xrefs": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+          },
+          "required": [
+            "wiki",
+            "sl",
+            "xrefs",
+          ],
+          "type": "object",
+        },
+        "commitHash": {
+          "anyOf": [
+            {
+              "type": "string",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "done": {
+          "type": "boolean",
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "runId": {
+          "type": "string",
+        },
+        "signalDetected": {
+          "type": "boolean",
+        },
+        "skillsLoaded": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "stage": {
+          "type": "string",
+        },
+        "status": {
+          "enum": [
+            "running",
+            "done",
+            "error",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "runId",
+        "status",
+        "stage",
+        "done",
+        "captured",
+        "error",
+        "commitHash",
+        "skillsLoaded",
+        "signalDetected",
+      ],
+      "type": "object",
+    },
+    "title": "Memory Ingest Status",
+  },
+]
