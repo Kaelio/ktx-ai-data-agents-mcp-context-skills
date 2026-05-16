@@ -5,100 +5,110 @@ description: Treat analytics context like code - version it, review it, merge it
 
 ## The idea
 
-dbt proved that analytics transformations belong in version control. Before dbt, SQL lived in BI tools, scheduling systems, and spreadsheets - scattered, unreviewed, impossible to audit. "Analytics as code" changed that: put your models in git, review them in PRs, deploy them by merging.
+dbt moved analytics transformations into git. KTX applies the same pattern to
+analytics context: metric definitions, joins, business rules, wiki pages, and
+ingest decisions become files that can be reviewed, merged, and audited.
 
-KTX applies the same principle to analytics context. Metric definitions, business rules, join relationships, wiki pages - these are artifacts that determine whether an agent produces correct results. They change over time. They need review. They need history. They need to be treated like code.
-
-A KTX project is a git repository. Semantic sources are YAML files. Wiki pages are Markdown files. Changes are commits. Updates are pull requests. Deployment is a merge. The entire lifecycle of your analytics context follows the same workflow your team already uses for dbt models, application code, and infrastructure.
+| Before | With KTX |
+|--------|----------|
+| Context scattered across BI tools, chats, docs, and analyst memory | Context lives in YAML and Markdown |
+| Agent changes are hard to inspect | Agent changes are git diffs |
+| Imports overwrite local judgment | Ingest reconciles with existing files |
+| History depends on tool logs | History lives in commits and transcripts |
 
 ## Auto-ingestion
 
-Most analytics context already exists - it's in your dbt manifests, LookML models, Metabase questions, and team Notion pages. KTX pulls from these sources automatically through adapters.
+Most context already exists in dbt manifests, LookML, MetricFlow, Metabase,
+Notion, warehouse metadata, and analyst notes. KTX reads those inputs through
+adapters, then reconciles them into local files.
 
-An ingestion run works like this:
+```text
+source tools -> adapters -> reconciliation agent -> YAML + Markdown diffs
+```
 
-1. **Adapters extract metadata.** Each configured source - dbt, LookML, Metabase, MetricFlow, Notion, or your live database - provides structured metadata about models, metrics, dimensions, questions, and documentation.
+| Step | What happens | Output |
+|------|--------------|--------|
+| **Extract** | Adapters read models, metrics, questions, schemas, and docs | Structured metadata |
+| **Reconcile** | The agent compares incoming facts with existing context | Create, update, skip, or flag |
+| **Write** | KTX saves changed semantic sources and wiki pages | Reviewable project files |
 
-2. **The LLM agent reconciles.** KTX doesn't blindly overwrite existing context. An LLM agent compares incoming metadata against your current semantic sources and wiki pages. It decides what to create, what to update, and what to leave alone. If your dbt project added a new model, the agent writes a new semantic source. If a Metabase question references a metric you've already defined, the agent skips the duplicate.
-
-3. **Files are written.** New and updated YAML sources and Markdown wiki pages are written to the project directory. Every decision is recorded in the session transcript.
-
-This reconciliation step is what separates auto-ingestion from a simple sync. A naive import would overwrite your hand-tuned metric definitions every time dbt's manifest changes. KTX's agent-driven approach merges intelligently: it respects your edits, fills gaps, and flags conflicts for human review.
+Reconciliation is the key difference from a sync. KTX preserves accepted local
+edits, fills gaps, and surfaces conflicts instead of blindly overwriting files.
 
 ## The git workflow
 
-Auto-ingestion is designed to plug into a PR-based workflow. Run ingestion on a branch, review the changed YAML and Markdown files, and merge them the same way you merge dbt models or application code.
+Run ingestion on a branch, review the changed YAML and Markdown, then merge the
+accepted context the same way you merge dbt or application code.
 
 ```text
-dbt / Looker / Metabase / Notion
-            |
-            v
-     metadata changes
-            |
-            v
-  nightly cron or CI ingest
-            |
-            v
-  branch: ingest/nightly
-            |
-            |  + 3 new sources
-            |  ~ 2 updated joins
-            |  + 1 wiki page
-            v
-        open PR
-            |
-            v
-  review semantic diff
-            |
-            v
-     approve & merge
-            |
-            v
-  agents see updated context
+dbt / BI / docs / warehouse
+          |
+          v
+   ktx ingest --all
+          |
+          v
+ branch: ingest/nightly
+          |
+          v
+   semantic diff in PR
+          |
+          v
+ approve and merge
+          |
+          v
+ agents read updated files
 ```
 
-A typical branch shows a semantic diff: "this ingest added 3 new sources from dbt, updated 2 join definitions based on schema changes, and created 1 wiki page from a Notion doc." Analytics engineers review the diff, verify that the new sources look correct, and merge.
+Typical review checklist:
 
-Teams usually run this on demand while setting up a source, then schedule it
-once the source is stable. A cron job or CI schedule can run `ktx ingest --all --no-input`
-overnight on an ingest branch so the latest schema context, dbt manifests, BI
-metadata, and documentation updates are ready for review each morning.
+- new sources match the warehouse and source-tool evidence;
+- joins have the right relationship direction;
+- generated measures match business definitions;
+- wiki pages capture caveats without duplicating YAML;
+- `.ktx/` runtime state stays out of git unless your team intentionally reviews
+  a report or transcript.
 
-Once merged, agents querying through the KTX CLI see the updated context immediately. No deployment step, no cache invalidation, no restart. The files are the source of truth, and agents read them on every request.
-
-This workflow gives you the same review guarantees you have for dbt models. No semantic source reaches production without a human approving it. But unlike maintaining context manually, the heavy lifting - discovering new tables, drafting source definitions, extracting business rules from documentation - is done by the ingestion agent. You review and approve. You don't write from scratch.
+Teams often run ingestion on demand during setup, then schedule
+`ktx ingest --all --no-input` on an ingest branch once the source is stable.
 
 ## Feedback loops
 
-Context improves over time through two feedback channels.
+Context improves when human corrections and agent signals flow back into the
+same reviewed files.
 
-**Analyst corrections.** When an analytics engineer spots something wrong - a measure formula that doesn't match the business definition, a join that should be `many_to_one` instead of `one_to_many`, a wiki page that's out of date - they edit the YAML or Markdown directly and commit. These corrections become part of the project's git history, and the next ingestion run respects them. If you manually fix a measure definition, KTX won't overwrite it on the next ingest.
+| Signal | Example | Where it lands |
+|--------|---------|----------------|
+| Analyst correction | A measure excludes test accounts | `semantic-layer/**/*.yaml` |
+| Business clarification | ARR changed definition this quarter | `wiki/**/*.md` |
+| Agent query issue | A filter returns no rows unexpectedly | Wiki caveat or tighter source filter |
+| Join problem | A path duplicates order-level measures | Relationship metadata or grain fix |
 
-**Agent feedback.** When an agent queries the semantic layer and gets unexpected results - a query that returns no rows because of a bad filter, a join path that produces duplicated results - it can flag the issue. These signals feed back into the context: wiki pages can note known data quality issues, and source definitions can be tightened with better filters, join paths, or grain declarations.
-
-Each of these channels makes the next ingestion cycle better. Analyst corrections teach the system what your team considers authoritative. Agent feedback surfaces gaps in coverage. Context is not a static artifact - it's a living system that converges toward accuracy with every iteration.
+Accepted corrections become input to the next ingest run. That makes the
+context layer converge toward the team's current source of truth.
 
 ## Deterministic replay
 
-Every ingestion session in KTX produces a full transcript: every tool call the LLM agent made, every response it received, every source it created or modified, and the reasoning behind each decision.
+Every ingestion session records the adapter inputs, tool calls, LLM responses,
+write decisions, and reasoning behind each change.
 
-This matters for three reasons.
+| Use case | What replay gives you |
+|----------|-----------------------|
+| **Debugging** | Trace a bad source, join, or measure back to the input that produced it |
+| **Trust** | Show where a definition came from and who reviewed the resulting diff |
+| **Reproducibility** | Compare old and new ingest behavior after config or model changes |
 
-**Debugging.** When a semantic source looks wrong - the grain is off, a join points to the wrong table, a measure formula doesn't match the business definition - you can trace it back to the ingestion session that created it. The transcript shows exactly which adapter provided the input, how the LLM interpreted it, and why it made the decision it did. You don't have to guess.
-
-**Trust.** Analytics teams need to trust the context that agents consume. Deterministic replay means you can verify any part of the context layer by re-examining the session that produced it. If a stakeholder asks "where did this revenue definition come from?", you have a complete audit trail - from the dbt manifest entry, through the LLM's reconciliation logic, to the YAML file that was written.
-
-**Reproducibility.** Because ingestion sessions are recorded as structured transcripts (tool calls and responses, not just logs), they can be replayed for testing and validation. If you change your ingestion configuration or upgrade the LLM, you can replay previous sessions to see how the output would differ. This gives you a safety net for changes that affect how context is generated.
-
-The transcript is stored with local ingest run state and can be reviewed or replayed when you need to audit a decision. Commit the resulting YAML and Markdown changes; commit reports or transcripts only when they are part of your team's review workflow.
+Commit the YAML and Markdown changes. Commit reports or transcripts only when
+they are part of your team's review workflow.
 
 ## Agent usage notes
 
-Use this page when an agent needs to explain review workflows, ingestion diffs, replayability, or why KTX writes YAML and Markdown instead of hiding context in a hosted service.
+Use this page when an agent needs to explain review workflows, ingestion diffs,
+replayability, or why KTX writes YAML and Markdown instead of hiding context in
+a hosted service.
 
 | Agent task | Relevant section | Next page |
 |------------|------------------|-----------|
 | Explain how generated context should be reviewed | The git workflow | [Building Context](/docs/guides/building-context) |
-| Diagnose why ingestion changed a semantic source | Auto-ingestion and Deterministic replay | [ktx ingest](/docs/cli-reference/ktx-ingest) |
+| Diagnose why ingestion changed a semantic source | Auto-ingestion / Deterministic replay | [ktx ingest](/docs/cli-reference/ktx-ingest) |
 | Explain how context improves over time | Feedback loops | [Building Context](/docs/guides/building-context) |
 | Tell a user what to commit | The git workflow | [Writing Context](/docs/guides/writing-context) |
