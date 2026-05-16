@@ -43,6 +43,12 @@ need to add or update wiki knowledge.
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
+`wiki search` uses hybrid search when `storage.search` is `sqlite-fts5`. KTX
+combines lexical SQLite FTS5 matches, token matches, and semantic matches from
+wiki page embeddings stored in `.ktx/db.sqlite`. If embeddings are not
+configured or the embedding backend is unavailable, KTX skips the semantic lane
+and keeps lexical and token results.
+
 ## Examples
 
 ```bash
@@ -60,14 +66,21 @@ ktx wiki search "monthly recurring revenue" --json --limit 10
 
 # Print search results as TSV
 ktx wiki search "monthly recurring revenue" --output plain
+
+# Inspect which search lanes were used
+ktx --debug wiki search "monthly recurring revenue" --json
 ```
 
 ## Output
 
 Wiki commands print clack-style pretty output in a TTY and TSV-style plain
 output when requested. JSON output wraps the items with a command metadata
-envelope. Open the matching Markdown files directly when you need the full page
-contents.
+envelope. Search results include `matchReasons` and `lanes` metadata so you can
+see whether lexical, token, or semantic search contributed to the ranking. Open
+the matching Markdown files directly when you need the full page contents.
+Pretty search output shows `#1`, `#2`, and later rank badges for the displayed
+results. Plain and JSON output keep the raw `score` value, which is a ranking
+score rather than a percentage.
 
 ```json
 {
@@ -77,16 +90,49 @@ contents.
       {
         "key": "revenue-definitions",
         "summary": "Canonical revenue metric definitions",
-        "score": 0.92
+        "score": 0.92,
+        "matchReasons": ["lexical", "semantic"],
+        "lanes": [
+          {
+            "lane": "lexical",
+            "status": "available",
+            "requestedCandidatePoolLimit": 25,
+            "effectiveCandidatePoolLimit": 25,
+            "returnedCandidateCount": 3,
+            "weight": 1.5
+          },
+          {
+            "lane": "semantic",
+            "status": "available",
+            "requestedCandidatePoolLimit": 25,
+            "effectiveCandidatePoolLimit": 25,
+            "returnedCandidateCount": 8,
+            "weight": 3
+          }
+        ]
       }
     ]
+  },
+  "meta": {
+    "command": "wiki search"
   }
 }
+```
+
+When you pass the global `--debug` flag, KTX writes search diagnostics to
+stderr and leaves stdout unchanged. This is useful with `--json` because stdout
+stays machine-readable:
+
+```text
+[debug] wiki search mode=sqlite-fts5 embedding=configured results=2
+[debug] wiki search lane=lexical status=available returned=1 weight=1.5
+[debug] wiki search lane=token status=available returned=1 weight=0.75
+[debug] wiki search lane=semantic status=available returned=2 weight=3
 ```
 
 ## Common errors
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Search returns no results | The query terms do not match summaries, tags, or content | Retry with business synonyms, then create a page if the knowledge is missing |
+| Search returns no results | The query terms do not match summaries, tags, or content, and the semantic lane is unavailable or has no positive matches | Run with `--debug`, check the semantic lane status, retry with business synonyms, then create a page if the knowledge is missing |
 | A page is missing | No Markdown file exists for that business context | Add a file under `wiki/` or run `ktx ingest <connectionId>` |

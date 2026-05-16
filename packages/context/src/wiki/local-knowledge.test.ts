@@ -22,6 +22,25 @@ class FakeEmbeddingPort {
   }
 }
 
+class ArrSynonymEmbeddingPort {
+  readonly maxBatchSize = 16;
+
+  async computeEmbedding(text: string): Promise<number[]> {
+    const lower = text.toLowerCase();
+    if (lower.trim() === 'annual recurring revenue' || lower.includes('arr') || lower.includes('contract-first')) {
+      return [1, 0];
+    }
+    if (lower.includes('net revenue') || lower.includes('gross') || lower.includes('refund')) {
+      return [0, 1];
+    }
+    return [0.5, 0.5];
+  }
+
+  async computeEmbeddingsBulk(texts: string[]): Promise<number[][]> {
+    return Promise.all(texts.map((text) => this.computeEmbedding(text)));
+  }
+}
+
 describe('local knowledge helpers', () => {
   let tempDir: string;
   let project: KtxLocalProject;
@@ -126,6 +145,37 @@ describe('local knowledge helpers', () => {
 
     expect(search[0]).toMatchObject({
       key: 'metrics-revenue',
+      matchReasons: expect.arrayContaining(['semantic']),
+      lanes: expect.arrayContaining([expect.objectContaining({ lane: 'semantic', status: 'available' })]),
+    });
+  });
+
+  it('ranks ARR synonym queries by semantic page embeddings over stronger lexical revenue matches', async () => {
+    await writeLocalKnowledgePage(project, {
+      key: 'arr-definition',
+      scope: 'GLOBAL',
+      summary: 'ARR is calculated contract-first for active customer contracts.',
+      content: 'Contract-first active contract value takes precedence over subscription values.',
+      tags: ['arr', 'contracts', 'finance'],
+    });
+    await writeLocalKnowledgePage(project, {
+      key: 'net-revenue-definition',
+      scope: 'GLOBAL',
+      summary: 'Net revenue definition',
+      content: 'Annual revenue is gross invoice revenue minus credits and refunds.',
+      tags: ['revenue', 'finance'],
+    });
+
+    const search = await searchLocalKnowledgePages(project, {
+      query: 'annual recurring revenue',
+      userId: 'local',
+      limit: 2,
+      embeddingService: new ArrSynonymEmbeddingPort(),
+    });
+
+    expect(search.map((result) => result.key)).toEqual(['arr-definition', 'net-revenue-definition']);
+    expect(search[0]).toMatchObject({
+      key: 'arr-definition',
       matchReasons: expect.arrayContaining(['semantic']),
       lanes: expect.arrayContaining([expect.objectContaining({ lane: 'semantic', status: 'available' })]),
     });

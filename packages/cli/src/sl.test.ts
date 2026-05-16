@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import Database from 'better-sqlite3';
 import { initKtxProject } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,6 +97,23 @@ describe('runKtxSl', () => {
       },
       meta: { command: 'sl search' },
     });
+  });
+
+  it('prints semantic-layer search rank badges in pretty output', async () => {
+    const projectDir = join(tempDir, 'rank-project');
+    await seedSlSource({ projectDir });
+
+    const searchIo = makeIo();
+    await expect(
+      runKtxSl(
+        { command: 'search', projectDir, connectionId: 'warehouse', query: 'order', output: 'pretty' },
+        searchIo.io,
+      ),
+    ).resolves.toBe(0);
+
+    const stdout = stripVTControlCharacters(searchIo.stdout());
+    expect(stdout).toMatch(/#1\s+orders/);
+    expect(stdout).not.toContain('%');
   });
 
   it('prints semantic-layer list and search as public JSON envelopes', async () => {

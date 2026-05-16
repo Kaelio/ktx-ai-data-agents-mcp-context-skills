@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { initKtxProject, loadKtxProject } from '@ktx/context/project';
 import type { KtxEmbeddingPort } from '@ktx/context';
 import { writeLocalKnowledgePage } from '@ktx/context/wiki';
@@ -90,6 +91,24 @@ describe('runKtxKnowledge', () => {
     expect(searchIo.stdout()).toContain('metrics-revenue');
   });
 
+  it('prints wiki search rank badges in pretty output', async () => {
+    const projectDir = join(tempDir, 'rank-project');
+    await initKtxProject({ projectDir });
+    await seedWikiPage(projectDir);
+
+    const searchIo = makeIo();
+    await expect(
+      runKtxKnowledge(
+        { command: 'search', projectDir, query: 'paid order', userId: 'local', output: 'pretty' },
+        searchIo.io,
+      ),
+    ).resolves.toBe(0);
+
+    const stdout = stripVTControlCharacters(searchIo.stdout());
+    expect(stdout).toMatch(/#1\s+metrics-revenue/);
+    expect(stdout).not.toContain('%');
+  });
+
   it('prints wiki list and search as public JSON envelopes', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });
@@ -155,5 +174,30 @@ describe('runKtxKnowledge', () => {
 
     expect(searchIo.stdout()).toContain('active-contract-arr-open-tickets');
     expect(searchIo.stderr()).toBe('');
+  });
+
+  it('writes wiki search lane diagnostics to stderr when debug is enabled', async () => {
+    const projectDir = join(tempDir, 'debug-project');
+    await initKtxProject({ projectDir });
+    await seedWikiPage(projectDir);
+
+    const searchIo = makeIo();
+    await expect(
+      runKtxKnowledge(
+        { command: 'search', projectDir, query: 'paid order', userId: 'local', json: true, debug: true },
+        searchIo.io,
+        { embeddingService: new FakeEmbeddingPort() },
+      ),
+    ).resolves.toBe(0);
+
+    expect(JSON.parse(searchIo.stdout())).toMatchObject({
+      kind: 'list',
+      data: { items: [expect.objectContaining({ key: 'metrics-revenue' })] },
+      meta: { command: 'wiki search' },
+    });
+    expect(searchIo.stderr()).toContain('[debug] wiki search mode=sqlite-fts5');
+    expect(searchIo.stderr()).toContain('embedding=configured');
+    expect(searchIo.stderr()).toContain('lane=lexical status=available');
+    expect(searchIo.stderr()).toContain('lane=semantic status=available');
   });
 });

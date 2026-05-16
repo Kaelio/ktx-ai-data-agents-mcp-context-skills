@@ -171,6 +171,22 @@ describe('runKtxCli', () => {
       },
       searchIo.io,
     );
+
+    const debugSearchIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, '--debug', 'wiki', 'search', 'revenue'], debugSearchIo.io, { knowledge }),
+    ).resolves.toBe(0);
+    expect(knowledge).toHaveBeenLastCalledWith(
+      {
+        command: 'search',
+        projectDir: tempDir,
+        query: 'revenue',
+        userId: 'local',
+        json: false,
+        debug: true,
+      },
+      debugSearchIo.io,
+    );
   });
 
   it('rejects removed public wiki read and write commands', async () => {

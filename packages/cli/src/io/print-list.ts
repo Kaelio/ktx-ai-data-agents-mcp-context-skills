@@ -24,7 +24,7 @@ export interface PrintListColumn<Row> {
    * - `'suffix'` — trailing em-dash optional value. Default: any column with `optional: true`.
    */
   role?: 'name' | 'metric' | 'badge' | 'suffix';
-  /** Custom pretty-mode value formatter (e.g. score → "87%"). Plain/JSON unaffected. */
+  /** Custom pretty-mode value formatter (for example, score -> "#1"). Plain/JSON unaffected. */
   prettyFormat?: (value: Row[keyof Row & string], row: Row) => string;
 }
 
@@ -65,6 +65,16 @@ export function printList<Row extends object>(args: PrintListArgs<Row>): void {
       printListPretty(args);
       return;
   }
+}
+
+export function createRankBadgeFormatter<Row extends object>(
+  rows: ReadonlyArray<Row>,
+): (_value: Row[keyof Row & string], row: Row) => string {
+  const ranks = new WeakMap<Row, number>();
+  rows.forEach((row, index) => {
+    ranks.set(row, index + 1);
+  });
+  return (_value, row) => `#${ranks.get(row) ?? rows.indexOf(row) + 1}`;
 }
 
 function isEmpty(value: unknown): boolean {

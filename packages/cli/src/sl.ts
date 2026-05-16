@@ -109,7 +109,7 @@ async function printSlSources(input: {
   emptyHint?: string;
 }): Promise<void> {
   const { resolveOutputMode } = await import('./io/mode.js');
-  const { printList } = await import('./io/print-list.js');
+  const { createRankBadgeFormatter, printList } = await import('./io/print-list.js');
   const mode = resolveOutputMode({ explicit: input.output, json: input.json, io: input.io });
 
   if (input.command === 'sl search') {
@@ -119,7 +119,7 @@ async function printSlSources(input: {
         label: 'SCORE',
         plain: 'score=',
         role: 'badge',
-        prettyFormat: (value) => `${Math.round(Number(value) * 100)}%`,
+        prettyFormat: createRankBadgeFormatter(input.rows as ReadonlyArray<LocalSlSourceSearchResult>),
         dim: true,
       },
       { key: 'connectionId', label: 'CONNECTION', plain: '' },
