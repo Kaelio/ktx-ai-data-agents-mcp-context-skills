@@ -49,13 +49,13 @@ describe('requireNpmPublicReleaseReady', () => {
 });
 
 describe('buildNpmPublishCommand', () => {
-  it('builds a dry-run pnpm publish command by default', () => {
+  it('builds a dry-run npm publish command by default', () => {
     assert.deepEqual(
       buildNpmPublishCommand('/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.1.tgz', readyReport.npmPublish, {
         live: false,
       }),
       {
-        command: 'pnpm',
+        command: 'npm',
         args: [
           'publish',
           '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.1.tgz',
@@ -64,7 +64,6 @@ describe('buildNpmPublishCommand', () => {
           '--tag',
           'next',
           '--dry-run',
-          '--no-git-checks',
         ],
         env: {},
       },
