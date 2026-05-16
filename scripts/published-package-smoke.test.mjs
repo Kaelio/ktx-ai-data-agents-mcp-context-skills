@@ -6,6 +6,8 @@ import {
   buildPublishedPackageNpxCommand,
   buildPublishedPackageSmokeCommands,
   isPublishedPackageVersionLabel,
+  isTransientPublishedPackageLookupFailure,
+  publishedPackageSmokePnpmWorkspaceYaml,
   publishedPackageSpec,
   readPublishedPackageSmokeConfig,
 } from './published-package-smoke.mjs';
@@ -156,6 +158,33 @@ describe('published package smoke output validation labels', () => {
   });
 });
 
+describe('published package smoke registry retry classification', () => {
+  it('recognizes npm propagation misses as transient lookup failures', () => {
+    assert.equal(
+      isTransientPublishedPackageLookupFailure({
+        code: 1,
+        stdout: '',
+        stderr: [
+          'npm error code ETARGET',
+          'npm error notarget No matching version found for @kaelio/ktx@0.1.0-rc.4.',
+        ].join('\n'),
+      }),
+      true,
+    );
+  });
+
+  it('does not retry unrelated command failures', () => {
+    assert.equal(
+      isTransientPublishedPackageLookupFailure({
+        code: 1,
+        stdout: '',
+        stderr: 'npm error code EOTP',
+      }),
+      false,
+    );
+  });
+});
+
 describe('published package smoke command construction', () => {
   const config = {
     enabled: true,
@@ -241,6 +270,13 @@ describe('published package smoke command construction', () => {
           env: { npm_config_registry: 'https://registry.npmjs.org/' },
         },
       ],
+    );
+  });
+
+  it('allows native dependency build scripts in clean pnpm smoke installs', () => {
+    assert.equal(
+      publishedPackageSmokePnpmWorkspaceYaml(),
+      ['packages:', '  - "."', 'allowBuilds:', '  better-sqlite3: true', ''].join('\n'),
     );
   });
 
