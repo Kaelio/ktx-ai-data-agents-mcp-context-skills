@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publicNpmPackageVersion": "0.1.0-rc.4",
+  "publicNpmPackageVersion": "0.1.0-rc.5",
   "releaseMode": "npm-public-release-ready",
   "npm": {
     "publish": true,
@@ -20,7 +20,7 @@
   },
   "publishedPackageSmoke": {
     "packageName": "@kaelio/ktx",
-    "version": "0.1.0-rc.4",
+    "version": "0.1.0-rc.5",
     "registry": null
   },
   "runtimeInstaller": {

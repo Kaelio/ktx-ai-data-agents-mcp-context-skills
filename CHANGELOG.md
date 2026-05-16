@@ -1,3 +1,9 @@
+## [0.1.0-rc.5](https://github.com/kaelio/ktx/compare/v0.1.0-rc.4...v0.1.0-rc.5) (2026-05-16)
+
+### Bug Fixes
+
+* **release:** tolerate npm propagation in smoke ([8d1837f](https://github.com/kaelio/ktx/commit/8d1837f26edecb7017317e6624edf208aebca194))
+
 ## [0.1.0-rc.4](https://github.com/kaelio/ktx/compare/v0.1.0-rc.3...v0.1.0-rc.4) (2026-05-16)
 
 ### Bug Fixes
