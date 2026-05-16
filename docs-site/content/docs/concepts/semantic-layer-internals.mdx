@@ -323,27 +323,49 @@ and picks a simple or aggregate-locality SQL shape.
   className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
   aria-label="Fan-out safe execution shape"
 >
-  <div className="grid gap-0 md:grid-cols-2">
-    <section className="border-b border-fd-border bg-fd-background p-4 md:border-b-0 md:border-r">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
-        {"Unsafe shape"}
-      </p>
-      <pre className="overflow-x-auto rounded-md bg-fd-muted p-3 text-xs leading-5 text-fd-foreground">
+  <div className="border-b border-fd-border bg-fd-muted/35 px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+      {"Fan-out handling"}
+    </p>
+    <p className="mt-1 text-sm leading-6 text-fd-muted-foreground">
+      {"The same question planned before and after KTX preserves the measure grain."}
+    </p>
+  </div>
+  <div className="grid gap-3 bg-fd-background p-4 md:grid-cols-[0.92fr_1.08fr]">
+    <section className="flex min-h-full flex-col rounded-md border border-fd-border bg-fd-card">
+      <div className="border-b border-fd-border px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">
+          {"Unsafe shape"}
+        </p>
+        <p className="mt-1 text-sm font-semibold text-fd-foreground">
+          {"Join first, aggregate later"}
+        </p>
+      </div>
+      <pre className="m-0 min-h-[13rem] flex-1 overflow-x-auto bg-transparent px-4 py-3 text-xs leading-5 text-fd-foreground">
 {`orders
-  join order_items
-  join customers
-group by customer_segment
-sum(orders.amount)`}
+  -> join order_items
+  -> join customers
+
+group by
+  customer_segment
+
+measure
+  sum(orders.amount)`}
       </pre>
-      <p className="mt-3 text-sm text-fd-muted-foreground">
-        {"The order measure is exposed to line-item fan-out before aggregation."}
-      </p>
+      <div className="border-t border-fd-border bg-red-50/60 px-4 py-3 text-sm leading-6 text-red-950 dark:bg-red-950/20 dark:text-red-100">
+        {"Order-level revenue is exposed to line-item fan-out before aggregation."}
+      </div>
     </section>
-    <section className="bg-fd-background p-4">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
-        {"KTX shape"}
-      </p>
-      <pre className="overflow-x-auto rounded-md border border-fd-border bg-fd-muted p-3 text-xs leading-5 text-fd-foreground">
+    <section className="flex min-h-full flex-col rounded-md border border-fd-primary/40 bg-fd-card shadow-[inset_4px_0_0_var(--color-fd-primary)]">
+      <div className="border-b border-fd-border px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-primary">
+          {"KTX shape"}
+        </p>
+        <p className="mt-1 text-sm font-semibold text-fd-foreground">
+          {"Aggregate locally, then join"}
+        </p>
+      </div>
+      <pre className="m-0 min-h-[13rem] flex-1 overflow-x-auto bg-transparent px-4 py-3 text-xs leading-5 text-fd-foreground">
 {`orders_agg as (
   select customer_id, sum(amount) revenue
   from orders
@@ -353,9 +375,9 @@ select customers.segment, sum(revenue)
 from orders_agg
 join customers`}
       </pre>
-      <p className="mt-3 text-sm text-fd-muted-foreground">
-        {"KTX pre-aggregates fact measures at their own grain before joining dimensions."}
-      </p>
+      <div className="border-t border-fd-border bg-fd-primary/10 px-4 py-3 text-sm leading-6 text-fd-foreground">
+        {"The measure is pre-aggregated at order grain before dimensions are joined."}
+      </div>
     </section>
   </div>
 </div>
