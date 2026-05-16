@@ -193,6 +193,9 @@ describe('setup agents', () => {
     expect(analyticsSkill).toContain('name: ktx-analytics');
     expect(analyticsSkill).toContain('Always run `discover_data` before writing SQL.');
     expect(analyticsSkill).toContain('Treat a `dictionary_search` miss as non-authoritative.');
+    expect(analyticsSkill).toContain('memory_ingest');
+    expect(analyticsSkill).toContain('ARR is reported in cents');
+    expect(analyticsSkill).not.toContain('memory_capture');
   });
 
   it('writes PATH-independent launcher commands for skills', async () => {
