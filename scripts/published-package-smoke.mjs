@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -22,6 +22,8 @@ export {
 
 const execFileAsync = promisify(execFile);
 const SMOKE_TIMEOUT_MS = 180_000;
+const TRANSIENT_LOOKUP_RETRY_ATTEMPTS = 6;
+const TRANSIENT_LOOKUP_RETRY_DELAY_MS = 10_000;
 
 const VERSION_LABELS = new Set([
   'published package npx version',
@@ -31,6 +33,18 @@ const VERSION_LABELS = new Set([
 
 export function isPublishedPackageVersionLabel(label) {
   return VERSION_LABELS.has(label);
+}
+
+export function publishedPackageSmokePnpmWorkspaceYaml() {
+  return ['packages:', '  - "."', 'allowBuilds:', '  better-sqlite3: true', ''].join('\n');
+}
+
+export function isTransientPublishedPackageLookupFailure(result) {
+  return (
+    result.code !== 0 &&
+    (result.stderr.includes('npm error code ETARGET') ||
+      result.stderr.includes('No matching version found for @kaelio/ktx@'))
+  );
 }
 
 function scriptRootDir() {
@@ -61,6 +75,24 @@ async function runCommand(command, args, options = {}) {
   }
 }
 
+function delay(ms) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
+
+async function runCommandWithRegistryRetry(command, args, options = {}) {
+  const attempts = options.retryAttempts ?? TRANSIENT_LOOKUP_RETRY_ATTEMPTS;
+  const retryDelayMs = options.retryDelayMs ?? TRANSIENT_LOOKUP_RETRY_DELAY_MS;
+  let result = await runCommand(command, args, options);
+
+  for (let attempt = 2; attempt <= attempts && isTransientPublishedPackageLookupFailure(result); attempt += 1) {
+    process.stdout.write(`npm registry has not exposed the package yet; retrying smoke command (${attempt}/${attempts})\n`);
+    await delay(retryDelayMs);
+    result = await runCommand(command, args, options);
+  }
+
+  return result;
+}
+
 function requireSuccess(label, result) {
   assert.equal(
     result.code,
@@ -74,15 +106,17 @@ export async function runPublishedPackageSmoke(config) {
   try {
     const projectDir = join(root, 'demo-project');
 
+    await writeFile(join(root, 'pnpm-workspace.yaml'), publishedPackageSmokePnpmWorkspaceYaml());
+
     const commands = buildPublishedPackageSmokeCommands(config, projectDir);
     const pnpmHome = join(root, 'pnpm-home');
     const globalEnv = {
       PNPM_HOME: pnpmHome,
-      PATH: `${pnpmHome}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
+      PATH: [join(pnpmHome, 'bin'), pnpmHome, process.env.PATH ?? ''].join(process.platform === 'win32' ? ';' : ':'),
     };
     for (const command of commands) {
       const isGlobalCommand = command.label.includes('global');
-      const result = await runCommand(command.command, command.args, {
+      const result = await runCommandWithRegistryRetry(command.command, command.args, {
         cwd: command.label.includes('local') || isGlobalCommand ? root : undefined,
         env: isGlobalCommand ? { ...globalEnv, ...command.env } : command.env,
       });
