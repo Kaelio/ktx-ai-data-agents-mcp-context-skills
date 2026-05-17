@@ -301,4 +301,48 @@ describe('parseIngestReportSnapshot', () => {
       resolverFailures: 0,
     });
   });
+
+  it('parses isolated-diff gate repair counters', () => {
+    const snapshot = parseIngestReportSnapshot({
+      id: 'report-1',
+      runId: 'run-1',
+      jobId: 'job-1',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      body: {
+        status: 'completed',
+        syncId: 'sync-1',
+        diffSummary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+        commitSha: 'abc123',
+        isolatedDiff: {
+          enabled: true,
+          acceptedPatches: 1,
+          textualConflicts: 0,
+          semanticConflicts: 1,
+          gateRepairAttempts: 1,
+          gateRepairs: 1,
+          gateRepairFailures: 0,
+        },
+        workUnits: [],
+        failedWorkUnits: [],
+        reconciliationSkipped: true,
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+        evictionInputs: [],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+
+    expect(snapshot.body.isolatedDiff).toMatchObject({
+      gateRepairAttempts: 1,
+      gateRepairs: 1,
+      gateRepairFailures: 0,
+    });
+  });
 });

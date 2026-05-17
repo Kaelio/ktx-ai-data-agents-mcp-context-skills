@@ -73,6 +73,9 @@ export interface IngestReportBody {
     resolverAttempts?: number;
     resolverRepairs?: number;
     resolverFailures?: number;
+    gateRepairAttempts?: number;
+    gateRepairs?: number;
+    gateRepairFailures?: number;
   };
   workUnits: IngestReportWorkUnit[];
   failedWorkUnits: string[];

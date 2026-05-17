@@ -158,6 +158,9 @@ export const ingestReportSnapshotSchema = z
             resolverAttempts: z.number().int().min(0).default(0),
             resolverRepairs: z.number().int().min(0).default(0),
             resolverFailures: z.number().int().min(0).default(0),
+            gateRepairAttempts: z.number().int().min(0).default(0),
+            gateRepairs: z.number().int().min(0).default(0),
+            gateRepairFailures: z.number().int().min(0).default(0),
           })
           .optional(),
         workUnits: z.array(
