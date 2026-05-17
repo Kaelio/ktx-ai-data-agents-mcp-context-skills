@@ -41,6 +41,9 @@ export interface WorkUnitOutcome {
   touchedSlSources: TouchedSlSource[];
   slDisallowed?: boolean;
   slDisallowedReason?: 'lookml_connection_mismatch';
+  patchPath?: string;
+  patchTouchedPaths?: string[];
+  childWorktreePath?: string;
 }
 
 export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit): Promise<WorkUnitOutcome> {

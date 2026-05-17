@@ -1,0 +1,87 @@
+import { mkdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { SessionOutcome } from '../../core/index.js';
+import type { IngestSessionWorktree, IngestSessionWorktreePort } from '../ports.js';
+import type { WorkUnit } from '../types.js';
+import type { IngestTraceWriter } from '../ingest-trace.js';
+import type { WorkUnitOutcome } from '../stages/stage-3-work-units.js';
+import { assertPatchAllowedForWorkUnit } from './git-patch.js';
+
+export interface RunIsolatedWorkUnitInput {
+  unitIndex: number;
+  ingestionBaseSha: string;
+  sessionWorktreeService: IngestSessionWorktreePort;
+  patchDir: string;
+  trace: IngestTraceWriter;
+  workUnit: WorkUnit;
+  run(child: IngestSessionWorktree): Promise<WorkUnitOutcome>;
+}
+
+function patchFileName(unitIndex: number, unitKey: string): string {
+  const safeKey = unitKey.replace(/[^a-zA-Z0-9_.-]+/g, '-');
+  return `${String(unitIndex).padStart(4, '0')}-${safeKey}.patch`;
+}
+
+export async function runIsolatedWorkUnit(input: RunIsolatedWorkUnitInput): Promise<WorkUnitOutcome> {
+  const sessionKey = `${input.trace.context.jobId}-${input.workUnit.unitKey}`;
+  let cleanupOutcome: SessionOutcome = 'crash';
+  const child = await input.sessionWorktreeService.create(sessionKey, input.ingestionBaseSha);
+  await input.trace.event('debug', 'work_unit', 'work_unit_child_created', {
+    unitKey: input.workUnit.unitKey,
+    unitIndex: input.unitIndex,
+    worktreePath: child.workdir,
+    baseSha: input.ingestionBaseSha,
+  });
+
+  try {
+    const outcome = await input.run(child);
+    if (outcome.status !== 'success') {
+      cleanupOutcome = 'crash';
+      await input.trace.event('error', 'work_unit', 'work_unit_failed_before_patch', {
+        unitKey: input.workUnit.unitKey,
+        reason: outcome.reason ?? 'unknown failure',
+      });
+      return { ...outcome, childWorktreePath: child.workdir };
+    }
+
+    await mkdir(input.patchDir, { recursive: true });
+    const patchPath = join(input.patchDir, patchFileName(input.unitIndex, input.workUnit.unitKey));
+    await child.git.writeBinaryNoRenamePatch(input.ingestionBaseSha, 'HEAD', patchPath);
+    const patch = await readFile(patchPath, 'utf-8');
+    const touched = assertPatchAllowedForWorkUnit({
+      unitKey: input.workUnit.unitKey,
+      patch,
+      slDisallowed: input.workUnit.slDisallowed === true,
+    });
+    cleanupOutcome = 'success';
+    await input.trace.event('debug', 'work_unit', 'work_unit_patch_collected', {
+      unitKey: input.workUnit.unitKey,
+      patchPath,
+      touchedPaths: touched.map((entry) => entry.path),
+      patchBytes: Buffer.byteLength(patch),
+    });
+    return {
+      ...outcome,
+      patchPath,
+      patchTouchedPaths: touched.map((entry) => entry.path),
+      childWorktreePath: child.workdir,
+    };
+  } catch (error) {
+    cleanupOutcome = 'crash';
+    await input.trace.event(
+      'error',
+      'work_unit',
+      'work_unit_child_failed',
+      { unitKey: input.workUnit.unitKey, worktreePath: child.workdir },
+      error,
+    );
+    throw error;
+  } finally {
+    await input.sessionWorktreeService.cleanup(child, cleanupOutcome);
+    await input.trace.event('trace', 'work_unit', 'work_unit_child_cleanup', {
+      unitKey: input.workUnit.unitKey,
+      outcome: cleanupOutcome,
+      worktreePath: child.workdir,
+    });
+  }
+}
