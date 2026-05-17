@@ -1,0 +1,103 @@
+---
+title: "ktx sql"
+description: "Execute parser-validated read-only SQL against a configured connection."
+---
+
+Run read-only SQL against a database connection in your KTX project. The command
+validates the statement before execution and only accepts a single `SELECT` or
+`WITH` query.
+
+## Command signature
+
+Use `ktx sql` with a required connection id and positional SQL text.
+
+```bash
+ktx sql --connection-id <id> [options] <sql...>
+```
+
+## Options
+
+Use output flags to choose between terminal display, TSV rows, and structured
+JSON.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <id>` | KTX database connection id. Required. | - |
+| `--max-rows <n>` | Maximum rows to return. Must be between `1` and `10000`. | `1000` |
+| `--output <mode>` | Output mode: `pretty`, `plain` (TSV), or `json`. | `pretty` |
+| `--json` | Shortcut for `--output=json` (overrides `--output`). | `false` |
+
+## Examples
+
+Quote SQL in shell scripts and when the query contains spaces or punctuation.
+
+```bash
+# Count rows in a table
+ktx sql --connection-id warehouse "select count(*) from public.orders"
+
+# Return a small result set
+ktx sql \
+  --connection-id warehouse \
+  --max-rows 25 \
+  "select id, status from public.orders order by created_at desc"
+
+# Print JSON for agents or scripts
+ktx sql \
+  --connection-id warehouse \
+  --json \
+  "select status, count(*) from public.orders group by status"
+
+# Print TSV rows
+ktx sql \
+  --connection-id warehouse \
+  --output plain \
+  "select id, status from public.orders"
+```
+
+## Output
+
+Pretty output prints aligned columns and a final row count.
+
+```text
+status  count
+------  -----
+paid    42
+open    7
+
+2 rows
+```
+
+Plain output prints a TSV header row followed by TSV data rows.
+
+```text
+status	count
+paid	42
+open	7
+```
+
+JSON output preserves connection id, headers, optional header types, rows, and
+row count.
+
+```json
+{
+  "connectionId": "warehouse",
+  "headers": ["status", "count"],
+  "headerTypes": ["text", "bigint"],
+  "rows": [
+    ["paid", 42],
+    ["open", 7]
+  ],
+  "rowCount": 2
+}
+```
+
+## Common errors
+
+Use the error text to distinguish validation failures from connection failures.
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| `Only one SQL statement can be executed.` | The SQL text contains multiple statements. | Run one query at a time. |
+| `SQL contains read/write operation` | The statement is not read-only. | Use a single `SELECT` or `WITH` query. |
+| `Connection "<id>" is not configured in ktx.yaml` | The connection id is wrong or missing from the project. | Run `ktx connection list` and retry with an exact id. |
+| `does not support read-only SQL execution` | The connection type has no local SQL executor. | Use a supported database connection or query through MCP where available. |

@@ -7,6 +7,7 @@ import type { KtxPublicIngestArgs } from './public-ingest.js';
 import type { KtxRuntimeArgs } from './runtime.js';
 import type { KtxSetupArgs } from './setup.js';
 import type { KtxSlArgs } from './sl.js';
+import type { KtxSqlArgs } from './sql.js';
 import { profileMark, profileSpan } from './startup-profile.js';
 import type { KtxTextIngestArgs } from './text-ingest.js';
 
@@ -34,6 +35,7 @@ export interface KtxCliDeps {
   runtime?: (args: KtxRuntimeArgs, io: KtxCliIo) => Promise<number>;
   knowledge?: (args: KtxKnowledgeArgs, io: KtxCliIo) => Promise<number>;
   sl?: (args: KtxSlArgs, io: KtxCliIo) => Promise<number>;
+  sql?: (args: KtxSqlArgs, io: KtxCliIo) => Promise<number>;
   mcp?: {
     startDaemon?: typeof import('./managed-mcp-daemon.js').startKtxMcpDaemon;
     stopDaemon?: typeof import('./managed-mcp-daemon.js').stopKtxMcpDaemon;
