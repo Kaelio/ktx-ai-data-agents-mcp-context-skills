@@ -16,6 +16,7 @@ export interface IntegrateWorkUnitPatchInput {
   trace: IngestTraceWriter;
   author: { name: string; email: string };
   slDisallowed: boolean;
+  allowedTargetConnectionIds: ReadonlySet<string>;
   validateAppliedTree(touchedPaths: string[]): Promise<void>;
 }
 
@@ -40,12 +41,14 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
       unitKey: input.unitKey,
       patch,
       slDisallowed: input.slDisallowed,
+      allowedTargetConnectionIds: input.allowedTargetConnectionIds,
     });
   } catch (error) {
     await input.trace.event('error', 'integration', 'patch_policy_rejected', {
       unitKey: input.unitKey,
       patchPath: input.patchPath,
       touchedPaths,
+      allowedTargetConnectionIds: [...input.allowedTargetConnectionIds].sort(),
       reason: errorMessage(error),
     });
     return {

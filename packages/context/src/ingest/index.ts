@@ -17,6 +17,11 @@ export {
   buildLiveDatabaseTableNaturalKey,
   ktxSchemaSnapshotToExtractedSchema,
 } from './adapters/live-database/extracted-schema.js';
+export {
+  assertSemanticLayerTargetPathsAllowed,
+  findDisallowedSemanticLayerTargetPaths,
+  semanticLayerConnectionIdFromPath,
+} from './semantic-layer-target-policy.js';
 export { LiveDatabaseSourceAdapter } from './adapters/live-database/live-database.adapter.js';
 export type {
   BuildLiveDatabaseManifestShardsInput,

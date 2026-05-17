@@ -52,6 +52,7 @@ describe('integrateWorkUnitPatch', () => {
       author: { name: 'KTX Test', email: 'system@ktx.local' },
       validateAppliedTree: vi.fn().mockResolvedValue(undefined),
       slDisallowed: false,
+      allowedTargetConnectionIds: new Set(['c1']),
     });
 
     expect(result.status).toBe('accepted');
@@ -84,6 +85,7 @@ describe('integrateWorkUnitPatch', () => {
       author: { name: 'KTX Test', email: 'system@ktx.local' },
       validateAppliedTree: vi.fn().mockRejectedValue(new Error('final artifact gates failed')),
       slDisallowed: false,
+      allowedTargetConnectionIds: new Set(['c1']),
     });
 
     expect(result.status).toBe('semantic_conflict');
@@ -118,6 +120,7 @@ describe('integrateWorkUnitPatch', () => {
       author: { name: 'KTX Test', email: 'system@ktx.local' },
       validateAppliedTree: vi.fn().mockResolvedValue(undefined),
       slDisallowed: true,
+      allowedTargetConnectionIds: new Set(['c1']),
     });
 
     expect(result).toMatchObject({
@@ -127,5 +130,47 @@ describe('integrateWorkUnitPatch', () => {
     const rawTrace = await readFile(trace.tracePath, 'utf-8');
     expect(rawTrace).toContain('patch_policy_rejected');
     expect(rawTrace).toContain('slDisallowed WorkUnit lookml-mismatch touched semantic-layer/c1/orders.yaml');
+  });
+
+  it('classifies unauthorized semantic-layer targets as traced textual conflicts', async () => {
+    const { homeDir, git, baseSha } = await makeRepo();
+    const childDir = join(homeDir, 'child-target-policy');
+    await git.addWorktree(childDir, 'child-target-policy', baseSha);
+    const childGit = git.forWorktree(childDir);
+    await mkdir(join(childDir, 'semantic-layer/finance'), { recursive: true });
+    await writeFile(
+      join(childDir, 'semantic-layer/finance/orders.yaml'),
+      'name: orders\ncolumns: []\njoins: []\nmeasures: []\n',
+    );
+    await childGit.commitFiles(['semantic-layer/finance/orders.yaml'], 'unauthorized sl', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'patches/unauthorized.patch');
+    await childGit.writeBinaryNoRenamePatch(baseSha, 'HEAD', patchPath);
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-target-policy/trace.jsonl'),
+      jobId: 'job-target-policy',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      level: 'trace',
+    });
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'wu-finance',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'KTX Test', email: 'system@ktx.local' },
+      validateAppliedTree: vi.fn().mockResolvedValue(undefined),
+      slDisallowed: false,
+      allowedTargetConnectionIds: new Set(['warehouse']),
+    });
+
+    expect(result).toMatchObject({
+      status: 'textual_conflict',
+      touchedPaths: ['semantic-layer/finance/orders.yaml'],
+    });
+    const rawTrace = await readFile(trace.tracePath, 'utf-8');
+    expect(rawTrace).toContain('patch_policy_rejected');
+    expect(rawTrace).toContain('semantic-layer target connection not allowed');
+    expect(rawTrace).toContain('allowedTargetConnectionIds');
   });
 });

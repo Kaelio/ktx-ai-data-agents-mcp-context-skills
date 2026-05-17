@@ -48,6 +48,7 @@ import { executeWorkUnit, type WorkUnitOutcome } from './stages/stage-3-work-uni
 import { runReconciliationStage4 } from './stages/stage-4-reconciliation.js';
 import type { StageIndex } from './stages/stage-index.types.js';
 import { validateWuTouchedSources } from './stages/validate-wu-sources.js';
+import { assertSemanticLayerTargetPathsAllowed } from './semantic-layer-target-policy.js';
 import { createEmitArtifactResolutionTool } from './tools/emit-artifact-resolution.tool.js';
 import { createEmitConflictResolutionTool } from './tools/emit-conflict-resolution.tool.js';
 import { createEmitEvictionDecisionTool } from './tools/emit-eviction-decision.tool.js';
@@ -1210,6 +1211,7 @@ export class IngestBundleRunner {
       this.logger.log(`[ingest-bundle] job=${job.jobId} tool-call transcripts: ${transcriptDir}/`);
       let projectionTouchedSources: TouchedSlSource[] = [];
       let projectionChangedWikiPageKeys: string[] = [];
+      let projectionTouchedPaths: string[] = [];
 
       if (!overrideReport && isolatedDiffEnabled) {
         await runTrace.event('info', 'routing', 'isolated_diff_enabled', {
@@ -1246,6 +1248,7 @@ export class IngestBundleRunner {
             ...projection.touchedSources.map((source) => `semantic-layer/${source.connectionId}/${source.sourceName}.yaml`),
             ...projection.changedWikiPageKeys.map((pageKey) => `wiki/global/${pageKey}.md`),
           ];
+          projectionTouchedPaths = projectionPaths;
           const projectionCommit =
             projectionPaths.length > 0
               ? await sessionWorktree.git.commitFiles(
@@ -1392,6 +1395,12 @@ export class IngestBundleRunner {
           if (!wu) {
             continue;
           }
+          const integrationFailureDetails = {
+            unitKey: outcome.unitKey,
+            patchPath: outcome.patchPath,
+            allowedTargetConnectionIds: slConnectionIds,
+          };
+          activeFailureDetails = integrationFailureDetails;
           const integration = await integrateWorkUnitPatch({
             unitKey: outcome.unitKey,
             patchPath: outcome.patchPath,
@@ -1399,6 +1408,7 @@ export class IngestBundleRunner {
             trace: runTrace,
             author: this.deps.storage.systemGitAuthor,
             slDisallowed: wu.slDisallowed === true,
+            allowedTargetConnectionIds: new Set(slConnectionIds),
             validateAppliedTree: async (touchedPaths) => {
               await validateFinalIngestArtifacts({
                 connectionIds: slConnectionIds,
@@ -1432,14 +1442,25 @@ export class IngestBundleRunner {
             isolatedDiffSummary.textualConflicts += 1;
             await this.deps.runs.markFailed(runRow.id);
             cleanupOutcome = 'conflict';
+            activeFailureDetails = {
+              ...integrationFailureDetails,
+              touchedPaths: integration.touchedPaths,
+              reason: integration.reason,
+            };
             throw new Error(`isolated diff textual conflict in ${outcome.unitKey}: ${integration.reason}`);
           }
           if (integration.status === 'semantic_conflict') {
             isolatedDiffSummary.semanticConflicts += 1;
             await this.deps.runs.markFailed(runRow.id);
             cleanupOutcome = 'conflict';
+            activeFailureDetails = {
+              ...integrationFailureDetails,
+              touchedPaths: integration.touchedPaths,
+              reason: integration.reason,
+            };
             throw new Error(`isolated diff semantic conflict in ${outcome.unitKey}: ${integration.reason}`);
           }
+          activeFailureDetails = undefined;
           isolatedDiffSummary.acceptedPatches += 1;
         }
 
@@ -2083,20 +2104,44 @@ export class IngestBundleRunner {
         ...(postProcessorOutcome?.touchedSources ?? []),
       ]);
 
+      const finalTargetPolicyPaths = [
+        ...projectionTouchedPaths,
+        ...workUnitOutcomes.flatMap((outcome) => outcome.patchTouchedPaths ?? []),
+        ...postReconciliationPaths,
+        ...(postProcessorOutcome?.touchedSources ?? []).map(
+          (source) => `semantic-layer/${source.connectionId}/${source.sourceName}.yaml`,
+        ),
+      ];
+      const targetPolicyTraceData = {
+        allowedTargetConnectionIds: slConnectionIds,
+        touchedPaths: [...new Set(finalTargetPolicyPaths)].sort(),
+      };
+      activePhase = 'target_policy';
+      activeFailureDetails = targetPolicyTraceData;
+      await traceTimed(runTrace, 'target_policy', 'semantic_layer_target_policy', targetPolicyTraceData, async () => {
+        assertSemanticLayerTargetPathsAllowed({
+          paths: finalTargetPolicyPaths,
+          allowedConnectionIds: new Set(slConnectionIds),
+        });
+      });
+      activeFailureDetails = undefined;
+
+      const finalArtifactGateTraceData = {
+        changedWikiPageKeys: finalChangedWikiPageKeys,
+        touchedSlSources: finalTouchedSlSources,
+        preReconciliationSha,
+        postReconciliationSha,
+        postReconciliationPaths,
+        reconciliationActionCount: reconcileActions.length,
+        wikiSlRefRepairCount: wikiSlRefRepairResult.repairs.length,
+      };
       activePhase = 'final_gates';
+      activeFailureDetails = finalArtifactGateTraceData;
       await traceTimed(
         runTrace,
         'final_gates',
         'final_artifact_gates',
-        {
-          changedWikiPageKeys: finalChangedWikiPageKeys,
-          touchedSlSources: finalTouchedSlSources,
-          preReconciliationSha,
-          postReconciliationSha,
-          postReconciliationPaths,
-          reconciliationActionCount: reconcileActions.length,
-          wikiSlRefRepairCount: wikiSlRefRepairResult.repairs.length,
-        },
+        finalArtifactGateTraceData,
         async () => {
           await validateFinalIngestArtifacts({
             connectionIds: repairConnectionIds,
@@ -2126,6 +2171,7 @@ export class IngestBundleRunner {
           });
         },
       );
+      activeFailureDetails = undefined;
 
       activePhase = 'provenance_validation';
       latestReportWorkUnits = this.toReportWorkUnits(stageIndex);
