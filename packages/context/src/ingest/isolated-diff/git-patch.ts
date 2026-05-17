@@ -1,3 +1,5 @@
+import { assertSemanticLayerTargetPathsAllowed } from '../semantic-layer-target-policy.js';
+
 export const textArtifactRoots = ['wiki/', 'semantic-layer/'] as const;
 
 export interface PatchTouchedPath {
@@ -12,6 +14,7 @@ export interface PatchPolicyInput {
   unitKey: string;
   patch: string;
   slDisallowed: boolean;
+  allowedTargetConnectionIds?: ReadonlySet<string>;
 }
 
 function stripPrefix(path: string): string {
@@ -74,6 +77,12 @@ export function parsePatchTouchedPaths(patch: string): PatchTouchedPath[] {
 
 export function assertPatchAllowedForWorkUnit(input: PatchPolicyInput): PatchTouchedPath[] {
   const touched = parsePatchTouchedPaths(input.patch);
+  if (input.allowedTargetConnectionIds) {
+    assertSemanticLayerTargetPathsAllowed({
+      paths: touched.map((entry) => entry.path),
+      allowedConnectionIds: input.allowedTargetConnectionIds,
+    });
+  }
   for (const entry of touched) {
     if (input.slDisallowed && entry.path.startsWith('semantic-layer/')) {
       throw new Error(`slDisallowed WorkUnit ${input.unitKey} touched ${entry.path}`);

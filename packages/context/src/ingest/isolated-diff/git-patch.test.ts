@@ -50,6 +50,22 @@ describe('isolated diff patch contract', () => {
     ).toThrow(/slDisallowed WorkUnit lookml-mismatch touched semantic-layer\/c1\/orders.yaml/);
   });
 
+  it('rejects semantic-layer paths outside allowed target connections', () => {
+    const patch =
+      'diff --git a/semantic-layer/finance/orders.yaml b/semantic-layer/finance/orders.yaml\nindex 1..2 100644\n';
+
+    expect(() =>
+      assertPatchAllowedForWorkUnit({
+        unitKey: 'wu-finance',
+        patch,
+        slDisallowed: false,
+        allowedTargetConnectionIds: new Set(['warehouse']),
+      }),
+    ).toThrow(
+      /semantic-layer target connection not allowed: semantic-layer\/finance\/orders.yaml \(finance\); allowed: warehouse/,
+    );
+  });
+
   it('rejects executable and binary changes under known text artifact roots', () => {
     expect(textArtifactRoots).toEqual(['wiki/', 'semantic-layer/']);
 

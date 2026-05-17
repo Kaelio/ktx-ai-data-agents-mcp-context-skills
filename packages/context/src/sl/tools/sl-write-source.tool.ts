@@ -1,6 +1,12 @@
 import YAML from 'yaml';
 import { z } from 'zod';
-import { addTouchedSlSource, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
+import {
+  addTouchedSlSource,
+  type ToolContext,
+  type ToolOutput,
+  validateActionRawPaths,
+  validateActionTargetConnection,
+} from '../../tools/index.js';
 import { sourceOverlaySchema } from '../schemas.js';
 import type { SemanticLayerService } from '../semantic-layer.service.js';
 import type { SemanticLayerSource } from '../types.js';
@@ -106,6 +112,10 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
 
     const semanticLayerService = context.session?.semanticLayerService ?? this.semanticLayerService;
     const skipIndex = context.session?.isWorktreeScoped === true;
+    const targetConnectionValidation = validateActionTargetConnection(context.session, connectionId);
+    if (!targetConnectionValidation.ok) {
+      return this.buildOutput(false, [targetConnectionValidation.error], sourceName);
+    }
     const rawPathValidation = validateActionRawPaths(context.session, input.rawPaths);
     if (!rawPathValidation.ok) {
       return this.buildOutput(false, [rawPathValidation.error], sourceName);
