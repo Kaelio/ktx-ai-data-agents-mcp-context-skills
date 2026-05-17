@@ -138,7 +138,10 @@ exists, all connectors follow the same execution path.
 The runner is responsible for:
 
 - creating the ingestion integration worktree from the project base commit;
-- creating one child worktree per work unit from that same base;
+- committing deterministic projection in the integration worktree before child
+  worktree creation;
+- creating one child worktree per work unit from the post-projection ingestion
+  base commit;
 - scoping tools to the work unit's raw files and allowed target connections;
 - running the agent loop inside the work unit worktree;
 - validating touched artifacts before accepting the work unit diff;
@@ -163,9 +166,18 @@ integration worktree stages raw snapshots, deterministic projections, accepted
 work-unit diffs, reconciliation changes, and final gate repairs before one
 squash merge back to main.
 
+Deterministic projection runs first in the integration worktree, after the raw
+snapshot is staged and before any per-work-unit worktree is created. The runner
+commits those projector changes as a single projection commit. The integration
+worktree's post-projection HEAD is the ingestion base commit referenced in this
+design. If the adapter has no projector, the raw-snapshot commit is the
+ingestion base commit.
+
 Each per-work-unit worktree starts from the same ingestion base commit. A work
 unit never observes another concurrent work unit's transient edits. This makes
-the work unit diff a clean proposal against a stable base.
+the work unit diff a clean proposal against a stable base. Work units observe
+deterministic projection outputs, including through `dependencyPaths` context,
+and do not re-derive authoritative projected facts.
 
 The integration worktree and each per-work-unit worktree must share one Git
 object database, created through `git worktree add` from the same repository.
@@ -245,10 +257,16 @@ Integration has three conflict classes:
 - Semantic conflict: the patch applies textually but creates an invalid or
   inconsistent artifact.
 
-Textual conflicts are resolved before semantic gates run. For known artifact
-types, the runner uses artifact-aware merge helpers. For unknown file types, the
-runner can fall back to agent-assisted conflict resolution in the integration
-worktree.
+Textual conflicts are resolved before semantic gates run only when deterministic
+artifact-aware merge helpers can prove a valid result. Version one has no
+interactive, CLI, or agent-driven resolver.
+
+In version one, routing to a resolver means fail-fast resolver behavior. The
+runner stops the run with a structured conflict error, marks the ingest failed,
+preserves the integration worktree for inspection, retains work-unit
+diffs/transcripts and existing report metadata, and does not squash anything
+back to the project main worktree. Interactive prompts, waiting for human input,
+retry loops, and agent-driven conflict repair are future work.
 
 ### Reconciliation in the new flow
 
@@ -279,8 +297,8 @@ write only to target connections authorized by the adapter for the ingest run,
 but it is not subject to any single work unit's `slDisallowed` scope. The final
 global gates validate the combined tree after reconciliation. If reconciliation
 introduces an invalid wiki or semantic-layer reference, touches an unauthorized
-target, or records an unresolvable artifact conflict, the run fails or routes to
-a resolver before squash.
+target, or records an unresolvable artifact conflict, the run stops under
+version-one resolver behavior before squash.
 
 ## Artifact-aware integration
 
@@ -316,8 +334,8 @@ records, not worktree files, and they feed the provenance gate.
 Artifact-aware integration can start with validation-only behavior. It does not
 need to auto-merge every semantic conflict in version one. If two diffs contest
 the same source YAML or wiki page and the merge cannot prove correctness, the
-runner must surface the conflict to a resolver rather than silently accepting
-stale references.
+runner must stop under version-one resolver behavior rather than silently
+accepting stale references.
 
 ## Global semantic gates
 
@@ -483,9 +501,11 @@ starting from the same base:
 Additional tests cover:
 
 - two work units editing different wiki pages without conflict;
-- two work units editing the same semantic-layer source with a textual conflict;
-- a deterministic projector change plus a work-unit wiki reference that becomes
-  stale after projection;
+- two work units editing the same semantic-layer source with a textual conflict,
+  where the run stops under version-one resolver behavior before squash;
+- a hybrid adapter case where deterministic projector outputs are visible in a
+  child worktree before work-unit wiki synthesis, and the final global gate
+  catches any stale reference to a non-existent projected semantic-layer entity;
 - Notion-style direct wiki writes with invalid `sl_refs`; and
 - LookML-style `slDisallowed` work units where write tools are unavailable and
   integration rejects any diff that still touches `semantic-layer/**`.
