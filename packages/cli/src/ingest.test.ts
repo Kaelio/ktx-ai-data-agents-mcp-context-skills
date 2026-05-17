@@ -35,6 +35,11 @@ describe('runKtxIngest', () => {
   let tempDir: string;
   let originalTerm: string | undefined;
   const interactiveEnv = (): NodeJS.ProcessEnv => ({ ...process.env, CI: 'false' });
+  const runtimeReady = (projectDir: string) => ({
+    status: 'ready' as const,
+    projectDir,
+    requirements: { features: ['core' as const], requirements: [] },
+  });
 
   beforeEach(async () => {
     resetVizFallbackWarningsForTest();
@@ -285,6 +290,7 @@ describe('runKtxIngest', () => {
             historicSqlProbe: async () => ({ ok: true, lines: ['PASS Historic SQL probe skipped in test'] }),
           },
           context: async () => ({ status: 'skipped', projectDir }),
+          runtime: async () => runtimeReady(projectDir),
         },
       ),
     ).resolves.toBe(0);

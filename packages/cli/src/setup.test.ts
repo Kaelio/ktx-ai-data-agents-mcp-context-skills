@@ -38,6 +38,10 @@ function makeIo() {
   };
 }
 
+function runtimeReady(projectDir: string) {
+  return { status: 'ready' as const, projectDir, requirements: { features: ['core' as const], requirements: [] } };
+}
+
 describe('setup status', () => {
   let tempDir: string;
 
@@ -1510,7 +1514,7 @@ describe('setup status', () => {
           },
           runtime: async () => {
             calls.push('runtime');
-            return { status: 'ready', projectDir: tempDir, requirements: { features: ['core'], requirements: [] } };
+            return runtimeReady(tempDir);
           },
           context: async () => {
             calls.push('context');
@@ -1569,6 +1573,7 @@ describe('setup status', () => {
             return { status: 'skipped', projectDir: tempDir };
           },
           sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => runtimeReady(tempDir),
           context: async () => ({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' }),
           agents: async () => ({
             status: 'ready',
@@ -1615,6 +1620,10 @@ describe('setup status', () => {
           embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
           databases: async () => ({ status: 'skipped', projectDir: tempDir }),
           sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => {
+            calls.push('runtime');
+            return runtimeReady(tempDir);
+          },
           context: async () => {
             calls.push('context');
             return { status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' };
@@ -1631,7 +1640,7 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(calls).toEqual(['context', 'agents']);
+    expect(calls).toEqual(['runtime', 'context', 'agents']);
   });
 
   it('does not install agents when non-interactive --agents finds context incomplete', async () => {
@@ -1664,6 +1673,7 @@ describe('setup status', () => {
         },
         io.io,
         {
+          runtime: async () => runtimeReady(tempDir),
           context: async () => ({ status: 'skipped', projectDir: tempDir }),
           agents,
         },
@@ -1766,6 +1776,10 @@ describe('setup status', () => {
             expect(args.skipSources).toBe(true);
             return { status: 'skipped', projectDir: tempDir };
           },
+          runtime: async () => {
+            calls.push('runtime');
+            return runtimeReady(tempDir);
+          },
           agents: async () => {
             calls.push('agents');
             return {
@@ -1778,7 +1792,7 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(calls).toEqual(['agents']);
+    expect(calls).toEqual(['runtime', 'agents']);
   });
 
   it('skips to agent setup when context is ready but agents are not configured', async () => {
@@ -1858,6 +1872,10 @@ describe('setup status', () => {
             expect(args.skipSources).toBe(true);
             return { status: 'skipped', projectDir: tempDir };
           },
+          runtime: async () => {
+            calls.push('runtime');
+            return runtimeReady(tempDir);
+          },
           agents: async () => {
             calls.push('agents');
             return {
@@ -1871,11 +1889,12 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(readyMenuSelect).not.toHaveBeenCalled();
-    expect(calls).toEqual(['agents']);
+    expect(calls).toEqual(['runtime', 'agents']);
   });
 
-  it('runs only project resolution, context gate, and agent setup in --agents mode', async () => {
+  it('runs only project resolution, runtime, context gate, and agent setup in --agents mode', async () => {
     const io = makeIo();
+    const runtime = vi.fn(async () => runtimeReady(tempDir));
     const context = vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir, runId: 'setup-context-local-test' }));
     const agents = vi.fn(async () => ({
       status: 'ready' as const,
@@ -1907,12 +1926,14 @@ describe('setup status', () => {
           model: async () => {
             throw new Error('model should not run');
           },
+          runtime,
           context,
           agents,
         },
       ),
     ).resolves.toBe(0);
 
+    expect(runtime).toHaveBeenCalledTimes(1);
     expect(context).toHaveBeenCalledTimes(1);
     expect(agents).toHaveBeenCalledTimes(1);
   });
