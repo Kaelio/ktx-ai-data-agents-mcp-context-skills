@@ -1,0 +1,92 @@
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import { GitService } from '../../core/index.js';
+import { FileIngestTraceWriter } from '../ingest-trace.js';
+import { integrateWorkUnitPatch } from './patch-integrator.js';
+
+async function makeRepo() {
+  const homeDir = await mkdtemp(join(tmpdir(), 'ktx-integrate-'));
+  const configDir = join(homeDir, 'config');
+  const git = new GitService({
+    storage: { configDir, homeDir },
+    git: {
+      userName: 'System User',
+      userEmail: 'system@example.com',
+      bootstrapMessage: 'init',
+      bootstrapAuthor: 'system',
+      bootstrapAuthorEmail: 'system@example.com',
+    },
+  });
+  await git.onModuleInit();
+  await mkdir(join(configDir, 'wiki/global'), { recursive: true });
+  await writeFile(join(configDir, 'wiki/global/a.md'), 'old\n');
+  await git.commitFiles(['wiki/global/a.md'], 'base', 'System User', 'system@example.com');
+  return { homeDir, configDir, git, baseSha: await git.revParseHead() };
+}
+
+describe('integrateWorkUnitPatch', () => {
+  it('applies a clean patch, runs semantic gates, and commits accepted changes', async () => {
+    const { homeDir, configDir, git, baseSha } = await makeRepo();
+    const childDir = join(homeDir, 'child');
+    await git.addWorktree(childDir, 'child', baseSha);
+    const childGit = git.forWorktree(childDir);
+    await writeFile(join(childDir, 'wiki/global/a.md'), 'new\n');
+    await childGit.commitFiles(['wiki/global/a.md'], 'edit', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'patches/wu.patch');
+    await childGit.writeBinaryNoRenamePatch(baseSha, 'HEAD', patchPath);
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-1/trace.jsonl'),
+      jobId: 'job-1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      level: 'trace',
+    });
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'wu-1',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'KTX Test', email: 'system@ktx.local' },
+      validateAppliedTree: vi.fn().mockResolvedValue(undefined),
+      slDisallowed: false,
+    });
+
+    expect(result.status).toBe('accepted');
+    await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('new\n');
+    await expect(readFile(trace.tracePath, 'utf-8')).resolves.toContain('patch_apply_finished');
+  });
+
+  it('rolls back and classifies semantic conflicts', async () => {
+    const { homeDir, configDir, git, baseSha } = await makeRepo();
+    const childDir = join(homeDir, 'child-semantic');
+    await git.addWorktree(childDir, 'child-semantic', baseSha);
+    const childGit = git.forWorktree(childDir);
+    await writeFile(join(childDir, 'wiki/global/a.md'), 'bad\n');
+    await childGit.commitFiles(['wiki/global/a.md'], 'bad edit', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'patches/bad.patch');
+    await childGit.writeBinaryNoRenamePatch(baseSha, 'HEAD', patchPath);
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-2/trace.jsonl'),
+      jobId: 'job-2',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      level: 'trace',
+    });
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'wu-bad',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'KTX Test', email: 'system@ktx.local' },
+      validateAppliedTree: vi.fn().mockRejectedValue(new Error('final artifact gates failed')),
+      slDisallowed: false,
+    });
+
+    expect(result.status).toBe('semantic_conflict');
+    await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('old\n');
+  });
+});
