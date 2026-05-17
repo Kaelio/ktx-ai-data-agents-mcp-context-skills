@@ -419,6 +419,82 @@ describe('IngestBundleRunner isolated diff path', () => {
     }
   });
 
+  it('runs final artifact gates after reconciliation mutates the integration tree', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps, adapter } = makeDeps(runtime);
+      adapter.chunk.mockResolvedValue({
+        workUnits: [{ unitKey: 'card-source', rawFiles: ['cards/source.json'], peerFileIndex: [], dependencyPaths: [] }],
+      });
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+          await mkdir(join(root, 'semantic-layer/warehouse'), { recursive: true });
+          await writeFile(
+            join(root, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+            'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr\n    expr: sum(contract_arr)\n',
+          );
+          addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'mart_account_segments');
+          currentSession.actions.push({
+            target: 'sl',
+            type: 'created',
+            key: 'mart_account_segments',
+            detail: 'Source with renamed ARR measure',
+            targetConnectionId: 'warehouse',
+            rawPaths: ['cards/source.json'],
+          });
+          await currentSession.gitService.commitFiles(
+            ['semantic-layer/warehouse/mart_account_segments.yaml'],
+            'wu source',
+            'KTX Test',
+            'system@ktx.local',
+          );
+        } else {
+          await mkdir(join(root, 'wiki/global'), { recursive: true });
+          await writeFile(
+            join(root, 'wiki/global/account-segments.md'),
+            '---\nsummary: Account segments\nusage_mode: auto\nsl_refs:\n  - mart_account_segments\n---\n\nReconcile wrote stale ARR `mart_account_segments.total_contract_arr_cents`.\n',
+          );
+          currentSession.actions.push({
+            target: 'wiki',
+            type: 'created',
+            key: 'account-segments',
+            detail: 'Stale reconcile wiki page',
+            rawPaths: ['cards/source.json'],
+          });
+          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'reconcile wiki', 'KTX Test', 'system@ktx.local');
+        }
+        return { stopReason: 'natural' };
+      }) as never;
+
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [['cards/source.json', 'h1']]);
+
+      await expect(
+        runner.run({
+          jobId: 'job-reconcile-stale',
+          connectionId: 'warehouse',
+          sourceKey: 'metabase',
+          trigger: 'upload',
+          bundleRef: { kind: 'upload', uploadId: 'upload' },
+        }),
+      ).rejects.toThrow(/total_contract_arr_cents/);
+
+      const trace = await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-reconcile-stale/trace.jsonl'), 'utf-8');
+      expect(trace).toContain('reconciliation_finished');
+      expect(trace).toContain('final_artifact_gates_failed');
+      expect(trace).toContain('ingest_failed');
+      expect(await runtime.git.revParseHead()).not.toContain('reconcile wiki');
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects slDisallowed patches that touch semantic-layer files', async () => {
     const runtime = await makeRealGitRuntime();
     try {
