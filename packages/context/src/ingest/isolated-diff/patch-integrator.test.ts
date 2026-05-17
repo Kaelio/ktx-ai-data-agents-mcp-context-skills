@@ -173,4 +173,129 @@ describe('integrateWorkUnitPatch', () => {
     expect(rawTrace).toContain('semantic-layer target connection not allowed');
     expect(rawTrace).toContain('allowedTargetConnectionIds');
   });
+
+  it('repairs a textual conflict through the bounded resolver and commits repaired files', async () => {
+    const { homeDir, configDir, git, baseSha } = await makeRepo();
+    await mkdir(join(configDir, 'wiki/global'), { recursive: true });
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'base\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'base page', 'System User', 'system@example.com');
+    const conflictBase = await git.revParseHead();
+
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'accepted edit', 'System User', 'system@example.com');
+
+    const childDir = join(homeDir, 'child-conflict');
+    await git.addWorktree(childDir, 'child-conflict', conflictBase);
+    const childGit = git.forWorktree(childDir);
+    await writeFile(join(childDir, 'wiki/global/a.md'), 'proposal\n', 'utf-8');
+    await childGit.commitFiles(['wiki/global/a.md'], 'proposal edit', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'proposal.patch');
+    await childGit.writeBinaryNoRenamePatch(conflictBase, 'HEAD', patchPath);
+
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-resolver/trace.jsonl'),
+      jobId: 'job-resolver',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      level: 'trace',
+    });
+
+    const validateAppliedTree = vi.fn(async (paths: string[]) => {
+      expect(paths).toEqual(['wiki/global/a.md']);
+      await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('accepted\nproposal\n');
+    });
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'wu-conflict',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'System User', email: 'system@example.com' },
+      slDisallowed: false,
+      allowedTargetConnectionIds: new Set(['warehouse']),
+      validateAppliedTree,
+      resolveTextualConflict: vi.fn(async (context) => {
+        expect(context).toMatchObject({
+          unitKey: 'wu-conflict',
+          patchPath,
+          touchedPaths: ['wiki/global/a.md'],
+        });
+        await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\nproposal\n', 'utf-8');
+        return {
+          status: 'repaired',
+          attempts: 1,
+          changedPaths: ['wiki/global/a.md'],
+        };
+      }),
+    });
+
+    expect(result).toMatchObject({
+      status: 'accepted',
+      touchedPaths: ['wiki/global/a.md'],
+      textualResolution: {
+        status: 'repaired',
+        attempts: 1,
+        changedPaths: ['wiki/global/a.md'],
+      },
+    });
+    expect(validateAppliedTree).toHaveBeenCalledOnce();
+    await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('accepted\nproposal\n');
+    await expect(readFile(trace.tracePath, 'utf-8')).resolves.toContain('patch_accepted_after_textual_resolution');
+    expect(await git.revParseHead()).not.toBe(baseSha);
+  });
+
+  it('keeps the pre-apply integration tree when the resolver cannot repair a textual conflict', async () => {
+    const { homeDir, configDir, git } = await makeRepo();
+    await mkdir(join(configDir, 'wiki/global'), { recursive: true });
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'base\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'base page', 'System User', 'system@example.com');
+    const conflictBase = await git.revParseHead();
+
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'accepted edit', 'System User', 'system@example.com');
+    const acceptedHead = await git.revParseHead();
+
+    const childDir = join(homeDir, 'child-conflict-fails');
+    await git.addWorktree(childDir, 'child-conflict-fails', conflictBase);
+    const childGit = git.forWorktree(childDir);
+    await writeFile(join(childDir, 'wiki/global/a.md'), 'proposal\n', 'utf-8');
+    await childGit.commitFiles(['wiki/global/a.md'], 'proposal edit', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'proposal-fails.patch');
+    await childGit.writeBinaryNoRenamePatch(conflictBase, 'HEAD', patchPath);
+
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-resolver-fails/trace.jsonl'),
+      jobId: 'job-resolver-fails',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      level: 'trace',
+    });
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'wu-conflict',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'System User', email: 'system@example.com' },
+      slDisallowed: false,
+      allowedTargetConnectionIds: new Set(['warehouse']),
+      validateAppliedTree: vi.fn(async () => {}),
+      resolveTextualConflict: vi.fn(async () => ({
+        status: 'failed',
+        attempts: 1,
+        reason: 'resolver completed without editing an allowed path',
+      })),
+    });
+
+    expect(result).toMatchObject({
+      status: 'textual_conflict',
+      textualResolution: {
+        status: 'failed',
+        attempts: 1,
+        reason: 'resolver completed without editing an allowed path',
+      },
+    });
+    expect(await git.revParseHead()).toBe(acceptedHead);
+    await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('accepted\n');
+  });
 });
