@@ -22,6 +22,7 @@ import type { MemoryFlowEventSink, MemoryFlowPlannedWorkUnit } from './memory-fl
 import type {
   ContextEvidenceIndexSummary,
   IngestBundleRunnerDeps,
+  IngestProvenanceInsert,
   IngestProvenanceRow,
   IngestRunsPort,
   IngestSessionWorktree,
@@ -32,7 +33,9 @@ import {
   buildStageIndexFromReportBody,
   postProcessorSavedMemoryCounts,
   type IngestReportPostProcessorOutcome,
+  type IngestReportProvenanceDetail,
   type IngestReportSnapshot,
+  type IngestReportWorkUnit,
 } from './reports.js';
 import {
   buildReconcileSystemPrompt,
@@ -140,6 +143,40 @@ function semanticSourceMatchesTableRef(source: SemanticLayerSource, tableRef: st
 
 function rawPathsForAction(action: MemoryAction, fallbackRawPaths: string[]): string[] {
   return action.rawPaths && action.rawPaths.length > 0 ? [...new Set(action.rawPaths)] : fallbackRawPaths;
+}
+
+type ProvenanceRowOrigin =
+  | {
+      source: 'work_unit_action';
+      unitKey: string;
+      unitIndex: number;
+      unitRawFiles: string[];
+      actionIndex: number;
+      action: MemoryAction;
+    }
+  | {
+      source: 'reconciliation_action';
+      actionIndex: number;
+      action: MemoryAction;
+    }
+  | {
+      source: 'artifact_resolution';
+      resolutionIndex: number;
+      resolution: NonNullable<StageIndex['artifactResolutions']>[number];
+    }
+  | {
+      source: 'raw_snapshot_fallback';
+      rawPath: string;
+    };
+
+interface ProvenanceRowDiagnostic {
+  row: IngestProvenanceInsert;
+  origin: ProvenanceRowOrigin;
+}
+
+interface ProvenancePlan {
+  rows: IngestProvenanceInsert[];
+  diagnostics: ProvenanceRowDiagnostic[];
 }
 
 export class IngestBundleRunner {
@@ -426,6 +463,157 @@ export class IngestBundleRunner {
     return error instanceof Error ? error.message : String(error);
   }
 
+  private buildProvenancePlan(input: {
+    job: IngestBundleJob;
+    syncId: string;
+    currentHashes: Map<string, string>;
+    stageIndex: StageIndex;
+    reconcileActions: MemoryAction[];
+  }): ProvenancePlan {
+    const rows: IngestProvenanceInsert[] = [];
+    const diagnostics: ProvenanceRowDiagnostic[] = [];
+    const actionToType = (action: MemoryAction): IngestProvenanceInsert['actionType'] => {
+      if (action.target === 'wiki') {
+        return 'wiki_written';
+      }
+      return action.type === 'created' ? 'source_created' : 'measure_added';
+    };
+    const producedPaths = new Set<string>();
+    const pushRow = (row: IngestProvenanceInsert, origin: ProvenanceRowOrigin): void => {
+      rows.push(row);
+      diagnostics.push({ row, origin });
+      producedPaths.add(row.rawPath);
+    };
+    const pushActionProvenance = (rawPath: string, action: MemoryAction, origin: ProvenanceRowOrigin): void => {
+      const hash = input.currentHashes.get(rawPath) ?? '';
+      pushRow(
+        {
+          connectionId: input.job.connectionId,
+          sourceKey: input.job.sourceKey,
+          syncId: input.syncId,
+          rawPath,
+          rawContentHash: hash,
+          artifactKind: action.target,
+          artifactKey: action.key,
+          targetConnectionId: action.target === 'sl' ? actionTargetConnectionId(action, input.job.connectionId) : null,
+          artifactContentHash: null,
+          actionType: actionToType(action),
+        },
+        origin,
+      );
+    };
+
+    input.stageIndex.workUnits.forEach((wu, unitIndex) => {
+      wu.actions.forEach((action, actionIndex) => {
+        for (const rawPath of rawPathsForAction(action, wu.rawFiles)) {
+          pushActionProvenance(rawPath, action, {
+            source: 'work_unit_action',
+            unitKey: wu.unitKey,
+            unitIndex,
+            unitRawFiles: wu.rawFiles,
+            actionIndex,
+            action,
+          });
+        }
+      });
+    });
+    input.reconcileActions.forEach((action, actionIndex) => {
+      for (const rawPath of action.rawPaths ?? []) {
+        pushActionProvenance(rawPath, action, {
+          source: 'reconciliation_action',
+          actionIndex,
+          action,
+        });
+      }
+    });
+    (input.stageIndex.artifactResolutions ?? []).forEach((resolution, resolutionIndex) => {
+      const hash = input.currentHashes.get(resolution.rawPath) ?? '';
+      pushRow(
+        {
+          connectionId: input.job.connectionId,
+          sourceKey: input.job.sourceKey,
+          syncId: input.syncId,
+          rawPath: resolution.rawPath,
+          rawContentHash: hash,
+          artifactKind: resolution.artifactKind,
+          artifactKey: resolution.artifactKey,
+          targetConnectionId: null,
+          artifactContentHash: null,
+          actionType: resolution.actionType,
+        },
+        {
+          source: 'artifact_resolution',
+          resolutionIndex,
+          resolution,
+        },
+      );
+    });
+    for (const [rawPath, hash] of input.currentHashes) {
+      if (producedPaths.has(rawPath)) {
+        continue;
+      }
+      pushRow(
+        {
+          connectionId: input.job.connectionId,
+          sourceKey: input.job.sourceKey,
+          syncId: input.syncId,
+          rawPath,
+          rawContentHash: hash,
+          artifactKind: null,
+          artifactKey: null,
+          targetConnectionId: null,
+          artifactContentHash: null,
+          actionType: 'skipped',
+        },
+        { source: 'raw_snapshot_fallback', rawPath },
+      );
+    }
+
+    return { rows, diagnostics };
+  }
+
+  private toReportProvenanceRows(rows: IngestProvenanceInsert[]): IngestReportProvenanceDetail[] {
+    return rows.map(({ rawPath, artifactKind, artifactKey, actionType, targetConnectionId }) => ({
+      rawPath,
+      artifactKind,
+      artifactKey,
+      targetConnectionId: targetConnectionId ?? null,
+      actionType,
+    }));
+  }
+
+  private toReportWorkUnits(stageIndex: StageIndex): IngestReportWorkUnit[] {
+    return stageIndex.workUnits.map((wu) => ({
+      unitKey: wu.unitKey,
+      rawFiles: wu.rawFiles,
+      status: wu.status,
+      reason: wu.reason,
+      actions: wu.actions,
+      touchedSlSources: wu.touchedSlSources,
+      slDisallowed: wu.slDisallowed,
+      slDisallowedReason: wu.slDisallowedReason,
+    }));
+  }
+
+  private provenanceValidationTraceData(input: {
+    plan: ProvenancePlan;
+    currentRawPaths: Set<string>;
+    deletedRawPaths: Set<string>;
+  }): Record<string, unknown> {
+    const invalidRows = input.plan.diagnostics.filter(
+      ({ row }) => !input.currentRawPaths.has(row.rawPath) && !input.deletedRawPaths.has(row.rawPath),
+    );
+    return {
+      rowCount: input.plan.rows.length,
+      currentRawPathCount: input.currentRawPaths.size,
+      deletedRawPathCount: input.deletedRawPaths.size,
+      currentRawPaths: [...input.currentRawPaths].sort(),
+      deletedRawPaths: [...input.deletedRawPaths].sort(),
+      invalidRawPaths: [...new Set(invalidRows.map(({ row }) => row.rawPath))].sort(),
+      invalidRows,
+    };
+  }
+
   private wikiPageKeysFromPaths(paths: string[]): string[] {
     return [
       ...new Set(
@@ -673,6 +861,16 @@ export class IngestBundleRunner {
     let latestWorkUnits: WorkUnitOutcome[] = [];
     let latestFailedWorkUnits: string[] = [];
     let latestReconciliationSkipped = true;
+    let latestReportWorkUnits: IngestReportWorkUnit[] = [];
+    let latestReconciliationActions: MemoryAction[] = [];
+    let latestConflictsResolved: StageIndex['conflictsResolved'] = [];
+    let latestEvictionsApplied: StageIndex['evictionsApplied'] = [];
+    let latestUnmappedFallbacks: StageIndex['unmappedFallbacks'] = [];
+    let latestArtifactResolutions: NonNullable<StageIndex['artifactResolutions']> = [];
+    let latestEvictionInputs: string[] = [];
+    let latestUnresolvedCards: UnresolvedCardInfo[] = [];
+    let latestReportProvenanceRows: IngestReportProvenanceDetail[] = [];
+    let activeFailureDetails: Record<string, unknown> | undefined;
     let latestIsolatedDiffSummary:
       | {
           enabled: boolean;
@@ -1495,6 +1693,7 @@ export class IngestBundleRunner {
           slDisallowed: o.slDisallowed,
           slDisallowedReason: o.slDisallowedReason,
         }));
+        latestReportWorkUnits = this.toReportWorkUnits(stageIndex);
       }
       const carryForwardResult =
         contextReport && this.deps.contextCandidateCarryforward
@@ -1928,6 +2127,48 @@ export class IngestBundleRunner {
         },
       );
 
+      activePhase = 'provenance_validation';
+      latestReportWorkUnits = this.toReportWorkUnits(stageIndex);
+      latestReconciliationActions = reconcileActions;
+      latestConflictsResolved = stageIndex.conflictsResolved;
+      latestEvictionsApplied = stageIndex.evictionsApplied;
+      latestUnmappedFallbacks = stageIndex.unmappedFallbacks;
+      latestArtifactResolutions = stageIndex.artifactResolutions ?? [];
+      latestEvictionInputs = eviction?.deletedRawPaths ?? [];
+      latestUnresolvedCards = unresolvedCards ?? [];
+      const provenancePlan = this.buildProvenancePlan({
+        job,
+        syncId,
+        currentHashes,
+        stageIndex,
+        reconcileActions,
+      });
+      const provenanceRows = provenancePlan.rows;
+      const currentRawPaths = new Set(currentHashes.keys());
+      const deletedRawPaths = new Set(eviction?.deletedRawPaths ?? []);
+      const provenanceValidationData = this.provenanceValidationTraceData({
+        plan: provenancePlan,
+        currentRawPaths,
+        deletedRawPaths,
+      });
+      const reportProvenanceRows = this.toReportProvenanceRows(provenanceRows);
+      latestReportProvenanceRows = reportProvenanceRows;
+      activeFailureDetails = provenanceValidationData;
+      await traceTimed(
+        runTrace,
+        'provenance',
+        'provenance_rows_validation',
+        provenanceValidationData,
+        async () => {
+          validateProvenanceRawPaths({
+            rows: provenanceRows,
+            currentRawPaths,
+            deletedRawPaths,
+          });
+        },
+      );
+      activeFailureDetails = undefined;
+
       // Stage 6 — squash commit
       activePhase = 'squash';
       const stage6 = ctx?.startPhase(0.04);
@@ -2003,89 +2244,10 @@ export class IngestBundleRunner {
       await stage5?.updateProgress(0.0, 'Recording history');
       activePhase = 'provenance';
 
-      // Provenance rows: per-artifact when the WU emitted actions, plus a `skipped`
-      // fallback for raw files that produced nothing so the next DiffSet still sees
-      // them.
-      const provenanceRows: Parameters<typeof this.deps.provenance.insertMany>[0] = [];
-      const actionToType = (a: MemoryAction): 'source_created' | 'measure_added' | 'wiki_written' => {
-        if (a.target === 'wiki') {
-          return 'wiki_written';
-        }
-        // SL action: 'created' → source_created; 'updated' → measure_added (coarse-grained;
-        // action.detail preserves the finer distinction for the report body).
-        return a.type === 'created' ? 'source_created' : 'measure_added';
-      };
-      const producedPaths = new Set<string>();
-      const pushActionProvenance = (rawPath: string, action: MemoryAction): void => {
-        const hash = currentHashes.get(rawPath) ?? '';
-        provenanceRows.push({
-          connectionId: job.connectionId,
-          sourceKey: job.sourceKey,
-          syncId,
-          rawPath,
-          rawContentHash: hash,
-          artifactKind: action.target,
-          artifactKey: action.key,
-          targetConnectionId: action.target === 'sl' ? actionTargetConnectionId(action, job.connectionId) : null,
-          artifactContentHash: null,
-          actionType: actionToType(action),
-        });
-        producedPaths.add(rawPath);
-      };
-      for (const wu of stageIndex.workUnits) {
-        for (const action of wu.actions) {
-          for (const rawPath of rawPathsForAction(action, wu.rawFiles)) {
-            pushActionProvenance(rawPath, action);
-          }
-        }
-      }
-      for (const action of reconcileActions) {
-        for (const rawPath of action.rawPaths ?? []) {
-          pushActionProvenance(rawPath, action);
-        }
-      }
-      for (const resolution of stageIndex.artifactResolutions ?? []) {
-        const hash = currentHashes.get(resolution.rawPath) ?? '';
-        provenanceRows.push({
-          connectionId: job.connectionId,
-          sourceKey: job.sourceKey,
-          syncId,
-          rawPath: resolution.rawPath,
-          rawContentHash: hash,
-          artifactKind: resolution.artifactKind,
-          artifactKey: resolution.artifactKey,
-          targetConnectionId: null,
-          artifactContentHash: null,
-          actionType: resolution.actionType,
-        });
-        producedPaths.add(resolution.rawPath);
-      }
-      for (const [rawPath, hash] of currentHashes) {
-        if (producedPaths.has(rawPath)) {
-          continue;
-        }
-        provenanceRows.push({
-          connectionId: job.connectionId,
-          sourceKey: job.sourceKey,
-          syncId,
-          rawPath,
-          rawContentHash: hash,
-          artifactKind: null,
-          artifactKey: null,
-          targetConnectionId: null,
-          artifactContentHash: null,
-          actionType: 'skipped',
-        });
-      }
-      validateProvenanceRawPaths({
-        rows: provenanceRows,
-        currentRawPaths: new Set(currentHashes.keys()),
-        deletedRawPaths: new Set(eviction?.deletedRawPaths ?? []),
-      });
-      await runTrace.event('debug', 'provenance', 'provenance_rows_validated', {
+      await this.deps.provenance.insertMany(provenanceRows);
+      await runTrace.event('debug', 'provenance', 'provenance_rows_inserted', {
         rowCount: provenanceRows.length,
       });
-      await this.deps.provenance.insertMany(provenanceRows);
       memoryFlow?.emit({ type: 'provenance_recorded', rowCount: provenanceRows.length });
       await stage5?.updateProgress(
         1.0,
@@ -2096,15 +2258,6 @@ export class IngestBundleRunner {
       await stage7?.updateProgress(0.0, 'Wrapping up');
       activePhase = 'report';
 
-      const reportProvenanceRows = provenanceRows.map(
-        ({ rawPath, artifactKind, artifactKey, actionType, targetConnectionId }) => ({
-          rawPath,
-          artifactKind,
-          artifactKey,
-          targetConnectionId: targetConnectionId ?? null,
-          actionType,
-        }),
-      );
       const reportToolTranscripts = Array.from(transcriptSummaries.values()).map((summary) => ({
         unitKey: summary.unitKey,
         path: summary.path,
@@ -2307,30 +2460,34 @@ export class IngestBundleRunner {
             failure: {
               phase: activePhase,
               message: this.errorMessage(error),
+              ...(activeFailureDetails ? { details: activeFailureDetails } : {}),
             },
-            workUnits: latestWorkUnits.map((wu) => ({
-              unitKey: wu.unitKey,
-              rawFiles: [],
-              status: wu.status,
-              reason: wu.reason,
-              actions: wu.actions,
-              touchedSlSources: wu.touchedSlSources,
-              slDisallowed: wu.slDisallowed,
-              slDisallowedReason: wu.slDisallowedReason,
-            })),
+            workUnits:
+              latestReportWorkUnits.length > 0
+                ? latestReportWorkUnits
+                : latestWorkUnits.map((wu) => ({
+                    unitKey: wu.unitKey,
+                    rawFiles: [],
+                    status: wu.status,
+                    reason: wu.reason,
+                    actions: wu.actions,
+                    touchedSlSources: wu.touchedSlSources,
+                    slDisallowed: wu.slDisallowed,
+                    slDisallowedReason: wu.slDisallowedReason,
+                  })),
             failedWorkUnits: latestFailedWorkUnits,
             reconciliationSkipped: latestReconciliationSkipped,
-            conflictsResolved: [],
-            evictionsApplied: [],
-            unmappedFallbacks: [],
-            artifactResolutions: [],
-            evictionInputs: [],
-            reconciliationActions: [],
+            conflictsResolved: latestConflictsResolved,
+            evictionsApplied: latestEvictionsApplied,
+            unmappedFallbacks: latestUnmappedFallbacks,
+            artifactResolutions: latestArtifactResolutions,
+            evictionInputs: latestEvictionInputs,
+            reconciliationActions: latestReconciliationActions,
             evictionDecisions: [],
-            unresolvedCards: [],
+            unresolvedCards: latestUnresolvedCards,
             supersededBy: null,
             overrideOf: null,
-            provenanceRows: [],
+            provenanceRows: latestReportProvenanceRows,
             toolTranscripts: Array.from(transcriptSummaries.values()).map((summary) => ({
               unitKey: summary.unitKey,
               path: summary.path,

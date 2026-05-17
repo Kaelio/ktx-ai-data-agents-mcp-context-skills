@@ -126,6 +126,7 @@ const sourceFetchReportSchema = z.object({
 const ingestReportFailureSchema = z.object({
   phase: z.string().min(1),
   message: z.string().min(1),
+  details: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const ingestReportSnapshotSchema = z

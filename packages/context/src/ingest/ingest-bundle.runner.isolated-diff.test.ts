@@ -609,6 +609,175 @@ describe('IngestBundleRunner isolated diff path', () => {
     }
   });
 
+  it('rejects invalid provenance raw paths before squash reaches main', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps, adapter } = makeDeps(runtime);
+      const createdReports: any[] = [];
+      deps.reports.create = vi.fn(async (args: any) => {
+        createdReports.push(args);
+        return { id: `report-${createdReports.length}` };
+      });
+      adapter.chunk.mockResolvedValue({
+        workUnits: [
+          {
+            unitKey: 'card-valid-artifacts',
+            rawFiles: ['cards/source.json'],
+            peerFileIndex: [],
+            dependencyPaths: [],
+          },
+        ],
+      });
+
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async () => {
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        await mkdir(join(root, 'semantic-layer/warehouse'), { recursive: true });
+        await mkdir(join(root, 'wiki/global'), { recursive: true });
+        await writeFile(
+          join(root, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+          'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr\n    expr: sum(contract_arr)\n',
+        );
+        await writeFile(
+          join(root, 'wiki/global/account-segments.md'),
+          '---\nsummary: Account segments\nusage_mode: auto\nsl_refs:\n  - mart_account_segments\n---\n\nARR is `mart_account_segments.total_contract_arr`.\n',
+        );
+        addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'mart_account_segments');
+        currentSession.actions.push({
+          target: 'sl',
+          type: 'created',
+          key: 'mart_account_segments',
+          detail: 'Valid source',
+          targetConnectionId: 'warehouse',
+          rawPaths: ['cards/source.json'],
+        });
+        currentSession.actions.push({
+          target: 'wiki',
+          type: 'created',
+          key: 'account-segments',
+          detail: 'Valid wiki with invalid provenance raw path',
+          rawPaths: ['cards/missing.json'],
+        });
+        await currentSession.gitService.commitFiles(
+          ['semantic-layer/warehouse/mart_account_segments.yaml', 'wiki/global/account-segments.md'],
+          'valid artifacts with invalid provenance',
+          'KTX Test',
+          'system@ktx.local',
+        );
+        return { stopReason: 'natural' };
+      }) as never;
+
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [['cards/source.json', 'h1']]);
+      const preRunHead = await runtime.git.revParseHead();
+
+      await expect(
+        runner.run({
+          jobId: 'job-invalid-provenance',
+          connectionId: 'warehouse',
+          sourceKey: 'metabase',
+          trigger: 'upload',
+          bundleRef: { kind: 'upload', uploadId: 'upload' },
+        }),
+      ).rejects.toThrow(/provenance row references raw path outside this snapshot: cards\/missing\.json/);
+
+      expect(await runtime.git.revParseHead()).toBe(preRunHead);
+      expect(deps.provenance.insertMany).not.toHaveBeenCalled();
+
+      const failureReport = createdReports.find((report) => report.body.status === 'failed');
+      expect(failureReport.body.tracePath).toContain('job-invalid-provenance/trace.jsonl');
+      expect(failureReport.body.failure).toMatchObject({
+        phase: 'provenance_validation',
+        message: expect.stringContaining('cards/missing.json'),
+      });
+      expect(failureReport.body.failure.details).toMatchObject({
+        invalidRawPaths: ['cards/missing.json'],
+        currentRawPaths: ['cards/source.json'],
+        invalidRows: expect.arrayContaining([
+          expect.objectContaining({
+            row: expect.objectContaining({
+              rawPath: 'cards/missing.json',
+              artifactKind: 'wiki',
+              artifactKey: 'account-segments',
+              actionType: 'wiki_written',
+            }),
+            origin: expect.objectContaining({
+              source: 'work_unit_action',
+              unitKey: 'card-valid-artifacts',
+              actionIndex: 1,
+              unitRawFiles: ['cards/source.json'],
+              action: expect.objectContaining({
+                target: 'wiki',
+                type: 'created',
+                key: 'account-segments',
+                rawPaths: ['cards/missing.json'],
+              }),
+            }),
+          }),
+        ]),
+      });
+      expect(failureReport.body.provenanceRows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ rawPath: 'cards/source.json', artifactKind: 'sl', artifactKey: 'mart_account_segments' }),
+          expect.objectContaining({ rawPath: 'cards/missing.json', artifactKind: 'wiki', artifactKey: 'account-segments' }),
+        ]),
+      );
+      expect(failureReport.body.workUnits).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            unitKey: 'card-valid-artifacts',
+            rawFiles: ['cards/source.json'],
+            actions: expect.arrayContaining([
+              expect.objectContaining({
+                target: 'wiki',
+                key: 'account-segments',
+                rawPaths: ['cards/missing.json'],
+              }),
+            ]),
+          }),
+        ]),
+      );
+
+      const events = (await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-invalid-provenance/trace.jsonl'), 'utf-8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(events.map((event) => event.event)).toEqual(
+        expect.arrayContaining([
+          'final_artifact_gates_finished',
+          'provenance_rows_validation_failed',
+          'ingest_failed',
+          'failure_report_created',
+        ]),
+      );
+      expect(events.map((event) => event.event)).not.toContain('squash_finished');
+      const validationFailure = events.find((event) => event.event === 'provenance_rows_validation_failed');
+      expect(validationFailure).toMatchObject({
+        phase: 'provenance',
+        data: {
+          invalidRawPaths: ['cards/missing.json'],
+          currentRawPaths: ['cards/source.json'],
+          invalidRows: expect.arrayContaining([
+            expect.objectContaining({
+              row: expect.objectContaining({ rawPath: 'cards/missing.json' }),
+              origin: expect.objectContaining({
+                source: 'work_unit_action',
+                unitKey: 'card-valid-artifacts',
+                actionIndex: 1,
+              }),
+            }),
+          ]),
+        },
+      });
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects slDisallowed patches that touch semantic-layer files', async () => {
     const runtime = await makeRealGitRuntime();
     try {

@@ -51,6 +51,7 @@ export interface IngestReportPostProcessorOutcome {
 export interface IngestReportFailure {
   phase: string;
   message: string;
+  details?: Record<string, unknown>;
 }
 
 export interface IngestReportBody {

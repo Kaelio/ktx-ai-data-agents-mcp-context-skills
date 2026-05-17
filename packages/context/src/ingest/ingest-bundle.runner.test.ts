@@ -167,10 +167,11 @@ const makeDeps = () => {
     loadPrompt: vi.fn().mockResolvedValue('base-framing'),
   };
   const wikiService = {
-    forWorktree: vi.fn().mockReturnValue({}),
+    forWorktree: vi.fn(),
     readPage: vi.fn().mockResolvedValue(null),
     syncFromCommit: vi.fn().mockResolvedValue(undefined),
   };
+  wikiService.forWorktree.mockReturnValue(wikiService);
   const knowledgeSlRefs = {
     syncFromWiki: vi.fn().mockResolvedValue({ inserted: 1, deleted: 0 }),
   };
@@ -178,7 +179,7 @@ const makeDeps = () => {
     listPagesForUser: vi.fn().mockResolvedValue([]),
   };
   const semanticLayerService = {
-    forWorktree: vi.fn().mockReturnValue({}),
+    forWorktree: vi.fn(),
     listFilesForConnection: vi
       .fn()
       .mockImplementation((connectionId: string) =>
@@ -193,6 +194,7 @@ const makeDeps = () => {
         }),
       ),
   };
+  semanticLayerService.forWorktree.mockReturnValue(semanticLayerService);
   const slSearchService = {
     indexSources: vi.fn().mockResolvedValue(undefined),
   };
