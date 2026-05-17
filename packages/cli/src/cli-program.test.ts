@@ -11,7 +11,13 @@ function stubIo(): KtxCliIo {
 }
 
 function stubPackageInfo(): KtxCliPackageInfo {
-  return { name: '@ktx/cli', version: '0.0.0-test', contextPackageName: '@ktx/context' };
+  return {
+    name: '@ktx/cli',
+    version: '0.0.0-test',
+    packageVersion: '0.0.0-private',
+    runtimeVersion: '0.0.0-test',
+    contextPackageName: '@ktx/context',
+  };
 }
 
 describe('buildKtxProgram', () => {

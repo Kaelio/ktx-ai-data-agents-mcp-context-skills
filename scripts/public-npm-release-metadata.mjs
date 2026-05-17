@@ -9,6 +9,8 @@ export const PUBLIC_NPM_RELEASE_TAGS = new Set(['latest', 'next']);
 
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const SEMVER_PARTS_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,6 +29,30 @@ export function assertPublicNpmPackageVersion(version) {
     throw new Error(`Invalid public npm package version: ${version}`);
   }
   return version;
+}
+
+export function publicNpmPackageVersionToPythonVersion(version) {
+  const safeVersion = assertPublicNpmPackageVersion(version);
+  const match = SEMVER_PARTS_PATTERN.exec(safeVersion);
+  if (!match) {
+    throw new Error(`Invalid public npm package version: ${version}`);
+  }
+
+  const [, major, minor, patch, prerelease, buildMetadata] = match;
+  if (buildMetadata) {
+    throw new Error(`Unsupported public npm build metadata for Python runtime version: ${safeVersion}`);
+  }
+
+  const baseVersion = `${major}.${minor}.${patch}`;
+  if (!prerelease) {
+    return baseVersion;
+  }
+
+  const rcMatch = /^rc\.([1-9]\d*|0)$/.exec(prerelease);
+  if (!rcMatch) {
+    throw new Error(`Unsupported public npm prerelease for Python runtime version: ${safeVersion}`);
+  }
+  return `${baseVersion}rc${rcMatch[1]}`;
 }
 
 export function assertPublicNpmReleaseTag(tag) {
@@ -50,4 +76,8 @@ export function readPublicNpmReleaseMetadata(rootDir = scriptRootDir()) {
 
 export function publicNpmPackageVersion(rootDir = scriptRootDir()) {
   return readPublicNpmReleaseMetadata(rootDir).version;
+}
+
+export function publicPythonRuntimePackageVersion(rootDir = scriptRootDir()) {
+  return publicNpmPackageVersionToPythonVersion(publicNpmPackageVersion(rootDir));
 }

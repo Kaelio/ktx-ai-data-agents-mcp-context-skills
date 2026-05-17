@@ -100,6 +100,12 @@ The artifact packaging and readiness scripts read `publicNpmPackageVersion`
 from `release-policy.json`, so manual version edits in build scripts aren't
 needed for rc releases.
 
+The bundled Python runtime wheel also derives its version from
+`publicNpmPackageVersion`. Stable npm versions are reused as-is, and rc
+versions are normalized to Python's version format. For example,
+`0.1.0-rc.2` becomes `0.1.0rc2` in the `kaelio-ktx` wheel filename and wheel
+metadata.
+
 ## npm authentication
 
 The release workflow publishes through npm Trusted Publishing. It doesn't use

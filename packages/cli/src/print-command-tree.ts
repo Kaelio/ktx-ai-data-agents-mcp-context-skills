@@ -11,7 +11,13 @@ function silentIo(): KtxCliIo {
 }
 
 function stubPackageInfo(): KtxCliPackageInfo {
-  return { name: '@ktx/cli', version: '0.0.0-docs', contextPackageName: '@ktx/context' };
+  return {
+    name: '@ktx/cli',
+    version: '0.0.0-docs',
+    packageVersion: '0.0.0-private',
+    runtimeVersion: '0.0.0-docs',
+    contextPackageName: '@ktx/context',
+  };
 }
 
 export function renderKtxCommandTree(): string {

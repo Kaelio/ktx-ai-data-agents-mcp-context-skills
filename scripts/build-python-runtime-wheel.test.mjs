@@ -48,11 +48,11 @@ describe('runtimeWheelLayout', () => {
 });
 
 describe('runtimeWheelPyproject', () => {
-  it('describes one kaelio-ktx wheel with lazy local embeddings', () => {
+  it('describes one kaelio-ktx wheel with the release-derived Python version and lazy local embeddings', () => {
     const pyproject = runtimeWheelPyproject();
 
     assert.match(pyproject, /name = "kaelio-ktx"/);
-    assert.match(pyproject, /version = "0\.1\.0"/);
+    assert.match(pyproject, /version = "0\.1\.0rc1"/);
     assert.match(pyproject, /ktx-daemon = "ktx_daemon\.__main__:main"/);
     assert.match(pyproject, /packages = \["semantic_layer", "ktx_daemon"\]/);
     assert.match(pyproject, /\[project\.optional-dependencies\]/);
@@ -110,6 +110,6 @@ describe('runtimeWheelBuildCommand', () => {
       cwd: '/repo/ktx',
     });
     assert.equal(RUNTIME_WHEEL_DISTRIBUTION_NAME, 'kaelio-ktx');
-    assert.equal(RUNTIME_WHEEL_PACKAGE_VERSION, '0.1.0');
+    assert.equal(RUNTIME_WHEEL_PACKAGE_VERSION, '0.1.0rc1');
   });
 });
