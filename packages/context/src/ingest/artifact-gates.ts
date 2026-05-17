@@ -24,17 +24,75 @@ export interface ProvenanceRawPathValidationInput {
   deletedRawPaths: Set<string>;
 }
 
-function bareSlRef(ref: string): string {
+function parseSlRef(ref: string): { connectionId: string | null; sourceName: string; entityName: string | null } {
   const withoutConnection = ref.includes('/') ? ref.slice(ref.indexOf('/') + 1) : ref;
-  return withoutConnection.split('.')[0] ?? withoutConnection;
+  const connectionId = ref.includes('/') ? ref.slice(0, ref.indexOf('/')) : null;
+  const [sourceName = '', entityName = null] = withoutConnection.split('.', 2);
+  return { connectionId, sourceName, entityName };
+}
+
+function slEntityNames(source: Awaited<ReturnType<SemanticLayerService['loadAllSources']>>['sources'][number]): Set<string> {
+  return new Set([
+    ...(source.measures ?? []).map((measure) => measure.name),
+    ...(source.columns ?? []).map((column) => column.name),
+    ...(source.segments ?? []).map((segment) => segment.name),
+  ]);
+}
+
+function uniqueTouchedSources(sources: TouchedSlSource[]): TouchedSlSource[] {
+  const seen = new Set<string>();
+  const unique: TouchedSlSource[] = [];
+  for (const source of sources) {
+    const key = `${source.connectionId}:${source.sourceName}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(source);
+  }
+  return unique.sort((left, right) => {
+    const byConnection = left.connectionId.localeCompare(right.connectionId);
+    return byConnection === 0 ? left.sourceName.localeCompare(right.sourceName) : byConnection;
+  });
+}
+
+async function expandTouchedSlSourcesWithDirectJoinNeighbors(input: FinalArtifactGateInput): Promise<TouchedSlSource[]> {
+  const expanded = [...input.touchedSlSources];
+  const touchedByConnection = new Map<string, Set<string>>();
+  for (const source of input.touchedSlSources) {
+    const bucket = touchedByConnection.get(source.connectionId) ?? new Set<string>();
+    bucket.add(source.sourceName);
+    touchedByConnection.set(source.connectionId, bucket);
+  }
+
+  for (const connectionId of input.connectionIds) {
+    const touched = touchedByConnection.get(connectionId);
+    if (!touched || touched.size === 0) {
+      continue;
+    }
+    const { sources } = await input.semanticLayerService.loadAllSources(connectionId);
+    for (const source of sources) {
+      const sourceIsTouched = touched.has(source.name);
+      if (sourceIsTouched) {
+        for (const join of source.joins ?? []) {
+          expanded.push({ connectionId, sourceName: join.to });
+        }
+      }
+      if ((source.joins ?? []).some((join) => touched.has(join.to))) {
+        expanded.push({ connectionId, sourceName: source.name });
+      }
+    }
+  }
+
+  return uniqueTouchedSources(expanded);
 }
 
 async function validateWikiSlRefs(input: FinalArtifactGateInput): Promise<string[]> {
   const errors: string[] = [];
-  const sourcesByConnection = new Map<string, Set<string>>();
+  const sourcesByConnection = new Map<string, Awaited<ReturnType<SemanticLayerService['loadAllSources']>>['sources']>();
   for (const connectionId of input.connectionIds) {
     const { sources } = await input.semanticLayerService.loadAllSources(connectionId);
-    sourcesByConnection.set(connectionId, new Set(sources.map((source) => source.name)));
+    sourcesByConnection.set(connectionId, sources);
   }
 
   for (const pageKey of input.changedWikiPageKeys) {
@@ -43,11 +101,21 @@ async function validateWikiSlRefs(input: FinalArtifactGateInput): Promise<string
       continue;
     }
     for (const ref of page.frontmatter.sl_refs ?? []) {
-      const sourceName = bareSlRef(ref);
-      const connectionId = ref.includes('/') ? ref.slice(0, ref.indexOf('/')) : null;
-      const sourceSets = connectionId ? [sourcesByConnection.get(connectionId)] : [...sourcesByConnection.values()];
-      if (!sourceSets.some((set) => set?.has(sourceName))) {
+      const parsed = parseSlRef(ref);
+      const candidateConnections = parsed.connectionId ? [parsed.connectionId] : input.connectionIds;
+      let source: Awaited<ReturnType<SemanticLayerService['loadAllSources']>>['sources'][number] | undefined;
+      for (const connectionId of candidateConnections) {
+        source = sourcesByConnection.get(connectionId)?.find((candidate) => candidate.name === parsed.sourceName);
+        if (source) {
+          break;
+        }
+      }
+      if (!source) {
         errors.push(`${pageKey}: unknown sl_refs entry ${ref}`);
+        continue;
+      }
+      if (parsed.entityName && !slEntityNames(source).has(parsed.entityName)) {
+        errors.push(`${pageKey}: unknown sl_refs entity ${ref}`);
       }
     }
   }
@@ -55,7 +123,8 @@ async function validateWikiSlRefs(input: FinalArtifactGateInput): Promise<string
 }
 
 export async function validateFinalIngestArtifacts(input: FinalArtifactGateInput): Promise<void> {
-  const validation = await input.validateTouchedSources(input.touchedSlSources);
+  const touchedWithDependencies = await expandTouchedSlSourcesWithDirectJoinNeighbors(input);
+  const validation = await input.validateTouchedSources(touchedWithDependencies);
   const errors: string[] = validation.invalidSources.map((source) => `semantic-layer validation failed for ${source}`);
   errors.push(...(await validateWikiSlRefs(input)));
 

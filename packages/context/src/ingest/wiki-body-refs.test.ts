@@ -67,4 +67,39 @@ describe('wiki body refs', () => {
 
     expect(invalid).toEqual([]);
   });
+
+  it('ignores two-part inline code when the source is not visible', async () => {
+    const invalid = await findInvalidWikiBodyRefs({
+      pageKey: 'engineering-notes',
+      body: [
+        'A version token like `node.v22` is not a semantic-layer reference.',
+        'A raw table must use `table:analytics.mart_account_segments`.',
+      ].join('\n'),
+      visibleConnectionIds: ['warehouse'],
+      loadSources: async () => sources,
+      tableExists: async (_connectionId, tableRef) => tableRef === 'analytics.mart_account_segments',
+    });
+
+    expect(invalid).toEqual([]);
+  });
+
+  it('still rejects explicit missing source and table references', async () => {
+    const invalid = await findInvalidWikiBodyRefs({
+      pageKey: 'account-segments',
+      body: [
+        '`source:missing_source`',
+        '`warehouse/source:missing_source`',
+        '`table:analytics.missing_table`',
+      ].join('\n'),
+      visibleConnectionIds: ['warehouse'],
+      loadSources: async () => sources,
+      tableExists: async () => false,
+    });
+
+    expect(invalid).toEqual([
+      'account-segments: unknown semantic-layer source missing_source',
+      'account-segments: unknown semantic-layer source warehouse/missing_source',
+      'account-segments: unknown raw table analytics.missing_table',
+    ]);
+  });
 });

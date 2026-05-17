@@ -96,6 +96,19 @@ export async function findInvalidWikiBodyRefs(input: WikiBodyRefValidationInput)
     return sources;
   };
 
+  const findSource = async (
+    connectionIds: string[],
+    sourceName: string,
+  ): Promise<{ connectionId: string; source: SemanticLayerSource } | null> => {
+    for (const connectionId of connectionIds) {
+      const source = (await loadSources(connectionId)).find((candidate) => candidate.name === sourceName);
+      if (source) {
+        return { connectionId, source };
+      }
+    }
+    return null;
+  };
+
   for (const ref of parseWikiBodyRefs(input.body)) {
     const connectionIds = ref.connectionId ? [ref.connectionId] : input.visibleConnectionIds;
     if (ref.kind === 'table') {
@@ -106,18 +119,16 @@ export async function findInvalidWikiBodyRefs(input: WikiBodyRefValidationInput)
       continue;
     }
 
-    let source: SemanticLayerSource | undefined;
-    for (const connectionId of connectionIds) {
-      source = (await loadSources(connectionId)).find((candidate) => candidate.name === ref.sourceName);
-      if (source) {
-        break;
+    const found = await findSource(connectionIds, ref.sourceName);
+    if (!found) {
+      if (ref.kind === 'sl_source') {
+        errors.push(
+          `${input.pageKey}: unknown semantic-layer source ${ref.connectionId ? `${ref.connectionId}/` : ''}${ref.sourceName}`,
+        );
       }
-    }
-    if (!source) {
-      errors.push(`${input.pageKey}: unknown semantic-layer source ${ref.sourceName}`);
       continue;
     }
-    if (ref.kind === 'sl_entity' && !entityNames(source).has(ref.entityName)) {
+    if (ref.kind === 'sl_entity' && !entityNames(found.source).has(ref.entityName)) {
       errors.push(`${input.pageKey}: unknown semantic-layer entity ${ref.sourceName}.${ref.entityName}`);
     }
   }

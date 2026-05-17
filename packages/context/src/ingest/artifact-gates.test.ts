@@ -52,4 +52,99 @@ describe('artifact gates', () => {
       }),
     ).toThrow(/provenance row references raw path outside this snapshot: cards\/missing\.json/);
   });
+
+  it('fails measure-level wiki frontmatter sl_refs that point at missing entities', async () => {
+    const wikiService = {
+      readPage: vi.fn().mockResolvedValue({
+        pageKey: 'account-segments',
+        frontmatter: {
+          summary: 'Account segments',
+          usage_mode: 'auto',
+          sl_refs: ['mart_account_segments.total_contract_arr_cents'],
+        },
+        content: 'ARR uses a renamed measure.',
+      }),
+    };
+    const semanticLayerService = {
+      loadAllSources: vi.fn().mockResolvedValue({
+        sources: [
+          {
+            name: 'mart_account_segments',
+            grain: ['account_id'],
+            columns: [{ name: 'account_id', type: 'string' }],
+            joins: [],
+            measures: [{ name: 'total_contract_arr', expr: 'sum(contract_arr)' }],
+            table: 'analytics.mart_account_segments',
+          },
+        ],
+        loadErrors: [],
+      }),
+    };
+
+    await expect(
+      validateFinalIngestArtifacts({
+        connectionIds: ['warehouse'],
+        changedWikiPageKeys: ['account-segments'],
+        touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'mart_account_segments' }],
+        wikiService: wikiService as never,
+        semanticLayerService: semanticLayerService as never,
+        validateTouchedSources: async () => ({ invalidSources: [], validSources: ['warehouse:mart_account_segments'] }),
+        tableExists: async () => true,
+      }),
+    ).rejects.toThrow(/unknown sl_refs entity mart_account_segments\.total_contract_arr_cents/);
+  });
+
+  it('validates direct declared-join neighbors of touched semantic-layer sources', async () => {
+    const semanticLayerService = {
+      loadAllSources: vi.fn().mockResolvedValue({
+        sources: [
+          {
+            name: 'orders',
+            grain: ['order_id'],
+            columns: [
+              { name: 'order_id', type: 'string' },
+              { name: 'account_id', type: 'string' },
+            ],
+            joins: [{ to: 'accounts', on: 'orders.account_id = accounts.account_id', relationship: 'many_to_one' }],
+            measures: [{ name: 'order_count', expr: 'count(*)' }],
+          },
+          {
+            name: 'accounts',
+            grain: ['account_id'],
+            columns: [{ name: 'account_id', type: 'string' }],
+            joins: [],
+            measures: [{ name: 'account_count', expr: 'count(*)' }],
+          },
+          {
+            name: 'segments',
+            grain: ['segment_id'],
+            columns: [
+              { name: 'segment_id', type: 'string' },
+              { name: 'account_id', type: 'string' },
+            ],
+            joins: [{ to: 'accounts', on: 'segments.account_id = accounts.account_id', relationship: 'many_to_one' }],
+            measures: [],
+          },
+        ],
+        loadErrors: [],
+      }),
+    };
+    const validateTouchedSources = vi.fn().mockResolvedValue({ invalidSources: [], validSources: [] });
+
+    await validateFinalIngestArtifacts({
+      connectionIds: ['warehouse'],
+      changedWikiPageKeys: [],
+      touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'accounts' }],
+      wikiService: { readPage: vi.fn() } as never,
+      semanticLayerService: semanticLayerService as never,
+      validateTouchedSources,
+      tableExists: async () => true,
+    });
+
+    expect(validateTouchedSources).toHaveBeenCalledWith([
+      { connectionId: 'warehouse', sourceName: 'accounts' },
+      { connectionId: 'warehouse', sourceName: 'orders' },
+      { connectionId: 'warehouse', sourceName: 'segments' },
+    ]);
+  });
 });
