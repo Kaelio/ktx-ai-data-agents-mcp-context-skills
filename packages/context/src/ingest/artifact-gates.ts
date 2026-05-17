@@ -1,6 +1,7 @@
 import type { SemanticLayerService } from '../sl/index.js';
 import type { TouchedSlSource } from '../tools/index.js';
 import type { KnowledgeWikiService } from '../wiki/index.js';
+import { findMissingWikiRefs } from '../wiki/wiki-ref-validation.js';
 import { findInvalidWikiBodyRefs } from './wiki-body-refs.js';
 
 export interface TouchedValidationResult {
@@ -122,11 +123,37 @@ async function validateWikiSlRefs(input: FinalArtifactGateInput): Promise<string
   return errors;
 }
 
+async function validateWikiRefs(input: FinalArtifactGateInput): Promise<string[]> {
+  const dangling: string[] = [];
+  for (const pageKey of input.changedWikiPageKeys) {
+    const page = await input.wikiService.readPage('GLOBAL', null, pageKey);
+    if (!page) {
+      continue;
+    }
+    const missingRefs = await findMissingWikiRefs({
+      wikiService: input.wikiService,
+      scope: 'GLOBAL',
+      scopeId: null,
+      pageKey,
+      refs: page.frontmatter.refs,
+      content: page.content,
+    });
+    for (const missingRef of missingRefs) {
+      dangling.push(`${pageKey} -> ${missingRef}`);
+    }
+  }
+  return dangling;
+}
+
 export async function validateFinalIngestArtifacts(input: FinalArtifactGateInput): Promise<void> {
   const touchedWithDependencies = await expandTouchedSlSourcesWithDirectJoinNeighbors(input);
   const validation = await input.validateTouchedSources(touchedWithDependencies);
   const errors: string[] = validation.invalidSources.map((source) => `semantic-layer validation failed for ${source}`);
   errors.push(...(await validateWikiSlRefs(input)));
+  const danglingWikiRefs = await validateWikiRefs(input);
+  if (danglingWikiRefs.length > 0) {
+    errors.push(`wiki references target missing page(s): ${danglingWikiRefs.join(', ')}`);
+  }
 
   for (const pageKey of input.changedWikiPageKeys) {
     const page = await input.wikiService.readPage('GLOBAL', null, pageKey);

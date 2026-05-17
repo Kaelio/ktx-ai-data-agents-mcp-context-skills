@@ -1,19 +1,38 @@
 import { describe, expect, it, vi } from 'vitest';
 import { validateFinalIngestArtifacts, validateProvenanceRawPaths } from './artifact-gates.js';
 
+function wikiServiceWithPages(
+  pages: Record<string, { refs?: string[]; content?: string; slRefs?: string[] }>,
+) {
+  return {
+    listPageKeys: vi.fn().mockResolvedValue(Object.keys(pages)),
+    readPage: vi.fn().mockImplementation((_scope: string, _scopeId: string | null, pageKey: string) => {
+      const page = pages[pageKey];
+      if (!page) {
+        return Promise.resolve(null);
+      }
+      return Promise.resolve({
+        pageKey,
+        frontmatter: {
+          summary: pageKey,
+          usage_mode: 'auto',
+          refs: page.refs,
+          sl_refs: page.slRefs,
+        },
+        content: page.content ?? '',
+      });
+    }),
+  };
+}
+
 describe('artifact gates', () => {
   it('fails the final tree when wiki body references a stale semantic-layer measure', async () => {
-    const wikiService = {
-      readPage: vi.fn().mockResolvedValue({
-        pageKey: 'account-segments',
-        frontmatter: {
-          summary: 'Account segments',
-          usage_mode: 'auto',
-          sl_refs: ['mart_account_segments'],
-        },
+    const wikiService = wikiServiceWithPages({
+      'account-segments': {
+        slRefs: ['mart_account_segments'],
         content: 'ARR is `mart_account_segments.total_contract_arr_cents`.',
-      }),
-    };
+      },
+    });
     const semanticLayerService = {
       loadAllSources: vi.fn().mockResolvedValue({
         sources: [
@@ -54,17 +73,12 @@ describe('artifact gates', () => {
   });
 
   it('fails measure-level wiki frontmatter sl_refs that point at missing entities', async () => {
-    const wikiService = {
-      readPage: vi.fn().mockResolvedValue({
-        pageKey: 'account-segments',
-        frontmatter: {
-          summary: 'Account segments',
-          usage_mode: 'auto',
-          sl_refs: ['mart_account_segments.total_contract_arr_cents'],
-        },
+    const wikiService = wikiServiceWithPages({
+      'account-segments': {
+        slRefs: ['mart_account_segments.total_contract_arr_cents'],
         content: 'ARR uses a renamed measure.',
-      }),
-    };
+      },
+    });
     const semanticLayerService = {
       loadAllSources: vi.fn().mockResolvedValue({
         sources: [
@@ -146,5 +160,31 @@ describe('artifact gates', () => {
       { connectionId: 'warehouse', sourceName: 'orders' },
       { connectionId: 'warehouse', sourceName: 'segments' },
     ]);
+  });
+
+  it('fails final gates when a changed wiki page references a missing wiki page', async () => {
+    const wikiService = wikiServiceWithPages({
+      'account-segments': {
+        refs: ['missing-frontmatter-page'],
+        content: 'See [[missing-inline-page]] for the related process.',
+      },
+    });
+    const semanticLayerService = {
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
+    };
+
+    await expect(
+      validateFinalIngestArtifacts({
+        connectionIds: ['warehouse'],
+        changedWikiPageKeys: ['account-segments'],
+        touchedSlSources: [],
+        wikiService: wikiService as never,
+        semanticLayerService: semanticLayerService as never,
+        validateTouchedSources: async () => ({ invalidSources: [], validSources: [] }),
+        tableExists: async () => true,
+      }),
+    ).rejects.toThrow(
+      /wiki references target missing page\(s\): account-segments -> missing-frontmatter-page, account-segments -> missing-inline-page/,
+    );
   });
 });
