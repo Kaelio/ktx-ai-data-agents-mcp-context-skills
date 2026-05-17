@@ -50,9 +50,12 @@ The design has these goals:
 
 ## Non-goals
 
-This design does not change the wiki markdown format, the semantic-layer YAML
-format, or the raw source snapshot layouts. It also does not remove source
-adapters' current fetch and chunk logic in one large rewrite.
+This design does not change the wiki frontmatter schema, wiki page file layout,
+the semantic-layer YAML format, or the raw source snapshot layouts. It does add
+a narrow author-facing inline-code grammar for explicit wiki body references to
+semantic-layer entities and raw tables, because body text is part of the
+stale-reference failure class. It also does not remove source adapters' current
+fetch and chunk logic in one large rewrite.
 
 This design does not introduce public connector knobs such as
 `executionMode`, `planningStrategy`, or `conflictPolicy`. The core runner
@@ -164,6 +167,11 @@ Each per-work-unit worktree starts from the same ingestion base commit. A work
 unit never observes another concurrent work unit's transient edits. This makes
 the work unit diff a clean proposal against a stable base.
 
+The integration worktree and each per-work-unit worktree must share one Git
+object database, created through `git worktree add` from the same repository.
+This is required so `git apply --3way` can resolve the base blobs recorded in
+each work-unit patch during integration.
+
 The runner creates and runs child worktrees under the existing
 `workUnitMaxConcurrency` setting. A run may have many planned work units, but no
 more than that bound may be active or left on disk at once. The default remains
@@ -254,15 +262,25 @@ Reconciliation must see the integrated state because its job is to resolve
 cross-work-unit duplicates, evictions, fallbacks, and source-specific
 reconcile guidance.
 
-Reconciliation is not allowed to mutate project main directly and does not run
-inside any child worktree. Its changes are captured as a reconciliation diff
-against the pre-reconciliation integration HEAD, recorded in the existing
-stage/report metadata, and validated with the same touched-artifact and scoped
-connection gates as work-unit writes. The final global gates validate the
-combined tree after reconciliation. If reconciliation introduces an invalid
-wiki or semantic-layer reference, touches a disallowed target, or records an
-unresolvable artifact conflict, the run fails or routes to a resolver before
-squash.
+Reconciliation runs exactly once per integration pass, serially against the
+integration worktree, after all accepted work-unit diffs have been applied and
+after textual conflicts are resolved. It never runs inside a child worktree and
+never overlaps with work-unit execution. This is the safety carve-out from the
+isolation goal: concurrent agent writes are the failure mode being avoided, and
+reconciliation is non-concurrent by construction.
+
+Reconciliation is not allowed to mutate project main directly. Its changes are
+captured as a reconciliation diff against the pre-reconciliation integration
+HEAD and recorded in the existing stage/report metadata. Reconciliation gates
+validate the artifacts touched by the reconciliation diff plus any wiki page or
+semantic-layer source referenced by changed frontmatter or body references,
+using the same artifact-class validators as work-unit gates. Reconciliation may
+write only to target connections authorized by the adapter for the ingest run,
+but it is not subject to any single work unit's `slDisallowed` scope. The final
+global gates validate the combined tree after reconciliation. If reconciliation
+introduces an invalid wiki or semantic-layer reference, touches an unauthorized
+target, or records an unresolvable artifact conflict, the run fails or routes to
+a resolver before squash.
 
 ## Artifact-aware integration
 
@@ -290,6 +308,11 @@ checks those rows against the integrated worktree and staged raw hashes. Moving
 provenance to on-disk files would be a separate schema migration, not part of
 this design.
 
+Artifact-resolution records are the existing merged or subsumed reconciliation
+outputs emitted through `emit_artifact_resolution` as
+`ArtifactResolutionRecord` stage-index records. They are in-memory stage
+records, not worktree files, and they feed the provenance gate.
+
 Artifact-aware integration can start with validation-only behavior. It does not
 need to auto-merge every semantic conflict in version one. If two diffs contest
 the same source YAML or wiki page and the merge cannot prove correctness, the
@@ -313,6 +336,14 @@ The final gates must include:
   and table references; and
 - provenance validation for raw paths referenced by new or changed artifacts
   before those rows are inserted into SQLite.
+
+For semantic-layer validation, touched sources are sources changed by accepted
+work-unit diffs, deterministic projection, or reconciliation. Dependency sources
+are their direct declared-join neighbors in the composed semantic-layer graph,
+including sources they join to and sources that join to them. Version one runs
+the existing whole-connection structural checks and source-scoped checks with
+the touched-and-dependency source set; it does not expand dependency scope to a
+transitive SQL-projection closure.
 
 The wiki body gate needs a narrow grammar so ordinary prose does not become a
 semantic-layer reference. In version one, an explicit body reference is one of
