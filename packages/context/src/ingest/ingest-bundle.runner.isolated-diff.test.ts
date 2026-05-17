@@ -486,6 +486,9 @@ describe('IngestBundleRunner isolated diff path', () => {
         return { toRuntimeTools: vi.fn(() => ({})) };
       });
       deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        if (params.telemetryTags.operationName === 'ingest-isolated-diff-textual-resolver') {
+          return { stopReason: 'natural' };
+        }
         const suffix = params.telemetryTags.unitKey === 'orders-a' ? 'a' : 'b';
         const root = rootOfConfig(currentSession.configService, runtime.configDir);
         await mkdir(join(root, 'semantic-layer/warehouse'), { recursive: true });
@@ -509,6 +512,7 @@ describe('IngestBundleRunner isolated diff path', () => {
       ).rejects.toThrow(/isolated diff textual conflict/);
       const trace = await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-text-conflict/trace.jsonl'), 'utf-8');
       expect(trace).toContain('patch_textual_conflict');
+      expect(trace).toContain('textual_conflict_resolver_failed');
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });
     }

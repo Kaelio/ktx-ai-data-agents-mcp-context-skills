@@ -222,7 +222,7 @@ describe('integrateWorkUnitPatch', () => {
         });
         await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\nproposal\n', 'utf-8');
         return {
-          status: 'repaired',
+          status: 'repaired' as const,
           attempts: 1,
           changedPaths: ['wiki/global/a.md'],
         };
@@ -281,7 +281,7 @@ describe('integrateWorkUnitPatch', () => {
       allowedTargetConnectionIds: new Set(['warehouse']),
       validateAppliedTree: vi.fn(async () => {}),
       resolveTextualConflict: vi.fn(async () => ({
-        status: 'failed',
+        status: 'failed' as const,
         attempts: 1,
         reason: 'resolver completed without editing an allowed path',
       })),

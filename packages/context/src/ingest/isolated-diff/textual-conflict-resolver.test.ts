@@ -60,7 +60,7 @@ describe('resolveTextualConflict', () => {
           path: 'wiki/global/account.md',
           content: 'accepted line\nproposal line\n',
         });
-        return { stopReason: 'natural' };
+        return { stopReason: 'natural' as const };
       }),
     };
 
@@ -100,7 +100,7 @@ describe('resolveTextualConflict', () => {
   it('fails when the repair agent completes without editing any touched path', async () => {
     const { workdir, patchPath, trace } = await makeHarness();
     const result = await resolveTextualConflict({
-      agentRunner: { runLoop: vi.fn(async () => ({ stopReason: 'natural' })) },
+      agentRunner: { runLoop: vi.fn(async () => ({ stopReason: 'natural' as const })) },
       workdir,
       unitKey: 'wu-a',
       patchPath,
