@@ -53,6 +53,16 @@ export interface IngestReportBody {
   diffSummary: IngestDiffSummary;
   fetch?: SourceFetchReport;
   commitSha: string | null;
+  tracePath?: string;
+  isolatedDiff?: {
+    enabled: boolean;
+    integrationWorktreePath?: string;
+    ingestionBaseSha?: string;
+    projectionSha?: string | null;
+    acceptedPatches: number;
+    textualConflicts: number;
+    semanticConflicts: number;
+  };
   workUnits: IngestReportWorkUnit[];
   failedWorkUnits: string[];
   reconciliationSkipped: boolean;

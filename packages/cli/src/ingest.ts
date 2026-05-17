@@ -195,6 +195,9 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
   io.stdout.write(`Report: ${report.id}\n`);
   io.stdout.write(`Run: ${report.runId}\n`);
   io.stdout.write(`Job: ${report.jobId}\n`);
+  if (report.body.tracePath) {
+    io.stdout.write(`Trace: ${report.body.tracePath}\n`);
+  }
   io.stdout.write(`Status: ${reportStatus(report)}\n`);
   io.stdout.write(`Source: ${reportSourceLabel(report.sourceKey)}\n`);
   io.stdout.write(`Connection: ${report.connectionId}\n`);

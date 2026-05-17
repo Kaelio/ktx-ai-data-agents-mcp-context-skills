@@ -76,6 +76,7 @@ import { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evide
 import { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
 import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './context-evidence/index.js';
 import { DiffSetService } from './diff-set.service.js';
+import { ingestTracePathForJob } from './ingest-trace.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import { PageTriageService } from './page-triage/index.js';
 import { createWarehouseVerificationTools } from './tools/warehouse-verification/index.js';
@@ -150,6 +151,10 @@ class LocalIngestStorage implements IngestStoragePort {
 
   resolveTranscriptDir(jobId: string): string {
     return join(this.project.projectDir, '.ktx/ingest-transcripts', jobId);
+  }
+
+  resolveTracePath(jobId: string): string {
+    return ingestTracePathForJob(this.homeDir, jobId);
   }
 }
 
@@ -671,6 +676,8 @@ export function createLocalBundleIngestRuntime(
       workUnitMaxConcurrency: options.project.config.ingest.workUnits.maxConcurrency,
       workUnitStepBudget: options.project.config.ingest.workUnits.stepBudget,
       workUnitFailureMode: options.project.config.ingest.workUnits.failureMode,
+      isolatedDiffSourceKeys: ['metabase'],
+      ingestTraceLevel: 'debug',
     },
     skillsRegistry: new SkillsRegistryService({ skillsDir, logger }),
     promptService,

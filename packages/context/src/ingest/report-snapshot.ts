@@ -137,6 +137,18 @@ export const ingestReportSnapshotSchema = z
         diffSummary: ingestDiffSummarySchema,
         fetch: sourceFetchReportSchema.optional(),
         commitSha: z.string().nullable(),
+        tracePath: z.string().optional(),
+        isolatedDiff: z
+          .object({
+            enabled: z.boolean(),
+            integrationWorktreePath: z.string().optional(),
+            ingestionBaseSha: z.string().optional(),
+            projectionSha: z.string().nullable().optional(),
+            acceptedPatches: z.number().int().min(0),
+            textualConflicts: z.number().int().min(0),
+            semanticConflicts: z.number().int().min(0),
+          })
+          .optional(),
         workUnits: z.array(
           z.object({
             unitKey: z.string().min(1),
