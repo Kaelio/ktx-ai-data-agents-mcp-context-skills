@@ -102,6 +102,35 @@ describe('dev Commander tree', () => {
     }
   });
 
+  it('prints config schema without requiring a KTX project directory', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-dev-schema-'));
+    const missingProjectDir = join(tempDir, 'missing-project');
+    const originalProjectDir = process.env.KTX_PROJECT_DIR;
+    const testIo = makeIo();
+
+    try {
+      process.env.KTX_PROJECT_DIR = missingProjectDir;
+
+      await expect(runKtxCli(['dev', 'schema'], testIo.io)).resolves.toBe(0);
+
+      expect(JSON.parse(testIo.stdout())).toMatchObject({
+        title: 'ktx.yaml',
+        type: 'object',
+      });
+      expect(testIo.stderr()).toBe('');
+    } finally {
+      if (originalProjectDir === undefined) {
+        delete process.env.KTX_PROJECT_DIR;
+      } else {
+        process.env.KTX_PROJECT_DIR = originalProjectDir;
+      }
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects removed dev command groups', async () => {
     for (const argv of [
       ['dev', 'doctor', 'setup'],

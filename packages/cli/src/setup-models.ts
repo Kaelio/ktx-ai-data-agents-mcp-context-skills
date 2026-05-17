@@ -509,12 +509,12 @@ async function chooseBackend(
   }
   const choice = await prompts.select({
     message: 'Which LLM provider should KTX use?',
-      options: [
-        { value: 'anthropic', label: 'Anthropic API' },
-        { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
-        { value: 'claude-code', label: 'Local Claude Code session' },
-        { value: 'back', label: 'Back' },
-      ],
+    options: [
+      { value: 'claude-code', label: 'Claude subscription (Pro/Max)' },
+      { value: 'anthropic', label: 'Anthropic API key' },
+      { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
+      { value: 'back', label: 'Back' },
+    ],
   });
   if (choice === 'back') {
     return { status: 'back' };

@@ -1,6 +1,6 @@
 import { createPythonSemanticLayerComputePort, type KtxSemanticLayerComputePort } from '@ktx/context/daemon';
 import type { KtxCliIo } from './cli-runtime.js';
-import { createClackPromptAdapter } from './clack.js';
+import { createClackPromptAdapter, createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
 import {
   installManagedPythonRuntime,
   readManagedPythonRuntimeStatus,
@@ -37,6 +37,7 @@ export interface ManagedPythonCommandDeps {
   readStatus?: (options: ManagedPythonRuntimeLayoutOptions) => Promise<ManagedPythonRuntimeStatus>;
   installRuntime?: (options: ManagedPythonRuntimeInstallOptions) => Promise<ManagedPythonRuntimeInstallResult>;
   confirmInstall?: (message: string, io: KtxCliIo) => Promise<boolean>;
+  spinner?: () => KtxCliSpinner;
 }
 
 export interface ManagedPythonCommandOptions extends ManagedPythonCommandDeps {
@@ -101,14 +102,20 @@ export async function ensureManagedPythonCommandRuntime(
     }
   }
 
-  options.io.stderr.write(`Installing KTX Python runtime (${feature}) with uv...\n`);
-  const installed = await installRuntime({
-    cliVersion: options.cliVersion,
-    features: [feature],
-    force: false,
-  });
-  options.io.stderr.write(`KTX Python runtime ready: ${installed.layout.versionDir}\n`);
-  return { layout: installed.layout, manifest: installed.manifest };
+  const progress = (options.spinner ?? (() => createStaticCliSpinner(options.io)))();
+  progress.start(`Installing KTX Python runtime (${feature}) with uv...`);
+  try {
+    const installed = await installRuntime({
+      cliVersion: options.cliVersion,
+      features: [feature],
+      force: false,
+    });
+    progress.stop(`KTX Python runtime ready: ${installed.layout.versionDir}`);
+    return { layout: installed.layout, manifest: installed.manifest };
+  } catch (error) {
+    progress.error(`KTX Python runtime install failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  }
 }
 
 export async function createManagedPythonSemanticLayerComputePort(
@@ -122,6 +129,7 @@ export async function createManagedPythonSemanticLayerComputePort(
     ...(options.readStatus ? { readStatus: options.readStatus } : {}),
     ...(options.installRuntime ? { installRuntime: options.installRuntime } : {}),
     ...(options.confirmInstall ? { confirmInstall: options.confirmInstall } : {}),
+    ...(options.spinner ? { spinner: options.spinner } : {}),
   });
   const createPythonCompute = options.createPythonCompute ?? createPythonSemanticLayerComputePort;
   return createPythonCompute({

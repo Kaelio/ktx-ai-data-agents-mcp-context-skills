@@ -1,10 +1,16 @@
 import { cancel, confirm, isCancel, log, spinner } from '@clack/prompts';
 
+const ESC = String.fromCharCode(0x1b);
+
 export interface KtxCliSpinner {
   start(message: string): void;
   message(message: string): void;
   stop(message: string): void;
   error(message: string): void;
+}
+
+export interface KtxCliSpinnerIo {
+  stderr: { write(chunk: string): void };
 }
 
 export interface KtxCliPromptAdapter {
@@ -29,6 +35,31 @@ export class KtxCliPromptCancelledError extends Error {
 
 export function createClackSpinner(): KtxCliSpinner {
   return spinner();
+}
+
+function magenta(text: string): string {
+  return `${ESC}[35m${text}${ESC}[39m`;
+}
+
+function red(text: string): string {
+  return `${ESC}[31m${text}${ESC}[39m`;
+}
+
+export function createStaticCliSpinner(io: KtxCliSpinnerIo): KtxCliSpinner {
+  return {
+    start(message) {
+      io.stderr.write(`${magenta('◐')}  ${message}\n`);
+    },
+    message(message) {
+      io.stderr.write(`${magenta('│')}  ${message}\n`);
+    },
+    stop(message) {
+      io.stderr.write(`${magenta('◇')}  ${message}\n`);
+    },
+    error(message) {
+      io.stderr.write(`${red('■')}  ${message}\n`);
+    },
+  };
 }
 
 export function createClackPromptAdapter(): KtxCliPromptAdapter {

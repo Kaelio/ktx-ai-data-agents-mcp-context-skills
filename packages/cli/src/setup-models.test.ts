@@ -164,7 +164,7 @@ describe('setup Anthropic model step', () => {
     );
   });
 
-  it('offers Vertex AI as an Anthropic model provider option', async () => {
+  it('offers Anthropic provider paths in the preferred order', async () => {
     const prompts = makePromptAdapter({ providerChoice: 'back' });
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -177,10 +177,12 @@ describe('setup Anthropic model step', () => {
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which LLM provider should KTX use?'),
-        options: expect.arrayContaining([
+        options: [
+          { value: 'claude-code', label: 'Claude subscription (Pro/Max)' },
+          { value: 'anthropic', label: 'Anthropic API key' },
           { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
           { value: 'back', label: 'Back' },
-        ]),
+        ],
       }),
     );
   });

@@ -10,7 +10,7 @@ import {
 } from '@ktx/context/project';
 import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
-import { createClackSpinner, type KtxCliSpinner } from './clack.js';
+import { createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
@@ -316,10 +316,7 @@ async function promptAfterLocalEmbeddingFailure(
 
 function healthCheckStartText(backend: KtxSetupEmbeddingBackend, model: string, dimensions: number): string {
   if (backend === LOCAL_EMBEDDING_BACKEND) {
-    return [
-      `Testing local sentence-transformers embeddings (${model}, ${dimensions} dimensions).`,
-      'First run may take up to 60 seconds.',
-    ].join(' ');
+    return `Testing local embeddings (${model})`;
   }
   return `Checking ${backend} embeddings (${model}, ${dimensions} dimensions).`;
 }
@@ -424,7 +421,7 @@ export async function runKtxSetupEmbeddingsStep(
             dimensions,
             credentialValue,
           });
-    const healthSpinner = (deps.spinner ?? createClackSpinner)();
+    const healthSpinner = (deps.spinner ?? (() => createStaticCliSpinner(io)))();
     const progress = startHealthCheckProgress(healthSpinner, healthCheckStartText(selectedBackend, model, dimensions));
     let health: KtxEmbeddingHealthCheckResult;
     try {

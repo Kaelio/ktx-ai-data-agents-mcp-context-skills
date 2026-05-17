@@ -58,6 +58,7 @@ type CommandPathNode = CommandWithGlobalOptions & {
 };
 
 const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'sql', 'status', 'mcp']);
+const PROJECT_INDEPENDENT_DEV_COMMANDS = new Set(['runtime', 'schema']);
 const COMMANDS_THAT_CREATE_PROJECT = new Set(['setup', 'ktx dev init']);
 const COMMANDS_WITH_OWN_MISSING_PROJECT_HANDLING = new Set(['status']);
 const GLOBAL_OPTIONS_WITH_VALUE = new Set(['--project-dir']);
@@ -172,7 +173,7 @@ function isProjectAwareCommand(path: string[]): boolean {
 
   const rootCommand = path[1];
   if (rootCommand === 'dev') {
-    return path[2] !== undefined && path[2] !== 'runtime';
+    return path[2] !== undefined && !PROJECT_INDEPENDENT_DEV_COMMANDS.has(path[2]);
   }
   return rootCommand !== undefined && PROJECT_AWARE_ROOT_COMMANDS.has(rootCommand);
 }
