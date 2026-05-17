@@ -12,6 +12,7 @@ import {
   discoverMetabaseDatabases,
   lookerCredentialsFromLocalConnection,
   metabaseRuntimeConfigFromLocalConnection,
+  planMetabaseFanoutChildren,
   seedLocalMappingStateFromKtxYaml,
   validateLookerMappings,
   validateMappingPhysicalMatch,
@@ -198,6 +199,14 @@ export async function runKtxSourceMapping(
     }
 
     const rows = await store.listDatabaseMappings(args.connectionId);
+    planMetabaseFanoutChildren({
+      metabaseConnectionId: args.connectionId,
+      mappings: rows.map((row) => ({
+        metabaseDatabaseId: row.metabaseDatabaseId,
+        targetConnectionId: row.targetConnectionId,
+        syncEnabled: row.syncEnabled,
+      })),
+    });
     const failures = rows.flatMap((row) => {
       if (!row.targetConnectionId) {
         return [];
