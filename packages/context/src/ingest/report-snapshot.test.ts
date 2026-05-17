@@ -206,6 +206,47 @@ describe('parseIngestReportSnapshot', () => {
     expect(snapshot.body.toolTranscripts).toEqual([]);
   });
 
+  it('parses failed ingest reports with trace and failure details', () => {
+    const snapshot = parseIngestReportSnapshot({
+      id: 'report-failed',
+      runId: 'run-failed',
+      jobId: 'job-failed',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      createdAt: '2026-05-17T12:00:00.000Z',
+      body: {
+        status: 'failed',
+        syncId: 'sync-failed',
+        diffSummary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+        commitSha: null,
+        tracePath: '/project/.ktx/ingest-traces/job-failed/trace.jsonl',
+        failure: {
+          phase: 'final_gates',
+          message: 'final artifact gates failed',
+        },
+        workUnits: [],
+        failedWorkUnits: [],
+        reconciliationSkipped: true,
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+        evictionInputs: [],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+
+    expect(snapshot.body.status).toBe('failed');
+    expect(snapshot.body.failure).toEqual({
+      phase: 'final_gates',
+      message: 'final artifact gates failed',
+    });
+    expect(snapshot.body.tracePath).toContain('trace.jsonl');
+  });
+
   it('rejects malformed report snapshots with a concise message', () => {
     const report = validReportSnapshot();
     report.body.workUnits[0] = {

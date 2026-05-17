@@ -495,6 +495,120 @@ describe('IngestBundleRunner isolated diff path', () => {
     }
   });
 
+  it('stores a failure report and postmortem trace for final gate failures', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps, adapter } = makeDeps(runtime);
+      const createdReports: any[] = [];
+      deps.reports.create = vi.fn(async (args: any) => {
+        createdReports.push(args);
+        return { id: `report-${createdReports.length}` };
+      });
+      adapter.chunk.mockResolvedValue({
+        workUnits: [
+          { unitKey: 'card-wiki', rawFiles: ['cards/wiki.json'], peerFileIndex: [], dependencyPaths: [] },
+          { unitKey: 'card-source', rawFiles: ['cards/source.json'], peerFileIndex: [], dependencyPaths: [] },
+        ],
+      });
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        if (params.telemetryTags.unitKey === 'card-wiki') {
+          await mkdir(join(root, 'wiki/global'), { recursive: true });
+          await writeFile(
+            join(root, 'wiki/global/account-segments.md'),
+            '---\nsummary: Account segments\nusage_mode: auto\n---\n\nARR is `mart_account_segments.total_contract_arr_cents`.\n',
+          );
+          currentSession.actions.push({
+            target: 'wiki',
+            type: 'created',
+            key: 'account-segments',
+            detail: 'Account segments',
+            rawPaths: ['cards/wiki.json'],
+          });
+          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'wu wiki', 'KTX Test', 'system@ktx.local');
+        }
+        if (params.telemetryTags.unitKey === 'card-source') {
+          await mkdir(join(root, 'semantic-layer/warehouse'), { recursive: true });
+          await writeFile(
+            join(root, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+            'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr\n    expr: sum(contract_arr)\n',
+          );
+          addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'mart_account_segments');
+          currentSession.actions.push({
+            target: 'sl',
+            type: 'created',
+            key: 'mart_account_segments',
+            detail: 'Dollar measure',
+            targetConnectionId: 'warehouse',
+            rawPaths: ['cards/source.json'],
+          });
+          await currentSession.gitService.commitFiles(
+            ['semantic-layer/warehouse/mart_account_segments.yaml'],
+            'wu source',
+            'KTX Test',
+            'system@ktx.local',
+          );
+        }
+        return { stopReason: 'natural' };
+      }) as never;
+
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [
+        ['cards/wiki.json', 'h1'],
+        ['cards/source.json', 'h2'],
+      ]);
+
+      await expect(
+        runner.run({
+          jobId: 'job-trace-failure',
+          connectionId: 'warehouse',
+          sourceKey: 'metabase',
+          trigger: 'upload',
+          bundleRef: { kind: 'upload', uploadId: 'upload' },
+        }),
+      ).rejects.toThrow(/total_contract_arr_cents/);
+
+      const failureReport = createdReports.find((report) => report.body.status === 'failed');
+      expect(failureReport.body.tracePath).toContain('job-trace-failure/trace.jsonl');
+      expect(failureReport.body.failure).toMatchObject({ phase: 'final_gates' });
+
+      const events = (await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-trace-failure/trace.jsonl'), 'utf-8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(events.map((event) => event.event)).toEqual(
+        expect.arrayContaining([
+          'ingest_started',
+          'input_snapshot',
+          'work_units_planned',
+          'isolated_diff_enabled',
+          'work_unit_child_created',
+          'work_unit_patch_collected',
+          'patch_apply_started',
+          'patch_accepted',
+          'reconciliation_finished',
+          'final_artifact_gates_failed',
+          'ingest_failed',
+          'failure_report_created',
+        ]),
+      );
+      const failed = events.find((event) => event.event === 'ingest_failed');
+      expect(failed).toMatchObject({
+        runId: 'run-1',
+        syncId: expect.any(String),
+        data: { phase: 'final_gates', tracePath: expect.stringContaining('trace.jsonl') },
+        error: { message: expect.stringContaining('total_contract_arr_cents') },
+      });
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects slDisallowed patches that touch semantic-layer files', async () => {
     const runtime = await makeRealGitRuntime();
     try {

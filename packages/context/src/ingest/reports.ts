@@ -48,12 +48,19 @@ export interface IngestReportPostProcessorOutcome {
   touchedSources: TouchedSlSource[];
 }
 
+export interface IngestReportFailure {
+  phase: string;
+  message: string;
+}
+
 export interface IngestReportBody {
+  status?: 'completed' | 'failed';
   syncId: string;
   diffSummary: IngestDiffSummary;
   fetch?: SourceFetchReport;
   commitSha: string | null;
   tracePath?: string;
+  failure?: IngestReportFailure;
   isolatedDiff?: {
     enabled: boolean;
     integrationWorktreePath?: string;

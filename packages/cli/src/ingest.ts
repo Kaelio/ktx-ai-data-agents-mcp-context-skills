@@ -102,7 +102,7 @@ export interface KtxIngestDeps {
 }
 
 function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
-  return report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
+  return report.body.status === 'failed' || report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
 }
 
 const REPORT_SOURCE_LABELS = new Map<string, string>([
@@ -174,6 +174,9 @@ function formatFailureReason(sourceKey: string, reason: string): string {
 }
 
 function failedReportMessage(report: IngestReportSnapshot): string | null {
+  if (report.body.status === 'failed' && report.body.failure?.message) {
+    return sanitizeMemoryFlowError(report.body.failure.message);
+  }
   const failedCount = report.body.failedWorkUnits.length;
   if (failedCount === 0) {
     return null;

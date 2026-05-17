@@ -123,6 +123,11 @@ const sourceFetchReportSchema = z.object({
   warnings: z.array(sourceFetchIssueSchema).default([]),
 });
 
+const ingestReportFailureSchema = z.object({
+  phase: z.string().min(1),
+  message: z.string().min(1),
+});
+
 export const ingestReportSnapshotSchema = z
   .object({
     id: z.string().min(1),
@@ -133,11 +138,13 @@ export const ingestReportSnapshotSchema = z
     createdAt: z.string().min(1),
     body: z
       .object({
+        status: z.enum(['completed', 'failed']).optional(),
         syncId: z.string().min(1),
         diffSummary: ingestDiffSummarySchema,
         fetch: sourceFetchReportSchema.optional(),
         commitSha: z.string().nullable(),
         tracePath: z.string().optional(),
+        failure: ingestReportFailureSchema.optional(),
         isolatedDiff: z
           .object({
             enabled: z.boolean(),
