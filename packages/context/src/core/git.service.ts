@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { SimpleGit } from 'simple-git';
 import { noopLogger, resolveConfigDir, type KtxCoreConfig, type KtxLogger } from './config.js';
 import { createSimpleGit } from './git-env.js';
@@ -745,6 +745,55 @@ export class GitService {
         `Worktree has ${unmerged.length} unmerged path(s): ${unmerged.slice(0, 5).join(', ')}; refusing to proceed`,
       );
     }
+  }
+
+  async writeBinaryNoRenamePatch(from: string, to: string, patchPath: string): Promise<void> {
+    await this.withMutationQueue(async () => {
+      const patch = await this.git.raw(['diff', '--binary', '--no-renames', `${from}..${to}`]);
+      await fs.mkdir(dirname(patchPath), { recursive: true });
+      await fs.writeFile(patchPath, patch, 'utf-8');
+    });
+  }
+
+  async applyPatchFile3WayIndex(patchPath: string): Promise<void> {
+    await this.withMutationQueue(async () => {
+      await this.git.raw(['apply', '--3way', '--index', patchPath]);
+    });
+  }
+
+  async commitStaged(commitMessage: string, author: string, authorEmail: string): Promise<GitCommitInfo> {
+    return this.withMutationQueue(async () => {
+      const stagedChanges = await this.git.diff(['--cached', '--name-only']);
+      if (!stagedChanges.trim()) {
+        const head = (await this.git.revparse(['HEAD'])).trim();
+        const log = await this.git.log({ maxCount: 1 });
+        const latest = log.latest;
+        return {
+          commitHash: head,
+          shortHash: head.substring(0, 8),
+          message: latest?.message ?? '',
+          author: latest?.author_name ?? '',
+          authorEmail: latest?.author_email ?? '',
+          timestamp: latest?.date ?? new Date(0).toISOString(),
+          committedDate: latest?.date ? new Date(latest.date).toISOString() : new Date(0).toISOString(),
+          created: false,
+        };
+      }
+      await this.git.commit(commitMessage, { '--author': `${author} <${authorEmail}>` });
+      const head = (await this.git.revparse(['HEAD'])).trim();
+      const log = await this.git.log({ maxCount: 1 });
+      const latest = log.latest;
+      return {
+        commitHash: head,
+        shortHash: head.substring(0, 8),
+        message: latest?.message ?? commitMessage,
+        author: latest?.author_name ?? author,
+        authorEmail: latest?.author_email ?? authorEmail,
+        timestamp: latest?.date ?? new Date().toISOString(),
+        committedDate: latest?.date ? new Date(latest.date).toISOString() : new Date().toISOString(),
+        created: true,
+      };
+    });
   }
 
   private async fileExists(path: string): Promise<boolean> {
