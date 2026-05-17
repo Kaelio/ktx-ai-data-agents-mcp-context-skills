@@ -12,7 +12,7 @@ validates the statement before execution and only accepts a single `SELECT` or
 Use `ktx sql` with a required connection id and positional SQL text.
 
 ```bash
-ktx sql --connection-id <id> [options] <sql...>
+ktx sql --connection <id> [options] <sql...>
 ```
 
 ## Options
@@ -22,7 +22,7 @@ JSON.
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | KTX database connection id. Required. | - |
+| `-c`, `--connection <id>` | KTX database connection id. Required. | - |
 | `--max-rows <n>` | Maximum rows to return. Must be between `1` and `10000`. | `1000` |
 | `--output <mode>` | Output mode: `pretty`, `plain` (TSV), or `json`. | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`). | `false` |
@@ -33,23 +33,23 @@ Quote SQL in shell scripts and when the query contains spaces or punctuation.
 
 ```bash
 # Count rows in a table
-ktx sql --connection-id warehouse "select count(*) from public.orders"
+ktx sql --connection warehouse "select count(*) from public.orders"
 
 # Return a small result set
 ktx sql \
-  --connection-id warehouse \
+  --connection warehouse \
   --max-rows 25 \
   "select id, status from public.orders order by created_at desc"
 
 # Print JSON for agents or scripts
 ktx sql \
-  --connection-id warehouse \
+  --connection warehouse \
   --json \
   "select status, count(*) from public.orders group by status"
 
 # Print TSV rows
 ktx sql \
-  --connection-id warehouse \
+  -c warehouse \
   --output plain \
   "select id, status from public.orders"
 ```

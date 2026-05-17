@@ -26,7 +26,7 @@ export function registerSqlCommands(program: Command, context: KtxCliCommandCont
     .command('sql')
     .description('Execute parser-validated read-only SQL against a configured connection')
     .argument('<sql...>', 'SQL query to execute')
-    .requiredOption('--connection-id <id>', 'KTX connection id')
+    .requiredOption('-c, --connection <id>', 'KTX connection id')
     .option('--max-rows <n>', 'Maximum rows to return', parseSqlMaxRowsOption, DEFAULT_MAX_ROWS)
     .addOption(
       new Option('--output <mode>', 'Output mode: pretty (default), plain (TSV), or json').choices([
@@ -40,7 +40,7 @@ export function registerSqlCommands(program: Command, context: KtxCliCommandCont
       async (
         sqlParts: string[],
         options: {
-          connectionId: string;
+          connection: string;
           maxRows: number;
           output?: 'pretty' | 'plain' | 'json';
           json?: boolean;
@@ -50,7 +50,7 @@ export function registerSqlCommands(program: Command, context: KtxCliCommandCont
         await runSqlArgs(context, {
           command: 'execute',
           projectDir: resolveCommandProjectDir(command),
-          connectionId: options.connectionId,
+          connectionId: options.connection,
           sql: sqlParts.join(' '),
           maxRows: options.maxRows,
           output: options.output,

@@ -81,7 +81,7 @@ ktx sl search "revenue"
 ktx wiki search "revenue recognition"
 
 # Execute read-only SQL
-ktx sql --connection-id warehouse "select count(*) from public.orders"
+ktx sql --connection warehouse "select count(*) from public.orders"
 
 # Start the local MCP server for agent clients
 ktx mcp start

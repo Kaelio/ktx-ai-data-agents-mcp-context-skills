@@ -70,7 +70,7 @@ Agent integration ready: yes (codex:project)
 | `ktx sl search "revenue"` | Search semantic-layer sources |
 | `ktx sl validate <source> --connection-id <id>` | Validate a semantic source |
 | `ktx sl query --measure <measure> --format sql` | Compile semantic-layer SQL |
-| `ktx sql --connection-id <id> "select 1"` | Execute read-only SQL |
+| `ktx sql --connection <id> "select 1"` | Execute read-only SQL |
 | `ktx wiki search "revenue definition"` | Search local wiki context |
 | `ktx mcp start` | Start the local MCP server for agent clients |
 

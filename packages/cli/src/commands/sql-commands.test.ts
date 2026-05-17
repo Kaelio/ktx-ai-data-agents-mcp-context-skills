@@ -33,7 +33,7 @@ describe('registerSqlCommands', () => {
 
     await expect(
       program.parseAsync(
-        ['--project-dir', '/tmp/ktx-sql', 'sql', '--connection-id', 'warehouse', 'select', '1'],
+        ['--project-dir', '/tmp/ktx-sql', 'sql', '--connection', 'warehouse', 'select', '1'],
         { from: 'user' },
       ),
     ).resolves.toBe(program);
@@ -53,13 +53,28 @@ describe('registerSqlCommands', () => {
     );
   });
 
+  it('supports the short connection flag', async () => {
+    const program = new Command().exitOverride().option('--project-dir <path>');
+    const sql = vi.fn(async () => 0);
+    const context = makeContext({ deps: { sql } });
+    registerSqlCommands(program, context);
+
+    await expect(
+      program.parseAsync(['--project-dir', '/tmp/ktx-sql', 'sql', '-c', 'warehouse', 'select 1'], {
+        from: 'user',
+      }),
+    ).resolves.toBe(program);
+
+    expect(sql).toHaveBeenCalledWith(expect.objectContaining({ connectionId: 'warehouse', sql: 'select 1' }), context.io);
+  });
+
   it('rejects missing SQL before invoking the runner', async () => {
     const program = new Command().exitOverride().option('--project-dir <path>');
     const sql = vi.fn(async () => 0);
     registerSqlCommands(program, makeContext({ deps: { sql } }));
 
     await expect(
-      program.parseAsync(['--project-dir', '/tmp/ktx-sql', 'sql', '--connection-id', 'warehouse'], {
+      program.parseAsync(['--project-dir', '/tmp/ktx-sql', 'sql', '--connection', 'warehouse'], {
         from: 'user',
       }),
     ).rejects.toThrow('missing required argument');
@@ -74,7 +89,7 @@ describe('registerSqlCommands', () => {
 
     await expect(
       program.parseAsync(
-        ['--project-dir', '/tmp/ktx-sql', 'sql', '--connection-id', 'warehouse', '--max-rows', '10001', 'select 1'],
+        ['--project-dir', '/tmp/ktx-sql', 'sql', '--connection', 'warehouse', '--max-rows', '10001', 'select 1'],
         { from: 'user' },
       ),
     ).rejects.toThrow('must be an integer between 1 and 10000');
