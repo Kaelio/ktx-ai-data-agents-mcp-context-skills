@@ -582,7 +582,10 @@ describe('IngestBundleRunner isolated diff path', () => {
         currentSession = toolSession;
         return { toRuntimeTools: vi.fn(() => ({})) };
       });
-      deps.agentRunner.runLoop = vi.fn(async () => {
+      deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        if (params.telemetryTags.operationName === 'ingest-isolated-diff-gate-repair') {
+          return { stopReason: 'natural' as const };
+        }
         const root = rootOfConfig(currentSession.configService, runtime.configDir);
         await mkdir(join(root, 'wiki/global'), { recursive: true });
         await writeFile(join(root, 'wiki/global/notion-page.md'), '---\nsummary: Notion page\nusage_mode: auto\nsl_refs:\n  - missing_source\n---\n\nBody\n');
@@ -595,7 +598,7 @@ describe('IngestBundleRunner isolated diff path', () => {
 
       await expect(
         runner.run({ jobId: 'job-invalid-slrefs', connectionId: 'warehouse', sourceKey: 'metabase', trigger: 'upload', bundleRef: { kind: 'upload', uploadId: 'upload' } }),
-      ).rejects.toThrow(/unknown sl_refs entry missing_source/);
+      ).rejects.toThrow(/gate repair completed without editing an allowed path/);
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });
     }
@@ -1549,6 +1552,203 @@ describe('IngestBundleRunner isolated diff path', () => {
       const trace = await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-resolver-e2e/trace.jsonl'), 'utf-8');
       expect(trace).toContain('textual_conflict_resolver_repaired');
       expect(trace).toContain('patch_accepted_after_textual_resolution');
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('repairs final wiki body refs before squash when the repair agent edits the scoped page', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      await mkdir(join(runtime.configDir, 'semantic-layer/warehouse'), { recursive: true });
+      await mkdir(join(runtime.configDir, 'wiki/global'), { recursive: true });
+      await writeFile(
+        join(runtime.configDir, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+        'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr_cents\n    expr: sum(contract_arr)\n',
+      );
+      await writeFile(
+        join(runtime.configDir, 'wiki/global/account-segments.md'),
+        '---\nsummary: Account segments\nusage_mode: auto\n---\n\nExisting ARR uses `mart_account_segments.total_contract_arr_cents`.\n',
+      );
+      await runtime.git.commitFiles(
+        ['semantic-layer/warehouse/mart_account_segments.yaml', 'wiki/global/account-segments.md'],
+        'seed stale wiki body ref',
+        'KTX Test',
+        'system@ktx.local',
+      );
+
+      const { deps, adapter } = makeDeps(runtime);
+      adapter.chunk.mockResolvedValue({
+        workUnits: [{ unitKey: 'source-only', rawFiles: ['cards/source.json'], peerFileIndex: [], dependencyPaths: [] }],
+      });
+
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        if (params.telemetryTags.operationName === 'ingest-isolated-diff-gate-repair') {
+          const gateError = await params.toolSet.read_gate_error.execute({});
+          expect(gateError.markdown).toContain('total_contract_arr_cents');
+          const page = await params.toolSet.read_repair_file.execute({
+            path: 'wiki/global/account-segments.md',
+          });
+          await params.toolSet.write_repair_file.execute({
+            path: 'wiki/global/account-segments.md',
+            content: page.markdown.replace('total_contract_arr_cents', 'total_contract_arr'),
+          });
+          return { stopReason: 'natural' as const };
+        }
+        if (params.modelRole === 'reconcile') {
+          return { stopReason: 'natural' as const };
+        }
+
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        await writeFile(
+          join(root, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+          'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr\n    expr: sum(contract_arr)\n',
+        );
+        addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'mart_account_segments');
+        currentSession.actions.push({
+          target: 'sl',
+          type: 'updated',
+          key: 'mart_account_segments',
+          detail: 'Rename ARR measure',
+          targetConnectionId: 'warehouse',
+          rawPaths: ['cards/source.json'],
+        });
+        await currentSession.gitService.commitFiles(
+          ['semantic-layer/warehouse/mart_account_segments.yaml'],
+          'wu source rename',
+          'KTX Test',
+          'system@ktx.local',
+        );
+        return { stopReason: 'natural' as const };
+      }) as never;
+
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [['cards/source.json', 'h1']]);
+
+      const result = await runner.run({
+        jobId: 'job-final-gate-repair',
+        connectionId: 'warehouse',
+        sourceKey: 'metabase',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload' },
+      });
+
+      expect(result.commitSha).toBeTruthy();
+      await expect(readFile(join(runtime.configDir, 'wiki/global/account-segments.md'), 'utf-8')).resolves.toContain(
+        'mart_account_segments.total_contract_arr',
+      );
+      await expect(readFile(join(runtime.configDir, 'wiki/global/account-segments.md'), 'utf-8')).resolves.not.toContain(
+        'total_contract_arr_cents',
+      );
+      const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0] as any;
+      expect(reportCreate.body.isolatedDiff).toMatchObject({
+        gateRepairAttempts: 1,
+        gateRepairs: 1,
+        gateRepairFailures: 0,
+      });
+      const trace = await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-final-gate-repair/trace.jsonl'), 'utf-8');
+      expect(trace).toContain('gate_repair_repaired');
+      expect(trace).toContain('final_artifact_gates_after_gate_repair_finished');
+      expect(trace).toContain('final_gate_repair_committed');
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails before squash when final gate repair makes no edit', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      await mkdir(join(runtime.configDir, 'semantic-layer/warehouse'), { recursive: true });
+      await mkdir(join(runtime.configDir, 'wiki/global'), { recursive: true });
+      await writeFile(
+        join(runtime.configDir, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+        'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr_cents\n    expr: sum(contract_arr)\n',
+      );
+      await writeFile(
+        join(runtime.configDir, 'wiki/global/account-segments.md'),
+        '---\nsummary: Account segments\nusage_mode: auto\n---\n\nExisting ARR uses `mart_account_segments.total_contract_arr_cents`.\n',
+      );
+      await runtime.git.commitFiles(
+        ['semantic-layer/warehouse/mart_account_segments.yaml', 'wiki/global/account-segments.md'],
+        'seed stale wiki body ref',
+        'KTX Test',
+        'system@ktx.local',
+      );
+      const preRunHead = await runtime.git.revParseHead();
+
+      const { deps, adapter } = makeDeps(runtime);
+      adapter.chunk.mockResolvedValue({
+        workUnits: [{ unitKey: 'source-only', rawFiles: ['cards/source.json'], peerFileIndex: [], dependencyPaths: [] }],
+      });
+
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        if (params.telemetryTags.operationName === 'ingest-isolated-diff-gate-repair') {
+          return { stopReason: 'natural' as const };
+        }
+        if (params.modelRole === 'reconcile') {
+          return { stopReason: 'natural' as const };
+        }
+
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        await writeFile(
+          join(root, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+          'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr\n    expr: sum(contract_arr)\n',
+        );
+        addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'mart_account_segments');
+        currentSession.actions.push({
+          target: 'sl',
+          type: 'updated',
+          key: 'mart_account_segments',
+          detail: 'Rename ARR measure',
+          targetConnectionId: 'warehouse',
+          rawPaths: ['cards/source.json'],
+        });
+        await currentSession.gitService.commitFiles(
+          ['semantic-layer/warehouse/mart_account_segments.yaml'],
+          'wu source rename',
+          'KTX Test',
+          'system@ktx.local',
+        );
+        return { stopReason: 'natural' as const };
+      }) as never;
+
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [['cards/source.json', 'h1']]);
+
+      await expect(
+        runner.run({
+          jobId: 'job-final-gate-repair-fails',
+          connectionId: 'warehouse',
+          sourceKey: 'metabase',
+          trigger: 'upload',
+          bundleRef: { kind: 'upload', uploadId: 'upload' },
+        }),
+      ).rejects.toThrow(/gate repair completed without editing an allowed path/);
+
+      expect(await runtime.git.revParseHead()).toBe(preRunHead);
+      const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0] as any;
+      expect(reportCreate.body.status).toBe('failed');
+      expect(reportCreate.body.isolatedDiff).toMatchObject({
+        gateRepairAttempts: 1,
+        gateRepairs: 0,
+        gateRepairFailures: 1,
+      });
+      const trace = await readFile(
+        join(runtime.configDir, '.ktx/ingest-traces/job-final-gate-repair-fails/trace.jsonl'),
+        'utf-8',
+      );
+      expect(trace).toContain('gate_repair_failed');
+      expect(trace).not.toContain('squash_finished');
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });
     }
