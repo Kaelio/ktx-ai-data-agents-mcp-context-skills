@@ -15,6 +15,7 @@ import { validateFinalIngestArtifacts, validateProvenanceRawPaths } from './arti
 import { selectRelevantCanonicalPins } from './canonical-pins.js';
 import { FileIngestTraceWriter, ingestTracePathForJob, type IngestTraceWriter, traceTimed } from './ingest-trace.js';
 import { integrateWorkUnitPatch } from './isolated-diff/patch-integrator.js';
+import { resolveTextualConflict } from './isolated-diff/textual-conflict-resolver.js';
 import { runIsolatedWorkUnit } from './isolated-diff/work-unit-executor.js';
 import { sanitizeMemoryFlowError } from './memory-flow/live-buffer.js';
 import type { CanonicalPin } from './canonical-pins.js';
@@ -965,6 +966,9 @@ export class IngestBundleRunner {
           acceptedPatches: number;
           textualConflicts: number;
           semanticConflicts: number;
+          resolverAttempts: number;
+          resolverRepairs: number;
+          resolverFailures: number;
         }
       | undefined;
     await trace.event('info', 'run', 'ingest_started', {
@@ -1286,6 +1290,9 @@ export class IngestBundleRunner {
         acceptedPatches: 0,
         textualConflicts: 0,
         semanticConflicts: 0,
+        resolverAttempts: 0,
+        resolverRepairs: 0,
+        resolverFailures: 0,
       };
       latestIsolatedDiffSummary = isolatedDiffSummary;
 
@@ -1521,7 +1528,28 @@ export class IngestBundleRunner {
                   ),
               });
             },
+            resolveTextualConflict: (context) =>
+              resolveTextualConflict({
+                agentRunner: this.deps.agentRunner,
+                workdir: sessionWorktree.workdir,
+                unitKey: context.unitKey,
+                patchPath: context.patchPath,
+                touchedPaths: context.touchedPaths,
+                trace: runTrace,
+                reason: context.reason,
+                maxAttempts: 1,
+                stepBudget: 12,
+              }),
           });
+          if (integration.textualResolution) {
+            isolatedDiffSummary.resolverAttempts += integration.textualResolution.attempts;
+            if (integration.textualResolution.status === 'repaired') {
+              isolatedDiffSummary.textualConflicts += 1;
+              isolatedDiffSummary.resolverRepairs += 1;
+            } else {
+              isolatedDiffSummary.resolverFailures += 1;
+            }
+          }
           if (integration.status === 'textual_conflict') {
             isolatedDiffSummary.textualConflicts += 1;
             await this.deps.runs.markFailed(runRow.id);

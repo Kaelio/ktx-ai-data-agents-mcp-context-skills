@@ -70,6 +70,9 @@ export interface IngestReportBody {
     acceptedPatches: number;
     textualConflicts: number;
     semanticConflicts: number;
+    resolverAttempts?: number;
+    resolverRepairs?: number;
+    resolverFailures?: number;
   };
   workUnits: IngestReportWorkUnit[];
   failedWorkUnits: string[];

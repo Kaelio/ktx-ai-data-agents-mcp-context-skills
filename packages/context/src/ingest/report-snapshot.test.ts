@@ -256,4 +256,49 @@ describe('parseIngestReportSnapshot', () => {
 
     expect(() => parseIngestReportSnapshot(report)).toThrow('Invalid ingest report snapshot');
   });
+
+  it('parses isolated-diff textual resolver counters', () => {
+    const snapshot = parseIngestReportSnapshot({
+      id: 'report-1',
+      runId: 'run-1',
+      jobId: 'job-1',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      body: {
+        status: 'completed',
+        syncId: 'sync-1',
+        diffSummary: { added: 0, modified: 1, deleted: 0, unchanged: 0 },
+        commitSha: 'abc123',
+        isolatedDiff: {
+          enabled: true,
+          acceptedPatches: 2,
+          textualConflicts: 1,
+          semanticConflicts: 0,
+          resolverAttempts: 1,
+          resolverRepairs: 1,
+          resolverFailures: 0,
+        },
+        workUnits: [],
+        failedWorkUnits: [],
+        reconciliationSkipped: true,
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+        artifactResolutions: [],
+        evictionInputs: [],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+
+    expect(snapshot.body.isolatedDiff).toMatchObject({
+      resolverAttempts: 1,
+      resolverRepairs: 1,
+      resolverFailures: 0,
+    });
+  });
 });

@@ -155,6 +155,9 @@ export const ingestReportSnapshotSchema = z
             acceptedPatches: z.number().int().min(0),
             textualConflicts: z.number().int().min(0),
             semanticConflicts: z.number().int().min(0),
+            resolverAttempts: z.number().int().min(0).default(0),
+            resolverRepairs: z.number().int().min(0).default(0),
+            resolverFailures: z.number().int().min(0).default(0),
           })
           .optional(),
         workUnits: z.array(
