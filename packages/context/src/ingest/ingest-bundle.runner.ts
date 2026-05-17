@@ -2129,6 +2129,8 @@ export class IngestBundleRunner {
       const finalArtifactGateTraceData = {
         changedWikiPageKeys: finalChangedWikiPageKeys,
         touchedSlSources: finalTouchedSlSources,
+        projectionTouchedPaths,
+        workUnitPatchTouchedPaths: workUnitOutcomes.flatMap((outcome) => outcome.patchTouchedPaths ?? []),
         preReconciliationSha,
         postReconciliationSha,
         postReconciliationPaths,
