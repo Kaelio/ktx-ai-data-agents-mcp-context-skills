@@ -7,6 +7,7 @@ import { createRuntimeToolDescriptorFromAiTool, type KtxRuntimeToolSet } from '.
 import type { CaptureSession, MemoryAction } from '../memory/index.js';
 import type { SemanticLayerService, SemanticLayerSource, SlValidationDeps } from '../sl/index.js';
 import { createTouchedSlSources, type ToolContext, type ToolSession } from '../tools/index.js';
+import { findDanglingWikiRefsForActions } from '../wiki/wiki-ref-validation.js';
 import { actionTargetConnectionId } from './action-identity.js';
 import { NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN } from './adapters/notion/types.js';
 import { selectRelevantCanonicalPins } from './canonical-pins.js';
@@ -762,6 +763,13 @@ export class IngestBundleRunner {
               agentRunner: this.deps.agentRunner,
               validateTouchedSources: (touched) =>
                 validateWuTouchedSources({ ...slValidationDeps, slValidator: this.deps.slValidator }, touched),
+              validateWikiRefs: (actions) =>
+                findDanglingWikiRefsForActions({
+                  wikiService: scopedWikiService,
+                  scope: 'GLOBAL',
+                  scopeId: null,
+                  actions,
+                }),
               resetHardTo: (targetSha) => sessionWorktree.git.resetHardTo(targetSha),
               buildSystemPrompt: () => systemPrompt,
               buildUserPrompt: (wuInner) => buildWuUserPrompt({ wu: wuInner, wikiIndex, slIndex, priorProvenance }),
@@ -1126,6 +1134,17 @@ export class IngestBundleRunner {
               }
             : undefined,
         });
+      }
+
+      const danglingReconcileWikiRefs = await findDanglingWikiRefsForActions({
+        wikiService: rcScopedWiki,
+        scope: 'GLOBAL',
+        scopeId: null,
+        actions: reconcileActions,
+      });
+      if (danglingReconcileWikiRefs.length > 0) {
+        await this.deps.runs.markFailed(runRow.id);
+        throw new Error(`wiki references target missing page(s): ${danglingReconcileWikiRefs.join(', ')}`);
       }
 
       const candidateSummaryAfterReconcile =

@@ -412,6 +412,127 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
+  it('fails before squash when reconciliation leaves a touched wiki page with dangling refs', async () => {
+    const deps = makeDeps();
+    let currentToolSession: any = null;
+    const scopedWiki = {
+      listPageKeys: vi.fn().mockResolvedValue(['page-a']),
+      readPage: vi.fn().mockImplementation((_scope: string, _scopeId: string | null, key: string) => {
+        if (key === 'page-a') {
+          return Promise.resolve({
+            pageKey: 'page-a',
+            frontmatter: { summary: 'Page A', usage_mode: 'auto', refs: ['missing-page'] },
+            content: 'See [[missing-page]].',
+          });
+        }
+        return Promise.resolve(null);
+      }),
+    };
+    deps.wikiService.forWorktree.mockReturnValue(scopedWiki);
+    deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
+      currentToolSession = toolSession;
+      return {
+        toRuntimeTools: vi.fn().mockReturnValue({}),
+        getAllTools: vi.fn().mockReturnValue([]),
+        getToolNames: vi.fn().mockReturnValue([]),
+      };
+    });
+    deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
+      if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+        currentToolSession.actions.push({ target: 'sl', type: 'updated', key: 'orders', detail: 'Orders source' });
+      }
+      if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        currentToolSession.actions.push({ target: 'wiki', type: 'created', key: 'page-a', detail: 'Page A' });
+      }
+      return { stopReason: 'natural' };
+    });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await expect(
+      runner.run({
+        jobId: 'j1',
+        connectionId: 'c1',
+        sourceKey: 'fake',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+      }),
+    ).rejects.toThrow(/wiki references target missing page\(s\): page-a -> missing-page/);
+
+    expect(deps.runsRepo.markFailed).toHaveBeenCalledWith('run-1');
+    expect(deps.gitService.squashMergeIntoMain).not.toHaveBeenCalled();
+  });
+
+  it('allows reconciliation to save circular wiki refs once both pages exist', async () => {
+    const deps = makeDeps();
+    let currentToolSession: any = null;
+    const scopedWiki = {
+      listPageKeys: vi.fn().mockResolvedValue(['page-a', 'page-b']),
+      readPage: vi.fn().mockImplementation((_scope: string, _scopeId: string | null, key: string) => {
+        if (key === 'page-a') {
+          return Promise.resolve({
+            pageKey: 'page-a',
+            frontmatter: { summary: 'Page A', usage_mode: 'auto', refs: ['page-b'] },
+            content: 'See [[page-b]].',
+          });
+        }
+        if (key === 'page-b') {
+          return Promise.resolve({
+            pageKey: 'page-b',
+            frontmatter: { summary: 'Page B', usage_mode: 'auto', refs: ['page-a'] },
+            content: 'See [[page-a]].',
+          });
+        }
+        return Promise.resolve(null);
+      }),
+    };
+    deps.wikiService.forWorktree.mockReturnValue(scopedWiki);
+    deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
+      currentToolSession = toolSession;
+      return {
+        toRuntimeTools: vi.fn().mockReturnValue({}),
+        getAllTools: vi.fn().mockReturnValue([]),
+        getToolNames: vi.fn().mockReturnValue([]),
+      };
+    });
+    deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
+      if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+        currentToolSession.actions.push({ target: 'sl', type: 'updated', key: 'orders', detail: 'Orders source' });
+      }
+      if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        currentToolSession.actions.push(
+          { target: 'wiki', type: 'created', key: 'page-a', detail: 'Page A' },
+          { target: 'wiki', type: 'created', key: 'page-b', detail: 'Page B' },
+        );
+      }
+      return { stopReason: 'natural' };
+    });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    const result = await runner.run({
+      jobId: 'j1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect(result.failedWorkUnits).toEqual([]);
+    expect(deps.gitService.squashMergeIntoMain).toHaveBeenCalled();
+    expect(deps.runsRepo.markFailed).not.toHaveBeenCalled();
+  });
+
   it('threads target warehouse connection names into WorkUnit and reconcile tool sessions', async () => {
     const deps = makeDeps();
     const sessions: any[] = [];

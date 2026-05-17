@@ -304,4 +304,40 @@ describe('WikiWriteTool', () => {
     expect(result.markdown).toMatch(/orbit-team-lanes-detail/);
     expect(wikiService.writePage).not.toHaveBeenCalled();
   });
+
+  it('accepts forward refs during ingest sessions for post-pass validation', async () => {
+    const { tool, wikiService } = makeTool({
+      wikiService: {
+        listPageKeys: vi.fn().mockResolvedValue(['orbit-company-overview']),
+      },
+    });
+    const session: ToolSession = {
+      connectionId: 'conn-1',
+      isWorktreeScoped: true,
+      preHead: null,
+      touchedSlSources: createTouchedSlSources(),
+      actions: [],
+      semanticLayerService: {} as any,
+      wikiService: wikiService as any,
+      configService: {} as any,
+      gitService: {} as any,
+      ingest: { runId: 'run-1', jobId: 'job-1', syncId: 'sync-1', sourceKey: 'notion' },
+    };
+
+    const result = await tool.call(
+      {
+        key: 'orbit-how-we-work',
+        summary: 'Operating norms',
+        content: 'See [[orbit-team-lanes-detail]].',
+        refs: ['orbit-company-overview', 'orbit-team-lanes-detail'],
+      } as any,
+      { ...baseContext, session },
+    );
+
+    expect(result.structured).toMatchObject({ success: true, key: 'orbit-how-we-work', action: 'created' });
+    expect(wikiService.writePage).toHaveBeenCalledTimes(1);
+    expect(session.actions).toContainEqual(
+      expect.objectContaining({ target: 'wiki', type: 'created', key: 'orbit-how-we-work' }),
+    );
+  });
 });
