@@ -27,6 +27,14 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
   const preApplyHead = await input.integrationGit.revParseHead();
   const patch = await readFile(input.patchPath, 'utf-8');
   const touchedPaths = parsePatchTouchedPaths(patch).map((entry) => entry.path);
+  if (touchedPaths.length === 0) {
+    await input.trace.event('debug', 'integration', 'patch_noop_accepted', {
+      unitKey: input.unitKey,
+      patchPath: input.patchPath,
+      patchBytes: Buffer.byteLength(patch),
+    });
+    return { status: 'accepted', commitSha: preApplyHead ?? '', touchedPaths };
+  }
   try {
     assertPatchAllowedForWorkUnit({
       unitKey: input.unitKey,
