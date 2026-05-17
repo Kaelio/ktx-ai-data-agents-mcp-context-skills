@@ -40,6 +40,8 @@ The design has these goals:
 - Run all agent-authored durable writes in isolated per-work-unit worktrees.
 - Treat each work unit's git diff as its proposal artifact.
 - Integrate accepted diffs through a shared artifact-aware merge path.
+- Resolve expected cross-work-unit overlap with bounded agent repair before
+  failing the run.
 - Run final global semantic gates before any changes reach the main project
   worktree.
 - Keep connector variance minimal and source-shaped, not pipeline-shaped.
@@ -257,16 +259,72 @@ Integration has three conflict classes:
 - Semantic conflict: the patch applies textually but creates an invalid or
   inconsistent artifact.
 
-Textual conflicts are resolved before semantic gates run only when deterministic
-artifact-aware merge helpers can prove a valid result. Version one has no
-interactive, CLI, or agent-driven resolver.
+Textual conflicts are resolved before semantic gates run when a bounded
+resolver agent can produce a valid result. Overlapping work-unit writes are
+normal, especially for Metabase cards that target the same semantic-layer marts
+from different collections. The runner must treat overlap as an integration
+case, not as a reason to fail immediately.
 
-In version one, routing to a resolver means fail-fast resolver behavior. The
-runner stops the run with a structured conflict error, marks the ingest failed,
-preserves the integration worktree for inspection, retains work-unit
-diffs/transcripts and existing report metadata, and does not squash anything
-back to the project main worktree. Interactive prompts, waiting for human input,
-retry loops, and agent-driven conflict repair are future work.
+Version one is agent-first. If `git apply --3way --index` leaves conflicts,
+the runner starts a resolver agent in the integration worktree. The resolver
+receives only the failed patch, already-applied patches, conflicted files,
+relevant work-unit transcripts, raw evidence paths, and the final-gate rules.
+The resolver must preserve all non-conflicting accepted content, resolve
+duplicate or competing artifact entries from evidence, and edit only files
+touched by the failed patch or already-applied overlapping patches.
+
+The runner then reruns artifact gates for the changed files and continues with
+the remaining patches if validation passes. Resolver attempts are capped to
+avoid an unbounded repair loop. A run fails only after the bounded resolver
+attempts cannot produce a valid integration tree.
+
+Deterministic semantic merge is a later optimization, not a version-one
+requirement. After measuring resolver latency, cost, and failure modes, KTX can
+add merge helpers for common semantic-layer YAML cases, such as additive
+`measures`, `segments`, `columns`, `joins`, and `descriptions` updates keyed by
+their stable logical identifiers. Those helpers can replace agent calls for
+mechanical merges once the measured v1 behavior justifies the added complexity.
+
+The integration worktree is preserved on failure with conflict markers or
+resolver edits, work-unit patches, transcripts, trace events, and the failure
+report. The runner never squashes a failed or partially repaired integration
+tree back to the project main worktree.
+
+### Gate repair stage
+
+The gate repair stage handles cases where patches apply cleanly but the
+combined tree fails final semantic or wiki gates. This is distinct from textual
+conflict resolution: the tree is textually valid, but the artifacts violate KTX
+contracts.
+
+After each patch integration and after reconciliation, the runner runs final
+artifact gates for the affected scope. If gates fail, the runner classifies the
+errors before deciding whether to repair or fail.
+
+Repairable gate errors include:
+
+- stale wiki body references to renamed semantic-layer entities;
+- invalid `sl_refs` entries that point to entities instead of sources;
+- inline prose that accidentally uses explicit SL reference syntax;
+- duplicate measures, segments, or joins with equivalent definitions;
+- missing or stale wiki references created by accepted patches; and
+- join or source references that can be corrected from the composed manifest
+  and work-unit evidence.
+
+High-risk gate errors fail without automatic repair unless a later
+implementation adds a stronger evidence contract:
+
+- two work units define the same measure with different business meaning;
+- a required warehouse table or column does not exist;
+- a SQL source fails execution and no obvious localized rewrite exists; or
+- the repair would require choosing between conflicting facts without evidence.
+
+For repairable errors, the runner starts a gate repair agent with the exact
+gate errors, changed files, relevant work-unit transcripts, raw evidence paths,
+and final-gate rules. The agent may edit only the files involved in the gate
+failure. The runner reruns gates after each repair attempt and caps attempts to
+one or two passes per integration stage. If the tree still fails, the run stops
+with the final gate report and preserved integration worktree.
 
 ### Reconciliation in the new flow
 
@@ -297,8 +355,9 @@ write only to target connections authorized by the adapter for the ingest run,
 but it is not subject to any single work unit's `slDisallowed` scope. The final
 global gates validate the combined tree after reconciliation. If reconciliation
 introduces an invalid wiki or semantic-layer reference, touches an unauthorized
-target, or records an unresolvable artifact conflict, the run stops under
-version-one resolver behavior before squash.
+target, or records an unresolvable artifact conflict, the runner sends
+repairable failures through the gate repair stage and stops before squash only
+when bounded repair cannot produce a valid tree.
 
 ## Artifact-aware integration
 
@@ -331,11 +390,12 @@ outputs emitted through `emit_artifact_resolution` as
 `ArtifactResolutionRecord` stage-index records. They are in-memory stage
 records, not worktree files, and they feed the provenance gate.
 
-Artifact-aware integration can start with validation-only behavior. It does not
-need to auto-merge every semantic conflict in version one. If two diffs contest
-the same source YAML or wiki page and the merge cannot prove correctness, the
-runner must stop under version-one resolver behavior rather than silently
-accepting stale references.
+Artifact-aware integration starts with validation plus bounded agent repair.
+It does not need semantic-layer YAML merge helpers in version one. If two diffs
+contest the same source YAML or wiki page and bounded agent repair cannot prove
+correctness, the runner must stop rather than silently accepting stale
+references. Deterministic semantic merge helpers can be added after v1 metrics
+show which conflicts are frequent, mechanical, and worth optimizing.
 
 ## Global semantic gates
 
@@ -367,20 +427,23 @@ The wiki body gate needs a narrow grammar so ordinary prose does not become a
 semantic-layer reference. In version one, an explicit body reference is one of
 these Markdown forms outside fenced code blocks:
 
-- an inline code token in the form `source.entity`, where `source` matches a
-  visible semantic-layer source and `entity` must match one of that source's
-  measures, dimensions, or segments;
-- an inline code token in the form `connectionId/source.entity`, which validates
-  against that specific target connection;
+- an inline code token in the form `source.entity`, where both parts are plain
+  identifier tokens, `source` matches a visible semantic-layer source, and
+  `entity` must match one of that source's measures, dimensions, or segments;
+- an inline code token in the form `connectionId/source.entity`, where
+  `source.entity` follows the same plain-identifier rule and validates against
+  that specific target connection;
 - an inline code token in the form `source:source_name`, which validates a
   source-level semantic-layer reference; or
 - an inline code token in the form `table:qualified_table_name`, which validates
   a raw warehouse table reference against the visible raw table/catalog sources.
 
-The parser ignores unformatted prose, fenced SQL examples, and unprefixed
-single-token inline code. Two-part inline code that does not name a visible
-semantic-layer source is not treated as an SL entity reference; use the
-`table:` prefix for raw warehouse table references.
+The parser ignores unformatted prose, fenced SQL examples, wildcard patterns
+such as `mart_nrr_quarterly.*_arr_cents`, inline SQL predicates such as
+`users.is_internal = false`, and unprefixed single-token inline code. Two-part
+inline code that does not name a visible semantic-layer source is not treated
+as an SL entity reference; use the `table:` prefix for raw warehouse table
+references.
 
 The `total_contract_arr_cents` incident is the regression case for this gate:
 the integrated tree must fail if a wiki page references
@@ -501,8 +564,17 @@ starting from the same base:
 Additional tests cover:
 
 - two work units editing different wiki pages without conflict;
-- two work units editing the same semantic-layer source with a textual conflict,
-  where the run stops under version-one resolver behavior before squash;
+- two work units editing the same semantic-layer overlay with additive changes,
+  where the resolver agent preserves both changes and gates the repaired file;
+- two work units editing the same semantic-layer overlay with incompatible
+  definitions, where the resolver agent receives the conflict context and the
+  run fails only after bounded repair attempts cannot prove a result;
+- a textual conflict in a wiki page where the resolver agent preserves
+  non-conflicting accepted content and gates the repaired page before squash;
+- a cleanly merged tree that fails final gates, where the gate repair agent
+  fixes a stale wiki reference and the run continues;
+- an unrepairable final-gate failure, such as a missing warehouse column, where
+  the runner stops with a preserved integration worktree and report;
 - a hybrid adapter case where deterministic projector outputs are visible in a
   child worktree before work-unit wiki synthesis, and the final global gate
   catches any stale reference to a non-existent projected semantic-layer entity;
@@ -522,13 +594,18 @@ configuration knob.
 
 1. Add the per-work-unit worktree executor behind that internal runner setting.
 2. Add diff collection and deterministic integration in the existing runner.
-3. Add final global wiki and semantic-layer reference gates, including the wiki
+3. Add bounded resolver-agent handling for textual conflicts.
+4. Add final global wiki and semantic-layer reference gates, including the wiki
    body reference parser defined above.
-4. Migrate Metabase to the new execution path first.
-5. Migrate Notion, LookML, Looker, dbt, and MetricFlow.
-6. Promote the new path to the default after the Metabase regression test and
+5. Add bounded gate-repair-agent handling for repairable final-gate failures.
+6. Instrument resolver latency, attempts, repaired files, and failure classes.
+7. Migrate Metabase to the new execution path first.
+8. Migrate Notion, LookML, Looker, dbt, and MetricFlow.
+9. Add deterministic semantic merge helpers only after v1 metrics show which
+   agent repairs are frequent and mechanical enough to justify optimization.
+10. Promote the new path to the default after the Metabase regression test and
    at least one non-Metabase connector pass.
-7. Remove the old shared-worktree work-unit execution path.
+11. Remove the old shared-worktree work-unit execution path.
 
 The rollout is complete when every connector that permits agent-authored durable
 writes uses isolated diffs and all integrations pass the same final global

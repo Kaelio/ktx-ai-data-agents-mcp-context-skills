@@ -168,6 +168,7 @@ const makeDeps = () => {
   };
   const wikiService = {
     forWorktree: vi.fn(),
+    listPageKeys: vi.fn().mockResolvedValue([]),
     readPage: vi.fn().mockResolvedValue(null),
     syncFromCommit: vi.fn().mockResolvedValue(undefined),
   };
@@ -1573,6 +1574,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       workUnits: [{ unitKey: 'u1', rawFiles: ['semantic_models.yml'], peerFileIndex: [], dependencyPaths: [] }],
       parseArtifacts: { semanticModels: [{ name: 'orders' }] },
     });
+    deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['warehouse-2']);
     deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
       Promise.resolve({ sources: [{ name: `${connectionId}_source` }], loadErrors: [] }),
     );

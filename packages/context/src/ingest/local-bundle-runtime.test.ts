@@ -17,6 +17,18 @@ type RuntimeWithConnectionDeps = {
   };
 };
 
+type RuntimeWithSlValidationDeps = {
+  deps: {
+    slValidator: {
+      validateSingleSource(
+        deps: unknown,
+        connectionId: string,
+        sourceName: string,
+      ): Promise<{ errors: string[]; warnings: string[] }>;
+    };
+  };
+};
+
 function testAgentRunner(): AgentRunnerPort {
   return { runLoop: vi.fn().mockResolvedValue({ stopReason: 'natural' as const }) };
 }
@@ -142,6 +154,77 @@ describe('createLocalBundleIngestRuntime', () => {
       { id: 'warehouse', name: 'warehouse', connectionType: 'POSTGRESQL' },
       { id: 'bq', name: 'bq', connectionType: 'BIGQUERY' },
     ]);
+  });
+
+  it('validates manifest-backed scan sources during local ingest gates', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      [
+        'tables:',
+        '  payments:',
+        '    table: public.payments',
+        '    columns:',
+        '      - name: payment_id',
+        '        type: string',
+        '      - name: amount',
+        '        type: number',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'Add warehouse manifest',
+    );
+    const agentRunner = testAgentRunner();
+
+    const runtime = createLocalBundleIngestRuntime({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      agentRunner,
+    });
+    const deps = (runtime.runner as unknown as RuntimeWithSlValidationDeps).deps;
+
+    await expect(deps.slValidator.validateSingleSource(deps, 'warehouse', 'payments')).resolves.toEqual({
+      errors: [],
+      warnings: expect.any(Array),
+    });
+  });
+
+  it('does not mask malformed direct overlays with manifest-backed fallback validation', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      [
+        'tables:',
+        '  payments:',
+        '    table: public.payments',
+        '    columns:',
+        '      - name: payment_id',
+        '        type: string',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'Add warehouse manifest',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/payments.yaml',
+      ['name: payments', 'columns:', '  - [', ''].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'Add malformed overlay',
+    );
+    const agentRunner = testAgentRunner();
+
+    const runtime = createLocalBundleIngestRuntime({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      agentRunner,
+    });
+    const deps = (runtime.runner as unknown as RuntimeWithSlValidationDeps).deps;
+
+    await expect(deps.slValidator.validateSingleSource(deps, 'warehouse', 'payments')).resolves.toEqual({
+      errors: [expect.stringContaining('invalid YAML')],
+      warnings: [],
+    });
   });
 
   it('passes project connection config to local ingest query executors', async () => {

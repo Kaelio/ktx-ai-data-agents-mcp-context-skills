@@ -23,6 +23,8 @@ describe('wiki body refs', () => {
       'Also `warehouse/mart_account_segments.segment` and `table:analytics.mart_account_segments`.',
       'Ignore prose mart_account_segments.total_contract_arr_cents.',
       'Ignore `single_token`.',
+      'Ignore wildcard pattern `mart_nrr_quarterly.*_arr_cents`.',
+      'Ignore condition `users.is_internal = false`.',
       '```sql',
       'select `mart_account_segments.total_contract_arr_cents`',
       '```',
@@ -48,6 +50,52 @@ describe('wiki body refs', () => {
     expect(invalid).toEqual([
       'account-segments: unknown semantic-layer entity mart_account_segments.total_contract_arr_cents',
     ]);
+  });
+
+  it('does not treat wildcard inline-code patterns as exact semantic-layer entity references', async () => {
+    const invalid = await findInvalidWikiBodyRefs({
+      pageKey: 'revenue-metrics-encoding',
+      body: 'Cents columns include `mart_nrr_quarterly.*_arr_cents` and `mart_retention_movement_breakout.*_arr_cents`.',
+      visibleConnectionIds: ['warehouse'],
+      loadSources: async () => [
+        { name: 'mart_nrr_quarterly', grain: [], columns: [], joins: [], measures: [], table: 'analytics.mart_nrr_quarterly' },
+        {
+          name: 'mart_retention_movement_breakout',
+          grain: [],
+          columns: [],
+          joins: [],
+          measures: [],
+          table: 'analytics.mart_retention_movement_breakout',
+        },
+      ],
+      tableExists: async () => true,
+    });
+
+    expect(invalid).toEqual([]);
+  });
+
+  it('does not treat inline-code SQL predicates as exact semantic-layer entity references', async () => {
+    const invalid = await findInvalidWikiBodyRefs({
+      pageKey: 'account-reporting-exclusions',
+      body: 'Exclude internal users with `users.is_internal = false` and test users with `users.is_test = false`.',
+      visibleConnectionIds: ['warehouse'],
+      loadSources: async () => [
+        {
+          name: 'users',
+          grain: [],
+          columns: [
+            { name: 'is_internal', type: 'boolean' },
+            { name: 'is_test', type: 'boolean' },
+          ],
+          joins: [],
+          measures: [],
+          table: 'analytics.users',
+        },
+      ],
+      tableExists: async () => true,
+    });
+
+    expect(invalid).toEqual([]);
   });
 
   it('validates source, dimension, segment, measure, and table references', async () => {

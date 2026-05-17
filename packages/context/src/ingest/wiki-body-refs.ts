@@ -38,6 +38,10 @@ function parseConnectionScoped(value: string): { connectionId: string | null; bo
   return { connectionId: value.slice(0, slash), body: value.slice(slash + 1) };
 }
 
+function isIdentifierToken(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
+}
+
 export function parseWikiBodyRefs(body: string): WikiBodyRef[] {
   const refs: WikiBodyRef[] = [];
   for (const line of visibleLinesOutsideFences(body)) {
@@ -62,7 +66,7 @@ export function parseWikiBodyRefs(body: string): WikiBodyRef[] {
         continue;
       }
       const parts = scoped.body.split('.');
-      if (parts.length === 2 && parts[0] && parts[1]) {
+      if (parts.length === 2 && isIdentifierToken(parts[0] ?? '') && isIdentifierToken(parts[1] ?? '')) {
         refs.push({
           kind: 'sl_entity',
           connectionId: scoped.connectionId,

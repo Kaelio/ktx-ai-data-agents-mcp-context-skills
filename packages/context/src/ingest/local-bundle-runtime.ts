@@ -24,7 +24,6 @@ import {
   type KtxConnectionInfo,
   type KtxQueryResult,
   SemanticLayerService,
-  type SemanticLayerSource,
   type SlConnectionCatalogPort,
   SlDiscoverTool,
   SlEditSourceTool,
@@ -248,22 +247,63 @@ class LocalSlPythonPort implements SlPythonPort {
 }
 
 class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
+  private validateParsedSource(sourceName: string, parsed: Record<string, unknown>) {
+    const isOverlay = parsed.table == null && parsed.sql == null;
+    const result = (isOverlay ? sourceOverlaySchema : sourceDefinitionSchema).safeParse(parsed);
+    return result.success
+      ? { errors: [], warnings: [LOCAL_SHAPE_WARNING] }
+      : {
+          errors: result.error.issues.map(
+            (issue) => `${sourceName}: ${issue.path.join('.') || 'source'} ${issue.message}`,
+          ),
+          warnings: [],
+        };
+  }
+
+  private async validateComposedSource(
+    deps: SlValidationDeps,
+    connectionId: string,
+    sourceName: string,
+    readError: unknown,
+  ) {
+    try {
+      const { sources, loadErrors } = await deps.semanticLayerService.loadAllSources(connectionId);
+      const source = sources.find((candidate) => candidate.name === sourceName);
+      if (source) {
+        return this.validateParsedSource(sourceName, source as unknown as Record<string, unknown>);
+      }
+      const detail =
+        loadErrors.length > 0
+          ? loadErrors.join('; ')
+          : readError instanceof Error
+            ? readError.message
+            : String(readError);
+      return { errors: [`${sourceName}: ${detail}`], warnings: [] };
+    } catch (fallbackError) {
+      return {
+        errors: [`${sourceName}: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`],
+        warnings: [],
+      };
+    }
+  }
+
   async validateSingleSource(deps: SlValidationDeps, connectionId: string, sourceName: string) {
+    let content: string;
     try {
       const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
-      const parsed = YAML.parse(file.content) as SemanticLayerSource;
-      const isOverlay = parsed.table == null && parsed.sql == null;
-      const result = (isOverlay ? sourceOverlaySchema : sourceDefinitionSchema).safeParse(parsed);
-      return result.success
-        ? { errors: [], warnings: [LOCAL_SHAPE_WARNING] }
-        : {
-            errors: result.error.issues.map(
-              (issue) => `${sourceName}: ${issue.path.join('.') || 'source'} ${issue.message}`,
-            ),
-            warnings: [],
-          };
+      content = file.content;
     } catch (error) {
-      return { errors: [`${sourceName}: ${error instanceof Error ? error.message : String(error)}`], warnings: [] };
+      return this.validateComposedSource(deps, connectionId, sourceName, error);
+    }
+
+    try {
+      const parsed = YAML.parse(content) as unknown as Record<string, unknown>;
+      return this.validateParsedSource(sourceName, parsed);
+    } catch (error) {
+      return {
+        errors: [`${sourceName}: invalid YAML — ${error instanceof Error ? error.message : String(error)}`],
+        warnings: [],
+      };
     }
   }
 }
