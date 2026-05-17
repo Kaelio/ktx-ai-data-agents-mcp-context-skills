@@ -79,7 +79,7 @@ async function listGlobalWikiPageKeys(root: string): Promise<string[]> {
 }
 
 function frontmatterList(yaml: string, key: string): string[] {
-  const pattern = new RegExp(`${key}:\\n((?:  - .+\\n?)*)`);
+  const pattern = new RegExp(`(?:^|\\n)${key}:\\n((?:  - .+\\n?)*)`);
   return (
     pattern
       .exec(yaml)?.[1]
@@ -1006,6 +1006,7 @@ describe('IngestBundleRunner isolated diff path', () => {
       expect(trace).toContain('patch_policy_rejected');
       expect(trace).toContain('semantic-layer/finance/orders.yaml');
       expect(trace).toContain('allowedTargetConnectionIds');
+      expect(trace).toContain('ingest_failed');
       expect(trace).toContain('failure_report_created');
       expect(trace).not.toContain('squash_finished');
 
@@ -1098,8 +1099,10 @@ describe('IngestBundleRunner isolated diff path', () => {
       );
       expect(trace).toContain('semantic_layer_target_policy_started');
       expect(trace).toContain('semantic_layer_target_policy_failed');
+      expect(trace).toContain('allowedTargetConnectionIds');
       expect(trace).toContain('semantic-layer/finance/reconcile_orders.yaml');
       expect(trace).toContain('ingest_failed');
+      expect(trace).toContain('failure_report_created');
       expect(trace).not.toContain('squash_finished');
       const failureReport = (deps.reports.create as any).mock.calls
         .map((call: any[]) => call[0])
