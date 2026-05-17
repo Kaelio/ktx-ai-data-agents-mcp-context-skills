@@ -6,7 +6,7 @@ import type { TouchedSlSource } from '../tools/index.js';
 import type { IngestTraceWriter } from './ingest-trace.js';
 import { traceTimed } from './ingest-trace.js';
 
-export type FinalGateRepairKind = 'patch_semantic_gate' | 'final_artifact_gate';
+type FinalGateRepairKind = 'patch_semantic_gate' | 'final_artifact_gate';
 
 export type FinalGateRepairResult =
   | { status: 'repaired'; attempts: number; changedPaths: string[] }
