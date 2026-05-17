@@ -1430,4 +1430,123 @@ describe('IngestBundleRunner isolated diff path', () => {
       await rm(runtime.homeDir, { recursive: true, force: true });
     }
   });
+
+  it('repairs additive same-source textual conflicts before final gates and squash', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps } = makeDeps(runtime);
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        if (params.telemetryTags.operationName === 'ingest-isolated-diff-textual-resolver') {
+          const current = await params.toolSet.read_integration_file.execute({
+            path: 'semantic-layer/warehouse/mart_account_segments.yaml',
+          });
+          expect(current.markdown).toContain('total_contract_arr_cents');
+          const patch = await params.toolSet.read_failed_patch.execute({});
+          expect(patch.markdown).toContain('account_count');
+          await params.toolSet.write_integration_file.execute({
+            path: 'semantic-layer/warehouse/mart_account_segments.yaml',
+            content:
+              'name: mart_account_segments\n' +
+              'grain: [account_id]\n' +
+              'columns: [{name: account_id, type: string}]\n' +
+              'joins: []\n' +
+              'measures:\n' +
+              '  - name: total_contract_arr_cents\n' +
+              '    expr: sum(contract_arr)\n' +
+              '  - name: account_count\n' +
+              '    expr: count_distinct(account_id)\n',
+          });
+          return { stopReason: 'natural' };
+        }
+
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        await mkdir(join(root, 'semantic-layer/warehouse'), { recursive: true });
+        if (params.telemetryTags.unitKey === 'card-wiki') {
+          await writeFile(
+            join(root, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+            'name: mart_account_segments\n' +
+              'grain: [account_id]\n' +
+              'columns: [{name: account_id, type: string}]\n' +
+              'joins: []\n' +
+              'measures:\n' +
+              '  - name: total_contract_arr_cents\n' +
+              '    expr: sum(contract_arr)\n',
+          );
+        } else if (params.telemetryTags.unitKey === 'card-source') {
+          await writeFile(
+            join(root, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+            'name: mart_account_segments\n' +
+              'grain: [account_id]\n' +
+              'columns: [{name: account_id, type: string}]\n' +
+              'joins: []\n' +
+              'measures:\n' +
+              '  - name: account_count\n' +
+              '    expr: count_distinct(account_id)\n',
+          );
+        }
+        addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'mart_account_segments');
+        currentSession.actions.push({
+          target: 'sl',
+          type: 'updated',
+          key: 'mart_account_segments',
+          detail: 'Updated account segments source',
+          targetConnectionId: 'warehouse',
+        });
+        await currentSession.gitService.commitFiles(
+          ['semantic-layer/warehouse/mart_account_segments.yaml'],
+          `wu ${params.telemetryTags.unitKey}`,
+          'KTX Test',
+          'system@ktx.local',
+        );
+        return { stopReason: 'natural' };
+      }) as never;
+
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [
+        ['cards/wiki.json', 'hash-a'],
+        ['cards/source.json', 'hash-b'],
+      ]);
+
+      const result = await runner.run({
+        jobId: 'job-resolver-e2e',
+        connectionId: 'warehouse',
+        sourceKey: 'metabase',
+        trigger: 'manual_resync',
+        bundleRef: { kind: 'upload', uploadId: 'upload-1' },
+      });
+
+      expect(result.commitSha).toBeTruthy();
+      const source = await readFile(join(runtime.configDir, 'semantic-layer/warehouse/mart_account_segments.yaml'), 'utf-8');
+      expect(source).toContain('total_contract_arr_cents');
+      expect(source).toContain('account_count');
+      expect(deps.agentRunner.runLoop).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelRole: 'repair',
+          telemetryTags: expect.objectContaining({
+            operationName: 'ingest-isolated-diff-textual-resolver',
+            unitKey: 'card-source',
+          }),
+        }),
+      );
+      const successReport = (deps.reports.create as any).mock.calls.at(-1)?.[0]?.body;
+      expect(successReport.isolatedDiff).toMatchObject({
+        acceptedPatches: 2,
+        textualConflicts: 1,
+        semanticConflicts: 0,
+        resolverAttempts: 1,
+        resolverRepairs: 1,
+        resolverFailures: 0,
+      });
+      const trace = await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-resolver-e2e/trace.jsonl'), 'utf-8');
+      expect(trace).toContain('textual_conflict_resolver_repaired');
+      expect(trace).toContain('patch_accepted_after_textual_resolution');
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
 });
