@@ -15,6 +15,7 @@ import {
   runLocalIngest,
   runLocalMetabaseIngest,
   savedMemoryCountsForReport,
+  sanitizeMemoryFlowError,
 } from '@ktx/context/ingest';
 import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
 import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
@@ -127,8 +128,70 @@ function reportSourceLabel(sourceKey: string): string {
     .join(' ');
 }
 
+function jsonObjectFromFailureReason(reason: string): Record<string, unknown> | null {
+  const trimmed = reason.trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end < start) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed.slice(start, end + 1));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isGoogleReauthFailure(record: Record<string, unknown>): boolean {
+  const error = stringField(record, 'error')?.toLowerCase() ?? '';
+  const description = stringField(record, 'error_description')?.toLowerCase() ?? '';
+  const subtype = stringField(record, 'error_subtype')?.toLowerCase() ?? '';
+  return error === 'invalid_grant' && (description.includes('reauth') || subtype === 'invalid_rapt');
+}
+
+function formatFailureReason(sourceKey: string, reason: string): string {
+  const parsed = jsonObjectFromFailureReason(reason);
+  if (!parsed) {
+    return sanitizeMemoryFlowError(reason);
+  }
+
+  if (sourceKey === 'historic-sql' && isGoogleReauthFailure(parsed)) {
+    return 'Google Cloud authentication failed while analyzing query history: application-default credentials expired or require reauthentication (invalid_grant / invalid_rapt). Run `gcloud auth application-default login`, then retry.';
+  }
+
+  const error = stringField(parsed, 'error');
+  const description = stringField(parsed, 'error_description');
+  const subtype = stringField(parsed, 'error_subtype');
+  const parts = [error, description].filter((part): part is string => Boolean(part));
+  const message = parts.length > 0 ? parts.join(': ') : reason;
+  return subtype ? `${message} (${subtype})` : message;
+}
+
+function failedReportMessage(report: IngestReportSnapshot): string | null {
+  const failedCount = report.body.failedWorkUnits.length;
+  if (failedCount === 0) {
+    return null;
+  }
+  const firstFailure = report.body.workUnits.find(
+    (workUnit) => workUnit.status === 'failed' && typeof workUnit.reason === 'string' && workUnit.reason.trim(),
+  );
+  const sourceLabel = reportSourceLabel(report.sourceKey);
+  const prefix = `${sourceLabel} failed for ${pluralize(failedCount, 'task')}.`;
+  if (!firstFailure?.reason) {
+    return prefix;
+  }
+  return `${prefix} First failure: ${formatFailureReason(report.sourceKey, firstFailure.reason)}`;
+}
+
 function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void {
   const counts = savedMemoryCountsForReport(report);
+  const failedMessage = failedReportMessage(report);
   io.stdout.write(`Report: ${report.id}\n`);
   io.stdout.write(`Run: ${report.runId}\n`);
   io.stdout.write(`Job: ${report.jobId}\n`);
@@ -140,6 +203,12 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
     `Diff: +${report.body.diffSummary.added}/~${report.body.diffSummary.modified}/-${report.body.diffSummary.deleted}/=${report.body.diffSummary.unchanged}\n`,
   );
   io.stdout.write(`Tasks: ${report.body.workUnits.length}\n`);
+  if (report.body.failedWorkUnits.length > 0) {
+    io.stdout.write(`Failed tasks: ${report.body.failedWorkUnits.length}\n`);
+  }
+  if (failedMessage) {
+    io.stdout.write(`Error: ${failedMessage}\n`);
+  }
   io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   io.stdout.write(`Provenance rows: ${report.body.provenanceRows.length}\n`);
 }

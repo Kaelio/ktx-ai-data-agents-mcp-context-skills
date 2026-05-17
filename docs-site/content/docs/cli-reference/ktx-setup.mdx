@@ -5,8 +5,8 @@ description: "Set up or resume a local KTX project."
 
 `ktx setup` is the guided configuration flow for a local KTX project. It can
 create or resume `ktx.yaml`, configure LLM and embedding providers, add
-database and context-source connections, build initial context, and install
-agent integrations.
+database and context-source connections, prepare required runtime features,
+build initial context, and install agent integrations.
 
 When you run bare `ktx` in an interactive terminal outside any KTX project, the
 CLI starts this same setup flow. Inside an existing project, `ktx setup`
@@ -78,6 +78,23 @@ of Anthropic API key or Vertex flags. For Claude Code, `--llm-model` accepts
 
 `sentence-transformers` uses the KTX-managed Python runtime. Choose only one
 embedding credential source.
+
+### Runtime
+
+Setup prepares the managed Python runtime when your selected configuration
+needs it. The runtime step runs after database and source setup and before the
+initial context build.
+
+KTX prepares the `core` runtime feature when agent integration, query-history
+ingest, Looker source ingest, or daemon-backed context build paths need it. KTX
+prepares the `local-embeddings` runtime feature when you choose managed local
+`sentence-transformers` embeddings. Existing external daemon URLs, such as
+`KTX_DAEMON_URL` or `KTX_SQL_ANALYSIS_URL`, satisfy the matching dependency and
+skip managed runtime installation for that dependency.
+
+Interactive setup prompts before installing runtime features. Use `--yes` to
+install them without prompting. Use `--no-input` to fail fast when required
+runtime features are missing.
 
 ### Databases
 
@@ -197,6 +214,7 @@ LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
 Databases configured: yes (postgres-warehouse)
 Context sources configured: yes (dbt-main)
+Runtime ready: yes (core)
 KTX context built: yes
 Agent integration ready: yes (codex:project)
 ```
@@ -210,6 +228,7 @@ Use `ktx status` for repeatable readiness checks after setup exits.
 | Setup resumes an unexpected project | `KTX_PROJECT_DIR` or nearest `ktx.yaml` points to another directory | Pass `--project-dir <path>` explicitly |
 | Setup cannot run in CI | Required values are missing and `--no-input` disables prompts | Provide the relevant automation flags or create a fixture `ktx.yaml` |
 | Provider health check fails | Provider key, model id, Vertex project, or Vertex location is invalid | Fix the `env:` or `file:` reference and rerun setup |
+| Python runtime is missing | The selected setup needs runtime-backed agent, query-history, Looker, or local embedding features | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx dev runtime install` command |
 | `--enable-query-history` is rejected | The selected database driver does not support query history | Use Postgres, BigQuery, or Snowflake, or rerun without query-history flags |
 | Source setup rejects location flags | Both `--source-path` and `--source-git-url` were supplied | Choose the local path or the Git URL, not both |
 | Agent integration missing | Setup skipped the agents step | Run `ktx setup --agents --target <target>` |

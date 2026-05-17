@@ -1054,7 +1054,7 @@ describe('setup status', () => {
     );
   });
 
-  it('auto-installs the managed runtime by default during setup', async () => {
+  it('prompts before installing the managed runtime by default during setup', async () => {
     const io = makeIo();
     const embeddings = vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir }));
     const context = vi.fn(async () => ({ status: 'failed' as const, projectDir: tempDir }));
@@ -1088,14 +1088,14 @@ describe('setup status', () => {
     expect(embeddings).toHaveBeenCalledWith(
       expect.objectContaining({
         cliVersion: '0.2.0',
-        runtimeInstallPolicy: 'auto',
+        runtimeInstallPolicy: 'prompt',
       }),
       io.io,
     );
     expect(context).toHaveBeenCalledWith(
       expect.objectContaining({
         cliVersion: '0.2.0',
-        runtimeInstallPolicy: 'auto',
+        runtimeInstallPolicy: 'prompt',
       }),
       io.io,
     );
@@ -1508,6 +1508,10 @@ describe('setup status', () => {
             calls.push('sources');
             return { status: 'skipped', projectDir: tempDir };
           },
+          runtime: async () => {
+            calls.push('runtime');
+            return { status: 'ready', projectDir: tempDir, requirements: { features: ['core'], requirements: [] } };
+          },
           context: async () => {
             calls.push('context');
             return { status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' };
@@ -1524,7 +1528,7 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources', 'context', 'agents']);
+    expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources', 'runtime', 'context', 'agents']);
   });
 
   it('commits setup config changes written by later setup steps', async () => {

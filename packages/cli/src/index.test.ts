@@ -711,6 +711,40 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe('');
   });
 
+  it('routes public ingest --yes as automatic runtime installation', async () => {
+    const testIo = makeIo();
+    const publicIngest = vi.fn().mockResolvedValue(0);
+
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'ingest', 'warehouse', '--yes'], testIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(0);
+
+    expect(publicIngest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        targetConnectionId: 'warehouse',
+        runtimeInstallPolicy: 'auto',
+      }),
+      testIo.io,
+    );
+  });
+
+  it('rejects conflicting public ingest runtime install modes', async () => {
+    const testIo = makeIo();
+    const publicIngest = vi.fn().mockResolvedValue(0);
+
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'ingest', 'warehouse', '--yes', '--no-input'], testIo.io, {
+        publicIngest,
+      }),
+    ).resolves.toBe(1);
+
+    expect(publicIngest).not.toHaveBeenCalled();
+    expect(testIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
+  });
+
   it('rejects mutually exclusive public ingest depth flags before dispatch', async () => {
     const testIo = makeIo();
     const publicIngest = vi.fn().mockResolvedValue(0);

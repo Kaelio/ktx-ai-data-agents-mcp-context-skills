@@ -1,0 +1,153 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
+import { buildDefaultKtxProjectConfig, readKtxSetupState, type KtxProjectConfig } from '@ktx/context/project';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ManagedPythonCommandRuntime } from './managed-python-command.js';
+import { runKtxSetupRuntimeStep } from './setup-runtime.js';
+
+function makeIo() {
+  let stdout = '';
+  let stderr = '';
+  return {
+    io: {
+      stdout: {
+        write: (chunk: string) => {
+          stdout += chunk;
+        },
+      },
+      stderr: {
+        write: (chunk: string) => {
+          stderr += chunk;
+        },
+      },
+    },
+    stdout: () => stdout,
+    stderr: () => stderr,
+  };
+}
+
+function projectConfig(config: KtxProjectConfig) {
+  return vi.fn(async () => ({ config }));
+}
+
+describe('runKtxSetupRuntimeStep', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-runtime-'));
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('ensures core runtime for agent setup and records the runtime step', async () => {
+    const io = makeIo();
+    const ensureRuntime = vi.fn(async (): Promise<ManagedPythonCommandRuntime> => ({} as ManagedPythonCommandRuntime));
+
+    await expect(
+      runKtxSetupRuntimeStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'auto',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'prompt',
+          agents: true,
+        },
+        io.io,
+        {
+          loadProject: projectConfig(buildDefaultKtxProjectConfig()),
+          ensureRuntime,
+          env: {},
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(ensureRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cliVersion: '0.2.0',
+        installPolicy: 'prompt',
+        feature: 'core',
+      }),
+    );
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('runtime');
+    expect(io.stdout()).toContain('Runtime ready: yes (core)');
+  });
+
+  it('fails fast when required runtime features cannot be installed in no-input mode', async () => {
+    const io = makeIo();
+    const ensureRuntime = vi.fn(async () => {
+      throw new Error('KTX Python runtime is required for this command. Run: ktx dev runtime install --yes');
+    });
+
+    await expect(
+      runKtxSetupRuntimeStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'never',
+          agents: true,
+        },
+        io.io,
+        {
+          loadProject: projectConfig(buildDefaultKtxProjectConfig()),
+          ensureRuntime,
+          env: {},
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'failed' });
+
+    expect(ensureRuntime).toHaveBeenCalledWith(expect.objectContaining({ installPolicy: 'never' }));
+    expect((await readKtxSetupState(tempDir)).completed_steps).not.toContain('runtime');
+    expect(io.stderr()).toContain('ktx dev runtime install --yes');
+  });
+
+  it('starts the managed local embeddings daemon for configured sentence-transformers embeddings', async () => {
+    const io = makeIo();
+    const ensureLocalEmbeddings = vi.fn(async () => ({
+      baseUrl: 'http://127.0.0.1:61234',
+      env: { KTX_MANAGED_SENTENCE_TRANSFORMERS_BASE_URL: 'http://127.0.0.1:61234' },
+    }));
+    const config: KtxProjectConfig = {
+      ...buildDefaultKtxProjectConfig(),
+      ingest: {
+        ...buildDefaultKtxProjectConfig().ingest,
+        embeddings: {
+          backend: 'sentence-transformers',
+          model: 'all-MiniLM-L6-v2',
+          dimensions: 384,
+          sentenceTransformers: { base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL },
+        },
+      },
+    };
+
+    await expect(
+      runKtxSetupRuntimeStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'auto',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+          agents: false,
+        },
+        io.io,
+        {
+          loadProject: projectConfig(config),
+          ensureLocalEmbeddings,
+          env: {},
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(ensureLocalEmbeddings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        installPolicy: 'auto',
+      }),
+    );
+    expect(io.stdout()).toContain('Runtime ready: yes (local embeddings)');
+  });
+});

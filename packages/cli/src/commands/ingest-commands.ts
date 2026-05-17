@@ -35,6 +35,7 @@ export function registerIngestCommands(
     .option('--query-history-window-days <days>', 'Query-history lookback window for this run', parsePositiveIntegerOption)
     .addOption(new Option('--plain', 'Print plain text output').conflicts(['json']))
     .addOption(new Option('--json', 'Print JSON output').conflicts(['plain']))
+    .option('--yes', 'Install required managed runtime features without prompting')
     .option('--no-input', 'Disable interactive terminal input')
     .showHelpAfterError();
 

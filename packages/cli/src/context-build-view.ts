@@ -708,6 +708,10 @@ const INTERNAL_FAILURE_LINE_RE =
 const ACTIONABLE_FAILURE_LINE_RE =
   /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
 
+function trimErrorPrefix(line: string): string {
+  return line.replace(/^Error:\s*/, '');
+}
+
 function firstCapturedFailureLine(output: string | undefined): string | null {
   const lines = (output ?? '')
     .split(/\r?\n/)
@@ -715,7 +719,8 @@ function firstCapturedFailureLine(output: string | undefined): string | null {
     .filter((candidate) => candidate.length > 0)
     .filter((candidate) => !candidate.startsWith('KTX scan completed'))
     .filter((candidate) => !INTERNAL_FAILURE_LINE_RE.test(candidate));
-  return lines.find((candidate) => ACTIONABLE_FAILURE_LINE_RE.test(candidate)) ?? lines.at(-1) ?? null;
+  const line = lines.find((candidate) => ACTIONABLE_FAILURE_LINE_RE.test(candidate)) ?? lines.at(-1) ?? null;
+  return line ? trimErrorPrefix(line) : null;
 }
 
 function isGenericFailedAtDetail(target: KtxPublicIngestPlanTarget, detail: string | null | undefined): boolean {

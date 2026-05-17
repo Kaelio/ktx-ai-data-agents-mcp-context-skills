@@ -8,6 +8,7 @@ const readyStatus: KtxSetupStatus = {
   embeddings: { backend: 'openai', ready: true, model: 'text-embedding-3-small', dimensions: 1536 },
   databases: [{ connectionId: 'warehouse', ready: true }],
   sources: [],
+  runtime: { required: false, ready: true, features: [] },
   context: { ready: true, status: 'completed' },
   agents: [{ target: 'codex', scope: 'project', ready: true }],
 };
@@ -16,6 +17,7 @@ describe('setup ready menu', () => {
   it('recognizes a ready setup only when required sections are ready', () => {
     expect(isKtxSetupReady(readyStatus)).toBe(true);
     expect(isKtxSetupReady({ ...readyStatus, embeddings: { ready: false } })).toBe(false);
+    expect(isKtxSetupReady({ ...readyStatus, runtime: { required: true, ready: false, features: ['core'] } })).toBe(false);
     expect(isKtxSetupReady({ ...readyStatus, context: { ready: false, status: 'not_started' } })).toBe(false);
     expect(isKtxSetupReady({ ...readyStatus, agents: [] })).toBe(false);
   });
@@ -24,6 +26,9 @@ describe('setup ready menu', () => {
     expect(isKtxPreAgentSetupReady(readyStatus)).toBe(true);
     expect(isKtxPreAgentSetupReady({ ...readyStatus, agents: [] })).toBe(true);
     expect(isKtxPreAgentSetupReady({ ...readyStatus, embeddings: { ready: false } })).toBe(false);
+    expect(isKtxPreAgentSetupReady({ ...readyStatus, runtime: { required: true, ready: false, features: ['core'] } })).toBe(
+      false,
+    );
     expect(isKtxPreAgentSetupReady({ ...readyStatus, context: { ready: false, status: 'not_started' } })).toBe(false);
   });
 

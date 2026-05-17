@@ -2,7 +2,16 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { KtxProjectConfig } from './config.js';
 
-export const KTX_SETUP_STEPS = ['project', 'llm', 'embeddings', 'databases', 'sources', 'context', 'agents'] as const;
+export const KTX_SETUP_STEPS = [
+  'project',
+  'llm',
+  'embeddings',
+  'databases',
+  'sources',
+  'runtime',
+  'context',
+  'agents',
+] as const;
 
 export type KtxSetupStep = (typeof KTX_SETUP_STEPS)[number];
 
