@@ -255,6 +255,7 @@ const buildRunner = (deps: ReturnType<typeof makeDeps> = makeDeps(), overrides: 
       resolveUploadDir: (uploadId) => `/tmp/ktx-test/ingest-uploads/${uploadId}`,
       resolvePullDir: (jobId) => `/tmp/ktx-test/ingest-pulls/${jobId}`,
       resolveTranscriptDir: (jobId) => `/tmp/ktx-test/run/wu-transcripts/${jobId}`,
+      resolveTracePath: (jobId) => `/tmp/ktx-test/ingest-traces/${jobId}/trace.jsonl`,
     },
     settings: { probeRowCount: 1, memoryIngestionModel: 'test-model' },
     skillsRegistry: deps.skillsRegistry as any,
@@ -1505,7 +1506,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
 
     const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
-      currentHashes: new Map([['explores/b2b/sales_pipeline.json', 'h1']]),
+      currentHashes: new Map([['a.yml', 'h1']]),
       rawDirInWorktree: 'raw-sources/looker-run/fake/s',
     });
     (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');

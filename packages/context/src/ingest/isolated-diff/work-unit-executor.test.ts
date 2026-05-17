@@ -81,8 +81,15 @@ describe('runIsolatedWorkUnit', () => {
     expect(sessionWorktreeService.create).toHaveBeenCalledWith('job-1-wu-1', baseSha);
     expect(sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'success');
     expect(result.status).toBe('success');
-    expect(result.patchPath).toContain('0000-wu-1.patch');
-    await expect(readFile(result.patchPath, 'utf-8')).resolves.toContain('wiki/global/a.md');
+    if (result.status !== 'success') {
+      throw new Error('expected successful work unit');
+    }
+    const patchPath = result.patchPath;
+    if (!patchPath) {
+      throw new Error('expected patch path');
+    }
+    expect(patchPath).toContain('0000-wu-1.patch');
+    await expect(readFile(patchPath, 'utf-8')).resolves.toContain('wiki/global/a.md');
     await expect(readFile(tracePath, 'utf-8')).resolves.toContain('work_unit_child_created');
   });
 });

@@ -609,6 +609,11 @@ export {
 } from './raw-sources-paths.js';
 export { ingestReportSnapshotSchema, parseIngestReportSnapshot } from './report-snapshot.js';
 export type { IngestReportBody, IngestReportSnapshot } from './reports.js';
+export * from './artifact-gates.js';
+export * from './ingest-trace.js';
+export * from './isolated-diff/git-patch.js';
+export * from './isolated-diff/patch-integrator.js';
+export * from './isolated-diff/work-unit-executor.js';
 export * from './reports.js';
 export { SourceAdapterRegistry } from './source-adapter-registry.js';
 export type { SqliteBundleIngestStoreOptions } from './sqlite-bundle-ingest-store.js';
@@ -652,4 +657,7 @@ export type {
   TriageSignals,
   UnresolvedCardInfo,
   WorkUnit,
+  DeterministicProjectionContext,
+  ProjectionResult,
 } from './types.js';
+export * from './wiki-body-refs.js';
