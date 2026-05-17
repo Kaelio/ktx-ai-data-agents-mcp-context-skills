@@ -99,7 +99,7 @@ converts authoritative source facts into KTX artifacts without an agent. Good
 examples are live database schema introspection and straightforward MetricFlow
 semantic-model import.
 
-The adapter contract remains small:
+The isolation-relevant adapter surface remains small:
 
 ```ts
 interface SourceAdapter {
@@ -113,6 +113,15 @@ interface SourceAdapter {
   resolveSlTargets?(ctx: SlTargetResolutionContext): Promise<string[]>;
 }
 ```
+
+This is the subset the isolated-diff runner needs to understand source-shaped
+planning and deterministic projection. It is not a proposal to delete existing
+`SourceAdapter` fields. Existing lifecycle and source-support fields such as
+`detect`, `readFetchReport`, `listTargetConnectionIds`, `clusterWorkUnits`,
+`describeScope`, `onPullSucceeded`, `evidenceIndexing`, `triageSupported`,
+`getTriageSignals`, and `reconcileSkillNames` stay part of the adapter contract
+until a separate cleanup intentionally removes them with migration impact
+called out.
 
 `chunk()` returns ordinary `WorkUnit[]`. The runner does not need a
 `planningStrategy` enum because the source adapter can plan by any domain shape
@@ -155,6 +164,15 @@ Each per-work-unit worktree starts from the same ingestion base commit. A work
 unit never observes another concurrent work unit's transient edits. This makes
 the work unit diff a clean proposal against a stable base.
 
+The runner creates and runs child worktrees under the existing
+`workUnitMaxConcurrency` setting. A run may have many planned work units, but no
+more than that bound may be active or left on disk at once. The default remains
+serial execution. Child worktrees must be cleaned up after the diff, transcript,
+and outcome metadata are persisted, including failure paths. Adapters with
+large fan-out, such as Notion, may use `clusterWorkUnits` before execution to
+keep work-unit count tractable, but clustering remains source-shaped planning
+rather than a separate execution mode.
+
 ## Work-unit lifecycle
 
 Each work unit follows a fixed lifecycle.
@@ -171,6 +189,39 @@ The work unit outcome stores the existing operational metadata KTX already
 records: unit key, status, actions, touched semantic-layer sources, failure
 reason, raw files, and transcript path. It does not add a proposal manifest.
 The diff is the proposal.
+
+For `slDisallowed` work units, isolation is defense in depth. The scoped
+work-unit tools must withhold semantic-layer write and edit tools, and the
+integration layer must reject any otherwise accepted diff from that work unit
+that touches `semantic-layer/**`. This catches buggy or bypassed tool behavior
+before an invalid LookML connection-mismatch write can reach the integration
+worktree.
+
+### Diff proposal contract
+
+The proposal artifact is a Git patch with binary-safe content, not the existing
+hash-based raw-source `DiffSet`.
+
+The first implementation must use one pinned patch contract:
+
+- collect `git diff --binary --no-renames <base>..HEAD`;
+- disable rename and copy detection so renames are represented as delete plus
+  create in version one;
+- preserve mode changes from the patch metadata, but reject unexpected
+  executable-mode or binary changes under known text artifact roots such as
+  `wiki/**` and `semantic-layer/**`;
+- apply each accepted patch to the integration worktree with
+  `git apply --3way --index`;
+- do not use `git apply --reject`, because partial hunk application is not an
+  accepted integration state; and
+- if patch application fails, leaves conflicts, or touches a path disallowed for
+  that work unit, roll back the integration worktree to its pre-apply HEAD and
+  classify the outcome as a textual conflict.
+
+Delete-versus-edit, recreate-versus-edit, and delete-versus-create races are
+therefore textual conflicts when Git cannot apply the patch cleanly. If Git
+applies the patch but known artifact validators reject the resulting tree, the
+outcome is a semantic conflict.
 
 ## Integration lifecycle
 
@@ -191,20 +242,53 @@ types, the runner uses artifact-aware merge helpers. For unknown file types, the
 runner can fall back to agent-assisted conflict resolution in the integration
 worktree.
 
+### Reconciliation in the new flow
+
+Reconciliation remains a shared runner stage, but it runs as a serial
+integration-stage pass instead of a parallel work unit.
+
+The runner applies all accepted work-unit diffs to the integration worktree,
+resolves textual conflicts that can be resolved, and then runs reconciliation in
+that integration worktree before final global gates and before squash.
+Reconciliation must see the integrated state because its job is to resolve
+cross-work-unit duplicates, evictions, fallbacks, and source-specific
+reconcile guidance.
+
+Reconciliation is not allowed to mutate project main directly and does not run
+inside any child worktree. Its changes are captured as a reconciliation diff
+against the pre-reconciliation integration HEAD, recorded in the existing
+stage/report metadata, and validated with the same touched-artifact and scoped
+connection gates as work-unit writes. The final global gates validate the
+combined tree after reconciliation. If reconciliation introduces an invalid
+wiki or semantic-layer reference, touches a disallowed target, or records an
+unresolvable artifact conflict, the run fails or routes to a resolver before
+squash.
+
 ## Artifact-aware integration
 
 KTX durable artifacts are structured enough that git-only merge is not a strong
 correctness boundary. Artifact-aware integration must parse and validate known
 file classes after diffs are applied.
 
-The first implementation must cover these artifact classes:
+The first implementation must cover these worktree file classes:
 
 - semantic-layer source YAML;
 - wiki markdown frontmatter;
 - wiki body references to semantic-layer sources, measures, dimensions, and raw
-  warehouse tables;
-- fallback records; and
-- provenance records that map raw paths to written artifacts.
+  warehouse tables.
+
+Unmapped fallback records are not worktree files in version one. They remain
+typed stage-index and report records emitted by `emit_unmapped_fallback`; the
+integration layer validates their raw paths and structured reason codes as
+report metadata, not as mergeable artifacts.
+
+Provenance also stays out of the worktree in version one. The source of truth is
+the ingest provenance store and report body. Before inserting provenance rows,
+the global gate derives the planned rows from accepted work-unit actions,
+reconciliation actions, artifact-resolution records, and skipped raw files, then
+checks those rows against the integrated worktree and staged raw hashes. Moving
+provenance to on-disk files would be a separate schema migration, not part of
+this design.
 
 Artifact-aware integration can start with validation-only behavior. It does not
 need to auto-merge every semantic conflict in version one. If two diffs contest
@@ -227,12 +311,32 @@ The final gates must include:
   measure-level references;
 - wiki body validation for explicit semantic-layer source, measure, dimension,
   and table references; and
-- provenance validation for raw paths referenced by new or changed artifacts.
+- provenance validation for raw paths referenced by new or changed artifacts
+  before those rows are inserted into SQLite.
+
+The wiki body gate needs a narrow grammar so ordinary prose does not become a
+semantic-layer reference. In version one, an explicit body reference is one of
+these Markdown forms outside fenced code blocks:
+
+- an inline code token in the form `source.entity`, where `source` matches a
+  visible semantic-layer source and `entity` must match one of that source's
+  measures, dimensions, or segments;
+- an inline code token in the form `connectionId/source.entity`, which validates
+  against that specific target connection;
+- an inline code token in the form `source:source_name`, which validates a
+  source-level semantic-layer reference; or
+- an inline code token in the form `table:qualified_table_name`, which validates
+  a raw warehouse table reference against the visible raw table/catalog sources.
+
+The parser ignores unformatted prose, fenced SQL examples, and unprefixed
+single-token inline code. Two-part inline code that does not name a visible
+semantic-layer source is not treated as an SL entity reference; use the
+`table:` prefix for raw warehouse table references.
 
 The `total_contract_arr_cents` incident is the regression case for this gate:
 the integrated tree must fail if a wiki page references
-`mart_account_segments.total_contract_arr_cents` while the final semantic-layer
-source defines only `total_contract_arr`.
+`mart_account_segments.total_contract_arr_cents` as an inline-code body token
+while the final semantic-layer source defines only `total_contract_arr`.
 
 ## Deterministic projection
 
@@ -337,7 +441,8 @@ The first test creates a fake or Metabase-like adapter with two work units
 starting from the same base:
 
 1. Work unit A writes a wiki page that references
-   `mart_account_segments.total_contract_arr_cents`.
+   `mart_account_segments.total_contract_arr_cents` as an inline-code body
+   token.
 2. Work unit B writes or overwrites the final semantic-layer source with only
    `total_contract_arr`.
 3. Both work units pass their local gates in isolation.
@@ -351,17 +456,23 @@ Additional tests cover:
 - a deterministic projector change plus a work-unit wiki reference that becomes
   stale after projection;
 - Notion-style direct wiki writes with invalid `sl_refs`; and
-- LookML-style `slDisallowed` work units that cannot write semantic-layer
-  files.
+- LookML-style `slDisallowed` work units where write tools are unavailable and
+  integration rejects any diff that still touches `semantic-layer/**`.
 
 ## Rollout
 
 The rollout must be incremental because the current runner is shared by all
 adapters.
 
-1. Add the per-work-unit worktree executor behind an internal setting.
+The rollout switch is runner-owned. During migration it may be a private
+per-source allowlist, or an internal `IngestSettingsPort` map keyed by
+`sourceKey`, but it must not become a `SourceAdapter` field or public connector
+configuration knob.
+
+1. Add the per-work-unit worktree executor behind that internal runner setting.
 2. Add diff collection and deterministic integration in the existing runner.
-3. Add final global wiki and semantic-layer reference gates.
+3. Add final global wiki and semantic-layer reference gates, including the wiki
+   body reference parser defined above.
 4. Migrate Metabase to the new execution path first.
 5. Migrate Notion, LookML, Looker, dbt, and MetricFlow.
 6. Promote the new path to the default after the Metabase regression test and
