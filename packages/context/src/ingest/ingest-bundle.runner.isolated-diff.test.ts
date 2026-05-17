@@ -95,7 +95,7 @@ function makeWikiService(root: string) {
 }
 
 function makeDeps(runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>) {
-  const adapter = {
+  const adapter: any = {
     source: 'metabase',
     skillNames: [],
     detect: vi.fn().mockResolvedValue(true),
@@ -149,12 +149,12 @@ function makeDeps(runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>) {
       buildSkillsPrompt: vi.fn().mockReturnValue(''),
       stripFrontmatter: vi.fn((body) => body),
     } as never,
-    promptService: { loadPrompt: vi.fn().mockResolvedValue('base') },
+    promptService: { loadPrompt: vi.fn().mockResolvedValue('base') } as never,
     wikiService: { ...wikiService, forWorktree: vi.fn((workdir: string) => makeWikiService(workdir)) } as never,
     knowledgeIndex: { listPagesForUser: vi.fn().mockResolvedValue([]) },
     knowledgeSlRefs: { syncFromWiki: vi.fn() },
     semanticLayerService,
-    slSearchService: { indexSources: vi.fn() },
+    slSearchService: { indexSources: vi.fn() } as never,
     slSourcesRepository: {} as never,
     slValidator: { validateSingleSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }) },
     connections: { listEnabledConnections: vi.fn().mockResolvedValue([]), getConnectionById: vi.fn() } as never,
