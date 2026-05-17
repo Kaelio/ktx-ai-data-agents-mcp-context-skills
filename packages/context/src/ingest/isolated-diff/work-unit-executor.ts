@@ -5,7 +5,7 @@ import type { IngestSessionWorktree, IngestSessionWorktreePort } from '../ports.
 import type { WorkUnit } from '../types.js';
 import type { IngestTraceWriter } from '../ingest-trace.js';
 import type { WorkUnitOutcome } from '../stages/stage-3-work-units.js';
-import { assertPatchAllowedForWorkUnit } from './git-patch.js';
+import { parsePatchTouchedPaths } from './git-patch.js';
 
 export interface RunIsolatedWorkUnitInput {
   unitIndex: number;
@@ -36,7 +36,7 @@ export async function runIsolatedWorkUnit(input: RunIsolatedWorkUnitInput): Prom
   try {
     const outcome = await input.run(child);
     if (outcome.status !== 'success') {
-      cleanupOutcome = 'crash';
+      cleanupOutcome = 'success';
       await input.trace.event('error', 'work_unit', 'work_unit_failed_before_patch', {
         unitKey: input.workUnit.unitKey,
         reason: outcome.reason ?? 'unknown failure',
@@ -48,11 +48,7 @@ export async function runIsolatedWorkUnit(input: RunIsolatedWorkUnitInput): Prom
     const patchPath = join(input.patchDir, patchFileName(input.unitIndex, input.workUnit.unitKey));
     await child.git.writeBinaryNoRenamePatch(input.ingestionBaseSha, 'HEAD', patchPath);
     const patch = await readFile(patchPath, 'utf-8');
-    const touched = assertPatchAllowedForWorkUnit({
-      unitKey: input.workUnit.unitKey,
-      patch,
-      slDisallowed: input.workUnit.slDisallowed === true,
-    });
+    const touched = parsePatchTouchedPaths(patch);
     cleanupOutcome = 'success';
     await input.trace.event('debug', 'work_unit', 'work_unit_patch_collected', {
       unitKey: input.workUnit.unitKey,
@@ -67,7 +63,6 @@ export async function runIsolatedWorkUnit(input: RunIsolatedWorkUnitInput): Prom
       childWorktreePath: child.workdir,
     };
   } catch (error) {
-    cleanupOutcome = 'crash';
     await input.trace.event(
       'error',
       'work_unit',
@@ -75,6 +70,7 @@ export async function runIsolatedWorkUnit(input: RunIsolatedWorkUnitInput): Prom
       { unitKey: input.workUnit.unitKey, worktreePath: child.workdir },
       error,
     );
+    cleanupOutcome = 'success';
     throw error;
   } finally {
     await input.sessionWorktreeService.cleanup(child, cleanupOutcome);

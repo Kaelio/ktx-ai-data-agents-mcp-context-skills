@@ -89,4 +89,43 @@ describe('integrateWorkUnitPatch', () => {
     expect(result.status).toBe('semantic_conflict');
     await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('old\n');
   });
+
+  it('classifies slDisallowed patch policy failures as traced textual conflicts', async () => {
+    const { homeDir, configDir, git, baseSha } = await makeRepo();
+    await mkdir(join(configDir, 'semantic-layer/c1'), { recursive: true });
+    await git.commitFiles(['semantic-layer/c1'], 'empty sl dir', 'System User', 'system@example.com');
+    const childDir = join(homeDir, 'child-policy');
+    await git.addWorktree(childDir, 'child-policy', baseSha);
+    const childGit = git.forWorktree(childDir);
+    await mkdir(join(childDir, 'semantic-layer/c1'), { recursive: true });
+    await writeFile(join(childDir, 'semantic-layer/c1/orders.yaml'), 'name: orders\ncolumns: []\njoins: []\nmeasures: []\n');
+    await childGit.commitFiles(['semantic-layer/c1/orders.yaml'], 'forbidden sl', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'patches/forbidden.patch');
+    await childGit.writeBinaryNoRenamePatch(baseSha, 'HEAD', patchPath);
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-policy/trace.jsonl'),
+      jobId: 'job-policy',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      level: 'trace',
+    });
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'lookml-mismatch',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'KTX Test', email: 'system@ktx.local' },
+      validateAppliedTree: vi.fn().mockResolvedValue(undefined),
+      slDisallowed: true,
+    });
+
+    expect(result).toMatchObject({
+      status: 'textual_conflict',
+      touchedPaths: ['semantic-layer/c1/orders.yaml'],
+    });
+    const rawTrace = await readFile(trace.tracePath, 'utf-8');
+    expect(rawTrace).toContain('patch_policy_rejected');
+    expect(rawTrace).toContain('slDisallowed WorkUnit lookml-mismatch touched semantic-layer/c1/orders.yaml');
+  });
 });

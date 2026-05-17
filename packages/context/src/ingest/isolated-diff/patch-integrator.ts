@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { GitService } from '../../core/index.js';
 import type { IngestTraceWriter } from '../ingest-trace.js';
 import { traceTimed } from '../ingest-trace.js';
-import { assertPatchAllowedForWorkUnit } from './git-patch.js';
+import { assertPatchAllowedForWorkUnit, parsePatchTouchedPaths } from './git-patch.js';
 
 export type PatchIntegrationResult =
   | { status: 'accepted'; commitSha: string; touchedPaths: string[] }
@@ -26,12 +26,26 @@ function errorMessage(error: unknown): string {
 export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput): Promise<PatchIntegrationResult> {
   const preApplyHead = await input.integrationGit.revParseHead();
   const patch = await readFile(input.patchPath, 'utf-8');
-  const touched = assertPatchAllowedForWorkUnit({
-    unitKey: input.unitKey,
-    patch,
-    slDisallowed: input.slDisallowed,
-  });
-  const touchedPaths = touched.map((entry) => entry.path);
+  const touchedPaths = parsePatchTouchedPaths(patch).map((entry) => entry.path);
+  try {
+    assertPatchAllowedForWorkUnit({
+      unitKey: input.unitKey,
+      patch,
+      slDisallowed: input.slDisallowed,
+    });
+  } catch (error) {
+    await input.trace.event('error', 'integration', 'patch_policy_rejected', {
+      unitKey: input.unitKey,
+      patchPath: input.patchPath,
+      touchedPaths,
+      reason: errorMessage(error),
+    });
+    return {
+      status: 'textual_conflict',
+      reason: errorMessage(error),
+      touchedPaths,
+    };
+  }
 
   try {
     await traceTimed(

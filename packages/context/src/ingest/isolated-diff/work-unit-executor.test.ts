@@ -92,4 +92,53 @@ describe('runIsolatedWorkUnit', () => {
     await expect(readFile(patchPath, 'utf-8')).resolves.toContain('wiki/global/a.md');
     await expect(readFile(tracePath, 'utf-8')).resolves.toContain('work_unit_child_created');
   });
+
+  it('removes child worktrees after failed WorkUnit outcomes are traced', async () => {
+    const { homeDir, git, baseSha } = await makeGit();
+    const childDir = join(homeDir, '.worktrees/session-job-1-wu-fail');
+    const sessionWorktreeService = {
+      create: vi.fn(async (_key: string, startSha: string) => {
+        await mkdir(join(homeDir, '.worktrees'), { recursive: true });
+        await git.addWorktree(childDir, 'session/job-1-wu-fail', startSha);
+        return {
+          chatId: 'job-1-wu-fail',
+          workdir: childDir,
+          branch: 'session/job-1-wu-fail',
+          baseSha: startSha,
+          createdAt: new Date(),
+          git: git.forWorktree(childDir),
+          config: {},
+        };
+      }),
+      cleanup: vi.fn(async () => undefined),
+    };
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-1/trace.jsonl'),
+      jobId: 'job-1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      level: 'trace',
+    });
+
+    const result = await runIsolatedWorkUnit({
+      unitIndex: 0,
+      ingestionBaseSha: baseSha,
+      sessionWorktreeService: sessionWorktreeService as never,
+      patchDir: join(homeDir, '.ktx/ingest-patches/job-1'),
+      trace,
+      run: async () => ({
+        unitKey: 'wu-fail',
+        status: 'failed',
+        reason: 'agent loop errored',
+        preSha: baseSha,
+        postSha: baseSha,
+        actions: [],
+        touchedSlSources: [],
+      }),
+      workUnit: { unitKey: 'wu-fail', rawFiles: ['a.json'], peerFileIndex: [], dependencyPaths: [] },
+    });
+
+    expect(result.status).toBe('failed');
+    expect(sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'success');
+  });
 });

@@ -646,7 +646,10 @@ describe('IngestBundleRunner isolated diff path', () => {
 
       await expect(
         runner.run({ jobId: 'job-sl-disallowed', connectionId: 'warehouse', sourceKey: 'metabase', trigger: 'upload', bundleRef: { kind: 'upload', uploadId: 'upload' } }),
-      ).rejects.toThrow(/slDisallowed WorkUnit lookml-mismatch touched semantic-layer\/warehouse\/orders.yaml/);
+      ).rejects.toThrow(/isolated diff textual conflict/);
+      const trace = await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-sl-disallowed/trace.jsonl'), 'utf-8');
+      expect(trace).toContain('patch_policy_rejected');
+      expect(trace).toContain('slDisallowed WorkUnit lookml-mismatch touched semantic-layer/warehouse/orders.yaml');
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });
     }
