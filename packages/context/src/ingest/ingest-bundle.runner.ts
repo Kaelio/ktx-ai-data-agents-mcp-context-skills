@@ -669,6 +669,90 @@ export class IngestBundleRunner {
     });
   }
 
+  private removedWikiPageKeysFromActions(actions: MemoryAction[]): string[] {
+    return this.uniqueWikiPageKeys(
+      actions.filter((action) => action.target === 'wiki' && action.type === 'removed').map((action) => action.key),
+    );
+  }
+
+  private finalGateActionOrigins(input: {
+    stageIndex: StageIndex;
+    reconcileActions: MemoryAction[];
+    fallbackConnectionId: string;
+  }) {
+    const actionContext = (action: MemoryAction, fallbackRawPaths: string[]) => ({
+      target: action.target,
+      type: action.type,
+      key: action.key,
+      detail: action.detail,
+      rawPaths: rawPathsForAction(action, fallbackRawPaths),
+      ...(action.target === 'sl' ? { targetConnectionId: actionTargetConnectionId(action, input.fallbackConnectionId) } : {}),
+    });
+
+    return [
+      ...input.stageIndex.workUnits.flatMap((workUnit, unitIndex) =>
+        workUnit.actions.map((action, actionIndex) => ({
+          source: 'work_unit_action',
+          unitKey: workUnit.unitKey,
+          unitIndex,
+          unitRawFiles: workUnit.rawFiles,
+          actionIndex,
+          action: actionContext(action, workUnit.rawFiles),
+        })),
+      ),
+      ...input.reconcileActions.map((action, actionIndex) => ({
+        source: 'reconciliation_action',
+        actionIndex,
+        action: actionContext(action, []),
+      })),
+    ];
+  }
+
+  private async wikiPageKeysForFinalGates(input: {
+    wikiService: ReturnType<KnowledgeWikiService['forWorktree']>;
+    changedWikiPageKeys: string[];
+    touchedSlSources: TouchedSlSource[];
+    actions: MemoryAction[];
+  }): Promise<{
+    pageKeys: string[];
+    trace: {
+      global: boolean;
+      reasons: string[];
+      changedWikiPageKeys: string[];
+      removedWikiPageKeys: string[];
+      pageKeysValidated: string[];
+    };
+  }> {
+    const changedWikiPageKeys = this.uniqueWikiPageKeys(input.changedWikiPageKeys);
+    const removedWikiPageKeys = this.removedWikiPageKeysFromActions(input.actions);
+    const reasons: string[] = [];
+    if (input.touchedSlSources.length > 0) {
+      reasons.push('semantic_layer_changed');
+    }
+    if (removedWikiPageKeys.length > 0) {
+      reasons.push('wiki_page_removed');
+    }
+
+    let pageKeys = changedWikiPageKeys;
+    if (reasons.length > 0) {
+      pageKeys = this.uniqueWikiPageKeys([
+        ...changedWikiPageKeys,
+        ...(await input.wikiService.listPageKeys('GLOBAL', null)),
+      ]);
+    }
+
+    return {
+      pageKeys,
+      trace: {
+        global: reasons.length > 0,
+        reasons,
+        changedWikiPageKeys,
+        removedWikiPageKeys,
+        pageKeysValidated: pageKeys,
+      },
+    };
+  }
+
   private async runWorkUnitInWorktree(input: {
     job: IngestBundleJob;
     syncId: string;
@@ -2087,7 +2171,7 @@ export class IngestBundleRunner {
         preReconciliationSha && postReconciliationSha && preReconciliationSha !== postReconciliationSha
           ? (await sessionWorktree.git.diffNameStatus(preReconciliationSha, postReconciliationSha)).map((entry) => entry.path)
           : [];
-      const finalChangedWikiPageKeys = this.uniqueWikiPageKeys([
+      const baseFinalChangedWikiPageKeys = this.uniqueWikiPageKeys([
         ...(isolatedDiffEnabled ? projectionChangedWikiPageKeys : []),
         ...workUnitOutcomes
           .flatMap((outcome) => outcome.patchTouchedPaths ?? [])
@@ -2103,6 +2187,13 @@ export class IngestBundleRunner {
         ...this.touchedSlSourcesFromPaths(postReconciliationPaths),
         ...(postProcessorOutcome?.touchedSources ?? []),
       ]);
+      const finalWikiGateScope = await this.wikiPageKeysForFinalGates({
+        wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
+        changedWikiPageKeys: baseFinalChangedWikiPageKeys,
+        touchedSlSources: finalTouchedSlSources,
+        actions: [...stageIndex.workUnits.flatMap((wu) => wu.actions), ...reconcileActions],
+      });
+      const finalChangedWikiPageKeys = finalWikiGateScope.pageKeys;
 
       const finalTargetPolicyPaths = [
         ...projectionTouchedPaths,
@@ -2128,9 +2219,15 @@ export class IngestBundleRunner {
 
       const finalArtifactGateTraceData = {
         changedWikiPageKeys: finalChangedWikiPageKeys,
+        wikiReferenceGateScope: finalWikiGateScope.trace,
         touchedSlSources: finalTouchedSlSources,
         projectionTouchedPaths,
         workUnitPatchTouchedPaths: workUnitOutcomes.flatMap((outcome) => outcome.patchTouchedPaths ?? []),
+        actionOrigins: this.finalGateActionOrigins({
+          stageIndex,
+          reconcileActions,
+          fallbackConnectionId: job.connectionId,
+        }),
         preReconciliationSha,
         postReconciliationSha,
         postReconciliationPaths,
