@@ -42,6 +42,47 @@ function runtimeReady(projectDir: string) {
   return { status: 'ready' as const, projectDir, requirements: { features: ['core' as const], requirements: [] } };
 }
 
+async function writeReadyRuntime(rootDir: string, cliVersion = '0.2.0') {
+  const runtimeRoot = join(rootDir, '.runtime');
+  const versionDir = join(runtimeRoot, cliVersion);
+  const pythonPath = join(versionDir, '.venv', 'bin', 'python');
+  const daemonPath = join(versionDir, '.venv', 'bin', 'ktx-daemon');
+  await mkdir(join(versionDir, '.venv', 'bin'), { recursive: true });
+  await writeFile(pythonPath, '', 'utf-8');
+  await writeFile(daemonPath, '', 'utf-8');
+  await writeFile(
+    join(versionDir, 'manifest.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        cliVersion,
+        installedAt: '2026-05-09T10:02:00.000Z',
+        asset: {
+          schemaVersion: 1,
+          distributionName: 'kaelio-ktx',
+          normalizedName: 'kaelio_ktx',
+          version: '0.1.0',
+          wheel: {
+            file: 'kaelio_ktx-0.1.0-py3-none-any.whl',
+            sha256: '0'.repeat(64),
+            bytes: 0,
+          },
+        },
+        features: ['core'],
+        python: {
+          executable: pythonPath,
+          daemonExecutable: daemonPath,
+        },
+        installLog: join(versionDir, 'install.log'),
+      },
+      null,
+      2,
+    )}\n`,
+    'utf-8',
+  );
+  return runtimeRoot;
+}
+
 describe('setup status', () => {
   let tempDir: string;
 
@@ -1709,7 +1750,7 @@ describe('setup status', () => {
       'utf-8',
     );
     await writeKtxSetupState(tempDir, {
-      completed_steps: ['project', 'llm', 'embeddings', 'sources', 'context', 'agents'],
+      completed_steps: ['project', 'llm', 'embeddings', 'sources', 'runtime', 'context', 'agents'],
     });
     await writeFile(
       join(tempDir, '.ktx/agents/install-manifest.json'),
@@ -1740,57 +1781,67 @@ describe('setup status', () => {
       commands: contextBuildCommands(tempDir, 'setup-context-local-ready'),
     });
 
-    await expect(
-      runKtxSetup(
-        {
-          command: 'run',
-          projectDir: tempDir,
-          mode: 'existing',
-          agents: false,
-          inputMode: 'auto',
-          yes: false,
-          cliVersion: '0.2.0',
-          skipLlm: false,
-          skipEmbeddings: false,
-          skipDatabases: false,
-          skipSources: false,
-          skipAgents: false,
-          databaseSchemas: [],
-        },
-        io.io,
-        {
-          readyMenuDeps: { prompts: { select: vi.fn(async () => 'agents'), cancel: vi.fn() } },
-          model: async (args) => {
-            expect(args.skipLlm).toBe(true);
-            return { status: 'skipped', projectDir: tempDir };
+    const previousRuntimeRoot = process.env.KTX_RUNTIME_ROOT;
+    process.env.KTX_RUNTIME_ROOT = await writeReadyRuntime(tempDir);
+    try {
+      await expect(
+        runKtxSetup(
+          {
+            command: 'run',
+            projectDir: tempDir,
+            mode: 'existing',
+            agents: false,
+            inputMode: 'auto',
+            yes: false,
+            cliVersion: '0.2.0',
+            skipLlm: false,
+            skipEmbeddings: false,
+            skipDatabases: false,
+            skipSources: false,
+            skipAgents: false,
+            databaseSchemas: [],
           },
-          embeddings: async (args) => {
-            expect(args.skipEmbeddings).toBe(true);
-            return { status: 'skipped', projectDir: tempDir };
+          io.io,
+          {
+            readyMenuDeps: { prompts: { select: vi.fn(async () => 'agents'), cancel: vi.fn() } },
+            model: async (args) => {
+              expect(args.skipLlm).toBe(true);
+              return { status: 'skipped', projectDir: tempDir };
+            },
+            embeddings: async (args) => {
+              expect(args.skipEmbeddings).toBe(true);
+              return { status: 'skipped', projectDir: tempDir };
+            },
+            databases: async (args) => {
+              expect(args.skipDatabases).toBe(true);
+              return { status: 'skipped', projectDir: tempDir };
+            },
+            sources: async (args) => {
+              expect(args.skipSources).toBe(true);
+              return { status: 'skipped', projectDir: tempDir };
+            },
+            runtime: async () => {
+              calls.push('runtime');
+              return runtimeReady(tempDir);
+            },
+            agents: async () => {
+              calls.push('agents');
+              return {
+                status: 'ready',
+                projectDir: tempDir,
+                installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
+              };
+            },
           },
-          databases: async (args) => {
-            expect(args.skipDatabases).toBe(true);
-            return { status: 'skipped', projectDir: tempDir };
-          },
-          sources: async (args) => {
-            expect(args.skipSources).toBe(true);
-            return { status: 'skipped', projectDir: tempDir };
-          },
-          runtime: async () => {
-            calls.push('runtime');
-            return runtimeReady(tempDir);
-          },
-          agents: async () => {
-            calls.push('agents');
-            return {
-              status: 'ready',
-              projectDir: tempDir,
-              installs: [{ target: 'codex', scope: 'project', mode: 'mcp-cli' }],
-            };
-          },
-        },
-      ),
-    ).resolves.toBe(0);
+        ),
+      ).resolves.toBe(0);
+    } finally {
+      if (previousRuntimeRoot === undefined) {
+        delete process.env.KTX_RUNTIME_ROOT;
+      } else {
+        process.env.KTX_RUNTIME_ROOT = previousRuntimeRoot;
+      }
+    }
 
     expect(calls).toEqual(['runtime', 'agents']);
   });
