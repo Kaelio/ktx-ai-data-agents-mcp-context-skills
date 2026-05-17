@@ -76,7 +76,7 @@ import { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evide
 import { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
 import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './context-evidence/index.js';
 import { DiffSetService } from './diff-set.service.js';
-import { ingestTracePathForJob } from './ingest-trace.js';
+import { ingestTracePathForJob, type IngestTraceLevel } from './ingest-trace.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import { PageTriageService } from './page-triage/index.js';
 import { createWarehouseVerificationTools } from './tools/warehouse-verification/index.js';
@@ -97,6 +97,12 @@ const promptsDir = fileURLToPath(new URL('../../prompts', import.meta.url));
 const skillsDir = fileURLToPath(new URL('../../skills', import.meta.url));
 const LOCAL_AUTHOR = { name: 'KTX Local', email: 'local@ktx.local' };
 const LOCAL_SHAPE_WARNING = 'Local ingest validates semantic-layer YAML shape only.';
+const INGEST_TRACE_LEVELS = new Set<IngestTraceLevel>(['error', 'info', 'debug', 'trace']);
+
+function ingestTraceLevelFromEnv(env: NodeJS.ProcessEnv = process.env): IngestTraceLevel {
+  const raw = env.KTX_INGEST_TRACE_LEVEL;
+  return raw && INGEST_TRACE_LEVELS.has(raw as IngestTraceLevel) ? (raw as IngestTraceLevel) : 'debug';
+}
 
 export interface CreateLocalBundleIngestRuntimeOptions {
   project: KtxLocalProject;
@@ -677,7 +683,7 @@ export function createLocalBundleIngestRuntime(
       workUnitStepBudget: options.project.config.ingest.workUnits.stepBudget,
       workUnitFailureMode: options.project.config.ingest.workUnits.failureMode,
       isolatedDiffSourceKeys: ['metabase'],
-      ingestTraceLevel: 'debug',
+      ingestTraceLevel: ingestTraceLevelFromEnv(),
     },
     skillsRegistry: new SkillsRegistryService({ skillsDir, logger }),
     promptService,

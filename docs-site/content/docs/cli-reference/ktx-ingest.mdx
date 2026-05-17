@@ -111,6 +111,35 @@ notion         skipped          skipped        done           done
 Use `--json` when a script or agent needs the selected plan and per-target
 results.
 
+## Inspect source ingest traces
+
+Source ingest writes persistent JSONL traces for postmortem debugging. Stored
+ingest status prints the trace path near the run identifiers:
+
+```bash
+ktx ingest status <runId>
+```
+
+The trace file lives under the project directory at
+`.ktx/ingest-traces/<jobId>/trace.jsonl`. Each line is a JSON event with the
+job id, run id, sync id, connection id, source key, phase, event name, timing,
+context fields, and error details when a step fails.
+
+Use `jq` or line-oriented tools to inspect a trace:
+
+```bash
+jq -c '. | {at, level, phase, event, durationMs, data, error}' \
+  .ktx/ingest-traces/<jobId>/trace.jsonl
+```
+
+KTX writes `debug` trace events by default. Set `KTX_INGEST_TRACE_LEVEL` to
+`error`, `info`, `debug`, or `trace` before running ingest to change the trace
+verbosity:
+
+```bash
+KTX_INGEST_TRACE_LEVEL=trace ktx ingest metabase
+```
+
 ## Common errors
 
 | Error | Cause | Recovery |
