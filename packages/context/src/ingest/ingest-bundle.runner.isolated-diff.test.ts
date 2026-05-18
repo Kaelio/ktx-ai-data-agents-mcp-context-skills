@@ -6,6 +6,7 @@ import { GitService, SessionWorktreeService } from '../core/index.js';
 import { LocalGitFileStore } from '../project/local-git-file-store.js';
 import { addTouchedSlSource } from '../tools/index.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
+import { defaultIsolatedDiffSourceKeys } from './isolated-diff/source-routing.js';
 import type { IngestBundleRunnerDeps } from './ports.js';
 
 async function makeRealGitRuntime() {
@@ -114,9 +115,9 @@ function makeWikiService(root: string) {
   };
 }
 
-function makeDeps(runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>) {
+function makeDeps(runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>, sourceKey = 'metabase') {
   const adapter: any = {
-    source: 'metabase',
+    source: sourceKey,
     skillNames: [],
     detect: vi.fn().mockResolvedValue(true),
     chunk: vi.fn().mockResolvedValue({
@@ -162,7 +163,12 @@ function makeDeps(runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>) {
       resolveTranscriptDir: (id) => join(runtime.configDir, '.ktx/ingest-transcripts', id),
       resolveTracePath: (id) => join(runtime.configDir, '.ktx/ingest-traces', id, 'trace.jsonl'),
     },
-    settings: { memoryIngestionModel: 'test', probeRowCount: 1, isolatedDiffSourceKeys: ['metabase'], ingestTraceLevel: 'trace' },
+    settings: {
+      memoryIngestionModel: 'test',
+      probeRowCount: 1,
+      isolatedDiffSourceKeys: defaultIsolatedDiffSourceKeys(),
+      ingestTraceLevel: 'trace',
+    },
     skillsRegistry: {
       listSkills: vi.fn().mockResolvedValue([]),
       getSkill: vi.fn().mockResolvedValue(null),
@@ -185,20 +191,119 @@ function makeDeps(runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>) {
   return { deps, adapter };
 }
 
-async function mockStageRawFiles(runner: IngestBundleRunner, runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>, hashes: [string, string][]) {
+async function mockStageRawFiles(
+  runner: IngestBundleRunner,
+  runtime: Awaited<ReturnType<typeof makeRealGitRuntime>>,
+  hashes: [string, string][],
+  sourceKey = 'metabase',
+) {
   (runner as any).resolveStagedDir = vi.fn().mockResolvedValue(join(runtime.homeDir, 'stage'));
   (runner as any).stageRawFilesStage1 = vi.fn(async ({ worktreeRoot }: any) => {
-    const rawDir = join(worktreeRoot, 'raw-sources/warehouse/metabase/s');
+    const rawDir = join(worktreeRoot, 'raw-sources/warehouse', sourceKey, 's');
     await mkdir(rawDir, { recursive: true });
     for (const [rawPath] of hashes) {
       await mkdir(join(rawDir, rawPath.split('/').slice(0, -1).join('/')), { recursive: true });
       await writeFile(join(rawDir, rawPath), '{}');
     }
-    return { currentHashes: new Map(hashes), rawDirInWorktree: 'raw-sources/warehouse/metabase/s' };
+    return { currentHashes: new Map(hashes), rawDirInWorktree: `raw-sources/warehouse/${sourceKey}/s` };
   });
 }
 
 describe('IngestBundleRunner isolated diff path', () => {
+  it.each(['notion', 'lookml', 'looker', 'dbt', 'metricflow'] as const)(
+    'routes %s direct writes through isolated child worktrees',
+    async (sourceKey) => {
+      const runtime = await makeRealGitRuntime();
+      try {
+        const { deps, adapter } = makeDeps(runtime, sourceKey);
+        adapter.chunk.mockResolvedValue({
+          workUnits: [
+            {
+              unitKey: `${sourceKey}-wiki`,
+              rawFiles: [`${sourceKey}/page.json`],
+              peerFileIndex: [],
+              dependencyPaths: [],
+            },
+          ],
+        });
+
+        let currentSession: any = null;
+        deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+          currentSession = toolSession;
+          return { toRuntimeTools: vi.fn(() => ({})) };
+        });
+        deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+          if (params.telemetryTags.operationName !== 'ingest-bundle-wu') {
+            return { stopReason: 'natural' };
+          }
+
+          expect(params.telemetryTags).toMatchObject({
+            operationName: 'ingest-bundle-wu',
+            source: sourceKey,
+            unitKey: `${sourceKey}-wiki`,
+          });
+
+          const root = rootOfConfig(currentSession.configService, runtime.configDir);
+          await mkdir(join(root, 'wiki/global'), { recursive: true });
+          await writeFile(
+            join(root, 'wiki/global', `${sourceKey}-isolated.md`),
+            `---\nsummary: ${sourceKey} isolated write\nusage_mode: auto\n---\n\nIsolated ${sourceKey} write.\n`,
+            'utf-8',
+          );
+          currentSession.actions.push({
+            target: 'wiki',
+            type: 'created',
+            key: `${sourceKey}-isolated`,
+            detail: `${sourceKey} isolated write`,
+            rawPaths: [`${sourceKey}/page.json`],
+          });
+          await currentSession.gitService.commitFiles(
+            [`wiki/global/${sourceKey}-isolated.md`],
+            `${sourceKey} wiki`,
+            'KTX Test',
+            'system@ktx.local',
+          );
+          return { stopReason: 'natural' };
+        }) as never;
+
+        const runner = new IngestBundleRunner(deps);
+        await mockStageRawFiles(runner, runtime, [[`${sourceKey}/page.json`, 'h1']], sourceKey);
+
+        await expect(
+          runner.run({
+            jobId: `job-${sourceKey}`,
+            connectionId: 'warehouse',
+            sourceKey,
+            trigger: 'upload',
+            bundleRef: { kind: 'upload', uploadId: 'upload' },
+          }),
+        ).resolves.toMatchObject({
+          jobId: `job-${sourceKey}`,
+          failedWorkUnits: [],
+          workUnitCount: 1,
+        });
+
+        const trace = await readFile(
+          join(runtime.configDir, '.ktx/ingest-traces', `job-${sourceKey}`, 'trace.jsonl'),
+          'utf-8',
+        );
+        expect(trace).toContain('isolated_diff_enabled');
+        expect(trace).toContain('work_unit_child_created');
+        expect(trace).toContain('work_unit_patch_collected');
+        expect(trace).toContain('patch_apply_started');
+        expect(trace).not.toContain('shared_worktree_path_enabled');
+
+        const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0];
+        expect(reportCreate?.body.isolatedDiff).toMatchObject({
+          enabled: true,
+          acceptedPatches: 1,
+        });
+      } finally {
+        await rm(runtime.homeDir, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('rejects the Metabase stale-measure wiki body regression before squash', async () => {
     const runtime = await makeRealGitRuntime();
     try {
