@@ -457,7 +457,7 @@ export class KtxDescriptionGenerator {
       }
     }
 
-    const sampleTable = input.connector.sampleTable;
+    const sampleTable = input.connector.sampleTable?.bind(input.connector);
     let sampleData: KtxTableSampleResult | null = null;
     let fallbackReason: 'capability_missing' | 'sampling_failed' | 'empty_sample' | null = null;
 
@@ -678,7 +678,7 @@ export class KtxDescriptionGenerator {
           });
           columnValues = [];
         } else {
-          const sampleColumn = input.connector.sampleColumn;
+          const sampleColumn = input.connector.sampleColumn.bind(input.connector);
           try {
             const sample = await retryAsync(
               () =>
