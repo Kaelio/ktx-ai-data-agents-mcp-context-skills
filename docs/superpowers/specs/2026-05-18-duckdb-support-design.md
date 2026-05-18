@@ -56,8 +56,8 @@ agent-facing SQL execution stays read-only.
 - Package registry and release artifact updates so DuckDB ships with the public
   CLI package.
 - Native dependency installation behavior for `@duckdb/node-api` across the KTX
-  supported Node/platform matrix, including user-facing load or ABI guidance
-  when prebuilt binaries are not enough.
+  supported platform matrix, including user-facing missing-binary or
+  unsupported-platform guidance before raw native-loader errors surface.
 - Docs for setup, primary-source integrations, SQL execution, and connection
   behavior.
 - Targeted sqlglot tests proving DuckDB dialect validation and semantic-layer
@@ -85,13 +85,16 @@ sampling, and result normalization.
 
 Use DuckDB's current Node client, `@duckdb/node-api`, rather than the older
 `duckdb` package. The design should keep the native dependency isolated inside
-`@ktx/connector-duckdb` so other packages only depend on KTX interfaces.
+`@ktx/connector-duckdb` so other packages only depend on KTX interfaces. In
+particular, `@ktx/context` must not import `@duckdb/node-api` or add it as a
+runtime dependency.
 
 KTX core remains the product-level source of truth for driver recognition:
 schemas, dialect aliases, connection type normalization, scan-driver
-normalization, MCP dialect resolution, and local semantic-layer execution
-dispatch belong in `@ktx/context`. The CLI should only wire commands to those
-ports and load the connector dynamically.
+normalization, MCP dialect resolution, and the local semantic-layer query
+executor port belong in `@ktx/context`. The CLI should wire commands to those
+ports and load the connector dynamically, including supplying the DuckDB query
+executor implementation from `@ktx/connector-duckdb` when execution is needed.
 
 The Python semantic layer should continue to generate Postgres-shaped SQL
 internally and transpile through sqlglot at the final dialect boundary. DuckDB
@@ -113,8 +116,8 @@ Add package files matching other connector packages:
 
 Test fixtures should generate the `.duckdb` database at test setup time with the
 same `@duckdb/node-api` version under test. Do not commit a binary `.duckdb`
-fixture unless the native module version is pinned and the fixture rebuild path
-is documented.
+fixture unless the DuckDB package version is pinned and the fixture regeneration
+path is documented.
 
 Public exports should mirror the SQLite naming pattern with DuckDB-specific
 symbols:
@@ -123,6 +126,7 @@ symbols:
 - `KtxDuckDbDialect`
 - `isKtxDuckDbConnectionConfig`
 - `duckDbDatabasePathFromConfig`
+- `createDuckDbQueryExecutor`
 - `createDuckDbLiveDatabaseIntrospection`
 
 The connector config shape should be intentionally small:
@@ -148,15 +152,18 @@ Update the shared driver and dialect surfaces:
 - `packages/context/src/connections/dialects.ts`
 - `packages/context/src/connections/local-warehouse-descriptor.ts`
 - `packages/context/src/connections/local-query-executor.ts`
-- `packages/context/src/connections/*duckdb*query-executor*.ts`
 - `packages/context/src/mcp/local-project-ports.ts`
 - `packages/context/src/sl/local-query.ts`
 - `packages/context/src/sl/semantic-layer.service.ts`
 
-The default local query executor must dispatch DuckDB separately from SQLite.
-It may share path-resolution helpers with the connector if the shared code lives
-in a lower-level package without creating circular dependencies; otherwise,
-duplicate the narrow path-resolution logic and test both paths.
+The default local query executor must dispatch DuckDB separately from SQLite
+through an explicit `duckdb?: KtxSqlQueryExecutorPort` option on
+`DefaultLocalQueryExecutorOptions`. The DuckDB implementation for that slot
+lives in `@ktx/connector-duckdb`; if no DuckDB executor is supplied, the context
+default should fail with the same unsupported-driver style it uses today rather
+than importing the native module directly. Any shared path-resolution behavior
+must live in `@ktx/connector-duckdb` or in dependency-free context helpers that
+do not depend on `@duckdb/node-api`.
 
 The scan and dialect driver sets must be extended explicitly:
 
@@ -193,6 +200,12 @@ Update CLI command wiring and setup surfaces:
 to Postgres. `ktx connection test`, scan, ingest, MCP startup, and semantic-layer
 execution should all use the same configured connection shape.
 
+`ktx sl query --execute` must supply a DuckDB-capable query executor from the
+CLI layer, either by reusing the connector-backed ingest query executor or by
+injecting `createDuckDbQueryExecutor()` into the context default executor's
+DuckDB slot. Do not satisfy semantic-layer DuckDB execution by adding
+`@duckdb/node-api` to `@ktx/context`.
+
 `packages/cli/src/local-adapters.ts` must create a DuckDB live-database
 introspection adapter and dispatch DuckDB connections to it before the daemon
 fallback. No DuckDB live-database ingest path may invoke
@@ -215,12 +228,19 @@ Update user-facing docs where DuckDB changes behavior:
 - CLI reference docs for connection and SQL commands if present
 - contributor/package-layout docs that enumerate connector packages
 
-If `@duckdb/node-api` prebuilt binaries cover all KTX-supported targets, record
-that install matrix in docs or tests. If they do not, add DuckDB-specific native
-load/ABI detection and either a rebuild flow or direct setup guidance analogous
-to the existing native SQLite path. Raw native-loader errors should not be the
-first user-facing failure mode for `ktx setup`, `ktx connection test`, or
-`ktx ingest`.
+`@duckdb/node-api` distributes platform-specific prebuilt binaries as optional
+dependencies for Linux glibc/musl, macOS Apple Silicon/Intel, and Windows
+arm64/x64. DuckDB native install handling should therefore be platform and
+optional-binary based, not a `NODE_MODULE_VERSION` ABI or `pnpm rebuild` flow
+like the existing `better-sqlite3` path.
+
+Record the supported platform matrix in docs or tests. At `ktx setup`,
+`ktx connection test`, `ktx ingest`, and other first-use entry points, verify
+that the host platform is covered and that the optional DuckDB binary can be
+loaded. Unsupported platforms or missing optional dependency packages should
+produce a friendly `@duckdb/node-api` platform-not-supported or missing-binary
+message with the current OS/arch/libc where available. Raw native-loader errors
+should not be the first user-facing failure mode.
 
 ## DuckDB Connector Behavior
 
@@ -305,12 +325,14 @@ Add or update focused tests before broad verification:
   resolution, missing-file rejection, schema introspection, table sampling,
   column sampling, distinct values, row counts, read-only SQL execution, and
   non-read-only SQL rejection. Include a missing-path test that proves no
-  `.duckdb` file is created.
+  `.duckdb` file is created. Include native-loader tests or dependency-injected
+  loader tests covering unsupported-platform and missing optional-binary errors.
 - `packages/context` tests for driver schema parsing, dialect maps, connection
   type normalization, local warehouse descriptors, MCP dialect mapping, and
   local semantic-layer query execution dispatch. Include assertions that DuckDB
   maps to `DUCKDB` for local warehouse descriptors and to `duckdb` for MCP and
-  semantic-layer dialect resolution.
+  semantic-layer dialect resolution, and that DuckDB execution is dispatched
+  only when a `duckdb` query executor slot is supplied.
 - `packages/cli` tests for local scan connector creation, setup database
   choices, connection testing, `ktx sql` dialect validation, ingest query
   executor wiring, and MCP SQL execution against a generated DuckDB fixture.
@@ -355,6 +377,8 @@ If no Python files change, the Python pre-commit command is not required.
   executes it through the local DuckDB file.
 - Non-read-only SQL is rejected before execution.
 - Missing, directory, and in-memory DuckDB targets never create a database file.
+- Missing `@duckdb/node-api` optional binaries and unsupported platforms fail
+  with friendly DuckDB-specific guidance before raw native-loader output.
 - DuckDB foreign keys are populated from native constraint metadata with source
   and referenced column pairs when formal foreign keys exist.
 - Public docs and package/artifact lists include DuckDB support.
