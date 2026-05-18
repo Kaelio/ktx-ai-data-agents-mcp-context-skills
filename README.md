@@ -108,9 +108,16 @@ ktx wiki search "refund policy" --json
 ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 ```
 
-During agent setup, choose **MCP tools + analytics skill** for client agents.
-Choose **MCP tools + analytics skill + admin CLI skill** only when a developer
-or operator agent also needs pinned `ktx` admin commands.
+During agent setup, choose **Ask data questions with KTX MCP** for client
+agents. Choose **Ask data questions + manage KTX with CLI commands** only when
+a developer or operator agent also needs pinned `ktx` admin commands.
+
+After setup, KTX prints **Required before using agents**. Complete those steps
+before opening the configured agent. If it shows `ktx mcp start --project-dir ...`,
+run that command before using Claude Code, Codex, Cursor, OpenCode, or generic
+MCP clients. The same output also prints the matching `ktx mcp stop` command
+for when you want to stop MCP later. Claude Desktop uses its own launcher and
+only needs a restart.
 
 The analytics skill teaches client agents the MCP workflow: discover data,
 prefer semantic-layer measures, inspect entity details before raw SQL, and
@@ -127,7 +134,8 @@ Supported client agents: Claude Code, Claude Desktop, Codex, Cursor, OpenCode,
 and clients that can use the printed MCP endpoint or `.agents` admin skills.
 Claude Desktop setup registers a local `ktx mcp stdio` server in Claude
 Desktop's config and generates `.ktx/agents/claude/ktx-plugin.zip` with the
-analytics skill.
+analytics skill. Restart Claude Desktop after setup; no manual plugin install
+step is required.
 
 The release artifact manifest contains the public npm tarball and the bundled
 `kaelio-ktx` runtime wheel. The `python/ktx-sl` and `python/ktx-daemon`
