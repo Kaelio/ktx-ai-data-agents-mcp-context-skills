@@ -78,6 +78,25 @@ The wizard walks you through everything KTX needs in one pass:
 7. **Agent integration** - installs project-local rules for Claude Code,
    Codex, Cursor, OpenCode, or universal `.agents`.
 
+If you choose local `sentence-transformers` embeddings, KTX uses the managed
+Python runtime. To prepare it before setup, run:
+
+```bash
+ktx dev runtime install --feature local-embeddings --yes
+ktx dev runtime start --feature local-embeddings
+```
+
+During the database step, setup tests the saved connection and builds initial
+schema context:
+
+```text
+Testing warehouse
+  Connection test passed
+
+Building schema context for warehouse
+  Running fast database ingest
+```
+
 If setup exits early, rerun `ktx setup` in the same directory. KTX keeps
 progress under `.ktx/setup/` and resumes from the remaining work.
 
@@ -106,6 +125,18 @@ Agent integration ready: yes (codex:project)
 ```
 
 For a structured check inside scripts, use `ktx status --json`.
+
+When setup builds deep context, its final context check looks like:
+
+```text
+KTX context is ready for agents.
+
+Databases:
+  warehouse: deep context complete
+
+Context sources:
+  dbt_main: memory update complete
+```
 
 ## Connect a coding agent
 
