@@ -32,6 +32,7 @@ type RuntimeWithSlValidationDeps = {
 type RuntimeWithSettingsDeps = {
   deps: {
     settings: {
+      sharedWorktreeSourceKeys?: string[];
       isolatedDiffSourceKeys?: string[];
     };
   };
@@ -266,7 +267,7 @@ describe('createLocalBundleIngestRuntime', () => {
     });
   });
 
-  it('enables isolated-diff routing for direct durable-write connectors', () => {
+  it('defaults local bundle ingest to isolated diffs without an allowlist', () => {
     const runtime = createLocalBundleIngestRuntime({
       project,
       adapters: [new FakeSourceAdapter()],
@@ -275,14 +276,8 @@ describe('createLocalBundleIngestRuntime', () => {
 
     const settings = (runtime.runner as unknown as RuntimeWithSettingsDeps).deps.settings;
 
-    expect(settings.isolatedDiffSourceKeys).toEqual([
-      'metabase',
-      'notion',
-      'lookml',
-      'looker',
-      'dbt',
-      'metricflow',
-    ]);
+    expect(settings.sharedWorktreeSourceKeys).toEqual([]);
+    expect('isolatedDiffSourceKeys' in settings).toBe(false);
   });
 
   it('accepts a debug LLM request file when constructing the default agent runner', async () => {

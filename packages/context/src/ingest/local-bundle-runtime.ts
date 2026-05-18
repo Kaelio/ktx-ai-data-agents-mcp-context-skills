@@ -77,7 +77,7 @@ import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './conte
 import { DiffSetService } from './diff-set.service.js';
 import { ingestTracePathForJob, type IngestTraceLevel } from './ingest-trace.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
-import { defaultIsolatedDiffSourceKeys } from './isolated-diff/source-routing.js';
+import { defaultSharedWorktreeSourceKeys } from './isolated-diff/source-routing.js';
 import { PageTriageService } from './page-triage/index.js';
 import { createWarehouseVerificationTools } from './tools/warehouse-verification/index.js';
 import type {
@@ -723,7 +723,7 @@ export function createLocalBundleIngestRuntime(
       workUnitMaxConcurrency: options.project.config.ingest.workUnits.maxConcurrency,
       workUnitStepBudget: options.project.config.ingest.workUnits.stepBudget,
       workUnitFailureMode: options.project.config.ingest.workUnits.failureMode,
-      isolatedDiffSourceKeys: defaultIsolatedDiffSourceKeys(),
+      sharedWorktreeSourceKeys: defaultSharedWorktreeSourceKeys(),
       ingestTraceLevel: ingestTraceLevelFromEnv(),
     },
     skillsRegistry: new SkillsRegistryService({ skillsDir, logger }),
