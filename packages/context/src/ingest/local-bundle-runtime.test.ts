@@ -31,9 +31,8 @@ type RuntimeWithSlValidationDeps = {
 
 type RuntimeWithSettingsDeps = {
   deps: {
-    settings: {
+    settings: Record<string, unknown> & {
       sharedWorktreeSourceKeys?: string[];
-      isolatedDiffSourceKeys?: string[];
     };
   };
 };
@@ -277,7 +276,15 @@ describe('createLocalBundleIngestRuntime', () => {
     const settings = (runtime.runner as unknown as RuntimeWithSettingsDeps).deps.settings;
 
     expect(settings.sharedWorktreeSourceKeys).toEqual([]);
-    expect('isolatedDiffSourceKeys' in settings).toBe(false);
+    expect(Object.keys(settings).sort()).toEqual([
+      'ingestTraceLevel',
+      'memoryIngestionModel',
+      'probeRowCount',
+      'sharedWorktreeSourceKeys',
+      'workUnitFailureMode',
+      'workUnitMaxConcurrency',
+      'workUnitStepBudget',
+    ]);
   });
 
   it('accepts a debug LLM request file when constructing the default agent runner', async () => {
