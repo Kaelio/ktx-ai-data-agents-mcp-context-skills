@@ -214,6 +214,9 @@ function sampleAggregateSql(driver: KtxConnectionDriver, innerSql: string): stri
   if (driver === 'postgres') {
     return `(SELECT STRING_AGG(CAST(value AS TEXT), CHR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
   }
+  if (driver === 'duckdb') {
+    return `(SELECT STRING_AGG(CAST(value AS VARCHAR), CHR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
+  }
   if (driver === 'bigquery') {
     return `(SELECT STRING_AGG(CAST(value AS STRING), '\\u001F') FROM (${innerSql}) AS relationship_profile_values)`;
   }

@@ -5,6 +5,7 @@ import {
   type KtxBigQueryConnectionConfig,
 } from '@ktx/connector-bigquery';
 import { createClickHouseLiveDatabaseIntrospection, isKtxClickHouseConnectionConfig } from '@ktx/connector-clickhouse';
+import { createDuckDbLiveDatabaseIntrospection, isKtxDuckDbConnectionConfig } from '@ktx/connector-duckdb';
 import { createMysqlLiveDatabaseIntrospection, isKtxMysqlConnectionConfig } from '@ktx/connector-mysql';
 import {
   createPostgresLiveDatabaseIntrospection,
@@ -104,6 +105,10 @@ function createKtxCliLiveDatabaseIntrospection(
     projectDir: project.projectDir,
     connections: project.config.connections,
   });
+  const duckdb = createDuckDbLiveDatabaseIntrospection({
+    projectDir: project.projectDir,
+    connections: project.config.connections,
+  });
   const mysql = createMysqlLiveDatabaseIntrospection({
     connections: project.config.connections,
   });
@@ -127,6 +132,9 @@ function createKtxCliLiveDatabaseIntrospection(
       }
       if (isKtxSqliteConnectionConfig(connection)) {
         return sqlite.extractSchema(connectionId);
+      }
+      if (isKtxDuckDbConnectionConfig(connection)) {
+        return duckdb.extractSchema(connectionId);
       }
       if (isKtxMysqlConnectionConfig(connection)) {
         return mysql.extractSchema(connectionId);

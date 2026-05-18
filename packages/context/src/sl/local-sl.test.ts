@@ -165,6 +165,45 @@ describe('local semantic-layer helpers', () => {
     );
   });
 
+  it('normalizes unsafe column names from existing manifest-backed scan sources', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/main.yaml',
+      `tables:
+  npi:
+    table: provider.main.npi
+    columns:
+      - name: npi
+        type: number
+      - name: provider_business_mailing_address_country_code_(if_outside_u.s.)
+        type: string
+      - name: Display Name
+        type: string
+      - name: display_name
+        type: string
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add legacy manifest shard',
+    );
+
+    await expect(listLocalSlSources(project, { connectionId: 'warehouse' })).resolves.toEqual([
+      {
+        columnCount: 4,
+        connectionId: 'warehouse',
+        joinCount: 0,
+        measureCount: 0,
+        name: 'npi',
+        path: 'semantic-layer/warehouse/_schema/main.yaml#npi',
+      },
+    ]);
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'npi' })).resolves.toEqual(
+      expect.objectContaining({
+        yaml: expect.stringContaining('provider_business_mailing_address_country_code_if_outside_u_s'),
+      }),
+    );
+  });
+
   it('expands manifest-backed scan sources when listing all connections', async () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/_schema/public.yaml',

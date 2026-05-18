@@ -33,6 +33,7 @@ const execFileAsync = promisify(execFileCallback);
 
 export type KtxSetupDatabaseDriver =
   | 'sqlite'
+  | 'duckdb'
   | 'postgres'
   | 'mysql'
   | 'clickhouse'
@@ -103,6 +104,7 @@ export interface KtxSetupDatabasesDeps {
 
 const DRIVER_OPTIONS: Array<{ value: KtxSetupDatabaseDriver; label: string }> = [
   { value: 'sqlite', label: 'SQLite' },
+  { value: 'duckdb', label: 'DuckDB' },
   { value: 'postgres', label: 'PostgreSQL' },
   { value: 'mysql', label: 'MySQL' },
   { value: 'clickhouse', label: 'ClickHouse' },
@@ -124,6 +126,7 @@ const HISTORIC_SQL_DIALECT_BY_DRIVER: Partial<Record<KtxSetupDatabaseDriver, His
 
 const DEFAULT_CONNECTION_IDS: Record<KtxSetupDatabaseDriver, string> = {
   sqlite: 'sqlite-local',
+  duckdb: 'duckdb-local',
   postgres: 'postgres-warehouse',
   mysql: 'mysql-warehouse',
   clickhouse: 'clickhouse-warehouse',
@@ -810,6 +813,18 @@ async function buildConnectionConfig(input: {
       ));
     if (path === undefined) return 'back';
     return path ? { driver: 'sqlite', path } : null;
+  }
+  if (driver === 'duckdb') {
+    if (args.inputMode === 'disabled' && !args.databaseUrl) return null;
+    const path =
+      args.databaseUrl ??
+      (await promptText(
+        prompts,
+        'DuckDB database file\nEnter a relative or absolute path, for example ./warehouse.duckdb.',
+        stringConfigField(input.existingConnection, 'path'),
+      ));
+    if (path === undefined) return 'back';
+    return path ? { driver: 'duckdb', path } : null;
   }
   if (driver === 'postgres' || driver === 'mysql' || driver === 'clickhouse' || driver === 'sqlserver') {
     return await buildUrlConnectionConfig({

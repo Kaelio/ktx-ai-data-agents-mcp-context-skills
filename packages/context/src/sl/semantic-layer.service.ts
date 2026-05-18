@@ -2,6 +2,11 @@ import YAML from 'yaml';
 import type { KtxFileStorePort, KtxLogger } from '../core/index.js';
 import { noopLogger } from '../core/index.js';
 import type { TableUsageOutput } from '../ingest/adapters/historic-sql/skill-schemas.js';
+import {
+  manifestColumnPhysicalExpression,
+  normalizeManifestColumnName,
+  normalizeManifestColumnNames,
+} from '../ingest/adapters/live-database/manifest.js';
 import type { SlConnectionCatalogPort, SlPythonPort } from './ports.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { isOverlaySource, resolvedSourceSchema, sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
@@ -495,6 +500,17 @@ export class SemanticLayerService {
 
       const manifestSource = manifestMatch.source;
       const manifestColumns = new Map(manifestSource.columns.map((c) => [c.name.toLowerCase(), c.name]));
+      const manifestPhysicalColumns = new Set<string>();
+      for (const manifestColumn of manifestSource.columns) {
+        if (!manifestColumn.expr) {
+          continue;
+        }
+        for (const ref of extractSqlIdentifierRefs(manifestColumn.expr)) {
+          if (refBelongsToSource(ref, manifestSource.name, sourceNames)) {
+            manifestPhysicalColumns.add(ref.name.toLowerCase());
+          }
+        }
+      }
       const declaredColumns = source.columns ?? [];
       const declaredByLower = new Map(declaredColumns.map((c) => [c.name.toLowerCase(), c]));
       const validOutputColumns = new Set(
@@ -537,7 +553,7 @@ export class SemanticLayerService {
           expr: column.expr,
           sourceName: source.name,
           sourceNames,
-          validColumns: new Set([...manifestColumns.keys(), ...validOutputColumns]),
+          validColumns: new Set([...manifestColumns.keys(), ...manifestPhysicalColumns, ...validOutputColumns]),
           validMeasures: new Set(),
         });
         if (missing.length > 0) {
@@ -1137,6 +1153,7 @@ export class SemanticLayerService {
 interface ManifestColumnEntry {
   name: string;
   type: string;
+  expr?: string;
   pk?: boolean;
   nullable?: boolean;
   descriptions?: Record<string, string>;
@@ -1166,18 +1183,26 @@ export interface ManifestTableEntry {
 }
 
 export function projectManifestEntry(name: string, entry: ManifestTableEntry): SemanticLayerSource {
-  const columns = entry.columns.map((c) => ({
-    name: c.name,
-    type: c.type,
-    role: c.type === 'time' ? 'time' : undefined,
-    descriptions: c.descriptions,
-    constraints: c.constraints,
-    enum_values: c.enum_values,
-    tests: c.tests,
-  }));
+  const columnNames = normalizeManifestColumnNames(entry.columns.map((c) => c.name));
+  const columns = entry.columns.map((c, index) => {
+    const columnName = columnNames[index] ?? normalizeManifestColumnName(c.name);
+    const expr = c.expr ?? (columnName !== c.name ? manifestColumnPhysicalExpression(name, c.name) : undefined);
+    return {
+      name: columnName,
+      type: c.type,
+      role: c.type === 'time' ? 'time' : undefined,
+      descriptions: c.descriptions,
+      ...(expr ? { expr } : {}),
+      constraints: c.constraints,
+      enum_values: c.enum_values,
+      tests: c.tests,
+    };
+  });
 
-  const pkColumns = entry.columns.filter((c) => c.pk).map((c) => c.name);
-  const grain = pkColumns.length > 0 ? pkColumns : entry.columns.map((c) => c.name);
+  const pkColumns = entry.columns.flatMap((c, index) =>
+    c.pk ? [columnNames[index] ?? normalizeManifestColumnName(c.name)] : [],
+  );
+  const grain = pkColumns.length > 0 ? pkColumns : columnNames;
 
   // Table-level dbt config from manifest shards is surfaced on the source for search / tools.
   const source: SemanticLayerSource = {
@@ -1276,9 +1301,7 @@ const SQL_KEYWORDS = new Set([
 ]);
 
 function extractColumnReferences(expr: string): string[] {
-  const cleaned = expr.replace(/'[^']*'/g, '').replace(/\b\d+(\.\d+)?\b/g, '');
-  const tokens = cleaned.match(/\b[a-zA-Z_]\w*\b/g) ?? [];
-  return [...new Set(tokens.filter((t) => !SQL_KEYWORDS.has(t.toLowerCase())))];
+  return [...new Set(extractSqlIdentifierRefs(expr).map((ref) => ref.name))];
 }
 
 function manifestEntryMatchesRef(source: SemanticLayerSource, ref: string): boolean {
@@ -1295,19 +1318,23 @@ function normalizeSqlExpressionForIdentifierScan(expr: string): string {
     .replace(/--.*$/gm, ' ')
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/'([^']|'')*'/g, ' ')
-    .replace(/"([^"]+)"/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]/g, '$1')
     .replace(/::\s*[A-Za-z_][\w$]*(?:\s*\([^)]*\))?/g, ' ');
 }
 
 function extractSqlIdentifierRefs(expr: string): Array<{ qualifier?: string; name: string }> {
   const normalized = normalizeSqlExpressionForIdentifierScan(expr);
   const refs = new Map<string, { qualifier?: string; name: string }>();
-  const re = /(?:\b([A-Za-z_][\w$]*)\s*\.\s*)?(\b[A-Za-z_][\w$]*)\b/g;
+
+  const bareIdentifier = String.raw`[A-Za-z_][\w$]*`;
+  const quotedIdentifier = String.raw`"(?:""|[^"])*"|` + String.raw`\`(?:\`\`|[^\`])*\`|\[(?:[^\]])+\]`;
+  const identifier = String.raw`(?:${quotedIdentifier}|${bareIdentifier})`;
+  const re = new RegExp(String.raw`(${identifier})\s*\.\s*(${identifier})|(${identifier})`, 'g');
+
   for (const match of normalized.matchAll(re)) {
-    const qualifier = match[1];
-    const name = match[2];
+    const rawQualifier = match[1];
+    const rawName = match[2] ?? match[3] ?? '';
+    const qualifier = rawQualifier ? unquoteSqlIdentifier(rawQualifier) : undefined;
+    const name = unquoteSqlIdentifier(rawName);
     if (!name) {
       continue;
     }
@@ -1317,12 +1344,36 @@ function extractSqlIdentifierRefs(expr: string): Array<{ qualifier?: string; nam
     if (!qualifier && after.startsWith('(')) {
       continue;
     }
-    if (SQL_KEYWORDS.has(nameLower) || (qualifierLower && SQL_KEYWORDS.has(qualifierLower))) {
+    if (!isQuotedSqlIdentifier(rawName) && SQL_KEYWORDS.has(nameLower)) {
+      continue;
+    }
+    if (rawQualifier && !isQuotedSqlIdentifier(rawQualifier) && qualifierLower && SQL_KEYWORDS.has(qualifierLower)) {
       continue;
     }
     refs.set(`${qualifierLower ?? ''}.${nameLower}`, qualifier ? { qualifier, name } : { name });
   }
   return [...refs.values()];
+}
+
+function isQuotedSqlIdentifier(identifier: string): boolean {
+  return (
+    (identifier.startsWith('"') && identifier.endsWith('"')) ||
+    (identifier.startsWith('`') && identifier.endsWith('`')) ||
+    (identifier.startsWith('[') && identifier.endsWith(']'))
+  );
+}
+
+function unquoteSqlIdentifier(identifier: string): string {
+  if (identifier.startsWith('"') && identifier.endsWith('"')) {
+    return identifier.slice(1, -1).replace(/""/g, '"');
+  }
+  if (identifier.startsWith('`') && identifier.endsWith('`')) {
+    return identifier.slice(1, -1).replace(/``/g, '`');
+  }
+  if (identifier.startsWith('[') && identifier.endsWith(']')) {
+    return identifier.slice(1, -1);
+  }
+  return identifier;
 }
 
 function refBelongsToSource(

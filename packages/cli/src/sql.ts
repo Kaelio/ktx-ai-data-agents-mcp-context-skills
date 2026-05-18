@@ -47,6 +47,7 @@ function sqlAnalysisDialectForDriver(driver: string | undefined): SqlAnalysisDia
     mssql: 'tsql',
     sqlite: 'sqlite',
     sqlite3: 'sqlite',
+    duckdb: 'duckdb',
     clickhouse: 'clickhouse',
     redshift: 'redshift',
   };

@@ -62,6 +62,39 @@ class TestSimpleSingleSource:
         assert "GROUP BY" in sql.upper()
         assert "public.orders" in sql
 
+    def test_computed_column_can_reference_quoted_physical_name(self):
+        source = SourceDefinition(
+            name="npi",
+            table="provider.main.npi",
+            grain=["provider_business_mailing_address_country_code_if_outside_u_s"],
+            columns=[
+                SourceColumn(
+                    name="provider_business_mailing_address_country_code_if_outside_u_s",
+                    type="string",
+                    expr='npi."provider_business_mailing_address_country_code_(if_outside_u.s.)"',
+                )
+            ],
+        )
+        sources = {"npi": source}
+        engine = SemanticEngine.from_sources(sources, dialect="duckdb")
+
+        sql = engine.query(
+            {
+                "measures": [],
+                "dimensions": [
+                    "npi.provider_business_mailing_address_country_code_if_outside_u_s"
+                ],
+                "limit": 5,
+            }
+        ).sql
+
+        assert_valid_sql(sql)
+        assert (
+            'npi."provider_business_mailing_address_country_code_(if_outside_u.s.)"'
+            in sql
+        )
+        assert "AS provider_business_mailing_address_country_code_if_outside_u_s" in sql
+
 
 class TestCrossSourceM2O:
     """Test 2: Cross-source, all m2o (the LATAM query)."""
@@ -715,6 +748,8 @@ class TestGeneratorEdgeCases:
         assert_valid_sql(result.sql)
 
     def test_dialect_duckdb(self):
+        import sqlglot
+
         engine = SemanticEngine(SOURCES_DIR, dialect="duckdb")
         result = engine.query(
             {
@@ -724,6 +759,7 @@ class TestGeneratorEdgeCases:
         )
         assert result.dialect == "duckdb"
         assert result.sql
+        sqlglot.parse_one(result.sql, read="duckdb")
 
     def test_dialect_mysql(self):
         engine = SemanticEngine(SOURCES_DIR, dialect="mysql")

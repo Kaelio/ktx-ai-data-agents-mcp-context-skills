@@ -29,6 +29,7 @@ export const INTERNAL_NPM_WORKSPACE_PACKAGES = [
   { name: '@ktx/llm', packageRoot: 'packages/llm' },
   { name: '@ktx/connector-bigquery', packageRoot: 'packages/connector-bigquery' },
   { name: '@ktx/connector-clickhouse', packageRoot: 'packages/connector-clickhouse' },
+  { name: '@ktx/connector-duckdb', packageRoot: 'packages/connector-duckdb' },
   { name: '@ktx/connector-mysql', packageRoot: 'packages/connector-mysql' },
   { name: '@ktx/connector-postgres', packageRoot: 'packages/connector-postgres' },
   { name: '@ktx/connector-snowflake', packageRoot: 'packages/connector-snowflake' },

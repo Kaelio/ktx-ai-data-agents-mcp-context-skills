@@ -22,6 +22,7 @@ const DRIVER_TO_CONNECTION_TYPE: Record<string, ConnectionType> = {
   postgres: 'POSTGRESQL',
   postgresql: 'POSTGRESQL',
   sqlite: 'SQLITE',
+  duckdb: 'DUCKDB',
   sqlserver: 'SQLSERVER',
   mssql: 'SQLSERVER',
   mysql: 'MYSQL',

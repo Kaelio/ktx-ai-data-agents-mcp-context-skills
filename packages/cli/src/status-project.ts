@@ -321,6 +321,11 @@ function buildConnectionStatus(
       if (typeof path === 'string' && path.length > 0) return ok(`path: ${path}`);
       return warn('path not set', 'Rerun `ktx setup`');
     }
+    case 'duckdb': {
+      const path = (conn as Record<string, unknown>).path ?? (conn as Record<string, unknown>).url;
+      if (typeof path === 'string' && path.length > 0) return ok(`path: ${path}`);
+      return warn('path not set', 'Rerun `ktx setup`');
+    }
     case 'notion': {
       const tokenRef =
         (conn as Record<string, unknown>).auth_token_ref ??

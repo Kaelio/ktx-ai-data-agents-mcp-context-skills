@@ -22,9 +22,74 @@ const HISTORIC_SQL_MANAGED_USAGE_KEYS = new Set([
   'staleSince',
 ]);
 
+const SAFE_SEMANTIC_COLUMN_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SQL_RESERVED_WORDS = new Set([
+  'all',
+  'and',
+  'as',
+  'between',
+  'by',
+  'case',
+  'column',
+  'constraint',
+  'create',
+  'default',
+  'delete',
+  'distinct',
+  'drop',
+  'else',
+  'end',
+  'except',
+  'exists',
+  'false',
+  'fetch',
+  'for',
+  'from',
+  'full',
+  'grant',
+  'group',
+  'having',
+  'in',
+  'index',
+  'inner',
+  'insert',
+  'intersect',
+  'is',
+  'join',
+  'key',
+  'left',
+  'like',
+  'limit',
+  'natural',
+  'not',
+  'null',
+  'on',
+  'or',
+  'order',
+  'outer',
+  'primary',
+  'references',
+  'revoke',
+  'right',
+  'select',
+  'set',
+  'table',
+  'then',
+  'true',
+  'union',
+  'update',
+  'using',
+  'values',
+  'view',
+  'when',
+  'where',
+  'with',
+]);
+
 export interface LiveDatabaseManifestColumn {
   name: string;
   type: string;
+  expr?: string;
   pk?: boolean;
   nullable?: boolean;
   descriptions?: Record<string, string>;
@@ -91,6 +156,64 @@ export interface BuildLiveDatabaseManifestShardsInput {
 export interface BuildLiveDatabaseManifestShardsResult {
   shards: Map<string, LiveDatabaseManifestShard>;
   tablesProcessed: number;
+}
+
+function isSafeSemanticColumnName(name: string): boolean {
+  return SAFE_SEMANTIC_COLUMN_NAME.test(name) && !SQL_RESERVED_WORDS.has(name.toLowerCase());
+}
+
+export function normalizeManifestColumnName(rawName: string): string {
+  const trimmed = rawName.trim();
+  if (isSafeSemanticColumnName(trimmed)) {
+    return trimmed;
+  }
+
+  const normalized = trimmed
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+  const withFallback = normalized.length > 0 ? normalized : 'column';
+  const withSafePrefix = /^[0-9]/.test(withFallback) ? `column_${withFallback}` : withFallback;
+  return SQL_RESERVED_WORDS.has(withSafePrefix.toLowerCase()) ? `${withSafePrefix}_column` : withSafePrefix;
+}
+
+export function normalizeManifestColumnNames(rawNames: readonly string[]): string[] {
+  const safeNameCounts = new Map<string, number>();
+  for (const rawName of rawNames) {
+    const trimmed = rawName.trim();
+    if (isSafeSemanticColumnName(trimmed)) {
+      safeNameCounts.set(trimmed, (safeNameCounts.get(trimmed) ?? 0) + 1);
+    }
+  }
+  const reservedSafeNames = new Set([...safeNameCounts.entries()].filter(([, count]) => count === 1).map(([name]) => name));
+  const used = new Set<string>();
+
+  return rawNames.map((rawName) => {
+    const trimmed = rawName.trim();
+    if (isSafeSemanticColumnName(trimmed) && !used.has(trimmed)) {
+      used.add(trimmed);
+      return trimmed;
+    }
+
+    const base = normalizeManifestColumnName(rawName);
+    let candidate = base;
+    let suffix = 2;
+    while (used.has(candidate) || reservedSafeNames.has(candidate)) {
+      candidate = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    used.add(candidate);
+    return candidate;
+  });
+}
+
+function quoteManifestIdentifier(identifier: string): string {
+  return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+export function manifestColumnPhysicalExpression(sourceName: string, physicalColumnName: string): string {
+  return `${sourceName}.${quoteManifestIdentifier(physicalColumnName)}`;
 }
 
 function mergeDescriptionsPreservingExternal(
@@ -189,6 +312,7 @@ function joinCondition(
   leftColumns: readonly string[],
   rightTable: string,
   rightColumns: readonly string[],
+  columnNameMaps: Map<string, Map<string, string>>,
 ): string {
   if (leftColumns.length === 0 || leftColumns.length !== rightColumns.length) {
     throw new Error(`Invalid relationship join from ${leftTable} to ${rightTable}: column tuple widths differ`);
@@ -199,7 +323,9 @@ function joinCondition(
       if (!rightColumn) {
         throw new Error(`Invalid relationship join from ${leftTable} to ${rightTable}: missing target column`);
       }
-      return `${leftTable}.${leftColumn} = ${rightTable}.${rightColumn}`;
+      const normalizedLeftColumn = columnNameMaps.get(leftTable)?.get(leftColumn) ?? normalizeManifestColumnName(leftColumn);
+      const normalizedRightColumn = columnNameMaps.get(rightTable)?.get(rightColumn) ?? normalizeManifestColumnName(rightColumn);
+      return `${leftTable}.${normalizedLeftColumn} = ${rightTable}.${normalizedRightColumn}`;
     })
     .join(' AND ');
 }
@@ -208,6 +334,7 @@ function buildJoinsByTable(
   tableNames: Set<string>,
   joins: LiveDatabaseManifestJoinData[],
   preservedJoins: Map<string, LiveDatabaseManifestJoinEntry[]>,
+  columnNameMaps: Map<string, Map<string, string>>,
 ): Map<string, LiveDatabaseManifestJoinEntry[]> {
   const joinsByTable = new Map<string, LiveDatabaseManifestJoinEntry[]>();
 
@@ -218,7 +345,7 @@ function buildJoinsByTable(
     const relationship = RELATIONSHIP_MAP[join.relationship] ?? join.relationship;
     addJoinOnce(joinsByTable, join.fromTable, {
       to: join.toTable,
-      on: joinCondition(join.fromTable, join.fromColumns, join.toTable, join.toColumns),
+      on: joinCondition(join.fromTable, join.fromColumns, join.toTable, join.toColumns, columnNameMaps),
       relationship,
       source: join.source,
     });
@@ -226,7 +353,7 @@ function buildJoinsByTable(
     const reverseRelationship = RELATIONSHIP_INVERSE[relationship] ?? 'one_to_many';
     addJoinOnce(joinsByTable, join.toTable, {
       to: join.fromTable,
-      on: joinCondition(join.toTable, join.toColumns, join.fromTable, join.fromColumns),
+      on: joinCondition(join.toTable, join.toColumns, join.fromTable, join.fromColumns, columnNameMaps),
       relationship: reverseRelationship,
       source: join.source,
     });
@@ -250,19 +377,30 @@ export function buildLiveDatabaseManifestShards(
   input: BuildLiveDatabaseManifestShardsInput,
 ): BuildLiveDatabaseManifestShardsResult {
   const tableNames = new Set(input.tables.map((table) => table.name));
-  const joinsByTable = buildJoinsByTable(tableNames, input.joins, input.existingPreservedJoins ?? new Map());
+  const columnNameMaps = new Map(
+    input.tables.map((table) => {
+      const normalizedNames = normalizeManifestColumnNames(table.columns.map((column) => column.name));
+      return [table.name, new Map(table.columns.map((column, index) => [column.name, normalizedNames[index] ?? column.name]))] as const;
+    }),
+  );
+  const joinsByTable = buildJoinsByTable(tableNames, input.joins, input.existingPreservedJoins ?? new Map(), columnNameMaps);
   const shards = new Map<string, LiveDatabaseManifestShard>();
 
   for (const table of input.tables) {
     const shardKey = getShardKey(input.connectionType, table.catalog, table.db);
     const shard = shards.get(shardKey) ?? { tables: {} };
     const existingDescriptions = input.existingDescriptions?.get(table.name);
+    const normalizedNames = normalizeManifestColumnNames(table.columns.map((column) => column.name));
 
-    const columns: LiveDatabaseManifestColumn[] = table.columns.map((column) => {
+    const columns: LiveDatabaseManifestColumn[] = table.columns.map((column, index) => {
+      const name = normalizedNames[index] ?? normalizeManifestColumnName(column.name);
       const manifestColumn: LiveDatabaseManifestColumn = {
-        name: column.name,
+        name,
         type: input.mapColumnType(column.type),
       };
+      if (name !== column.name) {
+        manifestColumn.expr = manifestColumnPhysicalExpression(table.name, column.name);
+      }
       if (column.pk) {
         manifestColumn.pk = true;
       }
@@ -270,7 +408,7 @@ export function buildLiveDatabaseManifestShards(
         manifestColumn.nullable = false;
       }
       const descriptions = mergeDescriptionsPreservingExternal(
-        existingDescriptions?.columns.get(column.name),
+        existingDescriptions?.columns.get(name) ?? existingDescriptions?.columns.get(column.name),
         column.descriptions,
       );
       if (descriptions) {

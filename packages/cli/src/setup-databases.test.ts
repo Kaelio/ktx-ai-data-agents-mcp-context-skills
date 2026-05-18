@@ -142,6 +142,7 @@ describe('setup databases step', () => {
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
       options: [
         { value: 'sqlite', label: 'SQLite' },
+        { value: 'duckdb', label: 'DuckDB' },
         { value: 'postgres', label: 'PostgreSQL' },
         { value: 'mysql', label: 'MySQL' },
         { value: 'clickhouse', label: 'ClickHouse' },
@@ -367,6 +368,20 @@ describe('setup databases step', () => {
           },
           {
             message: 'SQLite database file\nEnter a relative or absolute path, for example ./warehouse.sqlite.',
+          },
+        ],
+      },
+      {
+        driver: 'duckdb',
+        textValues: ['', './warehouse.duckdb'],
+        expectedTextPrompts: [
+          {
+            message: connectionNamePrompt('DuckDB'),
+            placeholder: 'duckdb-local',
+            initialValue: 'duckdb-local',
+          },
+          {
+            message: 'DuckDB database file\nEnter a relative or absolute path, for example ./warehouse.duckdb.',
           },
         ],
       },
@@ -1632,6 +1647,42 @@ describe('setup databases step', () => {
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
   });
 
+  it('adds one non-interactive DuckDB connection from --database-url without prompting', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({});
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['duckdb'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: './warehouse.duckdb',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { prompts, testConnection, scanConnection },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.text).not.toHaveBeenCalled();
+    expect(testConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    expect(scanConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toEqual({
+      driver: 'duckdb',
+      path: './warehouse.duckdb',
+      context: { depth: 'fast' },
+    });
+    expect(config.setup).toEqual({
+      database_connection_ids: ['warehouse'],
+    });
+    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('databases');
+  });
+
   it('selects multiple existing connections and validates each before recording setup ids', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -2055,6 +2106,29 @@ describe('setup databases step', () => {
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);
     expect(config.ingest.adapters).toEqual([]);
+  });
+
+  it('rejects query history for DuckDB setup', async () => {
+    const io = makeIo();
+    await expect(
+      runKtxSetupDatabasesStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          databaseDrivers: ['duckdb'],
+          databaseConnectionId: 'warehouse',
+          databaseUrl: './warehouse.duckdb',
+          databaseSchemas: [],
+          enableQueryHistory: true,
+          skipDatabases: false,
+        },
+        io.io,
+        {
+          testConnection: vi.fn(async () => 0),
+          scanConnection: vi.fn(async () => 0),
+        },
+      ),
+    ).rejects.toThrow('Query history setup is only supported for Snowflake, BigQuery, and Postgres, not DuckDB.');
   });
 
   it('enables query history on an existing Postgres connection', async () => {

@@ -46,6 +46,7 @@ const BUILTIN_TOOLS = [
 ];
 
 const KTX_MCP_SERVER_NAME = 'ktx';
+const CLAUDE_CODE_STRUCTURED_OUTPUT_TOOL_ID = 'StructuredOutput';
 
 function isResult(message: SDKMessage): message is SDKResultMessage {
   return message.type === 'result';
@@ -83,6 +84,7 @@ function modelForRole(modelSlots: ClaudeCodeKtxLlmRuntimeDeps['modelSlots'], rol
 function assertInitIsolation(
   message: SDKMessage,
   allowedToolIds: Set<string>,
+  requiredToolIds: Set<string>,
   expectedMcpServerNames: Set<string>,
 ): void {
   if (message.type !== 'system' || message.subtype !== 'init') {
@@ -90,7 +92,7 @@ function assertInitIsolation(
   }
   const activeToolIds = new Set(message.tools);
   const unexpectedTools = message.tools.filter((toolName) => !allowedToolIds.has(toolName));
-  const missingTools = [...allowedToolIds].filter((toolName) => !activeToolIds.has(toolName));
+  const missingTools = [...requiredToolIds].filter((toolName) => !activeToolIds.has(toolName));
   const activeMcpServerNames = message.mcp_servers.map((server) => server.name);
   const unexpectedMcpServers = activeMcpServerNames.filter((name) => !expectedMcpServerNames.has(name));
   const missingMcpServers = [...expectedMcpServerNames].filter((name) => !activeMcpServerNames.includes(name));
@@ -131,8 +133,9 @@ function baseOptions(input: {
   env: NodeJS.ProcessEnv | undefined;
   maxTurns: number;
   tools?: KtxRuntimeToolSet;
+  internalAllowedToolIds?: string[];
 }): Options {
-  const toolIds = mcpToolIds(input.tools ?? {});
+  const toolIds = [...mcpToolIds(input.tools ?? {}), ...(input.internalAllowedToolIds ?? [])];
   const allowedToolIds = new Set(toolIds);
   const expectedServerNames = [...expectedMcpServerNames(input.tools)];
   return {
@@ -176,12 +179,13 @@ async function collectResult(params: {
   prompt: string;
   options: Options;
   allowedToolIds: Set<string>;
+  requiredToolIds?: Set<string>;
   expectedMcpServerNames: Set<string>;
   onAssistantTurn?: () => Promise<void>;
 }): Promise<SDKResultMessage> {
   let result: SDKResultMessage | undefined;
   for await (const message of params.query({ prompt: params.prompt, options: params.options })) {
-    assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
+    assertInitIsolation(message, params.allowedToolIds, params.requiredToolIds ?? params.allowedToolIds, params.expectedMcpServerNames);
     if (message.type === 'assistant' && message.parent_tool_use_id === null) {
       await params.onAssistantTurn?.();
     }
@@ -217,6 +221,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
       allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
+      requiredToolIds: new Set(mcpToolIds(input.tools ?? {})),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
     });
     const error = resultError(result);
@@ -237,16 +242,19 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         projectDir: this.deps.projectDir,
         model: modelForRole(this.deps.modelSlots, input.role),
         env: this.deps.env,
-        maxTurns: 1,
+        maxTurns: 2,
         tools: input.tools,
+        internalAllowedToolIds: [CLAUDE_CODE_STRUCTURED_OUTPUT_TOOL_ID],
       }),
       outputFormat: { type: 'json_schema' as const, schema: jsonSchema(input.schema as z.ZodType) },
     };
+    const allowedToolIds = new Set([...mcpToolIds(input.tools ?? {}), CLAUDE_CODE_STRUCTURED_OUTPUT_TOOL_ID]);
     const result = await collectResult({
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
-      allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
+      allowedToolIds,
+      requiredToolIds: new Set(mcpToolIds(input.tools ?? {})),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
     });
     const error = resultError(result);
@@ -274,6 +282,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         prompt: params.userPrompt,
         options: { ...options, systemPrompt: params.systemPrompt },
         allowedToolIds: new Set(mcpToolIds(params.toolSet)),
+        requiredToolIds: new Set(mcpToolIds(params.toolSet)),
         expectedMcpServerNames: expectedMcpServerNames(params.toolSet),
         onAssistantTurn: async () => {
           stepIndex += 1;
@@ -329,6 +338,7 @@ export async function runClaudeCodeAuthProbe(input: {
       prompt: 'Reply with exactly: ok',
       options,
       allowedToolIds: new Set(),
+      requiredToolIds: new Set(),
       expectedMcpServerNames: new Set(),
     });
     const error = resultError(result);

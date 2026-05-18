@@ -29,6 +29,13 @@ describe('connectionConfigSchema (driver discriminated union)', () => {
     });
   });
 
+  it('accepts duckdb local file config', () => {
+    expect(connectionConfigSchema.parse({ driver: 'duckdb', path: 'data/warehouse.duckdb' })).toMatchObject({
+      driver: 'duckdb',
+      path: 'data/warehouse.duckdb',
+    });
+  });
+
   it('rejects an unknown driver', () => {
     expect(() => connectionConfigSchema.parse({ driver: 'nope', url: 'x' })).toThrow();
   });

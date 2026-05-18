@@ -2,8 +2,20 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadKtxProject } from '@ktx/context/project';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
+
+const duckDbMock = vi.hoisted(() => ({
+  extractSchema: vi.fn(),
+}));
+
+vi.mock('@ktx/connector-duckdb', () => ({
+  isKtxDuckDbConnectionConfig: (connection: { driver?: unknown } | undefined) =>
+    String(connection?.driver ?? '').toLowerCase() === 'duckdb',
+  createDuckDbLiveDatabaseIntrospection: () => ({
+    extractSchema: duckDbMock.extractSchema,
+  }),
+}));
 
 function sqlAnalysisStub() {
   return {
@@ -33,6 +45,7 @@ describe('CLI local ingest adapters', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-local-adapters-'));
+    duckDbMock.extractSchema.mockReset();
   });
 
   afterEach(async () => {
@@ -67,6 +80,40 @@ describe('CLI local ingest adapters', () => {
       'historic_sql_table_digest',
       'historic_sql_patterns',
     ]);
+  });
+
+  it('routes DuckDB live database introspection through the native connector', async () => {
+    duckDbMock.extractSchema.mockResolvedValue({
+      connectionId: 'warehouse',
+      driver: 'duckdb',
+      extractedAt: '2026-05-18T12:00:00.000Z',
+      scope: {},
+      metadata: {},
+      tables: [],
+    });
+    await writeProject(
+      tempDir,
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: duckdb',
+        '    path: warehouse.duckdb',
+        'ingest:',
+        '  adapters:',
+        '    - live-database',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+    const adapters = createKtxCliLocalIngestAdapters(project);
+    const liveDatabase = adapters.find((adapter) => adapter.source === 'live-database');
+    if (!liveDatabase?.fetch) {
+      throw new Error('Expected live-database adapter');
+    }
+
+    await liveDatabase.fetch({}, join(tempDir, 'staged'), { connectionId: 'warehouse', sourceKey: 'live-database' });
+
+    expect(duckDbMock.extractSchema).toHaveBeenCalledWith('warehouse');
   });
 
   it('registers Postgres historic SQL from connection context query history', async () => {

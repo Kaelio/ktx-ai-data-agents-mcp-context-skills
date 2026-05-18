@@ -8,6 +8,7 @@ export type SupportedDriver =
   | 'snowflake'
   | 'bigquery'
   | 'clickhouse'
+  | 'duckdb'
   | 'sqlite'
   | 'sqlite3';
 
@@ -21,6 +22,7 @@ export interface KtxDialect {
 const supportedDrivers: SupportedDriver[] = [
   'bigquery',
   'clickhouse',
+  'duckdb',
   'mysql',
   'postgres',
   'postgresql',
@@ -86,6 +88,7 @@ const dialects: Record<SupportedDriver, KtxDialect> = {
   postgresql: createDialect('postgresql', doubleQuoted),
   mysql: createDialect('mysql', backtickQuoted),
   clickhouse: createDialect('clickhouse', backtickQuoted),
+  duckdb: createDialect('duckdb', doubleQuoted),
   sqlite: createDialect('sqlite', doubleQuoted, true),
   sqlite3: createDialect('sqlite3', doubleQuoted, true),
   snowflake: createDialect('snowflake', doubleQuoted),

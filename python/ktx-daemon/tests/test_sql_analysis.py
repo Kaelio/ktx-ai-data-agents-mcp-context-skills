@@ -129,3 +129,27 @@ def test_validate_read_only_sql_reports_parse_errors() -> None:
     assert response.ok is False
     assert response.error is not None
     assert "Invalid expression" in response.error
+
+
+def test_validate_read_only_sql_accepts_duckdb_select() -> None:
+    response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(
+            dialect="duckdb",
+            sql="select * from read_csv_auto('orders.csv') limit 10",
+        )
+    )
+
+    assert response.ok is True
+    assert response.error is None
+
+
+def test_validate_read_only_sql_rejects_duckdb_mutation() -> None:
+    response = validate_read_only_sql_response(
+        ValidateReadOnlySqlRequest(
+            dialect="duckdb",
+            sql="create table copied as select 1",
+        )
+    )
+
+    assert response.ok is False
+    assert response.error

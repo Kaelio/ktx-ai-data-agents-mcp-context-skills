@@ -1,0 +1,48 @@
+{
+  "name": "@ktx/connector-duckdb",
+  "version": "0.0.0-private",
+  "description": "DuckDB connector package for KTX scan interfaces",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.5.2-r.1",
+    "@ktx/context": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "@vitest/coverage-v8": "^4.1.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaelio/ktx.git",
+    "directory": "packages/connector-duckdb"
+  },
+  "bugs": {
+    "url": "https://github.com/kaelio/ktx/issues"
+  },
+  "homepage": "https://github.com/kaelio/ktx#readme"
+}

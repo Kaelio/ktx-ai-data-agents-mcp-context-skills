@@ -1,7 +1,7 @@
 import type { KtxLocalProject } from '@ktx/context/project';
 import type { KtxScanConnector } from '@ktx/context/scan';
 
-const SUPPORTED_DRIVERS = 'sqlite, postgres, mysql, clickhouse, sqlserver, bigquery, snowflake';
+const SUPPORTED_DRIVERS = 'sqlite, duckdb, postgres, mysql, clickhouse, sqlserver, bigquery, snowflake';
 
 export async function createKtxCliScanConnector(
   project: KtxLocalProject,
@@ -21,6 +21,12 @@ export async function createKtxCliScanConnector(
     const { KtxSqliteScanConnector, isKtxSqliteConnectionConfig } = await import('@ktx/connector-sqlite');
     if (isKtxSqliteConnectionConfig(connection)) {
       return new KtxSqliteScanConnector({ connectionId, connection, projectDir: project.projectDir });
+    }
+  }
+  if (driver === 'duckdb') {
+    const { KtxDuckDbScanConnector, isKtxDuckDbConnectionConfig } = await import('@ktx/connector-duckdb');
+    if (isKtxDuckDbConnectionConfig(connection)) {
+      return new KtxDuckDbScanConnector({ connectionId, connection, projectDir: project.projectDir });
     }
   }
   if (driver === 'postgres' || driver === 'postgresql') {
