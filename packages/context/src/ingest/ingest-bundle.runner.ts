@@ -453,8 +453,8 @@ export class IngestBundleRunner {
     return workUnits.filter((wu) => wu.rawFiles.some((rawPath) => triageResult.fullRawPaths.has(rawPath)));
   }
 
-  private isIsolatedDiffEnabled(sourceKey: string): boolean {
-    return (this.deps.settings.isolatedDiffSourceKeys ?? []).includes(sourceKey);
+  private isSharedWorktreeFallbackEnabled(sourceKey: string): boolean {
+    return (this.deps.settings.sharedWorktreeSourceKeys ?? []).includes(sourceKey);
   }
 
   private createTrace(job: IngestBundleJob): IngestTraceWriter {
@@ -1303,7 +1303,7 @@ export class IngestBundleRunner {
         workUnitCount: memoryFlowPlannedWorkUnits.length,
         evictionCount: eviction?.deletedRawPaths.length ?? 0,
       });
-      const isolatedDiffEnabled = !overrideReport && this.isIsolatedDiffEnabled(job.sourceKey);
+      const isolatedDiffEnabled = !overrideReport && !this.isSharedWorktreeFallbackEnabled(job.sourceKey);
       const isolatedDiffSummary = {
         enabled: isolatedDiffEnabled,
         integrationWorktreePath: isolatedDiffEnabled ? sessionWorktree.workdir : undefined,
@@ -1664,7 +1664,10 @@ export class IngestBundleRunner {
         }
 
       } else if (!overrideReport) {
-        await runTrace.event('info', 'routing', 'shared_worktree_path_enabled', { sourceKey: job.sourceKey });
+        await runTrace.event('info', 'routing', 'shared_worktree_path_enabled', {
+          sourceKey: job.sourceKey,
+          reason: 'explicit_private_fallback',
+        });
         const workUnitSettings = {
           maxConcurrency: this.deps.settings.workUnitMaxConcurrency ?? 1,
           stepBudget: this.deps.settings.workUnitStepBudget ?? 40,
@@ -2653,7 +2656,7 @@ export class IngestBundleRunner {
         fetch: fetchReport ?? undefined,
         commitSha,
         tracePath: runTrace.tracePath,
-        isolatedDiff: isolatedDiffEnabled ? isolatedDiffSummary : undefined,
+        isolatedDiff: !overrideReport ? isolatedDiffSummary : undefined,
         workUnits: stageIndex.workUnits.map((wu) => ({
           unitKey: wu.unitKey,
           rawFiles: wu.rawFiles,
