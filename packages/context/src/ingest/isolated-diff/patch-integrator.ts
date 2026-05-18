@@ -23,6 +23,12 @@ export type PatchIntegrationResult =
       reason: string;
       touchedPaths: string[];
       textualResolution?: PatchIntegrationTextualResolution;
+      deferredTextualResolution?: {
+        unitKey: string;
+        patchPath: string;
+        touchedPaths: string[];
+        reason: string;
+      };
       gateRepair?: FinalGateRepairResult;
     }
   | {
@@ -48,6 +54,7 @@ export interface IntegrateWorkUnitPatchInput {
     touchedPaths: string[];
     reason: string;
   }): Promise<TextualConflictResolutionResult>;
+  deferTextualConflictResolution?: boolean;
   repairGateFailure?(input: {
     unitKey: string;
     patchPath: string;
@@ -122,6 +129,20 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
         status: 'textual_conflict',
         reason,
         touchedPaths,
+      };
+    }
+
+    if (input.deferTextualConflictResolution) {
+      return {
+        status: 'textual_conflict',
+        reason,
+        touchedPaths,
+        deferredTextualResolution: {
+          unitKey: input.unitKey,
+          patchPath: input.patchPath,
+          touchedPaths,
+          reason,
+        },
       };
     }
 

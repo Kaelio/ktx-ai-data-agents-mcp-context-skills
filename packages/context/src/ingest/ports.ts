@@ -141,6 +141,7 @@ export interface IngestSettingsPort {
   memoryIngestionModel: string;
   probeRowCount: number;
   workUnitMaxConcurrency?: number;
+  workUnitResolverConcurrency?: number;
   workUnitStepBudget?: number;
   workUnitFailureMode?: 'abort' | 'continue';
   ingestTraceLevel?: IngestTraceLevel;

@@ -93,13 +93,34 @@ const embeddingSchema = z
 const workUnitsSchema = z
   .strictObject({
     stepBudget: z.int().positive().default(40).describe('Maximum number of agent steps allowed per work unit before it is force-terminated.'),
-    maxConcurrency: z.int().positive().default(1).describe('Maximum number of work units run concurrently during ingest.'),
+    maxConcurrency: z.int().positive().max(8).default(1).describe('Maximum number of work units run concurrently during ingest.'),
+    resolverConcurrency: z
+      .int()
+      .positive()
+      .max(8)
+      .optional()
+      .describe('Maximum number of textual conflict resolvers run concurrently during ingest. Defaults to maxConcurrency.'),
     failureMode: z
       .enum(KTX_WORK_UNIT_FAILURE_MODES)
       .default('continue')
       .describe('Behavior when a work unit fails: "abort" stops the whole ingest run; "continue" records the failure and keeps going.'),
   })
+  .transform((workUnits) => ({
+    ...workUnits,
+    resolverConcurrency: workUnits.resolverConcurrency ?? workUnits.maxConcurrency,
+  }))
   .describe('Concurrency and failure handling for ingest work units.');
+
+const sourcesSchema = z
+  .strictObject({
+    maxConcurrency: z
+      .int()
+      .positive()
+      .max(8)
+      .default(1)
+      .describe('Maximum number of ingest sources run concurrently by `ktx ingest --all`.'),
+  })
+  .describe('Concurrency policy for top-level ingest sources.');
 
 const ingestSchema = z
   .strictObject({
@@ -111,6 +132,7 @@ const ingestSchema = z
       .prefault({ backend: 'deterministic', model: 'deterministic' })
       .describe('Embedding configuration used when ingest adapters need to embed documents.'),
     workUnits: workUnitsSchema.prefault({}).describe('Concurrency and failure handling for ingest work units.'),
+    sources: sourcesSchema.prefault({}).describe('Concurrency policy for top-level ingest sources.'),
   })
   .describe('Ingest pipeline configuration: adapters, embeddings, and work-unit policy.');
 
@@ -260,6 +282,7 @@ export type KtxProjectLlmProviderConfig = z.infer<typeof llmProviderSchema>;
 export type KtxProjectEmbeddingConfig = z.infer<typeof embeddingSchema>;
 export type KtxScanEnrichmentConfig = z.infer<typeof scanEnrichmentSchema>;
 export type KtxIngestWorkUnitsConfig = z.infer<typeof workUnitsSchema>;
+export type KtxIngestSourcesConfig = z.infer<typeof sourcesSchema>;
 export type KtxScanRelationshipConfig = z.infer<typeof scanRelationshipsSchema>;
 export type KtxProjectScanConfig = z.infer<typeof scanSchema>;
 export type KtxProjectConnectionConfig = z.infer<typeof connectionSchema>;
@@ -384,6 +407,7 @@ export function serializeKtxProjectConfig(config: KtxProjectConfig): string {
           ingest: {
             embeddings: config.ingest.embeddings,
             workUnits: config.ingest.workUnits,
+            sources: config.ingest.sources,
           },
         }
       : config;

@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import pLimit from 'p-limit';
 import { z } from 'zod';
 import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../llm/index.js';
 import type { IngestTraceWriter } from '../ingest-trace.js';
@@ -19,6 +20,12 @@ export interface ResolveTextualConflictInput {
   reason: string;
   maxAttempts?: number;
   stepBudget?: number;
+}
+
+export interface TextualConflictResolverQueueInput<TConflict extends { touchedPaths: string[] }, TResult> {
+  conflicts: TConflict[];
+  maxConcurrency: number;
+  resolve(conflict: TConflict, index: number): Promise<TResult>;
 }
 
 const readIntegrationFileSchema = z.object({
@@ -49,6 +56,69 @@ function assertAllowedPath(path: string, allowedPaths: ReadonlySet<string>): str
     throw new Error(`resolver path not allowed: ${normalized}`);
   }
   return normalized;
+}
+
+function hasPathOverlap(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  for (const path of left) {
+    if (right.has(path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function runTextualConflictResolvers<TConflict extends { touchedPaths: string[] }, TResult>(
+  input: TextualConflictResolverQueueInput<TConflict, TResult>,
+): Promise<TResult[]> {
+  const maxConcurrency = Math.max(1, input.maxConcurrency);
+  const limit = pLimit(maxConcurrency);
+  const results: TResult[] = [];
+  const pending = input.conflicts.map((conflict, index) => ({
+    conflict,
+    index,
+    touchedPaths: new Set(conflict.touchedPaths.map(normalizeRepoPath)),
+  }));
+  const activePaths = new Set<string>();
+  const active: Promise<void>[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    const pump = () => {
+      if (pending.length === 0 && active.length === 0) {
+        resolve();
+        return;
+      }
+
+      for (let i = 0; i < pending.length && active.length < maxConcurrency; ) {
+        const candidate = pending[i];
+        if (!candidate || hasPathOverlap(candidate.touchedPaths, activePaths)) {
+          i += 1;
+          continue;
+        }
+
+        pending.splice(i, 1);
+        for (const path of candidate.touchedPaths) {
+          activePaths.add(path);
+        }
+
+        const task = limit(async () => {
+          results[candidate.index] = await input.resolve(candidate.conflict, candidate.index);
+        })
+          .then(() => {
+            for (const path of candidate.touchedPaths) {
+              activePaths.delete(path);
+            }
+            active.splice(active.indexOf(task), 1);
+            pump();
+          })
+          .catch(reject);
+        active.push(task);
+      }
+    };
+
+    pump();
+  });
+
+  return results;
 }
 
 async function readOptionalFile(path: string): Promise<{ exists: boolean; content: string }> {

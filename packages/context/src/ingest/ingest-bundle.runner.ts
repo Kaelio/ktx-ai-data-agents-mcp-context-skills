@@ -16,7 +16,7 @@ import { selectRelevantCanonicalPins } from './canonical-pins.js';
 import { finalGateRepairPaths, repairFinalGateFailure } from './final-gate-repair.js';
 import { FileIngestTraceWriter, ingestTracePathForJob, type IngestTraceWriter, traceTimed } from './ingest-trace.js';
 import { integrateWorkUnitPatch } from './isolated-diff/patch-integrator.js';
-import { resolveTextualConflict } from './isolated-diff/textual-conflict-resolver.js';
+import { resolveTextualConflict, runTextualConflictResolvers } from './isolated-diff/textual-conflict-resolver.js';
 import { runIsolatedWorkUnit } from './isolated-diff/work-unit-executor.js';
 import { sanitizeMemoryFlowError } from './memory-flow/live-buffer.js';
 import type { CanonicalPin } from './canonical-pins.js';
@@ -1385,6 +1385,8 @@ export class IngestBundleRunner {
         const patchDir = join(this.deps.storage.homeDir, 'ingest-patches', job.jobId);
         const workUnitSettings = {
           maxConcurrency: this.deps.settings.workUnitMaxConcurrency ?? 1,
+          resolverConcurrency:
+            this.deps.settings.workUnitResolverConcurrency ?? this.deps.settings.workUnitMaxConcurrency ?? 1,
           stepBudget: this.deps.settings.workUnitStepBudget ?? 40,
           failureMode: this.deps.settings.workUnitFailureMode ?? 'continue',
         };
@@ -1501,6 +1503,19 @@ export class IngestBundleRunner {
           (outcome) => outcome?.status === 'success' && !!outcome.patchPath,
         ).length;
         let integratedPatchCount = 0;
+        const deferredTextualConflicts: Array<{
+          order: number;
+          unitKey: string;
+          patchPath: string;
+          touchedPaths: string[];
+          reason: string;
+          integrationFailureDetails: {
+            unitKey: string;
+            patchPath: string;
+            allowedTargetConnectionIds: string[];
+          };
+        }> = [];
+        const shouldDeferTextualConflicts = workUnitSettings.resolverConcurrency > 1;
         for (const [index, outcome] of workUnitOutcomesByIndex.entries()) {
           if (!outcome || outcome.status !== 'success' || !outcome.patchPath) {
             continue;
@@ -1515,6 +1530,34 @@ export class IngestBundleRunner {
             allowedTargetConnectionIds: slConnectionIds,
           };
           activeFailureDetails = integrationFailureDetails;
+          const validateAppliedTree = async (touchedPaths: string[]) => {
+            await validateFinalIngestArtifacts({
+              connectionIds: slConnectionIds,
+              changedWikiPageKeys: this.wikiPageKeysFromPaths(touchedPaths),
+              touchedSlSources: this.touchedSlSourcesFromPaths(touchedPaths),
+              wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
+              semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+              validateTouchedSources: (touched) =>
+                validateWuTouchedSources(
+                  {
+                    semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+                    connections: this.deps.connections,
+                    configService: sessionWorktree.config,
+                    gitService: sessionWorktree.git,
+                    slSourcesRepository: this.deps.slSourcesRepository,
+                    probeRowCount: this.deps.settings.probeRowCount,
+                    slValidator: this.deps.slValidator,
+                  },
+                  touched,
+                ),
+              tableExists: (connectionId, tableRef) =>
+                this.tableRefExistsInSemanticLayer(
+                  this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+                  [connectionId],
+                  tableRef,
+                ),
+            });
+          };
           emitStageProgress(
             'integration',
             80,
@@ -1528,34 +1571,7 @@ export class IngestBundleRunner {
             author: this.deps.storage.systemGitAuthor,
             slDisallowed: wu.slDisallowed === true,
             allowedTargetConnectionIds: new Set(slConnectionIds),
-            validateAppliedTree: async (touchedPaths) => {
-              await validateFinalIngestArtifacts({
-                connectionIds: slConnectionIds,
-                changedWikiPageKeys: this.wikiPageKeysFromPaths(touchedPaths),
-                touchedSlSources: this.touchedSlSourcesFromPaths(touchedPaths),
-                wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
-                semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-                validateTouchedSources: (touched) =>
-                  validateWuTouchedSources(
-                    {
-                      semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-                      connections: this.deps.connections,
-                      configService: sessionWorktree.config,
-                      gitService: sessionWorktree.git,
-                      slSourcesRepository: this.deps.slSourcesRepository,
-                      probeRowCount: this.deps.settings.probeRowCount,
-                      slValidator: this.deps.slValidator,
-                    },
-                    touched,
-                  ),
-                tableExists: (connectionId, tableRef) =>
-                  this.tableRefExistsInSemanticLayer(
-                    this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-                    [connectionId],
-                    tableRef,
-                  ),
-              });
-            },
+            validateAppliedTree,
             resolveTextualConflict: async (context) => {
               emitStageProgress('integration', 81, `Resolving text conflict for ${context.unitKey}`);
               const result = await resolveTextualConflict({
@@ -1578,6 +1594,7 @@ export class IngestBundleRunner {
               );
               return result;
             },
+            deferTextualConflictResolution: shouldDeferTextualConflicts,
             repairGateFailure: async (context) => {
               emitStageProgress('integration', 82, `Repairing semantic gate for ${context.unitKey}`);
               const result = await repairFinalGateFailure({
@@ -1618,6 +1635,20 @@ export class IngestBundleRunner {
               isolatedDiffSummary.gateRepairFailures += 1;
             }
           }
+          if (integration.status === 'textual_conflict' && integration.deferredTextualResolution) {
+            deferredTextualConflicts.push({
+              order: index,
+              ...integration.deferredTextualResolution,
+              integrationFailureDetails,
+            });
+            activeFailureDetails = undefined;
+            emitStageProgress(
+              'integration',
+              82,
+              `Deferred text conflict ${deferredTextualConflicts.length} for ${outcome.unitKey}`,
+            );
+            continue;
+          }
           if (integration.status === 'textual_conflict') {
             isolatedDiffSummary.textualConflicts += 1;
             await this.deps.runs.markFailed(runRow.id);
@@ -1650,6 +1681,166 @@ export class IngestBundleRunner {
             83,
             `Integrated ${integratedPatchCount}/${integrablePatchCount} patches`,
           );
+        }
+
+        if (deferredTextualConflicts.length > 0) {
+          const batches: typeof deferredTextualConflicts[] = [];
+          for (const conflict of deferredTextualConflicts.sort((left, right) => left.order - right.order)) {
+            const conflictPaths = new Set(conflict.touchedPaths);
+            let placed = false;
+            for (const batch of batches) {
+              const overlaps = batch.some((existing) => existing.touchedPaths.some((path) => conflictPaths.has(path)));
+              if (!overlaps) {
+                batch.push(conflict);
+                placed = true;
+                break;
+              }
+            }
+            if (!placed) {
+              batches.push([conflict]);
+            }
+          }
+
+          for (const batch of batches) {
+            const resolutions = await runTextualConflictResolvers({
+              maxConcurrency: workUnitSettings.resolverConcurrency,
+              conflicts: batch,
+              resolve: async (conflict) => {
+                emitStageProgress('integration', 81, `Resolving text conflict for ${conflict.unitKey}`);
+                const result = await resolveTextualConflict({
+                  agentRunner: this.deps.agentRunner,
+                  workdir: sessionWorktree.workdir,
+                  unitKey: conflict.unitKey,
+                  patchPath: conflict.patchPath,
+                  touchedPaths: conflict.touchedPaths,
+                  trace: runTrace,
+                  reason: conflict.reason,
+                  maxAttempts: 1,
+                  stepBudget: 12,
+                });
+                emitStageProgress(
+                  'integration',
+                  82,
+                  result.status === 'repaired'
+                    ? `Resolved text conflict for ${conflict.unitKey}`
+                    : `Text conflict resolver failed for ${conflict.unitKey}`,
+                );
+                return result;
+              },
+            });
+
+            for (const [resolutionIndex, resolution] of resolutions.entries()) {
+              const conflict = batch[resolutionIndex];
+              if (!conflict) {
+                continue;
+              }
+              isolatedDiffSummary.resolverAttempts += resolution.attempts;
+              if (resolution.status === 'failed') {
+                isolatedDiffSummary.textualConflicts += 1;
+                isolatedDiffSummary.resolverFailures += 1;
+                await this.deps.runs.markFailed(runRow.id);
+                cleanupOutcome = 'conflict';
+                activeFailureDetails = {
+                  ...conflict.integrationFailureDetails,
+                  touchedPaths: conflict.touchedPaths,
+                  reason: resolution.reason,
+                };
+                throw new Error(`isolated diff textual conflict in ${conflict.unitKey}: ${resolution.reason}`);
+              }
+
+              isolatedDiffSummary.textualConflicts += 1;
+              isolatedDiffSummary.resolverRepairs += 1;
+              activeFailureDetails = {
+                ...conflict.integrationFailureDetails,
+                touchedPaths: resolution.changedPaths,
+                reason: conflict.reason,
+              };
+              try {
+                await traceTimed(
+                  runTrace,
+                  'integration',
+                  'semantic_gate_after_textual_resolution',
+                  { unitKey: conflict.unitKey, touchedPaths: resolution.changedPaths },
+                  async () => {
+                    await validateFinalIngestArtifacts({
+                      connectionIds: slConnectionIds,
+                      changedWikiPageKeys: this.wikiPageKeysFromPaths(resolution.changedPaths),
+                      touchedSlSources: this.touchedSlSourcesFromPaths(resolution.changedPaths),
+                      wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
+                      semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+                      validateTouchedSources: (touched) =>
+                        validateWuTouchedSources(
+                          {
+                            semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+                            connections: this.deps.connections,
+                            configService: sessionWorktree.config,
+                            gitService: sessionWorktree.git,
+                            slSourcesRepository: this.deps.slSourcesRepository,
+                            probeRowCount: this.deps.settings.probeRowCount,
+                            slValidator: this.deps.slValidator,
+                          },
+                          touched,
+                        ),
+                      tableExists: (connectionId, tableRef) =>
+                        this.tableRefExistsInSemanticLayer(
+                          this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+                          [connectionId],
+                          tableRef,
+                        ),
+                    });
+                  },
+                );
+              } catch (semanticError) {
+                isolatedDiffSummary.semanticConflicts += 1;
+                await this.deps.runs.markFailed(runRow.id);
+                cleanupOutcome = 'conflict';
+                activeFailureDetails = {
+                  ...conflict.integrationFailureDetails,
+                  touchedPaths: resolution.changedPaths,
+                  reason: semanticError instanceof Error ? semanticError.message : String(semanticError),
+                };
+                throw new Error(
+                  `isolated diff semantic conflict in ${conflict.unitKey}: ${
+                    semanticError instanceof Error ? semanticError.message : String(semanticError)
+                  }`,
+                );
+              }
+
+              const commit = await sessionWorktree.git.commitFiles(
+                resolution.changedPaths,
+                `ingest: resolve WorkUnit ${conflict.unitKey} conflict`,
+                this.deps.storage.systemGitAuthor.name,
+                this.deps.storage.systemGitAuthor.email,
+              );
+              if (!commit.created) {
+                isolatedDiffSummary.resolverFailures += 1;
+                await this.deps.runs.markFailed(runRow.id);
+                cleanupOutcome = 'conflict';
+                activeFailureDetails = {
+                  ...conflict.integrationFailureDetails,
+                  touchedPaths: resolution.changedPaths,
+                  reason: 'textual resolver produced no committable changes',
+                };
+                throw new Error(`isolated diff textual conflict in ${conflict.unitKey}: textual resolver produced no committable changes`);
+              }
+              await runTrace.event('debug', 'integration', 'patch_accepted_after_textual_resolution', {
+                unitKey: conflict.unitKey,
+                commitSha: commit.commitHash,
+                touchedPaths: resolution.changedPaths,
+                attempts: resolution.attempts,
+              });
+              activeFailureDetails = undefined;
+              if (resolution.changedPaths.length > 0) {
+                isolatedDiffSummary.acceptedPatches += 1;
+                integratedPatchCount += 1;
+              }
+              emitStageProgress(
+                'integration',
+                83,
+                `Integrated ${integratedPatchCount}/${integrablePatchCount} patches`,
+              );
+            }
+          }
         }
 
       }

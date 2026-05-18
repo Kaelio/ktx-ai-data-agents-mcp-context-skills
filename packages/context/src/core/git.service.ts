@@ -89,7 +89,7 @@ export class GitService {
     this.git = createSimpleGit(this.configDir);
 
     // Initialize git repository
-    await this.initialize();
+    await this.withMutationQueue(() => this.initialize());
   }
 
   private async initialize(): Promise<void> {

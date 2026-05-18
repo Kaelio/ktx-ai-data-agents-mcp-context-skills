@@ -142,6 +142,9 @@ importers:
       ink:
         specifier: ^7.0.2
         version: 7.0.2(@types/react@19.2.14)(react@19.2.6)
+      p-limit:
+        specifier: ^7.3.0
+        version: 7.3.0
       react:
         specifier: ^19.2.6
         version: 19.2.6

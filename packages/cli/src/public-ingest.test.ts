@@ -82,6 +82,16 @@ function deepReadyProject(
   };
 }
 
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('buildPublicIngestPlan', () => {
   it('plans warehouse connections as scan targets and source connections as source ingest targets', () => {
     const project = projectWithConnections({
@@ -846,6 +856,62 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain('warehouse failed at database-schema.');
     expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --fast');
     expect(io.stdout()).not.toContain('Debug:');
+  });
+
+  it('runs public ingest targets concurrently up to ingest.sources.maxConcurrency and renders in plan order', async () => {
+    const io = makeIo();
+    const baseConfig = buildDefaultKtxProjectConfig();
+    const project: KtxPublicIngestProject = {
+      projectDir: '/tmp/project',
+      config: {
+        ...baseConfig,
+        ingest: {
+          ...baseConfig.ingest,
+          sources: { maxConcurrency: 2 },
+        } as KtxProjectConfig['ingest'],
+        connections: {
+          docs: { driver: 'notion' },
+          prod_metabase: { driver: 'metabase', api_url: 'https://metabase.example.com' },
+        },
+      },
+    };
+    const starts: string[] = [];
+    const docs = deferred<number>();
+    const prodMetabase = deferred<number>();
+    const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async (ingestArgs) => {
+      if (ingestArgs.command !== 'run') {
+        return 1;
+      }
+      starts.push(ingestArgs.connectionId);
+      if (ingestArgs.connectionId === 'docs') {
+        return docs.promise;
+      }
+      if (ingestArgs.connectionId === 'prod_metabase') {
+        return prodMetabase.promise;
+      }
+      return 1;
+    });
+
+    const run = runKtxPublicIngest(
+      { command: 'run', projectDir: '/tmp/project', all: true, json: false, inputMode: 'disabled' },
+      io.io,
+      {
+        loadProject: vi.fn(async () => project),
+        runIngest,
+      },
+    );
+
+    await vi.waitFor(() => expect(starts).toEqual(['docs', 'prod_metabase']));
+    prodMetabase.resolve(0);
+    docs.resolve(0);
+
+    await expect(run).resolves.toBe(0);
+    expect(runIngest).toHaveBeenCalledTimes(2);
+    const sourceRows = io
+      .stdout()
+      .split('\n')
+      .filter((line) => line.startsWith('docs') || line.startsWith('prod_metabase'));
+    expect(sourceRows.map((line) => line.trim().split(/\s+/)[0])).toEqual(['docs', 'prod_metabase']);
   });
 
   it('prints query-history retry guidance for query-history facet failures', async () => {

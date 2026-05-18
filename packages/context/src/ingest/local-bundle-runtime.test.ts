@@ -5,7 +5,7 @@ import type { AgentRunnerPort } from '../llm/index.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
-import { createLocalBundleIngestRuntime } from './local-bundle-runtime.js';
+import { createLocalBundleIngestRuntime, InProcessIngestLock } from './local-bundle-runtime.js';
 
 type RuntimeWithConnectionDeps = {
   deps: {
@@ -38,6 +38,84 @@ type RuntimeWithSettingsDeps = {
 function testAgentRunner(): AgentRunnerPort {
   return { runLoop: vi.fn().mockResolvedValue({ stopReason: 'natural' as const }) };
 }
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
+describe('InProcessIngestLock', () => {
+  it('serializes operations for the same key while allowing different keys to overlap', async () => {
+    const lock = new InProcessIngestLock();
+    const firstEntered = deferred();
+    const releaseFirst = deferred();
+    const secondEntered = deferred();
+    const otherEntered = deferred();
+    const events: string[] = [];
+
+    const first = lock.withLock('config:repo', async () => {
+      events.push('first:start');
+      firstEntered.resolve();
+      await releaseFirst.promise;
+      events.push('first:end');
+      return 'first';
+    });
+    await firstEntered.promise;
+
+    const second = lock.withLock('config:repo', async () => {
+      events.push('second:start');
+      secondEntered.resolve();
+      return 'second';
+    });
+    const other = lock.withLock('other:key', async () => {
+      events.push('other:start');
+      otherEntered.resolve();
+      return 'other';
+    });
+
+    await otherEntered.promise;
+    expect(events).toEqual(['first:start', 'other:start']);
+
+    releaseFirst.resolve();
+    await secondEntered.promise;
+    await expect(Promise.all([first, second, other])).resolves.toEqual(['first', 'second', 'other']);
+    expect(events).toEqual(['first:start', 'other:start', 'first:end', 'second:start']);
+  });
+
+  it('serializes operations for the same key across lock instances', async () => {
+    const firstLock = new InProcessIngestLock();
+    const secondLock = new InProcessIngestLock();
+    const firstEntered = deferred();
+    const releaseFirst = deferred();
+    const secondEntered = deferred();
+    const events: string[] = [];
+
+    const first = firstLock.withLock('config:repo', async () => {
+      events.push('first:start');
+      firstEntered.resolve();
+      await releaseFirst.promise;
+      events.push('first:end');
+      return 'first';
+    });
+    await firstEntered.promise;
+
+    const second = secondLock.withLock('config:repo', async () => {
+      events.push('second:start');
+      secondEntered.resolve();
+      return 'second';
+    });
+
+    await Promise.resolve();
+    expect(events).toEqual(['first:start']);
+    releaseFirst.resolve();
+    await secondEntered.promise;
+    await expect(Promise.all([first, second])).resolves.toEqual(['first', 'second']);
+    expect(events).toEqual(['first:start', 'first:end', 'second:start']);
+  });
+});
 
 describe('createLocalBundleIngestRuntime', () => {
   let tempDir: string;
@@ -281,6 +359,7 @@ describe('createLocalBundleIngestRuntime', () => {
       'probeRowCount',
       'workUnitFailureMode',
       'workUnitMaxConcurrency',
+      'workUnitResolverConcurrency',
       'workUnitStepBudget',
     ]);
   });

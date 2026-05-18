@@ -121,6 +121,38 @@ Source ingest extracts metadata, reconciles it with existing local context, and
 writes semantic-layer YAML plus wiki Markdown. It merges rather than blindly
 overwriting local edits.
 
+## Ingest concurrency
+
+KTX keeps ingest sequential by default so first runs are predictable. Increase
+concurrency when your configured sources are independent and your local LLM
+backend can handle more simultaneous agent sessions.
+
+```yaml title="ktx.yaml"
+ingest:
+  sources:
+    maxConcurrency: 4
+  workUnits:
+    maxConcurrency: 6
+    resolverConcurrency: 3
+```
+
+Use these settings together:
+
+| Setting | Applies to | Default |
+|---------|------------|---------|
+| `ingest.sources.maxConcurrency` | Top-level `ktx ingest --all` targets | `1` |
+| `ingest.workUnits.maxConcurrency` | Work units inside one source ingest | `1` |
+| `ingest.workUnits.resolverConcurrency` | Textual conflict repair for disjoint files | Same as `workUnits.maxConcurrency` |
+
+Evidence-only adapters, such as query-history ingest that emits historic SQL
+evidence, can usually tolerate higher work-unit concurrency because their
+patches are often no-ops. Source adapters that rewrite the same semantic-layer
+or wiki files need lower values to reduce conflict repair work.
+
+Each concurrency value must be between `1` and `8`. Higher values create more
+temporary Git worktrees and more concurrent LLM sessions, so raise them in
+small steps and check `.ktx/ingest-traces/` when a run fails.
+
 ## Text ingest
 
 Use `ktx ingest text` for notes, Markdown files, runbooks, Slack exports, or

@@ -244,6 +244,66 @@ describe('integrateWorkUnitPatch', () => {
     expect(await git.revParseHead()).not.toBe(baseSha);
   });
 
+  it('can defer textual conflict resolution without invoking the resolver inline', async () => {
+    const { homeDir, configDir, git } = await makeRepo();
+    await mkdir(join(configDir, 'wiki/global'), { recursive: true });
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'base\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'base page', 'System User', 'system@example.com');
+    const conflictBase = await git.revParseHead();
+
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'accepted edit', 'System User', 'system@example.com');
+    const acceptedHead = await git.revParseHead();
+
+    const childDir = join(homeDir, 'child-conflict-deferred');
+    await git.addWorktree(childDir, 'child-conflict-deferred', conflictBase);
+    const childGit = git.forWorktree(childDir);
+    await writeFile(join(childDir, 'wiki/global/a.md'), 'proposal\n', 'utf-8');
+    await childGit.commitFiles(['wiki/global/a.md'], 'proposal edit', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'proposal-deferred.patch');
+    await childGit.writeBinaryNoRenamePatch(conflictBase, 'HEAD', patchPath);
+
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-resolver-deferred/trace.jsonl'),
+      jobId: 'job-resolver-deferred',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      level: 'trace',
+    });
+    const resolveTextualConflict = vi.fn(async () => ({
+      status: 'failed' as const,
+      attempts: 1,
+      reason: 'should not run',
+    }));
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'wu-conflict',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'System User', email: 'system@example.com' },
+      slDisallowed: false,
+      allowedTargetConnectionIds: new Set(['warehouse']),
+      validateAppliedTree: vi.fn(async () => {}),
+      resolveTextualConflict,
+      deferTextualConflictResolution: true,
+    });
+
+    expect(result).toMatchObject({
+      status: 'textual_conflict',
+      reason: expect.stringContaining('conflicts'),
+      touchedPaths: ['wiki/global/a.md'],
+      deferredTextualResolution: {
+        unitKey: 'wu-conflict',
+        patchPath,
+        touchedPaths: ['wiki/global/a.md'],
+      },
+    });
+    expect(resolveTextualConflict).not.toHaveBeenCalled();
+    expect(await git.revParseHead()).toBe(acceptedHead);
+    await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('accepted\n');
+  });
+
   it('keeps the pre-apply integration tree when the resolver cannot repair a textual conflict', async () => {
     const { homeDir, configDir, git } = await makeRepo();
     await mkdir(join(configDir, 'wiki/global'), { recursive: true });

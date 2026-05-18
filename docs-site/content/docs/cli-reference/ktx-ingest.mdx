@@ -45,6 +45,23 @@ requires deep ingest readiness.
 When `--all` selects both databases and context sources, database ingest runs
 first, then source ingest and memory updates run for source connections.
 
+`ktx ingest --all` runs one target at a time by default. Configure source
+concurrency in `ktx.yaml` when independent connections can run in parallel:
+
+```yaml title="ktx.yaml"
+ingest:
+  sources:
+    maxConcurrency: 4
+  workUnits:
+    maxConcurrency: 6
+    resolverConcurrency: 3
+```
+
+`ingest.sources.maxConcurrency` controls top-level `--all` target dispatch.
+`ingest.workUnits.maxConcurrency` controls work units inside one source ingest.
+`ingest.workUnits.resolverConcurrency` controls concurrent textual conflict
+repairs for disjoint files. Each value must be between `1` and `8`.
+
 Some ingest paths use the managed KTX Python runtime. Query-history ingest uses
 it for SQL analysis, and Looker source ingest uses it for Looker identifier
 parsing. In an interactive terminal, `ktx ingest` prompts before installing the

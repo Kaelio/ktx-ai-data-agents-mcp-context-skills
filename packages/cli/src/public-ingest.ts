@@ -1,5 +1,6 @@
 import { type KtxLocalProject, type KtxProjectConnectionConfig, loadKtxProject } from '@ktx/context/project';
 import type { KtxProgressPort } from '@ktx/context/scan';
+import pLimit from 'p-limit';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
 import {
@@ -924,9 +925,18 @@ export async function runKtxPublicIngest(
     }
   }
 
-  for (const target of plan.targets) {
-    results.push(await executePublicIngestTarget(target, args, io, deps));
-  }
+  const ingestConfig = project.config.ingest as { sources?: { maxConcurrency?: number } } | undefined;
+  const sourceMaxConcurrency = ingestConfig?.sources?.maxConcurrency ?? 1;
+  const limitTarget = pLimit(sourceMaxConcurrency);
+  const orderedResults = await Promise.all(
+    plan.targets.map((target, index) =>
+      limitTarget(async () => ({
+        index,
+        result: await executePublicIngestTarget(target, args, io, deps),
+      })),
+    ),
+  );
+  results.push(...orderedResults.sort((left, right) => left.index - right.index).map((entry) => entry.result));
 
   if (args.json) {
     io.stdout.write(`${JSON.stringify({ plan, results }, null, 2)}\n`);

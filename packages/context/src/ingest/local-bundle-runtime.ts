@@ -163,9 +163,29 @@ class LocalIngestStorage implements IngestStoragePort {
   }
 }
 
-class LocalIngestLock implements IngestLockPort {
-  async withLock<T>(_key: string, fn: () => Promise<T>): Promise<T> {
-    return fn();
+export class InProcessIngestLock implements IngestLockPort {
+  private static readonly queues = new Map<string, Promise<void>>();
+
+  async withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const previous = InProcessIngestLock.queues.get(key) ?? Promise.resolve();
+    let release: () => void = () => {};
+    const current = previous.catch(() => undefined).then(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    InProcessIngestLock.queues.set(key, current);
+
+    await previous.catch(() => undefined);
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (InProcessIngestLock.queues.get(key) === current) {
+        InProcessIngestLock.queues.delete(key);
+      }
+    }
   }
 }
 
@@ -714,12 +734,13 @@ export function createLocalBundleIngestRuntime(
     }),
     agentRunner,
     gitService: options.project.git,
-    lockingService: new LocalIngestLock(),
+    lockingService: new InProcessIngestLock(),
     storage,
     settings: {
       memoryIngestionModel: options.project.config.llm.models.default ?? 'local-ingest-model',
       probeRowCount: 0,
       workUnitMaxConcurrency: options.project.config.ingest.workUnits.maxConcurrency,
+      workUnitResolverConcurrency: options.project.config.ingest.workUnits.resolverConcurrency,
       workUnitStepBudget: options.project.config.ingest.workUnits.stepBudget,
       workUnitFailureMode: options.project.config.ingest.workUnits.failureMode,
       ingestTraceLevel: ingestTraceLevelFromEnv(),

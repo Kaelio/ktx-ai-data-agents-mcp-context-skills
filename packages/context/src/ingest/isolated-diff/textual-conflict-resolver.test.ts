@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { FileIngestTraceWriter } from '../ingest-trace.js';
-import { resolveTextualConflict } from './textual-conflict-resolver.js';
+import { resolveTextualConflict, runTextualConflictResolvers } from './textual-conflict-resolver.js';
 
 async function makeHarness() {
   const root = await mkdtemp(join(tmpdir(), 'ktx-textual-resolver-'));
@@ -35,6 +35,14 @@ async function makeHarness() {
     'utf-8',
   );
   return { root, workdir, patchPath, trace };
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
 }
 
 describe('resolveTextualConflict', () => {
@@ -116,5 +124,57 @@ describe('resolveTextualConflict', () => {
       attempts: 1,
       reason: 'resolver completed without editing an allowed path',
     });
+  });
+});
+
+describe('runTextualConflictResolvers', () => {
+  it('runs disjoint conflicts concurrently and preserves result order', async () => {
+    const releases = [deferred(), deferred()];
+    const starts: string[] = [];
+
+    const run = runTextualConflictResolvers({
+      maxConcurrency: 2,
+      conflicts: [
+        { unitKey: 'wu-a', touchedPaths: ['wiki/global/a.md'] },
+        { unitKey: 'wu-b', touchedPaths: ['wiki/global/b.md'] },
+      ],
+      resolve: async (conflict, index) => {
+        starts.push(conflict.unitKey);
+        await releases[index].promise;
+        return `${conflict.unitKey}:resolved`;
+      },
+    });
+
+    await vi.waitFor(() => expect(starts).toEqual(['wu-a', 'wu-b']));
+    releases[1].resolve();
+    releases[0].resolve();
+
+    await expect(run).resolves.toEqual(['wu-a:resolved', 'wu-b:resolved']);
+  });
+
+  it('serializes overlapping conflicts even when concurrency allows more work', async () => {
+    const releaseFirst = deferred();
+    const starts: string[] = [];
+
+    const run = runTextualConflictResolvers({
+      maxConcurrency: 2,
+      conflicts: [
+        { unitKey: 'wu-a', touchedPaths: ['wiki/global/account.md'] },
+        { unitKey: 'wu-b', touchedPaths: ['wiki/global/account.md', 'wiki/global/other.md'] },
+      ],
+      resolve: async (conflict) => {
+        starts.push(conflict.unitKey);
+        if (conflict.unitKey === 'wu-a') {
+          await releaseFirst.promise;
+        }
+        return `${conflict.unitKey}:resolved`;
+      },
+    });
+
+    await vi.waitFor(() => expect(starts).toEqual(['wu-a']));
+    releaseFirst.resolve();
+
+    await expect(run).resolves.toEqual(['wu-a:resolved', 'wu-b:resolved']);
+    expect(starts).toEqual(['wu-a', 'wu-b']);
   });
 });

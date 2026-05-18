@@ -49,7 +49,11 @@ connections:
         workUnits: {
           stepBudget: 40,
           maxConcurrency: 1,
+          resolverConcurrency: 1,
           failureMode: 'continue',
+        },
+        sources: {
+          maxConcurrency: 1,
         },
       },
       agent: {
@@ -155,7 +159,57 @@ ingest:
     expect(config.ingest.workUnits).toEqual({
       stepBudget: 30,
       maxConcurrency: 2,
+      resolverConcurrency: 2,
       failureMode: 'abort',
+    });
+  });
+
+  it('parses ingest source and resolver concurrency knobs', () => {
+    const config = parseKtxProjectConfig(`
+ingest:
+  sources:
+    maxConcurrency: 4
+  workUnits:
+    maxConcurrency: 6
+    resolverConcurrency: 3
+`);
+
+    expect(config.ingest.sources).toEqual({
+      maxConcurrency: 4,
+    });
+    expect(config.ingest.workUnits).toEqual({
+      stepBudget: 40,
+      maxConcurrency: 6,
+      resolverConcurrency: 3,
+      failureMode: 'continue',
+    });
+  });
+
+  it('defaults resolver concurrency to work-unit concurrency', () => {
+    const config = parseKtxProjectConfig(`
+ingest:
+  workUnits:
+    maxConcurrency: 5
+`);
+
+    expect(config.ingest.workUnits.resolverConcurrency).toBe(5);
+  });
+
+  it('rejects concurrency values above the configured caps', () => {
+    const validation = validateKtxProjectConfig(`
+ingest:
+  sources:
+    maxConcurrency: 9
+  workUnits:
+    resolverConcurrency: 9
+`);
+
+    expect(validation).toEqual({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: 'ingest.sources.maxConcurrency' }),
+        expect.objectContaining({ path: 'ingest.workUnits.resolverConcurrency' }),
+      ]),
     });
   });
 
@@ -533,6 +587,13 @@ describe('generateKtxProjectConfigJsonSchema', () => {
     const scan = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).scan;
     const relationships = scan?.properties?.relationships as { properties?: Record<string, { description?: string }> };
     expect(relationships?.properties?.acceptThreshold?.description).toMatch(/auto-accepted/);
+  });
+
+  it('emits ingest concurrency caps in the generated schema', () => {
+    const serialized = JSON.stringify(schema);
+    expect(serialized).toContain('"sources"');
+    expect(serialized).toContain('"resolverConcurrency"');
+    expect(serialized).toContain('"maximum":8');
   });
 
   it('emits the mappings shapes under connections', () => {

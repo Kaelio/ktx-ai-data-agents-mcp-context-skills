@@ -53,6 +53,31 @@ describe('GitService', () => {
       expect(after).toBe(before);
     });
 
+    it('serializes concurrent initialization for the same config directory', async () => {
+      const concurrentDir = await mkdtemp(join(tmpdir(), 'git-service-concurrent-init-'));
+      const coreConfig: KtxCoreConfig = {
+        storage: { configDir: concurrentDir, homeDir: concurrentDir },
+        git: {
+          userName: 'Test User',
+          userEmail: 'test@example.com',
+          bootstrapMessage: 'Initialize test config repo',
+          bootstrapAuthor: 'test-system',
+          bootstrapAuthorEmail: 'system@example.com',
+        },
+      };
+      const first = new GitService(coreConfig);
+      const second = new GitService(coreConfig);
+
+      try {
+        await expect(Promise.all([first.onModuleInit(), second.onModuleInit()])).resolves.toEqual([undefined, undefined]);
+        const firstHead = await first.revParseHead();
+        const secondHead = await second.revParseHead();
+        expect(firstHead).toBe(secondHead);
+      } finally {
+        await rm(concurrentDir, { recursive: true, force: true });
+      }
+    });
+
     it('keeps git auto-maintenance attached for deterministic cleanup', async () => {
       const config = await readFile(join(tempDir, '.git', 'config'), 'utf-8');
 
