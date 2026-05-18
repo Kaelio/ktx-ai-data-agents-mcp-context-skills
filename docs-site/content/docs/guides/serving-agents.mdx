@@ -3,9 +3,8 @@ title: Serving Agents
 description: Expose KTX context to Claude Code, Codex, Cursor, OpenCode, and custom agents.
 ---
 
-KTX serves agents through the public CLI and project-local instruction files.
-Agents do not need a separate server. They read the generated rules, call KTX
-commands, inspect local context files, and use JSON output when they need
+KTX serves agents through the CLI and project-local instruction files. Agents
+read generated rules, call KTX commands, inspect context files, and use JSON for
 structured results.
 
 ## Recommended setup
@@ -39,14 +38,13 @@ ktx setup --agents --target claude-code --global
 ktx setup --agents --target codex --global
 ```
 
-KTX records installed files in `.ktx/agents/install-manifest.json`. Rerun
-`ktx setup --agents` after moving a checkout or reinstalling the CLI so the
-generated instructions point at the current CLI path.
+Installed files are recorded in `.ktx/agents/install-manifest.json`. Rerun
+`ktx setup --agents` after moving a checkout or reinstalling the CLI.
 
 ## Agent command set
 
-All supported agent clients use the same command surface. Use `--project-dir`
-when the agent is running outside the KTX project directory.
+All supported clients use the same command surface. Use `--project-dir` outside
+the KTX project directory.
 
 ### Readiness
 
@@ -54,9 +52,8 @@ when the agent is running outside the KTX project directory.
 ktx status --json
 ```
 
-Agents should run this before relying on context. It reports project, LLM,
-embedding, database, context-source, context-build, and agent-integration
-readiness.
+Run this before relying on context. It reports project, provider, connection,
+context-build, and agent-integration readiness.
 
 ### Semantic layer discovery
 
@@ -66,8 +63,8 @@ ktx sl list --connection-id warehouse --json
 ktx sl search "revenue" --json --limit 10
 ```
 
-Agents use these commands to discover source names, connection ids, measures,
-dimensions, and likely files to inspect.
+Use these commands to find source names, connection ids, measures, dimensions,
+and files to inspect.
 
 ### Semantic-layer validation and queries
 
@@ -106,9 +103,8 @@ ktx wiki list --json
 ktx wiki search "revenue recognition" --json --limit 10
 ```
 
-Agents should search wiki context when a question depends on business
-definitions, metric caveats, process rules, or terms that are not obvious from
-schema names.
+Search wiki context for business definitions, metric caveats, process rules, and
+non-obvious terms.
 
 ### Context refresh
 
@@ -120,8 +116,7 @@ ktx ingest --all
 ktx ingest text docs/revenue-notes.md --connection-id warehouse
 ```
 
-Use `--deep` only when LLM and embedding setup is ready and the user expects an
-AI-enriched refresh.
+Use `--deep` only when LLM and embedding setup is ready.
 
 ## Good agent behavior
 
@@ -135,14 +130,12 @@ Agents should:
 - Validate edited semantic sources with `ktx sl validate`.
 - Keep generated context changes reviewable in git.
 
-Agents should not assume a background server, ORPC route, frontend app, or
-external migration system exists. KTX is a local context layer with a CLI and
-plain project files.
+KTX is a local context layer with a CLI and plain project files. Do not assume a
+background server, ORPC route, frontend app, or external migration system.
 
 ## Manual setup
 
-Manual setup is useful for custom agents that can read project-local
-instructions but are not yet a named target.
+Use manual setup for custom agents that can read project-local instructions.
 
 1. Install the universal target:
 

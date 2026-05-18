@@ -52,7 +52,6 @@ KTX provides semantic-layer files, warehouse scans, wiki pages, provenance, and 
 
 ## Agent Entry Points
 
-${link("/docs/ai-resources", "AI Resources", "Machine-readable docs, prompt recipes, and agent setup paths")}
 ${link("/docs/ai-resources/agent-quickstart", "Agent Quickstart", "Task-first route for coding assistants using KTX")}
 ${link("/docs/ai-resources/markdown-access", "Markdown Access", "Fetch KTX docs as llms.txt, llms-full.txt, or per-page Markdown")}
 ${link("/docs/ai-resources/agent-instructions", "Agent Instructions", "Suggested instructions for coding assistants that need to read and cite KTX docs")}
@@ -73,6 +72,7 @@ ${link("/docs/guides/writing-context", "Writing Context", "Write semantic source
 
 ## CLI Reference
 
+${link("/docs/cli-reference/ktx", "ktx", "Root command map and global options")}
 ${link("/docs/cli-reference/ktx-setup", "ktx setup", "Interactive project setup")}
 ${link("/docs/cli-reference/ktx-sl", "ktx sl", "Semantic-layer commands")}
 ${link("/docs/cli-reference/ktx-wiki", "ktx wiki", "Wiki page commands")}

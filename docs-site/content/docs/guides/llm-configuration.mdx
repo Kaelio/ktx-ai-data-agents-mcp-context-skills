@@ -3,8 +3,8 @@ title: LLM configuration
 description: Configure KTX LLM providers, model roles, and prompt caching.
 ---
 
-KTX uses the top-level `llm` block in `ktx.yaml` for text generation,
-structured extraction, and ingest or memory agent loops.
+Configure text generation, structured extraction, and ingest or memory loops in
+the top-level `llm` block.
 
 ## Backends
 
@@ -15,9 +15,7 @@ Set `llm.provider.backend` to one of these values:
 - `vertex`: Use Vertex AI Anthropic models through Google Cloud credentials.
 - `gateway`: Use AI Gateway-compatible Anthropic model ids.
 - `claude-code`: Use your local Claude Code session through the Claude Agent
-  SDK. KTX removes provider-routing environment variables from Claude Code
-  child processes, so this backend doesn't silently fall back to
-  `ANTHROPIC_API_KEY`, Vertex, Gateway, or Bedrock credentials.
+  SDK. KTX strips provider-routing environment variables from child processes.
 
 ## Claude Code
 
@@ -36,26 +34,20 @@ llm:
     repair: sonnet
 ```
 
-During setup, choose the Claude Code backend interactively or pass the model in
-automation:
+During setup, choose the backend interactively or pass the model in automation:
 
 ```bash
 ktx setup --llm-backend claude-code --llm-model opus --no-input
 ```
 
-For Claude Code, `sonnet`, `opus`, and `haiku` map to the current KTX defaults.
-You can also pass a full Claude model ID, such as `claude-opus-4-7`.
+For Claude Code, `sonnet`, `opus`, and `haiku` map to KTX defaults. Full Claude
+model IDs are also accepted.
 
-`claude-code` keeps KTX tool boundaries intact. KTX exposes only the MCP tools
-needed for the current KTX agent loop, disables Claude Code built-in tools,
-keeps plugins empty, and denies every non-KTX tool request through
-`canUseTool`. The Claude Agent SDK may still report host-discovered slash
-commands, skills, and subagent names in init metadata; that metadata is not an
-execution grant for KTX agent loops.
+`claude-code` exposes only KTX MCP tools for the current agent loop. SDK init
+metadata may still list host slash commands, skills, and subagents; KTX does not
+grant execution access to them.
 
 ## Prompt caching
 
-`llm.promptCaching` has partial parity on `claude-code`. KTX doesn't pass
-Anthropic cache-control markers to the Claude Agent SDK. Status and doctor warn
-when you configure prompt-cache TTL, tool, or history fields that the Claude
-Agent SDK backend ignores.
+`llm.promptCaching` has partial parity on `claude-code`. Status and doctor warn
+when the Claude Agent SDK backend ignores configured cache fields.

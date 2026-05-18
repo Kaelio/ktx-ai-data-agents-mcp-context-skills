@@ -51,10 +51,7 @@ export default async function Page(props: {
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <DocsTitle>{page.data.title}</DocsTitle>
-            <DocsPageActions
-              markdownUrl={`${page.url}.md`}
-              mdxSource={mdxSource}
-            />
+            <DocsPageActions mdxSource={mdxSource} />
           </div>
           <DocsDescription className="wrap-anywhere">
             {page.data.description}
