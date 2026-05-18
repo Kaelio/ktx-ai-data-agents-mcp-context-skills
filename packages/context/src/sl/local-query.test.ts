@@ -182,6 +182,71 @@ grain: []
     });
   });
 
+  it('sends normalized legacy manifest columns with physical expressions to compute', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/main.yaml',
+      `tables:
+  npi:
+    table: provider.main.npi
+    columns:
+      - name: npi
+        type: number
+      - name: provider_business_mailing_address_country_code_(if_outside_u.s.)
+        type: string
+      - name: Display Name
+        type: string
+      - name: display_name
+        type: string
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add legacy manifest shard',
+    );
+
+    await compileLocalSlQuery(project, {
+      connectionId: 'warehouse',
+      query: {
+        measures: [],
+        dimensions: ['npi.provider_business_mailing_address_country_code_if_outside_u_s'],
+      },
+      compute,
+    });
+
+    expect(compute.query).toHaveBeenLastCalledWith({
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'npi',
+          table: 'provider.main.npi',
+          grain: [
+            'npi',
+            'provider_business_mailing_address_country_code_if_outside_u_s',
+            'display_name_2',
+            'display_name',
+          ],
+          columns: [
+            expect.objectContaining({ name: 'npi', type: 'number' }),
+            expect.objectContaining({
+              name: 'provider_business_mailing_address_country_code_if_outside_u_s',
+              type: 'string',
+              expr: 'npi."provider_business_mailing_address_country_code_(if_outside_u.s.)"',
+            }),
+            expect.objectContaining({
+              name: 'display_name_2',
+              type: 'string',
+              expr: 'npi."Display Name"',
+            }),
+            expect.objectContaining({ name: 'display_name', type: 'string' }),
+          ],
+        }),
+      ]),
+      dialect: 'postgres',
+      query: {
+        measures: [],
+        dimensions: ['npi.provider_business_mailing_address_country_code_if_outside_u_s'],
+      },
+    });
+  });
+
   it('strips authoring-only fields (usage, inherits_columns_from) before sending sources to the daemon', async () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/_schema/public.yaml',

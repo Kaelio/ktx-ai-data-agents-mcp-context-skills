@@ -11,6 +11,78 @@ function shardObject(shards: Map<string, LiveDatabaseManifestShard>): Record<str
 }
 
 describe('buildLiveDatabaseManifestShards', () => {
+  it('normalizes unsafe physical column names while preserving quoted expressions', () => {
+    const existingDescriptions = new Map<string, LiveDatabaseManifestExistingDescriptions>([
+      [
+        'npi',
+        {
+          columns: new Map([
+            ['provider_business_mailing_address_country_code_if_outside_u_s', { user: 'Pinned normalized description' }],
+            ['provider_business_practice_location_address_country_code_(if_outside_u.s.)', { user: 'Pinned raw description' }],
+          ]),
+        },
+      ],
+    ]);
+
+    const result = buildLiveDatabaseManifestShards({
+      connectionType: 'DUCKDB',
+      mapColumnType: (nativeType) => nativeType.toLowerCase(),
+      existingDescriptions,
+      tables: [
+        {
+          name: 'npi',
+          catalog: 'provider',
+          db: 'main',
+          columns: [
+            { name: 'npi', type: 'INTEGER', pk: true },
+            { name: 'provider_business_mailing_address_country_code_(if_outside_u.s.)', type: 'VARCHAR' },
+            { name: 'provider_business_practice_location_address_country_code_(if_outside_u.s.)', type: 'VARCHAR' },
+            { name: 'Display Name', type: 'VARCHAR' },
+            { name: 'display_name', type: 'VARCHAR' },
+            { name: '123 code', type: 'VARCHAR' },
+          ],
+        },
+      ],
+      joins: [],
+    });
+
+    expect(shardObject(result.shards)).toEqual({
+      main: {
+        tables: {
+          npi: {
+            table: 'provider.main.npi',
+            columns: [
+              { name: 'npi', type: 'integer', pk: true },
+              {
+                name: 'provider_business_mailing_address_country_code_if_outside_u_s',
+                type: 'varchar',
+                expr: 'npi."provider_business_mailing_address_country_code_(if_outside_u.s.)"',
+                descriptions: { user: 'Pinned normalized description' },
+              },
+              {
+                name: 'provider_business_practice_location_address_country_code_if_outside_u_s',
+                type: 'varchar',
+                expr: 'npi."provider_business_practice_location_address_country_code_(if_outside_u.s.)"',
+                descriptions: { user: 'Pinned raw description' },
+              },
+              {
+                name: 'display_name_2',
+                type: 'varchar',
+                expr: 'npi."Display Name"',
+              },
+              { name: 'display_name', type: 'varchar' },
+              {
+                name: 'column_123_code',
+                type: 'varchar',
+                expr: 'npi."123 code"',
+              },
+            ],
+          },
+        },
+      },
+    });
+  });
+
   it('builds shard objects with generated joins and preserved external descriptions', () => {
     const existingDescriptions = new Map<string, LiveDatabaseManifestExistingDescriptions>([
       [

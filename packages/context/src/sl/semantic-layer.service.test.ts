@@ -1127,6 +1127,56 @@ describe('validateWithProposedSource', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('allows generated manifest columns to reference quoted physical identifiers', async () => {
+    const schemaPath = 'semantic-layer/warehouse/_schema/main.yaml';
+    configService.listFiles.mockImplementation((dir: string) => {
+      if (dir === 'semantic-layer/warehouse') {
+        return Promise.resolve({ files: [] });
+      }
+      if (dir === 'semantic-layer') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      if (dir === 'semantic-layer/warehouse/_schema') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      return Promise.resolve({ files: [] });
+    });
+    configService.readFile.mockResolvedValue({
+      content: [
+        'tables:',
+        '  npi:',
+        '    table: provider.main.npi',
+        '    columns:',
+        '      - name: npi',
+        '        type: number',
+        '      - name: provider_business_mailing_address_country_code_if_outside_u_s',
+        '        type: string',
+        '        expr: npi."provider_business_mailing_address_country_code_(if_outside_u.s.)"',
+      ].join('\n'),
+    });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('warehouse', {
+      name: 'npi',
+      table: 'provider.main.npi',
+      grain: ['npi'],
+      columns: [
+        { name: 'npi', type: 'number' },
+        {
+          name: 'provider_business_mailing_address_country_code_if_outside_u_s',
+          type: 'string',
+          expr: 'npi."provider_business_mailing_address_country_code_(if_outside_u.s.)"',
+        },
+      ],
+      joins: [],
+      measures: [],
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+
   it('rejects join keys that are absent from matched physical sources', async () => {
     const schemaPath = 'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml';
     configService.listFiles.mockImplementation((dir: string) => {
