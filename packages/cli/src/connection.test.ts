@@ -491,7 +491,7 @@ describe('runKtxConnection', () => {
     await initKtxProject({ projectDir });
     await writeFile(
       join(projectDir, 'ktx.yaml'),
-      'connections:\n  mystery:\n    driver: duckdb\n',
+      'connections:\n  mystery:\n    driver: nope\n',
       'utf-8',
     );
     const io = makeIo();

@@ -39,6 +39,7 @@
     "@commander-js/extra-typings": "14.0.0",
     "@ktx/connector-bigquery": "workspace:*",
     "@ktx/connector-clickhouse": "workspace:*",
+    "@ktx/connector-duckdb": "workspace:*",
     "@ktx/connector-mysql": "workspace:*",
     "@ktx/connector-postgres": "workspace:*",
     "@ktx/connector-snowflake": "workspace:*",

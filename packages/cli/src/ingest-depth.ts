@@ -4,6 +4,7 @@ export type KtxDatabaseContextDepth = 'fast' | 'deep';
 
 const KTX_DATABASE_DRIVER_IDS = new Set([
   'sqlite',
+  'duckdb',
   'postgres',
   'postgresql',
   'mysql',

@@ -475,6 +475,80 @@ joins: []
     expect(stderr.write).not.toHaveBeenCalled();
   });
 
+  it('injects a duckdb-capable executor for sl query --execute', async () => {
+    const projectDir = join(tempDir, 'project');
+    const project = await initKtxProject({ projectDir });
+    project.config.connections.warehouse = { driver: 'duckdb', path: 'warehouse.duckdb' };
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      `name: orders
+table: main.orders
+grain: [id]
+columns:
+  - name: id
+    type: number
+  - name: amount
+    type: number
+measures:
+  - name: amount_sum
+    expr: sum(amount)
+joins: []
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add orders source',
+    );
+    const queryExecutor = {
+      execute: vi.fn(async () => ({
+        headers: ['total'],
+        rows: [[42]],
+        totalRows: 1,
+        command: 'SELECT',
+        rowCount: 1,
+      })),
+    };
+    const compute = {
+      query: vi.fn(async () => ({
+        dialect: 'duckdb',
+        sql: 'select 42 as total',
+        columns: [{ name: 'total' }],
+        rows: [],
+        totalRows: 0,
+        plan: {},
+      })),
+      validateSources: vi.fn(),
+      generateSources: vi.fn(),
+    };
+
+    await expect(
+      runKtxSl(
+        {
+          command: 'query',
+          projectDir,
+          connectionId: 'warehouse',
+          query: { measures: ['sum(orders.amount)'], dimensions: [] },
+          format: 'json',
+          execute: true,
+          cliVersion: '0.0.0-test',
+          runtimeInstallPolicy: 'never',
+        },
+        makeIo().io,
+        {
+          loadProject: async () => project,
+          createSemanticLayerCompute: () => compute,
+          createQueryExecutor: () => queryExecutor,
+        },
+      ),
+    ).resolves.toBe(0);
+    expect(queryExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        connection: expect.objectContaining({ driver: 'duckdb' }),
+        sql: 'select 42 as total',
+      }),
+    );
+  });
+
   it('executes sl query against a local SQLite connection through the default executor', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir });

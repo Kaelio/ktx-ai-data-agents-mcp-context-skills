@@ -41,6 +41,7 @@ export interface KtxConnectionDeps {
 
 const SUPPORTED_TEST_DRIVERS = [
   'sqlite',
+  'duckdb',
   'postgres',
   'mysql',
   'clickhouse',
@@ -276,6 +277,7 @@ async function testConnectionByDriver(
   if (
     driver === 'sqlite' ||
     driver === 'sqlite3' ||
+    driver === 'duckdb' ||
     driver === 'postgres' ||
     driver === 'postgresql' ||
     driver === 'mysql' ||

@@ -129,6 +129,46 @@ describe('runKtxSql', () => {
     expect(io.stderr()).toBe('');
   });
 
+  it('validates duckdb SQL with the duckdb analysis dialect', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, { warehouse: { driver: 'duckdb', path: 'warehouse.duckdb' } });
+    const sqlAnalysis = makeSqlAnalysis({ ok: true, error: null });
+    const connector = makeConnector({
+      id: 'duckdb:warehouse',
+      driver: 'duckdb',
+      executeReadOnly: vi.fn(async () => ({
+        headers: ['id'],
+        rows: [[1]],
+        totalRows: 1,
+        rowCount: 1,
+      })),
+    });
+    const createScanConnector = vi.fn(async () => connector);
+    const io = makeIo();
+
+    await expect(
+      runKtxSql(
+        {
+          command: 'execute',
+          projectDir,
+          connectionId: 'warehouse',
+          sql: 'select id from orders',
+          maxRows: 1000,
+          output: 'json',
+          json: false,
+          cliVersion: '0.0.0-test',
+        },
+        io.io,
+        {
+          createSqlAnalysis: () => sqlAnalysis,
+          createScanConnector,
+        },
+      ),
+    ).resolves.toBe(0);
+    expect(sqlAnalysis.validateReadOnly).toHaveBeenCalledWith('select id from orders', 'duckdb');
+  });
+
   it('prints JSON output', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });

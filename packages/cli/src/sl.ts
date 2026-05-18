@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { createDuckDbQueryExecutor } from '@ktx/connector-duckdb';
 import { createDefaultLocalQueryExecutor, type KtxSqlQueryExecutorPort } from '@ktx/context/connections';
 import {
   createLocalKtxEmbeddingProviderFromConfig,
@@ -79,6 +80,10 @@ function slSearchEmbeddingService(project: KtxLocalProject, deps: KtxSlDeps): Kt
     project.config.ingest.embeddings,
   );
   return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
+}
+
+function createKtxCliSlQueryExecutor(): KtxSqlQueryExecutorPort {
+  return createDefaultLocalQueryExecutor({ duckdb: createDuckDbQueryExecutor() });
 }
 
 async function printSlSources(input: {
@@ -239,7 +244,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
             installPolicy: args.runtimeInstallPolicy,
             io,
           });
-      const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createDefaultLocalQueryExecutor)() : undefined;
+      const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createKtxCliSlQueryExecutor)() : undefined;
       const result = await compileLocalSlQuery(project as KtxLocalProject, {
         connectionId: args.connectionId,
         query,

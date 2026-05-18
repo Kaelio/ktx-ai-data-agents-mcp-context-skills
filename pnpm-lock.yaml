@@ -109,6 +109,9 @@ importers:
       '@ktx/connector-clickhouse':
         specifier: workspace:*
         version: file:packages/connector-clickhouse(js-yaml@4.1.1)(ws@8.20.0)
+      '@ktx/connector-duckdb':
+        specifier: workspace:*
+        version: file:packages/connector-duckdb(js-yaml@4.1.1)(ws@8.20.0)
       '@ktx/connector-mysql':
         specifier: workspace:*
         version: file:packages/connector-mysql(@types/node@24.12.2)(js-yaml@4.1.1)(ws@8.20.0)
@@ -1474,6 +1477,10 @@ packages:
 
   '@ktx/connector-clickhouse@file:packages/connector-clickhouse':
     resolution: {directory: packages/connector-clickhouse, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@ktx/connector-duckdb@file:packages/connector-duckdb':
+    resolution: {directory: packages/connector-duckdb, type: directory}
     engines: {node: '>=22.0.0'}
 
   '@ktx/connector-mysql@file:packages/connector-mysql':
@@ -7681,6 +7688,17 @@ snapshots:
   '@ktx/connector-clickhouse@file:packages/connector-clickhouse(js-yaml@4.1.1)(ws@8.20.0)':
     dependencies:
       '@clickhouse/client': 1.18.4
+      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.0)
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - js-yaml
+      - pg-native
+      - supports-color
+      - ws
+
+  '@ktx/connector-duckdb@file:packages/connector-duckdb(js-yaml@4.1.1)(ws@8.20.0)':
+    dependencies:
+      '@duckdb/node-api': 1.5.2-r.1
       '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.0)
     transitivePeerDependencies:
       - '@cfworker/json-schema'
