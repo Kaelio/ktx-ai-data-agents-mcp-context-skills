@@ -19,7 +19,7 @@ export function DocsPageActions({ mdxSource }: Props) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard denied — fail silently
+      // Clipboard denied - fail silently
     }
   };
 

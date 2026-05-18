@@ -1,249 +1,98 @@
 ---
 title: Quickstart
-description: Set up KTX, build local context, and connect your coding agent.
+description: Install KTX, run setup, and connect your coding agent.
 ---
 
-This guide gets a local analytics project ready for KTX. You will install the
-CLI, run the setup wizard, connect a database, build context, and install agent
-rules that teach your coding assistant which KTX commands to run.
+This guide takes a local analytics project from empty to agent-ready. You'll
+install the CLI, run one guided setup command, and hand the context to a
+coding assistant.
 
-If you are a coding assistant choosing a docs route, start with the
-[Agent Quickstart](/docs/ai-resources/agent-quickstart). This page is the
-human setup walkthrough.
+If you're a coding assistant choosing a docs route, start with the
+[Agent Quickstart](/docs/ai-resources/agent-quickstart) instead.
 
-## What setup does
-
-`ktx setup` is the main project workflow. It can create or resume `ktx.yaml`,
-configure model and embedding providers, add database connections, add optional
-context sources, build the first context artifacts, and install agent
-integration.
-
-When you run bare `ktx` in an interactive terminal outside a KTX project, the
-CLI opens the same setup experience. Inside an existing project, `ktx setup`
-resumes incomplete work or opens a menu for changing setup, connecting an
-agent, checking status, or exploring a demo project.
+<div
+  className="not-prose my-8 rounded-xl border border-l-4 p-5 sm:p-6"
+  style={{
+    borderColor: 'color-mix(in oklch, #ff8a4d 35%, transparent)',
+    borderLeftColor: '#ff8a4d',
+    background: 'color-mix(in oklch, #ff8a4d 8%, transparent)',
+  }}
+>
+  <div
+    className="text-xs font-semibold uppercase tracking-wider"
+    style={{ color: '#ff8a4d' }}
+  >
+    No warehouse handy?
+  </div>
+  <div className="mt-2 text-base leading-relaxed text-fd-foreground">
+    Try KTX against a real data stack - Postgres, dbt, Metabase, and Notion
+    pre-loaded with the Orbit demo corpus. The page lists demo credentials
+    you can paste straight into `ktx setup`.
+  </div>
+  <a
+    href="https://kaelio.com/start"
+    className="mt-4 inline-flex items-center gap-1 text-base font-semibold no-underline hover:underline"
+    style={{
+      color: '#ff8a4d',
+      textDecorationColor: '#ff8a4d',
+    }}
+  >
+    Get demo credentials at kaelio.com/start →
+  </a>
+</div>
 
 ## Install the CLI
 
-Install the published `@kaelio/ktx` package:
+Install the published package globally:
 
 ```bash
 npm install -g @kaelio/ktx
 ```
 
-Then run setup from the analytics project directory:
+KTX is open source. If you'd like to hack on it or run from a local checkout,
+the source lives at [github.com/kaelio/ktx](https://github.com/kaelio/ktx) -
+see [Contributing](/docs/community/contributing) to get set up.
+
+## Run setup
+
+From your project directory, run:
 
 ```bash
 ktx setup
 ```
 
-The local checkout workflow is only for KTX contributors. See
-[Contributing](/docs/community/contributing) for that path.
+The wizard walks you through everything KTX needs in one pass:
 
-## Step 1: Choose the project
+1. **Project** - creates or resumes `ktx.yaml` in the current directory.
+2. **LLM** - picks a Claude backend. The default uses your local Claude Code
+   session, so no API key is required. You can also use an Anthropic API key
+   or Vertex AI.
+3. **Embeddings** - picks an embeddings backend. Choose OpenAI for hosted
+   embeddings or `sentence-transformers` to run locally without an API key.
+4. **Database** - adds at least one primary connection. Supported drivers:
+   SQLite, PostgreSQL, MySQL, ClickHouse, SQL Server, BigQuery, and Snowflake.
+5. **Context sources** - optionally adds dbt, MetricFlow, LookML, Looker,
+   Metabase, or Notion. You can skip and add them later.
+6. **Build** - runs the first ingest so semantic-layer sources and wiki pages
+   are ready for agents.
+7. **Agent integration** - installs project-local rules for Claude Code,
+   Codex, Cursor, OpenCode, or universal `.agents`.
 
-In an interactive terminal, setup can create a new KTX project or resume the
-nearest existing project. The main project file is `ktx.yaml`.
+If setup exits early, rerun `ktx setup` in the same directory. KTX keeps
+progress under `.ktx/setup/` and resumes from the remaining work.
 
-For scripted setup, pass the project directory explicitly:
+> **Note:** Running bare `ktx` in an interactive terminal outside a KTX
+> project opens the same wizard. Inside a project, it opens a menu for
+> resuming setup, connecting an agent, checking status, or exploring a
+> pre-built demo project.
 
-```bash
-ktx setup --project-dir ./analytics
-```
+## Verify
 
-If setup exits early, rerun `ktx setup` in the same directory. KTX keeps local
-setup progress under `.ktx/setup/` and resumes from the remaining work.
-
-## Step 2: Configure the LLM
-
-KTX uses a Claude model for ingest agents that turn schemas, SQL, BI metadata,
-and documents into semantic-layer sources and wiki context.
-
-Setup supports three LLM provider paths:
-
-| Provider | Use when | Credential model |
-|----------|----------|------------------|
-| Claude subscription (Pro/Max) | You want KTX to use your local Claude Code session | Claude Code local authentication |
-| Anthropic API key | You have an Anthropic API key | `ANTHROPIC_API_KEY` or a local `file:` secret |
-| Google Vertex AI for Anthropic Claude | Your organization runs Claude through Google Cloud | Application Default Credentials plus Vertex project and location |
-
-For Anthropic API, setup can read the key from the environment or save a pasted
-key to `.ktx/secrets/anthropic-api-key`. `ktx.yaml` stores an `env:` or `file:`
-reference, not the raw key.
-
-For Vertex AI, setup uses Google Application Default Credentials. It can read
-your active `gcloud` project, list visible projects, or accept explicit
-`--vertex-project` and `--vertex-location` values.
-
-To use your local Claude Code session instead of an API key, set:
-
-```yaml
-llm:
-  provider:
-    backend: claude-code
-  models:
-    default: sonnet
-    triage: haiku
-    candidateExtraction: sonnet
-    curator: sonnet
-    reconcile: sonnet
-    repair: sonnet
-```
-
-`claude-code` uses the Claude Code authentication already configured on your
-machine. It doesn't use `ANTHROPIC_API_KEY`, Vertex credentials, AI Gateway
-tokens, or Bedrock credentials. In non-interactive setup, pass
-`--llm-model opus`, `--llm-model sonnet`, `--llm-model haiku`, or a full Claude
-model ID to select the Claude Code model.
-
-Setup checks the selected model before saving. Anthropic API setup fetches live
-Claude model choices when possible and falls back to bundled defaults if model
-discovery is unavailable.
-
-## Step 3: Configure embeddings
-
-KTX uses embeddings for semantic search over semantic-layer sources, wiki
-context, schema metadata, and relationship evidence.
-
-| Backend | Default model | Notes |
-|---------|---------------|-------|
-| OpenAI | `text-embedding-3-small` | Recommended for hosted embeddings. Requires an OpenAI API key. |
-| Local sentence-transformers | `all-MiniLM-L6-v2` | Runs through the KTX-managed Python runtime. No hosted embedding key is required. |
-
-OpenAI setup reads `OPENAI_API_KEY` or saves a local secret file. Local
-sentence-transformers setup can install and start the managed runtime during
-setup. To prepare that runtime before setup, run:
-
-```bash
-ktx dev runtime install --feature local-embeddings --yes
-ktx dev runtime start --feature local-embeddings
-```
-
-## Step 4: Add a database
-
-KTX needs at least one primary database connection before it can build database
-context. The wizard supports SQLite, PostgreSQL, MySQL, ClickHouse, SQL Server,
-BigQuery, and Snowflake.
-
-You can usually enter connection fields interactively or provide a URL. Secret
-URLs can be stored as local files under `.ktx/secrets/` or referenced with
-`env:NAME` in `ktx.yaml`.
-
-After saving a connection, setup tests it and builds fast schema context:
-
-```text
-Testing warehouse
-  Connection test passed
-
-Building schema context for warehouse
-  Running fast database ingest
-
-Database ready
-  warehouse - PostgreSQL - schema context complete
-```
-
-PostgreSQL, BigQuery, and Snowflake can also enable query-history ingest. Query
-history helps KTX learn common query patterns, joins, service-account filters,
-and warehouse-specific usage. BigQuery and Snowflake support a lookback window;
-Postgres reads the current `pg_stat_statements` aggregate data instead.
-
-## Step 5: Add context sources
-
-Context sources are optional, but they make the first context layer much richer.
-Setup can add:
-
-| Source | Typical input | What KTX learns |
-|--------|---------------|-----------------|
-| dbt | Local project or Git repo | Models, columns, tests, descriptions, tags |
-| MetricFlow | Local project or Git repo | Semantic models, metrics, dimensions, entities |
-| LookML | Local files or Git repo | Views, explores, dimensions, measures, joins |
-| Looker | API URL and credentials | Explores, looks, dashboards, model metadata |
-| Metabase | API URL and key | Questions, dashboards, BI database mappings |
-| Notion | Integration token and crawl settings | Business docs and knowledge pages |
-
-Setup maps BI and source metadata back to your primary warehouse connection so
-generated context points at the right tables.
-
-You can skip this step and add sources later by rerunning `ktx setup`.
-
-## Step 6: Build context
-
-The context build turns configured databases and sources into local artifacts
-agents can read. It runs database ingest first, then source ingest and memory
-updates.
-
-Fast database ingest records deterministic schema grounding. Deep ingest adds
-AI-enriched descriptions, embeddings, relationship evidence, and query-history
-context when configured.
-
-When the build finishes, setup verifies that agent-ready context exists:
-
-```text
-KTX context is ready for agents.
-
-Databases:
-  warehouse: deep context complete
-
-Context sources:
-  dbt_main: memory update complete
-
-Verification:
-  Agent context: ready
-  Semantic search: ready
-```
-
-If a foreground build is interrupted, rerun `ktx setup` or build the same target
-with `ktx ingest <connectionId>`.
-
-## Step 7: Install agent integration
-
-The final setup step installs project-local rules for your coding assistant.
-Supported targets are Claude Code, Codex, Cursor, OpenCode, and universal
-`.agents`.
-
-You can also run this step later:
-
-```bash
-ktx setup --agents --target codex
-```
-
-Claude Code and Codex also support global installs:
-
-```bash
-ktx setup --agents --target codex --global
-```
-
-Agent rules are CLI-based. They point agents at the KTX CLI path that created
-the file, so agents do not need a separate `ktx` binary in `PATH`. If the CLI
-path changes after reinstalling or moving a checkout, rerun `ktx setup --agents`.
-
-## Generated files
-
-KTX writes plain files so people and agents can inspect changes in git.
-
-| Path | Purpose |
-|------|---------|
-| `ktx.yaml` | Project configuration for LLMs, embeddings, connections, context sources, and query-history settings |
-| `.ktx/secrets/*` | Local secret files referenced from `ktx.yaml`; do not commit these |
-| `.ktx/setup/*` | Local setup and context-build state |
-| `.ktx/agents/install-manifest.json` | Manifest used to manage installed agent files |
-| `semantic-layer/<connection-id>/*.yaml` | Semantic source definitions used for SQL generation |
-| `wiki/global/*.md` | Shared business context and metric definitions |
-| `wiki/user/<user-id>/*.md` | User-scoped notes and local context |
-| `.claude/skills/ktx/SKILL.md` | Claude Code project skill |
-| `.agents/skills/ktx/SKILL.md` | Codex or universal project skill |
-| `.cursor/rules/ktx.mdc` | Cursor project rule |
-| `.opencode/commands/ktx.md` | OpenCode project command |
-
-## Verify setup
-
-Run:
+When setup finishes, check readiness:
 
 ```bash
 ktx status
 ```
-
-Example output:
 
 ```text
 KTX project: /home/user/analytics
@@ -256,15 +105,37 @@ KTX context built: yes
 Agent integration ready: yes (codex:project)
 ```
 
-Use JSON when an agent or script needs a structured readiness check:
+For a structured check inside scripts, use `ktx status --json`.
+
+## Connect a coding agent
+
+The setup wizard installs project-local agent rules in the last step. To
+install or change targets later:
 
 ```bash
-ktx status --json
+ktx setup --agents
 ```
 
-## Scripted setup example
+Claude Code and Codex also support global installs with `--global`. Agent
+rules point at the KTX CLI path that created them, so agents don't need a
+separate `ktx` binary on `PATH`. If the CLI path changes, rerun
+`ktx setup --agents`.
 
-Use non-interactive setup when creating repeatable fixtures or automation:
+## What setup writes
+
+KTX writes plain files so people and agents can review changes in git.
+
+| Path | Purpose |
+|------|---------|
+| `ktx.yaml` | Project configuration |
+| `.ktx/secrets/*` | Local secret files referenced from `ktx.yaml` - do not commit |
+| `semantic-layer/<connection-id>/*.yaml` | Semantic sources for SQL generation |
+| `wiki/global/*.md` | Shared business context and metric definitions |
+| `.claude/skills/ktx/`, `.agents/skills/ktx/`, `.cursor/rules/ktx.mdc`, `.opencode/commands/ktx.md` | Installed agent rules |
+
+## Scripted setup
+
+For repeatable fixtures and automation, skip prompts with flags:
 
 ```bash
 ktx setup \
@@ -287,23 +158,21 @@ ktx ingest warehouse --fast
 See [ktx setup](/docs/cli-reference/ktx-setup) for the full automation flag
 surface.
 
-## Common errors
+## Common issues
 
-| Symptom | Likely cause | Recovery |
-|---------|--------------|----------|
-| `ktx: command not found` | The global package is not installed or your shell cannot find it | Reinstall `@kaelio/ktx` and open a new shell |
-| Setup resumes the wrong project | `KTX_PROJECT_DIR` or the nearest `ktx.yaml` points somewhere else | Pass `--project-dir <path>` |
-| Anthropic health check fails | API key, model id, or access is invalid | Fix `ANTHROPIC_API_KEY` or rerun setup with a different key or model |
-| Vertex AI health check fails | Vertex API, Claude access, project, location, or IAM permissions are missing | Check the project, location, Application Default Credentials, and Vertex AI permissions |
-| OpenAI embeddings fail | `OPENAI_API_KEY` is missing or invalid | Export the key or choose local sentence-transformers embeddings |
-| Local embeddings fail | Managed Python runtime cannot install or start | Run `ktx dev runtime status`, then install the local embeddings runtime |
-| Database test fails | Credentials, network access, database, warehouse, or schema is wrong | Test the same values with the database's native client, then rerun setup |
-| Context is not built | Setup saved configuration but skipped or interrupted the build | Run `ktx setup` or `ktx ingest --all` |
-| Agent integration is incomplete | Setup skipped the agents step or installed a different target | Run `ktx setup --agents --target <target>` |
+| Symptom | Fix |
+|---------|-----|
+| `ktx: command not found` | Reinstall `@kaelio/ktx` and open a new shell |
+| Setup resumes the wrong project | Pass `--project-dir <path>` |
+| LLM or embeddings health check fails | Rerun setup and pick a different credential, model, or backend |
+| Database test fails | Verify the same connection with the database's native client, then rerun setup |
+| Agent integration is incomplete | Run `ktx setup --agents --target <target>` |
 
 ## Next steps
 
-- Build and refresh context with [Building Context](/docs/guides/building-context).
-- Edit semantic sources and wiki pages with [Writing Context](/docs/guides/writing-context).
+- Refresh context with [Building Context](/docs/guides/building-context).
+- Edit semantic sources and wiki pages with
+  [Writing Context](/docs/guides/writing-context).
 - Connect more tools with [Agent Clients](/docs/integrations/agent-clients).
-- Read [The Context Layer](/docs/concepts/the-context-layer) to understand the architecture.
+- Read [The Context Layer](/docs/concepts/the-context-layer) to understand
+  the architecture.

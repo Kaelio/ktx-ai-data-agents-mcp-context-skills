@@ -165,6 +165,17 @@ pre {
   line-height: 1.7 !important;
 }
 
+/* Disable monospace ligatures so `--flag` keeps a visible space and double
+   dashes don't fuse into an em-dash glyph. */
+code,
+pre,
+pre code,
+.ktx-code,
+.ktx-code code {
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+}
+
 .dark pre {
   background: transparent !important;
 }
@@ -308,8 +319,8 @@ figure[data-rehype-pretty-code-figure]:has(.ktx-code) {
 
 .ktx-code-output-copy {
   position: absolute !important;
-  top: 6px !important;
-  right: 6px !important;
+  top: 7px !important;
+  right: 8px !important;
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 0.2s var(--ktx-ease), transform 0.2s var(--ktx-ease);
@@ -471,8 +482,8 @@ figure[data-rehype-pretty-code-figure]:has(.ktx-code) {
 
 .ktx-code-minimal-copy {
   position: absolute !important;
-  top: 6px !important;
-  right: 6px !important;
+  top: 7px !important;
+  right: 8px !important;
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 0.2s var(--ktx-ease), transform 0.2s var(--ktx-ease);
