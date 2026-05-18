@@ -23,7 +23,7 @@ import { ProductMechanics } from "@/components/product-mechanics";
       Make analytics context usable by agents
     </h1>
     <p className="mt-4 max-w-2xl text-lg text-fd-muted-foreground" style={{ lineHeight: '1.7' }}>
-      {'KTX turns warehouse metadata, semantic definitions, BI usage, and team knowledge into local files and runtime tools that database agents can trust.'}
+      {'KTX turns warehouse metadata, semantic definitions, BI usage, and team knowledge into a wiki and executable semantic layer that database agents can trust.'}
     </p>
   </div>
 </div>
@@ -36,12 +36,13 @@ import { ProductMechanics } from "@/components/product-mechanics";
 
 ## What KTX creates
 
+KTX ingestion turns source evidence into durable context files that agents can
+search, review, and execute.
+
 | Path | What it gives agents |
 |------|----------------------|
-| `semantic-layer/` | Measures, dimensions, joins, grain, filters, segments |
+| `semantic-layer/` | Executable measures, dimensions, joins, grain, filters, and segments |
 | `wiki/` | Business definitions, caveats, policies, analyst notes |
-| `raw-sources/` | Extracted metadata, scan output, relationship evidence |
-| `.ktx/` | Local indexes, embeddings, setup state, runtime data |
 
 <ProductMechanics />
 

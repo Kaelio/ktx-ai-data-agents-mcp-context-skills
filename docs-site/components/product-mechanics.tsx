@@ -1,113 +1,347 @@
-import type { ReactNode } from "react";
+"use client";
 
-type SourceInput = {
-  name: string;
-  sources: string[];
-  detail: string;
-  signal: string;
+import {
+  Background,
+  BackgroundVariant,
+  Handle,
+  MarkerType,
+  type Node,
+  type NodeProps,
+  Position,
+  ReactFlow,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+
+type SourceNodeData = {
   accent: string;
+  body: string;
+  items: string[];
+  title: string;
 };
 
-const sourceInputs = [
-  {
-    name: "Database structure",
-    sources: [
-      "Postgres",
-      "Snowflake",
-      "BigQuery",
-      "and many others",
-    ],
-    detail: "tables, columns, types, constraints, row counts",
-    signal: "grounds definitions in live database structure",
-    accent: "border-fd-primary",
-  },
-  {
-    name: "BI and usage evidence",
-    sources: ["Metabase", "Looker"],
-    detail: "historic SQL, questions, dashboards, usage patterns",
-    signal: "extracts joins, filters, grain, and trusted examples",
-    accent: "border-orange-500",
-  },
-  {
-    name: "Semantic modeling",
-    sources: ["dbt", "MetricFlow", "LookML"],
-    detail: "models, metrics, dimensions, explores, joins",
-    signal: "maps existing modeling logic into semantic entities",
-    accent: "border-amber-500",
-  },
-  {
-    name: "Company documentation",
-    sources: ["Notion"],
-    detail: "Notion pages, policies, caveats",
-    signal: "links business language back to semantic references",
-    accent: "border-slate-500 dark:border-cyan-200",
-  },
-] satisfies SourceInput[];
+type StageNodeData = {
+  body: string;
+  index: number;
+  title: string;
+};
 
-const ingestSteps = [
+type OutputNodeData = {
+  accent: string;
+  body: string;
+  path: string;
+  tags: string[];
+  title: string;
+};
+
+type SourceNode = Node<SourceNodeData, "source">;
+type StageNode = Node<StageNodeData, "stage">;
+type OutputNode = Node<OutputNodeData, "output">;
+type FlowNode = SourceNode | StageNode | OutputNode;
+
+const SOURCE_W = 210;
+const SOURCE_H = 200;
+const STAGE_W = 280;
+const STAGE_H = 120;
+const OUTPUT_W = 340;
+const OUTPUT_H = 232;
+
+const ROW_SOURCES_Y = 80;
+const ROW_STAGE_START_Y = 360;
+const STAGE_GAP = 30;
+const ROW_OUTPUTS_Y = 1000;
+
+const STAGE_CENTER_X = 460;
+const STAGE_X = STAGE_CENTER_X - STAGE_W / 2;
+
+const SOURCE_GAP_X = 24;
+const SOURCES_TOTAL = SOURCE_W * 4 + SOURCE_GAP_X * 3;
+const SOURCES_START_X = STAGE_CENTER_X - SOURCES_TOTAL / 2;
+
+const OUTPUT_GAP_X = 180;
+const OUTPUTS_TOTAL = OUTPUT_W * 2 + OUTPUT_GAP_X;
+const OUTPUTS_START_X = STAGE_CENTER_X - OUTPUTS_TOTAL / 2;
+
+const EDGE_STROKE = "#94a3b8";
+
+const sourceData: SourceNodeData[] = [
   {
-    title: "extract evidence",
-    body: "Pull structured facts from schemas, SQL, BI metadata, and docs.",
+    title: "Databases",
+    body: "Schemas, columns, keys, row counts, and query history.",
+    items: ["PostgreSQL", "Snowflake", "BigQuery", "SQLite"],
+    accent: "#3b82f6",
   },
   {
-    title: "reconcile entities",
-    body: "Merge names, measures, joins, and caveats into one project model.",
+    title: "BI tools",
+    body: "Dashboards, questions, explores, usage, and trusted examples.",
+    items: ["Metabase", "Looker"],
+    accent: "#f97316",
   },
   {
-    title: "validate references",
-    body: "Check semantic fields and joins against database context before agents use them.",
+    title: "Modeling code",
+    body: "Existing metrics, dimensions, models, joins, and entities.",
+    items: ["dbt", "LookML", "MetricFlow"],
+    accent: "#f59e0b",
+  },
+  {
+    title: "Docs and notes",
+    body: "Policies, caveats, team definitions, and analyst context.",
+    items: ["Notion", "Markdown"],
+    accent: "#10b981",
   },
 ];
 
-const artifacts = [
+const stageData: Omit<StageNodeData, "index">[] = [
   {
-    path: "semantic-layer/*.yaml",
-    title: "Typed query model",
-    body: "sources, grain, joins, dimensions, measures, filters, segments",
+    title: "Source adapters",
+    body: "Read each configured system in its native shape.",
   },
   {
+    title: "Context builder",
+    body: "Turn source evidence into proposed context updates.",
+  },
+  {
+    title: "Reconciliation",
+    body: "Merge new evidence with the context that already exists.",
+  },
+  {
+    title: "Validation",
+    body: "Check references and semantics before agents rely on them.",
+  },
+];
+
+const outputData: OutputNodeData[] = [
+  {
+    title: "Wiki",
     path: "wiki/*.md",
-    title: "Business context",
-    body: "rules and caveats with sl_refs back to semantic-layer entities",
+    tags: ["free-form", "auto-maintained"],
+    body: "Definitions, caveats, policies, analyst notes, and business language that agents can search.",
+    accent: "#10b981",
   },
   {
-    path: "raw-sources/",
-    title: "Evidence trail",
-    body: "scan artifacts, extracted metadata, relationship evidence",
-  },
-  {
-    path: ".ktx/",
-    title: "Local indexes",
-    body: "embeddings and search indexes, not the source of truth",
+    title: "Semantic layer",
+    path: "semantic-layer/*.yaml",
+    tags: ["structured", "executable", "auto-maintained"],
+    body: "Metrics, joins, tables, dimensions, filters, and segments that KTX can validate and compile into SQL.",
+    accent: "#3b82f6",
   },
 ];
 
-const runtimeSteps = [
-  {
-    title: "Search wiki",
-    body: "Find business rules, caveats, synonyms, and sl_refs.",
-  },
-  {
-    title: "Resolve semantic refs",
-    body: "Map measure and dimension names to approved entities.",
-  },
-  {
-    title: "Validate fields",
-    body: "Check source, columns, joins, grain, filters, and segments.",
-  },
-  {
-    title: "Build query plan",
-    body: "Create a semantic query plan before SQL is generated.",
-  },
-  {
-    title: "Compile dialect SQL",
-    body: "Generate warehouse-shaped SQL instead of copying examples.",
-  },
-  {
-    title: "Execute with bounds",
-    body: "Optionally run with bounded rows and return provenance.",
-  },
+const nodes: FlowNode[] = [
+  ...sourceData.map<SourceNode>((source, index) => ({
+    id: `source-${index}`,
+    type: "source",
+    position: {
+      x: SOURCES_START_X + index * (SOURCE_W + SOURCE_GAP_X),
+      y: ROW_SOURCES_Y,
+    },
+    data: source,
+    draggable: false,
+    selectable: false,
+  })),
+  ...stageData.map<StageNode>((stage, index) => ({
+    id: `stage-${index}`,
+    type: "stage",
+    position: {
+      x: STAGE_X,
+      y: ROW_STAGE_START_Y + index * (STAGE_H + STAGE_GAP),
+    },
+    data: { ...stage, index: index + 1 },
+    draggable: false,
+    selectable: false,
+  })),
+  ...outputData.map<OutputNode>((output, index) => ({
+    id: `output-${index}`,
+    type: "output",
+    position: {
+      x: OUTPUTS_START_X + index * (OUTPUT_W + OUTPUT_GAP_X),
+      y: ROW_OUTPUTS_Y,
+    },
+    data: output,
+    draggable: false,
+    selectable: false,
+  })),
 ];
+
+const REF_EDGE_STROKE = "#64748b";
+
+const flowEdges = [
+  ...sourceData.map((_, index) => ({
+    id: `e-source-${index}-stage-0`,
+    source: `source-${index}`,
+    target: "stage-0",
+  })),
+  ...stageData.slice(0, -1).map((_, index) => ({
+    id: `e-stage-${index}-stage-${index + 1}`,
+    source: `stage-${index}`,
+    target: `stage-${index + 1}`,
+  })),
+  ...outputData.map((_, index) => ({
+    id: `e-stage-3-output-${index}`,
+    source: "stage-3",
+    target: `output-${index}`,
+  })),
+].map((edge) => ({
+  ...edge,
+  type: "smoothstep" as const,
+  style: { stroke: EDGE_STROKE, strokeWidth: 1.5 },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    color: EDGE_STROKE,
+    width: 16,
+    height: 16,
+  },
+}));
+
+const refsEdge = {
+  id: "e-output-refs",
+  source: "output-0",
+  sourceHandle: "right",
+  target: "output-1",
+  targetHandle: "left",
+  type: "straight" as const,
+  label: "references",
+  labelBgPadding: [6, 3] as [number, number],
+  labelBgBorderRadius: 4,
+  labelStyle: {
+    fontSize: 13,
+    fontWeight: 500,
+    fill: "var(--color-fd-muted-foreground)",
+  },
+  labelBgStyle: {
+    fill: "var(--color-fd-background)",
+    stroke: "var(--color-fd-border)",
+    strokeWidth: 1,
+  },
+  style: {
+    stroke: REF_EDGE_STROKE,
+    strokeWidth: 1.25,
+    strokeDasharray: "4 4",
+  },
+  markerStart: {
+    type: MarkerType.ArrowClosed,
+    color: REF_EDGE_STROKE,
+    width: 14,
+    height: 14,
+  },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    color: REF_EDGE_STROKE,
+    width: 14,
+    height: 14,
+  },
+};
+
+const edges = [...flowEdges, refsEdge];
+
+function SourceNodeView({ data }: NodeProps<SourceNode>) {
+  return (
+    <div
+      style={{
+        width: SOURCE_W,
+        height: SOURCE_H,
+        borderTop: `3px solid ${data.accent}`,
+      }}
+      className="overflow-hidden rounded-md border border-fd-border bg-fd-card px-3.5 py-3 shadow-sm"
+    >
+      <Handle type="target" position={Position.Top} className="!opacity-0" />
+      <p className="text-[16px] font-semibold leading-6 text-fd-foreground">
+        {data.title}
+      </p>
+      <p className="mt-1 line-clamp-3 text-[13px] leading-5 text-fd-muted-foreground">
+        {data.body}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {data.items.map((item) => (
+          <span
+            key={item}
+            className="rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[12px] leading-5 text-fd-muted-foreground"
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
+    </div>
+  );
+}
+
+function StageNodeView({ data }: NodeProps<StageNode>) {
+  return (
+    <div
+      style={{ width: STAGE_W, height: STAGE_H }}
+      className="flex items-center gap-3.5 rounded-md border border-cyan-200/20 bg-[#0f1f23] px-4 py-3.5 text-white shadow-sm dark:bg-[#0b181b]"
+    >
+      <Handle type="target" position={Position.Top} className="!opacity-0" />
+      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-cyan-300/95 font-mono text-sm font-semibold text-[#0b1c20]">
+        {data.index}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[16px] font-semibold leading-6 text-white">
+          {data.title}
+        </p>
+        <p className="mt-1 line-clamp-3 text-[13px] leading-5 text-cyan-50/75">
+          {data.body}
+        </p>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
+    </div>
+  );
+}
+
+function OutputNodeView({ data }: NodeProps<OutputNode>) {
+  return (
+    <div
+      style={{
+        width: OUTPUT_W,
+        height: OUTPUT_H,
+        borderTop: `3px solid ${data.accent}`,
+      }}
+      className="overflow-hidden rounded-md border border-fd-border bg-fd-card px-4 py-3.5 shadow-sm"
+    >
+      <Handle type="target" position={Position.Top} className="!opacity-0" />
+      <Handle
+        id="left"
+        type="target"
+        position={Position.Left}
+        className="!opacity-0"
+      />
+      <Handle
+        id="right"
+        type="source"
+        position={Position.Right}
+        className="!opacity-0"
+      />
+      <p
+        className="font-mono text-[13px] font-semibold tracking-tight"
+        style={{ color: data.accent }}
+      >
+        {data.path}
+      </p>
+      <p className="mt-1.5 text-[16px] font-semibold leading-6 text-fd-foreground">
+        {data.title}
+      </p>
+      <div className="mt-1.5 flex flex-nowrap gap-1">
+        {data.tags.map((tag) => (
+          <span
+            key={tag}
+            className="whitespace-nowrap rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[12px] leading-5 text-fd-muted-foreground"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 line-clamp-3 text-[13px] leading-5 text-fd-muted-foreground">
+        {data.body}
+      </p>
+    </div>
+  );
+}
+
+const nodeTypes = {
+  source: SourceNodeView,
+  stage: StageNodeView,
+  output: OutputNodeView,
+};
 
 export function ProductMechanics() {
   return (
@@ -121,339 +355,111 @@ export function ProductMechanics() {
           className="text-xl font-semibold tracking-normal text-fd-foreground sm:text-2xl"
           style={{ fontFamily: "var(--font-display)" }}
         >
-          How KTX works
+          How ingestion works
         </h2>
         <p className="mt-3 text-sm leading-6 text-fd-muted-foreground">
-          KTX reads source evidence, writes local context files, and gives
-          agents semantic search, validation, SQL, and provenance.
+          KTX ingests source evidence, reconciles it with your existing project,
+          and produces durable context that agents can search, review, and
+          execute.
         </p>
       </div>
 
-      <div className="space-y-4">
-        <IngestionDiagram />
-        <RuntimeDiagram />
-      </div>
-    </section>
-  );
-}
-
-function IngestionDiagram() {
-  return (
-    <article
-      className="max-w-full min-w-0 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
-      aria-labelledby="ingestion-diagram-title"
-    >
-      <DiagramHeader
-        eyebrow="Ingestion"
-        id="ingestion-diagram-title"
-        title="Build context from source evidence"
-        body="KTX reconciles loose metadata, SQL, BI usage, and documentation into files agents can validate and edit."
-      />
-
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)]">
-        <section className="flex flex-col border-b border-fd-border p-4 lg:border-r lg:border-b-0">
-          <ColumnLabel>Inputs KTX reads</ColumnLabel>
-          <div className="grid flex-1 auto-rows-fr gap-2">
-            {sourceInputs.map((source) => (
-              <div
-                key={source.name}
-                className={`grid min-h-0 gap-2 border-l-2 bg-fd-background px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(6.5rem,0.42fr)] sm:items-center ${source.accent}`}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-fd-foreground">
-                    {source.name}
-                  </p>
-                  <p className="mt-0.5 text-xs leading-4 text-fd-muted-foreground">
-                    {source.detail}
-                  </p>
-                  <p className="mt-1 text-xs leading-4 text-fd-primary">
-                    {source.signal}
-                  </p>
-                </div>
-                <SourceList sources={source.sources} />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="flex flex-col bg-fd-muted/35 p-4">
-          <ColumnLabel>KTX transforms evidence</ColumnLabel>
-          <div className="flex flex-col gap-3">
-            <div className="rounded-md border border-fd-border bg-[#102226] p-3 text-white dark:bg-[#0b181b]">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
-                KTX builds the model
-              </p>
-              <ol className="grid gap-3">
-                {ingestSteps.map((step, index) => (
-                  <PipelineStep
-                    key={step.title}
-                    index={index + 1}
-                    title={step.title}
-                    body={step.body}
-                    dark
-                  />
-                ))}
-              </ol>
-            </div>
-
-            <div className="border-t border-fd-border/80 pt-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
-                Outputs KTX writes
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {artifacts.map((artifact) => (
-                  <Artifact key={artifact.path} {...artifact} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </article>
-  );
-}
-
-function RuntimeDiagram() {
-  return (
-    <article
-      className="max-w-full min-w-0 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
-      aria-labelledby="runtime-diagram-title"
-    >
-      <DiagramHeader
-        eyebrow="Runtime"
-        id="runtime-diagram-title"
-        title="Run agent requests through the model"
-        body="Agents send business intent. KTX resolves fields, checks joins and grain, compiles SQL, and can execute with row limits."
-      />
-
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-        <section className="border-b border-fd-border p-4 lg:border-r lg:border-b-0">
-          <ColumnLabel>Agent sends</ColumnLabel>
-          <CodeBox>
-            <div>connection: warehouse</div>
-            <div>measure: orders.total_revenue</div>
-            <div>dimension: customers.segment</div>
-            <div>filter: orders.created_date &gt;= '2024-01-01'</div>
-          </CodeBox>
-          <p className="mt-3 text-xs leading-5 text-fd-muted-foreground">
-            This is the API surface agents should use: compact semantic intent,
-            not hand-written warehouse SQL.
-          </p>
-        </section>
-
-        <section className="bg-fd-muted/35 p-4">
-          <ColumnLabel>KTX planning and execution</ColumnLabel>
-          <ol className="grid gap-2 sm:grid-cols-2">
-            {runtimeSteps.map((step, index) => (
-              <PipelineStep
-                key={step.title}
-                index={index + 1}
-                title={step.title}
-                body={step.body}
-              />
-            ))}
-          </ol>
-        </section>
-      </div>
-
-      <div className="grid gap-0 border-t border-fd-border lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section className="border-b border-fd-border p-4 lg:border-r lg:border-b-0">
-          <ColumnLabel>Semantic query plan</ColumnLabel>
-          <div className="rounded-md border border-fd-border bg-fd-card p-3 text-xs leading-5 text-fd-muted-foreground">
-            <p>
-              <strong className="text-fd-foreground">source:</strong>{" "}
-              orders joined to customers as many_to_one
-            </p>
-            <p>
-              <strong className="text-fd-foreground">measure:</strong>{" "}
-              total_revenue = sum(amount) with refund filter
-            </p>
-            <p>
-              <strong className="text-fd-foreground">grain:</strong> segment
-              group-by with date predicate
-            </p>
-            <p>
-              <strong className="text-fd-foreground">result:</strong> dialect
-              SQL, bounded rows, and provenance
-            </p>
-          </div>
-        </section>
-
-        <section className="p-4">
-          <ColumnLabel>KTX returns</ColumnLabel>
-          <CodeBox>
-            <div>select</div>
-            <div className="pl-3">customers.segment,</div>
-            <div className="pl-3">sum(orders.amount) as total_revenue</div>
-            <div>from analytics.orders</div>
-            <div>join analytics.customers</div>
-            <div className="pl-3">on orders.customer_id = customers.id</div>
-            <div>where orders.status != 'refunded'</div>
-            <div className="pl-3">and orders.created_date &gt;= '2024-01-01'</div>
-            <div>group by 1</div>
-          </CodeBox>
-          <p className="mt-3 text-xs leading-5 text-fd-muted-foreground">
-            The output can be SQL-only or executed results with provenance, so
-            the agent can show where the answer came from.
-          </p>
-        </section>
-      </div>
-    </article>
-  );
-}
-
-function DiagramHeader({
-  body,
-  eyebrow,
-  id,
-  title,
-}: {
-  body: string;
-  eyebrow: string;
-  id: string;
-  title: string;
-}) {
-  return (
-    <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-fd-primary">
-        {eyebrow}
-      </p>
-      <h3
-        id={id}
-        className="mt-1 text-base font-semibold tracking-normal text-fd-foreground sm:text-lg"
-        style={{ fontFamily: "var(--font-display)" }}
+      <article
+        className="max-w-full min-w-0 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+        aria-label="KTX ingestion flow from source systems to durable context outputs"
       >
-        {title}
-      </h3>
-      <p className="mt-2 max-w-3xl text-xs leading-5 text-fd-muted-foreground">
-        {body}
-      </p>
-    </div>
-  );
-}
+        <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-fd-primary">
+            Ingestion flow
+          </p>
+          <h3
+            className="mt-1 text-base font-semibold tracking-normal text-fd-foreground sm:text-lg"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            From scattered source systems to agent-ready context
+          </h3>
+          <p className="mt-2 max-w-3xl text-xs leading-5 text-fd-muted-foreground">
+            The inputs can be structured systems or loose team knowledge. The
+            outputs are the two files agents need: a readable wiki and an
+            executable semantic layer.
+          </p>
+        </div>
 
-function Artifact({
-  body,
-  path,
-  title,
-}: {
-  body: string;
-  path: string;
-  title: string;
-}) {
-  return (
-    <div className="rounded-md border border-fd-border bg-fd-card px-3 py-2">
-      <p className="font-mono text-xs font-semibold text-fd-foreground">
-        {path}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-fd-foreground">{title}</p>
-      <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">
-        {body}
-      </p>
-    </div>
-  );
-}
-
-function PipelineStep({
-  body,
-  dark = false,
-  index,
-  title,
-}: {
-  body: string;
-  dark?: boolean;
-  index: number;
-  title: string;
-}) {
-  return (
-    <li
-      className={
-        dark
-          ? "flex gap-3 text-sm"
-          : "flex gap-3 rounded-md border border-fd-border bg-fd-card px-3 py-2"
-      }
-    >
-      <span
-        className={
-          dark
-            ? "flex h-5 w-5 flex-none items-center justify-center rounded-full bg-cyan-200 text-[11px] font-semibold text-[#102226]"
-            : "flex h-5 w-5 flex-none items-center justify-center rounded-full bg-fd-primary text-[11px] font-semibold text-fd-primary-foreground"
+        <div
+          className="mechanics-canvas bg-fd-background"
+          style={{
+            height: "min(1180px, 165vw)",
+            minHeight: 680,
+          }}
+        >
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.04 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
+            elementsSelectable={false}
+            panOnDrag={false}
+            panOnScroll={false}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            zoomOnDoubleClick={false}
+            preventScrolling={false}
+            minZoom={0.2}
+            maxZoom={1.5}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={18}
+              size={1}
+              color="var(--color-fd-border)"
+            />
+          </ReactFlow>
+        </div>
+      </article>
+      <style>{`
+        .mechanics-canvas .react-flow__node {
+          background: transparent;
+          border: 0;
+          box-shadow: none;
+          padding: 0;
+          border-radius: 0;
+          width: auto;
+          text-align: left;
+          user-select: text;
+          -webkit-user-select: text;
+          cursor: auto;
+          pointer-events: all !important;
         }
-      >
-        {index}
-      </span>
-      <span className="min-w-0">
-        <span
-          className={
-            dark
-              ? "block text-sm font-semibold text-white"
-              : "block text-xs font-semibold text-fd-foreground"
-          }
-        >
-          {title}
-        </span>
-        <span
-          className={
-            dark
-            ? "mt-0.5 block break-words text-xs leading-5 text-cyan-50/75"
-              : "mt-0.5 block break-words text-xs leading-5 text-fd-muted-foreground"
-          }
-        >
-          {body}
-        </span>
-      </span>
-    </li>
-  );
-}
-
-function ColumnLabel({ children }: { children: ReactNode }) {
-  return (
-    <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
-      {children}
-    </p>
-  );
-}
-
-function SourceList({
-  sources,
-}: {
-  sources: string[];
-}) {
-  return (
-    <div
-      className="min-w-0 border-t border-fd-border/70 pt-2 sm:border-t-0 sm:border-l sm:pl-3 sm:pt-0"
-      aria-label="Sources"
-    >
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-fd-muted-foreground/80">
-        Sources
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {sources.map((source) =>
-          source === "and many others" ? (
-            <span
-              key={source}
-              className="px-0.5 py-0.5 text-[10px] font-medium leading-4 text-fd-muted-foreground/85"
-            >
-              {source}
-            </span>
-          ) : (
-            <span
-              key={source}
-              className="rounded border border-fd-border bg-fd-card/75 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-fd-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-            >
-              {source}
-            </span>
-          ),
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CodeBox({ children }: { children: ReactNode }) {
-  return (
-    <div className="max-w-full min-w-0 overflow-x-auto rounded-md border border-fd-border bg-[#0c1417] p-3 font-mono text-[11px] leading-5 text-cyan-50 shadow-sm">
-      <div className="[overflow-wrap:anywhere]">{children}</div>
-    </div>
+        .mechanics-canvas .react-flow__node > * {
+          pointer-events: auto;
+          user-select: text;
+          -webkit-user-select: text;
+        }
+        .mechanics-canvas .react-flow__node.selected,
+        .mechanics-canvas .react-flow__node:focus,
+        .mechanics-canvas .react-flow__node:focus-visible {
+          outline: none;
+          box-shadow: none;
+        }
+        .mechanics-canvas .react-flow__pane {
+          cursor: default;
+        }
+        .mechanics-canvas .react-flow__handle {
+          width: 1px;
+          height: 1px;
+          min-width: 0;
+          min-height: 0;
+          background: transparent;
+          border: 0;
+          pointer-events: none;
+        }
+      `}</style>
+    </section>
   );
 }
