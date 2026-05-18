@@ -1,4 +1,5 @@
 import type { KtxEmbeddingPort } from '../core/embedding.js';
+import type { SemanticLayerService } from '../sl/index.js';
 import type { MemoryFlowEventSink } from './memory-flow/types.js';
 
 export type IngestTrigger = 'upload' | 'scheduled_pull' | 'manual_resync' | 'manual_override';
@@ -106,6 +107,7 @@ export interface DeterministicProjectionContext {
   stagedDir: string;
   workdir: string;
   parseArtifacts?: unknown;
+  semanticLayerService: SemanticLayerService;
 }
 
 export interface ProjectionResult {

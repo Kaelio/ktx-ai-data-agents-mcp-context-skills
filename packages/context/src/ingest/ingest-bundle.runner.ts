@@ -1352,6 +1352,7 @@ export class IngestBundleRunner {
                 stagedDir,
                 workdir: sessionWorktree.workdir,
                 parseArtifacts,
+                semanticLayerService: this.deps.semanticLayerService,
               }),
           );
           if (projection.errors.length > 0) {
