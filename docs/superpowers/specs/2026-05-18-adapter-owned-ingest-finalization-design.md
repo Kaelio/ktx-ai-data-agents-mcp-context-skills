@@ -130,7 +130,6 @@ interface DeterministicFinalizationContext {
   workUnitOutcomes: WorkUnitOutcome[];
   reconciliationActions: MemoryAction[];
   overrideReplay?: FinalizationOverrideReplay;
-  semanticLayerService: SemanticLayerService;
 }
 
 interface FinalizationResult {
@@ -155,20 +154,35 @@ module layout, but the contract must preserve these semantics:
 - `finalize?()` is deterministic TypeScript code, not an agent loop.
 - It runs only in the ingestion integration worktree.
 - It may write ordinary durable project files.
-- It must report touched semantic-layer sources and wiki page keys.
-- `stageIndex` is the canonical runner index for accepted work-unit actions,
-  touched sources, and reconciliation records visible to the current run. In an
-  override replay it may be rebuilt from the prior report.
+- It must report the semantic-layer sources and wiki page keys it believes it
+  touched so the runner can verify that declaration against the worktree diff.
+- Outside override replay, `stageIndex` is the canonical runner index for
+  accepted work-unit actions, touched sources, evictions, reconciliation records,
+  and artifact resolutions visible to the current run.
+- In override replay, `stageIndex` is a prior-run replay index. It may contain
+  prior-run work-unit actions, touched sources, and artifact records, and
+  adapters must not treat those entries as current-run evidence.
 - `workUnitOutcomes` contains only work units executed in the current run. It
   is empty when override replay skips source work units.
 - `reconciliationActions` contains only accepted reconciliation writes emitted
   through the reconciliation tool session in the current run. These actions have
   already mutated the integration worktree.
+- `overrideReplay` being present is the canonical signal that source work units
+  did not produce current-run evidence unless another context field explicitly
+  carries fresh current-run deterministic input.
 - `actions` in `FinalizationResult` are descriptive records for finalization
   writes that the adapter already performed. The runner must not re-apply them.
   When finalization actions are intended to create provenance rows, they must
-  carry valid current-snapshot or eviction `rawPaths`.
+  carry defensible `rawPaths`: current-snapshot paths from the current raw
+  snapshot, or removed-from-snapshot paths derived from `stageIndex.evictionsApplied`
+  or the equivalent override-replay eviction metadata. Finalization actions
+  without defensible raw-path attribution are still reported, but the runner must
+  exclude them from provenance and surface that exclusion explicitly.
 - It cannot mutate the main project worktree directly.
+- The finalization context must not pass a root-scoped service that can bypass
+  the integration worktree. `workdir` is the durable write boundary. If a future
+  helper is added to the context, the contract must name it as worktree-scoped
+  and state whether it is read-only or allowed to write.
 
 The existing adapter API fields unrelated to deterministic projection and
 finalization remain part of the contract. Adding `finalize?()` must not remove
@@ -191,23 +205,35 @@ Adapters must treat missing current-run deterministic inputs as a no-op, not as
 negative evidence. For historic SQL, override replay must not mark tables stale,
 mark pattern pages stale, or archive pattern pages from an empty current-run
 evidence directory. Any override-safe finalization must be derived from the
-materialized raw snapshot or explicit prior-report data, not from the absence of
-fresh work-unit evidence.
+materialized raw snapshot or explicit prior-report data. In particular,
+prior-run `stageIndex.workUnits[*].actions`, prior-run touched sources, and
+prior-run artifact records are not proof that the current override run observed
+or failed to observe those artifacts.
 
 ## Runner responsibilities
 
 The runner owns all reusable mechanics around `finalize?()`.
 
 After reconciliation completes, the runner calls `adapter.finalize?()` if it
-exists. The runner then commits any reported or discovered finalization changes
-in the integration worktree, records the commit SHA and touched paths in the
-run trace/report, includes finalization actions in saved-memory counts, and
-runs wiki-SL-ref repair before final target-policy and artifact gates.
+exists. The runner captures the pre-finalization commit, derives the
+finalization changed paths from the integration-worktree git diff, commits those
+changes, records the commit SHA and touched paths in the run trace/report,
+includes finalization actions in saved-memory counts, and runs wiki-SL-ref
+repair before final target-policy and artifact gates.
+
+The integration-worktree diff is the source of truth for finalization touched
+paths, changed wiki page keys, and semantic-layer paths. The adapter's
+`touchedSources` and `changedWikiPageKeys` declaration is a verification input,
+not the downstream authority. The runner must derive the final repair and gate
+scope from the diff, cross-check the adapter declaration against that diff, and
+fail the run on under-reporting or over-reporting that would make wiki-SL-ref
+repair, target-policy checks, final gates, reports, traces, or provenance use a
+different artifact set from the actual finalization commit.
 
 `wiki_sl_ref_repair` remains a runner mechanic, not an adapter method. It runs
 after finalization and before final gates, and it uses the normal target
-connection set plus `FinalizationResult.touchedSources` to decide which
-semantic-layer references are visible. Its writes are part of the same
+connection set plus the runner-derived finalization touched sources to decide
+which semantic-layer references are visible. Its writes are part of the same
 integration worktree diff as finalization/reconciliation, so target-policy
 checks, final artifact gates, reports, traces, and squash behavior cover those
 writes before changes reach the main project worktree.
@@ -215,9 +241,9 @@ writes before changes reach the main project worktree.
 The runner must treat finalization like deterministic projection and
 reconciliation, not like a free-form source-key plug-in. It must enforce the
 same target-connection policy used for work-unit and reconciliation changes.
-If finalization writes an unauthorized semantic-layer target, references a
-missing semantic-layer entity, or returns errors, the run fails before changes
-reach the main project worktree.
+If finalization writes an unauthorized semantic-layer target, modifies artifacts
+outside the authorized target set, references a missing semantic-layer entity, or
+returns errors, the run fails before changes reach the main project worktree.
 
 The runner should expose one trace phase named `finalization`. It should not
 keep a `post_processor` stage, `IngestBundlePostProcessorPort`,
@@ -304,6 +330,14 @@ hashes, artifact kind, artifact key, target connection, and action type. The
 finalization phase and commit SHA belong in trace/report metadata; they should
 not be fabricated inside adapter-written files.
 
+Finalization reports must show both the adapter-declared touched artifacts and
+the runner-derived touched artifacts from the finalization git diff. When those
+sets differ, the report and trace must include the mismatch and the run must
+fail before wiki-SL-ref repair or final gates rely on the wrong scope. When a
+finalization action is excluded from provenance because no defensible raw path
+exists, the report must name the action and reason instead of silently dropping
+it.
+
 Traces must make finalization useful for postmortems. At minimum, record
 `finalization_started`, `finalization_committed`, `finalization_skipped`, and
 `finalization_failed` events with source key, touched paths, warnings, and
@@ -323,6 +357,14 @@ Finalization must not be used to repair arbitrary integration conflicts or
 rerun agent work. Conflict repair remains part of artifact-aware integration and
 reconciliation.
 
+Finalization must also preserve reconciliation and accepted work-unit writes
+from the same run. The runner must remember the paths changed before
+finalization and fail if `finalize?()` modifies the same path after
+reconciliation. If a source needs deterministic maintenance for an artifact
+created or edited by a work unit in the same run, that behavior belongs in the
+source-specific work-unit tool or in a later run, not in post-reconciliation
+finalization.
+
 ## Acceptance criteria
 
 The implementation is complete when these conditions are true:
@@ -336,11 +378,19 @@ The implementation is complete when these conditions are true:
   in target-policy checks, final gates, reports, traces, and provenance inputs.
 - Override replay passes explicit override metadata to finalization, leaves
   `workUnitOutcomes` empty when work units are skipped, and proves historic-SQL
-  finalization does not stale or archive artifacts from missing current-run
-  evidence.
+  finalization does not use prior-run `stageIndex` records as current-run
+  evidence or stale/archive artifacts from missing current-run evidence.
+- Finalization provenance uses current raw paths or eviction-derived raw paths,
+  and actions without defensible raw-path attribution are reported as excluded
+  from provenance.
+- The runner derives finalization touched paths, wiki page keys, and
+  semantic-layer scope from the integration-worktree git diff, cross-checks the
+  adapter's touched-artifact declaration, and fails on mismatches.
+- The runner fails when finalization modifies a path already changed by accepted
+  work-unit or reconciliation writes in the same run.
 - `wiki_sl_ref_repair` remains a runner-owned step after finalization and
-  before final gates, consumes finalization touched sources, and has its writes
-  covered by target-policy checks and final gates.
+  before final gates, consumes runner-derived finalization touched sources, and
+  has its writes covered by target-policy checks and final gates.
 - Finalization `actions` are not re-applied by the runner; they are included
   only in reporting, saved-memory counts, and provenance planning when their
   raw-path attribution is valid.
