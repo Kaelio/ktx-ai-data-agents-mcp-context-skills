@@ -69,7 +69,11 @@
   --color-fd-muted-foreground: #7a8d96;
 }
 
-html, body {
+/* Keep html overflow at the default `visible` so body's overflow
+   propagates to the viewport (per CSS Overflow spec). That lets
+   `react-remove-scroll-bar` lock viewport scroll via body alone while
+   leaving the sticky sidebar placeholder anchored to the viewport. */
+body {
   overflow-x: clip;
 }
 
@@ -778,8 +782,8 @@ body::after {
   mix-blend-mode: overlay;
 }
 
-/* Make sure content stays above background */
-body > * {
+/* Make sure page content stays above the decorative background. */
+.ktx-site-shell {
   position: relative;
   z-index: 2;
 }
