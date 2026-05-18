@@ -21,7 +21,7 @@ export function createDuckDbLiveDatabaseIntrospection(
         now: options.now,
       });
       try {
-        return await connector.introspect({ connectionId, driver: 'duckdb' as never }, { runId: `duckdb-${connectionId}` });
+        return await connector.introspect({ connectionId, driver: 'duckdb' }, { runId: `duckdb-${connectionId}` });
       } finally {
         await connector.cleanup();
       }

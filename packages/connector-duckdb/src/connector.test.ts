@@ -159,7 +159,7 @@ describe('KtxDuckDbScanConnector runtime behavior', () => {
 
   it('introspects tables, views, primary keys, foreign keys, and row counts', async () => {
     const c = connector();
-    const snapshot = await c.introspect({ connectionId: 'warehouse', driver: 'duckdb' as never }, { runId: 'test' });
+    const snapshot = await c.introspect({ connectionId: 'warehouse', driver: 'duckdb' }, { runId: 'test' });
     await c.cleanup();
 
     expect(snapshot).toMatchObject({
