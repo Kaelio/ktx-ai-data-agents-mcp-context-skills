@@ -111,3 +111,21 @@ test("/ktx/docs redirects to the docs introduction", async () => {
     `${docsBasePath}/docs/getting-started/introduction`,
   );
 });
+
+test("/ktx/api/search returns docs search results", async () => {
+  const response = await fetch(
+    `${docsSiteUrl}${docsBasePath}/api/search?query=setup`,
+  );
+
+  assert.equal(response.status, 200);
+
+  const results = await response.json();
+  assert.ok(Array.isArray(results), "search response should be an array");
+  assert.ok(
+    results.some(
+      (result) =>
+        typeof result.url === "string" && result.url.startsWith("/docs/"),
+    ),
+    "search should return at least one docs result",
+  );
+});

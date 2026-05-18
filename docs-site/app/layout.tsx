@@ -41,7 +41,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
     >
       <body>
-        <RootProvider>{children}</RootProvider>
+        <RootProvider search={{ options: { api: "/ktx/api/search" } }}>
+          <div className="ktx-site-shell">{children}</div>
+        </RootProvider>
       </body>
     </html>
   );

@@ -5,5 +5,13 @@ export const docs = defineDocs({
 });
 
 export default defineConfig({
-  mdxOptions: {},
+  mdxOptions: {
+    rehypeCodeOptions: {
+      addLanguageClass: true,
+      themes: {
+        light: "min-light",
+        dark: "github-dark",
+      },
+    },
+  },
 });

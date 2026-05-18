@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: What KTX is, how it works, and where to start.
+description: KTX is an open-source, self-improving context layer for data agents.
 ---
 
 import { ProductMechanics } from "@/components/product-mechanics";
@@ -23,46 +23,67 @@ import { ProductMechanics } from "@/components/product-mechanics";
       Make analytics context usable by agents
     </h1>
     <p className="mt-4 max-w-2xl text-lg text-fd-muted-foreground" style={{ lineHeight: '1.7' }}>
-      {'KTX turns warehouse metadata, semantic definitions, BI usage, and team knowledge into local files and runtime tools that database agents can trust.'}
+      {'KTX is an open-source context layer for database agents. It turns warehouse metadata, BI models, query history, docs, and approved metric definitions into reviewable files agents can search and execute.'}
     </p>
   </div>
 </div>
 
-## Why KTX
+## Why KTX helps
 
-- Schemas show columns, not business rules.
-- Agents need trusted metrics, joins, filters, caveats, and provenance.
-- KTX captures that context before agents write SQL, docs, or semantic edits.
+KTX gives agents a shared context workspace before they write SQL, answer a
+question, or update analytics definitions.
 
-## What KTX creates
+- **Context as code.** KTX writes wiki pages and semantic-layer definitions as
+  git-based files you can review, diff, and merge.
+- **Self-improving ingest.** KTX reads warehouses, BI tools, modeling code,
+  query history, and notes, then reconciles new evidence with accepted context.
+- **Executable semantics.** Agents can use approved measures, joins, filters,
+  dimensions, and segments instead of rebuilding canonical SQL from scratch.
+- **Agent-native access.** CLI and MCP tools let agents search context, compile
+  semantic queries, run read-only SQL, and propose updates.
 
-| Path | What it gives agents |
-|------|----------------------|
-| `semantic-layer/` | Measures, dimensions, joins, grain, filters, segments |
-| `wiki/` | Business definitions, caveats, policies, analyst notes |
-| `raw-sources/` | Extracted metadata, scan output, relationship evidence |
-| `.ktx/` | Local indexes, embeddings, setup state, runtime data |
+KTX complements existing semantic layers by pairing metric definitions with the
+surrounding business knowledge, caveats, provenance, and review workflow agents
+need for data work.
+
+## How KTX works
+
+KTX has two connected sides: it builds and maintains the context layer, then
+serves that context to agents at runtime.
+
+| Side | What KTX does |
+|------|---------------|
+| **Ingest and auto-maintain knowledge** | Reads your data stack and company knowledge, reconciles new evidence with accepted context, and keeps changes to `semantic-layer/` plus `wiki/` as version-controlled diffs automatically. |
+| **Serve agents at runtime** | Helps agents find the right wiki pages and semantic-layer entities, then compile or execute semantic queries through CLI and MCP tools. |
 
 <ProductMechanics />
 
 ## Use it for
 
-- **Generate SQL** from approved measures, dimensions, joins, and filters
-- **Explain provenance** with wiki context and warehouse evidence
-- **Repair context** through reviewable YAML and Markdown diffs
-- **Work alongside** dbt, LookML, MetricFlow, Looker, Metabase, and warehouses
+Use KTX when agents need more than raw database access. Agents can search wiki
+context, find semantic-layer entities, compile trusted semantic queries, run
+read-only SQL, and use the same tools through MCP.
 
-Databases: SQLite, PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL
-Server.
+- Generate SQL from approved metrics, joins, filters, and dimensions.
+- Explain metric provenance with wiki context and source evidence.
+- Repair context through reviewable YAML and Markdown diffs.
+- Work alongside dbt, MetricFlow, LookML, Looker, Metabase, Notion, and
+  supported databases.
 
 ## Start here
 
+Choose the route that matches what you want to do next. The quickstart is the
+best first step for users; contributor setup lives in the community docs.
+
 <Cards>
   <Card title="Quickstart" href="/docs/getting-started/quickstart">
-    Set up KTX and build your first context in under 10 minutes.
+    Install KTX, run setup, build context, and connect an agent.
   </Card>
-  <Card title="Guides" href="/docs/guides/building-context">
-    Hands-on workflows for scanning, ingesting, writing, and serving.
+  <Card title="The Context Layer" href="/docs/concepts/the-context-layer">
+    Understand why agents need more than schema access and raw SQL.
+  </Card>
+  <Card title="Building Context" href="/docs/guides/building-context">
+    Refresh context from databases, BI tools, query history, and documents.
   </Card>
   <Card title="Writing Context" href="/docs/guides/writing-context">
     Edit semantic-layer YAML and wiki Markdown safely.

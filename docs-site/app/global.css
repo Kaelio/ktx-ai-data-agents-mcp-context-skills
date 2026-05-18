@@ -69,7 +69,11 @@
   --color-fd-muted-foreground: #7a8d96;
 }
 
-html, body {
+/* Keep html overflow at the default `visible` so body's overflow
+   propagates to the viewport (per CSS Overflow spec). That lets
+   `react-remove-scroll-bar` lock viewport scroll via body alone while
+   leaving the sticky sidebar placeholder anchored to the viewport. */
+body {
   overflow-x: clip;
 }
 
@@ -161,6 +165,17 @@ pre {
   line-height: 1.7 !important;
 }
 
+/* Disable monospace ligatures so `--flag` keeps a visible space and double
+   dashes don't fuse into an em-dash glyph. */
+code,
+pre,
+pre code,
+.ktx-code,
+.ktx-code code {
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+}
+
 .dark pre {
   background: transparent !important;
 }
@@ -216,57 +231,10 @@ figure[data-rehype-pretty-code-figure]:has(.ktx-code) {
   margin: 0;
 }
 
-/* ── Mode A: Terminal ─────────────────────── */
-.ktx-code-terminal {
-  background: #0c1417;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #c8c3bc;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.1),
-    0 12px 32px -16px rgba(0, 0, 0, 0.3);
-}
-
-.ktx-code-terminal:hover {
-  border-color: rgba(34, 211, 238, 0.2);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.1),
-    0 14px 32px -12px rgba(34, 211, 238, 0.18);
-}
-
-.ktx-code-terminal-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
-}
-
-.ktx-tl-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 999px;
-  flex-shrink: 0;
-}
-
-.ktx-code-terminal-label {
-  margin-left: 8px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.ktx-code-body-terminal {
-  background: transparent !important;
-  color: #c8c3bc !important;
-}
-
 /* ── Mode D: Output preview (wizard prompts, status output) ── */
 .ktx-code-output {
   background: var(--color-fd-muted);
   border: 1px solid var(--color-fd-border);
-  border-left: 3px solid color-mix(in oklch, var(--color-fd-primary) 50%, var(--color-fd-border));
   position: relative;
   box-shadow: 0 1px 2px rgba(27, 27, 24, 0.02);
 }
@@ -274,17 +242,14 @@ figure[data-rehype-pretty-code-figure]:has(.ktx-code) {
 .dark .ktx-code-output {
   background: #111a1e;
   border-color: rgba(255, 255, 255, 0.05);
-  border-left-color: rgba(34, 211, 238, 0.25);
 }
 
 .ktx-code-output:hover {
   border-color: color-mix(in oklch, var(--color-fd-primary) 25%, var(--color-fd-border));
-  border-left-color: var(--color-fd-primary);
 }
 
 .dark .ktx-code-output:hover {
   border-color: rgba(255, 255, 255, 0.08);
-  border-left-color: rgba(34, 211, 238, 0.45);
 }
 
 .ktx-code-output-label {
@@ -304,8 +269,8 @@ figure[data-rehype-pretty-code-figure]:has(.ktx-code) {
 
 .ktx-code-output-copy {
   position: absolute !important;
-  top: 6px !important;
-  right: 6px !important;
+  top: 7px !important;
+  right: 8px !important;
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 0.2s var(--ktx-ease), transform 0.2s var(--ktx-ease);
@@ -445,30 +410,10 @@ figure[data-rehype-pretty-code-figure]:has(.ktx-code) {
   border-color: rgba(34, 211, 238, 0.2);
 }
 
-.ktx-code-minimal-lang {
-  position: absolute;
-  top: 8px;
-  left: 14px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-fd-muted-foreground);
-  font-family: var(--font-display), var(--font-sans), sans-serif;
-  opacity: 0;
-  transition: opacity 0.2s var(--ktx-ease);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.ktx-code-minimal:hover .ktx-code-minimal-lang {
-  opacity: 0.5;
-}
-
 .ktx-code-minimal-copy {
   position: absolute !important;
-  top: 6px !important;
-  right: 6px !important;
+  top: 7px !important;
+  right: 8px !important;
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 0.2s var(--ktx-ease), transform 0.2s var(--ktx-ease);
@@ -778,8 +723,8 @@ body::after {
   mix-blend-mode: overlay;
 }
 
-/* Make sure content stays above background */
-body > * {
+/* Make sure page content stays above the decorative background. */
+.ktx-site-shell {
   position: relative;
   z-index: 2;
 }
@@ -1058,8 +1003,7 @@ body > * {
   .pill-badge .pill-dot { animation: none; }
   .card-lift { transition: none; }
   .ktx-code,
-  .ktx-code-minimal-copy,
-  .ktx-code-minimal-lang {
+  .ktx-code-minimal-copy {
     transition: none;
   }
   #nd-sidebar div[data-state]:not([class]) > button[data-state] svg {

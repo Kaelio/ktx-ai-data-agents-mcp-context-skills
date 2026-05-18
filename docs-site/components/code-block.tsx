@@ -13,7 +13,7 @@ type Props = ComponentPropsWithoutRef<"pre"> & {
   "data-language"?: string;
 };
 
-const TERMINAL_LANGS = new Set(["bash", "sh", "shell", "zsh"]);
+const OUTPUT_LANGS = new Set(["text", "plain", "plaintext", "console", "output"]);
 const WIZARD_GLYPHS = /^\s*[◆◇◯◐○●]/;
 
 function extractText(node: ReactNode): string {
@@ -27,6 +27,33 @@ function extractText(node: ReactNode): string {
   return "";
 }
 
+function findLanguageInNode(node: ReactNode): string | null {
+  if (!isValidElement(node)) return null;
+  const props = (node as ReactElement<{
+    className?: string;
+    "data-language"?: string;
+    children?: ReactNode;
+  }>).props;
+
+  const dataLang = props["data-language"];
+  if (typeof dataLang === "string" && dataLang) return dataLang;
+
+  const className = typeof props.className === "string" ? props.className : "";
+  const m = className.match(/language-([\w-]+)/);
+  if (m) return m[1];
+
+  const children = props.children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = findLanguageInNode(child);
+      if (found) return found;
+    }
+  } else if (children) {
+    return findLanguageInNode(children);
+  }
+  return null;
+}
+
 function detectLanguage(props: Props, children: ReactNode): string | null {
   const dataLang = props["data-language"];
   if (typeof dataLang === "string" && dataLang) return dataLang;
@@ -35,14 +62,7 @@ function detectLanguage(props: Props, children: ReactNode): string | null {
   const m = className.match(/language-([\w-]+)/);
   if (m) return m[1];
 
-  if (isValidElement(children)) {
-    const childProps = (children as ReactElement<{ className?: string }>).props;
-    const childClass = typeof childProps.className === "string" ? childProps.className : "";
-    const cm = childClass.match(/language-([\w-]+)/);
-    if (cm) return cm[1];
-  }
-
-  return null;
+  return findLanguageInNode(children);
 }
 
 export function CodeBlock(props: Props) {
@@ -50,32 +70,11 @@ export function CodeBlock(props: Props) {
   const language = detectLanguage(props, children);
   const codeText = extractText(children);
 
-  const isTerminal = language !== null && TERMINAL_LANGS.has(language);
-  const isOutput = !isTerminal && WIZARD_GLYPHS.test(codeText);
   const hasTitle = typeof title === "string" && title.length > 0;
-
-  // Mode A - Terminal (commands the user types)
-  if (isTerminal) {
-    return (
-      <div className="not-prose ktx-code ktx-code-terminal group">
-        <div className="ktx-code-terminal-head">
-          <span className="ktx-tl-dot" style={{ background: "#ff5f57" }} />
-          <span className="ktx-tl-dot" style={{ background: "#febc2e" }} />
-          <span className="ktx-tl-dot" style={{ background: "#28c840" }} />
-          <span className="ktx-code-terminal-label">
-            {hasTitle ? title : "zsh"}
-          </span>
-          <CopyButton
-            text={codeText}
-            className="ml-auto text-white/80"
-          />
-        </div>
-        <pre {...rest} className="ktx-code-body ktx-code-body-terminal">
-          {children}
-        </pre>
-      </div>
-    );
-  }
+  const isOutput =
+    !hasTitle &&
+    (WIZARD_GLYPHS.test(codeText) ||
+      (language !== null && OUTPUT_LANGS.has(language)));
 
   // Mode D - Output preview (wizard prompts, terminal output)
   if (isOutput) {
@@ -110,7 +109,6 @@ export function CodeBlock(props: Props) {
   // Mode C - Minimal default
   return (
     <div className="not-prose ktx-code ktx-code-minimal group relative">
-      {language && <span className="ktx-code-minimal-lang">{language}</span>}
       <CopyButton text={codeText} className="ktx-code-minimal-copy" />
       <pre {...rest} className="ktx-code-body ktx-code-body-minimal">
         {children}
