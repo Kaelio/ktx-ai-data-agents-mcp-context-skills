@@ -79,7 +79,43 @@ describe('registerMcpCommands', () => {
 
     expect(startDaemon).toHaveBeenCalledTimes(1);
     expect(context.io.stdout.write).toHaveBeenCalledWith(
-      'KTX MCP daemon already running: http://127.0.0.1:7878/mcp\n',
+      [
+        'KTX MCP daemon already running: http://127.0.0.1:7878/mcp',
+        '',
+        'KTX is ready for configured agents.',
+        'Open your agent for this KTX project and ask a data question, for example:',
+        '  "Use KTX to show me the available tables and metrics."',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('prints a friendly next step after starting the daemon', async () => {
+    const program = new Command().exitOverride().option('--project-dir <path>');
+    const startDaemon = vi.fn().mockResolvedValue({
+      status: 'started',
+      url: 'http://127.0.0.1:7878/mcp',
+      state: {
+        schemaVersion: 1,
+        pid: 4242,
+        host: '127.0.0.1',
+        port: 7878,
+        tokenAuth: false,
+        projectDir: '/tmp/ktx-started',
+        startedAt: '2026-05-14T00:00:00.000Z',
+        logPath: '/tmp/ktx-started/.ktx/logs/mcp.log',
+      },
+    });
+    const context = makeContext({ deps: { mcp: { startDaemon } } });
+    registerMcpCommands(program, context);
+
+    await program.parseAsync(['--project-dir', '/tmp/ktx-started', 'mcp', 'start'], { from: 'user' });
+
+    expect(context.io.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('KTX MCP daemon started: http://127.0.0.1:7878/mcp\n\nKTX is ready for configured agents.'),
+    );
+    expect(context.io.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('"Use KTX to show me the available tables and metrics."'),
     );
   });
 
