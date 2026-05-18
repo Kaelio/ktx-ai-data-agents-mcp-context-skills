@@ -25,7 +25,7 @@ export function CopyButton({ text, className = "" }: Props) {
       type="button"
       onClick={onClick}
       aria-label={copied ? "Copied" : "Copy code"}
-      className={`inline-flex items-center justify-center w-9 h-9 rounded-md transition-all hover:bg-white/5 ${className}`}
+      className={`inline-flex items-center justify-center w-9 h-9 rounded-md transition-all hover:bg-fd-muted ${className}`}
     >
       {copied ? (
         <svg
