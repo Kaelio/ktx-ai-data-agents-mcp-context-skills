@@ -34,7 +34,7 @@ SQLite.
 ## Quick Start
 
 ```bash
-pnpm add --global @kaelio/ktx
+npm install -g @kaelio/ktx
 ktx setup
 ktx status
 ```
@@ -49,8 +49,8 @@ KTX project: /home/user/analytics
 Project ready: yes
 LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
-Databases configured: yes (postgres-warehouse)
-Context sources configured: yes (dbt-main)
+Databases configured: yes (warehouse)
+Context sources configured: yes (dbt_main)
 KTX context built: yes
 Agent integration ready: yes (codex:project)
 ```
@@ -63,9 +63,9 @@ Agent integration ready: yes (codex:project)
 | `ktx status` | Check project readiness |
 | `ktx connection list` | List configured connections |
 | `ktx connection test <id>` | Test one connection |
-| `ktx ingest <id>` | Build context for one connection |
+| `ktx ingest <connectionId>` | Build context for one connection |
 | `ktx ingest --all` | Build context for every configured connection |
-| `ktx ingest text <file>` | Capture free-form notes into memory |
+| `ktx ingest text <file> --connection-id <connectionId>` | Capture free-form notes into memory |
 | `ktx sl list` | List semantic-layer sources |
 | `ktx sl search "revenue"` | Search semantic-layer sources |
 | `ktx sl validate <source> --connection-id <id>` | Validate a semantic source |
@@ -97,8 +97,11 @@ Setup can install KTX instructions for Claude Code, Codex, Cursor, OpenCode,
 and universal `.agents` clients:
 
 ```bash
-ktx setup --agents --target codex
+ktx setup --agents
 ```
+
+Use `--target <target>` when you want to install or repair one specific
+integration.
 
 Agent-facing workflows typically start with:
 
