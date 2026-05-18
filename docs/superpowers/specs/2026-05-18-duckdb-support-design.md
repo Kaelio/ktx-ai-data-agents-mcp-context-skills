@@ -18,10 +18,19 @@ agent-facing SQL execution stays read-only.
 
 - `packages/context/src/project/driver-schemas.ts` rejects `driver: duckdb`.
 - `packages/cli/src/local-scan-connectors.ts` has no DuckDB connector factory.
+- `packages/cli/src/local-adapters.ts` has no DuckDB live-introspection branch,
+  so an unrecognized DuckDB connection would fall through to daemon-side
+  database introspection, which remains Postgres-only.
 - `packages/cli/src/connection.ts` and its tests currently treat DuckDB as an
   unsupported native driver.
 - `packages/cli/src/sql.ts` validates unknown drivers as Postgres because
   `sqlAnalysisDialectForDriver()` has no DuckDB entry.
+- `packages/context/src/scan/types.ts`,
+  `packages/context/src/scan/local-scan.ts`, and
+  `packages/context/src/connections/dialects.ts` all have closed driver sets
+  that currently reject or throw for `duckdb`.
+- `packages/context/src/connections/connection-type.ts` has no `DUCKDB` enum
+  value, and `local-warehouse-descriptor.ts` has no `duckdb` driver mapping.
 - `packages/context/src/connections/local-query-executor.ts` only dispatches
   local semantic-layer execution to Postgres and SQLite.
 - Some semantic-layer and MCP maps already recognize `DUCKDB`, but the runtime
@@ -46,6 +55,9 @@ agent-facing SQL execution stays read-only.
   support.
 - Package registry and release artifact updates so DuckDB ships with the public
   CLI package.
+- Native dependency installation behavior for `@duckdb/node-api` across the KTX
+  supported Node/platform matrix, including user-facing load or ABI guidance
+  when prebuilt binaries are not enough.
 - Docs for setup, primary-source integrations, SQL execution, and connection
   behavior.
 - Targeted sqlglot tests proving DuckDB dialect validation and semantic-layer
@@ -99,6 +111,11 @@ Add package files matching other connector packages:
 - `packages/connector-duckdb/src/live-database-introspection.ts`
 - focused tests and fixtures for a small `.duckdb` database
 
+Test fixtures should generate the `.duckdb` database at test setup time with the
+same `@duckdb/node-api` version under test. Do not commit a binary `.duckdb`
+fixture unless the native module version is pinned and the fixture rebuild path
+is documented.
+
 Public exports should mirror the SQLite naming pattern with DuckDB-specific
 symbols:
 
@@ -141,6 +158,22 @@ It may share path-resolution helpers with the connector if the shared code lives
 in a lower-level package without creating circular dependencies; otherwise,
 duplicate the narrow path-resolution logic and test both paths.
 
+The scan and dialect driver sets must be extended explicitly:
+
+- `KtxConnectionDriver` includes `duckdb`.
+- `normalizeDriver()` and supported-driver error text in
+  `packages/context/src/scan/local-scan.ts` accept `duckdb`.
+- `SupportedDriver`, `supportedDrivers`, and `getDialectForDriver()` in
+  `packages/context/src/connections/dialects.ts` accept `duckdb`.
+
+Connection-type normalization must be explicit:
+
+- `connectionTypeSchema` gains `DUCKDB`.
+- `DRIVER_TO_CONNECTION_TYPE` maps `duckdb` to `DUCKDB`.
+- `localConnectionToWarehouseDescriptor()` returns a non-null descriptor for
+  DuckDB, so MCP and semantic-layer paths receive `DUCKDB` instead of a lowercase
+  fallback driver string.
+
 ### CLI
 
 Update CLI command wiring and setup surfaces:
@@ -160,6 +193,12 @@ Update CLI command wiring and setup surfaces:
 to Postgres. `ktx connection test`, scan, ingest, MCP startup, and semantic-layer
 execution should all use the same configured connection shape.
 
+`packages/cli/src/local-adapters.ts` must create a DuckDB live-database
+introspection adapter and dispatch DuckDB connections to it before the daemon
+fallback. No DuckDB live-database ingest path may invoke
+`createDaemonLiveDatabaseIntrospection()`, because daemon-side database
+introspection remains outside v1 scope.
+
 ### Packaging And Docs
 
 Update public package and artifact scripts:
@@ -176,6 +215,13 @@ Update user-facing docs where DuckDB changes behavior:
 - CLI reference docs for connection and SQL commands if present
 - contributor/package-layout docs that enumerate connector packages
 
+If `@duckdb/node-api` prebuilt binaries cover all KTX-supported targets, record
+that install matrix in docs or tests. If they do not, add DuckDB-specific native
+load/ABI detection and either a rebuild flow or direct setup guidance analogous
+to the existing native SQLite path. Raw native-loader errors should not be the
+first user-facing failure mode for `ktx setup`, `ktx connection test`, or
+`ktx ingest`.
+
 ## DuckDB Connector Behavior
 
 The connector must resolve database files before opening DuckDB:
@@ -189,19 +235,27 @@ The connector must resolve database files before opening DuckDB:
 - Reject empty, in-memory, missing, directory, and non-file targets before
   opening the native DuckDB connection.
 
-Open the database in read-only mode whenever the Node client exposes that
-setting. If the native client cannot fully enforce read-only mode for a target,
-KTX still must perform a pre-open file existence check and a pre-execution
-`assertReadOnlySql()` check for every agent-facing SQL call.
+The pre-open filesystem check is unconditional and primary. Before every native
+DuckDB open, KTX must resolve the configured database path, verify that it
+already exists, and verify that it is a regular file. `access_mode=READ_ONLY` or
+an equivalent native option is defense-in-depth on top of that check, not a
+substitute for it. Every agent-facing SQL call must also run
+`assertReadOnlySql()` before execution.
 
 Schema introspection should use DuckDB metadata tables rather than parsing SQL:
 
 - tables and views from `information_schema.tables`
 - columns from `information_schema.columns`
-- primary keys and foreign keys from information-schema constraints when
-  available
+- primary keys and foreign keys from DuckDB's native constraint catalog, such as
+  `duckdb_constraints()` or an equivalent pragma exposed by the client, so
+  foreign-key source and referenced column pairs are populated reliably
 - estimated row counts from `COUNT(*)` for regular tables, matching SQLite's
   current local behavior
+
+Do not rely solely on `information_schema.referential_constraints` for foreign
+keys. It can identify constraints without enough per-column mapping data for the
+KTX `KtxSchemaForeignKey` shape. The connector should only advertise
+`formalForeignKeys: true` when it populates those column pairs.
 
 The resulting `KtxSchemaSnapshot` should preserve catalog/schema fields when
 DuckDB exposes them and keep table names stable for downstream KTX YAML and
@@ -250,13 +304,19 @@ Add or update focused tests before broad verification:
 - `packages/connector-duckdb` tests for connection config recognition, path/url
   resolution, missing-file rejection, schema introspection, table sampling,
   column sampling, distinct values, row counts, read-only SQL execution, and
-  non-read-only SQL rejection.
+  non-read-only SQL rejection. Include a missing-path test that proves no
+  `.duckdb` file is created.
 - `packages/context` tests for driver schema parsing, dialect maps, connection
   type normalization, local warehouse descriptors, MCP dialect mapping, and
-  local semantic-layer query execution dispatch.
+  local semantic-layer query execution dispatch. Include assertions that DuckDB
+  maps to `DUCKDB` for local warehouse descriptors and to `duckdb` for MCP and
+  semantic-layer dialect resolution.
 - `packages/cli` tests for local scan connector creation, setup database
   choices, connection testing, `ktx sql` dialect validation, ingest query
-  executor wiring, and MCP SQL execution against a DuckDB fixture.
+  executor wiring, and MCP SQL execution against a generated DuckDB fixture.
+  Include a `ktx ingest <id>` path test proving DuckDB uses the native
+  local-adapters introspection branch without invoking the daemon introspection
+  client.
 - Release/script tests that assert the connector package list.
 - Python semantic-layer tests for DuckDB sqlglot generation and parseability.
 - Python daemon SQL-analysis tests for DuckDB read-only validation.
@@ -284,7 +344,9 @@ If no Python files change, the Python pre-commit command is not required.
 - `ktx connection test <id>` succeeds for a valid fixture and fails cleanly for a
   missing path.
 - `ktx ingest <id>` produces live-database context for DuckDB tables and views,
-  with internal scan connector tests covering the schema snapshot.
+  with internal scan connector tests covering the schema snapshot, and does so
+  through native DuckDB introspection instead of daemon-side database
+  introspection.
 - `ktx sql --connection <id> "select ..."` validates as DuckDB, executes
   read-only SQL, and returns rows.
 - `ktx mcp` starts with a DuckDB connection configured, and MCP SQL execution
@@ -293,4 +355,6 @@ If no Python files change, the Python pre-commit command is not required.
   executes it through the local DuckDB file.
 - Non-read-only SQL is rejected before execution.
 - Missing, directory, and in-memory DuckDB targets never create a database file.
+- DuckDB foreign keys are populated from native constraint metadata with source
+  and referenced column pairs when formal foreign keys exist.
 - Public docs and package/artifact lists include DuckDB support.
