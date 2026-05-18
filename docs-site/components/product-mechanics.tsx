@@ -85,7 +85,7 @@ const sourceData: SourceNodeData[] = [
   {
     title: "Docs and notes",
     body: "Policies, caveats, team definitions, and analyst context.",
-    items: ["Notion", "Markdown"],
+    items: ["Notion", "Any text"],
     accent: "#10b981",
   },
 ];

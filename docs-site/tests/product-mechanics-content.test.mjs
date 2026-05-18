@@ -23,7 +23,7 @@ test("docs introduction frames the concept before showing product mechanics", as
 
   const heroIndex = introduction.indexOf("Make analytics context");
   const whyIndex = introduction.indexOf("## Why KTX");
-  const createsIndex = introduction.indexOf("## What KTX creates");
+  const worksIndex = introduction.indexOf("## How KTX works");
   const mechanicsIndex = introduction.indexOf("<ProductMechanics />");
   const useCaseIndex = introduction.indexOf("## Use it for");
   const heroSource = introduction.slice(0, mechanicsIndex);
@@ -34,12 +34,12 @@ test("docs introduction frames the concept before showing product mechanics", as
     "problem framing should appear after the hero",
   );
   assert.ok(
-    createsIndex > whyIndex,
-    "artifact summary should appear after problem framing",
+    worksIndex > whyIndex,
+    "mechanics bridge should appear after problem framing",
   );
   assert.ok(
-    mechanicsIndex > createsIndex,
-    "mechanics component should appear after the artifact summary",
+    mechanicsIndex > worksIndex,
+    "mechanics component should appear after the mechanics bridge",
   );
   assert.ok(
     mechanicsIndex < useCaseIndex,
@@ -81,7 +81,7 @@ test("product mechanics component explains ingestion outputs", async () => {
     "MetricFlow",
     "LookML",
     "Notion",
-    "Markdown",
+    "Any text",
     "compile into SQL",
     '"use client"',
     "@xyflow/react",
