@@ -8,10 +8,17 @@ import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project
 import { makeLocalGitRepo } from '../test/make-local-git-repo.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
+import { projectHistoricSqlEvidence } from './adapters/historic-sql/projection.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
 import { createDefaultLocalIngestAdapters, localPullConfigForAdapter } from './local-adapters.js';
 import { getLocalIngestStatus, runLocalIngest } from './local-ingest.js';
-import type { ChunkResult, DiffSet, SourceAdapter } from './types.js';
+import type {
+  ChunkResult,
+  DeterministicFinalizationContext,
+  DiffSet,
+  FinalizationResult,
+  SourceAdapter,
+} from './types.js';
 
 class TestAgentRunner implements AgentRunnerPort {
   runLoop = vi.fn().mockResolvedValue({ stopReason: 'natural' as const });
@@ -173,6 +180,25 @@ class HistoricSqlEvidenceTestAdapter implements SourceAdapter {
         },
       ],
     });
+  }
+
+  async finalize(ctx: DeterministicFinalizationContext): Promise<FinalizationResult> {
+    const projection = await projectHistoricSqlEvidence({
+      workdir: ctx.workdir,
+      connectionId: ctx.connectionId,
+      syncId: ctx.syncId,
+      runId: ctx.runId,
+      overrideReplay: ctx.overrideReplay,
+    });
+
+    return {
+      result: projection,
+      warnings: projection.warnings,
+      errors: [],
+      touchedSources: projection.touchedSources,
+      changedWikiPageKeys: projection.changedWikiPageKeys,
+      actions: projection.actions,
+    };
   }
 }
 
@@ -476,7 +502,7 @@ describe('canonical local ingest', () => {
     ]);
   });
 
-  it('runs historic-SQL evidence projection through the local bundle post-processor', async () => {
+  it('runs historic-SQL evidence projection through local bundle finalization', async () => {
     const projectDir = join(tempDir, 'historic-sql-project');
     await initKtxProject({ projectDir });
     await writeFile(
