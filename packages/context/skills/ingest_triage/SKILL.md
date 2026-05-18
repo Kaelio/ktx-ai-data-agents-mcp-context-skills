@@ -7,8 +7,11 @@ callers: [memory_agent]
 # Ingest Triage - conflict classification and resolution
 
 This skill is loaded in two contexts:
-- By a Stage 3 WorkUnit agent when `sl_discover` reveals that a prior WU (or a prior sync) already wrote something that overlaps with what the current WU is about to write.
-- By the Stage 4 reconciliation agent for cross-WU sweeps and for eviction decisions.
+- By a Stage 3 WorkUnit agent when `sl_discover`, deterministic projection
+  output, existing project memory, or prior provenance overlaps with what the
+  current WorkUnit is about to write.
+- By the Stage 4 reconciliation agent for cross-WorkUnit sweeps, accepted patch
+  overlap, and eviction decisions.
 
 Apply the rules below before every write that could collide with an existing artifact.
 
@@ -23,7 +26,8 @@ Apply the rules below before every write that could collide with an existing art
 3. **If the difference is structural - grain, columns, filter, join shape - is the current bundle the re-ingest of a previously-ingested bundle (i.e. `priorProvenance` has a row for this raw file and artifact)?**
    Re-ingest change (semantic break): replace + flag. Record in the IngestReport's `conflicts_resolved` list with `flagged_for_human: true`.
 
-4. **If there's no prior-sync row (both are from THIS job), check for same-ingest contradictions:**
+4. **If reconciliation sees accepted patches from this same job with no
+prior-sync row, check for same-ingest contradictions:**
 
    | Kind | Detection | Resolution |
    |---|---|---|
