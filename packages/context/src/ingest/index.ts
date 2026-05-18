@@ -663,5 +663,8 @@ export type {
   WorkUnit,
   DeterministicProjectionContext,
   ProjectionResult,
+  DeterministicFinalizationContext,
+  FinalizationOverrideReplay,
+  FinalizationResult,
 } from './types.js';
 export * from './wiki-body-refs.js';

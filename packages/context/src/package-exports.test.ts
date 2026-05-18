@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  DeterministicFinalizationContext,
+  FinalizationOverrideReplay,
+  FinalizationResult,
+} from './ingest/index.js';
+import type {
   ApplyLocalScanRelationshipReviewDecisionsInput,
   ApplyLocalScanRelationshipReviewDecisionsResult,
 } from './scan/index.js';
@@ -7,6 +12,12 @@ import type {
 const scanTypeExportCoverage: Partial<{
   input: ApplyLocalScanRelationshipReviewDecisionsInput;
   result: ApplyLocalScanRelationshipReviewDecisionsResult;
+}> = {};
+
+const ingestFinalizationTypeExportCoverage: Partial<{
+  context: DeterministicFinalizationContext;
+  overrideReplay: FinalizationOverrideReplay;
+  result: FinalizationResult;
 }> = {};
 
 describe('@ktx/context package exports', () => {
@@ -41,6 +52,7 @@ describe('@ktx/context package exports', () => {
     expect(connections.notionConnectionToPullConfig).toBeTypeOf('function');
     expect(scan).toBeDefined();
     expect(scanTypeExportCoverage).toEqual({});
+    expect(ingestFinalizationTypeExportCoverage).toEqual({});
     expect(scan.createKtxConnectorCapabilities).toBeTypeOf('function');
     expect(`liveDatabaseSnapshotToKtx${'SchemaSnapshot'}` in scan).toBe(false);
     expect(scan.normalizeKtxNativeType).toBeTypeOf('function');
