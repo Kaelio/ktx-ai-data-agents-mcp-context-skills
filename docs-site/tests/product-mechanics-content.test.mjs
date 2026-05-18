@@ -88,7 +88,8 @@ test("product mechanics component explains ingestion outputs", async () => {
     "<ReactFlow",
     "getSmoothStepPath",
     "animateMotion",
-    "mechanics-flow-dot",
+    "mechanics-particle",
+    "buildParticlePath",
   ]) {
     assert.ok(
       component.includes(expectedText),

@@ -3,7 +3,7 @@
 import {
   Background,
   BackgroundVariant,
-  BaseEdge,
+  type Edge,
   type EdgeProps,
   getSmoothStepPath,
   Handle,
@@ -14,6 +14,7 @@ import {
   ReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { useEffect, useMemo, useState } from "react";
 
 type SourceNodeData = {
   accent: string;
@@ -185,7 +186,7 @@ const flowEdges = [
   })),
 ].map((edge) => ({
   ...edge,
-  type: "animated" as const,
+  type: "smoothstep" as const,
   style: { stroke: EDGE_STROKE, strokeWidth: 1.5 },
   markerEnd: {
     type: MarkerType.ArrowClosed,
@@ -234,7 +235,6 @@ const refsEdge = {
   },
 };
 
-const edges = [...flowEdges, refsEdge];
 
 function SourceNodeView({ data }: NodeProps<SourceNode>) {
   return (
@@ -340,56 +340,84 @@ function OutputNodeView({ data }: NodeProps<OutputNode>) {
   );
 }
 
-const DOT_CORE_COLOR = "#67e8f9";
-const DOT_GLOW_COLOR = "#22d3ee";
-const DOT_SPEED_PX_PER_SEC = 110;
-const DOT_MIN_DURATION_SEC = 0.7;
+const PARTICLES_PER_SOURCE = 2;
+const PARTICLE_SPEED_PX_PER_SEC = 130;
+const PARTICLE_MIN_DURATION_SEC = 4;
 
-function AnimatedSmoothStepEdge({
-  id,
-  sourceX,
-  sourceY,
-  sourcePosition,
-  targetX,
-  targetY,
-  targetPosition,
-  style,
-  markerEnd,
-}: EdgeProps) {
-  const [path] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
+const stageTopY = (i: number) => ROW_STAGE_START_Y + i * (STAGE_H + STAGE_GAP);
+const stageBottomY = (i: number) => stageTopY(i) + STAGE_H;
+
+function buildParticlePath(
+  sourceIndex: number,
+  outputIndex: number,
+): { d: string; length: number } {
+  const sourceCenterX =
+    SOURCES_START_X + sourceIndex * (SOURCE_W + SOURCE_GAP_X) + SOURCE_W / 2;
+  const sourceBottomYVal = ROW_SOURCES_Y + SOURCE_H;
+  const outputCenterX =
+    OUTPUTS_START_X + outputIndex * (OUTPUT_W + OUTPUT_GAP_X) + OUTPUT_W / 2;
+
+  const legs: Array<[number, number, number, number]> = [
+    [sourceCenterX, sourceBottomYVal, STAGE_CENTER_X, stageTopY(0)],
+    [STAGE_CENTER_X, stageBottomY(0), STAGE_CENTER_X, stageTopY(1)],
+    [STAGE_CENTER_X, stageBottomY(1), STAGE_CENTER_X, stageTopY(2)],
+    [STAGE_CENTER_X, stageBottomY(2), STAGE_CENTER_X, stageTopY(3)],
+    [STAGE_CENTER_X, stageBottomY(3), outputCenterX, ROW_OUTPUTS_Y],
+  ];
+
+  const segments = legs.map(([sx, sy, tx, ty]) => {
+    const [segment] = getSmoothStepPath({
+      sourceX: sx,
+      sourceY: sy,
+      sourcePosition: Position.Bottom,
+      targetX: tx,
+      targetY: ty,
+      targetPosition: Position.Top,
+    });
+    return segment;
   });
-  const pathId = `mechanics-flow-${id}`;
-  const approxLength =
-    Math.abs(targetX - sourceX) + Math.abs(targetY - sourceY);
-  const duration = Math.max(
-    DOT_MIN_DURATION_SEC,
-    approxLength / DOT_SPEED_PX_PER_SEC,
-  );
-  const durAttr = `${duration.toFixed(2)}s`;
-  const beginAttr = `-${(duration / 2).toFixed(2)}s`;
 
+  let d = segments[0];
+  for (let i = 1; i < segments.length; i += 1) {
+    d += ` ${segments[i].replace(/^M/, "L")}`;
+  }
+
+  const length = legs.reduce(
+    (sum, [sx, sy, tx, ty]) => sum + Math.abs(tx - sx) + Math.abs(ty - sy),
+    0,
+  );
+
+  return { d, length };
+}
+
+type ParticleEdgeData = {
+  d: string;
+  duration: number;
+  beginOffset: number;
+  color: string;
+};
+
+type ParticleEdge = Edge<ParticleEdgeData, "particle">;
+
+function ParticleEdgeView({ id, data }: EdgeProps<ParticleEdge>) {
+  if (!data) return null;
+  const pathId = `mechanics-particle-path-${id}`;
   return (
     <>
-      <BaseEdge id={pathId} path={path} style={style} markerEnd={markerEnd} />
-      <g className="mechanics-flow-dot">
-        <circle r={6.5} fill={DOT_GLOW_COLOR} opacity={0.22} />
-        <circle r={2.6} fill={DOT_CORE_COLOR} />
-        <animateMotion dur={durAttr} repeatCount="indefinite">
-          <mpath href={`#${pathId}`} />
-        </animateMotion>
-      </g>
-      <g className="mechanics-flow-dot">
-        <circle r={5} fill={DOT_GLOW_COLOR} opacity={0.14} />
-        <circle r={2} fill={DOT_CORE_COLOR} opacity={0.7} />
+      <path
+        id={pathId}
+        d={data.d}
+        fill="none"
+        stroke="none"
+        pointerEvents="none"
+      />
+      <g className="mechanics-particle" style={{ color: data.color }}>
+        <circle r={7.5} fill="currentColor" opacity={0.16} />
+        <circle r={3.75} fill="currentColor" opacity={0.32} />
+        <circle r={2.1} fill="currentColor" />
         <animateMotion
-          dur={durAttr}
-          begin={beginAttr}
+          dur={`${data.duration.toFixed(2)}s`}
+          begin={`-${data.beginOffset.toFixed(2)}s`}
           repeatCount="indefinite"
         >
           <mpath href={`#${pathId}`} />
@@ -406,10 +434,69 @@ const nodeTypes = {
 };
 
 const edgeTypes = {
-  animated: AnimatedSmoothStepEdge,
+  particle: ParticleEdgeView,
 };
 
+const staticEdges = [...flowEdges, refsEdge];
+
+type ParticleSpec = {
+  id: string;
+  sourceIndex: number;
+  outputIndex: number;
+};
+
+function makeRandomParticles(perSource: number): ParticleSpec[] {
+  const specs: ParticleSpec[] = [];
+  for (let sourceIndex = 0; sourceIndex < sourceData.length; sourceIndex += 1) {
+    for (let n = 0; n < perSource; n += 1) {
+      specs.push({
+        id: `particle-${sourceIndex}-${n}`,
+        sourceIndex,
+        outputIndex: Math.floor(Math.random() * outputData.length),
+      });
+    }
+  }
+  return specs;
+}
+
+function specToEdge(spec: ParticleSpec): {
+  id: string;
+  source: string;
+  target: string;
+  type: "particle";
+  data: ParticleEdgeData;
+} {
+  const { d, length } = buildParticlePath(spec.sourceIndex, spec.outputIndex);
+  const duration = Math.max(
+    PARTICLE_MIN_DURATION_SEC,
+    length / PARTICLE_SPEED_PX_PER_SEC,
+  );
+  return {
+    id: spec.id,
+    source: `source-${spec.sourceIndex}`,
+    target: `output-${spec.outputIndex}`,
+    type: "particle",
+    data: {
+      d,
+      duration,
+      beginOffset: Math.random() * duration,
+      color: sourceData[spec.sourceIndex].accent,
+    },
+  };
+}
+
 export function ProductMechanics() {
+  const [particles, setParticles] = useState<ParticleSpec[]>([]);
+
+  useEffect(() => {
+    setParticles(makeRandomParticles(PARTICLES_PER_SOURCE));
+  }, []);
+
+  const edges = useMemo(
+    () => [...staticEdges, ...particles.map(specToEdge)],
+    [particles],
+  );
+
   return (
     <section
       className="not-prose my-12 w-full max-w-full min-w-0 space-y-5"
@@ -526,12 +613,12 @@ export function ProductMechanics() {
           border: 0;
           pointer-events: none;
         }
-        .mechanics-canvas .mechanics-flow-dot {
+        .mechanics-canvas .mechanics-particle {
           pointer-events: none;
-          filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.45));
+          filter: drop-shadow(0 0 6px currentColor);
         }
         @media (prefers-reduced-motion: reduce) {
-          .mechanics-canvas .mechanics-flow-dot {
+          .mechanics-canvas .mechanics-particle {
             display: none;
           }
         }
