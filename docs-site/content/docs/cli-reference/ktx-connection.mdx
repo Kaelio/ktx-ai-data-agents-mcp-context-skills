@@ -70,6 +70,9 @@ Native database connections report `Status: ok` when the connector probe
 passes. Source connectors report connector-specific details such as Metabase
 database count, Looker user, Notion bot, or Git repo URL.
 
+DuckDB connection tests open the configured file read-only. Missing files are
+reported as `File not found: <path>` and are not created.
+
 ```text
 Connection test passed: my-warehouse
 Driver: postgres

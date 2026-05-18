@@ -28,8 +28,8 @@ Use KTX when you want agents to:
 - Explain metric provenance with warehouse evidence
 - Work alongside dbt, MetricFlow, LookML, Looker, Metabase, and Notion
 
-Supports PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
-SQLite.
+Supports PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server,
+DuckDB, and SQLite.
 
 ## Quick Start
 
@@ -143,6 +143,7 @@ artifacts.
 | `packages/llm` | LLM and embedding providers |
 | `packages/connector-bigquery` | BigQuery scan connector |
 | `packages/connector-clickhouse` | ClickHouse scan connector |
+| `packages/connector-duckdb` | DuckDB scan connector |
 | `packages/connector-mysql` | MySQL scan connector |
 | `packages/connector-postgres` | Postgres scan connector |
 | `packages/connector-snowflake` | Snowflake scan connector |

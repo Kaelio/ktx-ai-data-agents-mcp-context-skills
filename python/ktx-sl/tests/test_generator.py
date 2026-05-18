@@ -715,6 +715,8 @@ class TestGeneratorEdgeCases:
         assert_valid_sql(result.sql)
 
     def test_dialect_duckdb(self):
+        import sqlglot
+
         engine = SemanticEngine(SOURCES_DIR, dialect="duckdb")
         result = engine.query(
             {
@@ -724,6 +726,7 @@ class TestGeneratorEdgeCases:
         )
         assert result.dialect == "duckdb"
         assert result.sql
+        sqlglot.parse_one(result.sql, read="duckdb")
 
     def test_dialect_mysql(self):
         engine = SemanticEngine(SOURCES_DIR, dialect="mysql")

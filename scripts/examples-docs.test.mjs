@@ -152,6 +152,7 @@ describe('standalone example docs', () => {
     assert.match(contributing, /llm\/\s+# LLM client abstraction/);
     assert.match(contributing, /connector-bigquery\/\s+# BigQuery connector/);
     assert.match(contributing, /connector-clickhouse\/\s+# ClickHouse connector/);
+    assert.match(contributing, /connector-duckdb\/\s+# DuckDB connector/);
     assert.match(contributing, /connector-mysql\/\s+# MySQL connector/);
     assert.match(contributing, /connector-postgres\/\s+# PostgreSQL connector/);
     assert.match(contributing, /connector-snowflake\/\s+# Snowflake connector/);
@@ -159,6 +160,12 @@ describe('standalone example docs', () => {
     assert.match(contributing, /connector-sqlserver\/\s+# SQL Server connector/);
     assert.match(contributing, /ktx-sl\/\s+# Semantic layer/);
     assert.match(contributing, /ktx-daemon\/\s+# Daemon/);
+  });
+
+  it('lists the DuckDB connector in the root package table', async () => {
+    const readme = await readText('README.md');
+
+    assert.match(readme, /\| `packages\/connector-duckdb` \| DuckDB scan connector \|/);
   });
 
   it('documents agent-facing CLI commands', async () => {

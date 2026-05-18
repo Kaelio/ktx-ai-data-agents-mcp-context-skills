@@ -1,6 +1,6 @@
 ---
 title: Primary Sources
-description: Connect KTX to PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, or SQLite.
+description: Connect KTX to PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, DuckDB, or SQLite.
 ---
 
 KTX connects to your data warehouse or database to build schema context,
@@ -21,12 +21,12 @@ Agents should prefer environment or file references over literal secrets.
 
 | Field | Required | Applies to | Description |
 |-------|----------|------------|-------------|
-| `driver` | Yes | all connections | Connector driver such as `postgres`, `snowflake`, `bigquery`, `clickhouse`, `mysql`, `sqlserver`, or `sqlite` |
+| `driver` | Yes | all connections | Connector driver such as `postgres`, `snowflake`, `bigquery`, `clickhouse`, `mysql`, `sqlserver`, `duckdb`, or `sqlite` |
 | `url` | One of the connection methods | URL-style connectors | Database URL, `env:NAME`, or `file:/path/to/secret` |
 | `host`, `port`, `database`, `username`, `password` | One of the connection methods | PostgreSQL, MySQL, ClickHouse, SQL Server | Field-by-field connection values |
 | `schema` or `schemas` | No | schema-aware warehouses | Single schema or list of schemas to scan |
 | `context.queryHistory` | No | PostgreSQL, Snowflake, BigQuery | Enables query-history ingestion when the warehouse supports it |
-| `path` | Yes for path-style SQLite | SQLite | Local SQLite database path or `env:NAME` reference |
+| `path` | Yes for path-style SQLite and DuckDB | SQLite, DuckDB | Local database path or `env:NAME` reference |
 | `max_bytes_billed` | No | BigQuery | Maximum bytes billed per query job |
 | `job_timeout_ms` | No | BigQuery | BigQuery query job timeout in milliseconds |
 | `project_id` | No | BigQuery | Optional local descriptor and mapping metadata; not used for BigQuery authentication |
@@ -501,6 +501,36 @@ No authentication required - SQLite is file-based. The file must be readable by 
 - SQLite type affinity system: `TEXT`, `NUMERIC`, `INTEGER`, `REAL`, `BLOB`
 - Foreign key enforcement requires explicit `PRAGMA foreign_keys = ON`
 - Database file must exist before `ktx connection test` or ingest runs
+
+## DuckDB
+
+File-backed local connector using `@duckdb/node-api`. DuckDB support is
+local-file only in v1.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  warehouse:
+    driver: duckdb
+    path: data/warehouse.duckdb
+```
+
+KTX opens the configured file read-only and fails if the file is missing,
+points to a directory, or uses `:memory:`.
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `information_schema.tables` |
+| Primary keys | Yes | Via `duckdb_constraints()` |
+| Foreign keys | Yes | Via `duckdb_constraints()` |
+| Row count estimates | Yes | Exact count via `SELECT COUNT(*)` |
+| Column statistics | No | - |
+| Query history | No | - |
+| Table sampling | Yes | - |
+| Nested analysis | No | - |
 
 ## Common errors
 
