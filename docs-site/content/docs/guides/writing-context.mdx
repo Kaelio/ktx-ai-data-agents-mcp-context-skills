@@ -3,12 +3,8 @@ title: Writing Context
 description: Edit semantic sources and wiki pages so agents use your business logic.
 ---
 
-KTX context is meant to be edited. Ingest gives you a grounded first draft, then
-you refine source YAML and wiki Markdown until agents can answer data questions
-with the same definitions your team uses.
-
-Use this guide when you are adding measures, fixing joins, documenting business
-rules, or reviewing context changes made by an agent.
+Ingest creates the first draft. Edit source YAML and wiki Markdown when you need
+sharper metrics, joins, or business rules.
 
 ## Editing workflow
 
@@ -45,10 +41,8 @@ Use this order for most context changes:
 
 ## Semantic sources
 
-Semantic sources are YAML files that describe queryable entities. A source is
-usually a table, but it can also point at a custom SQL expression. Sources
-define the vocabulary agents use for measures, dimensions, segments, joins, and
-grain-aware query planning.
+Semantic sources are YAML files for queryable tables or custom SQL. They define
+agent-facing measures, dimensions, segments, joins, and grain.
 
 Source files live at:
 
@@ -198,8 +192,8 @@ joins:
 
 ## Measures
 
-Good measures have precise names, SQL expressions at the correct grain, and
-descriptions that say what is included and excluded.
+Good measures have precise names, correct-grain SQL, and descriptions that name
+key inclusions and exclusions.
 
 ```yaml
 measures:
@@ -209,14 +203,13 @@ measures:
     description: Completed order revenue after refunds, excluding cancelled orders.
 ```
 
-Prefer one canonical measure plus wiki synonyms over several nearly identical
-measures. If your team uses multiple definitions, document the distinction in a
-wiki page and link it with `sl_refs`.
+Prefer one canonical measure plus wiki synonyms. Put competing definitions in a
+linked wiki page.
 
 ## Joins and grain
 
-`grain` and `relationship` prevent agents from producing double-counted SQL.
-State the row grain even when it seems obvious.
+`grain` and `relationship` prevent double-counted SQL. State the row grain even
+when it seems obvious.
 
 ```yaml
 grain:
@@ -228,8 +221,7 @@ joins:
 ```
 
 Use `many_to_one` for dimensions such as customer, account, product, or plan.
-Use `one_to_many` only when the target can fan out the source rows, such as
-orders to order items.
+Use `one_to_many` only when the target can fan out rows.
 
 ## Validate and query
 
@@ -239,8 +231,7 @@ Validation checks source YAML against the live database schema:
 ktx sl validate orders --connection-id warehouse
 ```
 
-It catches missing columns, invalid join targets, and table-reference problems
-before an agent relies on the source.
+It catches missing columns, invalid joins, and table-reference problems.
 
 Compile a query to inspect generated SQL:
 
@@ -268,9 +259,8 @@ ktx sl query \
 
 ## Wiki pages
 
-Wiki pages capture business context that does not belong in a single source
-file: metric policies, dashboard caveats, company vocabulary, data freshness,
-known issues, and source-of-truth notes.
+Wiki pages hold context that does not belong in one source file: policies,
+caveats, vocabulary, freshness, known issues, and source-of-truth notes.
 
 Wiki files live under:
 
@@ -280,8 +270,7 @@ wiki/
   user/<user-id>/
 ```
 
-Use global pages for shared business rules. Use user-scoped pages for local
-notes, personal conventions, or context that should not be shared broadly.
+Use global pages for shared rules and user-scoped pages for local notes.
 
 ### Wiki page example
 
@@ -338,8 +327,7 @@ ktx sl search "revenue" --json
 ktx wiki search "revenue recognition" --json --limit 10
 ```
 
-Check that definitions are specific, hidden columns stay hidden, joins have
-explicit relationships, and measures compile into the expected SQL.
+Check definitions, hidden columns, join relationships, and generated SQL.
 
 ## Common errors
 
