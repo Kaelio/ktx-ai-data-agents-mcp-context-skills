@@ -86,7 +86,9 @@ test("product mechanics component explains ingestion outputs", async () => {
     '"use client"',
     "@xyflow/react",
     "<ReactFlow",
-    "smoothstep",
+    "getSmoothStepPath",
+    "animateMotion",
+    "mechanics-flow-dot",
   ]) {
     assert.ok(
       component.includes(expectedText),

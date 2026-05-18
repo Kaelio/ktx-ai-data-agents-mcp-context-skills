@@ -3,6 +3,9 @@
 import {
   Background,
   BackgroundVariant,
+  BaseEdge,
+  type EdgeProps,
+  getSmoothStepPath,
   Handle,
   MarkerType,
   type Node,
@@ -182,7 +185,7 @@ const flowEdges = [
   })),
 ].map((edge) => ({
   ...edge,
-  type: "smoothstep" as const,
+  type: "animated" as const,
   style: { stroke: EDGE_STROKE, strokeWidth: 1.5 },
   markerEnd: {
     type: MarkerType.ArrowClosed,
@@ -337,10 +340,73 @@ function OutputNodeView({ data }: NodeProps<OutputNode>) {
   );
 }
 
+const DOT_CORE_COLOR = "#67e8f9";
+const DOT_GLOW_COLOR = "#22d3ee";
+const DOT_SPEED_PX_PER_SEC = 110;
+const DOT_MIN_DURATION_SEC = 0.7;
+
+function AnimatedSmoothStepEdge({
+  id,
+  sourceX,
+  sourceY,
+  sourcePosition,
+  targetX,
+  targetY,
+  targetPosition,
+  style,
+  markerEnd,
+}: EdgeProps) {
+  const [path] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+  const pathId = `mechanics-flow-${id}`;
+  const approxLength =
+    Math.abs(targetX - sourceX) + Math.abs(targetY - sourceY);
+  const duration = Math.max(
+    DOT_MIN_DURATION_SEC,
+    approxLength / DOT_SPEED_PX_PER_SEC,
+  );
+  const durAttr = `${duration.toFixed(2)}s`;
+  const beginAttr = `-${(duration / 2).toFixed(2)}s`;
+
+  return (
+    <>
+      <BaseEdge id={pathId} path={path} style={style} markerEnd={markerEnd} />
+      <g className="mechanics-flow-dot">
+        <circle r={6.5} fill={DOT_GLOW_COLOR} opacity={0.22} />
+        <circle r={2.6} fill={DOT_CORE_COLOR} />
+        <animateMotion dur={durAttr} repeatCount="indefinite">
+          <mpath href={`#${pathId}`} />
+        </animateMotion>
+      </g>
+      <g className="mechanics-flow-dot">
+        <circle r={5} fill={DOT_GLOW_COLOR} opacity={0.14} />
+        <circle r={2} fill={DOT_CORE_COLOR} opacity={0.7} />
+        <animateMotion
+          dur={durAttr}
+          begin={beginAttr}
+          repeatCount="indefinite"
+        >
+          <mpath href={`#${pathId}`} />
+        </animateMotion>
+      </g>
+    </>
+  );
+}
+
 const nodeTypes = {
   source: SourceNodeView,
   stage: StageNodeView,
   output: OutputNodeView,
+};
+
+const edgeTypes = {
+  animated: AnimatedSmoothStepEdge,
 };
 
 export function ProductMechanics() {
@@ -396,6 +462,7 @@ export function ProductMechanics() {
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             fitViewOptions={{ padding: 0.04 }}
             nodesDraggable={false}
@@ -458,6 +525,15 @@ export function ProductMechanics() {
           background: transparent;
           border: 0;
           pointer-events: none;
+        }
+        .mechanics-canvas .mechanics-flow-dot {
+          pointer-events: none;
+          filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.45));
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .mechanics-canvas .mechanics-flow-dot {
+            display: none;
+          }
         }
       `}</style>
     </section>
