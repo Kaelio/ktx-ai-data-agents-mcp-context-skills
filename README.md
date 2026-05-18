@@ -189,7 +189,7 @@ uv run pytest -q
 ## Docs
 
 - [Quickstart](docs-site/content/docs/getting-started/quickstart.mdx)
-- [CLI Reference](docs-site/content/docs/cli-reference/index.mdx)
+- [CLI Reference](docs-site/content/docs/cli-reference/ktx.mdx)
 - [Building Context](docs-site/content/docs/guides/building-context.mdx)
 - [Contributing](docs-site/content/docs/community/contributing.mdx)
 

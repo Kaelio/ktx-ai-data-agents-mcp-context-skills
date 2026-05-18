@@ -7,6 +7,11 @@ KTX connects to your data warehouse or database to build schema context,
 discover relationships, and execute semantic layer queries. Each connection is
 defined in `ktx.yaml` under the `connections` key.
 
+For analytics tools and knowledge systems such as dbt, MetricFlow, LookML,
+Metabase, Looker, and Notion, use [Context Sources](/docs/integrations/context-sources).
+For Claude Code, Codex, Cursor, OpenCode, and other agent clients, use
+[Agent Clients](/docs/integrations/agent-clients).
+
 All connectors share these conventions:
 
 - Sensitive values support `env:VAR_NAME` (read from environment) and
