@@ -1403,6 +1403,37 @@ describe('local scan', () => {
     );
   });
 
+  it('accepts duckdb as a native standalone scan driver when the host supplies a live-database adapter', async () => {
+    await writeFile(
+      join(project.projectDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: duckdb',
+        '    path: warehouse.duckdb',
+        'ingest:',
+        '  adapters:',
+        '    - live-database',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    project = await loadKtxProject({ projectDir: project.projectDir });
+
+    const result = await runLocalScan({
+      project,
+      adapters: [fetchOnlyAdapter()],
+      connectionId: 'warehouse',
+      jobId: 'scan-run-duckdb',
+      now: () => new Date('2026-04-29T12:00:00.000Z'),
+    });
+
+    expect(result.report.driver).toBe('duckdb');
+    expect(result.report.artifactPaths.reportPath).toBe(
+      'raw-sources/warehouse/live-database/2026-04-29-120000-scan-run-duckdb/scan-report.json',
+    );
+  });
+
   it('accepts mysql as a native standalone scan driver when the host supplies a live-database adapter', async () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),

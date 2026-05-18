@@ -8,6 +8,7 @@ describe('getDialectForDriver', () => {
     ['mysql', '`public`.`orders`'],
     ['clickhouse', '`public`.`orders`'],
     ['sqlite', '"orders"'],
+    ['duckdb', '"public"."orders"'],
     ['snowflake', '"analytics"."public"."orders"'],
     ['bigquery', '`analytics`.`public`.`orders`'],
     ['sqlserver', '[analytics].[public].[orders]'],
@@ -24,7 +25,7 @@ describe('getDialectForDriver', () => {
 
   it('throws with a supported-driver list for unknown drivers', () => {
     expect(() => getDialectForDriver('oracle')).toThrow(
-      'Unsupported warehouse driver "oracle". Supported drivers: bigquery, clickhouse, mysql, postgres, postgresql, sqlite, sqlite3, snowflake, sqlserver',
+      'Unsupported warehouse driver "oracle". Supported drivers: bigquery, clickhouse, duckdb, mysql, postgres, postgresql, sqlite, sqlite3, snowflake, sqlserver',
     );
   });
 });

@@ -2,6 +2,7 @@ export type KtxConnectionDriver =
   | 'sqlite'
   | 'postgres'
   | 'postgresql'
+  | 'duckdb'
   | 'sqlserver'
   | 'bigquery'
   | 'snowflake'

@@ -35,6 +35,15 @@ describe('localConnectionToWarehouseDescriptor', () => {
     });
   });
 
+  it('maps DuckDB configs to DUCKDB warehouse descriptors', () => {
+    expect(localConnectionToWarehouseDescriptor('warehouse', { driver: 'duckdb', path: 'data/warehouse.duckdb' })).toMatchObject({
+      id: 'warehouse',
+      connection_type: 'DUCKDB',
+      connection_params: { driver: 'duckdb', path: 'data/warehouse.duckdb' },
+    });
+    expect(localConnectionTypeForConfig('warehouse', { driver: 'duckdb', path: 'data/warehouse.duckdb' })).toBe('DUCKDB');
+  });
+
   it('returns null for non-warehouse adapters', () => {
     expect(
       localConnectionToWarehouseDescriptor('looker', {

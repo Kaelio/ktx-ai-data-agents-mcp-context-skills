@@ -56,4 +56,42 @@ describe('createDefaultLocalQueryExecutor', () => {
       }),
     ).rejects.toThrow('No local query executor is configured for driver "snowflake".');
   });
+
+  it('dispatches duckdb only when a duckdb executor slot is supplied', async () => {
+    const duckdb = {
+      execute: vi.fn(async () => ({
+        headers: ['duckdb'],
+        rows: [[3]],
+        totalRows: 1,
+        command: 'SELECT',
+        rowCount: 1,
+      })),
+    };
+    const executor = createDefaultLocalQueryExecutor({
+      postgres: { execute: vi.fn() },
+      sqlite: { execute: vi.fn() },
+      duckdb,
+    });
+
+    await expect(
+      executor.execute({
+        connectionId: 'warehouse',
+        connection: { driver: 'duckdb' },
+        sql: 'select 1',
+      }),
+    ).resolves.toMatchObject({ headers: ['duckdb'] });
+    expect(duckdb.execute).toHaveBeenCalledTimes(1);
+
+    const missingSlot = createDefaultLocalQueryExecutor({
+      postgres: { execute: vi.fn() },
+      sqlite: { execute: vi.fn() },
+    });
+    await expect(
+      missingSlot.execute({
+        connectionId: 'warehouse',
+        connection: { driver: 'duckdb' },
+        sql: 'select 1',
+      }),
+    ).rejects.toThrow('No local query executor is configured for driver "duckdb".');
+  });
 });

@@ -9,6 +9,7 @@ import { createSqliteQueryExecutor } from './sqlite-query-executor.js';
 export interface DefaultLocalQueryExecutorOptions {
   postgres?: KtxSqlQueryExecutorPort;
   sqlite?: KtxSqlQueryExecutorPort;
+  duckdb?: KtxSqlQueryExecutorPort;
 }
 
 function driverFor(input: KtxSqlQueryExecutionInput): string {
@@ -27,6 +28,12 @@ export function createDefaultLocalQueryExecutor(options: DefaultLocalQueryExecut
       }
       if (driver === 'sqlite' || driver === 'sqlite3') {
         return sqlite.execute(input);
+      }
+      if (driver === 'duckdb') {
+        if (!options.duckdb) {
+          throw new Error(`No local query executor is configured for driver "${input.connection?.driver ?? 'unknown'}".`);
+        }
+        return options.duckdb.execute(input);
       }
       throw new Error(`No local query executor is configured for driver "${input.connection?.driver ?? 'unknown'}".`);
     },

@@ -12,6 +12,7 @@ const warehouseDrivers = [
   'snowflake',
   'bigquery',
   'sqlite',
+  'duckdb',
   'clickhouse',
   'sqlserver',
 ] as const;
@@ -27,6 +28,11 @@ function warehouseConnectionSchema<const Driver extends WarehouseDriver>(driver:
         .min(1)
         .optional()
         .describe('Warehouse connection URL or DSN; may contain environment-variable references like env:DATABASE_URL.'),
+      path: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Local database file path for file-backed warehouse drivers such as SQLite and DuckDB.'),
     })
     .describe(
       `${driver} warehouse connection. Additional driver-tunable fields (e.g. historicSql, context.queryHistory) are accepted and passed through.`,
@@ -40,6 +46,7 @@ const warehouseConnectionSchemas = [
   warehouseConnectionSchema('snowflake'),
   warehouseConnectionSchema('bigquery'),
   warehouseConnectionSchema('sqlite'),
+  warehouseConnectionSchema('duckdb'),
   warehouseConnectionSchema('clickhouse'),
   warehouseConnectionSchema('sqlserver'),
 ] as const;
