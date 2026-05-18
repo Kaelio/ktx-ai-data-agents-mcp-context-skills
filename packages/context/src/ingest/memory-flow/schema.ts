@@ -54,6 +54,23 @@ export const memoryFlowEventSchema = z.discriminatedUnion('type', [
     reason: z.string().min(1),
   }),
   eventSchema({
+    type: z.literal('stage_progress'),
+    stage: z.enum([
+      'source',
+      'integration',
+      'reconciliation',
+      'post_processor',
+      'wiki_sl_ref_repair',
+      'final_gates',
+      'save',
+      'provenance',
+      'report',
+    ]),
+    percent: z.number().min(0).max(100),
+    message: z.string().min(1),
+    transient: z.boolean().optional(),
+  }),
+  eventSchema({
     type: z.literal('work_unit_started'),
     unitKey: z.string().min(1),
     skills: z.array(z.string().min(1)),

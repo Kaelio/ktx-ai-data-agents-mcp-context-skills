@@ -47,6 +47,7 @@ export interface ChunkResult {
 export interface FetchContext {
   connectionId: string;
   sourceKey: string;
+  memoryFlow?: MemoryFlowEventSink;
 }
 
 type SourceFetchIssueKind =

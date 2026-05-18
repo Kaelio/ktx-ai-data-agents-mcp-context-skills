@@ -21,6 +21,7 @@ function snapshot(overrides: Partial<MemoryFlowReplayInput> = {}): MemoryFlowRep
       { type: 'raw_snapshot_written', syncId: 'sync-1', rawFileCount: 2 },
       { type: 'diff_computed', added: 1, modified: 1, deleted: 0, unchanged: 0 },
       { type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 },
+      { type: 'stage_progress', stage: 'integration', percent: 80, message: 'Integrating 1/1 patches: orders' },
       { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'], stepBudget: 40 },
       { type: 'work_unit_step', unitKey: 'orders', stepIndex: 1, stepBudget: 40 },
       { type: 'candidate_action', unitKey: 'orders', target: 'wiki', action: 'created', key: 'wiki/orders.md' },

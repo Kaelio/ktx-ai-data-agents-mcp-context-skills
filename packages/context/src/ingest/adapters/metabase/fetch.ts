@@ -83,6 +83,15 @@ function resolvePath(index: Map<number | 'root', CollectionNode>, collectionId: 
 export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Promise<void> {
   const pullConfig: MetabasePullConfig = parseMetabasePullConfig(params.pullConfig);
   const logger = params.logger ?? noopMetabaseFetchLogger;
+  const emitFetchProgress = (percent: number, message: string, transient = false): void => {
+    params.ctx.memoryFlow?.emit({
+      type: 'stage_progress',
+      stage: 'source',
+      percent,
+      message,
+      ...(transient ? { transient } : {}),
+    });
+  };
   const syncState = await params.sourceStateReader.getSourceState(pullConfig.metabaseConnectionId);
   const mapping = syncState.mappings.find(
     (m) => m.metabaseDatabaseId === pullConfig.metabaseDatabaseId && m.syncEnabled,
@@ -100,6 +109,7 @@ export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Pr
 
   const client = await params.clientFactory.createClient(pullConfig, params.ctx);
   try {
+    emitFetchProgress(26, `Fetching Metabase database ${pullConfig.metabaseDatabaseId} metadata`);
     let mappingDatabaseName = mapping.metabaseDatabaseName;
     let mappingEngine = mapping.metabaseEngine;
     if (mappingDatabaseName === null) {
@@ -133,6 +143,12 @@ export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Pr
     await mkdir(join(params.stagedDir, STAGED_FILES.databasesDir), { recursive: true });
 
     const cardIdsToFetch = await resolveCardIdsToFetch(client, scope, pullConfig.metabaseDatabaseId, logger);
+    emitFetchProgress(
+      28,
+      `Fetching ${cardIdsToFetch.length} Metabase card${cardIdsToFetch.length === 1 ? '' : 's'} for database ${
+        pullConfig.metabaseDatabaseId
+      }`,
+    );
 
     const referencedCollectionIds = new Set<number>();
     let writtenCards = 0;
@@ -212,7 +228,19 @@ export async function fetchMetabaseBundle(params: FetchMetabaseBundleParams): Pr
           }
         }
       }
+      const knownTotal = Math.max(cardIdsToFetch.length, fetched.size + queue.length);
+      if (fetched.size === 1 || fetched.size % 10 === 0 || queue.length === 0) {
+        emitFetchProgress(
+          30,
+          `Checked ${fetched.size}/${knownTotal} Metabase cards for database ${pullConfig.metabaseDatabaseId}; wrote ${writtenCards}`,
+          true,
+        );
+      }
     }
+    emitFetchProgress(
+      32,
+      `Fetched Metabase database ${pullConfig.metabaseDatabaseId}: ${writtenCards} cards, ${unresolvedCards.length} unresolved`,
+    );
 
     for (const colId of referencedCollectionIds) {
       const node = collectionIndex.get(colId);

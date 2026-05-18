@@ -20,7 +20,7 @@ import { resolveTextualConflict } from './isolated-diff/textual-conflict-resolve
 import { runIsolatedWorkUnit } from './isolated-diff/work-unit-executor.js';
 import { sanitizeMemoryFlowError } from './memory-flow/live-buffer.js';
 import type { CanonicalPin } from './canonical-pins.js';
-import type { MemoryFlowEventSink, MemoryFlowPlannedWorkUnit } from './memory-flow/types.js';
+import type { MemoryFlowEvent, MemoryFlowEventSink, MemoryFlowPlannedWorkUnit } from './memory-flow/types.js';
 import type {
   ContextEvidenceIndexSummary,
   IngestBundleRunnerDeps,
@@ -75,6 +75,8 @@ import type {
   WorkUnit,
 } from './types.js';
 import { repairWikiSlRefs, type WikiSlRefRepairResult } from './wiki-sl-ref-repair.js';
+
+type MemoryFlowStageProgress = Extract<MemoryFlowEvent, { type: 'stage_progress' }>;
 
 function workUnitToMemoryFlowPlannedWorkUnit(workUnit: WorkUnit): MemoryFlowPlannedWorkUnit {
   return {
@@ -313,7 +315,7 @@ export class IngestBundleRunner {
 
   protected async resolveStagedDir(
     ref: IngestBundleJob['bundleRef'],
-    ctx: { connectionId: string; sourceKey: string; jobId: string },
+    ctx: { connectionId: string; sourceKey: string; jobId: string; memoryFlow?: MemoryFlowEventSink },
   ): Promise<string> {
     if (ref.kind === 'upload') {
       return this.deps.storage.resolveUploadDir(ref.uploadId);
@@ -327,7 +329,11 @@ export class IngestBundleRunner {
     if (!adapter.fetch) {
       throw new Error(`source adapter '${ctx.sourceKey}' does not support scheduled_pull (no fetch() method)`);
     }
-    await adapter.fetch(ref.config, stagedDir, { connectionId: ctx.connectionId, sourceKey: ctx.sourceKey });
+    await adapter.fetch(ref.config, stagedDir, {
+      connectionId: ctx.connectionId,
+      sourceKey: ctx.sourceKey,
+      ...(ctx.memoryFlow ? { memoryFlow: ctx.memoryFlow } : {}),
+    });
     return stagedDir;
   }
 
@@ -978,6 +984,20 @@ export class IngestBundleRunner {
     });
     try {
     const memoryFlow = ctx?.memoryFlow;
+    const emitStageProgress = (
+      stage: MemoryFlowStageProgress['stage'],
+      percent: number,
+      message: string,
+      options: { transient?: boolean } = {},
+    ): void => {
+      memoryFlow?.emit({
+        type: 'stage_progress',
+        stage,
+        percent,
+        message,
+        ...(options.transient !== undefined ? { transient: options.transient } : {}),
+      });
+    };
     const baseSha = await this.deps.lockingService.withLock('config:repo', () => this.deps.gitService.revParseHead());
     if (!baseSha) {
       throw new Error('ingest-bundle: config repo has no HEAD');
@@ -1017,6 +1037,7 @@ export class IngestBundleRunner {
               connectionId: job.connectionId,
               sourceKey: job.sourceKey,
               jobId: job.jobId,
+              ...(memoryFlow ? { memoryFlow } : {}),
             }),
     );
     const fetchReport = adapter.readFetchReport ? await adapter.readFetchReport(stagedDir) : null;
@@ -1482,6 +1503,10 @@ export class IngestBundleRunner {
         }));
 
         activePhase = 'integration';
+        const integrablePatchCount = workUnitOutcomesByIndex.filter(
+          (outcome) => outcome?.status === 'success' && !!outcome.patchPath,
+        ).length;
+        let integratedPatchCount = 0;
         for (const [index, outcome] of workUnitOutcomesByIndex.entries()) {
           if (!outcome || outcome.status !== 'success' || !outcome.patchPath) {
             continue;
@@ -1496,6 +1521,11 @@ export class IngestBundleRunner {
             allowedTargetConnectionIds: slConnectionIds,
           };
           activeFailureDetails = integrationFailureDetails;
+          emitStageProgress(
+            'integration',
+            80,
+            `Integrating ${integratedPatchCount + 1}/${integrablePatchCount} patches: ${outcome.unitKey}`,
+          );
           const integration = await integrateWorkUnitPatch({
             unitKey: outcome.unitKey,
             patchPath: outcome.patchPath,
@@ -1532,8 +1562,9 @@ export class IngestBundleRunner {
                   ),
               });
             },
-            resolveTextualConflict: (context) =>
-              resolveTextualConflict({
+            resolveTextualConflict: async (context) => {
+              emitStageProgress('integration', 81, `Resolving text conflict for ${context.unitKey}`);
+              const result = await resolveTextualConflict({
                 agentRunner: this.deps.agentRunner,
                 workdir: sessionWorktree.workdir,
                 unitKey: context.unitKey,
@@ -1543,9 +1574,19 @@ export class IngestBundleRunner {
                 reason: context.reason,
                 maxAttempts: 1,
                 stepBudget: 12,
-              }),
-            repairGateFailure: (context) =>
-              repairFinalGateFailure({
+              });
+              emitStageProgress(
+                'integration',
+                82,
+                result.status === 'repaired'
+                  ? `Resolved text conflict for ${context.unitKey}`
+                  : `Text conflict resolver failed for ${context.unitKey}`,
+              );
+              return result;
+            },
+            repairGateFailure: async (context) => {
+              emitStageProgress('integration', 82, `Repairing semantic gate for ${context.unitKey}`);
+              const result = await repairFinalGateFailure({
                 agentRunner: this.deps.agentRunner,
                 workdir: sessionWorktree.workdir,
                 gateError: context.reason,
@@ -1554,7 +1595,16 @@ export class IngestBundleRunner {
                 repairKind: 'patch_semantic_gate',
                 maxAttempts: 1,
                 stepBudget: 16,
-              }),
+              });
+              emitStageProgress(
+                'integration',
+                83,
+                result.status === 'repaired'
+                  ? `Repaired semantic gate for ${context.unitKey}`
+                  : `Semantic gate repair failed for ${context.unitKey}`,
+              );
+              return result;
+            },
           });
           if (integration.textualResolution) {
             isolatedDiffSummary.resolverAttempts += integration.textualResolution.attempts;
@@ -1598,6 +1648,12 @@ export class IngestBundleRunner {
           }
           activeFailureDetails = undefined;
           isolatedDiffSummary.acceptedPatches += 1;
+          integratedPatchCount += 1;
+          emitStageProgress(
+            'integration',
+            83,
+            `Integrated ${integratedPatchCount}/${integrablePatchCount} patches`,
+          );
         }
 
       } else if (!overrideReport) {
@@ -2004,6 +2060,7 @@ export class IngestBundleRunner {
         (eviction?.deletedRawPaths.length ?? 0) > 0 ||
         hasCandidateReconcileWork;
       if (hasReconcileWork || overrideReport) {
+        emitStageProgress('reconciliation', 84, 'Reconciling results');
         await stage4?.updateProgress(0.0, 'Reconciling results');
       }
 
@@ -2052,6 +2109,12 @@ export class IngestBundleRunner {
           getReconciliationActions: () => reconcileActions,
           onStepFinish: stage4
             ? ({ passNumber, stepIndex, stepBudget }) => {
+                emitStageProgress(
+                  'reconciliation',
+                  85,
+                  `Reconciling results: pass ${passNumber} step ${stepIndex}/${stepBudget}`,
+                  { transient: true },
+                );
                 void stage4.updateProgress(
                   stepIndex / stepBudget,
                   `Reconciling results · pass ${passNumber} step ${stepIndex}`,
@@ -2105,6 +2168,9 @@ export class IngestBundleRunner {
           force: !!overrideReport,
           onStepFinish: stage4
             ? ({ stepIndex, stepBudget }) => {
+                emitStageProgress('reconciliation', 85, `Reconciling results: step ${stepIndex}/${stepBudget}`, {
+                  transient: true,
+                });
                 void stage4.updateProgress(stepIndex / stepBudget, `Reconciling results · step ${stepIndex}`);
               }
             : undefined,
@@ -2147,6 +2213,7 @@ export class IngestBundleRunner {
       activePhase = 'post_processor';
       if (postProcessor) {
         const stagePostProcessor = ctx?.startPhase(0.04);
+        emitStageProgress('post_processor', 87, 'Running deterministic imports');
         await stagePostProcessor?.updateProgress(0.0, 'Running deterministic imports');
         try {
           const result = await traceTimed(
@@ -2173,6 +2240,7 @@ export class IngestBundleRunner {
             warnings: result.warnings,
             touchedSources: result.touchedSources,
           };
+          emitStageProgress('post_processor', 88, 'Deterministic imports complete');
           await stagePostProcessor?.updateProgress(1.0, 'Deterministic imports complete');
         } catch (error) {
           postProcessorOutcome = {
@@ -2200,6 +2268,7 @@ export class IngestBundleRunner {
         ]),
       ].sort();
       activePhase = 'wiki_sl_ref_repair';
+      emitStageProgress('wiki_sl_ref_repair', 88, 'Repairing wiki semantic-layer references');
       wikiSlRefRepairResult = await traceTimed(
         runTrace,
         'wiki_sl_ref_repair',
@@ -2218,6 +2287,7 @@ export class IngestBundleRunner {
         repairs: wikiSlRefRepairResult.repairs,
         warnings: wikiSlRefRepairResult.warnings,
       });
+      emitStageProgress('wiki_sl_ref_repair', 88, 'Checked wiki semantic-layer references');
       const postReconciliationSha = await sessionWorktree.git.revParseHead();
       const postReconciliationPaths =
         preReconciliationSha && postReconciliationSha && preReconciliationSha !== postReconciliationSha
@@ -2261,6 +2331,7 @@ export class IngestBundleRunner {
       };
       activePhase = 'target_policy';
       activeFailureDetails = targetPolicyTraceData;
+      emitStageProgress('final_gates', 88, 'Checking semantic-layer target policy');
       await traceTimed(runTrace, 'target_policy', 'semantic_layer_target_policy', targetPolicyTraceData, async () => {
         assertSemanticLayerTargetPathsAllowed({
           paths: finalTargetPolicyPaths,
@@ -2288,6 +2359,7 @@ export class IngestBundleRunner {
       };
       activePhase = 'final_gates';
       activeFailureDetails = finalArtifactGateTraceData;
+      emitStageProgress('final_gates', 89, 'Running final artifact gates');
       try {
         await traceTimed(
           runTrace,
@@ -2329,6 +2401,7 @@ export class IngestBundleRunner {
           changedWikiPageKeys: finalChangedWikiPageKeys,
           touchedSlSources: finalTouchedSlSources,
         });
+        emitStageProgress('final_gates', 89, 'Repairing final artifact gates');
         const gateRepair = await repairFinalGateFailure({
           agentRunner: this.deps.agentRunner,
           workdir: sessionWorktree.workdir,
@@ -2408,6 +2481,7 @@ export class IngestBundleRunner {
       activeFailureDetails = undefined;
 
       activePhase = 'provenance_validation';
+      emitStageProgress('provenance', 90, 'Validating provenance rows');
       latestReportWorkUnits = this.toReportWorkUnits(stageIndex);
       latestReconciliationActions = reconcileActions;
       latestConflictsResolved = stageIndex.conflictsResolved;
@@ -2452,6 +2526,7 @@ export class IngestBundleRunner {
       // Stage 6 — squash commit
       activePhase = 'squash';
       const stage6 = ctx?.startPhase(0.04);
+      emitStageProgress('save', 91, 'Saving changes');
       await stage6?.updateProgress(0.0, 'Saving changes');
       try {
         await sessionWorktree.git.assertWorktreeClean();
@@ -2521,6 +2596,7 @@ export class IngestBundleRunner {
       }
 
       const stage5 = ctx?.startPhase(0.04);
+      emitStageProgress('provenance', 95, 'Recording history');
       await stage5?.updateProgress(0.0, 'Recording history');
       activePhase = 'provenance';
 
@@ -2535,6 +2611,7 @@ export class IngestBundleRunner {
       );
 
       const stage7 = ctx?.startPhase(0.04);
+      emitStageProgress('report', 97, 'Wrapping up');
       await stage7?.updateProgress(0.0, 'Wrapping up');
       activePhase = 'report';
 

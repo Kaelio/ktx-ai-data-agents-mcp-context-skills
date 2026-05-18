@@ -45,6 +45,22 @@ type MemoryFlowEventPayload =
       reason: string;
     }
   | {
+      type: 'stage_progress';
+      stage:
+        | 'source'
+        | 'integration'
+        | 'reconciliation'
+        | 'post_processor'
+        | 'wiki_sl_ref_repair'
+        | 'final_gates'
+        | 'save'
+        | 'provenance'
+        | 'report';
+      percent: number;
+      message: string;
+      transient?: boolean;
+    }
+  | {
       type: 'work_unit_started';
       unitKey: string;
       skills: string[];
