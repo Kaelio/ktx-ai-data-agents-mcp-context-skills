@@ -74,6 +74,15 @@ describe('projectHistoricSqlEvidence', () => {
     const result = await projectHistoricSqlEvidence({ workdir, connectionId: 'warehouse', syncId: 'sync-1', runId: 'run-1' });
 
     expect(result.touchedSources).toEqual([{ connectionId: 'warehouse', sourceName: 'orders' }]);
+    expect(result.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          target: 'sl',
+          key: 'orders',
+          rawPaths: ['tables/public.orders.json'],
+        }),
+      ]),
+    );
     const shard = YAML.parse(await readFile(join(workdir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8'));
     expect(shard.tables.orders.usage).toEqual({
       ownerNote: 'keep me',
@@ -164,6 +173,16 @@ describe('projectHistoricSqlEvidence', () => {
     const result = await projectHistoricSqlEvidence({ workdir, connectionId: 'warehouse', syncId: 'sync-1', runId: 'run-1' });
 
     expect(result.patternPagesWritten).toBe(1);
+    expect(result.changedWikiPageKeys).toContain('historic-sql-old-order-lifecycle');
+    expect(result.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          target: 'wiki',
+          key: 'historic-sql-old-order-lifecycle',
+          rawPaths: ['patterns-input.json'],
+        }),
+      ]),
+    );
     await expect(readFile(join(workdir, 'wiki/global/historic-sql-old-order-lifecycle.md'), 'utf-8')).resolves.toContain(
       'Order Lifecycle Analysis',
     );
@@ -320,6 +339,19 @@ describe('projectHistoricSqlEvidence', () => {
       probeWarnings: [],
       staleArchiveAfterDays: 90,
     });
+    await writeJson(workdir, '.ktx/ingest-evidence/historic-sql/run-1/customers.json', {
+      kind: 'table_usage',
+      connectionId: 'warehouse',
+      table: 'public.customers',
+      rawPath: 'tables/public.customers.json',
+      usage: {
+        narrative: 'Customers were queried.',
+        frequencyTier: 'low',
+        commonFilters: [],
+        commonJoins: [],
+        staleSince: null,
+      },
+    });
     await writeText(
       workdir,
       'wiki/global/historic-sql-old-template.md',
@@ -346,6 +378,9 @@ describe('projectHistoricSqlEvidence', () => {
 
     expect(result.staleTablesMarked).toBe(1);
     expect(result.touchedSources).toEqual([{ connectionId: 'warehouse', sourceName: 'orders' }]);
+    const staleAction = result.actions.find((action) => action.target === 'sl' && action.key === 'orders');
+    expect(staleAction).toEqual(expect.objectContaining({ target: 'sl', key: 'orders' }));
+    expect(staleAction?.rawPaths).toBeUndefined();
     const shard = YAML.parse(await readFile(join(workdir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8'));
     expect(shard.tables.orders.usage).toEqual({
       ownerNote: 'keep analyst annotation',
@@ -359,5 +394,64 @@ describe('projectHistoricSqlEvidence', () => {
     await expect(readFile(join(workdir, 'wiki/global/historic-sql-old-template.md'), 'utf-8')).resolves.toContain(
       'Old body',
     );
+  });
+
+  it('does not mark stale or archive pages when override replay has no current-run evidence', async () => {
+    const workdir = await tempWorkdir();
+    await writeText(
+      workdir,
+      'semantic-layer/warehouse/_schema/public.yaml',
+      YAML.stringify({
+        tables: {
+          orders: {
+            table: 'public.orders',
+            usage: {
+              narrative: 'Orders were active before.',
+              frequencyTier: 'high',
+              commonFilters: ['status'],
+              commonGroupBys: ['status'],
+              commonJoins: [],
+            },
+            columns: [{ name: 'id', type: 'string' }],
+          },
+        },
+      }),
+    );
+    await writeJson(workdir, 'raw-sources/warehouse/historic-sql/override-sync/manifest.json', {
+      source: 'historic-sql',
+      connectionId: 'warehouse',
+      dialect: 'postgres',
+      fetchedAt: '2026-05-11T00:00:00.000Z',
+      windowStart: '2026-02-10T00:00:00.000Z',
+      windowEnd: '2026-05-11T00:00:00.000Z',
+      snapshotRowCount: 0,
+      touchedTableCount: 0,
+      parseFailures: 0,
+      warnings: [],
+      probeWarnings: [],
+      staleArchiveAfterDays: 90,
+    });
+
+    const result = await projectHistoricSqlEvidence({
+      workdir,
+      connectionId: 'warehouse',
+      syncId: 'override-sync',
+      runId: 'override-run',
+      overrideReplay: {
+        priorJobId: 'prior-job',
+        priorRunId: 'prior-run',
+        priorSyncId: 'prior-sync',
+        evictionRawPaths: ['tables/public/orders.json'],
+      },
+    });
+
+    expect(result.tableUsageMerged).toBe(0);
+    expect(result.staleTablesMarked).toBe(0);
+    expect(result.patternPagesWritten).toBe(0);
+    expect(result.stalePatternPagesMarked).toBe(0);
+    expect(result.archivedPatternPages).toBe(0);
+    expect(result.touchedSources).toEqual([]);
+    expect(result.changedWikiPageKeys).toEqual([]);
+    expect(result.actions).toEqual([]);
   });
 });

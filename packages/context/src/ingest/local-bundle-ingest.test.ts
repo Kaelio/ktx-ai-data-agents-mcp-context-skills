@@ -548,11 +548,12 @@ describe('canonical local ingest', () => {
     });
 
     expect(result.result.failedWorkUnits).toEqual([]);
-    expect(result.report.body.postProcessor).toMatchObject({
+    expect(result.report.body.finalization).toMatchObject({
       sourceKey: 'historic-sql',
       status: 'success',
       result: { tableUsageMerged: 1 },
-      touchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
+      declaredTouchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
+      derivedTouchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
     });
     await expect(readFile(join(projectDir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8')).resolves.toContain(
       'Orders are repeatedly queried by lifecycle status.',

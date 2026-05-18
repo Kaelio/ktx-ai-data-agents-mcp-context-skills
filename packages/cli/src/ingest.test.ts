@@ -1020,9 +1020,16 @@ describe('runKtxIngest', () => {
           sourceKey: 'historic-sql',
           body: {
             workUnits: [],
-            postProcessor: {
+            finalization: {
               sourceKey: 'historic-sql',
               status: 'success',
+              commitSha: 'finalization-sha',
+              touchedPaths: ['semantic-layer/warehouse/_schema/public.yaml', 'wiki/global/historic-sql-orders.md'],
+              declaredTouchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
+              derivedTouchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
+              declaredChangedWikiPageKeys: ['historic-sql-orders'],
+              derivedChangedWikiPageKeys: ['historic-sql-orders'],
+              mismatches: [],
               result: {
                 tableUsageMerged: 56,
                 staleTablesMarked: 1,
@@ -1032,7 +1039,24 @@ describe('runKtxIngest', () => {
               },
               errors: [],
               warnings: [],
-              touchedSources: [],
+              actions: [
+                ...Array.from({ length: 57 }, (_, index) => ({
+                  target: 'sl' as const,
+                  type: 'updated' as const,
+                  key: `orders-${index}`,
+                  detail: 'Merged usage',
+                  targetConnectionId: 'warehouse',
+                  rawPaths: ['tables/public/orders.json'],
+                })),
+                ...Array.from({ length: 35 }, (_, index) => ({
+                  target: 'wiki' as const,
+                  type: 'updated' as const,
+                  key: `historic-sql-orders-${index}`,
+                  detail: 'Projected pattern',
+                  rawPaths: ['patterns/orders.json'],
+                })),
+              ],
+              provenanceExclusions: [],
             },
           },
         }),

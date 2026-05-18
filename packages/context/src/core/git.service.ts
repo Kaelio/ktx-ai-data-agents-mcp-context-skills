@@ -533,6 +533,19 @@ export class GitService {
     return out;
   }
 
+  async changedPaths(): Promise<string[]> {
+    const raw = await this.git.raw(['status', '--porcelain=v1', '-z']);
+    const fields = raw.split('\0').filter(Boolean);
+    const paths: string[] = [];
+    for (const field of fields) {
+      const path = field.slice(3);
+      if (path.length > 0) {
+        paths.push(path);
+      }
+    }
+    return [...new Set(paths)].sort();
+  }
+
   /**
    * List all paths under the working tree that match `pathSpec`, scoped to HEAD.
    * Used for the reconciler's first-ever run when there's no watermark to diff from.

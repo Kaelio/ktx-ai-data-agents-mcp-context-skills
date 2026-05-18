@@ -1,6 +1,15 @@
-import type { ChunkResult, DiffSet, FetchContext, ScopeDescriptor, SourceAdapter } from '../../types.js';
+import type {
+  ChunkResult,
+  DeterministicFinalizationContext,
+  DiffSet,
+  FetchContext,
+  FinalizationResult,
+  ScopeDescriptor,
+  SourceAdapter,
+} from '../../types.js';
 import { chunkHistoricSqlUnifiedStagedDir, describeHistoricSqlUnifiedScope } from './chunk-unified.js';
 import { detectHistoricSqlStagedDir } from './detect.js';
+import { projectHistoricSqlEvidence } from './projection.js';
 import { stageHistoricSqlAggregatedSnapshot } from './stage-unified.js';
 import { type HistoricSqlSourceAdapterDeps } from './types.js';
 
@@ -34,5 +43,23 @@ export class HistoricSqlSourceAdapter implements SourceAdapter {
 
   describeScope(stagedDir: string): Promise<ScopeDescriptor> {
     return describeHistoricSqlUnifiedScope(stagedDir);
+  }
+
+  async finalize(ctx: DeterministicFinalizationContext): Promise<FinalizationResult> {
+    const projection = await projectHistoricSqlEvidence({
+      workdir: ctx.workdir,
+      connectionId: ctx.connectionId,
+      syncId: ctx.syncId,
+      runId: ctx.runId,
+      overrideReplay: ctx.overrideReplay,
+    });
+    return {
+      result: projection,
+      warnings: projection.warnings,
+      errors: [],
+      touchedSources: projection.touchedSources,
+      changedWikiPageKeys: projection.changedWikiPageKeys,
+      actions: projection.actions,
+    };
   }
 }

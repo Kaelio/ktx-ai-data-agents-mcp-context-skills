@@ -118,6 +118,35 @@ function makeWikiService(root: string) {
         content: content.trim(),
       };
     }),
+    writePage: vi.fn(
+      async (
+        _scope: string,
+        _scopeId: string | null,
+        key: string,
+        frontmatter: { summary?: string; usage_mode?: string; refs?: string[]; sl_refs?: string[] },
+        content: string,
+      ) => {
+        await mkdir(join(root, 'wiki/global'), { recursive: true });
+        const refs = (frontmatter.refs ?? []).map((ref) => `  - ${ref}`).join('\n');
+        const slRefs = (frontmatter.sl_refs ?? []).map((ref) => `  - ${ref}`).join('\n');
+        await writeFile(
+          join(root, 'wiki/global', `${key}.md`),
+          [
+            '---',
+            `summary: ${frontmatter.summary ?? key}`,
+            `usage_mode: ${frontmatter.usage_mode ?? 'auto'}`,
+            'refs:',
+            refs,
+            'sl_refs:',
+            slRefs,
+            '---',
+            '',
+            content,
+            '',
+          ].join('\n'),
+        );
+      },
+    ),
     syncFromCommit: vi.fn(),
   };
 }
@@ -2156,6 +2185,189 @@ describe('IngestBundleRunner isolated diff path', () => {
       );
       expect(trace).toContain('gate_repair_failed');
       expect(trace).not.toContain('squash_finished');
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+  it('runs finalization before wiki sl-ref repair and final gates', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps, adapter } = makeDeps(runtime);
+      adapter.chunk.mockResolvedValue({
+        workUnits: [{ unitKey: 'wiki-page', rawFiles: ['cards/source.json'], peerFileIndex: [], dependencyPaths: [] }],
+      });
+      adapter.finalize = vi.fn(async ({ workdir }) => {
+        await mkdir(join(workdir, 'semantic-layer/warehouse'), { recursive: true });
+        await mkdir(join(workdir, 'wiki/global'), { recursive: true });
+        await writeFile(
+          join(workdir, 'semantic-layer/warehouse/mart_account_segments.yaml'),
+          'name: mart_account_segments\ngrain: [account_id]\ncolumns: [{name: account_id, type: string}]\njoins: []\nmeasures:\n  - name: total_contract_arr\n    expr: sum(contract_arr)\n',
+        );
+        await writeFile(
+          join(workdir, 'wiki/global/finalized-accounts.md'),
+          '---\nsummary: Finalized accounts\nusage_mode: auto\nsl_refs:\n  - mart_account_segments\n  - missing_source\n---\n\nAccounts use `mart_account_segments.total_contract_arr`.\n',
+        );
+        return {
+          warnings: [],
+          errors: [],
+          touchedSources: [{ connectionId: 'warehouse', sourceName: 'mart_account_segments' }],
+          changedWikiPageKeys: ['finalized-accounts'],
+          actions: [
+            {
+              target: 'sl',
+              type: 'created',
+              key: 'mart_account_segments',
+              detail: 'Finalized accounts',
+              targetConnectionId: 'warehouse',
+              rawPaths: ['cards/source.json'],
+            },
+            {
+              target: 'wiki',
+              type: 'created',
+              key: 'finalized-accounts',
+              detail: 'Finalized wiki',
+              rawPaths: ['cards/source.json'],
+            },
+          ],
+        };
+      });
+      deps.agentRunner.runLoop = vi.fn(async () => ({ stopReason: 'natural' as const })) as never;
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [['cards/source.json', 'h1']]);
+
+      await runner.run({
+        jobId: 'job-finalization',
+        connectionId: 'warehouse',
+        sourceKey: 'metabase',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload' },
+      });
+
+      const trace = await readFile(
+        join(runtime.configDir, '.ktx/ingest-traces/job-finalization/trace.jsonl'),
+        'utf-8',
+      );
+      expect(trace.indexOf('finalization_committed')).toBeLessThan(trace.indexOf('wiki_sl_refs_repaired'));
+      expect(trace.indexOf('wiki_sl_refs_repaired')).toBeLessThan(trace.indexOf('final_artifact_gates'));
+      await expect(readFile(join(runtime.configDir, 'wiki/global/finalized-accounts.md'), 'utf-8')).resolves.toContain(
+        'sl_refs:\n  - mart_account_segments',
+      );
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when finalization edits a path already changed earlier in the run', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps, adapter } = makeDeps(runtime);
+      adapter.chunk.mockResolvedValue({
+        workUnits: [{ unitKey: 'wiki-page', rawFiles: ['cards/source.json'], peerFileIndex: [], dependencyPaths: [] }],
+      });
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async () => {
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        await mkdir(join(root, 'wiki/global'), { recursive: true });
+        await writeFile(
+          join(root, 'wiki/global/orders.md'),
+          '---\nsummary: Orders\nusage_mode: auto\n---\n\nWU body\n',
+        );
+        currentSession.actions.push({
+          target: 'wiki',
+          type: 'created',
+          key: 'orders',
+          detail: 'WU orders',
+          rawPaths: ['cards/source.json'],
+        });
+        await currentSession.gitService.commitFiles(
+          ['wiki/global/orders.md'],
+          'wu orders',
+          'KTX Test',
+          'system@ktx.local',
+        );
+        return { stopReason: 'natural' as const };
+      }) as never;
+      adapter.finalize = vi.fn(async ({ workdir }) => {
+        await writeFile(
+          join(workdir, 'wiki/global/orders.md'),
+          '---\nsummary: Orders\nusage_mode: auto\n---\n\nFinalized body\n',
+        );
+        return {
+          warnings: [],
+          errors: [],
+          touchedSources: [],
+          changedWikiPageKeys: ['orders'],
+          actions: [{ target: 'wiki', type: 'updated', key: 'orders', detail: 'Conflicting finalization' }],
+        };
+      });
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [['cards/source.json', 'h1']]);
+
+      await expect(
+        runner.run({
+          jobId: 'job-finalization-overlap',
+          connectionId: 'warehouse',
+          sourceKey: 'metabase',
+          trigger: 'upload',
+          bundleRef: { kind: 'upload', uploadId: 'upload' },
+        }),
+      ).rejects.toThrow(/finalization modified path\(s\) already changed earlier in this run: wiki\/global\/orders\.md/);
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects finalization writes to unauthorized semantic-layer targets', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps, adapter } = makeDeps(runtime);
+      adapter.chunk.mockResolvedValue({ workUnits: [] });
+      adapter.finalize = vi.fn(async ({ workdir }) => {
+        await mkdir(join(workdir, 'semantic-layer/other-warehouse'), { recursive: true });
+        await writeFile(
+          join(workdir, 'semantic-layer/other-warehouse/orders.yaml'),
+          'name: orders\ngrain: [order_id]\ncolumns: [{name: order_id, type: string}]\njoins: []\nmeasures: []\n',
+        );
+        return {
+          warnings: [],
+          errors: [],
+          touchedSources: [{ connectionId: 'other-warehouse', sourceName: 'orders' }],
+          changedWikiPageKeys: [],
+          actions: [
+            {
+              target: 'sl',
+              type: 'created',
+              key: 'orders',
+              targetConnectionId: 'other-warehouse',
+              detail: 'Forbidden target',
+              rawPaths: ['cards/source.json'],
+            },
+          ],
+        };
+      });
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(runner, runtime, [['cards/source.json', 'h1']]);
+
+      await expect(
+        runner.run({
+          jobId: 'job-finalization-target-policy',
+          connectionId: 'warehouse',
+          sourceKey: 'metabase',
+          trigger: 'upload',
+          bundleRef: { kind: 'upload', uploadId: 'upload' },
+        }),
+      ).rejects.toThrow(/semantic-layer target connection not allowed/);
+      const trace = await readFile(
+        join(runtime.configDir, '.ktx/ingest-traces/job-finalization-target-policy/trace.jsonl'),
+        'utf-8',
+      );
+      expect(trace).toContain('finalization_committed');
+      expect(trace).toContain('semantic_layer_target_policy');
+      expect(trace).toContain('ingest_failed');
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });
     }

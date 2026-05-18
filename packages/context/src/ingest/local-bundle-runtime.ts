@@ -72,7 +72,6 @@ import {
   CuratorPaginationService,
 } from './context-candidates/index.js';
 import { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evidence-tool.js';
-import { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
 import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './context-evidence/index.js';
 import { DiffSetService } from './diff-set.service.js';
 import { ingestTracePathForJob, type IngestTraceLevel } from './ingest-trace.js';
@@ -771,9 +770,6 @@ export function createLocalBundleIngestRuntime(
       settings: { batchSize: 8, maxPasses: 8, stepBudgetPerPass: 60 },
       logger,
     }),
-    postProcessors: {
-      'historic-sql': new HistoricSqlProjectionPostProcessor(),
-    },
     logger,
   };
 
