@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import pLimit from 'p-limit';
 import { z } from 'zod';
@@ -77,6 +77,16 @@ import type {
 import { repairWikiSlRefs, type WikiSlRefRepairResult } from './wiki-sl-ref-repair.js';
 
 type MemoryFlowStageProgress = Extract<MemoryFlowEvent, { type: 'stage_progress' }>;
+
+async function copyTransientIngestEvidence(sourceWorkdir: string, targetWorkdir: string): Promise<void> {
+  const source = join(sourceWorkdir, '.ktx/ingest-evidence');
+  const target = join(targetWorkdir, '.ktx/ingest-evidence');
+  await cp(source, target, { recursive: true, force: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  });
+}
 
 function workUnitToMemoryFlowPlannedWorkUnit(workUnit: WorkUnit): MemoryFlowPlannedWorkUnit {
   return {
@@ -1419,6 +1429,7 @@ export class IngestBundleRunner {
                   patchDir,
                   trace: runTrace,
                   workUnit: wu,
+                  afterSuccess: (child) => copyTransientIngestEvidence(child.workdir, sessionWorktree.workdir),
                   run: async (child) => {
                     const scopedWikiService = this.deps.wikiService.forWorktree(child.workdir);
                     const scopedSemanticLayerService = this.deps.semanticLayerService.forWorktree(child.workdir);

@@ -260,7 +260,11 @@ const buildRunner = (deps: ReturnType<typeof makeDeps> = makeDeps(), overrides: 
       resolveTranscriptDir: (jobId) => `/tmp/ktx-test/run/wu-transcripts/${jobId}`,
       resolveTracePath: (jobId) => `/tmp/ktx-test/ingest-traces/${jobId}/trace.jsonl`,
     },
-    settings: { probeRowCount: 1, memoryIngestionModel: 'test-model' },
+    settings: {
+      probeRowCount: 1,
+      memoryIngestionModel: 'test-model',
+      sharedWorktreeSourceKeys: ['fake', 'notion', 'looker', 'metricflow', 'historic-sql'],
+    },
     skillsRegistry: deps.skillsRegistry as any,
     promptService: deps.promptService as any,
     wikiService: deps.wikiService as any,
