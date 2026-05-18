@@ -29,6 +29,14 @@ type RuntimeWithSlValidationDeps = {
   };
 };
 
+type RuntimeWithSettingsDeps = {
+  deps: {
+    settings: {
+      isolatedDiffSourceKeys?: string[];
+    };
+  };
+};
+
 function testAgentRunner(): AgentRunnerPort {
   return { runLoop: vi.fn().mockResolvedValue({ stopReason: 'natural' as const }) };
 }
@@ -256,6 +264,25 @@ describe('createLocalBundleIngestRuntime', () => {
       connection: project.config.connections.warehouse,
       sql: 'select 1',
     });
+  });
+
+  it('enables isolated-diff routing for direct durable-write connectors', () => {
+    const runtime = createLocalBundleIngestRuntime({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      agentRunner: testAgentRunner(),
+    });
+
+    const settings = (runtime.runner as unknown as RuntimeWithSettingsDeps).deps.settings;
+
+    expect(settings.isolatedDiffSourceKeys).toEqual([
+      'metabase',
+      'notion',
+      'lookml',
+      'looker',
+      'dbt',
+      'metricflow',
+    ]);
   });
 
   it('accepts a debug LLM request file when constructing the default agent runner', async () => {
