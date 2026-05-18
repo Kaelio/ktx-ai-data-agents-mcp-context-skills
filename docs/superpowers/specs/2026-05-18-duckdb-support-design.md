@@ -228,19 +228,25 @@ Update user-facing docs where DuckDB changes behavior:
 - CLI reference docs for connection and SQL commands if present
 - contributor/package-layout docs that enumerate connector packages
 
-`@duckdb/node-api` distributes platform-specific prebuilt binaries as optional
-dependencies for Linux glibc/musl, macOS Apple Silicon/Intel, and Windows
-arm64/x64. DuckDB native install handling should therefore be platform and
-optional-binary based, not a `NODE_MODULE_VERSION` ABI or `pnpm rebuild` flow
-like the existing `better-sqlite3` path.
+`@duckdb/node-api` uses `@duckdb/node-bindings` platform-specific optional
+dependency packages for native binaries. The currently published
+`@duckdb/node-bindings` package matrix is Linux x64/arm64 glibc, macOS
+arm64/x64, and Windows arm64/x64. Although upstream docs mention Linux musl,
+the matching musl optional dependency packages are not currently published, so
+Alpine or other musl-based Linux hosts are not supported in v1. DuckDB native
+install handling should therefore be platform and optional-binary based, not a
+`NODE_MODULE_VERSION` ABI or `pnpm rebuild` flow like the existing
+`better-sqlite3` path.
 
 Record the supported platform matrix in docs or tests. At `ktx setup`,
 `ktx connection test`, `ktx ingest`, and other first-use entry points, verify
 that the host platform is covered and that the optional DuckDB binary can be
-loaded. Unsupported platforms or missing optional dependency packages should
-produce a friendly `@duckdb/node-api` platform-not-supported or missing-binary
-message with the current OS/arch/libc where available. Raw native-loader errors
-should not be the first user-facing failure mode.
+loaded. Unsupported platforms, including Linux musl/Alpine, should be detected
+and reported as unsupported by the platform-check helper instead of falling
+through to missing optional-binary handling. Missing optional dependency
+packages on supported platforms should produce a friendly `@duckdb/node-api`
+missing-binary message with the current OS/arch/libc where available. Raw
+native-loader errors should not be the first user-facing failure mode.
 
 ## DuckDB Connector Behavior
 
@@ -349,6 +355,7 @@ Expected verification after implementation:
 pnpm --filter @ktx/connector-duckdb run test
 pnpm --filter @ktx/context run test
 pnpm --filter @ktx/cli run test
+pnpm --filter @ktx/cli run test:slow
 pnpm --filter './packages/*' run type-check
 pnpm run dead-code
 node --test scripts/build-public-npm-package.test.mjs scripts/package-artifacts.test.mjs scripts/examples-docs.test.mjs
