@@ -11,7 +11,7 @@ import {
   searchLocalKnowledgePages,
 } from '@ktx/context/wiki';
 import { resolveOutputMode } from './io/mode.js';
-import { printList, type PrintListColumn } from './io/print-list.js';
+import { createRankBadgeFormatter, printList, type PrintListColumn } from './io/print-list.js';
 
 export type KtxKnowledgeArgs =
   | { command: 'list'; projectDir: string; userId: string; output?: string; json?: boolean }
@@ -23,6 +23,7 @@ export type KtxKnowledgeArgs =
       output?: string;
       json?: boolean;
       limit?: number;
+      debug?: boolean;
     };
 
 type KtxKnowledgeIo = import('./cli-runtime.js').KtxCliIo;
@@ -33,19 +34,23 @@ const WIKI_LIST_COLUMNS: ReadonlyArray<PrintListColumn<LocalKnowledgeSummary>> =
   { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
 ];
 
-const WIKI_SEARCH_COLUMNS: ReadonlyArray<PrintListColumn<LocalKnowledgeSearchResult>> = [
-  {
-    key: 'score',
-    label: 'SCORE',
-    plain: 'score=',
-    role: 'badge',
-    prettyFormat: (value) => `${Math.round(Number(value) * 100)}%`,
-    dim: true,
-  },
-  { key: 'scope', label: 'SCOPE', plain: '' },
-  { key: 'key', label: 'KEY', plain: '' },
-  { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
-];
+function wikiSearchColumns(
+  rows: ReadonlyArray<LocalKnowledgeSearchResult>,
+): ReadonlyArray<PrintListColumn<LocalKnowledgeSearchResult>> {
+  return [
+    {
+      key: 'score',
+      label: 'SCORE',
+      plain: 'score=',
+      role: 'badge',
+      prettyFormat: createRankBadgeFormatter(rows),
+      dim: true,
+    },
+    { key: 'scope', label: 'SCOPE', plain: '' },
+    { key: 'key', label: 'KEY', plain: '' },
+    { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
+  ];
+}
 
 interface KtxKnowledgeDeps {
   embeddingService?: KtxEmbeddingPort | null;
@@ -63,6 +68,26 @@ function wikiSearchEmbeddingService(
     project.config.ingest.embeddings,
   );
   return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
+}
+
+function writeWikiSearchDebug(
+  io: KtxKnowledgeIo,
+  input: {
+    mode: string;
+    embeddingConfigured: boolean;
+    results: LocalKnowledgeSearchResult[];
+  },
+): void {
+  io.stderr.write(
+    `[debug] wiki search mode=${input.mode} embedding=${input.embeddingConfigured ? 'configured' : 'unconfigured'} results=${input.results.length}\n`,
+  );
+  const lanes = input.results[0]?.lanes ?? [];
+  for (const lane of lanes) {
+    const reason = lane.reason ? ` reason=${lane.reason}` : '';
+    io.stderr.write(
+      `[debug] wiki search lane=${lane.lane} status=${lane.status} returned=${lane.returnedCandidateCount} weight=${lane.weight}${reason}\n`,
+    );
+  }
 }
 
 export async function runKtxKnowledge(
@@ -89,12 +114,20 @@ export async function runKtxKnowledge(
       return 0;
     }
     if (args.command === 'search') {
+      const embeddingService = wikiSearchEmbeddingService(project, deps);
       const results = await searchLocalKnowledgePages(project, {
         query: args.query,
         userId: args.userId,
-        embeddingService: wikiSearchEmbeddingService(project, deps),
+        embeddingService,
         limit: args.limit,
       });
+      if (args.debug) {
+        writeWikiSearchDebug(io, {
+          mode: project.config.storage.search,
+          embeddingConfigured: embeddingService !== null,
+          results,
+        });
+      }
       const mode = resolveOutputMode({ explicit: args.output, json: args.json, io });
       let emptyMessage = `No local wiki pages matched "${args.query}"`;
       let emptyHint = 'Run `ktx wiki list` to inspect available pages.';
@@ -107,7 +140,7 @@ export async function runKtxKnowledge(
       }
       printList<LocalKnowledgeSearchResult>({
         rows: results,
-        columns: WIKI_SEARCH_COLUMNS,
+        columns: wikiSearchColumns(results),
         groupBy: 'scope',
         emptyMessage,
         emptyHint,

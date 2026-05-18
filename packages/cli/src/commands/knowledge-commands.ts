@@ -1,5 +1,6 @@
 import { type Command, Option } from '@commander-js/extra-typings';
 import {
+  type CommandWithGlobalOptions,
   type KtxCliCommandContext,
   parsePositiveIntegerOption,
   resolveCommandProjectDir,
@@ -12,6 +13,11 @@ profileMark('module:commands/knowledge-commands');
 async function runKnowledgeArgs(context: KtxCliCommandContext, args: KtxKnowledgeArgs): Promise<void> {
   const runner = context.deps.knowledge ?? (await import('../knowledge.js')).runKtxKnowledge;
   context.setExitCode(await runner(args, context.io));
+}
+
+function isDebugEnabled(command: CommandWithGlobalOptions): boolean {
+  const options = (command.optsWithGlobals ? command.optsWithGlobals() : command.opts()) as { debug?: unknown };
+  return options.debug === true;
 }
 
 export function registerWikiCommands(program: Command, context: KtxCliCommandContext): void {
@@ -83,6 +89,7 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
           userId: options.userId,
           output: options.output,
           json: options.json,
+          ...(isDebugEnabled(command) ? { debug: true } : {}),
           ...(options.limit !== undefined ? { limit: options.limit } : {}),
         });
       },

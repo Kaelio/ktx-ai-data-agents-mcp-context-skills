@@ -78,6 +78,11 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
         skills: [],
         plugins: [],
         tools: [],
+        managedSettings: {
+          allowManagedMcpServersOnly: true,
+          allowedMcpServers: [],
+        },
+        strictMcpConfig: true,
         allowedTools: [],
         permissionMode: 'dontAsk',
         persistSession: false,
@@ -144,6 +149,11 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
 
     const options = query.mock.calls[0][0].options;
     expect(options.allowedTools).toEqual(['mcp__ktx__load_skill']);
+    expect(options.managedSettings).toEqual({
+      allowManagedMcpServersOnly: true,
+      allowedMcpServers: [{ serverName: 'ktx' }],
+    });
+    expect(options.strictMcpConfig).toBe(true);
     expect(await options.canUseTool('mcp__ktx__load_skill', {}, { signal: new AbortController().signal, toolUseID: '1' })).toEqual({
       behavior: 'allow',
       toolUseID: '1',
@@ -176,6 +186,11 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       skills: [],
       plugins: [],
       tools: [],
+      managedSettings: {
+        allowManagedMcpServersOnly: true,
+        allowedMcpServers: [],
+      },
+      strictMcpConfig: true,
       allowedTools: [],
       permissionMode: 'dontAsk',
       persistSession: false,
@@ -268,6 +283,11 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
 
     const options = query.mock.calls[0][0].options;
     expect(options.allowedTools).toEqual(['mcp__ktx__load_skill']);
+    expect(options.managedSettings).toEqual({
+      allowManagedMcpServersOnly: true,
+      allowedMcpServers: [{ serverName: 'ktx' }],
+    });
+    expect(options.strictMcpConfig).toBe(true);
     expect(await options.canUseTool('mcp__ktx__load_skill', {}, { signal: new AbortController().signal, toolUseID: '1' })).toEqual({
       behavior: 'allow',
       toolUseID: '1',
@@ -334,6 +354,10 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       answer: 'yes',
     });
     expect(objectQuery.mock.calls[0][0].options.env).toEqual(expect.objectContaining({ PATH: '/usr/bin' }));
+    expect(objectQuery.mock.calls[0][0].options.managedSettings).toEqual({
+      allowManagedMcpServersOnly: true,
+      allowedMcpServers: [],
+    });
     expect(objectQuery.mock.calls[0][0].options.env).not.toEqual(
       expect.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test', AWS_PROFILE: 'prod' }), // pragma: allowlist secret
     );
@@ -374,6 +398,10 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       telemetryTags: { operationName: 'test' },
     });
     expect(agentQuery.mock.calls[0][0].options.env).toEqual(expect.objectContaining({ HOME: '/Users/test' }));
+    expect(agentQuery.mock.calls[0][0].options.managedSettings).toEqual({
+      allowManagedMcpServersOnly: true,
+      allowedMcpServers: [{ serverName: 'ktx' }],
+    });
     expect(agentQuery.mock.calls[0][0].options.env).not.toEqual(
       expect.objectContaining({ ANTHROPIC_AUTH_TOKEN: 'token', CLAUDE_CODE_USE_VERTEX: '1' }),
     );
@@ -442,6 +470,11 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       skills: [],
       plugins: [],
       tools: [],
+      managedSettings: {
+        allowManagedMcpServersOnly: true,
+        allowedMcpServers: [],
+      },
+      strictMcpConfig: true,
       allowedTools: [],
       persistSession: false,
       env: expect.not.objectContaining({ ANTHROPIC_API_KEY: 'sk-ant-test' }),

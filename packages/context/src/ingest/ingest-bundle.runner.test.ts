@@ -1,8 +1,7 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { GitService } from '../core/index.js';
 import { addTouchedSlSource } from '../tools/index.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import { createMemoryFlowLiveBuffer } from './memory-flow/live-buffer.js';
@@ -96,6 +95,7 @@ const makeDeps = () => {
     triageSupported: undefined as undefined | boolean,
     detect: vi.fn().mockResolvedValue(true),
     listTargetConnectionIds: undefined as undefined | ((stagedDir: string) => Promise<string[]>),
+    finalize: undefined as any,
     chunk: vi.fn().mockResolvedValue({
       workUnits: [{ unitKey: 'u1', rawFiles: ['a.yml'], peerFileIndex: [], dependencyPaths: [] }],
     }),
@@ -123,9 +123,16 @@ const makeDeps = () => {
   };
   const scopedGit = {
     revParseHead: vi.fn().mockResolvedValue('h'),
-    commitFiles: vi.fn(),
+    commitFiles: vi.fn().mockResolvedValue({ created: true, commitHash: 'h' }),
+    commitStaged: vi.fn().mockResolvedValue({ created: false, commitHash: 'h' }),
     resetHardTo: vi.fn(),
     assertWorktreeClean: vi.fn().mockResolvedValue(undefined),
+    writeBinaryNoRenamePatch: vi.fn(async (_base: string, _head: string, patchPath: string) => {
+      await writeFile(patchPath, '', 'utf-8');
+    }),
+    applyPatchFile3WayIndex: vi.fn(),
+    diffNameStatus: vi.fn().mockResolvedValue([]),
+    changedPaths: vi.fn().mockResolvedValue([]),
   };
   const sessionWorktreeService = {
     create: vi.fn().mockResolvedValue({
@@ -167,10 +174,12 @@ const makeDeps = () => {
     loadPrompt: vi.fn().mockResolvedValue('base-framing'),
   };
   const wikiService = {
-    forWorktree: vi.fn().mockReturnValue({}),
+    forWorktree: vi.fn(),
+    listPageKeys: vi.fn().mockResolvedValue([]),
     readPage: vi.fn().mockResolvedValue(null),
     syncFromCommit: vi.fn().mockResolvedValue(undefined),
   };
+  wikiService.forWorktree.mockReturnValue(wikiService);
   const knowledgeSlRefs = {
     syncFromWiki: vi.fn().mockResolvedValue({ inserted: 1, deleted: 0 }),
   };
@@ -178,7 +187,7 @@ const makeDeps = () => {
     listPagesForUser: vi.fn().mockResolvedValue([]),
   };
   const semanticLayerService = {
-    forWorktree: vi.fn().mockReturnValue({}),
+    forWorktree: vi.fn(),
     listFilesForConnection: vi
       .fn()
       .mockImplementation((connectionId: string) =>
@@ -193,6 +202,7 @@ const makeDeps = () => {
         }),
       ),
   };
+  semanticLayerService.forWorktree.mockReturnValue(semanticLayerService);
   const slSearchService = {
     indexSources: vi.fn().mockResolvedValue(undefined),
   };
@@ -255,8 +265,12 @@ const buildRunner = (deps: ReturnType<typeof makeDeps> = makeDeps(), overrides: 
       resolveUploadDir: (uploadId) => `/tmp/ktx-test/ingest-uploads/${uploadId}`,
       resolvePullDir: (jobId) => `/tmp/ktx-test/ingest-pulls/${jobId}`,
       resolveTranscriptDir: (jobId) => `/tmp/ktx-test/run/wu-transcripts/${jobId}`,
+      resolveTracePath: (jobId) => `/tmp/ktx-test/ingest-traces/${jobId}/trace.jsonl`,
     },
-    settings: { probeRowCount: 1, memoryIngestionModel: 'test-model' },
+    settings: {
+      probeRowCount: 1,
+      memoryIngestionModel: 'test-model',
+    },
     skillsRegistry: deps.skillsRegistry as any,
     promptService: deps.promptService as any,
     wikiService: deps.wikiService as any,
@@ -410,6 +424,127 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       expect.stringContaining('ingest(fake): j1'),
       'raw-sources/c1/fake/s/a.yml',
     );
+  });
+
+  it('fails before squash when reconciliation leaves a touched wiki page with dangling refs', async () => {
+    const deps = makeDeps();
+    let currentToolSession: any = null;
+    const scopedWiki = {
+      listPageKeys: vi.fn().mockResolvedValue(['page-a']),
+      readPage: vi.fn().mockImplementation((_scope: string, _scopeId: string | null, key: string) => {
+        if (key === 'page-a') {
+          return Promise.resolve({
+            pageKey: 'page-a',
+            frontmatter: { summary: 'Page A', usage_mode: 'auto', refs: ['missing-page'] },
+            content: 'See [[missing-page]].',
+          });
+        }
+        return Promise.resolve(null);
+      }),
+    };
+    deps.wikiService.forWorktree.mockReturnValue(scopedWiki);
+    deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
+      currentToolSession = toolSession;
+      return {
+        toRuntimeTools: vi.fn().mockReturnValue({}),
+        getAllTools: vi.fn().mockReturnValue([]),
+        getToolNames: vi.fn().mockReturnValue([]),
+      };
+    });
+    deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
+      if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+        currentToolSession.actions.push({ target: 'sl', type: 'updated', key: 'orders', detail: 'Orders source' });
+      }
+      if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        currentToolSession.actions.push({ target: 'wiki', type: 'created', key: 'page-a', detail: 'Page A' });
+      }
+      return { stopReason: 'natural' };
+    });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await expect(
+      runner.run({
+        jobId: 'j1',
+        connectionId: 'c1',
+        sourceKey: 'fake',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+      }),
+    ).rejects.toThrow(/wiki references target missing page\(s\): page-a -> missing-page/);
+
+    expect(deps.runsRepo.markFailed).toHaveBeenCalledWith('run-1');
+    expect(deps.gitService.squashMergeIntoMain).not.toHaveBeenCalled();
+  });
+
+  it('allows reconciliation to save circular wiki refs once both pages exist', async () => {
+    const deps = makeDeps();
+    let currentToolSession: any = null;
+    const scopedWiki = {
+      listPageKeys: vi.fn().mockResolvedValue(['page-a', 'page-b']),
+      readPage: vi.fn().mockImplementation((_scope: string, _scopeId: string | null, key: string) => {
+        if (key === 'page-a') {
+          return Promise.resolve({
+            pageKey: 'page-a',
+            frontmatter: { summary: 'Page A', usage_mode: 'auto', refs: ['page-b'] },
+            content: 'See [[page-b]].',
+          });
+        }
+        if (key === 'page-b') {
+          return Promise.resolve({
+            pageKey: 'page-b',
+            frontmatter: { summary: 'Page B', usage_mode: 'auto', refs: ['page-a'] },
+            content: 'See [[page-a]].',
+          });
+        }
+        return Promise.resolve(null);
+      }),
+    };
+    deps.wikiService.forWorktree.mockReturnValue(scopedWiki);
+    deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
+      currentToolSession = toolSession;
+      return {
+        toRuntimeTools: vi.fn().mockReturnValue({}),
+        getAllTools: vi.fn().mockReturnValue([]),
+        getToolNames: vi.fn().mockReturnValue([]),
+      };
+    });
+    deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
+      if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
+        currentToolSession.actions.push({ target: 'sl', type: 'updated', key: 'orders', detail: 'Orders source' });
+      }
+      if (params.telemetryTags.operationName === 'ingest-bundle-reconcile') {
+        currentToolSession.actions.push(
+          { target: 'wiki', type: 'created', key: 'page-a', detail: 'Page A' },
+          { target: 'wiki', type: 'created', key: 'page-b', detail: 'Page B' },
+        );
+      }
+      return { stopReason: 'natural' };
+    });
+
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    const result = await runner.run({
+      jobId: 'j1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect(result.failedWorkUnits).toEqual([]);
+    expect(deps.gitService.squashMergeIntoMain).toHaveBeenCalled();
+    expect(deps.runsRepo.markFailed).not.toHaveBeenCalled();
   });
 
   it('threads target warehouse connection names into WorkUnit and reconcile tool sessions', async () => {
@@ -1384,7 +1519,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
 
     const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
-      currentHashes: new Map([['explores/b2b/sales_pipeline.json', 'h1']]),
+      currentHashes: new Map([['a.yml', 'h1']]),
       rawDirInWorktree: 'raw-sources/looker-run/fake/s',
     });
     (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
@@ -1441,26 +1576,69 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
-  it('runs a registered post-processor before squash, records the outcome, and reindexes touched sources after squash', async () => {
+  it('runs adapter finalization before squash, records the outcome, and reindexes touched sources', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'metricflow';
     deps.registry.get.mockReturnValue(deps.adapter);
     deps.adapter.chunk.mockResolvedValue({
-      workUnits: [{ unitKey: 'u1', rawFiles: ['semantic_models.yml'], peerFileIndex: [], dependencyPaths: [] }],
+      workUnits: [],
       parseArtifacts: { semanticModels: [{ name: 'orders' }] },
+    });
+    deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['warehouse-2']);
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      result: { sourcesTouched: 1 },
+      warnings: ['kept going'],
+      errors: [],
+      touchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+      changedWikiPageKeys: [],
+      actions: [
+        {
+          target: 'sl',
+          type: 'updated',
+          key: 'orders',
+          targetConnectionId: 'warehouse-2',
+          detail: 'Finalized orders usage',
+          rawPaths: ['semantic_models.yml'],
+        },
+      ],
     });
     deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
       Promise.resolve({ sources: [{ name: `${connectionId}_source` }], loadErrors: [] }),
     );
-    const postProcessor = {
-      run: vi.fn().mockResolvedValue({
-        result: { sourcesCreated: 1 },
-        warnings: ['kept going'],
-        errors: [],
-        touchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+    let head = 'pre-finalization';
+    const git = {
+      revParseHead: vi.fn(async () => head),
+      commitFiles: vi.fn().mockImplementation(async (paths: string[]) => {
+        if (paths.includes('semantic-layer/warehouse-2/orders.yaml')) {
+          head = 'post-finalization';
+          return { created: true, commitHash: 'finalization-sha' };
+        }
+        return { created: true, commitHash: head };
       }),
+      commitStaged: vi.fn().mockResolvedValue({ created: false, commitHash: 'post-finalization' }),
+      resetHardTo: vi.fn(),
+      assertWorktreeClean: vi.fn().mockResolvedValue(undefined),
+      writeBinaryNoRenamePatch: vi.fn(async (_base: string, _head: string, patchPath: string) => {
+        await writeFile(patchPath, '', 'utf-8');
+      }),
+      applyPatchFile3WayIndex: vi.fn(),
+      diffNameStatus: vi.fn().mockImplementation(async (from: string, to: string) =>
+        from === 'pre-finalization' && to === 'post-finalization'
+          ? [{ status: 'M', path: 'semantic-layer/warehouse-2/orders.yaml' }]
+          : [],
+      ),
+      changedPaths: vi.fn().mockResolvedValue(['semantic-layer/warehouse-2/orders.yaml']),
     };
-    const runner = buildRunner(deps, { postProcessors: { metricflow: postProcessor } });
+    deps.sessionWorktreeService.create.mockResolvedValue({
+      chatId: 'j1',
+      workdir: '/tmp/wt',
+      branch: 'session/j1',
+      baseSha: 'b',
+      createdAt: new Date(),
+      git,
+      config: {},
+    });
+    const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
       currentHashes: new Map([['semantic_models.yml', 'h1']]),
       rawDirInWorktree: 'raw-sources/c1/metricflow/s',
@@ -1475,26 +1653,29 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       bundleRef: { kind: 'upload', uploadId: 'upload-x' },
     });
 
-    expect(postProcessor.run).toHaveBeenCalledWith({
-      connectionId: 'c1',
-      sourceKey: 'metricflow',
-      syncId: expect.any(String),
-      jobId: 'j1',
-      runId: 'run-1',
-      workdir: '/tmp/wt',
-      parseArtifacts: { semanticModels: [{ name: 'orders' }] },
-    });
+    expect(deps.adapter.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'c1',
+        sourceKey: 'metricflow',
+        syncId: expect.any(String),
+        jobId: 'j1',
+        runId: 'run-1',
+        workdir: '/tmp/wt',
+        parseArtifacts: { semanticModels: [{ name: 'orders' }] },
+      }),
+    );
     expect(deps.reportsRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({
-          postProcessor: {
+          finalization: expect.objectContaining({
             sourceKey: 'metricflow',
             status: 'success',
-            result: { sourcesCreated: 1 },
-            warnings: ['kept going'],
-            errors: [],
-            touchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
-          },
+            commitSha: 'finalization-sha',
+            touchedPaths: ['semantic-layer/warehouse-2/orders.yaml'],
+            derivedTouchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+            declaredTouchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+            actions: [expect.objectContaining({ key: 'orders' })],
+          }),
         }),
       }),
     );
@@ -1503,7 +1684,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(deps.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'success');
   });
 
-  it('includes historic-sql post-processor output in memory-flow saved counts', async () => {
+  it('includes finalization actions in memory-flow saved counts', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'historic-sql';
     deps.registry.get.mockReturnValue(deps.adapter);
@@ -1517,21 +1698,19 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         },
       ],
     });
-    const postProcessor = {
-      run: vi.fn().mockResolvedValue({
-        result: {
-          tableUsageMerged: 2,
-          staleTablesMarked: 1,
-          patternPagesWritten: 3,
-          stalePatternPagesMarked: 1,
-          archivedPatternPages: 1,
-        },
-        warnings: [],
-        errors: [],
-        touchedSources: [{ connectionId: 'c1', sourceName: 'orders' }],
-      }),
-    };
-    const runner = buildRunner(deps, { postProcessors: { 'historic-sql': postProcessor } });
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      warnings: [],
+      errors: [],
+      touchedSources: [],
+      changedWikiPageKeys: [],
+      actions: [
+        { target: 'sl', type: 'updated', key: 'orders', detail: 'Merged usage' },
+        { target: 'sl', type: 'updated', key: 'customers', detail: 'Merged usage' },
+        { target: 'wiki', type: 'created', key: 'historic-sql-orders', detail: 'Projected pattern' },
+        { target: 'wiki', type: 'updated', key: 'historic-sql-customers', detail: 'Projected pattern' },
+      ],
+    });
+    const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
       currentHashes: new Map([['tables/public/orders.json', 'h1']]),
       rawDirInWorktree: 'raw-sources/c1/historic-sql/s',
@@ -1557,13 +1736,13 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(memoryFlow.snapshot().events).toContainEqual(
       expect.objectContaining({
         type: 'saved',
-        wikiCount: 5,
-        slCount: 3,
+        wikiCount: 2,
+        slCount: 2,
       }),
     );
   });
 
-  it('marks post-processor infrastructure failure as failed and preserves worktree cleanup state', async () => {
+  it('marks finalization infrastructure failure as failed and preserves worktree cleanup state', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'metricflow';
     deps.registry.get.mockReturnValue(deps.adapter);
@@ -1571,8 +1750,8 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       workUnits: [{ unitKey: 'u1', rawFiles: ['semantic_models.yml'], peerFileIndex: [], dependencyPaths: [] }],
       parseArtifacts: { semanticModels: [{ name: 'orders' }] },
     });
-    const postProcessor = { run: vi.fn().mockRejectedValue(new Error('worktree write failed')) };
-    const runner = buildRunner(deps, { postProcessors: { metricflow: postProcessor } });
+    deps.adapter.finalize = vi.fn().mockRejectedValue(new Error('worktree write failed'));
+    const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
       currentHashes: new Map([['semantic_models.yml', 'h1']]),
       rawDirInWorktree: 'raw-sources/c1/metricflow/s',
@@ -1592,6 +1771,132 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(deps.runsRepo.markFailed).toHaveBeenCalledWith('run-1');
     expect(deps.gitService.squashMergeIntoMain).not.toHaveBeenCalled();
     expect(deps.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'crash');
+  });
+
+  it('reports finalization actions excluded from provenance when raw paths are not defensible', async () => {
+    const deps = makeDeps();
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      warnings: [],
+      errors: [],
+      touchedSources: [],
+      changedWikiPageKeys: [],
+      actions: [
+        { target: 'wiki', type: 'updated', key: 'historic-sql-pattern', detail: 'No raw path' },
+        { target: 'sl', type: 'updated', key: 'orders', detail: 'Invalid raw path', rawPaths: ['missing.json'] },
+      ],
+    });
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['current.json', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect(deps.reportsRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          finalization: expect.objectContaining({
+            provenanceExclusions: [
+              expect.objectContaining({ reason: 'missing_raw_paths' }),
+              expect.objectContaining({ reason: 'raw_path_not_defensible', invalidRawPaths: ['missing.json'] }),
+            ],
+          }),
+        }),
+      }),
+    );
+    expect(deps.provenanceRepo.insertMany).not.toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ rawPath: 'missing.json' })]),
+    );
+  });
+
+  it('passes explicit override replay metadata and no current work unit outcomes', async () => {
+    const deps = makeDeps();
+    deps.reportsRepo.findByJobId.mockResolvedValue({
+      id: 'prior-report',
+      runId: 'prior-run',
+      jobId: 'prior-job',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      body: {
+        status: 'completed',
+        syncId: 'prior-sync',
+        diffSummary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
+        commitSha: 'prior-sha',
+        workUnits: [
+          {
+            unitKey: 'prior-unit',
+            rawFiles: ['prior.json'],
+            status: 'success',
+            actions: [{ target: 'wiki', type: 'created', key: 'prior', detail: 'prior' }],
+            touchedSlSources: [],
+          },
+        ],
+        failedWorkUnits: [],
+        reconciliationSkipped: false,
+        conflictsResolved: [],
+        evictionsApplied: [
+          {
+            rawPath: 'do-not-replay.json',
+            artifactKind: 'wiki',
+            artifactKey: 'old',
+            action: 'removed',
+            reason: 'prior',
+          },
+        ],
+        unmappedFallbacks: [],
+        artifactResolutions: [],
+        evictionInputs: ['evicted-from-prior-report.json'],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      warnings: [],
+      errors: [],
+      touchedSources: [],
+      changedWikiPageKeys: [],
+      actions: [],
+    });
+    deps.gitService.listFilesAtHead.mockResolvedValue(['raw-sources/c1/fake/prior-sync/prior.json']);
+    deps.gitService.getFileAtCommit.mockResolvedValue('{"id":1}\n');
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['prior.json', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/prior-sync',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/prior');
+
+    await runner.run({
+      jobId: 'override-job',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'manual_override',
+      bundleRef: { kind: 'override', priorJobId: 'prior-job' },
+    });
+
+    expect(deps.adapter.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workUnitOutcomes: [],
+        overrideReplay: {
+          priorJobId: 'prior-job',
+          priorRunId: 'prior-run',
+          priorSyncId: 'prior-sync',
+          evictionRawPaths: ['evicted-from-prior-report.json'],
+        },
+      }),
+    );
   });
 
   it('includes existing global wiki pages in WorkUnit prompts', async () => {
@@ -1851,9 +2156,15 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     const assertError = new Error('Worktree has in-progress git operation (sequencer ...); refusing to proceed');
     const sessionGit = {
       revParseHead: vi.fn().mockResolvedValue('h'),
-      commitFiles: vi.fn(),
+      commitFiles: vi.fn().mockResolvedValue({ created: true, commitHash: 'h' }),
+      commitStaged: vi.fn().mockResolvedValue({ created: false, commitHash: 'h' }),
       resetHardTo: vi.fn(),
       assertWorktreeClean: vi.fn().mockRejectedValue(assertError),
+      writeBinaryNoRenamePatch: vi.fn(async (_base: string, _head: string, patchPath: string) => {
+        await writeFile(patchPath, '', 'utf-8');
+      }),
+      applyPatchFile3WayIndex: vi.fn(),
+      diffNameStatus: vi.fn().mockResolvedValue([]),
     };
     deps.sessionWorktreeService.create.mockResolvedValue({
       chatId: 'j1',
@@ -1882,135 +2193,6 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     ).rejects.toThrow(/in-progress git operation/);
     expect(deps.runsRepo.markFailed).toHaveBeenCalledWith('run-1');
     expect(deps.gitService.squashMergeIntoMain).not.toHaveBeenCalled();
-  });
-
-  it('squash-merges only successful WUs into main when one WU fails sl_validate', async () => {
-    const homeDir = await mkdtemp(join(tmpdir(), 'ingest-rollback-'));
-    try {
-      const configDir = join(homeDir, 'config');
-      const mainGit = new GitService({
-        storage: { configDir, homeDir },
-        git: {
-          userName: 'System User',
-          userEmail: 'system@example.com',
-          bootstrapMessage: 'Initialize test config repo',
-          bootstrapAuthor: 'test-system',
-          bootstrapAuthorEmail: 'system@example.com',
-        },
-      });
-      await mainGit.onModuleInit();
-      const baseSha = await mainGit.revParseHead();
-      if (!baseSha) {
-        throw new Error('no base sha');
-      }
-
-      const deps = makeDeps();
-      const sessionDir = join(homeDir, '.worktrees', 'session-j1');
-      const sessionBranch = 'session/j1';
-      let currentToolSession: any = null;
-
-      deps.gitService = mainGit as any;
-      deps.sessionWorktreeService.create.mockImplementation(async (_jobId: string, startSha: string) => {
-        await mkdir(join(homeDir, '.worktrees'), { recursive: true });
-        await mainGit.addWorktree(sessionDir, sessionBranch, startSha);
-        return {
-          chatId: 'j1',
-          workdir: sessionDir,
-          branch: sessionBranch,
-          baseSha: startSha,
-          createdAt: new Date(),
-          git: mainGit.forWorktree(sessionDir),
-          config: {},
-        };
-      });
-      deps.sessionWorktreeService.cleanup.mockResolvedValue(undefined);
-      deps.adapter.chunk.mockResolvedValue({
-        workUnits: [
-          { unitKey: 'wu-good', rawFiles: ['good.raw'], peerFileIndex: [], dependencyPaths: [] },
-          { unitKey: 'wu-bad', rawFiles: ['bad.raw'], peerFileIndex: [], dependencyPaths: [] },
-        ],
-      });
-      deps.toolsetFactory.createIngestWuToolset.mockImplementation((toolSession: any) => {
-        currentToolSession = toolSession;
-        return {
-          toRuntimeTools: vi.fn().mockReturnValue({}),
-          getAllTools: vi.fn().mockReturnValue([]),
-          getToolNames: vi.fn().mockReturnValue([]),
-        };
-      });
-      deps.slValidator.validateSingleSource.mockImplementation(
-        (_validationDeps: unknown, _connectionId: string, sourceName: string) => ({
-          errors: sourceName === 'bad' ? [{ message: 'bad source rejected' }] : [],
-          warnings: [],
-        }),
-      );
-      deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
-        const unitKey = params.telemetryTags?.unitKey;
-        if (unitKey === 'wu-good') {
-          await mkdir(join(sessionDir, 'semantic-layer', 'c1'), { recursive: true });
-          await writeFile(join(sessionDir, 'semantic-layer', 'c1', 'good.yaml'), 'name: good\n');
-          addTouchedSlSource(currentToolSession.touchedSlSources, 'c1', 'good');
-          currentToolSession.actions.push({ target: 'sl', type: 'created', key: 'good', detail: '' });
-          await currentToolSession.gitService.commitFiles(
-            ['semantic-layer/c1/good.yaml'],
-            'test: add good source',
-            'KTX Test',
-            'system@ktx.local',
-          );
-        }
-        if (unitKey === 'wu-bad') {
-          await mkdir(join(sessionDir, 'semantic-layer', 'c1'), { recursive: true });
-          await writeFile(join(sessionDir, 'semantic-layer', 'c1', 'bad.yaml'), 'name: bad\n');
-          addTouchedSlSource(currentToolSession.touchedSlSources, 'c1', 'bad');
-          currentToolSession.actions.push({ target: 'sl', type: 'created', key: 'bad', detail: '' });
-          await currentToolSession.gitService.commitFiles(
-            ['semantic-layer/c1/bad.yaml'],
-            'test: add bad source',
-            'KTX Test',
-            'system@ktx.local',
-          );
-        }
-        return { stopReason: 'natural' };
-      });
-
-      const runner = buildRunner(deps);
-      (runner as any).stageRawFilesStage1 = vi.fn().mockImplementation(async ({ worktreeRoot }: any) => {
-        const rawDir = join(worktreeRoot, 'raw-sources', 'c1', 'fake', 's');
-        await mkdir(rawDir, { recursive: true });
-        await writeFile(join(rawDir, 'good.raw'), 'good raw');
-        await writeFile(join(rawDir, 'bad.raw'), 'bad raw');
-        return {
-          currentHashes: new Map([
-            ['good.raw', 'good-hash'],
-            ['bad.raw', 'bad-hash'],
-          ]),
-          rawDirInWorktree: 'raw-sources/c1/fake/s',
-        };
-      });
-      (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
-
-      const result = await runner.run({
-        jobId: 'j1',
-        connectionId: 'c1',
-        sourceKey: 'fake',
-        trigger: 'upload',
-        bundleRef: { kind: 'upload', uploadId: 'upload-x' },
-      });
-
-      expect(result.failedWorkUnits).toEqual(['wu-bad']);
-      expect(await readFile(join(configDir, 'semantic-layer', 'c1', 'good.yaml'), 'utf-8')).toContain('good');
-      expect(await readFile(join(configDir, 'semantic-layer', 'c1', 'bad.yaml'), 'utf-8').catch(() => null)).toBeNull();
-      expect(deps.reportsRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          body: expect.objectContaining({
-            failedWorkUnits: ['wu-bad'],
-          }),
-        }),
-      );
-      await expect(stat(join(configDir, '.git', 'sequencer'))).rejects.toThrow();
-    } finally {
-      await rm(homeDir, { recursive: true, force: true });
-    }
   });
 
   it('fails the run and rethrows when the adapter cannot detect the bundle', async () => {

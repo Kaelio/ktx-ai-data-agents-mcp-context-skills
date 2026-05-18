@@ -2,7 +2,10 @@ import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { localConnectionTypeForConfig, resolveNotionAuthToken } from '@ktx/context/connections';
+import {
+  localConnectionTypeForConfig,
+  resolveNotionConnectionAuthToken,
+} from '@ktx/context/connections';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   cloneOrPull,
@@ -620,7 +623,10 @@ async function defaultValidateLookml(connection: KtxProjectConnectionConfig): Pr
 }
 
 async function defaultValidateNotion(connection: KtxProjectConnectionConfig): Promise<SourceValidationResult> {
-  const token = await resolveNotionAuthToken(String(connection.auth_token_ref));
+  const token = await resolveNotionConnectionAuthToken({
+    auth_token: stringField(connection.auth_token) ?? null,
+    auth_token_ref: stringField(connection.auth_token_ref) ?? null,
+  });
   const client: NotionApi = new NotionClient(token);
   await client.retrieveBotUser();
   const roots = Array.isArray(connection.root_page_ids)

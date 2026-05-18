@@ -141,6 +141,9 @@ Semantic-layer list and search commands return human-readable output by
 default. Use `--json` on `list` or `search` when an agent needs structured
 output. Use `--format sql` on `query` to inspect generated SQL before
 execution, or leave `--format json` for the compiled query and optional rows.
+Pretty `sl search` output shows `#1`, `#2`, and later rank badges for the
+displayed results. Plain and JSON output keep the raw `score` value, which is a
+ranking score rather than a percentage.
 
 ```json
 {

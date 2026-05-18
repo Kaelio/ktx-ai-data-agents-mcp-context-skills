@@ -1,7 +1,9 @@
 import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import YAML from 'yaml';
+import type { MemoryAction } from '../../../memory/index.js';
 import { rawSourcesDirForSync } from '../../raw-sources-paths.js';
+import type { FinalizationOverrideReplay } from '../../types.js';
 import { mergeUsagePreservingExternal } from '../live-database/manifest.js';
 import { historicSqlEvidenceEnvelopeSchema, type HistoricSqlEvidenceEnvelope } from './evidence.js';
 import type { TableUsageOutput } from './skill-schemas.js';
@@ -12,6 +14,7 @@ export interface HistoricSqlProjectionInput {
   connectionId: string;
   syncId: string;
   runId: string;
+  overrideReplay?: FinalizationOverrideReplay;
 }
 
 export interface HistoricSqlProjectionResult {
@@ -21,6 +24,8 @@ export interface HistoricSqlProjectionResult {
   stalePatternPagesMarked: number;
   archivedPatternPages: number;
   touchedSources: Array<{ connectionId: string; sourceName: string }>;
+  changedWikiPageKeys: string[];
+  actions: MemoryAction[];
   warnings: string[];
 }
 
@@ -223,6 +228,8 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
     stalePatternPagesMarked: 0,
     archivedPatternPages: 0,
     touchedSources: [],
+    changedWikiPageKeys: [],
+    actions: [],
     warnings: [],
   };
   const touchedKeys = new Set<string>();
@@ -230,6 +237,16 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
   const manifest = stagedManifestSchema.parse(await readJson(join(rawDir, 'manifest.json')));
   const currentTables = await currentStagedTables(rawDir);
   const evidence = await loadEvidence(input.workdir, input.runId);
+  if (input.overrideReplay && evidence.length === 0) {
+    result.warnings.push(
+      'historic-sql finalization skipped stale/archive cleanup during override replay without current-run evidence',
+    );
+    return result;
+  }
+  if (evidence.length === 0) {
+    result.warnings.push('historic-sql finalization skipped because no current-run evidence was emitted');
+    return result;
+  }
   const tableEvidence = evidence.filter((entry): entry is HistoricSqlEvidenceEnvelope & { kind: 'table_usage' } => entry.kind === 'table_usage');
   const patternEvidence = evidence.filter((entry): entry is HistoricSqlEvidenceEnvelope & { kind: 'pattern' } => entry.kind === 'pattern');
 
@@ -255,6 +272,14 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
             touchedKeys.add(key);
             result.touchedSources.push({ connectionId: input.connectionId, sourceName });
           }
+          result.actions.push({
+            target: 'sl',
+            type: 'updated',
+            key: sourceName,
+            targetConnectionId: input.connectionId,
+            detail: `Merged historic-SQL usage for ${matchingEvidence.table}`,
+            rawPaths: [matchingEvidence.rawPath],
+          });
         }
       } else if (entry.usage && !currentTables.has(tableRef)) {
         const merged = mergeUsagePreservingExternal(entry.usage as TableUsageOutput | undefined, staleUsage(manifest.fetchedAt));
@@ -267,6 +292,13 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
             touchedKeys.add(key);
             result.touchedSources.push({ connectionId: input.connectionId, sourceName });
           }
+          result.actions.push({
+            target: 'sl',
+            type: 'updated',
+            key: sourceName,
+            targetConnectionId: input.connectionId,
+            detail: `Marked historic-SQL usage stale for ${tableRef}`,
+          });
         }
       }
     }
@@ -303,6 +335,14 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
     await writeFile(pagePath, renderMarkdownPage(frontmatter, renderPatternMarkdown(pattern)), 'utf-8');
     writtenKeys.add(key);
     result.patternPagesWritten += 1;
+    result.changedWikiPageKeys.push(key);
+    result.actions.push({
+      target: 'wiki',
+      type: reusable ? 'updated' : 'created',
+      key,
+      detail: `Projected historic-SQL pattern ${pattern.pattern.title}`,
+      rawPaths: [pattern.rawPath],
+    });
   }
 
   for (const page of patternPages) {
@@ -315,6 +355,13 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
         'utf-8',
       );
       result.archivedPatternPages += 1;
+      result.changedWikiPageKeys.push(page.key);
+      result.actions.push({
+        target: 'wiki',
+        type: 'updated',
+        key: page.key,
+        detail: `Archived stale historic-SQL pattern page ${page.key}`,
+      });
       continue;
     }
     const tags = [...new Set([...stringArray(page.frontmatter.tags), 'stale'])];
@@ -324,7 +371,15 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
       'utf-8',
     );
     result.stalePatternPagesMarked += 1;
+    result.changedWikiPageKeys.push(page.key);
+    result.actions.push({
+      target: 'wiki',
+      type: 'updated',
+      key: page.key,
+      detail: `Marked historic-SQL pattern page ${page.key} stale`,
+    });
   }
 
+  result.changedWikiPageKeys = [...new Set(result.changedWikiPageKeys)].sort();
   return result;
 }

@@ -33,6 +33,7 @@ export type {
 } from './setup-sources.js';
 export { runKtxSetupSourcesStep } from './setup-sources.js';
 export { runKtxRuntime, type KtxRuntimeArgs, type KtxRuntimeDeps } from './runtime.js';
+export { runKtxSql, type KtxSqlArgs, type KtxSqlDeps } from './sql.js';
 export {
   allocateDaemonPort,
   readManagedPythonDaemonStatus,

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createManagedPythonSemanticLayerComputePort,
+  ensureManagedPythonCommandRuntime,
   managedRuntimeInstallCommand,
   runtimeInstallPolicyFromFlags,
 } from './managed-python-command.js';
@@ -103,6 +104,17 @@ function installResult(features: KtxRuntimeFeature[] = ['core']): ManagedPythonR
   };
 }
 
+function makeSpinnerEvents() {
+  const events: string[] = [];
+  const spinner = vi.fn(() => ({
+    start: (msg: string) => events.push(`start:${msg}`),
+    message: (msg: string) => events.push(`message:${msg}`),
+    stop: (msg: string) => events.push(`stop:${msg}`),
+    error: (msg: string) => events.push(`error:${msg}`),
+  }));
+  return { events, spinner };
+}
+
 describe('managedRuntimeInstallCommand', () => {
   it('prints the exact command for each managed runtime feature', () => {
     expect(managedRuntimeInstallCommand('core')).toBe('ktx dev runtime install --yes');
@@ -128,6 +140,51 @@ describe('runtimeInstallPolicyFromFlags', () => {
 });
 
 describe('createManagedPythonSemanticLayerComputePort', () => {
+  it('uses non-animated runtime setup status by default', async () => {
+    const io = makeIo();
+
+    await expect(
+      ensureManagedPythonCommandRuntime({
+        cliVersion: '0.2.0',
+        installPolicy: 'auto',
+        io: io.io,
+        readStatus: vi.fn(async () => missingStatus()),
+        installRuntime: vi.fn(async () => installResult(['local-embeddings'])),
+        feature: 'local-embeddings',
+      }),
+    ).resolves.toMatchObject({
+      layout: { versionDir: '/runtime/0.2.0' },
+    });
+
+    expect(io.stderr()).toContain('Installing KTX Python runtime (local-embeddings) with uv...');
+    expect(io.stderr()).toContain('KTX Python runtime ready: /runtime/0.2.0');
+    expect(io.stderr().match(/Installing KTX Python runtime/g)).toHaveLength(1);
+  });
+
+  it('shows runtime installation progress with the CLI spinner', async () => {
+    const io = makeIo();
+    const { events, spinner } = makeSpinnerEvents();
+
+    const options = {
+      cliVersion: '0.2.0',
+      installPolicy: 'auto' as const,
+      io: io.io,
+      readStatus: vi.fn(async () => missingStatus()),
+      installRuntime: vi.fn(async () => installResult(['local-embeddings'])),
+      feature: 'local-embeddings' as const,
+      spinner,
+    };
+
+    await expect(ensureManagedPythonCommandRuntime(options)).resolves.toMatchObject({
+      layout: { versionDir: '/runtime/0.2.0' },
+    });
+
+    expect(events).toEqual([
+      'start:Installing KTX Python runtime (local-embeddings) with uv...',
+      'stop:KTX Python runtime ready: /runtime/0.2.0',
+    ]);
+  });
+
   it('uses the managed ktx-daemon executable when the runtime is ready', async () => {
     const io = makeIo();
     const compute = { query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() };
@@ -170,6 +227,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
 
   it('installs the core runtime without prompting when policy is auto', async () => {
     const io = makeIo();
+    const { events, spinner } = makeSpinnerEvents();
     const compute = { query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() };
     const createPythonCompute = vi.fn(() => compute);
     const installRuntime = vi.fn(async () => installResult());
@@ -182,6 +240,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
         readStatus: vi.fn(async () => missingStatus()),
         installRuntime,
         createPythonCompute,
+        spinner,
       }),
     ).resolves.toBe(compute);
 
@@ -190,12 +249,15 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
       features: ['core'],
       force: false,
     });
-    expect(io.stderr()).toContain('Installing KTX Python runtime (core) with uv');
-    expect(io.stderr()).toContain('KTX Python runtime ready: /runtime/0.2.0');
+    expect(events).toEqual([
+      'start:Installing KTX Python runtime (core) with uv...',
+      'stop:KTX Python runtime ready: /runtime/0.2.0',
+    ]);
   });
 
   it('prompts before installing when policy is prompt', async () => {
     const io = makeIo();
+    const { events, spinner } = makeSpinnerEvents();
     const confirmInstall = vi.fn(async () => true);
     const installRuntime = vi.fn(async () => installResult());
 
@@ -207,6 +269,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
       installRuntime,
       createPythonCompute: vi.fn(() => ({ query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() })),
       confirmInstall,
+      spinner,
     });
 
     expect(confirmInstall).toHaveBeenCalledWith(
@@ -218,10 +281,12 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
       features: ['core'],
       force: false,
     });
+    expect(events).toContainEqual('start:Installing KTX Python runtime (core) with uv...');
   });
 
   it('uses injected runtime confirmation instead of reading process TTY directly', async () => {
     const io = makeIo();
+    const { events, spinner } = makeSpinnerEvents();
     const compute = { query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() };
     const installRuntime = vi.fn(async (): Promise<ManagedPythonRuntimeInstallResult> => installResult());
     const confirmInstall = vi.fn(async () => true);
@@ -235,6 +300,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
         installRuntime,
         confirmInstall,
         createPythonCompute: () => compute,
+        spinner,
       }),
     ).resolves.toBe(compute);
 
@@ -242,7 +308,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
       'KTX needs to install the core Python runtime. This downloads Python dependencies with uv. Continue?',
       io.io,
     );
-    expect(io.stderr()).toContain('Installing KTX Python runtime (core) with uv...');
+    expect(events).toContainEqual('start:Installing KTX Python runtime (core) with uv...');
   });
 
   it('can decide default runtime prompting from injected io capabilities', async () => {

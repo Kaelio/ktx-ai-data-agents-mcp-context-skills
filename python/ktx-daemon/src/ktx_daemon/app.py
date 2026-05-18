@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 
+from ktx_daemon import VERSION
 from ktx_daemon.code_execution import (
     ExecuteCodeRequest,
     ExecuteCodeResponse,
@@ -84,7 +85,7 @@ def create_app(
     app = FastAPI(
         title="KTX Daemon",
         description="Stateless portable compute server for KTX.",
-        version="0.1.0",
+        version=VERSION,
     )
 
     @app.get("/health")

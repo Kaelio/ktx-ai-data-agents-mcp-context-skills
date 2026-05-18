@@ -17,6 +17,11 @@ export {
   buildLiveDatabaseTableNaturalKey,
   ktxSchemaSnapshotToExtractedSchema,
 } from './adapters/live-database/extracted-schema.js';
+export {
+  assertSemanticLayerTargetPathsAllowed,
+  findDisallowedSemanticLayerTargetPaths,
+  semanticLayerConnectionIdFromPath,
+} from './semantic-layer-target-policy.js';
 export { LiveDatabaseSourceAdapter } from './adapters/live-database/live-database.adapter.js';
 export type {
   BuildLiveDatabaseManifestShardsInput,
@@ -344,7 +349,6 @@ export type {
   HistoricSqlTableUsageEvidence,
 } from './adapters/historic-sql/evidence.js';
 export { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evidence-tool.js';
-export { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
 export { projectHistoricSqlEvidence } from './adapters/historic-sql/projection.js';
 export type { HistoricSqlProjectionInput, HistoricSqlProjectionResult } from './adapters/historic-sql/projection.js';
 export {
@@ -609,6 +613,11 @@ export {
 } from './raw-sources-paths.js';
 export { ingestReportSnapshotSchema, parseIngestReportSnapshot } from './report-snapshot.js';
 export type { IngestReportBody, IngestReportSnapshot } from './reports.js';
+export * from './artifact-gates.js';
+export * from './ingest-trace.js';
+export * from './isolated-diff/git-patch.js';
+export * from './isolated-diff/patch-integrator.js';
+export * from './isolated-diff/work-unit-executor.js';
 export * from './reports.js';
 export { SourceAdapterRegistry } from './source-adapter-registry.js';
 export type { SqliteBundleIngestStoreOptions } from './sqlite-bundle-ingest-store.js';
@@ -652,4 +661,10 @@ export type {
   TriageSignals,
   UnresolvedCardInfo,
   WorkUnit,
+  DeterministicProjectionContext,
+  ProjectionResult,
+  DeterministicFinalizationContext,
+  FinalizationOverrideReplay,
+  FinalizationResult,
 } from './types.js';
+export * from './wiki-body-refs.js';

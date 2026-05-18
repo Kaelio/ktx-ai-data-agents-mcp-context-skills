@@ -42,6 +42,12 @@ export async function runSetupDev(options = {}) {
       retry: 'pnpm run build',
     },
     {
+      name: 'runtime wheel assets',
+      command: 'pnpm',
+      args: ['run', 'artifacts:build-runtime'],
+      retry: 'pnpm run artifacts:build-runtime',
+    },
+    {
       name: 'doctor setup',
       command: process.execPath,
       args: ['packages/cli/dist/bin.js', 'status', '--no-input'],

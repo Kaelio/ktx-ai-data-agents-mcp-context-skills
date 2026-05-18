@@ -4,7 +4,15 @@ import {
 } from './setup-prompts.js';
 import type { KtxSetupStatus } from './setup.js';
 
-export type KtxSetupReadyAction = 'models' | 'embeddings' | 'databases' | 'sources' | 'context' | 'agents' | 'exit';
+export type KtxSetupReadyAction =
+  | 'models'
+  | 'embeddings'
+  | 'databases'
+  | 'sources'
+  | 'runtime'
+  | 'context'
+  | 'agents'
+  | 'exit';
 
 export interface KtxSetupReadyMenuPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
@@ -22,6 +30,7 @@ export function isKtxPreAgentSetupReady(status: KtxSetupStatus): boolean {
     status.embeddings.ready &&
     status.databases.every((database) => database.ready) &&
     status.sources.every((source) => source.ready) &&
+    status.runtime.ready &&
     status.context.ready
   );
 }
@@ -46,6 +55,7 @@ export async function runKtxSetupReadyChangeMenu(
       { value: 'embeddings', label: 'Embeddings' },
       { value: 'databases', label: 'Databases' },
       { value: 'sources', label: 'Context sources' },
+      ...(status.runtime.required ? [{ value: 'runtime', label: 'Runtime' }] : []),
       { value: 'context', label: 'Rebuild KTX context' },
       { value: 'agents', label: 'Agent integration' },
       { value: 'exit', label: 'Exit' },

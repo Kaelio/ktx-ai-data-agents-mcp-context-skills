@@ -15,6 +15,7 @@ import {
   runLocalIngest,
   runLocalMetabaseIngest,
   savedMemoryCountsForReport,
+  sanitizeMemoryFlowError,
 } from '@ktx/context/ingest';
 import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
 import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
@@ -101,7 +102,7 @@ export interface KtxIngestDeps {
 }
 
 function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
-  return report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
+  return report.body.status === 'failed' || report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
 }
 
 const REPORT_SOURCE_LABELS = new Map<string, string>([
@@ -127,11 +128,79 @@ function reportSourceLabel(sourceKey: string): string {
     .join(' ');
 }
 
+function jsonObjectFromFailureReason(reason: string): Record<string, unknown> | null {
+  const trimmed = reason.trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end < start) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed.slice(start, end + 1));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isGoogleReauthFailure(record: Record<string, unknown>): boolean {
+  const error = stringField(record, 'error')?.toLowerCase() ?? '';
+  const description = stringField(record, 'error_description')?.toLowerCase() ?? '';
+  const subtype = stringField(record, 'error_subtype')?.toLowerCase() ?? '';
+  return error === 'invalid_grant' && (description.includes('reauth') || subtype === 'invalid_rapt');
+}
+
+function formatFailureReason(sourceKey: string, reason: string): string {
+  const parsed = jsonObjectFromFailureReason(reason);
+  if (!parsed) {
+    return sanitizeMemoryFlowError(reason);
+  }
+
+  if (sourceKey === 'historic-sql' && isGoogleReauthFailure(parsed)) {
+    return 'Google Cloud authentication failed while analyzing query history: application-default credentials expired or require reauthentication (invalid_grant / invalid_rapt). Run `gcloud auth application-default login`, then retry.';
+  }
+
+  const error = stringField(parsed, 'error');
+  const description = stringField(parsed, 'error_description');
+  const subtype = stringField(parsed, 'error_subtype');
+  const parts = [error, description].filter((part): part is string => Boolean(part));
+  const message = parts.length > 0 ? parts.join(': ') : reason;
+  return subtype ? `${message} (${subtype})` : message;
+}
+
+function failedReportMessage(report: IngestReportSnapshot): string | null {
+  if (report.body.status === 'failed' && report.body.failure?.message) {
+    return sanitizeMemoryFlowError(report.body.failure.message);
+  }
+  const failedCount = report.body.failedWorkUnits.length;
+  if (failedCount === 0) {
+    return null;
+  }
+  const firstFailure = report.body.workUnits.find(
+    (workUnit) => workUnit.status === 'failed' && typeof workUnit.reason === 'string' && workUnit.reason.trim(),
+  );
+  const sourceLabel = reportSourceLabel(report.sourceKey);
+  const prefix = `${sourceLabel} failed for ${pluralize(failedCount, 'task')}.`;
+  if (!firstFailure?.reason) {
+    return prefix;
+  }
+  return `${prefix} First failure: ${formatFailureReason(report.sourceKey, firstFailure.reason)}`;
+}
+
 function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void {
   const counts = savedMemoryCountsForReport(report);
+  const failedMessage = failedReportMessage(report);
   io.stdout.write(`Report: ${report.id}\n`);
   io.stdout.write(`Run: ${report.runId}\n`);
   io.stdout.write(`Job: ${report.jobId}\n`);
+  if (report.body.tracePath) {
+    io.stdout.write(`Trace: ${report.body.tracePath}\n`);
+  }
   io.stdout.write(`Status: ${reportStatus(report)}\n`);
   io.stdout.write(`Source: ${reportSourceLabel(report.sourceKey)}\n`);
   io.stdout.write(`Connection: ${report.connectionId}\n`);
@@ -140,6 +209,12 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
     `Diff: +${report.body.diffSummary.added}/~${report.body.diffSummary.modified}/-${report.body.diffSummary.deleted}/=${report.body.diffSummary.unchanged}\n`,
   );
   io.stdout.write(`Tasks: ${report.body.workUnits.length}\n`);
+  if (report.body.failedWorkUnits.length > 0) {
+    io.stdout.write(`Failed tasks: ${report.body.failedWorkUnits.length}\n`);
+  }
+  if (failedMessage) {
+    io.stdout.write(`Error: ${failedMessage}\n`);
+  }
   io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   io.stdout.write(`Provenance rows: ${report.body.provenanceRows.length}\n`);
 }
@@ -220,7 +295,11 @@ function formatDiffProgress(event: Extract<MemoryFlowEvent, { type: 'diff_comput
 }
 
 function workUnitEventsThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): MemoryFlowEvent[] {
-  return snapshot.events.slice(0, eventIndex + 1);
+  const latestPlanIndex = snapshot.events
+    .slice(0, eventIndex + 1)
+    .findLastIndex((event) => event.type === 'chunks_planned');
+  const startIndex = latestPlanIndex >= 0 ? latestPlanIndex + 1 : 0;
+  return snapshot.events.slice(startIndex, eventIndex + 1);
 }
 
 function completedWorkUnitCountThrough(snapshot: MemoryFlowReplayInput, eventIndex: number): number {
@@ -244,7 +323,8 @@ function plannedWorkUnitCountThrough(snapshot: MemoryFlowReplayInput, eventIndex
   if (snapshot.plannedWorkUnits.length > 0) {
     return snapshot.plannedWorkUnits.length;
   }
-  const planEvent = workUnitEventsThrough(snapshot, eventIndex)
+  const planEvent = snapshot.events
+    .slice(0, eventIndex + 1)
     .filter((event) => event.type === 'chunks_planned')
     .at(-1);
   return planEvent?.workUnitCount ?? completedWorkUnitCountThrough(snapshot, eventIndex);
@@ -290,6 +370,12 @@ function plainIngestEventProgress(
       };
     case 'stage_skipped':
       return { percent: 45, message: `Skipped ${event.stage}: ${event.reason}` };
+    case 'stage_progress':
+      return {
+        percent: event.percent,
+        message: event.message,
+        ...(event.transient !== undefined ? { transient: event.transient } : {}),
+      };
     case 'work_unit_started': {
       const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
       const ordinal = workUnitOrdinalThrough(snapshot, eventIndex, event.unitKey);
@@ -636,6 +722,25 @@ export async function runKtxIngest(
       }
       if (args.adapter === 'metabase') {
         const executeMetabaseFanout = deps.runLocalMetabaseIngest ?? runLocalMetabaseIngest;
+        const runOutputMode = effectiveIngestOutputMode(args.outputMode, io, env, {
+          requireInput: (args.inputMode ?? 'auto') === 'auto',
+        });
+        const plainProgress = shouldWritePlainIngestProgress(runOutputMode, io, env)
+          ? createPlainIngestProgressRenderer(args, io)
+          : null;
+        const structuredProgress = deps.progress
+          ? createPlainIngestProgressObserver(args, deps.progress)
+          : null;
+        const initialMemoryFlow =
+          plainProgress || structuredProgress ? initialRunMemoryFlowInput(args, 'pending') : undefined;
+        const memoryFlow = initialMemoryFlow
+          ? createMemoryFlowLiveBuffer(initialMemoryFlow, {
+              onChange: (snapshot) => {
+                plainProgress?.update(snapshot);
+                structuredProgress?.update(snapshot);
+              },
+            })
+          : undefined;
         const progress =
           args.outputMode === 'json' && !deps.progress
             ? undefined
@@ -646,20 +751,29 @@ export async function runKtxIngest(
                   : io,
                 deps.progress,
               );
-        const result = await executeMetabaseFanout({
-          project: ingestProject,
-          adapters: createAdapters(ingestProject, adapterOptions),
-          metabaseConnectionId: args.connectionId,
-          ...localIngestOptions,
-          queryExecutor,
-          trigger: 'manual_resync',
-          jobIdFactory: deps.jobIdFactory,
-          ...(progress ? { progress } : {}),
-        });
-        if (args.outputMode === 'json') {
-          io.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-        } else {
-          writeMetabaseFanoutStatus(result, io);
+        plainProgress?.start();
+        structuredProgress?.start();
+        let result: LocalMetabaseFanoutResult;
+        try {
+          result = await executeMetabaseFanout({
+            project: ingestProject,
+            adapters: createAdapters(ingestProject, adapterOptions),
+            metabaseConnectionId: args.connectionId,
+            ...localIngestOptions,
+            queryExecutor,
+            trigger: 'manual_resync',
+            jobIdFactory: deps.jobIdFactory,
+            ...(memoryFlow ? { memoryFlow } : {}),
+            ...(progress ? { progress } : {}),
+          });
+          plainProgress?.flush();
+          if (args.outputMode === 'json') {
+            io.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+          } else {
+            writeMetabaseFanoutStatus(result, io);
+          }
+        } finally {
+          plainProgress?.flush();
         }
         return result.status === 'all_succeeded' ? 0 : 1;
       }

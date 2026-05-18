@@ -8,7 +8,8 @@ const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.
 const runtimeAssetPatterns = [/^packages\/[^/]+\/prompts\/.+\.md$/, /^packages\/[^/]+\/skills\/.+\.md$/];
 const identifierSkipPrefixes = ['docs/', 'docs-site/', 'examples/', 'python/ktx-sl/plans/', 'python/ktx-sl/openspec/'];
 const identifierAllowPatterns = [
-  /^packages\/cli\/src\/(?:index|managed-local-embeddings|managed-python-command|managed-python-daemon|managed-python-runtime|runtime)(?:\.test)?\.ts$/,
+  /^packages\/cli\/src\/(?:index|managed-local-embeddings|managed-python-command|managed-python-daemon|managed-python-runtime|release-version|runtime)(?:\.test)?\.ts$/,
+  /^python\/ktx-daemon\/src\/ktx_daemon\/__init__\.py$/,
   /^scripts\/(?:build-public-npm-package|build-python-runtime-wheel|local-embeddings-runtime-smoke|package-artifacts|public-npm-release-metadata|publish-public-npm-package|published-package-smoke|release-readiness)(?:\.test)?\.mjs$/,
 ];
 const forbiddenIdentifierTerms = ['kae' + 'lio', 'Kae' + 'lio', 'KAE' + 'LIO_'];
@@ -87,7 +88,10 @@ function scansForLlmBoundaries(relativePath) {
 }
 
 function isTestSource(relativePath) {
-  return /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relativePath);
+  return (
+    /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relativePath) ||
+    /(?:^|\/)tests\/(?:.+\/)?(?:test_[^/]+|[^/]+_test)\.py$/.test(relativePath)
+  );
 }
 
 function scansForContextProductionLlmBoundaries(relativePath) {

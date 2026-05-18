@@ -39,20 +39,64 @@ export interface IngestReportToolTranscriptSummary {
   toolNames: string[];
 }
 
-export interface IngestReportPostProcessorOutcome {
+export interface IngestReportFinalizationMismatch {
+  artifactKind: 'sl' | 'wiki';
+  key: string;
+  direction: 'missing_from_adapter_declaration' | 'extra_in_adapter_declaration';
+}
+
+export interface IngestReportFinalizationProvenanceExclusion {
+  action: MemoryAction;
+  reason: 'missing_raw_paths' | 'raw_path_not_defensible';
+  invalidRawPaths?: string[];
+}
+
+export interface IngestReportFinalizationOutcome {
   sourceKey: string;
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'skipped';
+  commitSha: string | null;
+  touchedPaths: string[];
+  declaredTouchedSources: TouchedSlSource[];
+  derivedTouchedSources: TouchedSlSource[];
+  declaredChangedWikiPageKeys: string[];
+  derivedChangedWikiPageKeys: string[];
+  mismatches: IngestReportFinalizationMismatch[];
   result?: unknown;
   errors: string[];
   warnings: string[];
-  touchedSources: TouchedSlSource[];
+  actions: MemoryAction[];
+  provenanceExclusions: IngestReportFinalizationProvenanceExclusion[];
+}
+
+export interface IngestReportFailure {
+  phase: string;
+  message: string;
+  details?: Record<string, unknown>;
 }
 
 export interface IngestReportBody {
+  status?: 'completed' | 'failed';
   syncId: string;
   diffSummary: IngestDiffSummary;
   fetch?: SourceFetchReport;
   commitSha: string | null;
+  tracePath?: string;
+  failure?: IngestReportFailure;
+  isolatedDiff?: {
+    enabled: boolean;
+    integrationWorktreePath?: string;
+    ingestionBaseSha?: string;
+    projectionSha?: string | null;
+    acceptedPatches: number;
+    textualConflicts: number;
+    semanticConflicts: number;
+    resolverAttempts?: number;
+    resolverRepairs?: number;
+    resolverFailures?: number;
+    gateRepairAttempts?: number;
+    gateRepairs?: number;
+    gateRepairFailures?: number;
+  };
   workUnits: IngestReportWorkUnit[];
   failedWorkUnits: string[];
   reconciliationSkipped: boolean;
@@ -70,7 +114,7 @@ export interface IngestReportBody {
   overrideOf: string | null;
   provenanceRows: IngestReportProvenanceDetail[];
   toolTranscripts: IngestReportToolTranscriptSummary[];
-  postProcessor?: IngestReportPostProcessorOutcome;
+  finalization?: IngestReportFinalizationOutcome;
   wikiSlRefRepairs?: WikiSlRefRepair[];
   wikiSlRefRepairWarnings?: string[];
   memoryFlow?: MemoryFlowReplayInput;
@@ -91,43 +135,24 @@ export interface IngestSavedMemoryCounts {
   slCount: number;
 }
 
-function numericResultField(result: Record<string, unknown>, field: string): number {
-  const value = result[field];
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
-}
-
-export function postProcessorSavedMemoryCounts(
-  postProcessor: IngestReportPostProcessorOutcome | undefined,
+export function finalizationSavedMemoryCounts(
+  finalization: IngestReportFinalizationOutcome | undefined,
 ): IngestSavedMemoryCounts {
-  if (!postProcessor || postProcessor.sourceKey !== 'historic-sql') {
-    return { wikiCount: 0, slCount: 0 };
-  }
-  const result = postProcessor.result;
-  if (!result || typeof result !== 'object' || Array.isArray(result)) {
-    return { wikiCount: 0, slCount: 0 };
-  }
-  const record = result as Record<string, unknown>;
+  const actions = finalization?.actions ?? [];
   return {
-    wikiCount:
-      numericResultField(record, 'patternPagesWritten') +
-      numericResultField(record, 'stalePatternPagesMarked') +
-      numericResultField(record, 'archivedPatternPages'),
-    slCount: numericResultField(record, 'tableUsageMerged') + numericResultField(record, 'staleTablesMarked'),
+    wikiCount: actions.filter((action) => action.target === 'wiki').length,
+    slCount: actions.filter((action) => action.target === 'sl').length,
   };
 }
 
 export function savedMemoryCountsForReport(report: IngestReportSnapshot): IngestSavedMemoryCounts {
   const workUnitActions = report.body.workUnits.flatMap((workUnit) => workUnit.actions);
   const reconciliationActions = report.body.reconciliationActions ?? [];
-  const actions = [...workUnitActions, ...reconciliationActions];
-  const directCounts = {
+  const finalizationActions = report.body.finalization?.actions ?? [];
+  const actions = [...workUnitActions, ...reconciliationActions, ...finalizationActions];
+  return {
     wikiCount: actions.filter((action) => action.target === 'wiki').length,
     slCount: actions.filter((action) => action.target === 'sl').length,
-  };
-  const postProcessorCounts = postProcessorSavedMemoryCounts(report.body.postProcessor);
-  return {
-    wikiCount: directCounts.wikiCount + postProcessorCounts.wikiCount,
-    slCount: directCounts.slCount + postProcessorCounts.slCount,
   };
 }
 

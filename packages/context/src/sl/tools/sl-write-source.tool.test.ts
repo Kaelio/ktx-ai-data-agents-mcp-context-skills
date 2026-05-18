@@ -133,6 +133,34 @@ describe('SlWriteSourceTool — session gating', () => {
     );
   });
 
+  it('rejects session-scoped writes outside allowed target connections', async () => {
+    const { tool } = makeTool();
+    const session = makeSession({
+      allowedConnectionNames: new Set(['warehouse']),
+    });
+    const context: ToolContext = { ...baseContext, session };
+
+    const result = await tool.call(
+      {
+        connectionId: 'finance',
+        sourceName: 'finance_orders',
+        source: {
+          name: 'finance_orders',
+          table: 'public.orders',
+          grain: ['id'],
+          columns: [{ name: 'id', type: 'string' }],
+          measures: [],
+          joins: [],
+        } as any,
+      } as any,
+      context,
+    );
+
+    expect(result.structured.success).toBe(false);
+    expect(result.markdown).toContain('connectionId "finance" is outside this ingest session');
+    expect(session.actions).toEqual([]);
+  });
+
   it('indexes normally when no session is present', async () => {
     const { tool, slSearchService } = makeTool();
     const result = await tool.call(

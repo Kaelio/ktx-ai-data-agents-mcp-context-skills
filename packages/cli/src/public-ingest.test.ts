@@ -6,6 +6,7 @@ import {
   type KtxPublicIngestProject,
   runKtxPublicIngest,
 } from './public-ingest.js';
+import type { ManagedPythonCommandRuntime } from './managed-python-command.js';
 
 function makeIo(options: { isTTY?: boolean; interactive?: boolean } = {}) {
   let stdout = '';
@@ -750,6 +751,53 @@ describe('runKtxPublicIngest', () => {
     expect(runScan).not.toHaveBeenCalled();
   });
 
+  it('preflights foreground query-history runtime before starting the context-build view', async () => {
+    const io = makeIo({ isTTY: true, interactive: true });
+    const calls: string[] = [];
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+    const ensureRuntime = vi.fn(async (): Promise<ManagedPythonCommandRuntime> => {
+      calls.push('runtime');
+      return {} as ManagedPythonCommandRuntime;
+    });
+    const runContextBuild = vi.fn(async () => {
+      calls.push('context-build');
+      return { exitCode: 0 };
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'auto',
+          queryHistory: 'enabled',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'prompt',
+        },
+        io.io,
+        {
+          loadProject: vi.fn(async () => project),
+          ensureRuntime,
+          runContextBuild,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(calls).toEqual(['runtime', 'context-build']);
+    expect(ensureRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cliVersion: '0.2.0',
+        installPolicy: 'prompt',
+        feature: 'core',
+      }),
+    );
+  });
+
   it('runs all independent targets and reports partial failures', async () => {
     const io = makeIo();
     const project = projectWithConnections({
@@ -806,7 +854,12 @@ describe('runKtxPublicIngest', () => {
       warehouse: { driver: 'postgres', context: { depth: 'deep' } },
     });
     const runScan = vi.fn(async () => 0);
-    const runIngest = vi.fn(async () => 1);
+    const runIngest = vi.fn(async (_args, ingestIo) => {
+      ingestIo.stdout.write(
+        'Error: Query history failed for 60 tasks. First failure: Google Cloud authentication failed while analyzing query history: application-default credentials expired or require reauthentication (invalid_grant / invalid_rapt). Run `gcloud auth application-default login`, then retry.\n',
+      );
+      return 1;
+    });
 
     await expect(
       runKtxPublicIngest(
@@ -824,9 +877,50 @@ describe('runKtxPublicIngest', () => {
       ),
     ).resolves.toBe(1);
 
-    expect(io.stdout()).toContain('warehouse failed at query-history.');
+    expect(io.stdout()).toMatch(/warehouse\s+done\s+failed\s+skipped\s+skipped/);
+    expect(io.stdout()).toContain(
+      'warehouse failed: Query history failed for 60 tasks. First failure: Google Cloud authentication failed while analyzing query history',
+    );
+    expect(io.stdout()).not.toContain('warehouse failed: Error:');
     expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
     expect(io.stdout()).not.toContain('historic-sql');
+  });
+
+  it('prints the runtime artifact build hint for missing query-history runtime assets', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn(async (_args, ingestIo) => {
+      ingestIo.stderr.write('Missing bundled Python runtime manifest: /repo/packages/cli/assets/python/manifest.json\n');
+      ingestIo.stderr.write('In a source checkout, build the local runtime assets with: pnpm run artifacts:build\n');
+      ingestIo.stderr.write('Then retry the runtime-backed KTX command.\n');
+      return 1;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stdout()).toContain('Missing bundled Python runtime manifest');
+    expect(io.stdout()).toContain(
+      'In a source checkout, build the local runtime assets with: pnpm run artifacts:build',
+    );
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
   });
 
   it('fails deep-readiness targets before work starts while continuing independent --all targets', async () => {

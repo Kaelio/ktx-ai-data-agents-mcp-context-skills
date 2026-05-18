@@ -206,6 +206,47 @@ describe('parseIngestReportSnapshot', () => {
     expect(snapshot.body.toolTranscripts).toEqual([]);
   });
 
+  it('parses failed ingest reports with trace and failure details', () => {
+    const snapshot = parseIngestReportSnapshot({
+      id: 'report-failed',
+      runId: 'run-failed',
+      jobId: 'job-failed',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      createdAt: '2026-05-17T12:00:00.000Z',
+      body: {
+        status: 'failed',
+        syncId: 'sync-failed',
+        diffSummary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+        commitSha: null,
+        tracePath: '/project/.ktx/ingest-traces/job-failed/trace.jsonl',
+        failure: {
+          phase: 'final_gates',
+          message: 'final artifact gates failed',
+        },
+        workUnits: [],
+        failedWorkUnits: [],
+        reconciliationSkipped: true,
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+        evictionInputs: [],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+
+    expect(snapshot.body.status).toBe('failed');
+    expect(snapshot.body.failure).toEqual({
+      phase: 'final_gates',
+      message: 'final artifact gates failed',
+    });
+    expect(snapshot.body.tracePath).toContain('trace.jsonl');
+  });
+
   it('rejects malformed report snapshots with a concise message', () => {
     const report = validReportSnapshot();
     report.body.workUnits[0] = {
@@ -214,5 +255,94 @@ describe('parseIngestReportSnapshot', () => {
     } as never;
 
     expect(() => parseIngestReportSnapshot(report)).toThrow('Invalid ingest report snapshot');
+  });
+
+  it('parses isolated-diff textual resolver counters', () => {
+    const snapshot = parseIngestReportSnapshot({
+      id: 'report-1',
+      runId: 'run-1',
+      jobId: 'job-1',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      body: {
+        status: 'completed',
+        syncId: 'sync-1',
+        diffSummary: { added: 0, modified: 1, deleted: 0, unchanged: 0 },
+        commitSha: 'abc123',
+        isolatedDiff: {
+          enabled: true,
+          acceptedPatches: 2,
+          textualConflicts: 1,
+          semanticConflicts: 0,
+          resolverAttempts: 1,
+          resolverRepairs: 1,
+          resolverFailures: 0,
+        },
+        workUnits: [],
+        failedWorkUnits: [],
+        reconciliationSkipped: true,
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+        artifactResolutions: [],
+        evictionInputs: [],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+
+    expect(snapshot.body.isolatedDiff).toMatchObject({
+      resolverAttempts: 1,
+      resolverRepairs: 1,
+      resolverFailures: 0,
+    });
+  });
+
+  it('parses isolated-diff gate repair counters', () => {
+    const snapshot = parseIngestReportSnapshot({
+      id: 'report-1',
+      runId: 'run-1',
+      jobId: 'job-1',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      body: {
+        status: 'completed',
+        syncId: 'sync-1',
+        diffSummary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+        commitSha: 'abc123',
+        isolatedDiff: {
+          enabled: true,
+          acceptedPatches: 1,
+          textualConflicts: 0,
+          semanticConflicts: 1,
+          gateRepairAttempts: 1,
+          gateRepairs: 1,
+          gateRepairFailures: 0,
+        },
+        workUnits: [],
+        failedWorkUnits: [],
+        reconciliationSkipped: true,
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+        evictionInputs: [],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+
+    expect(snapshot.body.isolatedDiff).toMatchObject({
+      gateRepairAttempts: 1,
+      gateRepairs: 1,
+      gateRepairFailures: 0,
+    });
   });
 });

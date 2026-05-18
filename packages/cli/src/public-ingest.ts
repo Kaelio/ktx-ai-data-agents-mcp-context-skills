@@ -9,8 +9,14 @@ import {
   isDatabaseDriver,
   normalizeConnectionDriver,
 } from './ingest-depth.js';
-import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
+import {
+  ensureManagedPythonCommandRuntime,
+  type KtxManagedPythonInstallPolicy,
+  type ManagedPythonCommandRuntime,
+} from './managed-python-command.js';
+import type { KtxRuntimeFeature } from './managed-python-runtime.js';
 import { publicIngestOutputLine } from './public-ingest-copy.js';
+import { resolvePublicIngestRuntimeRequirements } from './runtime-requirements.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
 
@@ -94,6 +100,13 @@ export interface KtxPublicIngestDeps {
   ) => Promise<{ exitCode: number }>;
   scanProgress?: KtxProgressPort;
   ingestProgress?: (update: KtxIngestProgressUpdate) => void;
+  ensureRuntime?: (options: {
+    cliVersion: string;
+    installPolicy: KtxManagedPythonInstallPolicy;
+    io: KtxCliIo;
+    feature: KtxRuntimeFeature;
+  }) => Promise<ManagedPythonCommandRuntime>;
+  env?: NodeJS.ProcessEnv;
   runtimeIo?: KtxCliIo;
   onPhaseStart?: (phaseKey: KtxPublicIngestPhaseKey) => void;
   onPhaseEnd?: (phaseKey: KtxPublicIngestPhaseKey, status: 'done' | 'failed' | 'skipped', summary?: string) => void;
@@ -555,6 +568,7 @@ function markTargetResult(
 ): KtxPublicIngestTargetResult {
   const selectedFailedOperation =
     failedOperation ?? (target.operation === 'database-ingest' ? 'database-schema' : 'source-ingest');
+  const selectedFailedOperationIndex = target.steps.indexOf(selectedFailedOperation);
   return {
     connectionId: target.connectionId,
     driver: target.driver,
@@ -563,6 +577,10 @@ function markTargetResult(
         return step;
       }
       if (status === 'done') {
+        return { ...step, status: 'done' };
+      }
+      const stepIndex = target.steps.indexOf(step.operation);
+      if (selectedFailedOperationIndex >= 0 && stepIndex >= 0 && stepIndex < selectedFailedOperationIndex) {
         return { ...step, status: 'done' };
       }
       if (step.operation === selectedFailedOperation) {
@@ -663,16 +681,40 @@ function createCapturedPublicIngestIo(): CapturedPublicIngestIo {
 
 const INTERNAL_STATUS_LINE_RE =
   /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
+const ACTIONABLE_FAILURE_LINE_RE =
+  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
+const RUNTIME_BACKED_RETRY_LINE_RE = /^Then retry the runtime-backed KTX command\.?$/;
 
-function firstCapturedFailureLine(output: string): string | undefined {
-  return output
+function trimErrorPrefix(line: string): string {
+  return line.replace(/^Error:\s*/, '');
+}
+
+function capturedFailureMessage(output: string): string | undefined {
+  const lines = output
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .filter((line) => !line.startsWith('KTX scan completed'))
     .filter((line) => !INTERNAL_STATUS_LINE_RE.test(line))
-    .map(publicIngestOutputLine)
-    .find((line) => line.length > 0);
+    .map(publicIngestOutputLine);
+
+  const actionableIndex = lines.findIndex((line) => ACTIONABLE_FAILURE_LINE_RE.test(line));
+  if (actionableIndex < 0) {
+    const line = lines.find((candidate) => candidate.length > 0);
+    return line ? trimErrorPrefix(line) : undefined;
+  }
+
+  const firstLine = lines[actionableIndex];
+  if (!firstLine?.startsWith('Missing bundled Python runtime manifest')) {
+    return trimErrorPrefix(firstLine);
+  }
+
+  const followupLines = lines
+    .slice(actionableIndex + 1)
+    .filter((line) => !RUNTIME_BACKED_RETRY_LINE_RE.test(line))
+    .filter((line) => !/\bRetry:\s/.test(line))
+    .filter((line) => line.startsWith('In a source checkout, build the local runtime assets with:'));
+  return [firstLine, ...followupLines].join('\n');
 }
 
 export async function executePublicIngestTarget(
@@ -737,7 +779,7 @@ export async function executePublicIngestTarget(
         args,
         'failed',
         'database-schema',
-        capturedScanIo ? firstCapturedFailureLine(capturedScanIo.capturedOutput()) : undefined,
+        capturedScanIo ? capturedFailureMessage(capturedScanIo.capturedOutput()) : undefined,
       );
     }
     deps.onPhaseEnd?.('database-schema', 'done');
@@ -779,7 +821,7 @@ export async function executePublicIngestTarget(
           args,
           'failed',
           'query-history',
-          capturedIngestIo ? firstCapturedFailureLine(capturedIngestIo.capturedOutput()) : undefined,
+          capturedIngestIo ? capturedFailureMessage(capturedIngestIo.capturedOutput()) : undefined,
         );
       }
       deps.onPhaseEnd?.('query-history', 'done');
@@ -819,7 +861,7 @@ export async function executePublicIngestTarget(
     args,
     exitCode === 0 ? 'done' : 'failed',
     'source-ingest',
-    capturedIngestIo ? firstCapturedFailureLine(capturedIngestIo.capturedOutput()) : undefined,
+    capturedIngestIo ? capturedFailureMessage(capturedIngestIo.capturedOutput()) : undefined,
   );
 }
 
@@ -831,6 +873,22 @@ export async function runKtxPublicIngest(
   const loadProject = deps.loadProject ?? loadKtxProject;
   const project = await loadProject({ projectDir: args.projectDir });
   if (shouldUseForegroundContextBuildView(args, io)) {
+    const plan = buildPublicIngestPlan(project, args);
+    const requirements = resolvePublicIngestRuntimeRequirements(plan, { env: deps.env ?? process.env });
+    const ensureRuntime = deps.ensureRuntime ?? ensureManagedPythonCommandRuntime;
+    for (const feature of requirements.features) {
+      try {
+        await ensureRuntime({
+          cliVersion: args.cliVersion ?? '0.0.0-private',
+          installPolicy: args.runtimeInstallPolicy ?? 'prompt',
+          io,
+          feature,
+        });
+      } catch (error) {
+        io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return 1;
+      }
+    }
     const { runContextBuild } = await import('./context-build-view.js');
     const contextBuild = deps.runContextBuild ?? runContextBuild;
     const result = await contextBuild(

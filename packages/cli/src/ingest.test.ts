@@ -35,6 +35,11 @@ describe('runKtxIngest', () => {
   let tempDir: string;
   let originalTerm: string | undefined;
   const interactiveEnv = (): NodeJS.ProcessEnv => ({ ...process.env, CI: 'false' });
+  const runtimeReady = (projectDir: string) => ({
+    status: 'ready' as const,
+    projectDir,
+    requirements: { features: ['core' as const], requirements: [] },
+  });
 
   beforeEach(async () => {
     resetVizFallbackWarningsForTest();
@@ -285,6 +290,7 @@ describe('runKtxIngest', () => {
             historicSqlProbe: async () => ({ ok: true, lines: ['PASS Historic SQL probe skipped in test'] }),
           },
           context: async () => ({ status: 'skipped', projectDir }),
+          runtime: async () => runtimeReady(projectDir),
         },
       ),
     ).resolves.toBe(0);
@@ -629,6 +635,117 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).not.toContain('Metabase ingest: prod-metabase');
   });
 
+  it('emits structured child ingest progress during Metabase fan-out', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo();
+    const progressEvents: Array<{ percent: number; message: string; transient?: boolean }> = [];
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'json',
+        },
+        io.io,
+        {
+          progress: (event) => progressEvents.push(event),
+          runLocalMetabaseIngest: async (input) => {
+            input.progress?.onMetabaseFanoutPlanned?.({
+              metabaseConnectionId: 'prod-metabase',
+              children: [{ metabaseDatabaseId: 1, targetConnectionId: 'warehouse_a' }],
+            });
+            input.progress?.onMetabaseChildStarted?.({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+            });
+            input.memoryFlow?.update({
+              plannedWorkUnits: [
+                {
+                  unitKey: 'metabase-col-6',
+                  rawFiles: ['cards/40.json'],
+                  peerFileCount: 0,
+                  dependencyCount: 0,
+                },
+              ],
+            });
+            input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 });
+            input.memoryFlow?.emit({
+              type: 'work_unit_started',
+              unitKey: 'metabase-col-6',
+              skills: ['sl_capture'],
+              stepBudget: 40,
+            });
+            input.memoryFlow?.emit({
+              type: 'work_unit_step',
+              unitKey: 'metabase-col-6',
+              stepIndex: 7,
+              stepBudget: 40,
+            });
+            input.memoryFlow?.emit({
+              type: 'stage_progress',
+              stage: 'integration',
+              percent: 81,
+              message: 'Resolving text conflict for metabase-col-6',
+            });
+            input.memoryFlow?.emit({ type: 'work_unit_finished', unitKey: 'metabase-col-6', status: 'success' });
+            input.memoryFlow?.update({
+              plannedWorkUnits: [
+                {
+                  unitKey: 'metabase-col-7',
+                  rawFiles: ['cards/48.json'],
+                  peerFileCount: 0,
+                  dependencyCount: 0,
+                },
+              ],
+            });
+            input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 });
+            input.memoryFlow?.emit({
+              type: 'work_unit_started',
+              unitKey: 'metabase-col-7',
+              skills: ['sl_capture'],
+              stepBudget: 40,
+            });
+            input.progress?.onMetabaseChildCompleted?.({
+              metabaseConnectionId: 'prod-metabase',
+              metabaseDatabaseId: 1,
+              targetConnectionId: 'warehouse_a',
+              jobId: 'metabase-child-1',
+              status: 'done',
+            });
+            return {
+              metabaseConnectionId: 'prod-metabase',
+              status: 'all_succeeded',
+              totals: { workUnits: 1, failedWorkUnits: 0 },
+              children: [],
+            };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(progressEvents).toEqual(
+      expect.arrayContaining([
+        { percent: 45, message: 'Planned 1 task' },
+        { percent: 55, message: 'Processing 1/1 tasks: metabase-col-6' },
+        {
+          percent: 60,
+          message: 'Processing tasks: 0/1 complete, 1 active; latest metabase-col-6 step 7/40',
+          transient: true,
+        },
+        { percent: 81, message: 'Resolving text conflict for metabase-col-6' },
+        { percent: 81, message: 'Processing 1/1 tasks: metabase-col-7' },
+      ]),
+    );
+    expect(io.stdout()).toContain('"status": "all_succeeded"');
+    expect(io.stderr()).not.toContain('Metabase ingest: prod-metabase');
+  });
+
   it('runs Metabase scheduled ingest through the public CLI command path with real fan-out', async () => {
     const projectDir = join(tempDir, 'metabase-cli-project');
     await writeWarehouseConfig(projectDir);
@@ -903,9 +1020,16 @@ describe('runKtxIngest', () => {
           sourceKey: 'historic-sql',
           body: {
             workUnits: [],
-            postProcessor: {
+            finalization: {
               sourceKey: 'historic-sql',
               status: 'success',
+              commitSha: 'finalization-sha',
+              touchedPaths: ['semantic-layer/warehouse/_schema/public.yaml', 'wiki/global/historic-sql-orders.md'],
+              declaredTouchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
+              derivedTouchedSources: [{ connectionId: 'warehouse', sourceName: 'orders' }],
+              declaredChangedWikiPageKeys: ['historic-sql-orders'],
+              derivedChangedWikiPageKeys: ['historic-sql-orders'],
+              mismatches: [],
               result: {
                 tableUsageMerged: 56,
                 staleTablesMarked: 1,
@@ -915,7 +1039,24 @@ describe('runKtxIngest', () => {
               },
               errors: [],
               warnings: [],
-              touchedSources: [],
+              actions: [
+                ...Array.from({ length: 57 }, (_, index) => ({
+                  target: 'sl' as const,
+                  type: 'updated' as const,
+                  key: `orders-${index}`,
+                  detail: 'Merged usage',
+                  targetConnectionId: 'warehouse',
+                  rawPaths: ['tables/public/orders.json'],
+                })),
+                ...Array.from({ length: 35 }, (_, index) => ({
+                  target: 'wiki' as const,
+                  type: 'updated' as const,
+                  key: `historic-sql-orders-${index}`,
+                  detail: 'Projected pattern',
+                  rawPaths: ['patterns/orders.json'],
+                })),
+              ],
+              provenanceExclusions: [],
             },
           },
         }),
@@ -977,6 +1118,125 @@ describe('runKtxIngest', () => {
 
     expect(io.stderr()).toBe('');
     expect(io.stdout()).toContain('Status: error\n');
+  });
+
+  it('prints trace path and error status for stored failed ingest reports', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const io = makeIo();
+    const report = {
+      id: 'report-failed',
+      runId: 'run-failed',
+      jobId: 'job-failed',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      createdAt: '2026-05-17T12:00:00.000Z',
+      body: {
+        status: 'failed',
+        syncId: 'sync-failed',
+        diffSummary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+        commitSha: null,
+        tracePath: '/project/.ktx/ingest-traces/job-failed/trace.jsonl',
+        failure: { phase: 'final_gates', message: 'final artifact gates failed' },
+        workUnits: [],
+        failedWorkUnits: [],
+        reconciliationSkipped: true,
+        conflictsResolved: [],
+        evictionsApplied: [],
+        unmappedFallbacks: [],
+        evictionInputs: [],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    };
+
+    await runKtxIngest(
+      {
+        command: 'status',
+        projectDir,
+        reportFile: '/project/report-failed.json',
+        runId: 'run-failed',
+        outputMode: 'plain',
+        inputMode: 'disabled',
+      },
+      io.io,
+      {
+        readReportFile: vi.fn().mockResolvedValue(report),
+      },
+    );
+
+    expect(io.stdout()).toContain('Trace: /project/.ktx/ingest-traces/job-failed/trace.jsonl');
+    expect(io.stdout()).toContain('Status: error');
+    expect(io.stdout()).toContain('Error: final artifact gates failed');
+  });
+
+  it('prints a clear first failure reason when query-history work units fail', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const rawReason =
+      '{"error":"invalid_grant","error_description":"reauth related error (invalid_rapt)","error_uri":"https://support.google.com/a/answer/9368756","error_subtype":"invalid_rapt"}';
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> => {
+      const failedWorkUnit = {
+        ...localFakeBundleReport('query-history-failed').body.workUnits[0],
+        unitKey: 'historic-sql-table-orders',
+        rawFiles: ['tables/orders.json'],
+        status: 'failed' as const,
+        reason: rawReason,
+        actions: [],
+        touchedSlSources: [],
+      };
+      const report = localFakeBundleReport('query-history-failed', {
+        id: 'report-query-history-failed',
+        runId: 'run-query-history-failed',
+        connectionId: input.connectionId,
+        sourceKey: 'historic-sql',
+        body: {
+          workUnits: [failedWorkUnit],
+          failedWorkUnits: [failedWorkUnit.unitKey],
+        },
+      });
+      return {
+        result: {
+          jobId: 'query-history-failed',
+          runId: report.runId,
+          syncId: report.body.syncId,
+          diffSummary: report.body.diffSummary,
+          workUnitCount: report.body.workUnits.length,
+          failedWorkUnits: report.body.failedWorkUnits,
+          artifactsWritten: report.body.provenanceRows.length,
+          commitSha: report.body.commitSha,
+        },
+        report,
+      };
+    });
+
+    const io = makeIo();
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'historic-sql',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'query-history-failed',
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stdout()).toContain('Status: error\n');
+    expect(io.stdout()).toContain('Failed tasks: 1\n');
+    expect(io.stdout()).toContain(
+      'Error: Query history failed for 1 task. First failure: Google Cloud authentication failed while analyzing query history: application-default credentials expired or require reauthentication (invalid_grant / invalid_rapt). Run `gcloud auth application-default login`, then retry.',
+    );
+    expect(io.stdout()).not.toContain('error_uri');
   });
 
   it('passes the debug LLM request file to local ingest runs', async () => {

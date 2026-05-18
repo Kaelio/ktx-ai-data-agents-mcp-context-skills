@@ -70,6 +70,7 @@ describe('scanFileContent', () => {
 
     assert.equal(scanFileContent('packages/cli/src/setup.test.ts', `project: ${name}-dev`).length, 0);
     assert.equal(scanFileContent('packages/context/src/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
+    assert.equal(scanFileContent('python/ktx-daemon/tests/test_package.py', `${name}-ktx`).length, 0);
   });
 
   it('allows public package identifiers in release packaging and managed runtime source', () => {
@@ -79,7 +80,9 @@ describe('scanFileContent', () => {
     assert.equal(scanFileContent('scripts/package-artifacts.test.mjs', `${name}-ktx`).length, 0);
     assert.equal(scanFileContent('scripts/public-npm-release-metadata.mjs', `@${name}/ktx`).length, 0);
     assert.equal(scanFileContent('scripts/publish-public-npm-package.test.mjs', `@${name}/ktx`).length, 0);
+    assert.equal(scanFileContent('packages/cli/src/release-version.ts', `@${name}/ktx`).length, 0);
     assert.equal(scanFileContent('packages/cli/src/managed-python-runtime.ts', `${name}_ktx`).length, 0);
+    assert.equal(scanFileContent('python/ktx-daemon/src/ktx_daemon/__init__.py', `${name}-ktx`).length, 0);
   });
 
   it('allows clean source files and clean runtime prompt assets', () => {

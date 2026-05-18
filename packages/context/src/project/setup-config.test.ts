@@ -25,13 +25,14 @@ describe('KTX setup config helpers', () => {
     await markKtxSetupStateStepComplete(tempDir, 'project');
     await markKtxSetupStateStepComplete(tempDir, 'project');
     await markKtxSetupStateStepComplete(tempDir, 'llm');
+    await markKtxSetupStateStepComplete(tempDir, 'runtime');
     await markKtxSetupStateStepComplete(tempDir, 'context');
 
     expect(await readKtxSetupState(tempDir)).toEqual({
-      completed_steps: ['project', 'llm', 'context'],
+      completed_steps: ['project', 'llm', 'runtime', 'context'],
     });
     await expect(readFile(join(tempDir, '.ktx', 'setup', 'state.json'), 'utf-8')).resolves.toBe(
-      `${JSON.stringify({ completed_steps: ['project', 'llm', 'context'] }, null, 2)}\n`,
+      `${JSON.stringify({ completed_steps: ['project', 'llm', 'runtime', 'context'] }, null, 2)}\n`,
     );
   });
 

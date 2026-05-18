@@ -123,6 +123,41 @@ const sourceFetchReportSchema = z.object({
   warnings: z.array(sourceFetchIssueSchema).default([]),
 });
 
+const ingestReportFailureSchema = z.object({
+  phase: z.string().min(1),
+  message: z.string().min(1),
+  details: z.record(z.string(), z.unknown()).optional(),
+});
+
+const finalizationMismatchSchema = z.object({
+  artifactKind: z.enum(['sl', 'wiki']),
+  key: z.string().min(1),
+  direction: z.enum(['missing_from_adapter_declaration', 'extra_in_adapter_declaration']),
+});
+
+const finalizationProvenanceExclusionSchema = z.object({
+  action: ingestActionSchema,
+  reason: z.enum(['missing_raw_paths', 'raw_path_not_defensible']),
+  invalidRawPaths: z.array(z.string()).optional(),
+});
+
+const finalizationOutcomeSchema = z.object({
+  sourceKey: z.string().min(1),
+  status: z.enum(['success', 'failed', 'skipped']),
+  commitSha: z.string().nullable(),
+  touchedPaths: z.array(z.string()),
+  declaredTouchedSources: z.array(touchedSlSourceSchema),
+  derivedTouchedSources: z.array(touchedSlSourceSchema),
+  declaredChangedWikiPageKeys: z.array(z.string()),
+  derivedChangedWikiPageKeys: z.array(z.string()),
+  mismatches: z.array(finalizationMismatchSchema).default([]),
+  result: z.unknown().optional(),
+  errors: z.array(z.string()),
+  warnings: z.array(z.string()),
+  actions: z.array(ingestActionSchema).default([]),
+  provenanceExclusions: z.array(finalizationProvenanceExclusionSchema).default([]),
+});
+
 export const ingestReportSnapshotSchema = z
   .object({
     id: z.string().min(1),
@@ -133,10 +168,30 @@ export const ingestReportSnapshotSchema = z
     createdAt: z.string().min(1),
     body: z
       .object({
+        status: z.enum(['completed', 'failed']).optional(),
         syncId: z.string().min(1),
         diffSummary: ingestDiffSummarySchema,
         fetch: sourceFetchReportSchema.optional(),
         commitSha: z.string().nullable(),
+        tracePath: z.string().optional(),
+        failure: ingestReportFailureSchema.optional(),
+        isolatedDiff: z
+          .object({
+            enabled: z.boolean(),
+            integrationWorktreePath: z.string().optional(),
+            ingestionBaseSha: z.string().optional(),
+            projectionSha: z.string().nullable().optional(),
+            acceptedPatches: z.number().int().min(0),
+            textualConflicts: z.number().int().min(0),
+            semanticConflicts: z.number().int().min(0),
+            resolverAttempts: z.number().int().min(0).default(0),
+            resolverRepairs: z.number().int().min(0).default(0),
+            resolverFailures: z.number().int().min(0).default(0),
+            gateRepairAttempts: z.number().int().min(0).default(0),
+            gateRepairs: z.number().int().min(0).default(0),
+            gateRepairFailures: z.number().int().min(0).default(0),
+          })
+          .optional(),
         workUnits: z.array(
           z.object({
             unitKey: z.string().min(1),
@@ -162,6 +217,7 @@ export const ingestReportSnapshotSchema = z
         overrideOf: z.string().nullable().default(null),
         provenanceRows: z.array(provenanceDetailSchema).default([]),
         toolTranscripts: z.array(toolTranscriptSummarySchema).default([]),
+        finalization: finalizationOutcomeSchema.optional(),
         memoryFlow: memoryFlowReplayInputSchema.optional(),
       })
       .passthrough(),

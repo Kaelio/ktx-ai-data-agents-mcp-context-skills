@@ -14,6 +14,7 @@ export interface TouchedValidationResult {
 export interface WorkUnitExecutionDeps {
   sessionWorktreeGit: { revParseHead(): Promise<string | null> };
   agentRunner: AgentRunnerPort;
+  validateWikiRefs?: (actions: MemoryAction[]) => Promise<string[]>;
   validateTouchedSources: (touched: TouchedSlSource[]) => Promise<TouchedValidationResult>;
   resetHardTo: (targetSha: string) => Promise<void>;
   buildSystemPrompt: (wu: WorkUnit) => string;
@@ -40,6 +41,9 @@ export interface WorkUnitOutcome {
   touchedSlSources: TouchedSlSource[];
   slDisallowed?: boolean;
   slDisallowedReason?: 'lookml_connection_mismatch';
+  patchPath?: string;
+  patchTouchedPaths?: string[];
+  childWorktreePath?: string;
 }
 
 export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit): Promise<WorkUnitOutcome> {
@@ -131,6 +135,11 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
   const toolFailureCount = deps.toolFailureCount?.(wu.unitKey) ?? 0;
   if (toolFailureCount > 0) {
     return failWithReset(`${toolFailureCount} tool call(s) failed during WorkUnit ${wu.unitKey}`);
+  }
+
+  const danglingWikiRefs = (await deps.validateWikiRefs?.(deps.sessionActions)) ?? [];
+  if (danglingWikiRefs.length > 0) {
+    return failWithReset(`wiki references target missing page(s): ${danglingWikiRefs.join(', ')}`);
   }
 
   const touched = listTouchedSlSources(deps.captureSession.touchedSlSources);

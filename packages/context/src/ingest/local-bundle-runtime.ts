@@ -24,7 +24,6 @@ import {
   type KtxConnectionInfo,
   type KtxQueryResult,
   SemanticLayerService,
-  type SemanticLayerSource,
   type SlConnectionCatalogPort,
   SlDiscoverTool,
   SlEditSourceTool,
@@ -73,9 +72,9 @@ import {
   CuratorPaginationService,
 } from './context-candidates/index.js';
 import { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evidence-tool.js';
-import { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
 import { ContextEvidenceIndexService, SqliteContextEvidenceStore } from './context-evidence/index.js';
 import { DiffSetService } from './diff-set.service.js';
+import { ingestTracePathForJob, type IngestTraceLevel } from './ingest-trace.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import { PageTriageService } from './page-triage/index.js';
 import { createWarehouseVerificationTools } from './tools/warehouse-verification/index.js';
@@ -96,6 +95,12 @@ const promptsDir = fileURLToPath(new URL('../../prompts', import.meta.url));
 const skillsDir = fileURLToPath(new URL('../../skills', import.meta.url));
 const LOCAL_AUTHOR = { name: 'KTX Local', email: 'local@ktx.local' };
 const LOCAL_SHAPE_WARNING = 'Local ingest validates semantic-layer YAML shape only.';
+const INGEST_TRACE_LEVELS = new Set<IngestTraceLevel>(['error', 'info', 'debug', 'trace']);
+
+function ingestTraceLevelFromEnv(env: NodeJS.ProcessEnv = process.env): IngestTraceLevel {
+  const raw = env.KTX_INGEST_TRACE_LEVEL;
+  return raw && INGEST_TRACE_LEVELS.has(raw as IngestTraceLevel) ? (raw as IngestTraceLevel) : 'debug';
+}
 
 export interface CreateLocalBundleIngestRuntimeOptions {
   project: KtxLocalProject;
@@ -150,6 +155,10 @@ class LocalIngestStorage implements IngestStoragePort {
 
   resolveTranscriptDir(jobId: string): string {
     return join(this.project.projectDir, '.ktx/ingest-transcripts', jobId);
+  }
+
+  resolveTracePath(jobId: string): string {
+    return ingestTracePathForJob(this.homeDir, jobId);
   }
 }
 
@@ -237,22 +246,63 @@ class LocalSlPythonPort implements SlPythonPort {
 }
 
 class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
+  private validateParsedSource(sourceName: string, parsed: Record<string, unknown>) {
+    const isOverlay = parsed.table == null && parsed.sql == null;
+    const result = (isOverlay ? sourceOverlaySchema : sourceDefinitionSchema).safeParse(parsed);
+    return result.success
+      ? { errors: [], warnings: [LOCAL_SHAPE_WARNING] }
+      : {
+          errors: result.error.issues.map(
+            (issue) => `${sourceName}: ${issue.path.join('.') || 'source'} ${issue.message}`,
+          ),
+          warnings: [],
+        };
+  }
+
+  private async validateComposedSource(
+    deps: SlValidationDeps,
+    connectionId: string,
+    sourceName: string,
+    readError: unknown,
+  ) {
+    try {
+      const { sources, loadErrors } = await deps.semanticLayerService.loadAllSources(connectionId);
+      const source = sources.find((candidate) => candidate.name === sourceName);
+      if (source) {
+        return this.validateParsedSource(sourceName, source as unknown as Record<string, unknown>);
+      }
+      const detail =
+        loadErrors.length > 0
+          ? loadErrors.join('; ')
+          : readError instanceof Error
+            ? readError.message
+            : String(readError);
+      return { errors: [`${sourceName}: ${detail}`], warnings: [] };
+    } catch (fallbackError) {
+      return {
+        errors: [`${sourceName}: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`],
+        warnings: [],
+      };
+    }
+  }
+
   async validateSingleSource(deps: SlValidationDeps, connectionId: string, sourceName: string) {
+    let content: string;
     try {
       const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
-      const parsed = YAML.parse(file.content) as SemanticLayerSource;
-      const isOverlay = parsed.table == null && parsed.sql == null;
-      const result = (isOverlay ? sourceOverlaySchema : sourceDefinitionSchema).safeParse(parsed);
-      return result.success
-        ? { errors: [], warnings: [LOCAL_SHAPE_WARNING] }
-        : {
-            errors: result.error.issues.map(
-              (issue) => `${sourceName}: ${issue.path.join('.') || 'source'} ${issue.message}`,
-            ),
-            warnings: [],
-          };
+      content = file.content;
     } catch (error) {
-      return { errors: [`${sourceName}: ${error instanceof Error ? error.message : String(error)}`], warnings: [] };
+      return this.validateComposedSource(deps, connectionId, sourceName, error);
+    }
+
+    try {
+      const parsed = YAML.parse(content) as unknown as Record<string, unknown>;
+      return this.validateParsedSource(sourceName, parsed);
+    } catch (error) {
+      return {
+        errors: [`${sourceName}: invalid YAML — ${error instanceof Error ? error.message : String(error)}`],
+        warnings: [],
+      };
     }
   }
 }
@@ -671,6 +721,7 @@ export function createLocalBundleIngestRuntime(
       workUnitMaxConcurrency: options.project.config.ingest.workUnits.maxConcurrency,
       workUnitStepBudget: options.project.config.ingest.workUnits.stepBudget,
       workUnitFailureMode: options.project.config.ingest.workUnits.failureMode,
+      ingestTraceLevel: ingestTraceLevelFromEnv(),
     },
     skillsRegistry: new SkillsRegistryService({ skillsDir, logger }),
     promptService,
@@ -719,9 +770,6 @@ export function createLocalBundleIngestRuntime(
       settings: { batchSize: 8, maxPasses: 8, stepBudgetPerPass: 60 },
       logger,
     }),
-    postProcessors: {
-      'historic-sql': new HistoricSqlProjectionPostProcessor(),
-    },
     logger,
   };
 

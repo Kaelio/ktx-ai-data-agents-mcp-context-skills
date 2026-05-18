@@ -6,11 +6,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
+import { publicPythonRuntimePackageVersion } from './public-npm-release-metadata.mjs';
+
 const execFileAsync = promisify(execFile);
 
 export const RUNTIME_WHEEL_DISTRIBUTION_NAME = 'kaelio-ktx';
 export const RUNTIME_WHEEL_NORMALIZED_NAME = 'kaelio_ktx';
-export const RUNTIME_WHEEL_PACKAGE_VERSION = '0.1.0';
+export const RUNTIME_WHEEL_PACKAGE_VERSION = publicPythonRuntimePackageVersion();
 
 function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');

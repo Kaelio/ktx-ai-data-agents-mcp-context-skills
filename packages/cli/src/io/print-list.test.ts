@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KtxCliIo } from '../cli-runtime.js';
-import { printList, type PrintListColumn } from './print-list.js';
+import { createRankBadgeFormatter, printList, type PrintListColumn } from './print-list.js';
 import { SYMBOLS } from './symbols.js';
 
 function recorder(): { io: KtxCliIo; out: () => string; err: () => string } {
@@ -239,25 +239,25 @@ describe('printList — pretty mode', () => {
     expect(out).toContain('2 pages');
   });
 
-  it('renders a leading badge column with prettyFormat in pretty mode', () => {
+  it('renders a leading rank badge column in pretty mode', () => {
     const r = recorder();
     interface SearchRow { score: number; scope: string; key: string; summary: string }
+    const rows: SearchRow[] = [
+      { score: 0.87, scope: 'GLOBAL', key: 'alpha', summary: 'first' },
+      { score: 0.04, scope: 'GLOBAL', key: 'beta', summary: 'second' },
+    ];
     const SEARCH_COLUMNS: ReadonlyArray<PrintListColumn<SearchRow>> = [
       {
         key: 'score',
         label: 'SCORE',
         plain: 'score=',
         role: 'badge',
-        prettyFormat: (v) => `${Math.round(Number(v) * 100)}%`,
+        prettyFormat: createRankBadgeFormatter(rows),
         dim: true,
       },
       { key: 'scope', label: 'SCOPE', plain: '' },
       { key: 'key', label: 'KEY', plain: '' },
       { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
-    ];
-    const rows: SearchRow[] = [
-      { score: 0.87, scope: 'GLOBAL', key: 'alpha', summary: 'first' },
-      { score: 0.04, scope: 'GLOBAL', key: 'beta', summary: 'second' },
     ];
     printList<SearchRow>({
       rows,
@@ -270,20 +270,22 @@ describe('printList — pretty mode', () => {
       io: r.io,
     });
     const out = stripAnsi(r.out());
-    expect(out).toMatch(/87%\s+alpha\s+/);
-    expect(out).toMatch(/4%\s+beta\s+/);
+    expect(out).toMatch(/#1\s+alpha\s+/);
+    expect(out).toMatch(/#2\s+beta\s+/);
+    expect(out).not.toContain('%');
   });
 
   it('emits the badge column in plain mode using its plain prefix', () => {
     const r = recorder();
     interface SearchRow { score: number; scope: string; key: string; summary: string }
+    const rows: SearchRow[] = [{ score: 0.87, scope: 'GLOBAL', key: 'alpha', summary: 'first' }];
     const SEARCH_COLUMNS: ReadonlyArray<PrintListColumn<SearchRow>> = [
       {
         key: 'score',
         label: 'SCORE',
         plain: 'score=',
         role: 'badge',
-        prettyFormat: (v) => `${Math.round(Number(v) * 100)}%`,
+        prettyFormat: createRankBadgeFormatter(rows),
         dim: true,
       },
       { key: 'scope', label: 'SCOPE', plain: '' },
@@ -291,7 +293,7 @@ describe('printList — pretty mode', () => {
       { key: 'summary', label: 'SUMMARY', plain: '', optional: true, dim: true },
     ];
     printList<SearchRow>({
-      rows: [{ score: 0.87, scope: 'GLOBAL', key: 'alpha', summary: 'first' }],
+      rows,
       columns: SEARCH_COLUMNS,
       groupBy: 'scope',
       mode: 'plain',

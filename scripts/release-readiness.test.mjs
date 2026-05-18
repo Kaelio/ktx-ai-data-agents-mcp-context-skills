@@ -37,7 +37,7 @@ async function writeUploadableArtifactFixtures(layout) {
       layout.npmTarballs[packageInfo.name],
       `${packageInfo.name}-tarball`,
     ]),
-    [join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'), 'kaelio-ktx-runtime-wheel'],
+    [join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'), 'kaelio-ktx-runtime-wheel'],
   ]);
 
   for (const [path, contents] of fileContents) {

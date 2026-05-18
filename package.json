@@ -11,6 +11,7 @@
   },
   "scripts": {
     "artifacts:build": "node scripts/package-artifacts.mjs build",
+    "artifacts:build-runtime": "node scripts/package-artifacts.mjs build-runtime",
     "artifacts:check": "node scripts/package-artifacts.mjs check",
     "artifacts:live-db-smoke": "node scripts/installed-live-database-smoke.mjs",
     "artifacts:verify": "node scripts/package-artifacts.mjs verify",

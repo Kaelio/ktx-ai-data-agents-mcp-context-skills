@@ -32,6 +32,7 @@ export type { SqlEdit } from './sql-edit-replacer.js';
 export { applySqlEdits } from './sql-edit-replacer.js';
 export type { IngestToolMetadata, MemoryAction, ToolSession } from './tool-session.js';
 export { validateActionRawPaths } from './action-raw-paths.js';
+export { validateActionTargetConnection } from './action-target-connection.js';
 export type { TouchedSlSource, TouchedSlSourceSet } from './touched-sl-sources.js';
 export {
   addTouchedSlSource,

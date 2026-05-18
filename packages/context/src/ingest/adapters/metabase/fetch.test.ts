@@ -138,6 +138,52 @@ describe('fetchMetabaseBundle', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('emits memory-flow progress while fetching Metabase cards', async () => {
+    const events: unknown[] = [];
+
+    await fetchMetabaseBundle({
+      pullConfig: { metabaseConnectionId, metabaseDatabaseId: 42 },
+      stagedDir,
+      ctx: {
+        ...makeFetchContext(),
+        memoryFlow: {
+          emit: (event) => events.push(event),
+          update: vi.fn(),
+          finish: vi.fn(),
+          snapshot: vi.fn(),
+        },
+      },
+      clientFactory,
+      sourceStateReader,
+    });
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'stage_progress',
+          stage: 'source',
+          message: 'Fetching Metabase database 42 metadata',
+        }),
+        expect.objectContaining({
+          type: 'stage_progress',
+          stage: 'source',
+          message: 'Fetching 1 Metabase card for database 42',
+        }),
+        expect.objectContaining({
+          type: 'stage_progress',
+          stage: 'source',
+          message: 'Checked 1/1 Metabase cards for database 42; wrote 1',
+          transient: true,
+        }),
+        expect.objectContaining({
+          type: 'stage_progress',
+          stage: 'source',
+          message: 'Fetched Metabase database 42: 1 cards, 0 unresolved',
+        }),
+      ]),
+    );
+  });
+
   it('routes Metabase fetch warnings through the injected logger', async () => {
     const logger = {
       log: vi.fn(),

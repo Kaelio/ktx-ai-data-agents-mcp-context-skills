@@ -176,10 +176,31 @@ describe('setup embeddings step', () => {
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');
-    expect(spinnerEvents).toContainEqual(
-      'start:Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
-    );
+    expect(spinnerEvents).toContainEqual('start:Testing local embeddings (all-MiniLM-L6-v2)');
     expect(io.stdout()).toContain('Embeddings ready: yes');
+  });
+
+  it('uses a short non-animated local embeddings health-check status by default', async () => {
+    const io = makeIo();
+    const healthCheck = vi.fn(async () => ({ ok: true as const }));
+    const prompts = makePromptAdapter({ selectValues: ['sentence-transformers'] });
+
+    const result = await runKtxSetupEmbeddingsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+        skipEmbeddings: false,
+      },
+      io.io,
+      { prompts, env: {}, healthCheck, ensureLocalEmbeddings: vi.fn(async () => managedDaemon()) },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('Testing local embeddings (all-MiniLM-L6-v2)');
+    expect(io.stderr()).not.toContain('First run may take up to 60 seconds');
+    expect(io.stderr().match(/Testing local embeddings/g)).toHaveLength(1);
   });
 
   it('shows live progress while local sentence-transformers embeddings are being tested', async () => {
@@ -213,9 +234,7 @@ describe('setup embeddings step', () => {
     );
 
     await vi.waitFor(() => {
-      expect(spinnerEvents).toContainEqual(
-        'start:Testing local sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions). First run may take up to 60 seconds.',
-      );
+      expect(spinnerEvents).toContainEqual('start:Testing local embeddings (all-MiniLM-L6-v2)');
     });
 
     expect(resolveHealthCheck).toBeDefined();

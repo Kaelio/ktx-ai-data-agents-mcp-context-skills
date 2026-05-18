@@ -63,9 +63,9 @@ Setup supports three LLM provider paths:
 
 | Provider | Use when | Credential model |
 |----------|----------|------------------|
-| Anthropic API | You have an Anthropic API key | `ANTHROPIC_API_KEY` or a local `file:` secret |
+| Claude subscription (Pro/Max) | You want KTX to use your local Claude Code session | Claude Code local authentication |
+| Anthropic API key | You have an Anthropic API key | `ANTHROPIC_API_KEY` or a local `file:` secret |
 | Google Vertex AI for Anthropic Claude | Your organization runs Claude through Google Cloud | Application Default Credentials plus Vertex project and location |
-| Claude Code | You want KTX to use your local Claude Code session | Claude Code local authentication |
 
 For Anthropic API, setup can read the key from the environment or save a pasted
 key to `.ktx/secrets/anthropic-api-key`. `ktx.yaml` stores an `env:` or `file:`

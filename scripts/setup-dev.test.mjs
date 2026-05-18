@@ -22,6 +22,7 @@ test('runSetupDev runs phased setup without global linking', async () => {
       ['pnpm', ['install', '--frozen-lockfile']],
       ['pnpm', ['run', 'native:rebuild']],
       ['pnpm', ['run', 'build']],
+      ['pnpm', ['run', 'artifacts:build-runtime']],
       [process.execPath, ['packages/cli/dist/bin.js', 'status', '--no-input']],
     ],
   );

@@ -942,6 +942,16 @@ async function buildArtifacts(layout) {
   await assertPathExists(artifactManifestPath(layout), 'artifact manifest');
 }
 
+async function buildRuntimeWheelAssets(layout) {
+  await rm(layout.pythonDir, { recursive: true, force: true });
+  await mkdir(layout.pythonDir, { recursive: true });
+
+  const [, wheelCommand] = buildArtifactCommands(layout);
+  await runCommand(wheelCommand.command, wheelCommand.args, { cwd: wheelCommand.cwd });
+  const pythonArtifacts = await findPythonArtifacts(layout.pythonDir);
+  await copyRuntimeWheelAssets(layout, pythonArtifacts);
+}
+
 async function verifyNpmArtifacts(layout, tmpRoot) {
   for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
     await assertPathExists(layout.npmTarballs[packageInfo.name], `${packageInfo.name} tarball`);
@@ -1009,6 +1019,10 @@ async function main() {
 
   if (command === 'build') {
     await buildArtifacts(layout);
+    return;
+  }
+  if (command === 'build-runtime') {
+    await buildRuntimeWheelAssets(layout);
     return;
   }
   if (command === 'verify') {

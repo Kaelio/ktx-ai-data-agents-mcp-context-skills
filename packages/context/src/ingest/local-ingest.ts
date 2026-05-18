@@ -321,13 +321,6 @@ async function recordLocalMetabaseChildFailure(options: {
     overrideOf: null,
     provenanceRows: [],
     toolTranscripts: [],
-    postProcessor: {
-      sourceKey: 'metabase',
-      status: 'failed',
-      errors: [reason],
-      warnings: [],
-      touchedSources: [],
-    },
   };
 
   const report = await store.create({

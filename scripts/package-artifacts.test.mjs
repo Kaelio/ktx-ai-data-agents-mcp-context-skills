@@ -82,7 +82,7 @@ async function writeUploadableArtifactFixtures(layout) {
       `${packageInfo.name}-tarball`,
     ]),
     [
-      join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+      join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
       'kaelio-ktx-runtime-wheel',
     ],
   ]);
@@ -139,7 +139,7 @@ describe('packageReleaseMetadata', () => {
           ecosystem: 'python',
           packageName: 'kaelio-ktx',
           packageRoot: 'python/runtime-wheel',
-          packageVersion: '0.1.0',
+          packageVersion: '0.1.0rc1',
           private: false,
           releaseMode: 'ci-artifact-only',
         },
@@ -154,10 +154,10 @@ describe('findPythonArtifacts', () => {
   it('finds the bundled runtime wheel only', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-test-'));
     try {
-      await writeFile(join(root, 'kaelio_ktx-0.1.0-py3-none-any.whl'), '');
+      await writeFile(join(root, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'), '');
 
       assert.deepEqual(await findPythonArtifacts(root), {
-        runtimeWheel: join(root, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+        runtimeWheel: join(root, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
       });
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -210,7 +210,7 @@ describe('artifact manifest', () => {
             ecosystem: 'python',
             packageName: 'kaelio-ktx',
             packageRoot: 'python/runtime-wheel',
-            packageVersion: '0.1.0',
+            packageVersion: '0.1.0rc1',
             private: false,
             releaseMode: 'ci-artifact-only',
           },
@@ -252,8 +252,8 @@ describe('artifact manifest', () => {
             artifactKind: 'wheel',
             ecosystem: 'python',
             packageName: 'kaelio-ktx',
-            packageVersion: '0.1.0',
-            path: 'python/kaelio_ktx-0.1.0-py3-none-any.whl',
+            packageVersion: '0.1.0rc1',
+            path: 'python/kaelio_ktx-0.1.0rc1-py3-none-any.whl',
           },
         ],
       );
@@ -362,17 +362,17 @@ describe('copyRuntimeWheelAssets', () => {
     try {
       await mkdir(layout.pythonDir, { recursive: true });
       await writeFile(
-        join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+        join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
         'kaelio-ktx-runtime-wheel',
       );
 
       const assets = await copyRuntimeWheelAssets(layout, {
-        runtimeWheel: join(layout.pythonDir, 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+        runtimeWheel: join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
       });
 
       assert.equal(
         assets.wheelPath,
-        join(root, 'packages', 'cli', 'assets', 'python', 'kaelio_ktx-0.1.0-py3-none-any.whl'),
+        join(root, 'packages', 'cli', 'assets', 'python', 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
       );
       assert.equal(
         assets.manifestPath,
@@ -385,7 +385,7 @@ describe('copyRuntimeWheelAssets', () => {
         normalizedName: RUNTIME_WHEEL_NORMALIZED_NAME,
         version: RUNTIME_WHEEL_PACKAGE_VERSION,
         wheel: {
-          file: 'kaelio_ktx-0.1.0-py3-none-any.whl',
+          file: 'kaelio_ktx-0.1.0rc1-py3-none-any.whl',
           sha256: createHash('sha256')
             .update('kaelio-ktx-runtime-wheel')
             .digest('hex'),

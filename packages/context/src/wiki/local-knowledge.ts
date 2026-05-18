@@ -309,6 +309,7 @@ async function searchLocalKnowledgePagesWithSqlite(
     },
     {
       lane: 'semantic',
+      weight: 3,
       async generate(args) {
         if (!embeddingService) {
           return { status: 'skipped', candidates: [], reason: 'embedding_unconfigured' };
@@ -320,7 +321,9 @@ async function searchLocalKnowledgePagesWithSqlite(
             limit: args.laneCandidatePoolLimit,
           });
           return {
-            candidates: rows.map((row) => ({ id: row.id, rank: row.rank, rawScore: row.rawScore })),
+            candidates: rows
+              .filter((row) => row.rawScore > 0)
+              .map((row, index) => ({ id: row.id, rank: index + 1, rawScore: row.rawScore })),
           };
         } catch (error) {
           return {

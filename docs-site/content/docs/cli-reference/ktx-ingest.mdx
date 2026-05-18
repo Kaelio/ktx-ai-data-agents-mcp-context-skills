@@ -32,6 +32,7 @@ connections when you use `--all`.
 | `--query-history-window-days <days>` | BigQuery/Snowflake query-history lookback window for this run | Stored connection default |
 | `--plain` | Print plain text output | `true` |
 | `--json` | Print JSON output | `false` |
+| `--yes` | Install required managed runtime features without prompting | `false` |
 | `--no-input` | Disable interactive terminal input | — |
 
 `--fast` and `--deep` are mutually exclusive. Depth flags apply only to
@@ -43,6 +44,12 @@ requires deep ingest readiness.
 
 When `--all` selects both databases and context sources, database ingest runs
 first, then source ingest and memory updates run for source connections.
+
+Some ingest paths use the managed KTX Python runtime. Query-history ingest uses
+it for SQL analysis, and Looker source ingest uses it for Looker identifier
+parsing. In an interactive terminal, `ktx ingest` prompts before installing the
+required runtime features. Use `--yes` to install them without prompting, or
+use `--no-input` to fail fast with install guidance.
 
 ## `ktx ingest text` Options
 
@@ -104,6 +111,41 @@ notion         skipped          skipped        done           done
 Use `--json` when a script or agent needs the selected plan and per-target
 results.
 
+## Inspect source ingest traces
+
+Source ingest writes persistent JSONL traces for postmortem debugging. Plain
+ingest output prints the trace path near the report, run, and job identifiers
+when a trace is available:
+
+```text
+Report: report-abc123
+Run: run-abc123
+Job: job-abc123
+Trace: .ktx/ingest-traces/job-abc123/trace.jsonl
+```
+
+The trace file lives under the project directory at
+`.ktx/ingest-traces/<jobId>/trace.jsonl`. Each line is a JSON event with the
+job id, run id, sync id, connection id, source key, phase, event name, timing,
+state snapshot, decision context, and error details. Failed runs also write a
+stored ingest report with `status: "failed"`, `failure.phase`,
+`failure.message`, and the same trace path.
+
+Use `jq` or line-oriented tools to inspect a trace:
+
+```bash
+jq -c '. | {at, level, phase, event, durationMs, data, error}' \
+  .ktx/ingest-traces/<jobId>/trace.jsonl
+```
+
+KTX writes `debug` trace events by default. Set `KTX_INGEST_TRACE_LEVEL` to
+`error`, `info`, `debug`, or `trace` before running ingest to change the trace
+verbosity:
+
+```bash
+KTX_INGEST_TRACE_LEVEL=trace ktx ingest metabase
+```
+
 ## Common errors
 
 | Error | Cause | Recovery |
@@ -111,6 +153,7 @@ results.
 | Connection not configured | The connection id is not present in `ktx.yaml` | Add the connection with `ktx setup` or update `ktx.yaml` |
 | Deep readiness is missing | `--deep` or query history needs model, embedding, and scan-enrichment configuration | Run `ktx setup` or rerun with `--fast` |
 | Query history is unsupported | The selected database driver does not support query history | Run schema ingest without query-history flags |
+| Python runtime is missing | The selected ingest target needs runtime-backed SQL analysis or source parsing | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx dev runtime install` command |
 | No ingest target was selected | No connection id was provided and `--all` was omitted | Run `ktx ingest <connectionId>` or `ktx ingest --all` |
 | Source options were ignored | Depth and query-history flags were supplied for a non-database source | Omit database-only flags when ingesting source connections |
 | Text ingest stops early | `--fail-fast` was used and one item failed | Fix the failed item or rerun without `--fail-fast` to collect all failures |
