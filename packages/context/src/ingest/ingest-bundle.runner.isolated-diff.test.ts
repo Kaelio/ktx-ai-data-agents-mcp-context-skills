@@ -294,7 +294,8 @@ describe('IngestBundleRunner isolated diff path', () => {
         expect(trace).not.toContain('shared_worktree_path_enabled');
 
         const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0];
-        expect(reportCreate?.body.isolatedDiff).toMatchObject({
+        const reportBody = reportCreate?.body as { isolatedDiff?: unknown } | undefined;
+        expect(reportBody?.isolatedDiff).toMatchObject({
           enabled: true,
           acceptedPatches: 1,
         });

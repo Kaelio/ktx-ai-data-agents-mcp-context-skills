@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { parsedTargetTableSchema, type ParsedTargetTable } from '../../parsed-target-table.js';
 import type { MetricflowHostTable } from './semantic-models.js';
 
-export const METRICFLOW_PROJECTION_CONFIG_FILE = 'sync-config.json';
+const METRICFLOW_PROJECTION_CONFIG_FILE = 'sync-config.json';
 
-export const metricflowProjectionConfigSchema = z.object({
+const metricflowProjectionConfigSchema = z.object({
   parsedTargetTables: z.record(z.string(), parsedTargetTableSchema).default({}),
 });
 
