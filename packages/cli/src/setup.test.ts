@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
 import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
 import { runDemoTour } from './setup-demo-tour.js';
-import { formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from './setup.js';
+import { formatKtxSetupCompletionSummary, formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from './setup.js';
 
 vi.mock('./setup-demo-tour.js', () => ({
   runDemoTour: vi.fn(async () => 0),
@@ -422,6 +422,108 @@ describe('setup status', () => {
     expect(rendered).not.toContain(['Primary sources', 'configured'].join(' '));
     expect(rendered).toContain('KTX context built: no');
     expect(rendered).not.toContain('No KTX project found.');
+  });
+
+  it('formats a concise ready summary for completed agent setup', () => {
+    const rendered = formatKtxSetupCompletionSummary(
+      {
+        project: { path: tempDir, ready: true },
+        llm: { ready: true, model: 'sonnet' },
+        embeddings: { ready: true, model: 'text-embedding-3-small' },
+        databases: [{ connectionId: 'postgres-warehouse', ready: true }],
+        sources: [{ connectionId: 'dbt-main', type: 'dbt', ready: true }],
+        runtime: { required: true, ready: true, features: ['core'] },
+        context: { ready: true, status: 'completed' },
+        agents: [
+          { target: 'claude-code', scope: 'project', ready: true },
+          { target: 'claude-desktop', scope: 'global', ready: true },
+        ],
+      },
+      {
+        agentNextActions: [
+          '1. Start MCP',
+          '  Run this command before using Claude Code:',
+          '',
+          '  RUN:',
+          `  ktx mcp start --project-dir ${tempDir}`,
+          '',
+          '  If you need to stop MCP later:',
+          `  ktx mcp stop --project-dir ${tempDir}`,
+          '',
+          '2. Open Claude Code',
+          '  Open Claude Code from the KTX project directory:',
+          '',
+          '  RUN:',
+          `  cd '${tempDir}'`,
+          '  claude',
+        ].join('\n'),
+      },
+    );
+
+    expect(rendered).toContain(`Project\n  ${tempDir}`);
+    expect(rendered).toContain('Context\n  built');
+    expect(rendered).toContain('Agents configured\n  Claude Code, Claude Desktop');
+    expect(rendered).toContain('REQUIRED BEFORE USING AGENTS\n\n  1. Start MCP');
+    expect(rendered).toContain('    Run this command before using Claude Code:');
+    expect(rendered).toContain('    RUN:');
+    expect(rendered).toContain('    If you need to stop MCP later:');
+    expect(rendered).toContain(`ktx mcp stop --project-dir ${tempDir}`);
+    expect(rendered).toContain('After that, try\n  Ask your agent: "Use KTX to show me the available tables."');
+    expect(rendered).not.toContain('Verify');
+    expect(rendered).not.toContain('Project ready: yes');
+    expect(rendered).not.toContain('What you can do next');
+  });
+
+  it('prints agent next actions inside the final ready summary during full setup', async () => {
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'new',
+          agents: false,
+          target: 'claude-code',
+          skipAgents: false,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          skipSources: true,
+          databaseSchemas: [],
+        },
+        testIo.io,
+        {
+          runtime: async () => runtimeReady(tempDir),
+          context: async () => {
+            await writeKtxSetupContextState(tempDir, {
+              runId: 'setup-context-local-test',
+              status: 'completed',
+              primarySourceConnectionIds: [],
+              contextSourceConnectionIds: [],
+              reportIds: [],
+              artifactPaths: [],
+              retryableFailedTargets: [],
+              commands: contextBuildCommands(tempDir, 'setup-context-local-test'),
+            });
+            await writeKtxSetupState(tempDir, { completed_steps: ['project', 'context'] });
+            return { status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const output = testIo.stdout();
+    expect(output).toContain('Agent integration complete');
+    expect(output).toContain('Finish KTX agent setup');
+    expect(output).not.toContain('KTX project ready');
+    expect(output).toContain('REQUIRED BEFORE USING AGENTS');
+    expect(output).toContain('Run this command before using Claude Code:');
+    expect(output).toContain(`ktx mcp start --project-dir ${tempDir}`);
+    expect(output).not.toContain('Finish agent setup');
   });
 
   it('prints the setup shell intro for auto-created run mode', async () => {

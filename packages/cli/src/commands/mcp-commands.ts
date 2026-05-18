@@ -25,6 +25,17 @@ function binPath(): string {
   return fileURLToPath(new URL('../bin.js', import.meta.url));
 }
 
+function formatMcpStartResultMessage(input: { status: 'started' | 'already-running'; url: string }): string {
+  return [
+    input.status === 'started' ? `KTX MCP daemon started: ${input.url}` : `KTX MCP daemon already running: ${input.url}`,
+    '',
+    'KTX is ready for configured agents.',
+    'Open your agent for this KTX project and ask a data question, for example:',
+    '  "Use KTX to show me the available tables and metrics."',
+    '',
+  ].join('\n');
+}
+
 export function registerMcpCommands(program: Command, context: KtxCliCommandContext): void {
   const mcp = program.command('mcp').description('Run the KTX MCP HTTP server');
 
@@ -82,11 +93,7 @@ export function registerMcpCommands(program: Command, context: KtxCliCommandCont
         allowedOrigins: options.allowedOrigin,
         binPath: binPath(),
       });
-      context.io.stdout.write(
-        result.status === 'started'
-          ? `KTX MCP daemon started: ${result.url}\n`
-          : `KTX MCP daemon already running: ${result.url}\n`,
-      );
+      context.io.stdout.write(formatMcpStartResultMessage({ status: result.status, url: result.url }));
     });
 
   mcp

@@ -19,6 +19,7 @@ import {
   type KtxSetupAgentsDeps,
   readKtxAgentInstallManifest,
   runKtxSetupAgentsStep,
+  targetDisplayName,
 } from './setup-agents.js';
 import {
   type KtxSetupDatabaseDriver,
@@ -435,6 +436,35 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
   return `${lines.join('\n')}\n`;
 }
 
+export function formatKtxSetupCompletionSummary(
+  status: KtxSetupStatus,
+  options: { agentNextActions?: string } = {},
+): string {
+  const readyAgents = status.agents.filter((agent) => agent.ready).map((agent) => targetDisplayName(agent.target));
+  const lines = [
+    'Project',
+    `  ${status.project.path}`,
+    '',
+    'Context',
+    `  ${status.context.ready ? 'built' : formatContextBuilt(status.context)}`,
+    '',
+    'Agents configured',
+    `  ${readyAgents.length > 0 ? readyAgents.join(', ') : 'not installed'}`,
+  ];
+  const agentNextActions = options.agentNextActions?.trim();
+  if (agentNextActions) {
+    lines.push(
+      '',
+      'REQUIRED BEFORE USING AGENTS',
+      '',
+      ...agentNextActions.split('\n').map((line) => (line ? `  ${line}` : '')),
+    );
+  }
+  lines.push('', agentNextActions ? 'After that, try' : 'Try it');
+  lines.push('  Ask your agent: "Use KTX to show me the available tables."');
+  return lines.join('\n');
+}
+
 function setupStatusReady(status: KtxSetupStatus): boolean {
   if (!status.project.ready) {
     return false;
@@ -457,6 +487,10 @@ function setupHasContextTargets(status: KtxSetupStatus): boolean {
 
 function setupContextReady(status: KtxSetupStatus): boolean {
   return status.context.ready;
+}
+
+function shouldPrintConciseReadySummary(status: KtxSetupStatus): boolean {
+  return setupStatusReady(status) && setupContextReady(status) && status.agents.some((agent) => agent.ready);
 }
 
 function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
@@ -493,6 +527,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
   setupUi.intro('KTX setup', io);
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
+  let agentNextActions: string | undefined;
   const canShowEntryMenu =
     args.showEntryMenu === true &&
     args.inputMode !== 'disabled' &&
@@ -724,7 +759,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       } else {
         const agentsRunner =
           deps.agents ?? ((agentArgs, agentIo) => runKtxSetupAgentsStep(agentArgs, agentIo, deps.agentsDeps));
-        stepResult = await agentsRunner(
+        const agentResult = await agentsRunner(
           {
             projectDir: projectResult.projectDir,
             inputMode: args.inputMode,
@@ -734,9 +769,14 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             scope: args.agentScope ?? 'project',
             mode: 'mcp',
             skipAgents: false,
+            showNextActions: agentsRequested,
           },
           io,
         );
+        stepResult = agentResult;
+        if (agentResult.status === 'ready') {
+          agentNextActions = agentResult.nextActions;
+        }
       }
 
       if (stepResult.status === 'failed' || stepResult.status === 'missing-input') {
@@ -779,19 +819,30 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
   const status = await readKtxSetupStatus(projectResult.projectDir, { cliVersion: args.cliVersion });
   const focusedOnAgents = args.agents || entryAction === 'agents';
   if (!focusedOnAgents) {
-    setupUi.note(formatKtxSetupStatus(status).trimEnd(), 'Project status', io, {
-      format: (line) => line,
-    });
-    setupUi.note(
-      formatSetupNextStepLines({
-        setupReady: setupStatusReady(status),
-        hasContextTargets: setupHasContextTargets(status),
-        contextReady: setupContextReady(status),
-        agentIntegrationReady: status.agents.some((agent) => agent.ready),
-      }).join('\n'),
-      'What you can do next',
-      io,
-    );
+    if (shouldPrintConciseReadySummary(status)) {
+      setupUi.note(
+        formatKtxSetupCompletionSummary(status, { agentNextActions }),
+        agentNextActions ? 'Finish KTX agent setup' : 'KTX project ready',
+        io,
+        {
+          format: (line) => line,
+        },
+      );
+    } else {
+      setupUi.note(formatKtxSetupStatus(status).trimEnd(), 'Project status', io, {
+        format: (line) => line,
+      });
+      setupUi.note(
+        formatSetupNextStepLines({
+          setupReady: setupStatusReady(status),
+          hasContextTargets: setupHasContextTargets(status),
+          contextReady: setupContextReady(status),
+          agentIntegrationReady: status.agents.some((agent) => agent.ready),
+        }).join('\n'),
+        'What you can do next',
+        io,
+      );
+    }
   }
   return 0;
 }

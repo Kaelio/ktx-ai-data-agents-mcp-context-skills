@@ -43,7 +43,7 @@ function commandLines(commands: ReadonlyArray<{ command: string; description: st
 
 export function formatNextStepLines(indent = '  '): string[] {
   return [
-    `${indent}KTX context is ready for agents. Open your coding agent in this directory and ask a data question.`,
+    `${indent}KTX context is ready for agents. Open your coding agent from the KTX project directory and ask a data question.`,
     `${indent}Verify with:`,
     ...commandLines(KTX_NEXT_STEP_DIRECT_COMMANDS, indent),
   ];
