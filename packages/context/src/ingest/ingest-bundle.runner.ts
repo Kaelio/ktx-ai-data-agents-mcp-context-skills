@@ -1337,6 +1337,7 @@ export class IngestBundleRunner {
         });
 
         if (adapter.project) {
+          const preProjectionSha = await sessionWorktree.git.revParseHead();
           const projection = await traceTimed(
             runTrace,
             'projection',
@@ -1379,7 +1380,10 @@ export class IngestBundleRunner {
                   this.deps.storage.systemGitAuthor.name,
                   this.deps.storage.systemGitAuthor.email,
                 );
-          isolatedDiffSummary.projectionSha = projectionCommit.created ? projectionCommit.commitHash : null;
+          isolatedDiffSummary.projectionSha =
+            projectionCommit.created || projectionCommit.commitHash !== preProjectionSha
+              ? projectionCommit.commitHash
+              : null;
           await runTrace.event('debug', 'projection', 'deterministic_projection_committed', {
             projectionSha: isolatedDiffSummary.projectionSha,
             touchedSources: projectionTouchedSources,
@@ -1648,8 +1652,10 @@ export class IngestBundleRunner {
             throw new Error(`isolated diff semantic conflict in ${outcome.unitKey}: ${integration.reason}`);
           }
           activeFailureDetails = undefined;
-          isolatedDiffSummary.acceptedPatches += 1;
-          integratedPatchCount += 1;
+          if (integration.touchedPaths.length > 0) {
+            isolatedDiffSummary.acceptedPatches += 1;
+            integratedPatchCount += 1;
+          }
           emitStageProgress(
             'integration',
             83,

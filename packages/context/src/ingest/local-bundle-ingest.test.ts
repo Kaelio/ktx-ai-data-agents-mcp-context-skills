@@ -694,6 +694,14 @@ describe('canonical local ingest', () => {
         ],
       },
     });
+    expect(result.report.body.isolatedDiff).toMatchObject({
+      enabled: true,
+      acceptedPatches: 0,
+      projectionSha: expect.any(String),
+    });
+
+    const projectedSourcePath = join(metricflowProject.projectDir, 'semantic-layer/warehouse/orders.yaml');
+    await expect(readFile(projectedSourcePath, 'utf-8')).resolves.toContain('name: orders');
 
     const stagedRawPath = join(
       metricflowProject.projectDir,
