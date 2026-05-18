@@ -145,6 +145,7 @@ interface FinalizationOverrideReplay {
   priorJobId: string;
   priorRunId: string;
   priorSyncId: string;
+  evictionRawPaths: string[];
 }
 ```
 
@@ -159,9 +160,13 @@ module layout, but the contract must preserve these semantics:
 - Outside override replay, `stageIndex` is the canonical runner index for
   accepted work-unit actions, touched sources, evictions, reconciliation records,
   and artifact resolutions visible to the current run.
-- In override replay, `stageIndex` is a prior-run replay index. It may contain
-  prior-run work-unit actions, touched sources, and artifact records, and
-  adapters must not treat those entries as current-run evidence.
+- In override replay, `stageIndex` is a prior-run replay index for work-unit
+  facts. It may contain prior-run work-unit actions, touched sources, and
+  artifact records, and adapters must not treat those entries as current-run
+  evidence. The runner must not replay prior-report `evictionsApplied` as
+  current-run eviction evidence. If override reconciliation records eviction
+  decisions, those records are fresh current-run `stageIndex.evictionsApplied`
+  entries.
 - `workUnitOutcomes` contains only work units executed in the current run. It
   is empty when override replay skips source work units.
 - `reconciliationActions` contains only accepted reconciliation writes emitted
@@ -170,14 +175,21 @@ module layout, but the contract must preserve these semantics:
 - `overrideReplay` being present is the canonical signal that source work units
   did not produce current-run evidence unless another context field explicitly
   carries fresh current-run deterministic input.
+- `overrideReplay.evictionRawPaths` contains the deleted raw paths loaded from
+  the prior report's `evictionInputs` for the reused raw snapshot. It is the
+  only override-replay raw-path allowlist for removed-from-snapshot provenance.
+  It is not, by itself, proof that a particular durable artifact is stale or was
+  observed by current-run work units.
 - `actions` in `FinalizationResult` are descriptive records for finalization
   writes that the adapter already performed. The runner must not re-apply them.
   When finalization actions are intended to create provenance rows, they must
   carry defensible `rawPaths`: current-snapshot paths from the current raw
-  snapshot, or removed-from-snapshot paths derived from `stageIndex.evictionsApplied`
-  or the equivalent override-replay eviction metadata. Finalization actions
-  without defensible raw-path attribution are still reported, but the runner must
-  exclude them from provenance and surface that exclusion explicitly.
+  snapshot, removed-from-snapshot paths from current-run
+  `stageIndex.evictionsApplied`, or removed-from-snapshot paths from
+  `overrideReplay.evictionRawPaths` when override replay is present.
+  Finalization actions without defensible raw-path attribution are still
+  reported, but the runner must exclude them from provenance and surface that
+  exclusion explicitly.
 - It cannot mutate the main project worktree directly.
 - The finalization context must not pass a root-scoped service that can bypass
   the integration worktree. `workdir` is the durable write boundary. If a future
@@ -191,24 +203,35 @@ triage or evidence-indexing support.
 ## Override replay
 
 Override ingest remains a replay of a prior raw snapshot with forced
-reconciliation. It does not execute source work units, so finalization must not
-silently assume fresh work-unit evidence exists.
+reconciliation. It does not execute source work units or call `adapter.chunk()`
+in this design, so finalization must not silently assume fresh work-unit
+evidence exists.
 
 The runner should still enter the finalization phase for adapters that
 implement `finalize?()`, but it must pass explicit override metadata. In that
-mode, `workUnitOutcomes` is empty, `parseArtifacts` is absent unless the runner
-created fresh parse artifacts in the current run, `stageIndex` comes from the
-prior report, and `reconciliationActions` contains only new override
-reconciliation actions.
+mode, `workUnitOutcomes` is empty, `parseArtifacts` is absent,
+`overrideReplay.evictionRawPaths` is populated from the prior report's
+`evictionInputs`, `stageIndex` comes from the prior report with prior
+`evictionsApplied` excluded, and `reconciliationActions` contains only new
+override reconciliation actions.
+
+If a future implementation intentionally re-parses the materialized override
+raw snapshot, it must expose that fact through an explicit override-safe context
+field instead of relying on `parseArtifacts` alone. `parseArtifacts` by itself
+is never current work-unit evidence in override replay and never authorizes
+historic-SQL whole-run cleanup.
 
 Adapters must treat missing current-run deterministic inputs as a no-op, not as
 negative evidence. For historic SQL, override replay must not mark tables stale,
 mark pattern pages stale, or archive pattern pages from an empty current-run
-evidence directory. Any override-safe finalization must be derived from the
-materialized raw snapshot or explicit prior-report data. In particular,
-prior-run `stageIndex.workUnits[*].actions`, prior-run touched sources, and
-prior-run artifact records are not proof that the current override run observed
-or failed to observe those artifacts.
+evidence directory. Whole-run cleanup can run only when `overrideReplay` is
+absent and current-run work-unit evidence exists, or when a future explicit
+override-safe context field names equivalent facts. Any override-safe
+finalization must be derived from the materialized raw snapshot or explicit
+prior-report data. In particular, prior-run
+`stageIndex.workUnits[*].actions`, prior-run touched sources, and prior-run
+artifact records are not proof that the current override run observed or failed
+to observe those artifacts.
 
 ## Runner responsibilities
 
@@ -229,6 +252,18 @@ scope from the diff, cross-check the adapter declaration against that diff, and
 fail the run on under-reporting or over-reporting that would make wiki-SL-ref
 repair, target-policy checks, final gates, reports, traces, or provenance use a
 different artifact set from the actual finalization commit.
+
+The runner-derived semantic-layer scope must include logical
+`TouchedSlSource` tuples, not only file paths. Standalone semantic-layer files
+under `semantic-layer/<connectionId>/<sourceName>.yaml` can map structurally to
+`{ connectionId, sourceName }`. Aggregate semantic-layer files, including
+`semantic-layer/<connectionId>/_schema/*.yaml`, must be resolved by comparing
+the pre-finalization and post-finalization materialized semantic-layer sources
+with the worktree-scoped semantic-layer parser/loader. Wiki page keys continue
+to map structurally from `wiki/global/<pageKey>.md`. If the runner cannot
+resolve a changed semantic-layer path to logical touched sources with its own
+resolver, the run must fail; it must not fall back to the adapter declaration as
+the downstream scope.
 
 `wiki_sl_ref_repair` remains a runner mechanic, not an adapter method. It runs
 after finalization and before final gates, and it uses the normal target
@@ -376,16 +411,22 @@ The implementation is complete when these conditions are true:
 - The runner invokes `finalize?()` after reconciliation and before final gates.
 - Finalization changes are committed in the integration worktree and included
   in target-policy checks, final gates, reports, traces, and provenance inputs.
-- Override replay passes explicit override metadata to finalization, leaves
-  `workUnitOutcomes` empty when work units are skipped, and proves historic-SQL
-  finalization does not use prior-run `stageIndex` records as current-run
-  evidence or stale/archive artifacts from missing current-run evidence.
-- Finalization provenance uses current raw paths or eviction-derived raw paths,
-  and actions without defensible raw-path attribution are reported as excluded
-  from provenance.
+- Override replay passes explicit override metadata to finalization, including
+  `overrideReplay.evictionRawPaths`; leaves `workUnitOutcomes` empty when work
+  units are skipped; omits `parseArtifacts` unless a future explicit
+  override-safe input is added; and proves historic-SQL finalization does not
+  use prior-run `stageIndex` records as current-run evidence or stale/archive
+  artifacts from missing current-run evidence.
+- Finalization provenance uses current raw paths, current-run
+  `stageIndex.evictionsApplied`, or `overrideReplay.evictionRawPaths`, and
+  actions without defensible raw-path attribution are reported as excluded from
+  provenance.
 - The runner derives finalization touched paths, wiki page keys, and
-  semantic-layer scope from the integration-worktree git diff, cross-checks the
-  adapter's touched-artifact declaration, and fails on mismatches.
+  semantic-layer scope from the integration-worktree git diff, resolves
+  aggregate semantic-layer files such as `_schema/*.yaml` to logical touched
+  sources with the runner's own semantic-layer parser/loader, cross-checks the
+  adapter's touched-artifact declaration, and fails on mismatches or
+  unresolvable changed semantic-layer paths.
 - The runner fails when finalization modifies a path already changed by accepted
   work-unit or reconciliation writes in the same run.
 - `wiki_sl_ref_repair` remains a runner-owned step after finalization and
