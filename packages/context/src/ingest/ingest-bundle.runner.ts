@@ -435,24 +435,6 @@ export class IngestBundleRunner {
     };
   }
 
-  private buildFailedWorkUnitOutcome(wu: WorkUnit, error: unknown): WorkUnitOutcome {
-    return {
-      unitKey: wu.unitKey,
-      status: 'failed',
-      reason: error instanceof Error ? error.message : String(error),
-      preSha: '',
-      postSha: '',
-      actions: [],
-      touchedSlSources: [],
-      slDisallowed: wu.slDisallowed,
-      slDisallowedReason: wu.slDisallowedReason,
-    };
-  }
-
-  private formatWorkUnitFailure(outcome: WorkUnitOutcome): string {
-    return `WorkUnit ${outcome.unitKey} failed: ${outcome.reason ?? 'unknown failure'}`;
-  }
-
   private filterWorkUnitsForTriage(
     workUnits: WorkUnit[],
     triageResult: { enabled: boolean; fullRawPaths: Set<string> } | null,
@@ -461,10 +443,6 @@ export class IngestBundleRunner {
       return workUnits;
     }
     return workUnits.filter((wu) => wu.rawFiles.some((rawPath) => triageResult.fullRawPaths.has(rawPath)));
-  }
-
-  private isSharedWorktreeFallbackEnabled(sourceKey: string): boolean {
-    return (this.deps.settings.sharedWorktreeSourceKeys ?? []).includes(sourceKey);
   }
 
   private createTrace(job: IngestBundleJob): IngestTraceWriter {
@@ -1313,7 +1291,7 @@ export class IngestBundleRunner {
         workUnitCount: memoryFlowPlannedWorkUnits.length,
         evictionCount: eviction?.deletedRawPaths.length ?? 0,
       });
-      const isolatedDiffEnabled = !overrideReport && !this.isSharedWorktreeFallbackEnabled(job.sourceKey);
+      const isolatedDiffEnabled = !overrideReport;
       const isolatedDiffSummary = {
         enabled: isolatedDiffEnabled,
         integrationWorktreePath: isolatedDiffEnabled ? sessionWorktree.workdir : undefined,
@@ -1339,7 +1317,7 @@ export class IngestBundleRunner {
       let projectionChangedWikiPageKeys: string[] = [];
       let projectionTouchedPaths: string[] = [];
 
-      if (!overrideReport && isolatedDiffEnabled) {
+      if (!overrideReport) {
         await runTrace.event('info', 'routing', 'isolated_diff_enabled', {
           sourceKey: job.sourceKey,
           workUnitCount: workUnits.length,
@@ -1674,260 +1652,6 @@ export class IngestBundleRunner {
           );
         }
 
-      } else if (!overrideReport) {
-        await runTrace.event('info', 'routing', 'shared_worktree_path_enabled', {
-          sourceKey: job.sourceKey,
-          reason: 'explicit_private_fallback',
-        });
-        const workUnitSettings = {
-          maxConcurrency: this.deps.settings.workUnitMaxConcurrency ?? 1,
-          stepBudget: this.deps.settings.workUnitStepBudget ?? 40,
-          failureMode: this.deps.settings.workUnitFailureMode ?? 'continue',
-        };
-        const limitWorkUnit = pLimit(workUnitSettings.maxConcurrency);
-        const workUnitOutcomesByIndex: WorkUnitOutcome[] = [];
-        let completedWorkUnits = 0;
-        let abortRequested = false;
-
-        const runSingleWorkUnit = async (wu: WorkUnit): Promise<WorkUnitOutcome> => {
-          const session: CaptureSession = {
-            userId: 'system',
-            chatId: wu.unitKey,
-            userMessage: `ingest(${job.sourceKey}) WU=${wu.unitKey}`,
-            connectionId: job.connectionId,
-            userScopedEnabled: false,
-            forceGlobalScope: true,
-            touchedSlSources: createTouchedSlSources(),
-            preHead: sessionWorktree.baseSha,
-          };
-          const sessionActions: MemoryAction[] = [];
-
-          const scopedWikiService = this.deps.wikiService.forWorktree(sessionWorktree.workdir);
-          const scopedSemanticLayerService = this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir);
-
-          const toolSession: ToolSession = {
-            connectionId: job.connectionId,
-            isWorktreeScoped: true,
-            preHead: sessionWorktree.baseSha,
-            touchedSlSources: session.touchedSlSources,
-            actions: sessionActions,
-            allowedRawPaths: new Set(wu.rawFiles),
-            allowedConnectionNames: new Set(slConnectionIds),
-            semanticLayerService: scopedSemanticLayerService,
-            wikiService: scopedWikiService,
-            configService: sessionWorktree.config,
-            gitService: sessionWorktree.git,
-            ingest: ingestToolMetadata,
-          };
-
-          const slValidationDeps: SlValidationDeps = {
-            semanticLayerService: scopedSemanticLayerService,
-            connections: this.deps.connections,
-            configService: sessionWorktree.config,
-            gitService: sessionWorktree.git,
-            slSourcesRepository: this.deps.slSourcesRepository,
-            probeRowCount: this.deps.settings.probeRowCount,
-          };
-
-          const wuToolset = this.deps.toolsetFactory.createIngestWuToolset(toolSession, {
-            includeContextEvidenceTools: adapter.evidenceIndexing === 'documents' && !!contextReport,
-          });
-          const wuToolContext: ToolContext = {
-            sourceId: 'ingest',
-            messageId: `${job.jobId}-wu-${wu.unitKey}`,
-            userId: 'system',
-            connectionId: job.connectionId,
-            ingest: ingestToolMetadata,
-            session: toolSession,
-          };
-
-          const skillsLoadedPerWu: string[] = [];
-          const loadSkillTool: KtxRuntimeToolSet = {
-            load_skill: {
-              name: 'load_skill',
-              description:
-                'Load a skill to get specialized instructions. Call this when a skill listed in the system prompt matches the current task.',
-              inputSchema: z.object({ name: z.string() }),
-              execute: async ({ name }) => {
-                const skill = await this.deps.skillsRegistry.getSkill(name, 'memory_agent');
-                if (!skill) {
-                  const available =
-                    (await this.deps.skillsRegistry.listSkills('memory_agent')).map((s) => s.name).join(', ') ||
-                    '(none)';
-                  return { markdown: `Skill "${name}" not available. Available: ${available}` };
-                }
-                const body = await readFile(join(skill.path, 'SKILL.md'), 'utf-8');
-                if (!skillsLoadedPerWu.includes(skill.name)) {
-                  skillsLoadedPerWu.push(skill.name);
-                }
-                const structured = {
-                  name: skill.name,
-                  skillDirectory: skill.path,
-                  content: this.deps.skillsRegistry.stripFrontmatter(body),
-                };
-                return {
-                  markdown: `# ${structured.name}\n\n${structured.content}`,
-                  structured,
-                };
-              },
-            },
-          };
-
-          const priorProvenance = await this.deps.provenance.findLatestArtifactsForRawPaths(
-            job.connectionId,
-            job.sourceKey,
-            wu.rawFiles,
-          );
-          const wuEmitUnmappedFallbackTool = {
-            emit_unmapped_fallback: createRuntimeToolDescriptorFromAiTool(
-              'emit_unmapped_fallback',
-              createEmitUnmappedFallbackTool({
-                stageIndex,
-                allowedPaths: new Set(wu.rawFiles),
-                tableRefExists: (tableRef) =>
-                  this.tableRefExistsInSemanticLayer(scopedSemanticLayerService, slConnectionIds, tableRef),
-              }),
-            ),
-          };
-
-          const systemPrompt = buildWuSystemPrompt({
-            baseFraming,
-            skillsPrompt,
-            syncId,
-            sourceKey: job.sourceKey,
-            canonicalPins,
-          });
-
-          memoryFlow?.emit({
-            type: 'work_unit_started',
-            unitKey: wu.unitKey,
-            skills: wuSkillNames,
-            stepBudget: workUnitSettings.stepBudget,
-          });
-          return executeWorkUnit(
-            {
-              sessionWorktreeGit: sessionWorktree.git,
-              agentRunner: this.deps.agentRunner,
-              validateTouchedSources: (touched) =>
-                validateWuTouchedSources({ ...slValidationDeps, slValidator: this.deps.slValidator }, touched),
-              validateWikiRefs: (actions) =>
-                findDanglingWikiRefsForActions({
-                  wikiService: scopedWikiService,
-                  scope: 'GLOBAL',
-                  scopeId: null,
-                  actions,
-                }),
-              resetHardTo: (targetSha) => sessionWorktree.git.resetHardTo(targetSha),
-              buildSystemPrompt: () => systemPrompt,
-              buildUserPrompt: (wuInner) => buildWuUserPrompt({ wu: wuInner, wikiIndex, slIndex, priorProvenance }),
-              buildToolSet: (wuInner) =>
-                wrapToolsWithLogger(
-                  buildWuToolSet({
-                    sourceKey: job.sourceKey,
-                    stagedDir,
-                    wu: wuInner,
-                    loadSkillTool,
-                    emitUnmappedFallbackTool: wuEmitUnmappedFallbackTool,
-                    toolsetTools: wuToolset.toRuntimeTools(wuToolContext),
-                  }),
-                  join(transcriptDir, `${wuInner.unitKey}.jsonl`),
-                  wuInner.unitKey,
-                  { onEntry: recordTranscriptEntry(join(transcriptDir, `${wuInner.unitKey}.jsonl`)) },
-                ),
-              captureSession: session,
-              sessionActions,
-              modelRole: 'candidateExtraction',
-              stepBudget: workUnitSettings.stepBudget,
-              sourceKey: job.sourceKey,
-              connectionId: job.connectionId,
-              jobId: job.jobId,
-              toolFailureCount: (unitKey) => transcriptSummaries.get(unitKey)?.fatalErrorCount ?? 0,
-              onStepFinish: ({ stepIndex, stepBudget }) => {
-                memoryFlow?.emit({ type: 'work_unit_step', unitKey: wu.unitKey, stepIndex, stepBudget });
-              },
-            },
-            wu,
-          );
-        };
-
-        if (workUnits.length === 0) {
-          await stage3?.updateProgress(1.0, '0 of 0 work units complete');
-        }
-
-        try {
-          await Promise.all(
-            workUnits.map((wu, index) =>
-              limitWorkUnit(async () => {
-                if (abortRequested) {
-                  return;
-                }
-
-                let outcome: WorkUnitOutcome;
-                try {
-                  outcome = await runSingleWorkUnit(wu);
-                } catch (error) {
-                  outcome = this.buildFailedWorkUnitOutcome(wu, error);
-                }
-
-                workUnitOutcomesByIndex[index] = outcome;
-                for (const action of outcome.actions) {
-                  memoryFlow?.emit({
-                    type: 'candidate_action',
-                    unitKey: outcome.unitKey,
-                    target: action.target,
-                    action: action.type,
-                    key: action.key,
-                  });
-                }
-                memoryFlow?.emit({
-                  type: 'work_unit_finished',
-                  unitKey: outcome.unitKey,
-                  status: outcome.status,
-                  ...(outcome.reason ? { reason: outcome.reason } : {}),
-                });
-                completedWorkUnits += 1;
-                await stage3?.updateProgress(
-                  completedWorkUnits / workUnits.length,
-                  `${completedWorkUnits} of ${workUnits.length} work units complete`,
-                );
-
-                if (outcome.status === 'failed') {
-                  this.logger.warn(`[ingest-bundle] WU=${outcome.unitKey} failed: ${outcome.reason}`);
-                  if (workUnitSettings.failureMode === 'abort') {
-                    abortRequested = true;
-                    throw new Error(this.formatWorkUnitFailure(outcome));
-                  }
-                }
-              }),
-            ),
-          );
-        } catch (error) {
-          await this.deps.runs.markFailed(runRow.id);
-          throw error;
-        }
-
-        workUnitOutcomes.push(
-          ...workUnitOutcomesByIndex.filter((outcome): outcome is WorkUnitOutcome => Boolean(outcome)),
-        );
-        failedWorkUnits.push(
-          ...workUnitOutcomes.filter((outcome) => outcome.status === 'failed').map((outcome) => outcome.unitKey),
-        );
-        latestWorkUnits = workUnitOutcomes;
-        latestFailedWorkUnits = failedWorkUnits;
-
-        // Complete the typed Stage Index from the outcomes once, and use it for
-        // Stage 4, provenance writes (Phase G), and the report body (Phase F3).
-        stageIndex.workUnits = workUnitOutcomes.map((o) => ({
-          unitKey: o.unitKey,
-          rawFiles: workUnits.find((w) => w.unitKey === o.unitKey)?.rawFiles ?? [],
-          status: o.status,
-          reason: o.reason,
-          actions: o.actions,
-          touchedSlSources: o.touchedSlSources,
-          slDisallowed: o.slDisallowed,
-          slDisallowedReason: o.slDisallowedReason,
-        }));
-        latestReportWorkUnits = this.toReportWorkUnits(stageIndex);
       }
       const carryForwardResult =
         contextReport && this.deps.contextCandidateCarryforward

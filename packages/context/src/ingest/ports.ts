@@ -143,7 +143,6 @@ export interface IngestSettingsPort {
   workUnitMaxConcurrency?: number;
   workUnitStepBudget?: number;
   workUnitFailureMode?: 'abort' | 'continue';
-  sharedWorktreeSourceKeys?: string[];
   ingestTraceLevel?: IngestTraceLevel;
 }
 

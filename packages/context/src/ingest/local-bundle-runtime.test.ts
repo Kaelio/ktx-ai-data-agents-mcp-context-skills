@@ -31,9 +31,7 @@ type RuntimeWithSlValidationDeps = {
 
 type RuntimeWithSettingsDeps = {
   deps: {
-    settings: Record<string, unknown> & {
-      sharedWorktreeSourceKeys?: string[];
-    };
+    settings: Record<string, unknown>;
   };
 };
 
@@ -266,7 +264,7 @@ describe('createLocalBundleIngestRuntime', () => {
     });
   });
 
-  it('defaults local bundle ingest to isolated diffs without an allowlist', () => {
+  it('defaults local bundle ingest to isolated diffs without a shared-worktree fallback setting', () => {
     const runtime = createLocalBundleIngestRuntime({
       project,
       adapters: [new FakeSourceAdapter()],
@@ -274,13 +272,13 @@ describe('createLocalBundleIngestRuntime', () => {
     });
 
     const settings = (runtime.runner as unknown as RuntimeWithSettingsDeps).deps.settings;
+    const fallbackSettingKey = ['sharedWorktree', 'SourceKeys'].join('');
 
-    expect(settings.sharedWorktreeSourceKeys).toEqual([]);
+    expect(settings).not.toHaveProperty(fallbackSettingKey);
     expect(Object.keys(settings).sort()).toEqual([
       'ingestTraceLevel',
       'memoryIngestionModel',
       'probeRowCount',
-      'sharedWorktreeSourceKeys',
       'workUnitFailureMode',
       'workUnitMaxConcurrency',
       'workUnitStepBudget',

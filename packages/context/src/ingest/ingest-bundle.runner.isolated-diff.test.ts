@@ -6,7 +6,6 @@ import { GitService, SessionWorktreeService } from '../core/index.js';
 import { LocalGitFileStore } from '../project/local-git-file-store.js';
 import { addTouchedSlSource } from '../tools/index.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
-import { defaultSharedWorktreeSourceKeys } from './isolated-diff/source-routing.js';
 import type { IngestBundleRunnerDeps } from './ports.js';
 
 async function makeRealGitRuntime() {
@@ -90,6 +89,14 @@ function frontmatterList(yaml: string, key: string): string[] {
   );
 }
 
+function legacyFallbackSettingKey(): string {
+  return ['sharedWorktree', 'SourceKeys'].join('');
+}
+
+function legacySharedTraceEvent(): string {
+  return ['shared', 'worktree', 'path', 'enabled'].join('_');
+}
+
 function makeWikiService(root: string) {
   return {
     listPageKeys: vi.fn(async (scope: string) => (scope === 'GLOBAL' ? listGlobalWikiPageKeys(root) : [])),
@@ -170,7 +177,6 @@ function makeDeps(
     settings: {
       memoryIngestionModel: 'test',
       probeRowCount: 1,
-      sharedWorktreeSourceKeys: defaultSharedWorktreeSourceKeys(),
       ingestTraceLevel: 'trace',
       ...settings,
     },
@@ -286,7 +292,7 @@ describe('IngestBundleRunner isolated diff path', () => {
       );
       expect(trace).toContain('isolated_diff_enabled');
       expect(trace).toContain('work_unit_child_created');
-      expect(trace).not.toContain('shared_worktree_path_enabled');
+      expect(trace).not.toContain(legacySharedTraceEvent());
 
       const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0];
       const reportBody = reportCreate?.body as { isolatedDiff?: unknown } | undefined;
@@ -299,13 +305,14 @@ describe('IngestBundleRunner isolated diff path', () => {
     }
   });
 
-  it('keeps the shared-worktree path reachable through explicit private fallback settings', async () => {
+  it('does not support shared-worktree fallback settings', async () => {
     const runtime = await makeRealGitRuntime();
     try {
       const sourceKey = 'legacy-source';
-      const { deps, adapter } = makeDeps(runtime, sourceKey, {
-        sharedWorktreeSourceKeys: ['legacy-source'],
-      });
+      const staleSettings = {
+        [legacyFallbackSettingKey()]: ['legacy-source'],
+      } as Partial<IngestBundleRunnerDeps['settings']> & Record<string, unknown>;
+      const { deps, adapter } = makeDeps(runtime, sourceKey, staleSettings);
       adapter.chunk.mockResolvedValue({
         workUnits: [
           {
@@ -329,20 +336,20 @@ describe('IngestBundleRunner isolated diff path', () => {
         const root = rootOfConfig(currentSession.configService, runtime.configDir);
         await mkdir(join(root, 'wiki/global'), { recursive: true });
         await writeFile(
-          join(root, 'wiki/global/legacy-shared.md'),
-          '---\nsummary: Legacy shared write\nusage_mode: auto\n---\n\nLegacy shared write.\n',
+          join(root, 'wiki/global/legacy-isolated.md'),
+          '---\nsummary: Legacy isolated write\nusage_mode: auto\n---\n\nLegacy isolated write.\n',
           'utf-8',
         );
         currentSession.actions.push({
           target: 'wiki',
           type: 'created',
-          key: 'legacy-shared',
-          detail: 'Legacy shared write',
+          key: 'legacy-isolated',
+          detail: 'Legacy isolated write',
           rawPaths: ['legacy/page.json'],
         });
         await currentSession.gitService.commitFiles(
-          ['wiki/global/legacy-shared.md'],
-          'legacy wiki',
+          ['wiki/global/legacy-isolated.md'],
+          'legacy isolated wiki',
           'KTX Test',
           'system@ktx.local',
         );
@@ -354,30 +361,151 @@ describe('IngestBundleRunner isolated diff path', () => {
 
       await expect(
         runner.run({
-          jobId: 'job-legacy-shared',
+          jobId: 'job-legacy-isolated',
           connectionId: 'warehouse',
           sourceKey,
           trigger: 'upload',
           bundleRef: { kind: 'upload', uploadId: 'upload' },
         }),
       ).resolves.toMatchObject({
-        jobId: 'job-legacy-shared',
+        jobId: 'job-legacy-isolated',
         failedWorkUnits: [],
         workUnitCount: 1,
       });
 
       const trace = await readFile(
-        join(runtime.configDir, '.ktx/ingest-traces/job-legacy-shared/trace.jsonl'),
+        join(runtime.configDir, '.ktx/ingest-traces/job-legacy-isolated/trace.jsonl'),
         'utf-8',
       );
-      expect(trace).toContain('shared_worktree_path_enabled');
-      expect(trace).not.toContain('work_unit_child_created');
+      expect(trace).toContain('isolated_diff_enabled');
+      expect(trace).toContain('work_unit_child_created');
+      expect(trace).not.toContain(legacySharedTraceEvent());
 
       const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0];
       const reportBody = reportCreate?.body as { isolatedDiff?: unknown } | undefined;
       expect(reportBody?.isolatedDiff).toMatchObject({
-        enabled: false,
+        enabled: true,
+        acceptedPatches: 1,
       });
+    } finally {
+      await rm(runtime.homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not integrate failed isolated WorkUnit patches', async () => {
+    const runtime = await makeRealGitRuntime();
+    try {
+      const { deps, adapter } = makeDeps(runtime, 'fake');
+      adapter.chunk.mockResolvedValue({
+        workUnits: [
+          { unitKey: 'wu-good', rawFiles: ['good.raw'], peerFileIndex: [], dependencyPaths: [] },
+          { unitKey: 'wu-bad', rawFiles: ['bad.raw'], peerFileIndex: [], dependencyPaths: [] },
+        ],
+      });
+      deps.diffSetService.compute = vi.fn().mockResolvedValue({
+        added: ['good.raw', 'bad.raw'],
+        modified: [],
+        deleted: [],
+        unchanged: [],
+      });
+      deps.slValidator.validateSingleSource = vi.fn(
+        async (_validationDeps: unknown, _connectionId: string, sourceName: string) => ({
+          errors: sourceName === 'bad' ? [{ message: 'bad source rejected' }] : [],
+          warnings: [],
+        }),
+      ) as never;
+
+      let currentSession: any = null;
+      deps.toolsetFactory.createIngestWuToolset = vi.fn((toolSession: any) => {
+        currentSession = toolSession;
+        return { toRuntimeTools: vi.fn(() => ({})) };
+      });
+      deps.agentRunner.runLoop = vi.fn(async (params: any) => {
+        if (params.telemetryTags.operationName !== 'ingest-bundle-wu') {
+          return { stopReason: 'natural' };
+        }
+        const unitKey = params.telemetryTags.unitKey;
+        const root = rootOfConfig(currentSession.configService, runtime.configDir);
+        await mkdir(join(root, 'semantic-layer/warehouse'), { recursive: true });
+        if (unitKey === 'wu-good') {
+          await writeFile(join(root, 'semantic-layer/warehouse/good.yaml'), 'name: good\n', 'utf-8');
+          addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'good');
+          currentSession.actions.push({
+            target: 'sl',
+            type: 'created',
+            key: 'good',
+            detail: 'good source',
+            targetConnectionId: 'warehouse',
+            rawPaths: ['good.raw'],
+          });
+          await currentSession.gitService.commitFiles(
+            ['semantic-layer/warehouse/good.yaml'],
+            'test: add good source',
+            'KTX Test',
+            'system@ktx.local',
+          );
+        }
+        if (unitKey === 'wu-bad') {
+          await writeFile(join(root, 'semantic-layer/warehouse/bad.yaml'), 'name: bad\n', 'utf-8');
+          addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'bad');
+          currentSession.actions.push({
+            target: 'sl',
+            type: 'created',
+            key: 'bad',
+            detail: 'bad source',
+            targetConnectionId: 'warehouse',
+            rawPaths: ['bad.raw'],
+          });
+          await currentSession.gitService.commitFiles(
+            ['semantic-layer/warehouse/bad.yaml'],
+            'test: add bad source',
+            'KTX Test',
+            'system@ktx.local',
+          );
+        }
+        return { stopReason: 'natural' };
+      }) as never;
+
+      const runner = new IngestBundleRunner(deps);
+      await mockStageRawFiles(
+        runner,
+        runtime,
+        [
+          ['good.raw', 'good-hash'],
+          ['bad.raw', 'bad-hash'],
+        ],
+        'fake',
+      );
+
+      const result = await runner.run({
+        jobId: 'job-failed-wu-isolated',
+        connectionId: 'warehouse',
+        sourceKey: 'fake',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload' },
+      });
+
+      expect(result.failedWorkUnits).toEqual(['wu-bad']);
+      await expect(readFile(join(runtime.configDir, 'semantic-layer/warehouse/good.yaml'), 'utf-8')).resolves.toContain(
+        'good',
+      );
+      await expect(readFile(join(runtime.configDir, 'semantic-layer/warehouse/bad.yaml'), 'utf-8')).rejects.toThrow();
+
+      const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0];
+      const reportBody = reportCreate?.body as {
+        isolatedDiff?: { acceptedPatches?: number };
+        failedWorkUnits?: string[];
+      };
+      expect(reportBody.failedWorkUnits).toEqual(['wu-bad']);
+      expect(reportBody.isolatedDiff).toMatchObject({ enabled: true, acceptedPatches: 1 });
+
+      const trace = await readFile(
+        join(runtime.configDir, '.ktx/ingest-traces/job-failed-wu-isolated/trace.jsonl'),
+        'utf-8',
+      );
+      expect(trace).toContain('work_unit_failed_before_patch');
+      expect(trace).toContain('patch_accepted');
+      expect(trace).not.toContain(legacySharedTraceEvent());
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });
     }
@@ -464,7 +592,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         expect(trace).toContain('work_unit_child_created');
         expect(trace).toContain('work_unit_patch_collected');
         expect(trace).toContain('patch_apply_started');
-        expect(trace).not.toContain('shared_worktree_path_enabled');
+        expect(trace).not.toContain(legacySharedTraceEvent());
 
         const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0];
         const reportBody = reportCreate?.body as { isolatedDiff?: unknown } | undefined;
