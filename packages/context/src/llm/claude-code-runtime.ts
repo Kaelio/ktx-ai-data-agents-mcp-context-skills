@@ -45,6 +45,8 @@ const BUILTIN_TOOLS = [
   'TodoWrite',
 ];
 
+const KTX_MCP_SERVER_NAME = 'ktx';
+
 function isResult(message: SDKMessage): message is SDKResultMessage {
   return message.type === 'result';
 }
@@ -113,7 +115,14 @@ function assertInitIsolation(
 }
 
 function expectedMcpServerNames(tools: KtxRuntimeToolSet | undefined): Set<string> {
-  return tools && Object.keys(tools).length > 0 ? new Set(['ktx']) : new Set();
+  return tools && Object.keys(tools).length > 0 ? new Set([KTX_MCP_SERVER_NAME]) : new Set();
+}
+
+function managedMcpSettings(serverNames: string[]): NonNullable<Options['managedSettings']> {
+  return {
+    allowManagedMcpServersOnly: true,
+    allowedMcpServers: serverNames.map((serverName) => ({ serverName })),
+  };
 }
 
 function baseOptions(input: {
@@ -125,6 +134,7 @@ function baseOptions(input: {
 }): Options {
   const toolIds = mcpToolIds(input.tools ?? {});
   const allowedToolIds = new Set(toolIds);
+  const expectedServerNames = [...expectedMcpServerNames(input.tools)];
   return {
     cwd: input.projectDir,
     model: input.model,
@@ -133,6 +143,8 @@ function baseOptions(input: {
     skills: [],
     plugins: [],
     tools: [],
+    managedSettings: managedMcpSettings(expectedServerNames),
+    strictMcpConfig: true,
     allowedTools: toolIds,
     disallowedTools: BUILTIN_TOOLS,
     canUseTool: async (toolName, _toolInput, options) =>
@@ -147,7 +159,14 @@ function baseOptions(input: {
     persistSession: false,
     env: createKtxClaudeCodeEnv(input.env),
     ...(input.tools && Object.keys(input.tools).length > 0
-      ? { mcpServers: { ktx: createSdkMcpServer({ name: 'ktx', tools: createClaudeSdkTools(input.tools) }) } }
+      ? {
+          mcpServers: {
+            [KTX_MCP_SERVER_NAME]: createSdkMcpServer({
+              name: KTX_MCP_SERVER_NAME,
+              tools: createClaudeSdkTools(input.tools),
+            }),
+          },
+        }
       : {}),
   };
 }
