@@ -93,7 +93,17 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
 
   it('validates structured output with the caller schema', async () => {
     const schema = z.object({ answer: z.string() });
-    const query = vi.fn((_input: any) => stream([initMessage(), resultMessage({ structured_output: { answer: 'yes' } })]));
+    const query = vi.fn((_input: any) =>
+      stream([
+        initMessage({
+          tools: ['StructuredOutput'],
+          slash_commands: ['/help', '/compact'],
+          skills: ['pdf'],
+          agents: ['claude', 'Explore'],
+        }),
+        resultMessage({ structured_output: { answer: 'yes' } }),
+      ]),
+    );
     const runtime = new ClaudeCodeKtxLlmRuntime({
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
@@ -102,10 +112,40 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     });
 
     await expect(runtime.generateObject({ role: 'default', prompt: 'json', schema })).resolves.toEqual({ answer: 'yes' });
+    expect(query.mock.calls[0][0].options.maxTurns).toBe(2);
     expect(query.mock.calls[0][0].options.outputFormat).toMatchObject({
       type: 'json_schema',
       schema: expect.objectContaining({ type: 'object' }),
     });
+    expect(query.mock.calls[0][0].options.allowedTools).toEqual(['StructuredOutput']);
+    expect(
+      await query.mock.calls[0][0].options.canUseTool('StructuredOutput', {}, { signal: new AbortController().signal, toolUseID: 'structured' }),
+    ).toEqual({
+      behavior: 'allow',
+      toolUseID: 'structured',
+    });
+    expect(
+      await query.mock.calls[0][0].options.canUseTool('Bash', {}, { signal: new AbortController().signal, toolUseID: 'bash' }),
+    ).toMatchObject({
+      behavior: 'deny',
+      toolUseID: 'bash',
+    });
+  });
+
+  it('rejects StructuredOutput when text generation did not request structured output', async () => {
+    const query = vi.fn((_input: any) =>
+      stream([initMessage({ tools: ['StructuredOutput'] }), resultMessage({ result: 'hello' })]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'say hello' })).rejects.toThrow(
+      /Claude Code runtime isolation failed: tools=StructuredOutput/,
+    );
   });
 
   it('registers only exact KTX MCP tool ids and denies non-KTX tools', async () => {
