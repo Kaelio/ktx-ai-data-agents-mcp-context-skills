@@ -1,22 +1,12 @@
-export const ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEYS = [
-  'metabase',
-  'notion',
-  'lookml',
-  'looker',
-  'dbt',
-  'metricflow',
-] as const;
+const DEFAULT_SHARED_WORKTREE_SOURCE_KEYS: readonly string[] = [];
 
-export type IsolatedDiffDirectWriteSourceKey = (typeof ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEYS)[number];
-
-const ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEY_SET = new Set<string>(ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEYS);
-
-export function defaultIsolatedDiffSourceKeys(): string[] {
-  return [...ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEYS];
+export function defaultSharedWorktreeSourceKeys(): string[] {
+  return [...DEFAULT_SHARED_WORKTREE_SOURCE_KEYS];
 }
 
-export function isIsolatedDiffDirectWriteSourceKey(
+export function isSharedWorktreeFallbackSourceKey(
   sourceKey: string,
-): sourceKey is IsolatedDiffDirectWriteSourceKey {
-  return ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEY_SET.has(sourceKey);
+  sharedWorktreeSourceKeys: readonly string[] = DEFAULT_SHARED_WORKTREE_SOURCE_KEYS,
+): boolean {
+  return sharedWorktreeSourceKeys.includes(sourceKey);
 }

@@ -1,40 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import {
-  defaultIsolatedDiffSourceKeys,
-  isIsolatedDiffDirectWriteSourceKey,
-  ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEYS,
-} from './source-routing.js';
+import { defaultSharedWorktreeSourceKeys, isSharedWorktreeFallbackSourceKey } from './source-routing.js';
 
 describe('isolated-diff source routing', () => {
-  it('keeps the runner-owned direct-write connector list explicit', () => {
-    expect(ISOLATED_DIFF_DIRECT_WRITE_SOURCE_KEYS).toEqual([
-      'metabase',
-      'notion',
-      'lookml',
-      'looker',
-      'dbt',
-      'metricflow',
-    ]);
+  it('defaults every non-override source to isolated diffs', () => {
+    expect(defaultSharedWorktreeSourceKeys()).toEqual([]);
   });
 
   it('returns a mutable copy for runtime settings', () => {
-    const keys = defaultIsolatedDiffSourceKeys();
-    keys.push('fake');
+    const keys = defaultSharedWorktreeSourceKeys();
+    keys.push('legacy-source');
 
-    expect(defaultIsolatedDiffSourceKeys()).toEqual([
-      'metabase',
-      'notion',
-      'lookml',
-      'looker',
-      'dbt',
-      'metricflow',
-    ]);
+    expect(defaultSharedWorktreeSourceKeys()).toEqual([]);
   });
 
-  it('recognizes migrated connector source keys only', () => {
-    expect(isIsolatedDiffDirectWriteSourceKey('notion')).toBe(true);
-    expect(isIsolatedDiffDirectWriteSourceKey('metricflow')).toBe(true);
-    expect(isIsolatedDiffDirectWriteSourceKey('historic-sql')).toBe(false);
-    expect(isIsolatedDiffDirectWriteSourceKey('live-database')).toBe(false);
+  it('recognizes only explicitly configured shared-worktree fallback sources', () => {
+    expect(isSharedWorktreeFallbackSourceKey('notion', [])).toBe(false);
+    expect(isSharedWorktreeFallbackSourceKey('metricflow', [])).toBe(false);
+    expect(isSharedWorktreeFallbackSourceKey('legacy-source', ['legacy-source'])).toBe(true);
+    expect(isSharedWorktreeFallbackSourceKey('other-source', ['legacy-source'])).toBe(false);
   });
 });
