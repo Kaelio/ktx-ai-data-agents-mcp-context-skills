@@ -3,19 +3,16 @@ import { createKtxEmbeddingProvider } from './embedding-provider.js';
 import type { KtxEmbeddingConfig } from './types.js';
 
 describe('createKtxEmbeddingProvider', () => {
-  it('creates deterministic embeddings with stable dimensions', async () => {
-    const provider = createKtxEmbeddingProvider({
-      backend: 'deterministic',
-      model: 'sha256',
-      dimensions: 6,
-      batchSize: 4,
-    });
+  it('rejects deterministic embeddings', () => {
+    const config = JSON.parse(
+      JSON.stringify({
+        backend: 'deterministic',
+        model: 'sha256',
+        dimensions: 6,
+      }),
+    ) as KtxEmbeddingConfig;
 
-    await expect(provider.embed('Revenue policy')).resolves.toHaveLength(6);
-    await expect(provider.embed('Revenue policy')).resolves.toEqual(await provider.embed('Revenue policy'));
-    await expect(provider.embed('Revenue policy')).resolves.not.toEqual(await provider.embed('Approval policy'));
-    await expect(provider.embedMany(['a', 'b'])).resolves.toHaveLength(2);
-    expect(provider.maxBatchSize).toBe(4);
+    expect(() => createKtxEmbeddingProvider(config)).toThrow('Unsupported KTX embedding backend: deterministic');
   });
 
   it('rejects gateway embeddings', () => {

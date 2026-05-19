@@ -62,7 +62,6 @@ export function deepReadinessGaps(config: KtxProjectConfig): string[] {
   if (
     !embeddings ||
     embeddings.backend === 'none' ||
-    embeddings.backend === 'deterministic' ||
     !embeddings.model ||
     embeddings.dimensions <= 0
   ) {

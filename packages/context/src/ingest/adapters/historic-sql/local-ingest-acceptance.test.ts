@@ -165,7 +165,7 @@ async function writeHistoricSqlProject(project: KtxLocalProject): Promise<KtxLoc
       '  adapters:',
       '    - historic-sql',
       '  embeddings:',
-      '    backend: deterministic',
+      '    backend: none',
       'storage:',
       '  state: sqlite',
       '  search: sqlite-fts5',

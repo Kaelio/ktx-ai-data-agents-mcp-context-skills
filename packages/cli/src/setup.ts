@@ -238,7 +238,6 @@ function embeddingsReady(status: KtxSetupStatus['embeddings']): boolean {
   return (
     status.backend !== undefined &&
     status.backend !== 'none' &&
-    status.backend !== 'deterministic' &&
     typeof status.model === 'string' &&
     status.model.length > 0 &&
     typeof status.dimensions === 'number' &&

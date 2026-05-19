@@ -221,21 +221,15 @@ describe('local KTX embedding config', () => {
     });
   });
 
-  it('constructs deterministic embeddings from the default project config', () => {
+  it('returns null for the default disabled project embedding config', () => {
     const createKtxEmbeddingProvider = vi.fn(() => ({}) as never);
     const provider = createLocalKtxEmbeddingProviderFromConfig(
       buildDefaultKtxProjectConfig().ingest.embeddings,
       { createKtxEmbeddingProvider },
     );
 
-    expect(provider).not.toBeNull();
-    expect(createKtxEmbeddingProvider).toHaveBeenCalledWith(
-      expect.objectContaining({
-        backend: 'deterministic',
-        model: 'deterministic',
-        dimensions: 8,
-      }),
-    );
+    expect(provider).toBeNull();
+    expect(createKtxEmbeddingProvider).not.toHaveBeenCalled();
   });
 
   it('returns null when embeddings are disabled', () => {

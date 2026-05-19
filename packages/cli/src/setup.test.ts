@@ -108,7 +108,7 @@ describe('setup status', () => {
     });
   });
 
-  it('reports deterministic default embeddings as not setup-ready', async () => {
+  it('reports disabled default embeddings as not setup-ready', async () => {
     await mkdir(tempDir, { recursive: true });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -122,8 +122,7 @@ describe('setup status', () => {
         '    default: claude-sonnet-4-6',
         'ingest:',
         '  embeddings:',
-        '    backend: deterministic',
-        '    model: deterministic',
+        '    backend: none',
         '    dimensions: 8',
         'connections: {}',
       ].join('\n'),
@@ -133,7 +132,7 @@ describe('setup status', () => {
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
       project: { path: tempDir, ready: true },
       llm: { backend: 'anthropic', ready: true, model: 'claude-sonnet-4-6' },
-      embeddings: { backend: 'deterministic', ready: false, model: 'deterministic', dimensions: 8 },
+      embeddings: { backend: 'none', ready: false, dimensions: 8 },
     });
   });
 
@@ -373,8 +372,7 @@ describe('setup status', () => {
         '    default: claude-sonnet-4-6',
         'ingest:',
         '  embeddings:',
-        '    backend: deterministic',
-        '    model: deterministic',
+        '    backend: none',
         '    dimensions: 8',
         '',
       ].join('\n'),

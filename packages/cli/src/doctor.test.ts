@@ -676,8 +676,7 @@ describe('runKtxDoctor', () => {
         '  adapters:',
         '    - live-database',
         '  embeddings:',
-        '    backend: deterministic',
-        '    model: deterministic',
+        '    backend: none',
         '    dimensions: 8',
         '',
       ].join('\n'),
@@ -694,8 +693,8 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('Embeddings');
-    expect(testIo.stdout()).toContain('deterministic');
-    expect(testIo.stdout()).toContain('semantic search degraded');
+    expect(testIo.stdout()).toContain('none');
+    expect(testIo.stdout()).toContain('semantic search will be skipped');
     delete process.env.ANTHROPIC_API_KEY;
   });
 

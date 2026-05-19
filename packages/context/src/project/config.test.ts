@@ -42,8 +42,7 @@ connections:
       ingest: {
         adapters: [],
         embeddings: {
-          backend: 'deterministic',
-          model: 'deterministic',
+          backend: 'none',
           dimensions: 8,
         },
         workUnits: {
@@ -87,13 +86,10 @@ connections:
 
     expect(serialized).not.toContain('project:');
     expect(serialized).not.toContain('live-database');
-    expect(serialized).toContain(
-      '  embeddings:\n    backend: deterministic\n    model: deterministic\n    dimensions: 8',
-    );
+    expect(serialized).toContain('  embeddings:\n    backend: none\n    dimensions: 8');
     expect(parsed.ingest.adapters).toEqual([]);
     expect(parsed.ingest.embeddings).toEqual({
-      backend: 'deterministic',
-      model: 'deterministic',
+      backend: 'none',
       dimensions: 8,
     });
   });
@@ -404,8 +400,7 @@ scan:
 
     expect(config).toEqual(buildDefaultKtxProjectConfig());
     expect(config.ingest.embeddings).toEqual({
-      backend: 'deterministic',
-      model: 'deterministic',
+      backend: 'none',
       dimensions: 8,
     });
   });
