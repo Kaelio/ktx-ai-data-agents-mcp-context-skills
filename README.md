@@ -136,10 +136,10 @@ ktx sl validate orders
 Supported client agents: Claude Code, Claude Desktop, Codex, Cursor, OpenCode,
 and clients that can use the printed MCP endpoint or `.agents` admin skills.
 Claude Desktop setup registers a local `ktx mcp stdio` server in Claude
-Desktop's config and generates `.ktx/agents/claude/ktx-skills.zip` with one or
-two skills, depending on the setup mode. Restart Claude Desktop after setup,
-then upload that ZIP from **Customize** > **Skills** > **+** > **Create
-skill** > **Upload a skill**.
+Desktop's config and generates one uploadable ZIP per Claude Desktop skill
+under `.ktx/agents/claude/`. Restart Claude Desktop after setup, then upload
+each ZIP from **Customize** > **Skills** > **+** > **Create skill** >
+**Upload a skill**.
 
 The release artifact manifest contains the public npm tarball and the bundled
 `kaelio-ktx` runtime wheel. The `python/ktx-sl` and `python/ktx-daemon`
