@@ -99,6 +99,7 @@ function installResult(features: KtxRuntimeFeature[] = ['core']): ManagedPythonR
     asset: {
       manifest: installedManifest.asset,
       wheelPath: '/assets/python/kaelio_ktx-0.2.0-py3-none-any.whl',
+      requiresPython: { specifier: '>=3.13', minimumVersion: '3.13' },
     },
     manifest: installedManifest,
   };

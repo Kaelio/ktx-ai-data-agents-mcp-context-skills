@@ -14,6 +14,7 @@ import {
   type ManagedPythonRuntimeInstallOptions,
   type ManagedPythonRuntimeInstallResult,
 } from './managed-python-runtime.js';
+import { sanitizeChildProxyEnv } from './proxy-env.js';
 
 export interface ManagedPythonDaemonState {
   schemaVersion: 1;
@@ -696,10 +697,10 @@ export async function startManagedPythonDaemon(
       {
         detached: true,
         stdio: ['ignore', stdout.fd, stderr.fd],
-        env: {
+        env: sanitizeChildProxyEnv({
           ...process.env,
           KTX_DAEMON_VERSION: options.cliVersion,
-        },
+        }),
       },
     );
     child.unref();

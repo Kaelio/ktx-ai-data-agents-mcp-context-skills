@@ -150,6 +150,8 @@ describe('ensureManagedLocalEmbeddingsDaemon', () => {
       }),
     ).resolves.toEqual({
       baseUrl: 'http://127.0.0.1:61234',
+      stdoutLog: '/work/proj/.ktx/runtime/daemon.stdout.log',
+      stderrLog: '/work/proj/.ktx/runtime/daemon.stderr.log',
       env: {
         [MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV]: 'http://127.0.0.1:61234',
       },

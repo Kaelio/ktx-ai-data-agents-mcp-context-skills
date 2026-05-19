@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { strFromU8, unzipSync } from 'fflate';
 import { z } from 'zod';
 
 const execFileAsync = promisify(execFile);
@@ -78,6 +79,10 @@ export interface ManagedPythonDaemonLayout extends ManagedPythonRuntimeLayout {
 export interface ManagedRuntimeAsset {
   manifest: KtxRuntimeAssetManifest;
   wheelPath: string;
+  requiresPython: {
+    specifier: string;
+    minimumVersion: string;
+  };
 }
 
 export type ManagedPythonRuntimeExec = (
@@ -196,6 +201,40 @@ function isErrnoException(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }
 
+function parseRequiresPythonFromWheel(input: { wheelPath: string; contents: Buffer }): ManagedRuntimeAsset['requiresPython'] {
+  let files: Record<string, Uint8Array>;
+  try {
+    files = unzipSync(new Uint8Array(input.contents));
+  } catch (error) {
+    throw new Error(
+      `Unable to read bundled Python runtime wheel metadata: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const metadataEntry = Object.entries(files).find(([path]) => path.endsWith('.dist-info/METADATA'));
+  if (!metadataEntry) {
+    throw new Error(`Bundled Python runtime wheel metadata is missing: ${input.wheelPath}`);
+  }
+
+  const metadata = strFromU8(metadataEntry[1]);
+  const requiresPython = metadata
+    .split(/\r?\n/)
+    .map((line) => line.match(/^Requires-Python:\s*(.+)\s*$/i)?.[1]?.trim())
+    .find((value): value is string => typeof value === 'string' && value.length > 0);
+  if (!requiresPython) {
+    throw new Error('Bundled Python runtime wheel metadata is missing Requires-Python');
+  }
+
+  const minimumMatch = requiresPython.match(/(?:^|[,\s])>=\s*([0-9]+)\.([0-9]+)(?:\.[0-9]+)?\b/);
+  if (!minimumMatch) {
+    throw new Error(`Unsupported bundled Python runtime Requires-Python: ${requiresPython}`);
+  }
+
+  return {
+    specifier: requiresPython,
+    minimumVersion: `${minimumMatch[1]}.${minimumMatch[2]}`,
+  };
+}
+
 export async function verifyRuntimeAsset(input: { assetDir: string }): Promise<ManagedRuntimeAsset> {
   const manifestPath = join(input.assetDir, 'manifest.json');
   let manifestData: unknown;
@@ -221,7 +260,7 @@ export async function verifyRuntimeAsset(input: { assetDir: string }): Promise<M
   if (sha256 !== manifest.wheel.sha256 || wheel.byteLength !== manifest.wheel.bytes) {
     throw new Error(`Bundled Python runtime wheel checksum mismatch: ${wheelPath}`);
   }
-  return { manifest, wheelPath };
+  return { manifest, wheelPath, requiresPython: parseRequiresPythonFromWheel({ wheelPath, contents: wheel }) };
 }
 
 function normalizeFeatures(features: KtxRuntimeFeature[]): KtxRuntimeFeature[] {
@@ -262,6 +301,14 @@ function errorOutput(error: unknown): { stdout: string; stderr: string } {
   };
 }
 
+function installFailureMessage(input: { logPath: string; stdout: string; stderr: string }): string {
+  const output = [input.stderr.trim(), input.stdout.trim()].filter((part) => part.length > 0).join('\n');
+  if (!output) {
+    return `Python runtime install failed. Install log: ${input.logPath}`;
+  }
+  return `Python runtime install failed.\n${output}\nInstall log: ${input.logPath}`;
+}
+
 async function runLogged(input: {
   exec: ManagedPythonRuntimeExec;
   logPath: string;
@@ -288,7 +335,7 @@ async function runLogged(input: {
     if (output.stderr) {
       await appendFile(input.logPath, output.stderr.endsWith('\n') ? output.stderr : `${output.stderr}\n`);
     }
-    throw new Error(`Python runtime install failed. Install log: ${input.logPath}`);
+    throw new Error(installFailureMessage({ logPath: input.logPath, stdout: output.stdout, stderr: output.stderr }));
   }
 }
 
@@ -334,7 +381,14 @@ export async function installManagedPythonRuntime(
     exec,
     logPath: layout.installLogPath,
     command: 'uv',
-    args: ['venv', layout.venvDir],
+    args: ['python', 'install', asset.requiresPython.minimumVersion],
+    env: uvEnv,
+  });
+  await runLogged({
+    exec,
+    logPath: layout.installLogPath,
+    command: 'uv',
+    args: ['venv', '--python', asset.requiresPython.minimumVersion, layout.venvDir],
     env: uvEnv,
   });
   const wheelSpec = features.includes('local-embeddings') ? `${asset.wheelPath}[local-embeddings]` : asset.wheelPath;

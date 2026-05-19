@@ -46,9 +46,14 @@ function makePromptAdapter(options: {
   };
 }
 
-function managedDaemon(baseUrl = 'http://127.0.0.1:61234') {
+function managedDaemon(
+  baseUrl = 'http://127.0.0.1:61234',
+  logs: { stdoutLog?: string; stderrLog?: string } = {},
+) {
   return {
     baseUrl,
+    stdoutLog: logs.stdoutLog ?? '/tmp/ktx-daemon.stdout.log',
+    stderrLog: logs.stderrLog ?? '/tmp/ktx-daemon.stderr.log',
     env: {
       KTX_MANAGED_SENTENCE_TRANSFORMERS_BASE_URL: baseUrl,
     },
@@ -328,6 +333,65 @@ describe('setup embeddings step', () => {
     expect(io.stderr()).toContain('Local embedding health check failed: 401 invalid api key [redacted]');
     expect(io.stderr()).toContain('Prepare the runtime with: ktx dev runtime start --feature local-embeddings');
     expect(io.stderr()).not.toContain('skip for now');
+  });
+
+  it('prints the recent daemon stderr tail when local embedding health check fails', async () => {
+    const io = makeIo();
+    const stderrLog = join(tempDir, '.ktx', 'runtime', 'daemon.stderr.log');
+    await mkdir(join(tempDir, '.ktx', 'runtime'), { recursive: true });
+    await writeFile(
+      stderrLog,
+      Array.from({ length: 45 }, (_value, index) => `daemon traceback line ${index + 1}`).join('\n'),
+    );
+
+    const result = await runKtxSetupEmbeddingsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+        skipEmbeddings: false,
+      },
+      io.io,
+      {
+        env: {},
+        ensureLocalEmbeddings: vi.fn(async () => managedDaemon('http://127.0.0.1:61234', { stderrLog })),
+        healthCheck: vi.fn(async () => ({ ok: false as const, message: 'HTTP 500' })),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).toContain('Recent local embeddings daemon stderr:');
+    expect(io.stderr()).toContain('daemon traceback line 6');
+    expect(io.stderr()).toContain('daemon traceback line 45');
+    expect(io.stderr()).not.toContain('daemon traceback line 5');
+  });
+
+  it('does not print daemon stderr diagnostics when the log is unavailable or empty', async () => {
+    const io = makeIo();
+
+    const result = await runKtxSetupEmbeddingsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+        skipEmbeddings: false,
+      },
+      io.io,
+      {
+        env: {},
+        ensureLocalEmbeddings: vi.fn(async () =>
+          managedDaemon('http://127.0.0.1:61234', {
+            stderrLog: join(tempDir, '.ktx', 'runtime', 'missing.stderr.log'),
+          }),
+        ),
+        healthCheck: vi.fn(async () => ({ ok: false as const, message: 'HTTP 500' })),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).not.toContain('Recent local embeddings daemon stderr:');
   });
 
   it('uses fixed OpenAI defaults and only asks for credentials when OpenAI is selected', async () => {

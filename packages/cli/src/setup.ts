@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
 import {
@@ -33,7 +34,11 @@ import {
   isKtxSetupLlmConfigReady,
   runKtxSetupAnthropicModelStep,
 } from './setup-models.js';
-import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
+import {
+  type KtxSetupCreatedProjectCleanup,
+  type KtxSetupProjectDeps,
+  runKtxSetupProjectStep,
+} from './setup-project.js';
 import {
   isKtxPreAgentSetupReady,
   isKtxSetupReady,
@@ -502,6 +507,23 @@ async function commitSetupConfigChanges(projectDir: string): Promise<void> {
   await project.git.commitFile('ktx.yaml', 'setup: update KTX project config', 'ktx setup', 'setup@ktx.local');
 }
 
+const KTX_SETUP_SCAFFOLD_PATHS = ['ktx.yaml', '.ktx', 'wiki', 'semantic-layer', 'raw-sources', '.git'];
+
+async function cleanupCreatedProjectScaffold(cleanup: KtxSetupCreatedProjectCleanup | undefined): Promise<void> {
+  if (!cleanup) {
+    return;
+  }
+  if (cleanup.kind === 'remove-project-dir') {
+    await rm(cleanup.projectDir, { recursive: true, force: true });
+    return;
+  }
+  await Promise.all(
+    KTX_SETUP_SCAFFOLD_PATHS.map((relativePath) =>
+      rm(join(cleanup.projectDir, relativePath), { recursive: true, force: true }),
+    ),
+  );
+}
+
 export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
   try {
     return await runKtxSetupInner(args, io, deps);
@@ -772,7 +794,11 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
         }
       }
 
-      if (stepResult.status === 'failed' || stepResult.status === 'missing-input') {
+      if (stepResult.status === 'failed') {
+        await cleanupCreatedProjectScaffold(projectResult.createdProjectCleanup);
+        return 1;
+      }
+      if (stepResult.status === 'missing-input') {
         return 1;
       }
       if (stepResult.status === 'back') {

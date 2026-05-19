@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -561,6 +561,112 @@ describe('setup status', () => {
     expect(testIo.stdout()).not.toContain('ktx agent context --json');
     expect(testIo.stdout()).not.toContain('Optional MCP:');
     expect(testIo.stderr()).toBe('');
+  });
+
+  it('removes a newly created missing project directory when a later runtime step fails', async () => {
+    const projectDir = join(tempDir, 'missing-project');
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir }),
+          databases: async () => ({ status: 'skipped', projectDir }),
+          sources: async () => ({ status: 'skipped', projectDir }),
+          runtime: async () => ({ status: 'failed', projectDir, requirements: { features: ['core'], requirements: [] } }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    await expect(stat(projectDir)).rejects.toThrow();
+  });
+
+  it('removes KTX scaffold files from an initially empty project directory when runtime setup fails', async () => {
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir: tempDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
+          databases: async () => ({ status: 'skipped', projectDir: tempDir }),
+          sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => ({ status: 'failed', projectDir: tempDir, requirements: { features: ['core'], requirements: [] } }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    await expect(stat(tempDir)).resolves.toBeDefined();
+    expect(await readdir(tempDir)).toEqual([]);
+  });
+
+  it('preserves a pre-existing non-empty project directory when runtime setup fails', async () => {
+    await writeFile(join(tempDir, 'notes.txt'), 'keep me\n', 'utf-8');
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir: tempDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
+          databases: async () => ({ status: 'skipped', projectDir: tempDir }),
+          sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => ({ status: 'failed', projectDir: tempDir, requirements: { features: ['core'], requirements: [] } }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    await expect(readFile(join(tempDir, 'notes.txt'), 'utf-8')).resolves.toBe('keep me\n');
+    await expect(stat(join(tempDir, 'ktx.yaml'))).resolves.toBeDefined();
   });
 
   it('shows demo near the bottom of the first setup intent menu before project creation', async () => {

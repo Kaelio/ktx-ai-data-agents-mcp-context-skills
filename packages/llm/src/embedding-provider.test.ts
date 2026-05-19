@@ -111,12 +111,12 @@ describe('createKtxEmbeddingProvider', () => {
     );
   });
 
-  it('falls back to one-shot ktx-daemon inference when the local HTTP daemon is unavailable', async () => {
-    const fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
-    const runSentenceTransformersJson = vi
+  it('reports local HTTP daemon failures without a ktx-daemon spawn fallback cascade', async () => {
+    const fetch = vi
       .fn()
-      .mockResolvedValueOnce({ embedding: [0.1, 0.2] })
-      .mockResolvedValueOnce({ embeddings: [[0.3, 0.4], [0.5, 0.6]] });
+      .mockResolvedValue(
+        new Response('Embedding compute failed: httpx.InvalidURL: Invalid port', { status: 500 }),
+      );
 
     const provider = createKtxEmbeddingProvider(
       {
@@ -125,19 +125,13 @@ describe('createKtxEmbeddingProvider', () => {
         dimensions: 2,
         sentenceTransformers: { baseURL: 'http://127.0.0.1:8765', pathPrefix: '' },
       },
-      { fetch, runSentenceTransformersJson },
+      { fetch },
     );
 
-    await expect(provider.embedMany(['hello', 'world'])).resolves.toEqual([
-      [0.3, 0.4],
-      [0.5, 0.6],
-    ]);
+    await expect(provider.embed('hello')).rejects.toThrow(
+      'Embedding provider sentence-transformers request failed with HTTP 500: Embedding compute failed: httpx.InvalidURL: Invalid port',
+    );
+    await expect(provider.embed('hello')).rejects.not.toThrow('ktx-daemon fallback failed');
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(runSentenceTransformersJson).toHaveBeenNthCalledWith(1, 'embedding-compute', {
-      text: '__ktx_embedding_probe__',
-    });
-    expect(runSentenceTransformersJson).toHaveBeenNthCalledWith(2, 'embedding-compute-bulk', {
-      texts: ['hello', 'world'],
-    });
   });
 });
