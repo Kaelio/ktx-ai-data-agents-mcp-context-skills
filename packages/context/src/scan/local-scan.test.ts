@@ -1017,7 +1017,7 @@ describe('local scan', () => {
     expect(persistedReport).not.toContain('postgres://reader:secret@example.test/db'); // pragma: allowlist secret
   });
 
-  it('runs enriched scans when deterministic standalone enrichment is configured', async () => {
+  it('runs enriched scans when deterministic standalone enrichment is configured without embeddings', async () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),
       [
@@ -1103,10 +1103,9 @@ describe('local scan', () => {
     expect(result.report.mode).toBe('enriched');
     expect(result.report.enrichment.tableDescriptions).toBe('completed');
     expect(result.report.enrichment.columnDescriptions).toBe('completed');
-    expect(result.report.enrichment.embeddings).toBe('completed');
+    expect(result.report.enrichment.embeddings).toBe('skipped');
     expect(result.report.artifactPaths.enrichmentArtifacts).toEqual([
       'raw-sources/warehouse/live-database/2026-04-29-091500-scan-enriched-1/enrichment/descriptions.json',
-      'raw-sources/warehouse/live-database/2026-04-29-091500-scan-enriched-1/enrichment/embeddings.json',
       'raw-sources/warehouse/live-database/2026-04-29-091500-scan-enriched-1/enrichment/relationships.json',
       'raw-sources/warehouse/live-database/2026-04-29-091500-scan-enriched-1/enrichment/relationship-profile.json',
       'raw-sources/warehouse/live-database/2026-04-29-091500-scan-enriched-1/enrichment/relationship-diagnostics.json',
