@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a new feature or improvement
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For bug reports, use the bug template. For questions, use the
+        [KTX Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ).
+  - type: textarea
+    id: request
+    attributes:
+      label: What do you want, and why?
+      description: Describe the problem and your proposed solution.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area?
+      options:
+        - CLI / setup
+        - Connectors
+        - Context engine
+        - Python semantic layer
+        - Python daemon
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Want to contribute this?
+      options:
+        - label: Yes, I'd like to open a PR
+        - label: I'd like guidance, then I'll open a PR
+        - label: No, just reporting the idea
