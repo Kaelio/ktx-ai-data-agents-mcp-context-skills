@@ -3,6 +3,8 @@ title: Quickstart
 description: Install KTX, run setup, and connect your coding agent.
 ---
 
+import { CopyButton } from "@/components/copy-button";
+
 This guide takes a local analytics project from empty to agent-ready. You'll
 install the CLI, run one guided setup command, and hand the context to a
 coding assistant.
@@ -51,23 +53,36 @@ If you're a coding assistant choosing a docs route, start with the
   <div className="text-sm font-semibold text-fd-foreground">
     Run setup from an agent
   </div>
-  <p className="mt-2 text-sm leading-6 text-fd-muted-foreground">
+  <div className="mt-2 text-sm leading-6 text-fd-muted-foreground">
     You can ask an agent such as Claude Code, Codex, Cursor, or OpenCode to
     install and configure KTX for you. The{' '}
-    <a href="/docs/agents-setup.md" className="font-medium underline">
+    <a href="/ktx/docs/agents-setup.md" className="font-medium underline">
       agent setup Markdown prompt
     </a>{' '}
     tells the agent how to check prerequisites, ask only for credentials or
     connection choices, run <code>ktx setup</code>, verify connections, and
     report the result.
-  </p>
-  <p className="mt-3 text-sm leading-6 text-fd-muted-foreground">
+  </div>
+  <div className="mt-3 text-sm leading-6 text-fd-muted-foreground">
     Use a prompt like this from the project you want to configure:
-  </p>
-  <div className="mt-3 text-sm font-medium leading-6 text-fd-foreground">
-    <div>Follow instructions from</div>
-    <div>https://docs.kaelio.com/ktx/docs/agents-setup.md</div>
-    <div>to install and configure ktx</div>
+  </div>
+  <div className="mt-3 max-w-full overflow-hidden rounded-md border bg-fd-background">
+    <div className="flex items-center gap-2 border-b px-3 py-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        Prompt
+      </span>
+      <CopyButton
+        text={`Follow instructions from
+https://docs.kaelio.com/ktx/docs/agents-setup.md
+to install and configure ktx`}
+        className="-my-1"
+      />
+    </div>
+    <div className="p-3 font-mono text-sm leading-6 text-fd-foreground">
+      <div>Follow instructions from</div>
+      <div className="break-all">https://docs.kaelio.com/ktx/docs/agents-setup.md</div>
+      <div>to install and configure ktx</div>
+    </div>
   </div>
 </div>
 
