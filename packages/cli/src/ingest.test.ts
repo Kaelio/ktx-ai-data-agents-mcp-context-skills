@@ -262,7 +262,7 @@ describe('runKtxIngest', () => {
         {
           command: 'run',
           projectDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           agentScope: 'project',
           skipAgents: true,
@@ -322,7 +322,7 @@ describe('runKtxIngest', () => {
     expect(runIo.stderr()).toContain('Configure a local Claude Code session or API-backed LLM, then rerun ingest:');
     expect(runIo.stderr()).toContain(`ktx setup --project-dir ${projectDir} --llm-backend claude-code --no-input`);
     expect(runIo.stderr()).toContain(
-      `ktx setup --project-dir ${projectDir} --llm-backend anthropic --anthropic-api-key-env ANTHROPIC_API_KEY --anthropic-model claude-sonnet-4-6 --no-input`,
+      `ktx setup --project-dir ${projectDir} --llm-backend anthropic --anthropic-api-key-env ANTHROPIC_API_KEY --llm-model claude-sonnet-4-6 --no-input`,
     );
   });
 
@@ -777,7 +777,7 @@ describe('runKtxIngest', () => {
         '  adapters:',
         '    - metabase',
         '  embeddings:',
-        '    backend: deterministic',
+        '    backend: none',
         '',
       ].join('\n'),
       'utf-8',
@@ -1869,7 +1869,7 @@ describe('runKtxIngest', () => {
         '  adapters:',
         '    - looker',
       '  embeddings:',
-      '    backend: deterministic',
+      '    backend: none',
       '',
       ].join('\n'),
       'utf-8',

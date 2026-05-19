@@ -1,11 +1,16 @@
 ---
 title: Primary Sources
-description: Connect KTX to PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, or SQLite.
+description: Connect KTX to PostgreSQL, Snowflake, BigQuery, MySQL, SQL Server, or SQLite.
 ---
 
 KTX connects to your data warehouse or database to build schema context,
 discover relationships, and execute semantic layer queries. Each connection is
 defined in `ktx.yaml` under the `connections` key.
+
+For analytics tools and knowledge systems such as dbt, MetricFlow, LookML,
+Metabase, Looker, and Notion, use [Context Sources](/docs/integrations/context-sources).
+For Claude Code, Codex, Cursor, OpenCode, and other agent clients, use
+[Agent Clients](/docs/integrations/agent-clients).
 
 All connectors share these conventions:
 
@@ -21,9 +26,9 @@ Agents should prefer environment or file references over literal secrets.
 
 | Field | Required | Applies to | Description |
 |-------|----------|------------|-------------|
-| `driver` | Yes | all connections | Connector driver such as `postgres`, `snowflake`, `bigquery`, `clickhouse`, `mysql`, `sqlserver`, or `sqlite` |
+| `driver` | Yes | all connections | Connector driver such as `postgres`, `snowflake`, `bigquery`, `mysql`, `sqlserver`, or `sqlite` |
 | `url` | One of the connection methods | URL-style connectors | Database URL, `env:NAME`, or `file:/path/to/secret` |
-| `host`, `port`, `database`, `username`, `password` | One of the connection methods | PostgreSQL, MySQL, ClickHouse, SQL Server | Field-by-field connection values |
+| `host`, `port`, `database`, `username`, `password` | One of the connection methods | PostgreSQL, MySQL, SQL Server | Field-by-field connection values |
 | `schema` or `schemas` | No | schema-aware warehouses | Single schema or list of schemas to scan |
 | `context.queryHistory` | No | PostgreSQL, Snowflake, BigQuery | Enables query-history ingestion when the warehouse supports it |
 | `path` | Yes for path-style SQLite | SQLite | Local SQLite database path or `env:NAME` reference |
@@ -264,63 +269,6 @@ staged artifact shape as Postgres and Snowflake.
 
 ---
 
-## ClickHouse
-
-Connects over HTTP (port 8123) or HTTPS (port 8443). Supports the ClickHouse native type system including `Nullable`, `LowCardinality`, and `Array` wrappers.
-
-### Connection config
-
-```yaml title="ktx.yaml"
-connections:
-  my-clickhouse:
-    driver: clickhouse
-    url: http://localhost:8123/analytics
-```
-
-Or with individual fields:
-
-```yaml title="ktx.yaml"
-connections:
-  my-clickhouse:
-    driver: clickhouse
-    host: clickhouse.internal
-    port: 8123
-    database: analytics
-    username: default
-    password: env:CH_PASSWORD
-    ssl: false
-```
-
-### Authentication
-
-| Method | Config |
-|--------|--------|
-| Basic auth | `username` + `password` (HTTP basic auth) |
-| No auth | Default user `default` with no password |
-| HTTPS | Set `ssl: true` (uses port 8443 by default) |
-
-### Features
-
-| Feature | Supported | Notes |
-|---------|-----------|-------|
-| Tables & views | Yes | Via `system.tables`, engine-based detection |
-| Primary keys | Yes | Via `system.columns` |
-| Foreign keys | No | Not a ClickHouse concept |
-| Row count estimates | Yes | Via `system.parts` aggregation |
-| Column statistics | No | - |
-| Query history | No | - |
-| Table sampling | Yes | - |
-
-### Dialect notes
-
-- Parameter binding uses `{param:Type}` syntax (e.g., `{database:String}`)
-- Detects views vs. tables by engine name (`View`, `MaterializedView`)
-- Handles `Nullable(T)` and `LowCardinality(Nullable(T))` type wrappers
-- Dictionary tables are excluded from scanning
-- Results returned in JSONCompact or JSONEachRow format
-
----
-
 ## MySQL
 
 Standard MySQL/MariaDB connector with full foreign key support and schema introspection.
@@ -510,4 +458,4 @@ No authentication required - SQLite is file-based. The file must be readable by 
 | Database ingest returns no tables | Schema, database, or project filter is wrong, or the user lacks metadata permissions | Verify the schema list and grant metadata read permissions |
 | Query history is empty | Query history extension or warehouse history view is unavailable | Enable the warehouse-specific history feature, then rerun `ktx ingest <connectionId> --query-history` or `ktx setup` |
 | Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on fast schema context |
-| Semantic query execution fails | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the `ktx sl query` flags |
+| Semantic Query execution fails | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the `ktx sl query` flags |

@@ -217,6 +217,14 @@ describe('publicNpmPackageJson', () => {
     assert.deepEqual(packageJson.dependencies, { commander: '14.0.3' });
     assert.deepEqual(packageJson.bundledDependencies, PUBLIC_BUNDLED_WORKSPACE_PACKAGES);
     assert.deepEqual(packageJson.files, ['dist', 'assets']);
+    assert.deepEqual(packageJson.repository, {
+      type: 'git',
+      url: 'https://github.com/Kaelio/ktx',
+    });
+    assert.deepEqual(packageJson.bugs, {
+      url: 'https://github.com/Kaelio/ktx/issues',
+    });
+    assert.equal(packageJson.homepage, 'https://github.com/Kaelio/ktx#readme');
   });
 });
 

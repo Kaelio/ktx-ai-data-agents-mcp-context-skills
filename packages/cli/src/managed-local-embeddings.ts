@@ -14,6 +14,8 @@ import { startManagedPythonDaemon, type ManagedPythonDaemonStartResult } from '.
 
 export interface ManagedLocalEmbeddingsDaemon {
   baseUrl: string;
+  stdoutLog: string;
+  stderrLog: string;
   env: Record<typeof MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV, string>;
 }
 
@@ -91,6 +93,8 @@ export async function ensureManagedLocalEmbeddingsDaemon(
 
   return {
     baseUrl: daemon.baseUrl,
+    stdoutLog: daemon.state.stdoutLog,
+    stderrLog: daemon.state.stderrLog,
     env: {
       [MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV]: daemon.baseUrl,
     },

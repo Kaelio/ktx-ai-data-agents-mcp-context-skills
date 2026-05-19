@@ -49,8 +49,10 @@ describe('KTX demo next steps', () => {
     const rendered = formatNextStepLines().join('\n');
 
     expect(rendered).toContain('KTX context is ready for agents.');
+    expect(rendered).toContain('KTX project directory');
     expect(rendered).toContain('ask a data question');
     expect(rendered).toContain('Verify with:');
+    expect(rendered).not.toContain('this directory');
     expect(rendered).not.toContain('Preferred route');
     expect(rendered).not.toContain('Optional MCP:');
   });

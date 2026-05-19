@@ -151,7 +151,6 @@ describe('standalone example docs', () => {
     assert.match(contributing, /context\/\s+# Core context engine/);
     assert.match(contributing, /llm\/\s+# LLM client abstraction/);
     assert.match(contributing, /connector-bigquery\/\s+# BigQuery connector/);
-    assert.match(contributing, /connector-clickhouse\/\s+# ClickHouse connector/);
     assert.match(contributing, /connector-mysql\/\s+# MySQL connector/);
     assert.match(contributing, /connector-postgres\/\s+# PostgreSQL connector/);
     assert.match(contributing, /connector-snowflake\/\s+# Snowflake connector/);
@@ -192,7 +191,7 @@ describe('standalone example docs', () => {
     const quickstart = await readText('docs-site/content/docs/getting-started/quickstart.mdx');
     const packageArtifacts = await readText('examples/package-artifacts/README.md');
 
-    assert.match(rootReadme, publicPackagePattern('pnpm add --global {package}'));
+    assert.match(rootReadme, publicPackagePattern('npm install -g {package}'));
     assert.match(quickstart, publicPackagePattern('npm install -g {package}'));
     assert.match(quickstart, /ktx dev runtime install --feature local-embeddings --yes/);
     assert.match(quickstart, /ktx dev runtime start --feature local-embeddings/);

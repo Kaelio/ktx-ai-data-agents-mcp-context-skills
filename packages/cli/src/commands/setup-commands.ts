@@ -85,8 +85,6 @@ function optionWasSpecified(command: Command, optionName: string): boolean {
 
 function shouldShowSetupEntryMenu(
   options: {
-    new?: boolean;
-    existing?: boolean;
     agents?: boolean;
     target?: string;
     global?: boolean;
@@ -98,7 +96,6 @@ function shouldShowSetupEntryMenu(
     anthropicApiKeyEnv?: string;
     anthropicApiKeyFile?: string;
     llmModel?: string;
-    anthropicModel?: string;
     vertexProject?: string;
     vertexLocation?: string;
     skipLlm?: boolean;
@@ -108,7 +105,6 @@ function shouldShowSetupEntryMenu(
     skipEmbeddings?: boolean;
     database?: KtxSetupDatabaseDriver[];
     databaseConnectionId?: string[];
-    newDatabaseConnectionId?: string;
     databaseUrl?: string;
     databaseSchema?: string[];
     enableQueryHistory?: boolean;
@@ -160,8 +156,6 @@ function shouldShowSetupEntryMenu(
   }
 
   return ![
-    'new',
-    'existing',
     'agents',
     'target',
     'global',
@@ -173,7 +167,6 @@ function shouldShowSetupEntryMenu(
     'anthropicApiKeyEnv',
     'anthropicApiKeyFile',
     'llmModel',
-    'anthropicModel',
     'vertexProject',
     'vertexLocation',
     'skipLlm',
@@ -181,7 +174,6 @@ function shouldShowSetupEntryMenu(
     'embeddingApiKeyEnv',
     'embeddingApiKeyFile',
     'skipEmbeddings',
-    'newDatabaseConnectionId',
     'databaseUrl',
     'enableQueryHistory',
     'disableQueryHistory',
@@ -214,8 +206,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .command('setup')
     .description('Set up or resume a local KTX project')
     .addOption(new Option('--project-dir <path>', 'KTX project directory').hideHelp())
-    .addOption(new Option('--new', 'Create a new KTX project before setup').hideHelp().default(false))
-    .addOption(new Option('--existing', 'Use an existing KTX project').hideHelp().default(false))
     .option('--agents', 'Install agent integration only', false)
     .addOption(
       new Option('--target <target>', 'Agent target').choices([
@@ -230,7 +220,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .option('--global', 'Install agent integration into the global target scope', false)
     .option('--local', 'Install Claude Code MCP config into the private per-project ~/.claude.json scope', false)
     .addOption(new Option('--skip-agents', 'Leave agent integration incomplete for now').hideHelp().default(false))
-    .option('--yes', 'Accept safe defaults in non-interactive setup', false)
+    .option('--yes', 'Accept project creation and runtime install defaults where setup confirms', false)
     .option('--no-input', 'Disable interactive terminal input')
     .addOption(new Option('--llm-backend <backend>', 'LLM backend').argParser(llmBackend).hideHelp())
     .addOption(
@@ -240,7 +230,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       new Option('--anthropic-api-key-file <path>', 'File containing the Anthropic API key').hideHelp(),
     )
     .addOption(new Option('--llm-model <model>', 'LLM model ID or backend model alias').hideHelp())
-    .addOption(new Option('--anthropic-model <model>', 'Anthropic model ID to validate and save').hideHelp())
     .addOption(new Option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path').hideHelp())
     .addOption(new Option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path').hideHelp())
     .addOption(new Option('--skip-llm', 'Leave LLM setup incomplete for now').hideHelp().default(false))
@@ -267,16 +256,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       new Option('--database-connection-id <id>', 'Existing selected connection id or new connection id')
         .argParser((value, previous: string[]) => [...previous, value])
         .default([] as string[])
-        .hideHelp(),
-    )
-    .addOption(
-      new Option('--new-database-connection-id <id>', 'Connection id for one new database connection')
-        .argParser((value) => {
-          if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value)) {
-            throw new InvalidArgumentError(`Unsafe connection id: ${value}`);
-          }
-          return value;
-        })
         .hideHelp(),
     )
     .addOption(
@@ -365,11 +344,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       context.setExitCode(1);
       return;
     }
-    if (options.llmModel && options.anthropicModel) {
-      context.io.stderr.write('Choose only one LLM model flag: --llm-model or --anthropic-model.\n');
-      context.setExitCode(1);
-      return;
-    }
     if (
       options.llmBackend &&
       options.llmBackend !== 'anthropic' &&
@@ -419,12 +393,18 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       return;
     }
 
-    const mode = options.new ? 'new' : options.existing ? 'existing' : 'auto';
+    const creatingDatabaseConnection = options.database.length > 0 || options.databaseUrl !== undefined;
+    if (creatingDatabaseConnection && options.databaseConnectionId.length > 1) {
+      context.io.stderr.write('Choose only one new database connection id when configuring a database.\n');
+      context.setExitCode(1);
+      return;
+    }
+
     const resolvedAgentScope = options.local ? 'local' : options.global ? 'global' : 'project';
     await runSetupArgs(context, {
       command: 'run',
       projectDir: resolveCommandProjectDir(command),
-      mode,
+      mode: 'auto',
       agents: options.agents === true,
       ...(options.target ? { target: options.target } : {}),
       agentScope: resolvedAgentScope,
@@ -436,7 +416,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ...(options.anthropicApiKeyEnv ? { anthropicApiKeyEnv: options.anthropicApiKeyEnv } : {}),
       ...(options.anthropicApiKeyFile ? { anthropicApiKeyFile: options.anthropicApiKeyFile } : {}),
       ...(options.llmModel ? { llmModel: options.llmModel } : {}),
-      ...(options.anthropicModel ? { anthropicModel: options.anthropicModel } : {}),
       ...(options.vertexProject ? { vertexProject: options.vertexProject } : {}),
       ...(options.vertexLocation ? { vertexLocation: options.vertexLocation } : {}),
       skipLlm: options.skipLlm === true,
@@ -445,8 +424,12 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ...(options.embeddingApiKeyFile ? { embeddingApiKeyFile: options.embeddingApiKeyFile } : {}),
       skipEmbeddings: options.skipEmbeddings === true,
       ...(options.database.length > 0 ? { databaseDrivers: options.database } : {}),
-      ...(options.databaseConnectionId.length > 0 ? { databaseConnectionIds: options.databaseConnectionId } : {}),
-      ...(options.newDatabaseConnectionId ? { databaseConnectionId: options.newDatabaseConnectionId } : {}),
+      ...(options.databaseConnectionId.length > 0 && creatingDatabaseConnection
+        ? { databaseConnectionId: options.databaseConnectionId[0] }
+        : {}),
+      ...(options.databaseConnectionId.length > 0 && !creatingDatabaseConnection
+        ? { databaseConnectionIds: options.databaseConnectionId }
+        : {}),
       ...(options.databaseUrl ? { databaseUrl: options.databaseUrl } : {}),
       databaseSchemas: options.databaseSchema,
       ...(options.enableQueryHistory ? { enableQueryHistory: true } : {}),

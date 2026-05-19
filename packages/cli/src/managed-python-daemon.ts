@@ -14,6 +14,7 @@ import {
   type ManagedPythonRuntimeInstallOptions,
   type ManagedPythonRuntimeInstallResult,
 } from './managed-python-runtime.js';
+import { sanitizeChildProxyEnv } from './proxy-env.js';
 
 export interface ManagedPythonDaemonState {
   schemaVersion: 1;
@@ -696,10 +697,10 @@ export async function startManagedPythonDaemon(
       {
         detached: true,
         stdio: ['ignore', stdout.fd, stderr.fd],
-        env: {
-          ...sanitizeProxyEnv(process.env),
+        env: sanitizeChildProxyEnv({
+          ...process.env,
           KTX_DAEMON_VERSION: options.cliVersion,
-        },
+        }),
       },
     );
     child.unref();
@@ -806,33 +807,4 @@ export async function stopAllManagedPythonDaemons(
     failed,
     scanErrors: discovery.scanErrors,
   };
-}
-
-/**
- * Filter NO_PROXY/no_proxy values to remove entries httpx cannot parse.
- *
- * httpx (used by the Python daemon via huggingface_hub / sentence-transformers)
- * treats each comma-separated NO_PROXY entry as a URL pattern. Raw IPv6 CIDR
- * blocks like `fd07:b51a:cc66:f0::/64` raise `InvalidURL` and crash the daemon.
- * OrbStack and similar Docker setups inject such entries by default.
- *
- * We drop any entry containing `::` (the unambiguous IPv6 marker) but keep
- * IPv4 addresses, IPv4 CIDRs, hostnames, and wildcard hosts intact.
- */
-export function sanitizeProxyEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const result: NodeJS.ProcessEnv = { ...env };
-  for (const key of ['NO_PROXY', 'no_proxy']) {
-    const value = result[key];
-    if (typeof value !== 'string' || value.length === 0) continue;
-    const kept = value
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0 && !entry.includes('::'));
-    if (kept.length === 0) {
-      delete result[key];
-    } else {
-      result[key] = kept.join(',');
-    }
-  }
-  return result;
 }

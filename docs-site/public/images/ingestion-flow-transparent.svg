@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1346" height="1710" viewBox="0 0 1346 1710" role="img" aria-labelledby="title desc">
+  <title id="title">KTX ingestion flow</title>
+  <desc id="desc">Source systems flow through source adapters, context builder, reconciliation, and validation to create wiki Markdown and semantic-layer YAML outputs.</desc>
+  <defs>
+    <filter id="card-shadow" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.14"/>
+    </filter>
+    <filter id="dark-shadow" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#020617" flood-opacity="0.22"/>
+    </filter>
+    <filter id="glow-blue" x="-160%" y="-160%" width="420%" height="420%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .card { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1.4; filter: url(#card-shadow); }
+      .stage { fill: #0b1f23; stroke: #17343a; stroke-width: 1.2; filter: url(#dark-shadow); }
+      .title { fill: #24272d; font: 700 20px Inter, Arial, sans-serif; }
+      .body { fill: #666b73; font: 500 16px Inter, Arial, sans-serif; }
+      .tag { fill: #6b7280; font: 500 14px Inter, Arial, sans-serif; }
+      .mono { font: 700 16px "SFMono-Regular", Consolas, monospace; }
+      .stage-title { fill: #f8fafc; font: 700 20px Inter, Arial, sans-serif; }
+      .stage-body { fill: #b8c6ca; font: 500 16px Inter, Arial, sans-serif; }
+      .index { fill: #07313a; font: 700 18px Inter, Arial, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+      .edge { fill: none; stroke: #94a3b8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      .dash { fill: none; stroke: #64748b; stroke-width: 1.8; stroke-dasharray: 5 8; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <g id="source-cards">
+    <g transform="translate(24 39)">
+      <rect class="card" x="0" y="0" width="298" height="285" rx="4"/>
+      <rect x="0" y="0" width="298" height="4" rx="2" fill="#3b82f6"/>
+      <text class="title" x="22" y="45">Databases</text>
+      <text class="body" x="22" y="82">Schemas, columns, keys,</text>
+      <text class="body" x="22" y="112">row counts, and query</text>
+      <text class="body" x="22" y="142">history.</text>
+      <g transform="translate(22 174)">
+        <rect x="0" y="0" width="116" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="23">PostgreSQL</text>
+        <rect x="124" y="0" width="104" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="136" y="23">Snowflake</text>
+        <rect x="0" y="46" width="94" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="69">BigQuery</text>
+        <rect x="102" y="46" width="72" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="114" y="69">SQLite</text>
+      </g>
+    </g>
+
+    <g transform="translate(358 39)">
+      <rect class="card" x="0" y="0" width="298" height="285" rx="4"/>
+      <rect x="0" y="0" width="298" height="4" rx="2" fill="#f97316"/>
+      <text class="title" x="22" y="45">BI tools</text>
+      <text class="body" x="22" y="82">Dashboards, questions,</text>
+      <text class="body" x="22" y="112">explores, usage, and trusted</text>
+      <text class="body" x="22" y="142">examples.</text>
+      <g transform="translate(22 174)">
+        <rect x="0" y="0" width="99" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="23">Metabase</text>
+        <rect x="109" y="0" width="75" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="121" y="23">Looker</text>
+      </g>
+    </g>
+
+    <g transform="translate(692 39)">
+      <rect class="card" x="0" y="0" width="298" height="285" rx="4"/>
+      <rect x="0" y="0" width="298" height="4" rx="2" fill="#f59e0b"/>
+      <text class="title" x="22" y="45">Modeling code</text>
+      <text class="body" x="22" y="82">Existing metrics, dimensions,</text>
+      <text class="body" x="22" y="112">models, joins, and entities.</text>
+      <g transform="translate(22 146)">
+        <rect x="0" y="0" width="47" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="23">dbt</text>
+        <rect x="57" y="0" width="83" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="69" y="23">LookML</text>
+        <rect x="0" y="46" width="109" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="69">MetricFlow</text>
+      </g>
+    </g>
+
+    <g transform="translate(1026 39)">
+      <rect class="card" x="0" y="0" width="298" height="285" rx="4"/>
+      <rect x="0" y="0" width="298" height="4" rx="2" fill="#10b981"/>
+      <text class="title" x="22" y="45">Docs and notes</text>
+      <text class="body" x="22" y="82">Policies, caveats, team</text>
+      <text class="body" x="22" y="112">definitions, and analyst</text>
+      <text class="body" x="22" y="142">context.</text>
+      <g transform="translate(22 174)">
+        <rect x="0" y="0" width="72" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="23">Notion</text>
+        <rect x="82" y="0" width="87" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="94" y="23">Any text</text>
+      </g>
+    </g>
+  </g>
+
+  <g id="edges">
+    <path class="edge" d="M172 324 V380 Q172 394 186 394 H507 Q507 394 507 380 V324"/>
+    <path class="edge" d="M841 324 V380 Q841 394 827 394 H507"/>
+    <path class="edge" d="M1175 324 V380 Q1175 394 1161 394 H673 Q673 394 673 408 V433" marker-end="url(#arrow)"/>
+    <path class="edge" d="M507 394 H673"/>
+    <path class="edge" d="M673 607 V651" marker-end="url(#arrow)"/>
+    <path class="edge" d="M673 823 V866" marker-end="url(#arrow)"/>
+    <path class="edge" d="M673 1038 V1081" marker-end="url(#arrow)"/>
+    <path class="edge" d="M673 1254 V1305 Q673 1322 656 1322 H305 Q291 1322 291 1336 V1364" marker-end="url(#arrow)"/>
+    <path class="edge" d="M673 1254 V1305 Q673 1322 690 1322 H1043 Q1057 1322 1057 1336 V1364" marker-end="url(#arrow)"/>
+    <path class="dash" d="M546 1523 H800"/>
+    <path d="M546 1523 l9 -6 v12 z" fill="#64748b"/>
+    <path d="M800 1523 l-9 -6 v12 z" fill="#64748b"/>
+  </g>
+
+  <g id="particles">
+    <circle cx="256" cy="394" r="18" fill="#3b82f6" opacity="0.18" filter="url(#glow-blue)"/>
+    <circle cx="256" cy="394" r="6" fill="#3b82f6" opacity="0.9"/>
+    <circle cx="632" cy="394" r="18" fill="#f97316" opacity="0.18" filter="url(#glow-blue)"/>
+    <circle cx="632" cy="394" r="6" fill="#f97316" opacity="0.9"/>
+    <circle cx="830" cy="394" r="18" fill="#10b981" opacity="0.18" filter="url(#glow-blue)"/>
+    <circle cx="830" cy="394" r="6" fill="#10b981" opacity="0.9"/>
+    <circle cx="673" cy="625" r="17" fill="#10b981" opacity="0.18" filter="url(#glow-blue)"/>
+    <circle cx="673" cy="625" r="6" fill="#10b981" opacity="0.9"/>
+    <circle cx="673" cy="1054" r="17" fill="#f59e0b" opacity="0.18" filter="url(#glow-blue)"/>
+    <circle cx="673" cy="1054" r="6" fill="#f59e0b" opacity="0.9"/>
+    <circle cx="573" cy="1322" r="17" fill="#3b82f6" opacity="0.18" filter="url(#glow-blue)"/>
+    <circle cx="573" cy="1322" r="6" fill="#3b82f6" opacity="0.9"/>
+  </g>
+
+  <g id="stages">
+    <g transform="translate(474 438)">
+      <rect class="stage" x="0" y="0" width="400" height="169" rx="4"/>
+      <circle cx="48" cy="84" r="23" fill="#55dced"/>
+      <text class="index" x="48" y="84">1</text>
+      <text class="stage-title" x="90" y="64">Source adapters</text>
+      <text class="stage-body" x="90" y="100">Read each configured system in</text>
+      <text class="stage-body" x="90" y="130">its native shape.</text>
+    </g>
+
+    <g transform="translate(474 653)">
+      <rect class="stage" x="0" y="0" width="400" height="169" rx="4"/>
+      <circle cx="48" cy="84" r="23" fill="#55dced"/>
+      <text class="index" x="48" y="84">2</text>
+      <text class="stage-title" x="90" y="64">Context builder</text>
+      <text class="stage-body" x="90" y="100">Turn source evidence into</text>
+      <text class="stage-body" x="90" y="130">proposed context updates.</text>
+    </g>
+
+    <g transform="translate(474 868)">
+      <rect class="stage" x="0" y="0" width="400" height="169" rx="4"/>
+      <circle cx="48" cy="84" r="23" fill="#55dced"/>
+      <text class="index" x="48" y="84">3</text>
+      <text class="stage-title" x="90" y="64">Reconciliation</text>
+      <text class="stage-body" x="90" y="100">Merge new evidence with the</text>
+      <text class="stage-body" x="90" y="130">context that already exists.</text>
+    </g>
+
+    <g transform="translate(474 1082)">
+      <rect class="stage" x="0" y="0" width="400" height="172" rx="4"/>
+      <circle cx="48" cy="86" r="23" fill="#55dced"/>
+      <text class="index" x="48" y="86">4</text>
+      <text class="stage-title" x="90" y="63">Validation</text>
+      <text class="stage-body" x="90" y="99">Check references and</text>
+      <text class="stage-body" x="90" y="129">semantics before agents rely on</text>
+      <text class="stage-body" x="90" y="159">them.</text>
+    </g>
+  </g>
+
+  <g id="outputs">
+    <g transform="translate(60 1373)">
+      <rect class="card" x="0" y="0" width="485" height="329" rx="4"/>
+      <rect x="0" y="0" width="485" height="4" rx="2" fill="#10b981"/>
+      <text class="mono" x="24" y="47" fill="#10b981">wiki/*.md</text>
+      <text class="title" x="24" y="92">Wiki</text>
+      <g transform="translate(24 116)">
+        <rect x="0" y="0" width="92" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="23">free-form</text>
+        <rect x="102" y="0" width="150" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="114" y="23">auto-maintained</text>
+      </g>
+      <text class="body" x="24" y="184">Definitions, caveats, policies, analyst notes, and</text>
+      <text class="body" x="24" y="214">business language that agents can search.</text>
+    </g>
+
+    <g transform="translate(803 1373)">
+      <rect class="card" x="0" y="0" width="485" height="329" rx="4"/>
+      <rect x="0" y="0" width="485" height="4" rx="2" fill="#3b82f6"/>
+      <text class="mono" x="24" y="47" fill="#3b82f6">semantic-layer/*.yaml</text>
+      <text class="title" x="24" y="92">Semantic layer</text>
+      <g transform="translate(24 116)">
+        <rect x="0" y="0" width="100" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="12" y="23">structured</text>
+        <rect x="110" y="0" width="108" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="122" y="23">executable</text>
+        <rect x="228" y="0" width="150" height="36" rx="4" fill="#fbfaf8" stroke="#e5e1dc"/>
+        <text class="tag" x="240" y="23">auto-maintained</text>
+      </g>
+      <text class="body" x="24" y="184">Metrics, joins, tables, dimensions, filters, and</text>
+      <text class="body" x="24" y="214">segments that KTX can validate and compile into</text>
+      <text class="body" x="24" y="244">SQL.</text>
+    </g>
+
+    <g transform="translate(618 1505)">
+      <rect x="0" y="0" width="111" height="36" rx="4" fill="#ffffff" stroke="#e5e1dc"/>
+      <text class="tag" x="15" y="23">references</text>
+    </g>
+  </g>
+</svg>

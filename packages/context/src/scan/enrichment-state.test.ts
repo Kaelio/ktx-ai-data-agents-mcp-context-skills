@@ -58,13 +58,13 @@ describe('scan enrichment state', () => {
       snapshot,
       mode: 'enriched',
       detectRelationships: true,
-      providerIdentity: { provider: 'deterministic', embeddingDimensions: 8, llmModel: 'a' },
+      providerIdentity: { provider: 'local-heuristic', llmModel: 'a' },
     });
     const second = computeKtxScanEnrichmentInputHash({
       snapshot: { ...snapshot, metadata: {} },
       mode: 'enriched',
       detectRelationships: true,
-      providerIdentity: { llmModel: 'a', embeddingDimensions: 8, provider: 'deterministic' },
+      providerIdentity: { llmModel: 'a', provider: 'local-heuristic' },
     });
     const firstTable = snapshot.tables[0];
     if (!firstTable) {
@@ -74,7 +74,7 @@ describe('scan enrichment state', () => {
       snapshot: { ...snapshot, tables: [{ ...firstTable, name: 'orders_v2' }] },
       mode: 'enriched',
       detectRelationships: true,
-      providerIdentity: { provider: 'deterministic', embeddingDimensions: 8, llmModel: 'a' },
+      providerIdentity: { provider: 'local-heuristic', llmModel: 'a' },
     });
 
     expect(first).toMatch(/^[a-f0-9]{64}$/);
@@ -87,7 +87,7 @@ describe('scan enrichment state', () => {
       snapshot,
       mode: 'enriched',
       detectRelationships: true,
-      providerIdentity: { provider: 'deterministic', embeddingDimensions: 8 },
+      providerIdentity: { provider: 'local-heuristic' },
     });
 
     await store.saveCompletedStage({

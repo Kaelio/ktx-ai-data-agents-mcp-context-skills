@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
 import {
@@ -19,6 +20,7 @@ import {
   type KtxSetupAgentsDeps,
   readKtxAgentInstallManifest,
   runKtxSetupAgentsStep,
+  targetDisplayName,
 } from './setup-agents.js';
 import {
   type KtxSetupDatabaseDriver,
@@ -32,7 +34,11 @@ import {
   isKtxSetupLlmConfigReady,
   runKtxSetupAnthropicModelStep,
 } from './setup-models.js';
-import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
+import {
+  type KtxSetupCreatedProjectCleanup,
+  type KtxSetupProjectDeps,
+  runKtxSetupProjectStep,
+} from './setup-project.js';
 import {
   isKtxPreAgentSetupReady,
   isKtxSetupReady,
@@ -75,7 +81,7 @@ export type KtxSetupArgs =
   | {
       command: 'run';
       projectDir: string;
-      mode: 'auto' | 'new' | 'existing';
+      mode: 'auto';
       agents: boolean;
       target?: KtxAgentTarget;
       agentScope?: KtxAgentScope;
@@ -87,7 +93,6 @@ export type KtxSetupArgs =
       anthropicApiKeyEnv?: string;
       anthropicApiKeyFile?: string;
       llmModel?: string;
-      anthropicModel?: string;
       vertexProject?: string;
       vertexLocation?: string;
       skipLlm: boolean;
@@ -237,7 +242,6 @@ function embeddingsReady(status: KtxSetupStatus['embeddings']): boolean {
   return (
     status.backend !== undefined &&
     status.backend !== 'none' &&
-    status.backend !== 'deterministic' &&
     typeof status.model === 'string' &&
     status.model.length > 0 &&
     typeof status.dimensions === 'number' &&
@@ -338,7 +342,6 @@ export async function readKtxSetupStatus(
   }
   const agents = [...agentMap.values()];
   const runtimeRequirements = resolveProjectRuntimeRequirements(project.config, {
-    agents: agents.length > 0,
     env: options.env ?? process.env,
   });
   let runtimeReady = runtimeRequirements.features.length === 0 || completedSteps.includes('runtime');
@@ -435,6 +438,35 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
   return `${lines.join('\n')}\n`;
 }
 
+export function formatKtxSetupCompletionSummary(
+  status: KtxSetupStatus,
+  options: { agentNextActions?: string } = {},
+): string {
+  const readyAgents = status.agents.filter((agent) => agent.ready).map((agent) => targetDisplayName(agent.target));
+  const lines = [
+    'Project',
+    `  ${status.project.path}`,
+    '',
+    'Context',
+    `  ${status.context.ready ? 'built' : formatContextBuilt(status.context)}`,
+    '',
+    'Agents configured',
+    `  ${readyAgents.length > 0 ? readyAgents.join(', ') : 'not installed'}`,
+  ];
+  const agentNextActions = options.agentNextActions?.trim();
+  if (agentNextActions) {
+    lines.push(
+      '',
+      'REQUIRED BEFORE USING AGENTS',
+      '',
+      ...agentNextActions.split('\n').map((line) => (line ? `  ${line}` : '')),
+    );
+  }
+  lines.push('', agentNextActions ? 'After that, try' : 'Try it');
+  lines.push('  Ask your agent: "Use KTX to show me the available tables."');
+  return lines.join('\n');
+}
+
 function setupStatusReady(status: KtxSetupStatus): boolean {
   if (!status.project.ready) {
     return false;
@@ -459,10 +491,8 @@ function setupContextReady(status: KtxSetupStatus): boolean {
   return status.context.ready;
 }
 
-function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
-  io.stderr.write('KTX context is not ready for agents.\n\n');
-  io.stderr.write(`Build context first:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
-  io.stderr.write(`Then install agent integration:\n  ktx setup --agents --project-dir ${resolve(projectDir)}\n`);
+function shouldPrintConciseReadySummary(status: KtxSetupStatus): boolean {
+  return setupStatusReady(status) && setupContextReady(status) && status.agents.some((agent) => agent.ready);
 }
 
 function setupRuntimeInstallPolicy(args: Extract<KtxSetupArgs, { command: 'run' }>): 'prompt' | 'auto' | 'never' {
@@ -475,6 +505,23 @@ function setupRuntimeInstallPolicy(args: Extract<KtxSetupArgs, { command: 'run' 
 async function commitSetupConfigChanges(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
   await project.git.commitFile('ktx.yaml', 'setup: update KTX project config', 'ktx setup', 'setup@ktx.local');
+}
+
+const KTX_SETUP_SCAFFOLD_PATHS = ['ktx.yaml', '.ktx', 'wiki', 'semantic-layer', 'raw-sources', '.git'];
+
+async function cleanupCreatedProjectScaffold(cleanup: KtxSetupCreatedProjectCleanup | undefined): Promise<void> {
+  if (!cleanup) {
+    return;
+  }
+  if (cleanup.kind === 'remove-project-dir') {
+    await rm(cleanup.projectDir, { recursive: true, force: true });
+    return;
+  }
+  await Promise.all(
+    KTX_SETUP_SCAFFOLD_PATHS.map((relativePath) =>
+      rm(join(cleanup.projectDir, relativePath), { recursive: true, force: true }),
+    ),
+  );
 }
 
 export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
@@ -493,6 +540,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
   setupUi.intro('KTX setup', io);
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
+  let agentNextActions: string | undefined;
   const canShowEntryMenu =
     args.showEntryMenu === true &&
     args.inputMode !== 'disabled' &&
@@ -552,18 +600,19 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     }
 
     const runOnly = readyAction;
+    const agentOnlySetup = agentsRequested || runOnly === 'agents';
     const shouldRunModels = !runOnly || runOnly === 'models';
     const shouldRunEmbeddings = !runOnly || runOnly === 'embeddings';
     const shouldRunDatabases = !runOnly || runOnly === 'databases';
     const shouldRunSources = !runOnly || runOnly === 'sources';
     const shouldRunRuntime =
-      agentsRequested || !runOnly || runOnly === 'runtime' || runOnly === 'context' || runOnly === 'agents';
-    const shouldRunContext = agentsRequested || !runOnly || runOnly === 'context';
+      !agentOnlySetup && (!runOnly || runOnly === 'runtime' || runOnly === 'context');
+    const shouldRunContext = !agentOnlySetup && (!runOnly || runOnly === 'context');
     const shouldRunAgents = agentsRequested || !runOnly || runOnly === 'agents';
     const showPromptInstructions = projectResult.confirmedCreation !== true;
 
-    const setupSteps: KtxSetupFlowStep[] = agentsRequested
-      ? ['runtime', 'context']
+    const setupSteps: KtxSetupFlowStep[] = agentOnlySetup
+      ? []
       : ['models', 'embeddings', 'databases', 'sources', 'runtime', 'context'];
     if (shouldRunAgents && args.skipAgents !== true) {
       setupSteps.push('agents');
@@ -605,7 +654,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.anthropicApiKeyEnv ? { anthropicApiKeyEnv: args.anthropicApiKeyEnv } : {}),
             ...(args.anthropicApiKeyFile ? { anthropicApiKeyFile: args.anthropicApiKeyFile } : {}),
             ...(args.llmModel ? { llmModel: args.llmModel } : {}),
-            ...(args.anthropicModel ? { anthropicModel: args.anthropicModel } : {}),
             ...(args.vertexProject ? { vertexProject: args.vertexProject } : {}),
             ...(args.vertexLocation ? { vertexLocation: args.vertexLocation } : {}),
             forcePrompt: forcePromptSteps.has('models') || runOnly === 'models',
@@ -702,7 +750,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             inputMode: args.inputMode,
             cliVersion: args.cliVersion,
             runtimeInstallPolicy: setupRuntimeInstallPolicy(args),
-            agents: shouldRunAgents && args.skipAgents !== true,
           },
           io,
         );
@@ -724,22 +771,34 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       } else {
         const agentsRunner =
           deps.agents ?? ((agentArgs, agentIo) => runKtxSetupAgentsStep(agentArgs, agentIo, deps.agentsDeps));
-        stepResult = await agentsRunner(
+        const agentResult = await agentsRunner(
           {
             projectDir: projectResult.projectDir,
-            inputMode: args.inputMode,
+            inputMode:
+              args.inputMode === 'auto' && io.stdout.isTTY !== true && deps.agentsDeps?.prompts === undefined
+                ? 'disabled'
+                : args.inputMode,
             yes: args.yes,
             agents: true,
             ...(args.target ? { target: args.target } : {}),
             scope: args.agentScope ?? 'project',
             mode: 'mcp',
             skipAgents: false,
+            showNextActions: agentsRequested,
           },
           io,
         );
+        stepResult = agentResult;
+        if (agentResult.status === 'ready') {
+          agentNextActions = agentResult.nextActions;
+        }
       }
 
-      if (stepResult.status === 'failed' || stepResult.status === 'missing-input') {
+      if (stepResult.status === 'failed') {
+        await cleanupCreatedProjectScaffold(projectResult.createdProjectCleanup);
+        return 1;
+      }
+      if (stepResult.status === 'missing-input') {
         return 1;
       }
       if (stepResult.status === 'back') {
@@ -759,10 +818,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       }
       if (step === 'context' && stepResult.status !== 'ready') {
         if (shouldRunAgents && args.skipAgents !== true) {
-          if (agentsRequested) {
-            writeContextNotReadyForAgents(projectResult.projectDir, io);
-            return args.inputMode === 'disabled' ? 1 : 0;
-          }
           return 0;
         }
       }
@@ -779,19 +834,30 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
   const status = await readKtxSetupStatus(projectResult.projectDir, { cliVersion: args.cliVersion });
   const focusedOnAgents = args.agents || entryAction === 'agents';
   if (!focusedOnAgents) {
-    setupUi.note(formatKtxSetupStatus(status).trimEnd(), 'Project status', io, {
-      format: (line) => line,
-    });
-    setupUi.note(
-      formatSetupNextStepLines({
-        setupReady: setupStatusReady(status),
-        hasContextTargets: setupHasContextTargets(status),
-        contextReady: setupContextReady(status),
-        agentIntegrationReady: status.agents.some((agent) => agent.ready),
-      }).join('\n'),
-      'What you can do next',
-      io,
-    );
+    if (shouldPrintConciseReadySummary(status)) {
+      setupUi.note(
+        formatKtxSetupCompletionSummary(status, { agentNextActions }),
+        agentNextActions ? 'Finish KTX agent setup' : 'KTX project ready',
+        io,
+        {
+          format: (line) => line,
+        },
+      );
+    } else {
+      setupUi.note(formatKtxSetupStatus(status).trimEnd(), 'Project status', io, {
+        format: (line) => line,
+      });
+      setupUi.note(
+        formatSetupNextStepLines({
+          setupReady: setupStatusReady(status),
+          hasContextTargets: setupHasContextTargets(status),
+          contextReady: setupContextReady(status),
+          agentIntegrationReady: status.agents.some((agent) => agent.ready),
+        }).join('\n'),
+        'What you can do next',
+        io,
+      );
+    }
   }
   return 0;
 }

@@ -18,7 +18,7 @@ import {
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 
-export type KtxSetupProjectMode = 'auto' | 'new' | 'existing' | 'prompt-new';
+export type KtxSetupProjectMode = 'auto' | 'prompt-new';
 export type KtxSetupInputMode = 'auto' | 'disabled';
 
 export interface KtxSetupProjectArgs {
@@ -29,8 +29,18 @@ export interface KtxSetupProjectArgs {
   allowBack?: boolean;
 }
 
+export type KtxSetupCreatedProjectCleanup =
+  | { kind: 'remove-project-dir'; projectDir: string }
+  | { kind: 'remove-ktx-scaffold'; projectDir: string };
+
 export type KtxSetupProjectResult =
-  | { status: 'ready'; projectDir: string; project: KtxLocalProject; confirmedCreation?: boolean }
+  | {
+      status: 'ready';
+      projectDir: string;
+      project: KtxLocalProject;
+      confirmedCreation?: boolean;
+      createdProjectCleanup?: KtxSetupCreatedProjectCleanup;
+    }
   | { status: 'back'; projectDir: string }
   | { status: 'cancelled'; projectDir: string }
   | { status: 'missing-input'; projectDir: string };
@@ -49,7 +59,12 @@ export interface KtxSetupProjectDeps {
 }
 
 type PromptProjectDirResult =
-  | { status: 'selected'; projectDir: string; confirmedCreation: boolean }
+  | {
+      status: 'selected';
+      projectDir: string;
+      confirmedCreation: boolean;
+      createdProjectCleanup?: KtxSetupCreatedProjectCleanup;
+    }
   | { status: 'cancelled'; projectDir: string }
   | { status: 'missing-input'; projectDir: string }
   | { status: 'back'; projectDir: string };
@@ -92,11 +107,28 @@ async function existingFolderState(
 }
 
 type ConfirmProjectDirResult =
-  | { status: 'confirmed'; confirmedCreation: boolean }
+  | {
+      status: 'confirmed';
+      confirmedCreation: boolean;
+      createdProjectCleanup?: KtxSetupCreatedProjectCleanup;
+    }
   | { status: 'choose-another' }
   | { status: 'back' }
   | { status: 'cancelled' }
   | { status: 'not-directory' };
+
+function cleanupForFolderState(
+  projectDir: string,
+  state: Awaited<ReturnType<typeof existingFolderState>>,
+): KtxSetupCreatedProjectCleanup | undefined {
+  if (state === 'missing') {
+    return { kind: 'remove-project-dir', projectDir };
+  }
+  if (state === 'empty-directory') {
+    return { kind: 'remove-ktx-scaffold', projectDir };
+  }
+  return undefined;
+}
 
 async function confirmProjectDir(
   selectedDir: string,
@@ -137,7 +169,7 @@ async function confirmProjectDir(
   if (action === 'choose-another') return { status: 'choose-another' };
   if (action === 'back') return { status: 'back' };
   if (action !== 'create') return { status: 'cancelled' };
-  return { status: 'confirmed', confirmedCreation: true };
+  return { status: 'confirmed', confirmedCreation: true, createdProjectCleanup: cleanupForFolderState(selectedDir, state) };
 }
 
 async function normalizeSetupGitignore(projectDir: string): Promise<void> {
@@ -220,8 +252,26 @@ async function promptForNewProjectDir(
     if (confirmed.status === 'choose-another') continue;
     if (confirmed.status === 'back') return { status: 'back', projectDir };
     if (confirmed.status === 'cancelled') return { status: 'cancelled', projectDir };
-    return { status: 'selected', projectDir: selectedDir, confirmedCreation: confirmed.confirmedCreation };
+    return {
+      status: 'selected',
+      projectDir: selectedDir,
+      confirmedCreation: confirmed.confirmedCreation,
+      ...(confirmed.createdProjectCleanup ? { createdProjectCleanup: confirmed.createdProjectCleanup } : {}),
+    };
   }
+}
+
+async function createProjectWithCleanup(
+  projectDir: string,
+  deps: KtxSetupProjectDeps,
+): Promise<{ project: KtxLocalProject; createdProjectCleanup?: KtxSetupCreatedProjectCleanup }> {
+  const state = await existingFolderState(projectDir);
+  const project = await createProject(projectDir, deps);
+  const createdProjectCleanup = cleanupForFolderState(projectDir, state);
+  return {
+    project,
+    ...(createdProjectCleanup ? { createdProjectCleanup } : {}),
+  };
 }
 
 export async function runKtxSetupProjectStep(
@@ -233,30 +283,14 @@ export async function runKtxSetupProjectStep(
   const homeDir = deps.homeDir ?? homedir();
   const exists = hasProjectConfig(projectDir);
 
-  if (args.mode === 'existing') {
-    if (!exists) {
-      io.stderr.write(`No existing KTX project found at ${projectDir}. Pass --new to create it.\n`);
-      return { status: 'missing-input', projectDir };
-    }
-    const project = await loadExistingProject(projectDir, deps);
-    printProjectSummary(io, projectDir);
-    return { status: 'ready', projectDir, project };
-  }
-
-  if (args.mode === 'new') {
-    const project = await createProject(projectDir, deps);
-    printProjectSummary(io, projectDir);
-    return { status: 'ready', projectDir, project };
-  }
-
   if (args.mode === 'prompt-new') {
     if (args.inputMode === 'disabled') {
-      io.stderr.write('Missing new project folder: pass --new --project-dir to create a project without prompts.\n');
+      io.stderr.write('Missing new project folder: pass --project-dir and --yes to create a project without prompts.\n');
       return { status: 'missing-input', projectDir };
     }
     if (!io.stdout.isTTY && !deps.prompts) {
       io.stderr.write(
-        'Missing new project folder: pass --new --project-dir to create a project outside an interactive terminal.\n',
+        'Missing new project folder: pass --project-dir and --yes to create a project outside an interactive terminal.\n',
       );
       return { status: 'missing-input', projectDir };
     }
@@ -277,6 +311,7 @@ export async function runKtxSetupProjectStep(
       projectDir: selected.projectDir,
       project,
       confirmedCreation: selected.confirmedCreation,
+      ...(selected.createdProjectCleanup ? { createdProjectCleanup: selected.createdProjectCleanup } : {}),
     };
   }
 
@@ -288,16 +323,21 @@ export async function runKtxSetupProjectStep(
 
   if (args.inputMode === 'disabled') {
     if (!args.yes) {
-      io.stderr.write('Missing setup choice: pass --new or --yes to create a project in non-interactive setup.\n');
+      io.stderr.write('Missing setup choice: pass --yes to create a project in non-interactive setup.\n');
       return { status: 'missing-input', projectDir };
     }
-    const project = await createProject(projectDir, deps);
+    const { project, createdProjectCleanup } = await createProjectWithCleanup(projectDir, deps);
     printProjectSummary(io, projectDir);
-    return { status: 'ready', projectDir, project };
+    return {
+      status: 'ready',
+      projectDir,
+      project,
+      ...(createdProjectCleanup ? { createdProjectCleanup } : {}),
+    };
   }
 
   if (!io.stdout.isTTY && !deps.prompts) {
-    io.stderr.write('Missing setup choice: pass --new or --yes to create a project outside an interactive terminal.\n');
+    io.stderr.write('Missing setup choice: pass --yes to create a project outside an interactive terminal.\n');
     return { status: 'missing-input', projectDir };
   }
 
@@ -332,9 +372,14 @@ export async function runKtxSetupProjectStep(
     }
 
     if (choice === 'current') {
-      const project = await createProject(projectDir, deps);
+      const { project, createdProjectCleanup } = await createProjectWithCleanup(projectDir, deps);
       printProjectSummary(io, projectDir);
-      return { status: 'ready', projectDir, project };
+      return {
+        status: 'ready',
+        projectDir,
+        project,
+        ...(createdProjectCleanup ? { createdProjectCleanup } : {}),
+      };
     }
 
     if (choice === 'new-default') {
@@ -349,6 +394,7 @@ export async function runKtxSetupProjectStep(
         projectDir: defaultProjectDir,
         project,
         confirmedCreation: confirmed.confirmedCreation,
+        ...(confirmed.createdProjectCleanup ? { createdProjectCleanup: confirmed.createdProjectCleanup } : {}),
       };
     }
 
@@ -372,7 +418,13 @@ export async function runKtxSetupProjectStep(
       if (confirmed.status === 'cancelled') return { status: 'cancelled', projectDir };
       const project = await createProject(customDir, deps);
       printProjectSummary(io, customDir);
-      return { status: 'ready', projectDir: customDir, project, confirmedCreation: confirmed.confirmedCreation };
+      return {
+        status: 'ready',
+        projectDir: customDir,
+        project,
+        confirmedCreation: confirmed.confirmedCreation,
+        ...(confirmed.createdProjectCleanup ? { createdProjectCleanup: confirmed.createdProjectCleanup } : {}),
+      };
     }
 
     prompts.cancel('Setup cancelled.');

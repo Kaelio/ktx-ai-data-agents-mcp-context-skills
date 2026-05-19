@@ -310,7 +310,7 @@ describe('canonical local ingest', () => {
         '  adapters:',
         '    - fake',
         '  embeddings:',
-        '    backend: deterministic',
+        '    backend: none',
         '',
       ].join('\n'),
       'utf-8',
@@ -415,9 +415,11 @@ describe('canonical local ingest', () => {
     expect(result.result.failedWorkUnits).toEqual([]);
     const db = new Database(join(project.projectDir, '.ktx', 'db.sqlite'), { readonly: true });
     try {
-      expect(db.prepare('SELECT key, summary, embedding_json IS NOT NULL AS has_embedding FROM knowledge_pages ORDER BY key').all()).toEqual([
-        { key: 'orders_context', summary: 'Orders source context', has_embedding: 1 },
-      ]);
+      expect(
+        db
+          .prepare('SELECT key, summary, embedding_json IS NOT NULL AS has_embedding FROM knowledge_pages ORDER BY key')
+          .all(),
+      ).toEqual([{ key: 'orders_context', summary: 'Orders source context', has_embedding: 0 }]);
     } finally {
       db.close();
     }
@@ -515,7 +517,7 @@ describe('canonical local ingest', () => {
         '  adapters:',
         '    - historic-sql',
         '  embeddings:',
-        '    backend: deterministic',
+        '    backend: none',
         'storage:',
         '  state: sqlite',
         '  search: sqlite-fts5',
@@ -599,7 +601,7 @@ describe('canonical local ingest', () => {
         '  adapters:',
         '    - metabase',
         '  embeddings:',
-        '    backend: deterministic',
+        '    backend: none',
         '',
       ].join('\n'),
       'utf-8',
@@ -677,7 +679,7 @@ describe('canonical local ingest', () => {
         '  adapters:',
         '    - metricflow',
         '  embeddings:',
-        '    backend: deterministic',
+        '    backend: none',
         'storage:',
         '  state: sqlite',
         '  search: sqlite-fts5',
@@ -805,7 +807,7 @@ describe('canonical local ingest', () => {
         '  adapters:',
         '    - looker',
         '  embeddings:',
-        '    backend: deterministic',
+        '    backend: none',
         'storage:',
         '  state: sqlite',
         '  search: sqlite-fts5',

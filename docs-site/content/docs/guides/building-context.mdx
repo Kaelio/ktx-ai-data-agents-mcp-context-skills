@@ -3,12 +3,9 @@ title: Building Context
 description: Build and refresh KTX context from databases, source tools, query history, and text.
 ---
 
-Building context turns configured connections into local semantic-layer sources
-and wiki pages. Agents use those files to understand your schema, business
-definitions, metric logic, joins, and known caveats before they write SQL.
-
-Use this guide after `ktx setup` has created `ktx.yaml` and at least one
-database or context-source connection.
+Build context after `ktx setup` creates `ktx.yaml` and at least one database or
+context-source connection. KTX writes local semantic-layer sources and wiki
+pages for agents to use before writing SQL.
 
 ## The build loop
 
@@ -22,15 +19,12 @@ Most projects use this loop:
 5. Validate and query representative sources before handing the context to an
    agent.
 
-`ktx ingest --all` runs database connections first, then context-source
-connections. That order lets dbt, BI, Notion, and text ingest attach context to
-known warehouse tables.
+`ktx ingest --all` runs databases first, then context-source connections, so
+external metadata can attach to known warehouse tables.
 
 ## Database ingest
 
-Database ingest connects to a configured warehouse and records local schema
-context. It gives agents table, column, type, constraint, and row-count
-grounding without requiring them to inspect the database directly.
+Database ingest records table, column, type, constraint, and row-count context.
 
 ```bash
 # Build one configured database connection
@@ -55,20 +49,16 @@ ktx ingest warehouse --deep
 ktx ingest --all --deep
 ```
 
-Deep ingest needs LLM and embedding readiness. If those providers are not
-configured, run `ktx setup` or use `--fast`.
+Deep ingest needs LLM and embedding readiness. Otherwise run `ktx setup` or use
+`--fast`.
 
-When you use `claude-code`, KTX still controls the tool surface for ingest and
-memory capture. Claude Code built-in tools, discovered MCP servers, plugins,
-skills, agents, and slash commands are not invokable by KTX agent loops unless
-they are exact KTX MCP tools for the current run.
+With `claude-code`, KTX agent loops can invoke only the KTX MCP tools for the
+current run.
 
 ## Query history
 
-PostgreSQL, BigQuery, and Snowflake can add query-history context. This helps
-KTX learn common joins, filters, service-account patterns, redaction rules, and
-usage-heavy query templates. BigQuery and Snowflake support a lookback window;
-Postgres reads the current `pg_stat_statements` aggregate data instead.
+PostgreSQL, BigQuery, and Snowflake can add query-history context: common joins,
+filters, service-account patterns, redaction rules, and high-usage templates.
 
 Enable it during setup, store it under `connections.<id>.context.queryHistory`,
 or request it for one run:
@@ -84,19 +74,13 @@ for one run.
 
 ## Relationship evidence
 
-Many databases do not declare all foreign keys. KTX can score relationship
-candidates using signals such as name similarity, type compatibility, value
-overlap, embedding similarity, uniqueness, null rate, and structural priors.
-
-The public CLI does not expose separate relationship review subcommands.
-Relationship evidence is built as part of deep database ingest when the
-connector and readiness checks support it.
+KTX scores relationship candidates during supported deep database ingest. The
+public CLI does not expose separate relationship review subcommands.
 
 ## Context-source ingest
 
-Context-source connections pull business metadata from tools your team already
-uses. The current public `ktx ingest` command is connection-centric: pass one
-configured connection id, or pass `--all`.
+Context-source connections pull metadata from dbt, BI tools, Notion, and other
+configured systems. Pass one connection id or `--all`.
 
 ```bash
 # Build one source connection
@@ -117,14 +101,13 @@ Supported source types:
 | `metabase` | Metabase API | Questions, dashboards, table metadata, and mappings |
 | `notion` | Notion API | Wiki pages and business knowledge |
 
-Source ingest extracts metadata, reconciles it with existing local context, and
-writes semantic-layer YAML plus wiki Markdown. It merges rather than blindly
-overwriting local edits.
+Source ingest writes semantic-layer YAML and wiki Markdown, merging with local
+edits.
 
 ## Text ingest
 
-Use `ktx ingest text` for notes, Markdown files, runbooks, Slack exports, or
-other free-form knowledge that should become searchable KTX memory.
+Use `ktx ingest text` for notes, Markdown, runbooks, Slack exports, or other
+searchable memory.
 
 ```bash
 # Capture a Markdown file
@@ -146,14 +129,12 @@ Useful flags:
 | `--json` | Print structured output |
 | `--fail-fast` | Stop after the first failed text item |
 
-Text ingest is a good fit for small, high-signal documents. For system-specific
-connectors such as Notion, dbt, or Metabase, prefer configured source ingest so
-KTX can preserve source metadata.
+Use text ingest for small, high-signal documents. Prefer configured source
+ingest for Notion, dbt, Metabase, and similar systems.
 
 ## Output and artifacts
 
-Every ingest run prints a summary. Use `--json` when an agent or script needs a
-structured plan and per-target results.
+Every ingest run prints a summary. Use `--json` for scripts and agents.
 
 ```bash
 ktx ingest --all --json
@@ -168,9 +149,7 @@ Typical generated files:
 | `wiki/user/<user-id>/*.md` | Text and memory ingest | User-scoped context |
 | `.ktx/setup/context-build.json` | Setup context build | Resume and readiness state for setup |
 
-Ingest sessions also record transcripts with tool calls, LLM responses, and
-write decisions. Inspect them when you need to debug why a source or wiki page
-was written a certain way.
+Ingest transcripts include tool calls, LLM responses, and write decisions.
 
 ## Example: first full refresh
 

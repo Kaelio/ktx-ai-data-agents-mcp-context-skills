@@ -11,6 +11,8 @@ import {
   type KtxMcpDaemonState,
 } from './managed-mcp-daemon.js';
 
+type KtxMcpDaemonStartOptions = Parameters<typeof startKtxMcpDaemon>[0];
+
 function child(pid = 4242): KtxMcpDaemonChild {
   return { pid, unref: vi.fn() };
 }
@@ -40,6 +42,7 @@ describe('managed MCP daemon lifecycle', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -92,6 +95,33 @@ describe('managed MCP daemon lifecycle', () => {
     expect(JSON.stringify(JSON.parse(await readFile(join(projectDir, '.ktx/mcp.json'), 'utf8')))).not.toContain(
       'secret-token',
     );
+  });
+
+  it('sanitizes IPv6 CIDR entries from child NO_PROXY env', async () => {
+    vi.stubEnv('NO_PROXY', 'localhost,fd07:b51a:cc66:f0::/64');
+    vi.stubEnv('no_proxy', '::1,fd00::/8,*.orb.local');
+    const spawnDaemon = vi.fn<NonNullable<KtxMcpDaemonStartOptions['spawnDaemon']>>(() => child(5555));
+
+    await startKtxMcpDaemon({
+      projectDir,
+      cliVersion: '0.0.0-test',
+      host: '127.0.0.1',
+      port: 7879,
+      allowedHosts: [],
+      allowedOrigins: [],
+      binPath: '/repo/packages/cli/dist/bin.js',
+      spawnDaemon,
+      processAlive: vi.fn(() => false),
+      portAvailable: vi.fn(async () => true),
+      now: () => new Date('2026-05-14T00:00:00.000Z'),
+    });
+
+    const env = spawnDaemon.mock.calls[0]?.[2].env;
+    if (!env) {
+      throw new Error('Expected MCP daemon spawn env');
+    }
+    expect(env.NO_PROXY).toBe('localhost,::1,*.orb.local');
+    expect(env.no_proxy).toBe(env.NO_PROXY);
   });
 
   it('returns already-running without spawning when the daemon is alive at the same host/port', async () => {

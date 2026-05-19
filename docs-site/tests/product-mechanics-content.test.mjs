@@ -23,7 +23,7 @@ test("docs introduction frames the concept before showing product mechanics", as
 
   const heroIndex = introduction.indexOf("Make analytics context");
   const whyIndex = introduction.indexOf("## Why KTX");
-  const createsIndex = introduction.indexOf("## What KTX creates");
+  const worksIndex = introduction.indexOf("## How KTX works");
   const mechanicsIndex = introduction.indexOf("<ProductMechanics />");
   const useCaseIndex = introduction.indexOf("## Use it for");
   const heroSource = introduction.slice(0, mechanicsIndex);
@@ -34,12 +34,12 @@ test("docs introduction frames the concept before showing product mechanics", as
     "problem framing should appear after the hero",
   );
   assert.ok(
-    createsIndex > whyIndex,
-    "artifact summary should appear after problem framing",
+    worksIndex > whyIndex,
+    "mechanics bridge should appear after problem framing",
   );
   assert.ok(
-    mechanicsIndex > createsIndex,
-    "mechanics component should appear after the artifact summary",
+    mechanicsIndex > worksIndex,
+    "mechanics component should appear after the mechanics bridge",
   );
   assert.ok(
     mechanicsIndex < useCaseIndex,
@@ -49,49 +49,47 @@ test("docs introduction frames the concept before showing product mechanics", as
   assert.doesNotMatch(heroSource, /The Context Layer/);
   assert.doesNotMatch(heroSource, /Building Context/);
   assert.doesNotMatch(heroSource, /flex flex-wrap gap-3/);
+  assert.doesNotMatch(introduction, /raw-sources/);
+  assert.doesNotMatch(introduction, /\.ktx/);
 });
 
-test("product mechanics component covers source-specific context and SQL expansion", async () => {
+test("product mechanics component explains ingestion outputs", async () => {
   const component = await readDocsFile("components/product-mechanics.tsx");
 
   for (const expectedText of [
-    "How KTX works",
-    "Build context from source evidence",
-    "Run agent requests through the model",
-    "Ingestion",
-    "Runtime",
-    "wiki/",
-    "semantic-layer/",
-    "raw-sources/",
-    ".ktx/",
-    "sl_refs",
-    "Database structure",
-    "BI and usage evidence",
-    "Semantic modeling",
-    "Company documentation",
-    "Notion pages",
-    "Sources",
-    "KTX transforms evidence",
-    "KTX builds the model",
-    "Outputs KTX writes",
-    "Postgres",
+    "How ingestion works",
+    "Ingestion flow",
+    "From scattered source systems to agent-ready context",
+    "wiki/*.md",
+    "semantic-layer/*.yaml",
+    "Wiki",
+    "Semantic layer",
+    "Databases",
+    "BI tools",
+    "Modeling code",
+    "Docs and notes",
+    "Source adapters",
+    "Context builder",
+    "Reconciliation",
+    "Validation",
+    "PostgreSQL",
     "Snowflake",
     "BigQuery",
-    "and many others",
     "Metabase",
     "Looker",
+    "dbt",
     "MetricFlow",
     "LookML",
-    "extract evidence",
-    "reconcile entities",
-    "validate references",
-    "semantic query plan",
-    "dialect SQL",
-    "bounded rows",
-    "provenance",
-    "measure: orders.total_revenue",
-    "dimension: customers.segment",
-    "select",
+    "Notion",
+    "Any text",
+    "compile into SQL",
+    '"use client"',
+    "@xyflow/react",
+    "<ReactFlow",
+    "getSmoothStepPath",
+    "animateMotion",
+    "mechanics-particle",
+    "buildParticlePath",
   ]) {
     assert.ok(
       component.includes(expectedText),
@@ -99,7 +97,27 @@ test("product mechanics component covers source-specific context and SQL expansi
     );
   }
 
+  assert.match(
+    component,
+    /nodesDraggable=\{false\}/,
+    "ReactFlow canvas should disable node dragging",
+  );
+  assert.match(
+    component,
+    /panOnDrag=\{false\}/,
+    "ReactFlow canvas should disable panning",
+  );
+  assert.match(
+    component,
+    /zoomOnScroll=\{false\}/,
+    "ReactFlow canvas should disable scroll zoom",
+  );
+
+  assert.doesNotMatch(component, /raw-sources/);
+  assert.doesNotMatch(component, /\.ktx/);
   assert.doesNotMatch(component, /Product mechanics/);
+  assert.doesNotMatch(component, /How KTX works/);
+  assert.doesNotMatch(component, /Runtime/);
   assert.doesNotMatch(component, /A semantic compiler for analytics agents/);
   assert.doesNotMatch(component, /KTX does more than retrieve Markdown/);
   assert.doesNotMatch(component, /Plain Markdown \+ RAG/);
@@ -109,15 +127,11 @@ test("product mechanics component covers source-specific context and SQL expansi
   assert.doesNotMatch(component, /KTX works in two moments/);
   assert.doesNotMatch(component, /name: "Metabase and query history"/);
   assert.doesNotMatch(component, /name: "dbt, MetricFlow, LookML"/);
-  assert.doesNotMatch(component, /query history/);
-  assert.doesNotMatch(component, /analyst notes/);
-  assert.doesNotMatch(component, /ClickHouse/);
   assert.doesNotMatch(component, /MySQL/);
   assert.doesNotMatch(component, /SQL Server/);
-  assert.doesNotMatch(component, /SQLite/);
   assert.doesNotMatch(
     component,
-    /\/ktx\/brand\/(?:postgresql|snowflake|bigquery|clickhouse|mysql|sqlserver|sqlite|metabase|dbt|looker|notion)\.svg/,
+    /\/ktx\/brand\/(?:postgresql|snowflake|bigquery|mysql|sqlserver|sqlite|metabase|dbt|looker|notion)\.svg/,
   );
   assert.doesNotMatch(component, /<img/);
   assert.doesNotMatch(component, /w-\[calc\(100vw/);

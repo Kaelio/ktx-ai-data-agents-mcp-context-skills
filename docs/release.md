@@ -3,7 +3,7 @@
 This runbook covers the maintainer workflow for publishing `@kaelio/ktx` to
 npm through GitHub Actions. The workflow uses semantic-release to choose the
 next version, update release metadata, publish the package, create the GitHub
-release, and commit the release files back to the repository.
+release, and commit prerelease files back to the `next` branch.
 
 ## Release channels
 
@@ -15,7 +15,9 @@ KTX has two npm release channels:
 Run rc releases from the source branch you want to publish. The workflow
 creates or updates the `next` prerelease branch from that source branch before
 running semantic-release, because semantic-release requires a dedicated
-prerelease branch in addition to the stable `main` branch.
+prerelease branch in addition to the stable `main` branch. You can publish an
+rc from `main` when you want to validate the current stable branch before a
+stable release.
 
 Run stable releases only from `main`. The workflow rejects stable releases from
 other branches.
@@ -29,11 +31,26 @@ Before you publish, confirm these requirements:
   `.github/workflows/release.yml` workflow.
 - The workflow keeps `id-token: write` permission so npm can verify the
   GitHub Actions run through OpenID Connect.
-- The repository has a baseline semantic-release tag for the latest published
-  package version, such as `v0.1.0-rc.1`.
+- The repository has release metadata in `release-policy.json` for the current
+  public package line, such as `0.1.0-rc.1` or `0.1.0`.
+- The repository has a stable baseline tag when you need semantic-release to
+  publish the first stable version as `0.1.0`.
 
-If no baseline tag exists, semantic-release treats the run as the first release
-and may choose a version that doesn't match the currently published package.
+semantic-release doesn't support choosing an arbitrary first `0.x` stable
+release. If KTX has no stable tag yet and you need the first stable release to
+be `0.1.0`, create and push the baseline tag once before running the live
+stable workflow:
+
+```bash
+root_commit="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
+git tag v0.0.0 "${root_commit}"
+git push origin v0.0.0
+```
+
+KTX follows the same versioning schema as the main Kaelio release workflow:
+breaking-change and `major` commit markers create a minor release, not an
+automatic major release. A major version requires an intentional manual release
+path.
 
 ## Dry-run a release
 
@@ -44,7 +61,7 @@ publishing to npm.
 2. Select **KTX Release**.
 3. Select the branch to release from.
 4. Set **release_kind** to `rc` or `stable`.
-5. Leave **publish_live** set to `false`.
+5. Set **publish_live** to `false`.
 6. Optional: Set **force_release** to `true` when you need a patch release even
    if semantic-release doesn't find a releasable commit.
 7. Run the workflow.
@@ -60,9 +77,9 @@ promoting to `latest`.
 
 1. Open **Actions** in GitHub.
 2. Select **KTX Release**.
-3. Select the source branch to release from.
+3. Select the source branch to release from, including `main` when needed.
 4. Set **release_kind** to `rc`.
-5. Set **publish_live** to `true`.
+5. Leave **publish_live** set to `true`.
 6. Optional: Set **force_release** to `true`.
 7. Run the workflow.
 
@@ -78,19 +95,21 @@ Publish a stable release from `main` after you have validated an rc package.
 1. Open **Actions** in GitHub.
 2. Select **KTX Release**.
 3. Select `main`.
-4. Set **release_kind** to `stable`.
-5. Set **publish_live** to `true`.
+4. Leave **release_kind** set to `stable`.
+5. Leave **publish_live** set to `true`.
 6. Optional: Set **force_release** to `true`.
 7. Run the workflow.
 
 The workflow publishes `@kaelio/ktx` with `--access public --tag latest`, runs
-the published package smoke test, creates a GitHub release, and commits the
-release metadata.
+the published package smoke test, and creates a GitHub release. Stable releases
+don't commit release metadata back to `main`, because `main` is protected and
+requires changes through pull requests.
 
 ## Release metadata
 
 semantic-release calls `scripts/update-public-release-version.mjs` during the
-prepare step. That script updates:
+prepare step before `@semantic-release/npm` publishes the package. That script
+updates:
 
 - `package.json` with the semantic-release version.
 - `release-policy.json` with `publicNpmPackageVersion`, npm publish settings,
@@ -98,7 +117,10 @@ prepare step. That script updates:
 
 The artifact packaging and readiness scripts read `publicNpmPackageVersion`
 from `release-policy.json`, so manual version edits in build scripts aren't
-needed for rc releases.
+needed for rc releases. The semantic-release npm plugin publishes the generated
+`dist/public-npm-package` tree and writes the release tarball under
+`dist/artifacts/npm`. Stable releases use the updated metadata during the
+workflow run, but that generated metadata isn't committed back to `main`.
 
 The bundled Python runtime wheel also derives its version from
 `publicNpmPackageVersion`. Stable npm versions are reused as-is, and rc

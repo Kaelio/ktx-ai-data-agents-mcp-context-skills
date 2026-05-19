@@ -55,12 +55,12 @@ describe('setup project step', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('creates a new project with --new and marks the project step complete', async () => {
+  it('creates a new project in non-interactive auto mode with --yes and marks the project step complete', async () => {
     const projectDir = join(tempDir, 'warehouse');
     const testIo = makeIo();
 
     const result = await runKtxSetupProjectStep(
-      { projectDir, mode: 'new', inputMode: 'disabled', yes: false },
+      { projectDir, mode: 'auto', inputMode: 'disabled', yes: true },
       testIo.io,
     );
 
@@ -74,7 +74,7 @@ describe('setup project step', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('loads an existing project with --existing and drops config setup progress', async () => {
+  it('loads an existing project in auto mode and drops config setup progress', async () => {
     const projectDir = join(tempDir, 'warehouse');
     await initKtxProject({ projectDir });
     await writeFile(
@@ -91,7 +91,7 @@ describe('setup project step', () => {
     );
 
     const result = await runKtxSetupProjectStep(
-      { projectDir, mode: 'existing', inputMode: 'disabled', yes: false },
+      { projectDir, mode: 'auto', inputMode: 'disabled', yes: false },
       makeIo().io,
     );
 
@@ -112,7 +112,7 @@ describe('setup project step', () => {
     await expect(
       runKtxSetupProjectStep({ projectDir, mode: 'auto', inputMode: 'disabled', yes: false }, rejectedIo.io),
     ).resolves.toMatchObject({ status: 'missing-input' });
-    expect(rejectedIo.stderr()).toContain('Missing setup choice: pass --new or --yes');
+    expect(rejectedIo.stderr()).toContain('Missing setup choice: pass --yes');
     await expect(stat(join(projectDir, 'ktx.yaml'))).rejects.toThrow();
 
     await expect(
@@ -121,15 +121,15 @@ describe('setup project step', () => {
     await expect(stat(join(projectDir, 'ktx.yaml'))).resolves.toBeDefined();
   });
 
-  it('fails --existing clearly when ktx.yaml is missing', async () => {
+  it('fails clearly in no-input auto mode when ktx.yaml is missing and --yes is absent', async () => {
     const projectDir = join(tempDir, 'warehouse');
     const testIo = makeIo();
 
     await expect(
-      runKtxSetupProjectStep({ projectDir, mode: 'existing', inputMode: 'disabled', yes: false }, testIo.io),
+      runKtxSetupProjectStep({ projectDir, mode: 'auto', inputMode: 'disabled', yes: false }, testIo.io),
     ).resolves.toMatchObject({ status: 'missing-input' });
 
-    expect(testIo.stderr()).toContain(`No existing KTX project found at ${projectDir}`);
+    expect(testIo.stderr()).toContain('Missing setup choice: pass --yes');
   });
 
   it('prompts to use the current directory and creates a project in interactive auto mode', async () => {

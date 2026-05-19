@@ -28,8 +28,8 @@ export const metadata: Metadata = {
   description:
     "Open-source context infrastructure that makes agentic analytics reliable.",
   icons: {
-    icon: "/brand/ktx-mascot.svg",
-    shortcut: "/brand/ktx-mascot.svg",
+    icon: "/ktx/brand/ktx-mascot.svg",
+    shortcut: "/ktx/brand/ktx-mascot.svg",
   },
 };
 
@@ -41,7 +41,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
     >
       <body>
-        <RootProvider>{children}</RootProvider>
+        <RootProvider search={{ options: { api: "/ktx/api/search" } }}>
+          <div className="ktx-site-shell">{children}</div>
+        </RootProvider>
       </body>
     </html>
   );

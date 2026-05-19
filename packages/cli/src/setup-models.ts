@@ -37,7 +37,6 @@ export interface KtxSetupModelArgs {
   anthropicApiKeyEnv?: string;
   anthropicApiKeyFile?: string;
   llmModel?: string;
-  anthropicModel?: string;
   vertexProject?: string;
   vertexLocation?: string;
   forcePrompt?: boolean;
@@ -478,14 +477,14 @@ function requestedBackend(args: KtxSetupModelArgs): KtxSetupLlmBackend | undefin
   if (args.vertexProject || args.vertexLocation) {
     return 'vertex';
   }
-  if (args.anthropicApiKeyEnv || args.anthropicApiKeyFile || args.llmModel || args.anthropicModel) {
+  if (args.anthropicApiKeyEnv || args.anthropicApiKeyFile || args.llmModel) {
     return 'anthropic';
   }
   return undefined;
 }
 
 function requestedModel(args: KtxSetupModelArgs): string | undefined {
-  return args.llmModel ?? args.anthropicModel;
+  return args.llmModel;
 }
 
 async function chooseBackend(
@@ -929,7 +928,6 @@ export async function runKtxSetupAnthropicModelStep(
     !args.anthropicApiKeyEnv &&
     !args.anthropicApiKeyFile &&
     !args.llmModel &&
-    !args.anthropicModel &&
     !args.vertexProject &&
     !args.vertexLocation
   ) {

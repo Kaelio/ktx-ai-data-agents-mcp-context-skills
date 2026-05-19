@@ -242,15 +242,6 @@ function buildEmbeddingsStatus(config: KtxProjectEmbeddingConfig, env: NodeJS.Pr
       detail: 'disabled — semantic search will be skipped',
     };
   }
-  if (backend === 'deterministic') {
-    return {
-      backend,
-      model,
-      dimensions,
-      status: 'warn',
-      detail: 'deterministic — semantic search degraded (lexical/dictionary lanes still work)',
-    };
-  }
   if (backend === 'openai') {
     const ref = config.openai?.api_key;
     const resolved = resolveRef(ref, env);
@@ -645,7 +636,7 @@ function buildVerdict(
   const reasons: string[] = [];
   if (llm.status === 'warn') reasons.push('LLM credentials missing');
   if (embeddings.status === 'warn') {
-    if (embeddings.backend === 'deterministic' || embeddings.backend === 'none') {
+    if (embeddings.backend === 'none') {
       reasons.push('semantic search disabled');
     } else {
       reasons.push('embedding credentials missing');

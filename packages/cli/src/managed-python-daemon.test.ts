@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   readManagedPythonDaemonStatus,
-  sanitizeProxyEnv,
   startManagedPythonDaemon,
   stopAllManagedPythonDaemons,
   stopManagedPythonDaemon,
@@ -80,6 +79,7 @@ function installResult(root: string, features: Array<'core' | 'local-embeddings'
     asset: {
       manifest: manifest(root, features).asset,
       wheelPath: join(root, 'assets', 'python', 'kaelio_ktx-0.2.0-py3-none-any.whl'),
+      requiresPython: { specifier: '>=3.13', minimumVersion: '3.13' },
     },
     manifest: manifest(root, features),
   };
@@ -133,6 +133,7 @@ describe('managed Python daemon lifecycle', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -186,6 +187,27 @@ describe('managed Python daemon lifecycle', () => {
       stdoutLog: layout(tempDir).daemonStdoutPath,
       stderrLog: layout(tempDir).daemonStderrPath,
     });
+  });
+
+  it('sanitizes IPv6 CIDR entries from child NO_PROXY env', async () => {
+    vi.stubEnv('NO_PROXY', 'localhost,fd07:b51a:cc66:f0::/64,127.0.0.0/8');
+    vi.stubEnv('no_proxy', '::1,fd00::/8,*.orb.local');
+    const spawnDaemon = makeSpawn(5555);
+
+    await startManagedPythonDaemon({
+      ...daemonOptionsBase(tempDir),
+      features: ['local-embeddings'],
+      installRuntime: vi.fn(async () => installResult(tempDir, ['core', 'local-embeddings'])),
+      spawnDaemon,
+      fetch: makeFetch(),
+      allocatePort: vi.fn(async () => 61234),
+      now: () => new Date('2026-05-11T00:00:00.000Z'),
+      pollIntervalMs: 1,
+    });
+
+    const env = vi.mocked(spawnDaemon).mock.calls[0]?.[2].env;
+    expect(env?.NO_PROXY).toBe('localhost,127.0.0.0/8,::1,*.orb.local');
+    expect(env?.no_proxy).toBe(env?.NO_PROXY);
   });
 
   it('makes a final health probe before reporting startup failure', async () => {
@@ -403,40 +425,5 @@ describe('managed Python daemon lifecycle', () => {
       }),
     ]);
     expect(await readFile(layout(tempDir).daemonStatePath, 'utf8')).toContain('"pid": 4242');
-  });
-});
-
-describe('sanitizeProxyEnv', () => {
-  it('removes IPv6 CIDR entries from NO_PROXY that crash httpx', () => {
-    const cleaned = sanitizeProxyEnv({
-      NO_PROXY: 'localhost,127.0.0.1,fd07:b51a:cc66:f0::/64,*.orb.internal',
-      no_proxy: 'localhost,127.0.0.1,fd07:b51a:cc66:f0::/64,*.orb.internal',
-    });
-    expect(cleaned.NO_PROXY).toBe('localhost,127.0.0.1,*.orb.internal');
-    expect(cleaned.no_proxy).toBe('localhost,127.0.0.1,*.orb.internal');
-  });
-
-  it('deletes NO_PROXY entirely when every entry is unparseable', () => {
-    const cleaned = sanitizeProxyEnv({ NO_PROXY: 'fd07::/64,::1' });
-    expect(cleaned.NO_PROXY).toBeUndefined();
-  });
-
-  it('preserves IPv4 addresses, IPv4 CIDRs, hostnames, and wildcards', () => {
-    const cleaned = sanitizeProxyEnv({
-      NO_PROXY: '127.0.0.0/8,10.0.0.1,localhost,*.example.com',
-    });
-    expect(cleaned.NO_PROXY).toBe('127.0.0.0/8,10.0.0.1,localhost,*.example.com');
-  });
-
-  it('leaves other env vars untouched', () => {
-    const cleaned = sanitizeProxyEnv({ PATH: '/usr/bin', NO_PROXY: '::1', FOO: 'bar' });
-    expect(cleaned.PATH).toBe('/usr/bin');
-    expect(cleaned.FOO).toBe('bar');
-    expect(cleaned.NO_PROXY).toBeUndefined();
-  });
-
-  it('does nothing when NO_PROXY is not set', () => {
-    const cleaned = sanitizeProxyEnv({ PATH: '/usr/bin' });
-    expect(cleaned).toEqual({ PATH: '/usr/bin' });
   });
 });

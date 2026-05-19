@@ -43,14 +43,9 @@ import type {
 
 const DESCRIPTION_TABLE_CONCURRENCY = 6;
 
-export interface DeterministicLocalScanEnrichmentProviderOptions {
-  embeddingDimensions?: number;
-  maxBatchSize?: number;
-}
-
 export interface KtxLocalScanEnrichmentProviders {
   llmRuntime: KtxLlmRuntimePort;
-  embedding: KtxEmbeddingPort;
+  embedding?: KtxEmbeddingPort | null;
 }
 
 export interface KtxLocalScanEnrichmentInput {
@@ -173,31 +168,9 @@ function providerlessEnrichedWarning(relationshipDetection: boolean): KtxScanWar
   };
 }
 
-function hashEmbedding(text: string, dimensions: number): number[] {
-  const values = Array.from({ length: dimensions }, (_, index) => {
-    let hash = index + 17;
-    for (const char of text) {
-      hash = (hash * 31 + char.charCodeAt(0) + index) % 1009;
-    }
-    return Number(((hash % 200) / 100 - 1).toFixed(4));
-  });
-  return values;
-}
-
-export function createDeterministicLocalScanEnrichmentProviders(
-  options: DeterministicLocalScanEnrichmentProviderOptions = {},
-): KtxLocalScanEnrichmentProviders {
-  const dimensions = options.embeddingDimensions ?? 8;
-  const maxBatchSize = options.maxBatchSize ?? 64;
+export function createDeterministicLocalScanEnrichmentProviders(): KtxLocalScanEnrichmentProviders {
   return {
     llmRuntime: deterministicLlmRuntime(),
-    embedding: {
-      dimensions,
-      maxBatchSize,
-      async embedBatch(texts) {
-        return texts.map((text) => hashEmbedding(text, dimensions));
-      },
-    },
   };
 }
 
@@ -370,7 +343,7 @@ async function generateDescriptions(input: {
 
 async function buildEmbeddings(input: {
   snapshot: KtxSchemaSnapshot;
-  providers: KtxLocalScanEnrichmentProviders;
+  embedding: KtxEmbeddingPort;
   descriptions: KtxLocalScanEnrichmentResult['descriptionUpdates'];
   progress?: KtxProgressPort;
 }): Promise<{ updates: KtxEmbeddingUpdate[]; byColumnId: Map<string, number[]> }> {
@@ -400,7 +373,7 @@ async function buildEmbeddings(input: {
   }
 
   const embeddings: number[][] = [];
-  const maxBatchSize = embeddingBatchSize(input.providers.embedding.maxBatchSize);
+  const maxBatchSize = embeddingBatchSize(input.embedding.maxBatchSize);
   const embeddingTexts = texts.map((item) => item.text);
   const batchCount = Math.ceil(embeddingTexts.length / maxBatchSize);
   if (batchCount === 0) {
@@ -412,7 +385,7 @@ async function buildEmbeddings(input: {
       transient: true,
     });
     const batch = embeddingTexts.slice(offset, offset + maxBatchSize);
-    const batchEmbeddings = await input.providers.embedding.embedBatch(batch);
+    const batchEmbeddings = await input.embedding.embedBatch(batch);
     if (batchEmbeddings.length !== batch.length) {
       throw new Error(`expected ${batch.length} embeddings, received ${batchEmbeddings.length}`);
     }
@@ -560,34 +533,38 @@ export async function runLocalScanEnrichment(
           warnings,
         }),
     });
-    const embeddingProgress = progress?.startPhase(0.2);
-    embeddingUpdates = await runEnrichmentStage({
-      stateStore: input.stateStore,
-      runId: input.context.runId,
-      connectionId: input.connectionId,
-      syncId,
-      mode: input.mode,
-      stage: 'embeddings',
-      inputHash,
-      now,
-      resumedStages: state.resumedStages,
-      completedStages: state.completedStages,
-      failedStages: state.failedStages,
-      compute: async () => {
-        const embeddings = await buildEmbeddings({
-          snapshot,
-          providers,
-          descriptions,
-          progress: embeddingProgress,
-        });
-        return embeddings.updates;
-      },
-    });
-    schema = snapshotToKtxEnrichedSchema(snapshot, embeddingsByColumnId(embeddingUpdates));
     summary.dataDictionary = input.connector.sampleColumn ? 'completed' : 'skipped';
     summary.tableDescriptions = 'completed';
     summary.columnDescriptions = 'completed';
-    summary.embeddings = 'completed';
+
+    const embeddingProgress = progress?.startPhase(0.2);
+    const embedding = providers.embedding;
+    if (embedding) {
+      embeddingUpdates = await runEnrichmentStage({
+        stateStore: input.stateStore,
+        runId: input.context.runId,
+        connectionId: input.connectionId,
+        syncId,
+        mode: input.mode,
+        stage: 'embeddings',
+        inputHash,
+        now,
+        resumedStages: state.resumedStages,
+        completedStages: state.completedStages,
+        failedStages: state.failedStages,
+        compute: async () => {
+          const embeddings = await buildEmbeddings({
+            snapshot,
+            embedding,
+            descriptions,
+            progress: embeddingProgress,
+          });
+          return embeddings.updates;
+        },
+      });
+      schema = snapshotToKtxEnrichedSchema(snapshot, embeddingsByColumnId(embeddingUpdates));
+      summary.embeddings = 'completed';
+    }
   }
 
   let relationshipUpdate: KtxRelationshipUpdate | null = null;

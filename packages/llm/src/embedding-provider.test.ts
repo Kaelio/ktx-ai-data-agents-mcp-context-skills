@@ -3,19 +3,16 @@ import { createKtxEmbeddingProvider } from './embedding-provider.js';
 import type { KtxEmbeddingConfig } from './types.js';
 
 describe('createKtxEmbeddingProvider', () => {
-  it('creates deterministic embeddings with stable dimensions', async () => {
-    const provider = createKtxEmbeddingProvider({
-      backend: 'deterministic',
-      model: 'sha256',
-      dimensions: 6,
-      batchSize: 4,
-    });
+  it('rejects deterministic embeddings', () => {
+    const config = JSON.parse(
+      JSON.stringify({
+        backend: 'deterministic',
+        model: 'sha256',
+        dimensions: 6,
+      }),
+    ) as KtxEmbeddingConfig;
 
-    await expect(provider.embed('Revenue policy')).resolves.toHaveLength(6);
-    await expect(provider.embed('Revenue policy')).resolves.toEqual(await provider.embed('Revenue policy'));
-    await expect(provider.embed('Revenue policy')).resolves.not.toEqual(await provider.embed('Approval policy'));
-    await expect(provider.embedMany(['a', 'b'])).resolves.toHaveLength(2);
-    expect(provider.maxBatchSize).toBe(4);
+    expect(() => createKtxEmbeddingProvider(config)).toThrow('Unsupported KTX embedding backend: deterministic');
   });
 
   it('rejects gateway embeddings', () => {
@@ -114,12 +111,12 @@ describe('createKtxEmbeddingProvider', () => {
     );
   });
 
-  it('falls back to one-shot ktx-daemon inference when the local HTTP daemon is unavailable', async () => {
-    const fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
-    const runSentenceTransformersJson = vi
+  it('reports local HTTP daemon failures without a ktx-daemon spawn fallback cascade', async () => {
+    const fetch = vi
       .fn()
-      .mockResolvedValueOnce({ embedding: [0.1, 0.2] })
-      .mockResolvedValueOnce({ embeddings: [[0.3, 0.4], [0.5, 0.6]] });
+      .mockResolvedValue(
+        new Response('Embedding compute failed: httpx.InvalidURL: Invalid port', { status: 500 }),
+      );
 
     const provider = createKtxEmbeddingProvider(
       {
@@ -128,19 +125,13 @@ describe('createKtxEmbeddingProvider', () => {
         dimensions: 2,
         sentenceTransformers: { baseURL: 'http://127.0.0.1:8765', pathPrefix: '' },
       },
-      { fetch, runSentenceTransformersJson },
+      { fetch },
     );
 
-    await expect(provider.embedMany(['hello', 'world'])).resolves.toEqual([
-      [0.3, 0.4],
-      [0.5, 0.6],
-    ]);
+    await expect(provider.embed('hello')).rejects.toThrow(
+      'Embedding provider sentence-transformers request failed with HTTP 500: Embedding compute failed: httpx.InvalidURL: Invalid port',
+    );
+    await expect(provider.embed('hello')).rejects.not.toThrow('ktx-daemon fallback failed');
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(runSentenceTransformersJson).toHaveBeenNthCalledWith(1, 'embedding-compute', {
-      text: '__ktx_embedding_probe__',
-    });
-    expect(runSentenceTransformersJson).toHaveBeenNthCalledWith(2, 'embedding-compute-bulk', {
-      texts: ['hello', 'world'],
-    });
   });
 });

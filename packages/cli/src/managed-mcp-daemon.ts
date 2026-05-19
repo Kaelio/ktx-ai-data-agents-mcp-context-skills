@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
+import { sanitizeChildProxyEnv } from './proxy-env.js';
 
 export interface KtxMcpDaemonState {
   schemaVersion: 1;
@@ -166,11 +167,11 @@ export async function startKtxMcpDaemon(options: {
     const child = (options.spawnDaemon ?? defaultSpawnDaemon)(process.execPath, args, {
       detached: true,
       stdio: ['ignore', log.fd, log.fd],
-      env: {
+      env: sanitizeChildProxyEnv({
         ...process.env,
         KTX_CLI_VERSION: options.cliVersion,
         ...(options.token ? { KTX_MCP_TOKEN: options.token } : {}),
-      },
+      }),
     });
     if (!child.pid) {
       throw new Error('Failed to start KTX MCP daemon: child process pid was not available.');

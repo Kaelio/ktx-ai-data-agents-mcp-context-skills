@@ -72,8 +72,9 @@ KTX is a pnpm + uv workspace.
 - Python daemon: `python/ktx-daemon`
 - Examples and fixtures: `examples/`
 - Workspace scripts: `scripts/`
-- Local agent skills are private overlays. Do not commit `.agents/` or
-  `.claude/` to this public repository.
+- Local agent skills and internal planning docs are private overlays. Do not
+  commit `.agents/`, `.claude/`, or `docs/superpowers/` to this public
+  repository.
 
 Some package names still contain `ktx` during the split. Do not mass-rename
 symbols, package names, paths, or docs to `ktx` unless the task asks for that

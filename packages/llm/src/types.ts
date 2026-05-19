@@ -62,7 +62,7 @@ export interface KtxLlmProvider {
   activeBackend(): KtxLlmBackend;
 }
 
-export type KtxEmbeddingBackend = 'openai' | 'deterministic' | 'sentence-transformers';
+export type KtxEmbeddingBackend = 'openai' | 'sentence-transformers';
 
 export interface KtxEmbeddingTokenUsageEvent {
   backend: KtxEmbeddingBackend;

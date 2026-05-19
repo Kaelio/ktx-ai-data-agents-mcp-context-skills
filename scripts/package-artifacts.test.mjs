@@ -467,7 +467,8 @@ describe('verification snippets', () => {
     const source = npmRuntimeSmokeSource();
 
     assert.match(source, /ktx public package version/);
-    assert.match(source, /@kaelio\\\/ktx 0\\\.1\\\.0/);
+    assert.match(source, /installedPackageVersionPattern/);
+    assert.doesNotMatch(source, /@kaelio\\\/ktx 0\\\.1\\\.0/);
     assert.match(source, /'ktx', 'sl', 'query'/);
     assert.doesNotMatch(source, /@ktx\/context/);
     assert.doesNotMatch(source, /@modelcontextprotocol/);

@@ -146,12 +146,12 @@ export function publicNpmPackageJson(cliPackageJson, dependencies, version = PUB
     license: cliPackageJson.license ?? 'Apache-2.0',
     repository: {
       type: 'git',
-      url: 'git+https://github.com/kaelio/ktx.git',
+      url: 'https://github.com/Kaelio/ktx',
     },
     bugs: {
-      url: 'https://github.com/kaelio/ktx/issues',
+      url: 'https://github.com/Kaelio/ktx/issues',
     },
-    homepage: 'https://github.com/kaelio/ktx#readme',
+    homepage: 'https://github.com/Kaelio/ktx#readme',
   };
 }
 

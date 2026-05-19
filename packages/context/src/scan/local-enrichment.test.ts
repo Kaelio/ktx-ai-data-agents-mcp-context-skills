@@ -17,10 +17,23 @@ import {
   createKtxConnectorCapabilities,
   type KtxQueryResult,
   type KtxReadOnlyQueryInput,
+  type KtxEmbeddingPort,
   type KtxScanConnector,
   type KtxScanContext,
   type KtxSchemaSnapshot,
 } from './types.js';
+
+function fakeScanEmbedding(options: { dimensions: number; maxBatchSize?: number }): KtxEmbeddingPort {
+  return {
+    dimensions: options.dimensions,
+    maxBatchSize: options.maxBatchSize ?? 64,
+    async embedBatch(texts) {
+      return texts.map((_, textIndex) =>
+        Array.from({ length: options.dimensions }, (__, dimensionIndex) => textIndex + dimensionIndex),
+      );
+    },
+  };
+}
 
 const snapshot: KtxSchemaSnapshot = {
   connectionId: 'warehouse',
@@ -355,7 +368,7 @@ describe('local scan enrichment', () => {
   });
 
   it('honors scan relationship config when LLM proposals are disabled', async () => {
-    const providers = createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 3 });
+    const providers = createDeterministicLocalScanEnrichmentProviders();
     const generateObject = vi.fn();
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
@@ -424,7 +437,7 @@ describe('local scan enrichment', () => {
       detectRelationships: false,
       connector: failingConnector,
       context: { runId: 'scan-run-warnings', logger },
-      providers: createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 6 }),
+      providers: createDeterministicLocalScanEnrichmentProviders(),
     });
 
     const codes = result.warnings.map((warning) => warning.code);
@@ -439,25 +452,24 @@ describe('local scan enrichment', () => {
     expect(failingConnector.sampleTable).toHaveBeenCalledTimes(6);
   });
 
-  it('runs configured deterministic enrichment with descriptions and embeddings', async () => {
+  it('runs configured deterministic enrichment with descriptions and no embeddings', async () => {
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
       mode: 'enriched',
       detectRelationships: true,
       connector: connector(),
       context: { runId: 'scan-run-2' },
-      providers: createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 6 }),
+      providers: createDeterministicLocalScanEnrichmentProviders(),
     });
 
     expect(result.summary).toMatchObject({
       dataDictionary: 'completed',
       tableDescriptions: 'completed',
       columnDescriptions: 'completed',
-      embeddings: 'completed',
+      embeddings: 'skipped',
       deterministicRelationships: 'completed',
     });
-    expect(result.embeddingUpdates).toHaveLength(3);
-    expect(result.embeddingUpdates[0]?.embedding).toHaveLength(6);
+    expect(result.embeddingUpdates).toEqual([]);
     expect(result.snapshot).toEqual(snapshot);
     expect(result.relationships).toEqual({ accepted: 0, review: 1, rejected: 0, skipped: 0 });
   });
@@ -518,7 +530,7 @@ describe('local scan enrichment', () => {
       mode: 'enriched',
       connector: scanConnector,
       context: { runId: 'scan-run-concurrent-descriptions' },
-      providers: createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 3 }),
+      providers: createDeterministicLocalScanEnrichmentProviders(),
       relationshipSettings: settings,
     });
 
@@ -542,7 +554,10 @@ describe('local scan enrichment', () => {
       detectRelationships: true,
       connector: connector(),
       context: { runId: 'scan-run-progress', progress },
-      providers: createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 6 }),
+      providers: {
+        ...createDeterministicLocalScanEnrichmentProviders(),
+        embedding: fakeScanEmbedding({ dimensions: 6 }),
+      },
     });
 
     expect(events).toEqual(
@@ -613,7 +628,7 @@ describe('local scan enrichment', () => {
       ...connector(),
       introspect: vi.fn(async () => manyColumnSnapshot),
     };
-    const deterministicProviders = createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 3 });
+    const deterministicProviders = createDeterministicLocalScanEnrichmentProviders();
     const embedBatch = vi.fn(async (texts: string[]) => {
       if (texts.length > 2) {
         throw new Error(`Embedding batch size ${texts.length} exceeds maximum 2`);
@@ -644,7 +659,10 @@ describe('local scan enrichment', () => {
   it('reuses completed description and embedding stages for the same run id and snapshot hash', async () => {
     const stateStore = memoryEnrichmentStateStore();
     const scanConnector = connector();
-    const providers = createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 6 });
+    const providers = {
+      ...createDeterministicLocalScanEnrichmentProviders(),
+      embedding: fakeScanEmbedding({ dimensions: 6 }),
+    };
 
     const first = await runLocalScanEnrichment({
       connectionId: 'warehouse',
@@ -655,7 +673,7 @@ describe('local scan enrichment', () => {
       providers,
       stateStore,
       syncId: 'sync-resume-1',
-      providerIdentity: { provider: 'deterministic', embeddingDimensions: 6 },
+      providerIdentity: { provider: 'fake', embeddingDimensions: 6 },
     });
 
     const generateText = vi.spyOn(providers.llmRuntime, 'generateText');
@@ -669,7 +687,7 @@ describe('local scan enrichment', () => {
       providers,
       stateStore,
       syncId: 'sync-resume-1',
-      providerIdentity: { provider: 'deterministic', embeddingDimensions: 6 },
+      providerIdentity: { provider: 'fake', embeddingDimensions: 6 },
     });
 
     expect(first.state.completedStages).toEqual(['descriptions', 'embeddings', 'relationships']);
@@ -685,7 +703,10 @@ describe('local scan enrichment', () => {
 
   it('does not reuse completed stages when the snapshot changes', async () => {
     const stateStore = memoryEnrichmentStateStore();
-    const providers = createDeterministicLocalScanEnrichmentProviders({ embeddingDimensions: 6 });
+    const providers = {
+      ...createDeterministicLocalScanEnrichmentProviders(),
+      embedding: fakeScanEmbedding({ dimensions: 6 }),
+    };
     const scanConnector = connector();
 
     await runLocalScanEnrichment({
@@ -697,7 +718,7 @@ describe('local scan enrichment', () => {
       providers,
       stateStore,
       syncId: 'sync-resume-hash',
-      providerIdentity: { provider: 'deterministic', embeddingDimensions: 6 },
+      providerIdentity: { provider: 'fake', embeddingDimensions: 6 },
     });
 
     const firstTable = snapshot.tables[0];
@@ -722,7 +743,7 @@ describe('local scan enrichment', () => {
       providers,
       stateStore,
       syncId: 'sync-resume-hash',
-      providerIdentity: { provider: 'deterministic', embeddingDimensions: 6 },
+      providerIdentity: { provider: 'fake', embeddingDimensions: 6 },
     });
 
     expect(result.state.resumedStages).toEqual([]);
@@ -828,8 +849,8 @@ describe('local scan enrichment', () => {
       },
     );
 
-    expect(providers?.embedding.dimensions).toBe(1536);
-    expect(providers?.embedding.maxBatchSize).toBe(8);
+    expect(providers?.embedding?.dimensions).toBe(1536);
+    expect(providers?.embedding?.maxBatchSize).toBe(8);
     expect(createKtxLlmProvider).toHaveBeenCalledWith(
       expect.objectContaining({ backend: 'gateway', modelSlots: { default: 'provider/language-model' } }),
     );

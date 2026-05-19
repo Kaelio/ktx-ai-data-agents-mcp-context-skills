@@ -96,7 +96,6 @@ export type {
   KtxStructuralSyncPlan,
 } from './enrichment-types.js';
 export type {
-  DeterministicLocalScanEnrichmentProviderOptions,
   KtxLocalScanEnrichmentInput,
   KtxLocalScanEnrichmentProviders,
   KtxLocalScanEnrichmentResult,

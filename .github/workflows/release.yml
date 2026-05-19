@@ -7,10 +7,10 @@ on:
         description: "Release kind: rc publishes to next, stable publishes to latest"
         required: true
         type: choice
-        default: "rc"
+        default: "stable"
         options:
-          - rc
           - stable
+          - rc
       force_release:
         description: "Force a patch release even if semantic-release finds no releasable commits"
         required: false
@@ -20,7 +20,7 @@ on:
         description: "Create the release and publish @kaelio/ktx to npm instead of running a dry-run"
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -89,6 +89,26 @@ jobs:
           git push --set-upstream origin "HEAD:${KTX_PRERELEASE_BRANCH}"
         env:
           KTX_PRERELEASE_BRANCH: next
+
+      - name: Prepare npm package root for release verification
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist/public-npm-package
+          node --input-type=module <<'EOF'
+          import { writeFile } from 'node:fs/promises';
+
+          const packageJson = {
+            name: '@kaelio/ktx',
+            version: '0.0.0',
+            private: false
+          };
+
+          await writeFile(
+            'dist/public-npm-package/package.json',
+            `${JSON.stringify(packageJson, null, 2)}\n`
+          );
+          EOF
 
       - name: Dry-run semantic release
         if: ${{ !inputs.publish_live }}

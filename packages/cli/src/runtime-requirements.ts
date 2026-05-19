@@ -8,7 +8,6 @@ import type { KtxRuntimeFeature } from './managed-python-runtime.js';
 import type { KtxPublicIngestPlan } from './public-ingest.js';
 
 type KtxRuntimeRequirementReason =
-  | 'agent-mcp'
   | 'query-history'
   | 'looker-source'
   | 'database-introspection'
@@ -26,7 +25,6 @@ export interface KtxRuntimeRequirements {
 }
 
 export interface KtxProjectRuntimeRequirementOptions {
-  agents?: boolean;
   databaseIntrospectionFallback?: boolean;
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
 }
@@ -91,14 +89,6 @@ export function resolveProjectRuntimeRequirements(
 ): KtxRuntimeRequirements {
   const env = options.env ?? process.env;
   const requirements: KtxRuntimeRequirement[] = [];
-
-  if (options.agents === true) {
-    requirements.push({
-      feature: 'core',
-      reason: 'agent-mcp',
-      detail: 'Agent MCP setup uses semantic-layer query tools and SQL validation.',
-    });
-  }
 
   if (options.databaseIntrospectionFallback === true && !hasDaemonOverride(env)) {
     requirements.push({

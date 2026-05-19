@@ -20,7 +20,7 @@ ktx sl <subcommand> [options]
 | `list` | List semantic-layer sources |
 | `search <query>` | Search semantic-layer sources |
 | `validate <sourceName>` | Validate a semantic-layer source against the database schema |
-| `query` | Compile or execute a semantic-layer query |
+| `query` | Compile or execute a Semantic Query |
 
 ## Options
 
@@ -52,7 +52,7 @@ ktx sl <subcommand> [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--connection-id <id>` | KTX connection id | - |
-| `--query-file <path>` | JSON semantic-layer query file | - |
+| `--query-file <path>` | JSON Semantic Query file | - |
 | `--measure <measure>` | Measure to query; repeatable (at least one required) | - |
 | `--dimension <dimension>` | Dimension to include; repeatable | - |
 | `--filter <filter>` | Filter expression; repeatable | - |
@@ -67,7 +67,7 @@ ktx sl <subcommand> [options]
 | `--max-rows <n>` | Maximum rows to return when executing | - |
 
 `sl query` requires at least one `--measure` unless `--query-file` is set.
-`--query-file` should point to a JSON semantic-layer query object.
+`--query-file` should point to a JSON Semantic Query object.
 
 ## Examples
 

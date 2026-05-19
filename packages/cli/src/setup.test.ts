@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
 import { contextBuildCommands, writeKtxSetupContextState } from './setup-context.js';
 import { runDemoTour } from './setup-demo-tour.js';
-import { formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from './setup.js';
+import { formatKtxSetupCompletionSummary, formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from './setup.js';
 
 vi.mock('./setup-demo-tour.js', () => ({
   runDemoTour: vi.fn(async () => 0),
@@ -108,7 +108,7 @@ describe('setup status', () => {
     });
   });
 
-  it('reports deterministic default embeddings as not setup-ready', async () => {
+  it('reports disabled default embeddings as not setup-ready', async () => {
     await mkdir(tempDir, { recursive: true });
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -122,8 +122,7 @@ describe('setup status', () => {
         '    default: claude-sonnet-4-6',
         'ingest:',
         '  embeddings:',
-        '    backend: deterministic',
-        '    model: deterministic',
+        '    backend: none',
         '    dimensions: 8',
         'connections: {}',
       ].join('\n'),
@@ -133,7 +132,7 @@ describe('setup status', () => {
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
       project: { path: tempDir, ready: true },
       llm: { backend: 'anthropic', ready: true, model: 'claude-sonnet-4-6' },
-      embeddings: { backend: 'deterministic', ready: false, model: 'deterministic', dimensions: 8 },
+      embeddings: { backend: 'none', ready: false, dimensions: 8 },
     });
   });
 
@@ -373,8 +372,7 @@ describe('setup status', () => {
         '    default: claude-sonnet-4-6',
         'ingest:',
         '  embeddings:',
-        '    backend: deterministic',
-        '    model: deterministic',
+        '    backend: none',
         '    dimensions: 8',
         '',
       ].join('\n'),
@@ -424,6 +422,112 @@ describe('setup status', () => {
     expect(rendered).not.toContain('No KTX project found.');
   });
 
+  it('formats a concise ready summary for completed agent setup', () => {
+    const rendered = formatKtxSetupCompletionSummary(
+      {
+        project: { path: tempDir, ready: true },
+        llm: { ready: true, model: 'sonnet' },
+        embeddings: { ready: true, model: 'text-embedding-3-small' },
+        databases: [{ connectionId: 'postgres-warehouse', ready: true }],
+        sources: [{ connectionId: 'dbt-main', type: 'dbt', ready: true }],
+        runtime: { required: true, ready: true, features: ['core'] },
+        context: { ready: true, status: 'completed' },
+        agents: [
+          { target: 'claude-code', scope: 'project', ready: true },
+          { target: 'claude-desktop', scope: 'global', ready: true },
+        ],
+      },
+      {
+        agentNextActions: [
+          '1. Start MCP',
+          '  Run this command before using Claude Code:',
+          '',
+          '  RUN:',
+          `  ktx mcp start --project-dir ${tempDir}`,
+          '',
+          '  If you need to stop MCP later:',
+          `  ktx mcp stop --project-dir ${tempDir}`,
+          '',
+          '2. Open Claude Code',
+          '  Open Claude Code from the KTX project directory:',
+          '',
+          '  RUN:',
+          `  cd '${tempDir}'`,
+          '  claude',
+        ].join('\n'),
+      },
+    );
+
+    expect(rendered).toContain(`Project\n  ${tempDir}`);
+    expect(rendered).toContain('Context\n  built');
+    expect(rendered).toContain('Agents configured\n  Claude Code, Claude Desktop');
+    expect(rendered).toContain('REQUIRED BEFORE USING AGENTS\n\n  1. Start MCP');
+    expect(rendered).toContain('    Run this command before using Claude Code:');
+    expect(rendered).toContain('    RUN:');
+    expect(rendered).toContain('    If you need to stop MCP later:');
+    expect(rendered).toContain(`ktx mcp stop --project-dir ${tempDir}`);
+    expect(rendered).toContain('After that, try\n  Ask your agent: "Use KTX to show me the available tables."');
+    expect(rendered).not.toContain('Verify');
+    expect(rendered).not.toContain('Project ready: yes');
+    expect(rendered).not.toContain('What you can do next');
+  });
+
+  it('prints agent next actions inside the final ready summary during full setup', async () => {
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          target: 'claude-code',
+          skipAgents: false,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          skipSources: true,
+          databaseSchemas: [],
+        },
+        testIo.io,
+        {
+          runtime: async () => runtimeReady(tempDir),
+          context: async () => {
+            await writeKtxSetupContextState(tempDir, {
+              runId: 'setup-context-local-test',
+              status: 'completed',
+              primarySourceConnectionIds: [],
+              contextSourceConnectionIds: [],
+              reportIds: [],
+              artifactPaths: [],
+              retryableFailedTargets: [],
+              commands: contextBuildCommands(tempDir, 'setup-context-local-test'),
+            });
+            await writeKtxSetupState(tempDir, { completed_steps: ['project', 'context'] });
+            return { status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const output = testIo.stdout();
+    expect(output).toContain('Claude Code · Project scope');
+    expect(output).toContain(join(tempDir, '.mcp.json'));
+    expect(output).toContain('Requires MCP to be started.');
+    expect(output).toContain('Analytics skill installed.');
+    expect(output).not.toContain('Agent integration complete');
+    expect(output).toContain('Finish KTX agent setup');
+    expect(output).not.toContain('KTX project ready');
+    expect(output).toContain('REQUIRED BEFORE USING AGENTS');
+    expect(output).toContain('Run this command before using Claude Code:');
+    expect(output).toContain(`ktx mcp start --project-dir ${tempDir}`);
+    expect(output).not.toContain('Finish agent setup');
+  });
+
   it('prints the setup shell intro for auto-created run mode', async () => {
     const testIo = makeIo();
 
@@ -457,6 +561,112 @@ describe('setup status', () => {
     expect(testIo.stdout()).not.toContain('ktx agent context --json');
     expect(testIo.stdout()).not.toContain('Optional MCP:');
     expect(testIo.stderr()).toBe('');
+  });
+
+  it('removes a newly created missing project directory when a later runtime step fails', async () => {
+    const projectDir = join(tempDir, 'missing-project');
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir }),
+          databases: async () => ({ status: 'skipped', projectDir }),
+          sources: async () => ({ status: 'skipped', projectDir }),
+          runtime: async () => ({ status: 'failed', projectDir, requirements: { features: ['core'], requirements: [] } }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    await expect(stat(projectDir)).rejects.toThrow();
+  });
+
+  it('removes KTX scaffold files from an initially empty project directory when runtime setup fails', async () => {
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir: tempDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
+          databases: async () => ({ status: 'skipped', projectDir: tempDir }),
+          sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => ({ status: 'failed', projectDir: tempDir, requirements: { features: ['core'], requirements: [] } }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    await expect(stat(tempDir)).resolves.toBeDefined();
+    expect(await readdir(tempDir)).toEqual([]);
+  });
+
+  it('preserves a pre-existing non-empty project directory when runtime setup fails', async () => {
+    await writeFile(join(tempDir, 'notes.txt'), 'keep me\n', 'utf-8');
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir: tempDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
+          databases: async () => ({ status: 'skipped', projectDir: tempDir }),
+          sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => ({ status: 'failed', projectDir: tempDir, requirements: { features: ['core'], requirements: [] } }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    await expect(readFile(join(tempDir, 'notes.txt'), 'utf-8')).resolves.toBe('keep me\n');
+    await expect(stat(join(tempDir, 'ktx.yaml'))).resolves.toBeDefined();
   });
 
   it('shows demo near the bottom of the first setup intent menu before project creation', async () => {
@@ -843,7 +1053,7 @@ describe('setup status', () => {
     );
   });
 
-  it('creates a project through run mode when --new is selected', async () => {
+  it('creates a project through run mode when --yes is selected', async () => {
     const testIo = makeIo();
 
     await expect(
@@ -851,11 +1061,11 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
-          yes: false,
+          yes: true,
           cliVersion: '0.2.0',
           skipLlm: true,
           skipEmbeddings: true,
@@ -943,14 +1153,14 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
-          yes: false,
+          yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          anthropicModel: 'claude-sonnet-4-6',
+          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: true,
           databaseSchemas: [],
@@ -967,7 +1177,7 @@ describe('setup status', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-        anthropicModel: 'claude-sonnet-4-6',
+        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       testIo.io,
@@ -983,16 +1193,16 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
-          yes: false,
+          yes: true,
           cliVersion: '0.2.0',
           llmBackend: 'vertex',
           vertexProject: 'local-gcp-project',
           vertexLocation: 'us-east5',
-          anthropicModel: 'claude-sonnet-4-6',
+          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: true,
           databaseSchemas: [],
@@ -1011,7 +1221,7 @@ describe('setup status', () => {
         llmBackend: 'vertex',
         vertexProject: 'local-gcp-project',
         vertexLocation: 'us-east5',
-        anthropicModel: 'claude-sonnet-4-6',
+        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       testIo.io,
@@ -1028,14 +1238,14 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
           yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          anthropicModel: 'claude-sonnet-4-6',
+          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
           embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
@@ -1066,13 +1276,14 @@ describe('setup status', () => {
   it('passes no-input runtime policy to the embeddings step', async () => {
     const io = makeIo();
     const embeddings = vi.fn(async () => ({ status: 'failed' as const, projectDir: tempDir }));
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
 
     await expect(
       runKtxSetup(
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           agentScope: 'project',
           skipAgents: true,
@@ -1103,13 +1314,14 @@ describe('setup status', () => {
     const io = makeIo();
     const embeddings = vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir }));
     const context = vi.fn(async () => ({ status: 'failed' as const, projectDir: tempDir }));
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
 
     await expect(
       runKtxSetup(
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           agentScope: 'project',
           skipAgents: true,
@@ -1148,6 +1360,7 @@ describe('setup status', () => {
 
   it('lets Back from embedding setup return to the model step instead of exiting', async () => {
     const testIo = makeIo();
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     const modelResults = [
       { status: 'ready' as const, projectDir: tempDir },
       { status: 'back' as const, projectDir: tempDir },
@@ -1160,7 +1373,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'auto',
@@ -1184,6 +1397,7 @@ describe('setup status', () => {
 
   it('lets Back from database selection return to embedding setup', async () => {
     const testIo = makeIo();
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     const modelResults = [
       { status: 'ready' as const, projectDir: tempDir },
       { status: 'back' as const, projectDir: tempDir },
@@ -1207,11 +1421,11 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'auto',
-          yes: false,
+          yes: true,
           cliVersion: '0.2.0',
           skipLlm: false,
           skipEmbeddings: false,
@@ -1254,7 +1468,7 @@ describe('setup status', () => {
           agents: false,
           skipAgents: true,
           inputMode: 'auto',
-          yes: false,
+          yes: true,
           cliVersion: '0.2.0',
           skipLlm: false,
           skipEmbeddings: true,
@@ -1291,14 +1505,14 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
-          yes: false,
+          yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          anthropicModel: 'claude-sonnet-4-6',
+          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
           embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
@@ -1349,7 +1563,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'existing',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
@@ -1425,7 +1639,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'existing',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
@@ -1475,7 +1689,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'existing',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
@@ -1523,7 +1737,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'existing',
+          mode: 'auto',
           agents: false,
           inputMode: 'disabled',
           yes: true,
@@ -1584,7 +1798,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           inputMode: 'disabled',
           yes: true,
@@ -1631,7 +1845,7 @@ describe('setup status', () => {
     expect(committedConfig.stdout).toContain('warehouse:');
   });
 
-  it('runs agent setup after context succeeds in --agents mode', async () => {
+  it('runs agent setup without runtime or context in --agents mode', async () => {
     const calls: string[] = [];
     const io = makeIo();
     await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
@@ -1641,7 +1855,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'existing',
+          mode: 'auto',
           agents: true,
           target: 'codex',
           agentScope: 'project',
@@ -1663,11 +1877,11 @@ describe('setup status', () => {
           sources: async () => ({ status: 'skipped', projectDir: tempDir }),
           runtime: async () => {
             calls.push('runtime');
-            return runtimeReady(tempDir);
+            throw new Error('runtime should not run');
           },
           context: async () => {
             calls.push('context');
-            return { status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' };
+            throw new Error('context should not run');
           },
           agents: async () => {
             calls.push('agents');
@@ -1681,11 +1895,13 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(calls).toEqual(['runtime', 'context', 'agents']);
+    expect(calls).toEqual(['agents']);
   });
 
-  it('does not install agents when non-interactive --agents finds context incomplete', async () => {
+  it('installs agents when non-interactive --agents finds context incomplete', async () => {
     const io = makeIo();
+    const runtime = vi.fn(async () => runtimeReady(tempDir));
+    const context = vi.fn(async () => ({ status: 'skipped' as const, projectDir: tempDir }));
     const agents = vi.fn(async () => ({
       status: 'ready' as const,
       projectDir: tempDir,
@@ -1698,7 +1914,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'existing',
+          mode: 'auto',
           agents: true,
           target: 'codex',
           agentScope: 'project',
@@ -1714,15 +1930,64 @@ describe('setup status', () => {
         },
         io.io,
         {
-          runtime: async () => runtimeReady(tempDir),
-          context: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime,
+          context,
           agents,
         },
       ),
-    ).resolves.toBe(1);
+    ).resolves.toBe(0);
 
-    expect(agents).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain('KTX context is not ready for agents.');
+    expect(runtime).not.toHaveBeenCalled();
+    expect(context).not.toHaveBeenCalled();
+    expect(agents).toHaveBeenCalledTimes(1);
+    expect(io.stderr()).not.toContain('KTX context is not ready for agents.');
+  });
+
+  it('runs non-TTY --agents with a target without requiring --no-input or --yes', async () => {
+    const io = makeIo();
+    const agents = vi.fn(async () => ({
+      status: 'ready' as const,
+      projectDir: tempDir,
+      installs: [{ target: 'claude-code' as const, scope: 'project' as const, mode: 'mcp' as const }],
+    }));
+    await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: true,
+          target: 'claude-code',
+          agentScope: 'project',
+          inputMode: 'auto',
+          yes: false,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: false,
+          skipDatabases: false,
+          skipSources: false,
+          skipAgents: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        { agents },
+      ),
+    ).resolves.toBe(0);
+
+    expect(agents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputMode: 'disabled',
+        yes: false,
+        agents: true,
+        target: 'claude-code',
+        scope: 'project',
+        mode: 'mcp',
+      }),
+      io.io,
+    );
+    expect(io.stderr()).not.toContain('Interactive setup requires a terminal');
   });
 
   it('routes a ready project menu selection to agent setup', async () => {
@@ -1789,7 +2054,7 @@ describe('setup status', () => {
           {
             command: 'run',
             projectDir: tempDir,
-            mode: 'existing',
+            mode: 'auto',
             agents: false,
             inputMode: 'auto',
             yes: false,
@@ -1843,7 +2108,7 @@ describe('setup status', () => {
       }
     }
 
-    expect(calls).toEqual(['runtime', 'agents']);
+    expect(calls).toEqual(['agents']);
   });
 
   it('skips to agent setup when context is ready but agents are not configured', async () => {
@@ -1892,7 +2157,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'existing',
+          mode: 'auto',
           agents: false,
           inputMode: 'auto',
           yes: false,
@@ -1940,10 +2205,10 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(readyMenuSelect).not.toHaveBeenCalled();
-    expect(calls).toEqual(['runtime', 'agents']);
+    expect(calls).toEqual(['agents']);
   });
 
-  it('runs only project resolution, runtime, context gate, and agent setup in --agents mode', async () => {
+  it('runs only project resolution and agent setup in --agents mode', async () => {
     const io = makeIo();
     const runtime = vi.fn(async () => runtimeReady(tempDir));
     const context = vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir, runId: 'setup-context-local-test' }));
@@ -1958,7 +2223,7 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: true,
           target: 'universal',
           agentScope: 'project',
@@ -1984,8 +2249,8 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(runtime).toHaveBeenCalledTimes(1);
-    expect(context).toHaveBeenCalledTimes(1);
+    expect(runtime).not.toHaveBeenCalled();
+    expect(context).not.toHaveBeenCalled();
     expect(agents).toHaveBeenCalledTimes(1);
   });
 
@@ -1999,14 +2264,14 @@ describe('setup status', () => {
         {
           command: 'run',
           projectDir: tempDir,
-          mode: 'new',
+          mode: 'auto',
           agents: false,
           skipAgents: true,
           inputMode: 'disabled',
-          yes: false,
+          yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          anthropicModel: 'claude-sonnet-4-6',
+          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: false,
           databaseSchemas: [],
@@ -2017,6 +2282,7 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(1);
 
+    expect(model).toHaveBeenCalledTimes(1);
     expect(embeddings).not.toHaveBeenCalled();
   });
 });

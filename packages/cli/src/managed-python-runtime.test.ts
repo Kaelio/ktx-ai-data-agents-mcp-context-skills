@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { strToU8, zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MISSING_UV_RUNTIME_INSTALL_MESSAGE,
@@ -14,10 +15,33 @@ import {
   type ManagedPythonRuntimeExec,
 } from './managed-python-runtime.js';
 
-async function writeAsset(root: string, contents = 'wheel-bytes') {
+function runtimeWheelContents(input: { label?: string; requiresPython?: string | null } = {}): Buffer {
+  const label = input.label ?? 'runtime-wheel';
+  const requiresPython = input.requiresPython === null ? [] : [`Requires-Python: ${input.requiresPython ?? '>=3.13'}`];
+  return Buffer.from(
+    zipSync({
+      'kaelio_ktx-0.1.0.dist-info/METADATA': strToU8(
+        [
+          'Metadata-Version: 2.4',
+          'Name: kaelio-ktx',
+          'Version: 0.1.0',
+          ...requiresPython,
+          `Summary: ${label}`,
+          '',
+        ].join('\n'),
+      ),
+    }),
+  );
+}
+
+async function writeAsset(
+  root: string,
+  options: { label?: string; requiresPython?: string | null; contents?: Buffer } = {},
+) {
   const assetDir = join(root, 'assets', 'python');
   await mkdir(assetDir, { recursive: true });
   const wheelPath = join(assetDir, 'kaelio_ktx-0.1.0-py3-none-any.whl');
+  const contents = options.contents ?? runtimeWheelContents(options);
   await writeFile(wheelPath, contents);
   await writeFile(
     join(assetDir, 'manifest.json'),
@@ -30,7 +54,7 @@ async function writeAsset(root: string, contents = 'wheel-bytes') {
         wheel: {
           file: 'kaelio_ktx-0.1.0-py3-none-any.whl',
           sha256: createHash('sha256').update(contents).digest('hex'),
-          bytes: Buffer.byteLength(contents),
+          bytes: contents.byteLength,
         },
       },
       null,
@@ -145,17 +169,18 @@ describe('verifyRuntimeAsset', () => {
   });
 
   it('reads the manifest and verifies the wheel checksum', async () => {
-    const { assetDir, wheelPath } = await writeAsset(tempDir, 'valid-wheel');
+    const { assetDir, wheelPath } = await writeAsset(tempDir, { label: 'valid-wheel' });
 
     const asset = await verifyRuntimeAsset({ assetDir });
 
     expect(asset.manifest.distributionName).toBe('kaelio-ktx');
     expect(asset.manifest.normalizedName).toBe('kaelio_ktx');
     expect(asset.wheelPath).toBe(wheelPath);
+    expect(asset.requiresPython).toEqual({ specifier: '>=3.13', minimumVersion: '3.13' });
   });
 
   it('rejects a wheel whose checksum does not match the manifest', async () => {
-    const { assetDir, wheelPath } = await writeAsset(tempDir, 'original');
+    const { assetDir, wheelPath } = await writeAsset(tempDir, { label: 'original' });
     await writeFile(wheelPath, 'tampered');
 
     await expect(verifyRuntimeAsset({ assetDir })).rejects.toThrow(
@@ -164,7 +189,7 @@ describe('verifyRuntimeAsset', () => {
   });
 
   it('rejects an unsafe wheel filename in the manifest', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'valid-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'valid-wheel' });
     await writeFile(
       join(assetDir, 'manifest.json'),
       `${JSON.stringify({
@@ -190,6 +215,22 @@ describe('verifyRuntimeAsset', () => {
       /Missing bundled Python runtime manifest.*pnpm run artifacts:build/s,
     );
   });
+
+  it('rejects a bundled wheel without Requires-Python metadata', async () => {
+    const { assetDir } = await writeAsset(tempDir, { requiresPython: null });
+
+    await expect(verifyRuntimeAsset({ assetDir })).rejects.toThrow(
+      /Bundled Python runtime wheel metadata is missing Requires-Python/,
+    );
+  });
+
+  it('rejects a bundled wheel without a supported minimum Python version', async () => {
+    const { assetDir } = await writeAsset(tempDir, { requiresPython: '<4' });
+
+    await expect(verifyRuntimeAsset({ assetDir })).rejects.toThrow(
+      /Unsupported bundled Python runtime Requires-Python: <4/,
+    );
+  });
 });
 
 describe('installManagedPythonRuntime', () => {
@@ -204,7 +245,7 @@ describe('installManagedPythonRuntime', () => {
   });
 
   it('creates a venv, installs the core wheel, and writes a manifest', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const commands: Array<{ command: string; args: string[] }> = [];
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => {
       commands.push({ command, args });
@@ -222,7 +263,8 @@ describe('installManagedPythonRuntime', () => {
     expect(result.status).toBe('installed');
     expect(commands).toEqual([
       { command: 'uv', args: ['--version'] },
-      { command: 'uv', args: ['venv', result.layout.venvDir, '--python', '3.13'] },
+      { command: 'uv', args: ['python', 'install', '3.13'] },
+      { command: 'uv', args: ['venv', '--python', '3.13', result.layout.venvDir] },
       {
         command: 'uv',
         args: ['pip', 'install', '--python', result.layout.pythonPath, result.asset.wheelPath],
@@ -240,7 +282,7 @@ describe('installManagedPythonRuntime', () => {
   });
 
   it('disables repo uv config for managed runtime uv commands', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const commands: Array<{ command: string; args: string[]; env?: NodeJS.ProcessEnv }> = [];
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args, options) => {
       commands.push({ command, args, env: options?.env });
@@ -258,13 +300,14 @@ describe('installManagedPythonRuntime', () => {
 
     expect(commands.map((call) => [call.command, call.args[0], call.env?.UV_NO_CONFIG, call.env?.PATH])).toEqual([
       ['uv', '--version', '1', '/opt/homebrew/bin'],
+      ['uv', 'python', '1', '/opt/homebrew/bin'],
       ['uv', 'venv', '1', '/opt/homebrew/bin'],
       ['uv', 'pip', '1', '/opt/homebrew/bin'],
     ]);
   });
 
   it('installs the local-embeddings extra when requested', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'embedding-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'embedding-wheel' });
     const commands: Array<{ command: string; args: string[] }> = [];
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => {
       commands.push({ command, args });
@@ -288,7 +331,7 @@ describe('installManagedPythonRuntime', () => {
   });
 
   it('fails with the hard-prerequisite message when uv is missing', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const commands: Array<{ command: string; args: string[] }> = [];
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => {
       commands.push({ command, args });
@@ -309,7 +352,7 @@ describe('installManagedPythonRuntime', () => {
   });
 
   it('reuses an existing compatible runtime when force is false', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => ({
       stdout: command === 'uv' && args[0] === '--version' ? 'uv 0.9.5\n' : '',
       stderr: '',
@@ -335,14 +378,17 @@ describe('installManagedPythonRuntime', () => {
     });
 
     expect(second.status).toBe('ready');
-    expect(exec).toHaveBeenCalledTimes(3);
+    expect(exec).toHaveBeenCalledTimes(4);
   });
 
   it('keeps failed install logs in the versioned runtime directory', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => {
       if (command === 'uv' && args[0] === 'venv') {
-        throw Object.assign(new Error('uv venv failed'), { stdout: 'creating\n', stderr: 'bad python\n' });
+        throw Object.assign(new Error('uv venv failed'), {
+          stdout: 'creating\n',
+          stderr: '× No solution found\n╰─▶ current Python version (3.12.3) does not satisfy Python>=3.13\n',
+        });
       }
       return { stdout: command === 'uv' && args[0] === '--version' ? 'uv 0.9.5\n' : '', stderr: '' };
     });
@@ -355,11 +401,11 @@ describe('installManagedPythonRuntime', () => {
         features: ['core'],
         exec,
       }),
-    ).rejects.toThrow(/Python runtime install failed/);
+    ).rejects.toThrow(/current Python version \(3\.12\.3\) does not satisfy Python>=3\.13/);
 
     const log = await readFile(join(tempDir, 'runtime', '0.2.0', 'install.log'), 'utf8');
-    expect(log).toContain('$ uv venv');
-    expect(log).toContain('bad python');
+    expect(log).toContain('$ uv venv --python 3.13');
+    expect(log).toContain('current Python version (3.12.3) does not satisfy Python>=3.13');
   });
 });
 
@@ -386,7 +432,7 @@ describe('readManagedPythonRuntimeStatus', () => {
   });
 
   it('reports ready when manifest and executables exist', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => ({
       stdout: command === 'uv' && args[0] === '--version' ? 'uv 0.9.5\n' : '',
       stderr: '',
@@ -413,7 +459,7 @@ describe('readManagedPythonRuntimeStatus', () => {
   });
 
   it('reports broken when an executable is missing', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => ({
       stdout: command === 'uv' && args[0] === '--version' ? 'uv 0.9.5\n' : '',
       stderr: '',
@@ -449,7 +495,7 @@ describe('doctorManagedPythonRuntime', () => {
   });
 
   it('checks uv, bundled assets, and installed runtime status', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const exec: ManagedPythonRuntimeExec = vi.fn(async (command, args) => ({
       stdout: command === 'uv' && args[0] === '--version' ? 'uv 0.9.5\n' : '',
       stderr: '',
@@ -471,7 +517,7 @@ describe('doctorManagedPythonRuntime', () => {
   });
 
   it('reports uv as a hard prerequisite when uv is missing', async () => {
-    const { assetDir } = await writeAsset(tempDir, 'core-wheel');
+    const { assetDir } = await writeAsset(tempDir, { label: 'core-wheel' });
     const exec: ManagedPythonRuntimeExec = vi.fn(async () => {
       throw new Error('spawn uv ENOENT');
     });

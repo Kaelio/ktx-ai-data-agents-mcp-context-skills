@@ -90,6 +90,26 @@ function releaseTag(kind) {
   return kind === 'rc' ? 'next' : 'latest';
 }
 
+function releaseChangelogPlugins(kind) {
+  return kind === 'rc' ? ['@semantic-release/changelog'] : [];
+}
+
+function releaseGitPlugins(kind) {
+  if (kind !== 'rc') {
+    return [];
+  }
+
+  return [
+    [
+      '@semantic-release/git',
+      {
+        assets: ['CHANGELOG.md', 'package.json', 'release-policy.json'],
+        message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
+      },
+    ],
+  ];
+}
+
 function releaseBranches(env = process.env) {
   const branch = currentBranch(env);
   const kind = releaseKind(env);
@@ -137,7 +157,7 @@ function createReleaseConfig(env = process.env) {
           },
         },
       ],
-      '@semantic-release/changelog',
+      ...releaseChangelogPlugins(kind),
       [
         '@semantic-release/exec',
         {
@@ -146,19 +166,22 @@ function createReleaseConfig(env = process.env) {
             'pnpm run artifacts:check',
             'pnpm run release:readiness',
           ].join(' && '),
-          publishCmd: [
-            'pnpm run release:npm-publish -- --publish',
-            'pnpm run release:published-smoke',
-          ].join(' && '),
         },
       ],
       [
-        '@semantic-release/git',
+        '@semantic-release/npm',
         {
-          assets: ['CHANGELOG.md', 'package.json', 'release-policy.json'],
-          message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
+          pkgRoot: 'dist/public-npm-package',
+          tarballDir: 'dist/artifacts/npm',
         },
       ],
+      [
+        '@semantic-release/exec',
+        {
+          publishCmd: 'pnpm run release:published-smoke',
+        },
+      ],
+      ...releaseGitPlugins(kind),
       [
         '@semantic-release/github',
         {
