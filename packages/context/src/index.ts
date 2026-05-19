@@ -12,6 +12,7 @@ export * from './agent/index.js';
 export * from './core/index.js';
 export * from './daemon/index.js';
 export * from './ingest/index.js';
+export * from './index-sync/index.js';
 export * from './llm/index.js';
 export type {
   CaptureSession,

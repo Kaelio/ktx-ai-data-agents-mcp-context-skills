@@ -513,7 +513,7 @@ describe('doctorManagedPythonRuntime', () => {
       ['asset', 'pass'],
       ['runtime', 'fail'],
     ]);
-    expect(checks[2]?.fix).toBe('Run: ktx dev runtime install --yes');
+    expect(checks[2]?.fix).toBe('Run: ktx admin runtime install --yes');
   });
 
   it('reports uv as a hard prerequisite when uv is missing', async () => {
@@ -534,7 +534,7 @@ describe('doctorManagedPythonRuntime', () => {
       label: 'uv',
       status: 'fail',
       detail: MISSING_UV_RUNTIME_INSTALL_MESSAGE,
-      fix: 'Install uv, make sure it is on PATH, and run: ktx dev runtime install --yes',
+      fix: 'Install uv, make sure it is on PATH, and run: ktx admin runtime install --yes',
     });
   });
 });

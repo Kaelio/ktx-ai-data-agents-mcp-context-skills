@@ -12,7 +12,7 @@ describe('renderKtxCommandTree', () => {
       .filter((line) => /^ {2}[├└]── \S/.test(line))
       .map((line) => line.replace(/^ {2}[├└]── /, '').trim().split(' ')[0]);
 
-    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'mcp', 'dev']) {
+    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'mcp', 'admin']) {
       expect(topLevel).toContain(expected);
     }
 

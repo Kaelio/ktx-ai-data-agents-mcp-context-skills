@@ -164,4 +164,4 @@ percentage.
 | Validation fails | YAML references missing columns, invalid joins, or invalid SQL expressions | Fix the source YAML and rerun `ktx sl validate` |
 | Query compile fails | Measure, dimension, filter, or segment name is invalid | Search sources with `ktx sl <query>`, inspect the source YAML in your project files, then retry using declared fields |
 | Execution returns too many rows | `--max-rows` is missing or too high | Add `--max-rows` with a bounded value before executing |
-| Runtime install is blocked | Query execution needs the managed Python runtime and prompts are disabled | Run `ktx dev runtime install --feature core --yes`, or rerun `ktx sl query --yes` |
+| Runtime install is blocked | Query execution needs the managed Python runtime and prompts are disabled | Run `ktx admin runtime install --feature core --yes`, or rerun `ktx sl query --yes` |

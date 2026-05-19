@@ -307,7 +307,7 @@ function localEmbeddingSetupMessage(message: string, stderrTail: string[] = []):
   const lines = [
     `Local embedding health check failed: ${message}`,
     'Local embeddings use the KTX-managed Python runtime.',
-    'Prepare the runtime with: ktx dev runtime start --feature local-embeddings',
+    'Prepare the runtime with: ktx admin runtime start --feature local-embeddings',
     'Use --yes with setup to install and start the runtime without prompting.',
     'The first run may download Python packages and the all-MiniLM-L6-v2 model.',
   ];

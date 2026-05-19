@@ -118,9 +118,9 @@ function makeSpinnerEvents() {
 
 describe('managedRuntimeInstallCommand', () => {
   it('prints the exact command for each managed runtime feature', () => {
-    expect(managedRuntimeInstallCommand('core')).toBe('ktx dev runtime install --yes');
+    expect(managedRuntimeInstallCommand('core')).toBe('ktx admin runtime install --yes');
     expect(managedRuntimeInstallCommand('local-embeddings')).toBe(
-      'ktx dev runtime install --feature local-embeddings --yes',
+      'ktx admin runtime install --feature local-embeddings --yes',
     );
   });
 });
@@ -221,7 +221,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
         readStatus: vi.fn(async () => missingStatus()),
         installRuntime,
       }),
-    ).rejects.toThrow('KTX Python runtime is required for this command. Run: ktx dev runtime install --yes');
+    ).rejects.toThrow('KTX Python runtime is required for this command. Run: ktx admin runtime install --yes');
 
     expect(installRuntime).not.toHaveBeenCalled();
   });

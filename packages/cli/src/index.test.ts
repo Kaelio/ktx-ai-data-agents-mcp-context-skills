@@ -129,9 +129,10 @@ describe('runKtxCli', () => {
 
     expect(testIo.stdout()).toContain('Usage: ktx [options] [command]');
     expect(testIo.stdout()).toContain('KTX data agent context layer CLI');
-    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'dev']) {
+    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'admin']) {
       expect(testIo.stdout()).toContain(`${command}`);
     }
+    expect(testIo.stdout()).not.toMatch(/^  dev\s/m);
     expect(testIo.stdout()).not.toMatch(/^  scan\s/m);
     for (const removed of ['demo', 'init', 'connect', 'ask', 'knowledge', 'agent', 'completion', 'serve']) {
       expect(testIo.stdout()).not.toMatch(new RegExp(`^\\s+${removed}(?:\\s|\\[|$)`, 'm'));
@@ -291,17 +292,17 @@ describe('runKtxCli', () => {
     const pruneIo = makeIo();
 
     await expect(
-      runKtxCli(['dev', 'runtime', 'install', '--feature', 'local-embeddings', '--force', '--yes'], installIo.io, {
+      runKtxCli(['admin', 'runtime', 'install', '--feature', 'local-embeddings', '--force', '--yes'], installIo.io, {
         runtime,
       }),
     ).resolves.toBe(0);
     await expect(
-      runKtxCli(['dev', 'runtime', 'start', '--feature', 'local-embeddings', '--force'], startIo.io, { runtime }),
+      runKtxCli(['admin', 'runtime', 'start', '--feature', 'local-embeddings', '--force'], startIo.io, { runtime }),
     ).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'stop', '--all'], stopAllIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'stop', '--all'], stopAllIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(1);
 
     expect(runtime).toHaveBeenNthCalledWith(
       1,
@@ -402,7 +403,7 @@ describe('runKtxCli', () => {
   it('documents runtime stop all in command help', async () => {
     const testIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'runtime', 'stop', '--help'], testIo.io)).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'stop', '--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('--all');
     expect(testIo.stdout()).toContain('Stop all KTX daemon processes recorded or discoverable');
@@ -680,9 +681,9 @@ describe('runKtxCli', () => {
     const completionIo = makeIo();
     const hiddenIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'completion', 'zsh'], completionIo.io)).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'completion', 'zsh'], completionIo.io)).resolves.toBe(1);
     await expect(
-      runKtxCli(['dev', '__complete', '--shell', 'zsh', '--position', '2', '--', 'ktx', 'co'], hiddenIo.io),
+      runKtxCli(['admin', '__complete', '--shell', 'zsh', '--position', '2', '--', 'ktx', 'co'], hiddenIo.io),
     ).resolves.toBe(1);
 
     expect(completionIo.stderr()).toMatch(/unknown command|error:/);
@@ -986,7 +987,7 @@ describe('runKtxCli', () => {
     expect(args.targetConnectionId).toBeUndefined();
   });
 
-  it('rejects old adapter-backed ingest flags at the top level and under dev', async () => {
+  it('rejects old adapter-backed ingest flags at the top level and under admin', async () => {
     const rootRunIo = makeIo();
     const devRunIo = makeIo();
     const publicIngest = vi.fn(async () => 0);
@@ -997,7 +998,7 @@ describe('runKtxCli', () => {
       }),
     ).resolves.toBe(1);
     await expect(
-      runKtxCli(['dev', 'ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], devRunIo.io, {
+      runKtxCli(['admin', 'ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], devRunIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(1);
@@ -1006,12 +1007,12 @@ describe('runKtxCli', () => {
     expect(devRunIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('rejects removed dev doctor and removed ingest parser cases', async () => {
+  it('rejects removed admin doctor and removed ingest parser cases', async () => {
     const doctor = vi.fn(async () => 0);
     const doctorIo = makeIo();
     const ingestRunIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'doctor', 'setup', '--json', '--no-input'], doctorIo.io, { doctor })).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'doctor', 'setup', '--json', '--no-input'], doctorIo.io, { doctor })).resolves.toBe(1);
     await expect(
       runKtxCli(
         [
@@ -1803,12 +1804,12 @@ describe('runKtxCli', () => {
     expect(serveIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('prints dev help for bare dev commands', async () => {
+  it('prints admin help for bare admin commands', async () => {
     const testIo = makeIo();
 
-    await expect(runKtxCli(['dev'], testIo.io)).resolves.toBe(0);
+    await expect(runKtxCli(['admin'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx dev [options] [command]');
+    expect(testIo.stdout()).toContain('Usage: ktx admin [options] [command]');
     expect(testIo.stdout()).toContain('Low-level project initialization');
     expect(testIo.stdout()).toContain('init');
     expect(testIo.stdout()).toContain('runtime');
@@ -1820,13 +1821,13 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('rejects removed dev command groups without invoking execution', async () => {
+  it('rejects removed admin command groups without invoking execution', async () => {
     for (const command of ['scan', 'ingest', 'mapping']) {
       const testIo = makeIo();
       const publicIngest = vi.fn().mockResolvedValue(0);
       const sl = vi.fn().mockResolvedValue(0);
 
-      await expect(runKtxCli(['dev', command], testIo.io, { publicIngest, sl })).resolves.toBe(1);
+      await expect(runKtxCli(['admin', command], testIo.io, { publicIngest, sl })).resolves.toBe(1);
 
       expect(testIo.stderr()).toMatch(/unknown command|error:/);
       expect(publicIngest).not.toHaveBeenCalled();
@@ -1834,10 +1835,10 @@ describe('runKtxCli', () => {
     }
   });
 
-  it('rejects removed reserved dev subcommands', async () => {
+  it('rejects removed reserved admin subcommands', async () => {
     const testIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'artifacts'], testIo.io)).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'artifacts'], testIo.io)).resolves.toBe(1);
 
     expect(testIo.stderr()).toMatch(/unknown command|error:/);
   });

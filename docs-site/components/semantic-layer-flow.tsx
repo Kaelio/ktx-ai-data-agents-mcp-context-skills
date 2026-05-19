@@ -4,7 +4,6 @@ import { useCallback, useState } from "react";
 import {
   Background,
   BackgroundVariant,
-  Controls,
   Handle,
   MarkerType,
   type Node,
@@ -1036,7 +1035,7 @@ export function SemanticLayerFlow() {
           }}
         >
           <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-fd-border/50 bg-white/30 px-1.5 py-px font-mono text-[9.5px] font-medium uppercase tracking-[0.06em] text-fd-muted-foreground shadow-sm backdrop-blur-sm dark:bg-white/10">
-            Pan / zoom
+            Drag to pan • ⌘/Ctrl + scroll to zoom
           </div>
           <ReactFlow
             nodes={nodes}
@@ -1050,15 +1049,14 @@ export function SemanticLayerFlow() {
             elementsSelectable={false}
             panOnDrag
             panOnScroll={false}
-            zoomOnScroll
+            zoomOnScroll={false}
             zoomOnPinch
             zoomOnDoubleClick
-            preventScrolling
+            preventScrolling={false}
             minZoom={minZoom}
             maxZoom={1.5}
             proOptions={{ hideAttribution: true }}
           >
-            <Controls position="bottom-right" showInteractive={false} />
             <Background
               variant={BackgroundVariant.Dots}
               gap={18}

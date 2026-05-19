@@ -65,6 +65,35 @@ describe('SqliteKnowledgeIndex', () => {
     expect(index.search('churn', 10)).toEqual([]);
   });
 
+  it('clear removes one wiki scope and leaves other scopes intact', async () => {
+    const index = new SqliteKnowledgeIndex({ dbPath });
+    index.sync([
+      page({ path: 'wiki/global/revenue.md', key: 'revenue', scope: 'GLOBAL', scopeId: null }),
+      page({
+        path: 'wiki/user/local/revenue.md',
+        key: 'revenue',
+        scope: 'USER',
+        scopeId: 'local',
+        summary: 'Local revenue',
+        content: 'Local revenue notes.',
+      }),
+      page({
+        path: 'wiki/user/alex/revenue.md',
+        key: 'revenue',
+        scope: 'USER',
+        scopeId: 'alex',
+        summary: 'Alex revenue',
+        content: 'Alex revenue notes.',
+      }),
+    ]);
+
+    expect(index.clear('USER', 'local')).toBe(1);
+
+    expect(index.search('Local', 10)).toEqual([]);
+    expect(index.search('Alex', 10)).toEqual([expect.objectContaining({ path: 'wiki/user/alex/revenue.md' })]);
+    expect(index.search('definition', 10)).toEqual([expect.objectContaining({ path: 'wiki/global/revenue.md' })]);
+  });
+
   it('exposes existing search text and embedding state for incremental refresh', () => {
     const index = new SqliteKnowledgeIndex({ dbPath });
     index.sync([page({ path: 'wiki/global/revenue.md', key: 'revenue', embedding: [1, 0] })]);

@@ -144,6 +144,11 @@ describe('standalone built ktx CLI smoke', () => {
     expectSetupStderr(init);
     expect(init.stdout).toContain(`Project: ${projectDir}`);
 
+    const reindex = await runBuiltCli(['--project-dir', projectDir, 'admin', 'reindex', '--output', 'plain']);
+    expect(reindex.code).toBe(0);
+    expect(reindex.stdout).toContain('reindex\t');
+    expect(reindex.stderr).toContain('wiki/global');
+
     const run = await runBuiltCli([
       'ingest',
       'run',
