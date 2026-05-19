@@ -11,6 +11,7 @@
   <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/graph/badge.svg?branch=main" alt="Codecov" /></a>
   <a href="https://github.com/Kaelio/ktx/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/Kaelio/ktx/ci.yml?branch=main&label=tests&style=flat-square" alt="Tests" /></a>
   <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-KTX-22c55e?style=flat-square" alt="Documentation" /></a>
+  <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><img src="https://img.shields.io/badge/slack-join%20community-4A154B?style=flat-square&logo=slack&logoColor=white" alt="Join the KTX Slack community" /></a>
   <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
 </p>
 
@@ -210,7 +211,17 @@ uv run pytest -q
 - [Quickstart](docs-site/content/docs/getting-started/quickstart.mdx)
 - [CLI Reference](docs-site/content/docs/cli-reference/ktx.mdx)
 - [Building Context](docs-site/content/docs/guides/building-context.mdx)
+- [Community & Support](docs-site/content/docs/community/support.mdx)
 - [Contributing](docs-site/content/docs/community/contributing.mdx)
+
+## Community
+
+- **[Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ)** — ask questions, share what you're building, and chat with maintainers and other users.
+- **[GitHub Issues](https://github.com/Kaelio/ktx/issues)** — report bugs and request features.
+- **[Contributing guide](docs-site/content/docs/community/contributing.mdx)** — set up the repo, run tests, and open a PR.
+
+See [Community & Support](docs-site/content/docs/community/support.mdx) for the
+full guide on where to ask what.
 
 ## License
 
