@@ -90,6 +90,26 @@ function releaseTag(kind) {
   return kind === 'rc' ? 'next' : 'latest';
 }
 
+function releaseChangelogPlugins(kind) {
+  return kind === 'rc' ? ['@semantic-release/changelog'] : [];
+}
+
+function releaseGitPlugins(kind) {
+  if (kind !== 'rc') {
+    return [];
+  }
+
+  return [
+    [
+      '@semantic-release/git',
+      {
+        assets: ['CHANGELOG.md', 'package.json', 'release-policy.json'],
+        message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
+      },
+    ],
+  ];
+}
+
 function releaseBranches(env = process.env) {
   const branch = currentBranch(env);
   const kind = releaseKind(env);
@@ -138,7 +158,7 @@ function createReleaseConfig(env = process.env) {
         },
       ],
       './scripts/semantic-release-version-policy.cjs',
-      '@semantic-release/changelog',
+      ...releaseChangelogPlugins(kind),
       [
         '@semantic-release/exec',
         {
@@ -153,13 +173,7 @@ function createReleaseConfig(env = process.env) {
           ].join(' && '),
         },
       ],
-      [
-        '@semantic-release/git',
-        {
-          assets: ['CHANGELOG.md', 'package.json', 'release-policy.json'],
-          message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
-        },
-      ],
+      ...releaseGitPlugins(kind),
       [
         '@semantic-release/github',
         {
