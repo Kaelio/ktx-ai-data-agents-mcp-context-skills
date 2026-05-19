@@ -126,8 +126,8 @@ If you choose local `sentence-transformers` embeddings, KTX uses the managed
 Python runtime. To prepare it before setup, run:
 
 ```bash
-ktx dev runtime install --feature local-embeddings --yes
-ktx dev runtime start --feature local-embeddings
+ktx admin runtime install --feature local-embeddings --yes
+ktx admin runtime start --feature local-embeddings
 ```
 
 During the database step, setup tests the saved connection and builds initial

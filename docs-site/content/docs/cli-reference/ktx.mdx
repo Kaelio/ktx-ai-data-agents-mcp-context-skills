@@ -48,7 +48,7 @@ ktx
     stop
     status
     logs
-  dev
+  admin
     init [directory]
     schema
     runtime
@@ -56,6 +56,7 @@ ktx
       start
       stop
       status
+    reindex
 ```
 
 The public context-build entrypoint is `ktx ingest [connectionId]` or
@@ -90,11 +91,11 @@ ktx status
 ktx ingest warehouse
 
 # Build every configured connection
-ktx ingest --all
+ktx ingest
 
 # Search semantic-layer sources and wiki pages
-ktx sl search "revenue"
-ktx wiki search "revenue recognition"
+ktx sl "revenue"
+ktx wiki "revenue recognition"
 
 # Execute read-only SQL
 ktx sql --connection warehouse "select count(*) from public.orders"

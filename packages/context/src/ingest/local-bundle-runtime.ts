@@ -379,16 +379,19 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
     return result;
   }
 
-  async deleteStale(): Promise<void> {
+  async deleteStale(): Promise<number> {
     await this.syncAllPagesFromDisk();
+    return 0;
   }
 
-  async deleteByScope(): Promise<void> {
+  async deleteByScope(): Promise<number> {
     await this.syncAllPagesFromDisk();
+    return 0;
   }
 
-  async deleteByKey(): Promise<void> {
+  async deleteByKey(): Promise<number> {
     await this.syncAllPagesFromDisk();
+    return 0;
   }
 
   async findPageByKey(scope: string, scopeId: string | null, pageKey: string) {

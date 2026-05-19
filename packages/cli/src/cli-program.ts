@@ -10,7 +10,7 @@ import { registerSetupCommands } from './commands/setup-commands.js';
 import { registerSlCommands } from './commands/sl-commands.js';
 import { registerSqlCommands } from './commands/sql-commands.js';
 import { registerStatusCommands } from './commands/status-commands.js';
-import { registerDevCommands } from './dev.js';
+import { registerAdminCommands } from './admin.js';
 import { renderMissingProjectMessage } from './doctor.js';
 import { findNearestKtxProjectDir, resolveKtxProjectDir } from './project-resolver.js';
 import { profileMark, profileSpan } from './startup-profile.js';
@@ -58,8 +58,8 @@ type CommandPathNode = CommandWithGlobalOptions & {
 };
 
 const PROJECT_AWARE_ROOT_COMMANDS = new Set(['setup', 'connection', 'ingest', 'wiki', 'sl', 'sql', 'status', 'mcp']);
-const PROJECT_INDEPENDENT_DEV_COMMANDS = new Set(['runtime', 'schema']);
-const COMMANDS_THAT_CREATE_PROJECT = new Set(['setup', 'ktx dev init']);
+const PROJECT_INDEPENDENT_ADMIN_COMMANDS = new Set(['runtime', 'schema']);
+const COMMANDS_THAT_CREATE_PROJECT = new Set(['setup', 'ktx admin init']);
 const COMMANDS_WITH_OWN_MISSING_PROJECT_HANDLING = new Set(['status']);
 const GLOBAL_OPTIONS_WITH_VALUE = new Set(['--project-dir']);
 const GLOBAL_OPTIONS_WITHOUT_VALUE = new Set(['--debug', '--help', '-h', '--version', '-v']);
@@ -172,15 +172,15 @@ function isProjectAwareCommand(path: string[]): boolean {
   }
 
   const rootCommand = path[1];
-  if (rootCommand === 'dev') {
-    return path[2] !== undefined && !PROJECT_INDEPENDENT_DEV_COMMANDS.has(path[2]);
+  if (rootCommand === 'admin') {
+    return path[2] !== undefined && !PROJECT_INDEPENDENT_ADMIN_COMMANDS.has(path[2]);
   }
   return rootCommand !== undefined && PROJECT_AWARE_ROOT_COMMANDS.has(rootCommand);
 }
 
 function shouldSuppressProjectDirLine(path: string[], options: Record<string, unknown>): boolean {
   const commandPathKey = path.join(' ');
-  if (commandPathKey === 'ktx dev init') {
+  if (commandPathKey === 'ktx admin init') {
     return true;
   }
 
@@ -421,7 +421,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   registerSqlCommands(program, context);
   registerStatusCommands(program, context);
   registerMcpCommands(program, context);
-  registerDevCommands(program, context);
+  registerAdminCommands(program, context);
 
   return program;
 }

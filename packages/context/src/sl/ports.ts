@@ -40,9 +40,9 @@ export interface SlSourcesIndexPort {
     sources: Array<{ sourceName: string; searchText: string; embedding: number[] | null; contentHash?: string | null }>,
   ): Promise<void>;
   getExistingSearchTexts(connectionId: string): Promise<Map<string, { searchText: string; hasEmbedding: boolean }>>;
-  deleteStale(connectionId: string, keepNames: string[]): Promise<void>;
-  deleteByConnection(connectionId: string): Promise<void>;
-  deleteByConnectionAndName(connectionId: string, sourceName: string): Promise<void>;
+  deleteStale(connectionId: string, keepNames: string[]): Promise<number>;
+  deleteByConnection(connectionId: string): Promise<number>;
+  deleteByConnectionAndName(connectionId: string, sourceName: string): Promise<number>;
   search(
     connectionId: string,
     queryEmbedding: number[] | null,

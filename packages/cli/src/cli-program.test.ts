@@ -31,7 +31,7 @@ describe('buildKtxProgram', () => {
 
     expect(program.name()).toBe('ktx');
     const topLevel = program.commands.map((command) => command.name()).sort();
-    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'dev']) {
+    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'admin']) {
       expect(topLevel).toContain(expected);
     }
   });

@@ -11,6 +11,7 @@
   <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/graph/badge.svg?branch=main" alt="Codecov" /></a>
   <a href="https://github.com/Kaelio/ktx/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/Kaelio/ktx/ci.yml?branch=main&label=tests&style=flat-square" alt="Tests" /></a>
   <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-KTX-22c55e?style=flat-square" alt="Documentation" /></a>
+  <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><img src="https://img.shields.io/badge/slack-join%20community-4A154B?style=flat-square&logo=slack&logoColor=white" alt="Join the KTX Slack community" /></a>
   <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
 </p>
 
@@ -94,17 +95,21 @@ Agent integration ready: yes (codex:project)
 |---------|---------|
 | `ktx setup` | Create, resume, or update a KTX project |
 | `ktx status` | Check project readiness |
-| `ktx connection list` | List configured connections |
+| `ktx connection` | List configured connections |
+| `ktx connection test` | Test every configured connection |
 | `ktx connection test <id>` | Test one connection |
+| `ktx ingest` | Build context for every configured connection |
 | `ktx ingest <id>` | Build context for one connection |
-| `ktx ingest --all` | Build context for every configured connection |
-| `ktx ingest text <file> --connection-id <connectionId>` | Capture free-form notes into memory |
-| `ktx sl list` | List semantic-layer sources |
-| `ktx sl search "revenue"` | Search semantic-layer sources |
+| `ktx ingest --text "..."` | Capture free-form notes into memory |
+| `ktx ingest --file notes.md --connection-id <id>` | Capture a text file into memory |
+| `ktx sl` | List semantic-layer sources |
+| `ktx sl "revenue"` | Search semantic-layer sources |
 | `ktx sl validate <source> --connection-id <id>` | Validate a semantic source |
 | `ktx sl query --measure <measure> --format sql` | Compile semantic-layer SQL |
 | `ktx sql --connection <id> "select 1"` | Execute read-only SQL |
-| `ktx wiki search "revenue definition"` | Search local wiki context |
+| `ktx wiki` | List local wiki pages |
+| `ktx wiki "revenue definition"` | Search local wiki context |
+| `ktx mcp` | Show MCP daemon status |
 | `ktx mcp start` | Start the local MCP server for agent clients |
 
 Project resolution defaults to `KTX_PROJECT_DIR`, then the nearest `ktx.yaml`,
@@ -139,8 +144,8 @@ A typical agent workflow combines wiki and semantic-layer search before
 querying:
 
 ```bash
-ktx sl search "revenue" --json
-ktx wiki search "refund policy" --json
+ktx sl "revenue" --json
+ktx wiki "refund policy" --json
 ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 ```
 
@@ -210,7 +215,17 @@ uv run pytest -q
 - [Quickstart](docs-site/content/docs/getting-started/quickstart.mdx)
 - [CLI Reference](docs-site/content/docs/cli-reference/ktx.mdx)
 - [Building Context](docs-site/content/docs/guides/building-context.mdx)
+- [Community & Support](docs-site/content/docs/community/support.mdx)
 - [Contributing](docs-site/content/docs/community/contributing.mdx)
+
+## Community
+
+- **[Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ)** — ask questions, share what you're building, and chat with maintainers and other users.
+- **[GitHub Issues](https://github.com/Kaelio/ktx/issues)** — report bugs and request features.
+- **[Contributing guide](docs-site/content/docs/community/contributing.mdx)** — set up the repo, run tests, and open a PR.
+
+See [Community & Support](docs-site/content/docs/community/support.mdx) for the
+full guide on where to ask what.
 
 ## License
 

@@ -147,7 +147,7 @@ export async function findPythonArtifacts(pythonDir) {
       files,
       RUNTIME_WHEEL_DISTRIBUTION_NAME,
       '.whl',
-      'kaelio-ktx dev runtime wheel',
+      'kaelio-ktx runtime wheel',
       pythonDir,
       RUNTIME_WHEEL_PACKAGE_VERSION,
     ),
@@ -606,8 +606,8 @@ try {
   requireOutput('ktx public package version', version, await installedPackageVersionPattern());
 
   const runtimeStatusBefore = parseJsonResultWithExitCode(
-    'ktx dev runtime status missing',
-    await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'status', '--json']),
+    'ktx admin runtime status missing',
+    await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'status', '--json']),
     1,
   );
   assert.equal(runtimeStatusBefore.kind, 'missing');
@@ -688,7 +688,6 @@ try {
     'exec',
     'ktx',
     'wiki',
-    'search',
     'revenue',
     '--json',
     '--limit',
@@ -731,7 +730,6 @@ try {
     'exec',
     'ktx',
     'sl',
-    'search',
     'orders',
     '--json',
     '--connection-id',
@@ -768,8 +766,8 @@ try {
   requireOutput('ktx sl query first managed runtime install', slQuery, /orders/);
 
   const runtimeStatusAfter = parseJsonResult(
-    'ktx dev runtime status ready',
-    await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'status', '--json']),
+    'ktx admin runtime status ready',
+    await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'status', '--json']),
   );
   assert.equal(runtimeStatusAfter.kind, 'ready');
   assert.deepEqual(runtimeStatusAfter.manifest.features, ['core']);
@@ -797,29 +795,29 @@ try {
   requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"rows": \\[\\s*\\[\\s*3\\s*\\]\\s*\\]/);
   process.stdout.write('ktx sl query sqlite execute verified\\n');
 
-  const runtimeDoctor = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'status']);
-  requireSuccess('ktx dev runtime status', runtimeDoctor);
-  requireOutput('ktx dev runtime status', runtimeDoctor, /KTX Python runtime/);
-  requireOutput('ktx dev runtime status', runtimeDoctor, /status: ready/);
-  process.stdout.write('ktx dev runtime status verified\\n');
+  const runtimeDoctor = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'status']);
+  requireSuccess('ktx admin runtime status', runtimeDoctor);
+  requireOutput('ktx admin runtime status', runtimeDoctor, /KTX Python runtime/);
+  requireOutput('ktx admin runtime status', runtimeDoctor, /status: ready/);
+  process.stdout.write('ktx admin runtime status verified\\n');
 
-  const runtimeStart = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'start']);
-  requireSuccess('ktx dev runtime start', runtimeStart);
+  const runtimeStart = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'start']);
+  requireSuccess('ktx admin runtime start', runtimeStart);
   daemonStarted = true;
-  requireOutput('ktx dev runtime start', runtimeStart, /Started KTX Python daemon/);
-  requireOutput('ktx dev runtime start', runtimeStart, /url: http:\\/\\/127\\.0\\.0\\.1:\\d+/);
-  requireOutput('ktx dev runtime start', runtimeStart, /features: core/);
+  requireOutput('ktx admin runtime start', runtimeStart, /Started KTX Python daemon/);
+  requireOutput('ktx admin runtime start', runtimeStart, /url: http:\\/\\/127\\.0\\.0\\.1:\\d+/);
+  requireOutput('ktx admin runtime start', runtimeStart, /features: core/);
 
-  const runtimeStartReuse = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'start']);
-  requireSuccess('ktx dev runtime start reuse', runtimeStartReuse);
-  requireOutput('ktx dev runtime start reuse', runtimeStartReuse, /Using existing KTX Python daemon/);
-  requireOutput('ktx dev runtime start reuse', runtimeStartReuse, /features: core/);
+  const runtimeStartReuse = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'start']);
+  requireSuccess('ktx admin runtime start reuse', runtimeStartReuse);
+  requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /Using existing KTX Python daemon/);
+  requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /features: core/);
 
-  const runtimeStop = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'stop']);
-  requireSuccess('ktx dev runtime stop', runtimeStop);
+  const runtimeStop = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop']);
+  requireSuccess('ktx admin runtime stop', runtimeStop);
   daemonStarted = false;
-  requireOutput('ktx dev runtime stop', runtimeStop, /Stopped KTX Python daemon/);
-  process.stdout.write('ktx dev runtime daemon lifecycle verified\\n');
+  requireOutput('ktx admin runtime stop', runtimeStop, /Stopped KTX Python daemon/);
+  process.stdout.write('ktx admin runtime daemon lifecycle verified\\n');
 
   const structuralScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',
     '--project-dir',
@@ -849,7 +847,7 @@ try {
   process.stdout.write('ktx ingest state verified\\n');
 } finally {
   if (daemonStarted) {
-    await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'stop']);
+    await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop']);
   }
   if (previousRuntimeRoot === undefined) {
     delete process.env.KTX_RUNTIME_ROOT;

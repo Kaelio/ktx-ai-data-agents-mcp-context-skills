@@ -1,5 +1,6 @@
 import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
 import { noopLogger } from '../core/index.js';
+import type { ReindexWorkResult } from '../index-sync/types.js';
 import { DEFAULT_PRIORITY, resolveDescription } from './descriptions.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import type { SlSourcesIndexPort } from './ports.js';
@@ -94,73 +95,71 @@ export function buildSemanticLayerSourceSearchText(
 
 export class SlSearchService {
   constructor(
-    private readonly embeddingService: KtxEmbeddingPort,
+    private readonly embeddingService: KtxEmbeddingPort | null,
     private readonly slSourcesRepository: SlSourcesIndexPort,
     private readonly logger: KtxLogger = noopLogger,
   ) {}
 
-  async indexSources(connectionId: string, sources: SemanticLayerSource[]): Promise<void> {
+  async indexSources(connectionId: string, sources: SemanticLayerSource[]): Promise<ReindexWorkResult> {
+    const existing = await this.slSourcesRepository.getExistingSearchTexts(connectionId);
     if (sources.length === 0) {
-      await this.slSourcesRepository.deleteByConnection(connectionId);
-      return;
+      const deleted = await this.slSourcesRepository.deleteByConnection(connectionId);
+      return { scanned: 0, updated: 0, deleted, embeddingsRecomputed: 0, embeddingsFailed: 0 };
     }
 
-    // Detect which sources actually changed by comparing search_text
-    const existing = await this.slSourcesRepository.getExistingSearchTexts(connectionId);
     const searchTexts = sources.map((s) => this.buildSearchText(s));
 
+    const embeddingService = this.embeddingService;
     const changedIndices: number[] = [];
-    for (let i = 0; i < sources.length; i++) {
-      const prev = existing.get(sources[i].name);
-      if (!prev || prev.searchText !== searchTexts[i] || !prev.hasEmbedding) {
+    for (let i = 0; i < sources.length; i += 1) {
+      const previous = existing.get(sources[i]!.name);
+      if (
+        !previous ||
+        previous.searchText !== searchTexts[i] ||
+        (embeddingService !== null && !previous.hasEmbedding)
+      ) {
         changedIndices.push(i);
       }
     }
 
-    if (changedIndices.length === 0) {
-      // Still clean up stale sources even if nothing changed
-      const keepNames = sources.map((s) => s.name);
-      await this.slSourcesRepository.deleteStale(connectionId, keepNames);
-      this.logger.log(`SL sources for connection ${connectionId}: all ${sources.length} up to date, 0 reindexed`);
-      return;
-    }
+    let changedEmbeddings: (number[] | null)[] = changedIndices.map(() => null);
+    let embeddingsRecomputed = 0;
+    let embeddingsFailed = 0;
 
-    // Compute embeddings only for changed sources
-    const changedTexts = changedIndices.map((i) => searchTexts[i]);
-    let changedEmbeddings: (number[] | null)[];
-    try {
-      const batchSize = this.embeddingService.maxBatchSize;
-      const allEmbeddings: number[][] = [];
-      for (let i = 0; i < changedTexts.length; i += batchSize) {
-        const batch = changedTexts.slice(i, i + batchSize);
-        const batchEmbeddings = await this.embeddingService.computeEmbeddingsBulk(batch);
-        allEmbeddings.push(...batchEmbeddings);
+    if (embeddingService && changedIndices.length > 0) {
+      try {
+        const changedTexts = changedIndices.map((index) => searchTexts[index]!);
+        const allEmbeddings: number[][] = [];
+        for (let i = 0; i < changedTexts.length; i += embeddingService.maxBatchSize) {
+          const batch = changedTexts.slice(i, i + embeddingService.maxBatchSize);
+          allEmbeddings.push(...(await embeddingService.computeEmbeddingsBulk(batch)));
+        }
+        changedEmbeddings = allEmbeddings;
+        embeddingsRecomputed = allEmbeddings.length;
+      } catch (error) {
+        this.logger.warn(
+          `Failed to compute SL source embeddings: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        embeddingsFailed = changedIndices.length;
       }
-      changedEmbeddings = allEmbeddings;
-    } catch (error) {
-      this.logger.warn(
-        `Failed to compute SL source embeddings: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      changedEmbeddings = changedIndices.map(() => null);
     }
 
-    const rows = changedIndices.map((srcIdx, i) => {
-      return {
-        sourceName: sources[srcIdx].name,
-        searchText: searchTexts[srcIdx],
-        embedding: changedEmbeddings[i],
-      };
-    });
-
+    const rows = changedIndices.map((sourceIndex, embeddingIndex) => ({
+      sourceName: sources[sourceIndex]!.name,
+      searchText: searchTexts[sourceIndex]!,
+      embedding: changedEmbeddings[embeddingIndex] ?? null,
+    }));
     await this.slSourcesRepository.upsertSources(connectionId, rows);
 
-    // Remove sources that no longer exist in YAML
-    const keepNames = sources.map((s) => s.name);
-    await this.slSourcesRepository.deleteStale(connectionId, keepNames);
-
-    this.logger.log(
-      `SL sources for connection ${connectionId}: ${changedIndices.length}/${sources.length} reindexed, ${sources.length - changedIndices.length} unchanged`,
-    );
+    const keepNames = sources.map((source) => source.name);
+    const deleted = await this.slSourcesRepository.deleteStale(connectionId, keepNames);
+    return {
+      scanned: sources.length,
+      updated: changedIndices.length,
+      deleted,
+      embeddingsRecomputed,
+      embeddingsFailed,
+    };
   }
 
   async search(
@@ -170,12 +169,14 @@ export class SlSearchService {
     minRrfScore = 0,
   ): Promise<Array<{ sourceName: string; score: number; snippet?: string }>> {
     let queryEmbedding: number[] | null = null;
-    try {
-      queryEmbedding = await this.embeddingService.computeEmbedding(query);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to compute query embedding, falling back to FTS + trigram: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    if (this.embeddingService) {
+      try {
+        queryEmbedding = await this.embeddingService.computeEmbedding(query);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to compute query embedding, falling back to FTS + trigram: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
 
     const results = await this.slSourcesRepository.search(connectionId, queryEmbedding, query, limit, minRrfScore);

@@ -12,8 +12,8 @@ imports the package entry point, and runs installed `ktx` commands against a
 generated local project.
 
 The managed Python runtime smoke requires `uv` on `PATH`, isolates
-`KTX_RUNTIME_ROOT`, verifies `ktx dev runtime status`, runs `ktx sl query --yes` to
-install the core runtime from the bundled wheel, checks `ktx dev runtime status`,
+`KTX_RUNTIME_ROOT`, verifies `ktx admin runtime status`, runs `ktx sl query --yes` to
+install the core runtime from the bundled wheel, checks `ktx admin runtime status`,
 starts and reuses the managed daemon, and stops it.
 
 The artifact manifest contains the public `@kaelio/ktx` npm tarball and the

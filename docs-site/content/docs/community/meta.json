@@ -1,5 +1,5 @@
 {
   "title": "Community",
   "defaultOpen": true,
-  "pages": ["contributing"]
+  "pages": ["support", "contributing"]
 }

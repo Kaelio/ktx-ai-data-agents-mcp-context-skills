@@ -165,10 +165,10 @@ describe('standalone example docs', () => {
 
     for (const command of [
       'ktx status --json',
-      'ktx sl list --json',
-      'ktx sl search "revenue" --json',
+      'ktx sl --json',
+      'ktx sl "revenue" --json',
       'ktx sl query',
-      'ktx wiki search "revenue recognition" --json',
+      'ktx wiki "revenue recognition" --json',
     ]) {
       assert.match(servingAgents, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
@@ -193,12 +193,12 @@ describe('standalone example docs', () => {
 
     assert.match(rootReadme, publicPackagePattern('npm install -g {package}'));
     assert.match(quickstart, publicPackagePattern('npm install -g {package}'));
-    assert.match(quickstart, /ktx dev runtime install --feature local-embeddings --yes/);
-    assert.match(quickstart, /ktx dev runtime start --feature local-embeddings/);
+    assert.match(quickstart, /ktx admin runtime install --feature local-embeddings --yes/);
+    assert.match(quickstart, /ktx admin runtime start --feature local-embeddings/);
     assert.match(packageArtifacts, /requires `uv` on `PATH`/);
-    assert.match(packageArtifacts, /ktx dev runtime status/);
-    assert.match(packageArtifacts, /ktx dev runtime status/);
-    assert.doesNotMatch(packageArtifacts, /ktx dev runtime prune/);
+    assert.match(packageArtifacts, /ktx admin runtime status/);
+    assert.match(packageArtifacts, /ktx admin runtime status/);
+    assert.doesNotMatch(packageArtifacts, /ktx admin runtime prune/);
     assert.match(
       packageArtifacts,
       new RegExp(
@@ -229,9 +229,9 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(readme, /standalone Python distributions/);
     assert.doesNotMatch(readme, /installs the Python artifacts directly/);
     assert.match(readme, /requires `uv` on `PATH`/);
-    assert.match(readme, /ktx dev runtime status/);
-    assert.match(readme, /ktx dev runtime status/);
-    assert.doesNotMatch(readme, /ktx dev runtime prune/);
+    assert.match(readme, /ktx admin runtime status/);
+    assert.match(readme, /ktx admin runtime status/);
+    assert.doesNotMatch(readme, /ktx admin runtime prune/);
     assert.doesNotMatch(readme, /@ktx\/context/);
     assert.doesNotMatch(readme, /@ktx\/cli/);
     assert.doesNotMatch(readme, /python -m ktx_daemon semantic-validate/);
@@ -241,7 +241,7 @@ describe('standalone example docs', () => {
     const rootReadme = await readText('README.md');
     const cliMeta = await readText('docs-site/content/docs/cli-reference/meta.json');
     const ingestReference = await readText('docs-site/content/docs/cli-reference/ktx-ingest.mdx');
-    const devReference = await readText('docs-site/content/docs/cli-reference/ktx-dev.mdx');
+    const adminReference = await readText('docs-site/content/docs/cli-reference/ktx-admin.mdx');
     const setupReference = await readText('docs-site/content/docs/cli-reference/ktx-setup.mdx');
     const buildingContext = await readText('docs-site/content/docs/guides/building-context.mdx');
     const contextSources = await readText('docs-site/content/docs/integrations/context-sources.mdx');
@@ -252,7 +252,7 @@ describe('standalone example docs', () => {
     const localWarehouseReadme = await readText('examples/local-warehouse/README.md');
 
     assert.match(ingestReference, /ktx ingest <connectionId>/);
-    assert.match(ingestReference, /ktx ingest --all --deep/);
+    assert.match(ingestReference, /Build every configured connection/);
     assert.match(ingestReference, /--query-history-window-days <days>/);
     assert.match(buildingContext, /ktx ingest <connectionId>/);
     assert.match(buildingContext, /ktx ingest --all/);
@@ -275,7 +275,7 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(ingestReference, /--adapter/);
     assert.doesNotMatch(ingestReference, /ktx ingest watch/);
     assert.doesNotMatch(ingestReference, /live-database/);
-    assert.doesNotMatch(devReference, /ktx scan/);
+    assert.doesNotMatch(adminReference, /ktx scan/);
     assert.doesNotMatch(buildingContext, /ktx ingest watch/);
     assert.doesNotMatch(buildingContext, /ktx ingest status/);
     assert.doesNotMatch(buildingContext, /ktx ingest replay/);

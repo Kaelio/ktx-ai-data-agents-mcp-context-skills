@@ -33,9 +33,9 @@ export interface KnowledgeIndexPort {
     scope: string,
     scopeId: string | null,
   ): Promise<Map<string, { searchText: string; hasEmbedding: boolean }>>;
-  deleteStale(scope: string, scopeId: string | null, keepKeys: string[]): Promise<void>;
-  deleteByScope(scope: string, scopeId: string | null): Promise<void>;
-  deleteByKey(scope: string, scopeId: string | null, pageKey: string): Promise<void>;
+  deleteStale(scope: string, scopeId: string | null, keepKeys: string[]): Promise<number>;
+  deleteByScope(scope: string, scopeId: string | null): Promise<number>;
+  deleteByKey(scope: string, scopeId: string | null, pageKey: string): Promise<number>;
   findPageByKey(
     scope: string,
     scopeId: string | null,

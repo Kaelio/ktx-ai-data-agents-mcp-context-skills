@@ -129,9 +129,10 @@ describe('runKtxCli', () => {
 
     expect(testIo.stdout()).toContain('Usage: ktx [options] [command]');
     expect(testIo.stdout()).toContain('KTX data agent context layer CLI');
-    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'dev']) {
+    for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'admin']) {
       expect(testIo.stdout()).toContain(`${command}`);
     }
+    expect(testIo.stdout()).not.toMatch(/^  dev\s/m);
     expect(testIo.stdout()).not.toMatch(/^  scan\s/m);
     for (const removed of ['demo', 'init', 'connect', 'ask', 'knowledge', 'agent', 'completion', 'serve']) {
       expect(testIo.stdout()).not.toMatch(new RegExp(`^\\s+${removed}(?:\\s|\\[|$)`, 'm'));
@@ -148,7 +149,7 @@ describe('runKtxCli', () => {
     const knowledge = vi.fn(async () => 0);
 
     const listIo = makeIo();
-    await expect(runKtxCli(['--project-dir', tempDir, 'wiki', 'list', '--json'], listIo.io, { knowledge }))
+    await expect(runKtxCli(['--project-dir', tempDir, 'wiki', '--json'], listIo.io, { knowledge }))
       .resolves.toBe(0);
     expect(knowledge).toHaveBeenCalledWith(
       {
@@ -162,7 +163,7 @@ describe('runKtxCli', () => {
 
     const searchIo = makeIo();
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'wiki', 'search', 'revenue', '--limit', '5'], searchIo.io, { knowledge }),
+      runKtxCli(['--project-dir', tempDir, 'wiki', 'revenue', '--limit', '5'], searchIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
       {
@@ -178,7 +179,7 @@ describe('runKtxCli', () => {
 
     const debugSearchIo = makeIo();
     await expect(
-      runKtxCli(['--project-dir', tempDir, '--debug', 'wiki', 'search', 'revenue'], debugSearchIo.io, { knowledge }),
+      runKtxCli(['--project-dir', tempDir, '--debug', 'wiki', 'revenue'], debugSearchIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
       {
@@ -191,47 +192,57 @@ describe('runKtxCli', () => {
       },
       debugSearchIo.io,
     );
+
+    const multiWordIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'wiki', 'revenue', 'policy'], multiWordIo.io, { knowledge }),
+    ).resolves.toBe(0);
+    expect(knowledge).toHaveBeenLastCalledWith(
+      {
+        command: 'search',
+        projectDir: tempDir,
+        query: 'revenue policy',
+        userId: 'local',
+        json: false,
+      },
+      multiWordIo.io,
+    );
   });
 
-  it('rejects removed public wiki read and write commands', async () => {
+  it('rejects unknown write-style flags on the flattened wiki and sl commands', async () => {
     const knowledge = vi.fn(async () => 0);
-
-    for (const argv of [
-      ['--project-dir', tempDir, 'wiki', 'read', 'revenue', '--json'],
-      ['--project-dir', tempDir, 'wiki', 'write', 'revenue', '--summary', 'Revenue', '--content', 'Revenue.'],
-    ]) {
-      const io = makeIo();
-
-      await expect(runKtxCli(argv, io.io, { knowledge })).resolves.toBe(1);
-
-      expect(io.stderr()).toMatch(/unknown command|error:/);
-    }
-
-    expect(knowledge).not.toHaveBeenCalled();
-  });
-
-  it('rejects removed public sl read/write commands', async () => {
     const sl = vi.fn(async () => 0);
 
-    for (const argv of [
-      ['--project-dir', tempDir, 'sl', 'read', 'orders', '--connection-id', 'warehouse'],
-      ['--project-dir', tempDir, 'sl', 'write', 'orders', '--connection-id', 'warehouse', '--yaml', 'name: orders'],
-    ]) {
-      const io = makeIo();
-      await expect(runKtxCli(argv, io.io, { sl })).resolves.toBe(1);
-      expect(io.stderr()).toMatch(/unknown command|error:/);
-    }
+    const wikiIo = makeIo();
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'wiki', 'revenue', '--summary', 'Revenue', '--content', 'Revenue.'],
+        wikiIo.io,
+        { knowledge },
+      ),
+    ).resolves.toBe(1);
+    expect(wikiIo.stderr()).toMatch(/unknown option|error:/);
+    expect(knowledge).not.toHaveBeenCalled();
 
+    const slIo = makeIo();
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'sl', 'orders', '--yaml', 'name: orders'],
+        slIo.io,
+        { sl },
+      ),
+    ).resolves.toBe(1);
+    expect(slIo.stderr()).toMatch(/unknown option|error:/);
     expect(sl).not.toHaveBeenCalled();
   });
 
-  it('routes sl search and rejects the old sl list --query flag', async () => {
+  it('routes sl search via the flattened query positional and rejects unknown flags', async () => {
     const sl = vi.fn(async () => 0);
 
     const searchIo = makeIo();
     await expect(
       runKtxCli(
-        ['--project-dir', tempDir, 'sl', 'search', 'revenue', '--connection-id', 'warehouse', '--limit', '5', '--json'],
+        ['--project-dir', tempDir, 'sl', 'revenue', '--connection-id', 'warehouse', '--limit', '5', '--json'],
         searchIo.io,
         { sl },
       ),
@@ -249,11 +260,26 @@ describe('runKtxCli', () => {
       searchIo.io,
     );
 
-    const listIo = makeIo();
+    const bareIo = makeIo();
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'sl', 'list', '--query', 'revenue'], listIo.io, { sl }),
+      runKtxCli(['--project-dir', tempDir, 'sl', '--connection-id', 'warehouse', '--json'], bareIo.io, { sl }),
+    ).resolves.toBe(0);
+    expect(sl).toHaveBeenLastCalledWith(
+      {
+        command: 'list',
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        json: true,
+        output: undefined,
+      },
+      bareIo.io,
+    );
+
+    const unknownIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'sl', '--query', 'revenue'], unknownIo.io, { sl }),
     ).resolves.toBe(1);
-    expect(listIo.stderr()).toContain("unknown option '--query'");
+    expect(unknownIo.stderr()).toContain("unknown option '--query'");
   });
 
   it('routes runtime management commands with the release runtime version', async () => {
@@ -266,17 +292,17 @@ describe('runKtxCli', () => {
     const pruneIo = makeIo();
 
     await expect(
-      runKtxCli(['dev', 'runtime', 'install', '--feature', 'local-embeddings', '--force', '--yes'], installIo.io, {
+      runKtxCli(['admin', 'runtime', 'install', '--feature', 'local-embeddings', '--force', '--yes'], installIo.io, {
         runtime,
       }),
     ).resolves.toBe(0);
     await expect(
-      runKtxCli(['dev', 'runtime', 'start', '--feature', 'local-embeddings', '--force'], startIo.io, { runtime }),
+      runKtxCli(['admin', 'runtime', 'start', '--feature', 'local-embeddings', '--force'], startIo.io, { runtime }),
     ).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'stop', '--all'], stopAllIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
-    await expect(runKtxCli(['dev', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'runtime', 'stop'], stopIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'stop', '--all'], stopAllIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'status', '--json'], statusIo.io, { runtime })).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'prune', '--dry-run'], pruneIo.io, { runtime })).resolves.toBe(1);
 
     expect(runtime).toHaveBeenNthCalledWith(
       1,
@@ -377,7 +403,7 @@ describe('runKtxCli', () => {
   it('documents runtime stop all in command help', async () => {
     const testIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'runtime', 'stop', '--help'], testIo.io)).resolves.toBe(0);
+    await expect(runKtxCli(['admin', 'runtime', 'stop', '--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('--all');
     expect(testIo.stdout()).toContain('Stop all KTX daemon processes recorded or discoverable');
@@ -523,7 +549,7 @@ describe('runKtxCli', () => {
     await initKtxProject({ projectDir });
     const commands = [
       ['--project-dir', projectDir, 'status', '--json'],
-      ['--project-dir', projectDir, 'sl', 'list', '--json'],
+      ['--project-dir', projectDir, 'sl', '--json'],
     ];
 
     for (const argv of commands) {
@@ -655,9 +681,9 @@ describe('runKtxCli', () => {
     const completionIo = makeIo();
     const hiddenIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'completion', 'zsh'], completionIo.io)).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'completion', 'zsh'], completionIo.io)).resolves.toBe(1);
     await expect(
-      runKtxCli(['dev', '__complete', '--shell', 'zsh', '--position', '2', '--', 'ktx', 'co'], hiddenIo.io),
+      runKtxCli(['admin', '__complete', '--shell', 'zsh', '--position', '2', '--', 'ktx', 'co'], hiddenIo.io),
     ).resolves.toBe(1);
 
     expect(completionIo.stderr()).toMatch(/unknown command|error:/);
@@ -871,7 +897,8 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).toContain('--query-history');
     expect(testIo.stdout()).toContain('--no-query-history');
     expect(testIo.stdout()).toContain('--query-history-window-days <days>');
-    expect(testIo.stdout()).toContain('text');
+    expect(testIo.stdout()).toContain('--text');
+    expect(testIo.stdout()).toContain('--file');
     expect(testIo.stdout()).not.toMatch(/^  status\s/m);
     expect(testIo.stdout()).not.toMatch(/^  replay\s/m);
     expect(testIo.stdout()).not.toMatch(/^  run\s/m);
@@ -891,7 +918,6 @@ describe('runKtxCli', () => {
           '--project-dir',
           tempDir,
           'ingest',
-          'text',
           '--text',
           'Revenue means gross receipts.',
           '--text',
@@ -923,22 +949,45 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('documents text ingest inputs without a manifest option', async () => {
+  it('rejects a positional connection id when --text is supplied', async () => {
     const textIngest = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
     const testIo = makeIo();
 
-    await expect(runKtxCli(['ingest', 'text', '--help'], testIo.io, { textIngest })).resolves.toBe(0);
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'ingest', 'warehouse', '--text', 'hello'],
+        testIo.io,
+        { textIngest, publicIngest },
+      ),
+    ).resolves.toBe(1);
 
-    expect(testIo.stdout()).toContain('Usage: ktx ingest text [options] [files...]');
-    expect(testIo.stdout()).toContain('--text <content>');
-    expect(testIo.stdout()).toContain('--connection-id <connectionId>');
-    expect(testIo.stdout()).toContain('--user-id <id>');
-    expect(testIo.stdout()).toContain('--fail-fast');
-    expect(testIo.stdout()).not.toContain('--manifest');
     expect(textIngest).not.toHaveBeenCalled();
+    expect(publicIngest).not.toHaveBeenCalled();
+    expect(testIo.stderr()).toMatch(/--text\/--file does not accept a positional connection id/);
   });
 
-  it('rejects old adapter-backed ingest flags at the top level and under dev', async () => {
+  it('treats bare ingest as ingest --all', async () => {
+    const publicIngest = vi.fn().mockResolvedValue(0);
+    const testIo = makeIo();
+
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'ingest', '--no-input'], testIo.io, { publicIngest }),
+    ).resolves.toBe(0);
+
+    expect(publicIngest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        projectDir: tempDir,
+        all: true,
+      }),
+      testIo.io,
+    );
+    const args = publicIngest.mock.calls[0]?.[0] as { targetConnectionId?: string };
+    expect(args.targetConnectionId).toBeUndefined();
+  });
+
+  it('rejects old adapter-backed ingest flags at the top level and under admin', async () => {
     const rootRunIo = makeIo();
     const devRunIo = makeIo();
     const publicIngest = vi.fn(async () => 0);
@@ -949,7 +998,7 @@ describe('runKtxCli', () => {
       }),
     ).resolves.toBe(1);
     await expect(
-      runKtxCli(['dev', 'ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], devRunIo.io, {
+      runKtxCli(['admin', 'ingest', 'run', '--connection-id', 'warehouse', '--adapter', 'metabase'], devRunIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(1);
@@ -958,12 +1007,12 @@ describe('runKtxCli', () => {
     expect(devRunIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('rejects removed dev doctor and removed ingest parser cases', async () => {
+  it('rejects removed admin doctor and removed ingest parser cases', async () => {
     const doctor = vi.fn(async () => 0);
     const doctorIo = makeIo();
     const ingestRunIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'doctor', 'setup', '--json', '--no-input'], doctorIo.io, { doctor })).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'doctor', 'setup', '--json', '--no-input'], doctorIo.io, { doctor })).resolves.toBe(1);
     await expect(
       runKtxCli(
         [
@@ -1755,12 +1804,12 @@ describe('runKtxCli', () => {
     expect(serveIo.stderr()).toMatch(/unknown command|error:/);
   });
 
-  it('prints dev help for bare dev commands', async () => {
+  it('prints admin help for bare admin commands', async () => {
     const testIo = makeIo();
 
-    await expect(runKtxCli(['dev'], testIo.io)).resolves.toBe(0);
+    await expect(runKtxCli(['admin'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx dev [options] [command]');
+    expect(testIo.stdout()).toContain('Usage: ktx admin [options] [command]');
     expect(testIo.stdout()).toContain('Low-level project initialization');
     expect(testIo.stdout()).toContain('init');
     expect(testIo.stdout()).toContain('runtime');
@@ -1772,13 +1821,13 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('rejects removed dev command groups without invoking execution', async () => {
+  it('rejects removed admin command groups without invoking execution', async () => {
     for (const command of ['scan', 'ingest', 'mapping']) {
       const testIo = makeIo();
       const publicIngest = vi.fn().mockResolvedValue(0);
       const sl = vi.fn().mockResolvedValue(0);
 
-      await expect(runKtxCli(['dev', command], testIo.io, { publicIngest, sl })).resolves.toBe(1);
+      await expect(runKtxCli(['admin', command], testIo.io, { publicIngest, sl })).resolves.toBe(1);
 
       expect(testIo.stderr()).toMatch(/unknown command|error:/);
       expect(publicIngest).not.toHaveBeenCalled();
@@ -1786,10 +1835,10 @@ describe('runKtxCli', () => {
     }
   });
 
-  it('rejects removed reserved dev subcommands', async () => {
+  it('rejects removed reserved admin subcommands', async () => {
     const testIo = makeIo();
 
-    await expect(runKtxCli(['dev', 'artifacts'], testIo.io)).resolves.toBe(1);
+    await expect(runKtxCli(['admin', 'artifacts'], testIo.io)).resolves.toBe(1);
 
     expect(testIo.stderr()).toMatch(/unknown command|error:/);
   });

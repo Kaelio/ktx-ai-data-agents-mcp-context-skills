@@ -58,9 +58,9 @@ context-build, and agent-integration readiness.
 ### Semantic layer discovery
 
 ```bash
-ktx sl list --json
-ktx sl list --connection-id warehouse --json
-ktx sl search "revenue" --json --limit 10
+ktx sl --json
+ktx sl --connection-id warehouse --json
+ktx sl "revenue" --json --limit 10
 ```
 
 Use these commands to find source names, connection ids, measures, dimensions,
@@ -99,8 +99,8 @@ For complex calls, agents can write a JSON query object and pass it with
 ### Wiki context
 
 ```bash
-ktx wiki list --json
-ktx wiki search "revenue recognition" --json --limit 10
+ktx wiki --json
+ktx wiki "revenue recognition" --json --limit 10
 ```
 
 Search wiki context for business definitions, metric caveats, process rules, and
@@ -112,8 +112,8 @@ Agents can refresh context when the user asks them to:
 
 ```bash
 ktx ingest warehouse --fast
-ktx ingest --all
-ktx ingest text docs/revenue-notes.md --connection-id warehouse
+ktx ingest
+ktx ingest --file docs/revenue-notes.md --connection-id warehouse
 ```
 
 Use `--deep` only when LLM and embedding setup is ready.
@@ -123,7 +123,7 @@ Use `--deep` only when LLM and embedding setup is ready.
 Agents should:
 
 - Run `ktx status --json` before using KTX context.
-- Use `ktx sl search` and `ktx wiki search` before writing SQL from memory.
+- Use `ktx sl <query>` and `ktx wiki <query>` before writing SQL from memory.
 - Inspect the relevant YAML or Markdown files after search returns candidates.
 - Compile SQL with `ktx sl query --format sql` before executing.
 - Use `--max-rows` whenever executing a live query.
@@ -156,5 +156,5 @@ For per-client notes, see [Agent Clients](/docs/integrations/agent-clients).
 | Agent says KTX is unavailable | Agent did not load the generated instruction file | Rerun `ktx setup --agents --target <target>` and restart the agent session |
 | Agent command cannot find the project | Agent is running outside the KTX directory | Add `--project-dir <path>` or open the agent in the project root |
 | Generated rules point at a missing CLI path | CLI was moved, rebuilt, or reinstalled | Rerun `ktx setup --agents` |
-| Agent cannot find a metric | Context is missing or stale | Run `ktx sl search`, inspect source YAML, then refresh with `ktx ingest` if needed |
+| Agent cannot find a metric | Context is missing or stale | Run `ktx sl <query>`, inspect source YAML, then refresh with `ktx ingest` if needed |
 | Agent query returns too many rows | The command executed without a result cap | Require `--max-rows` for executed queries |

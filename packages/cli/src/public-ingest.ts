@@ -469,14 +469,11 @@ export function buildPublicIngestPlan(
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
   },
 ): KtxPublicIngestPlan {
-  if (!args.all && !args.targetConnectionId) {
-    throw new Error('Context build requires a connection id or all targets');
-  }
-
+  const allConnections = args.all || !args.targetConnectionId;
   const entries = Object.entries(project.config.connections).sort(([a], [b]) => a.localeCompare(b));
-  const selected = args.all ? entries : entries.filter(([connectionId]) => connectionId === args.targetConnectionId);
+  const selected = allConnections ? entries : entries.filter(([connectionId]) => connectionId === args.targetConnectionId);
 
-  if (!args.all && selected.length === 0) {
+  if (!allConnections && selected.length === 0) {
     throw new Error(`Connection "${args.targetConnectionId}" is not configured in ktx.yaml`);
   }
   if (selected.length === 0) {

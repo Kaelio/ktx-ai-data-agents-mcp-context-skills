@@ -221,10 +221,9 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
     );
   }
 
-  async deleteStale(connectionId: string, keepNames: string[]): Promise<void> {
+  async deleteStale(connectionId: string, keepNames: string[]): Promise<number> {
     if (keepNames.length === 0) {
-      await this.deleteByConnection(connectionId);
-      return;
+      return this.deleteByConnection(connectionId);
     }
 
     const placeholders = keepNames.map(() => '?').join(', ');
@@ -257,18 +256,29 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
     });
 
     remove(stale.map((row) => row.source_name));
+    return stale.length;
   }
 
-  async deleteByConnection(connectionId: string): Promise<void> {
+  async deleteByConnection(connectionId: string): Promise<number> {
+    return this.clear(connectionId);
+  }
+
+  async clear(connectionId: string): Promise<number> {
+    const rows = this.db
+      .prepare('SELECT source_name FROM local_sl_sources WHERE connection_id = ?')
+      .all(connectionId) as Array<{ source_name: string }>;
     const remove = this.db.transaction(() => {
       this.db.prepare('DELETE FROM local_sl_sources_fts WHERE connection_id = ?').run(connectionId);
       this.db.prepare('DELETE FROM local_sl_sources WHERE connection_id = ?').run(connectionId);
+      this.db.prepare('DELETE FROM local_sl_dictionary_values_fts WHERE connection_id = ?').run(connectionId);
+      this.db.prepare('DELETE FROM local_sl_dictionary_values WHERE connection_id = ?').run(connectionId);
     });
     remove();
+    return rows.length;
   }
 
-  async deleteByConnectionAndName(connectionId: string, sourceName: string): Promise<void> {
-    this.deleteByConnectionAndNameSync(connectionId, sourceName);
+  async deleteByConnectionAndName(connectionId: string, sourceName: string): Promise<number> {
+    return this.deleteByConnectionAndNameSync(connectionId, sourceName);
   }
 
   async replaceDictionaryEntries(connectionId: string, entries: SlDictionaryEntry[]): Promise<void> {
@@ -537,7 +547,7 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
       .filter((row) => row.rrfScore >= minRrfScore);
   }
 
-  private deleteByConnectionAndNameSync(connectionId: string, sourceName: string): void {
+  private deleteByConnectionAndNameSync(connectionId: string, sourceName: string): number {
     const remove = this.db.transaction(() => {
       this.db
         .prepare(
@@ -548,7 +558,7 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
         `,
         )
         .run(connectionId, sourceName);
-      this.db
+      const result = this.db
         .prepare(
           `
           DELETE FROM local_sl_sources
@@ -557,7 +567,8 @@ export class SqliteSlSourcesIndex implements SlSourcesIndexPort {
         `,
         )
         .run(connectionId, sourceName);
+      return Number(result.changes);
     });
-    remove();
+    return remove();
   }
 }

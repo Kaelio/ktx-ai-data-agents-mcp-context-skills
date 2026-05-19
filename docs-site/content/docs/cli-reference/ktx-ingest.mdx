@@ -1,35 +1,44 @@
 ---
 title: "ktx ingest"
-description: "Build or refresh KTX context from configured connections."
+description: "Build or refresh KTX context, or capture text into KTX memory."
 ---
 
-`ktx ingest` builds or refreshes KTX context from configured connections.
-Database connections build schema context. Context-source connections ingest
-metadata from tools such as dbt, Looker, Metabase, MetricFlow, LookML, and
-Notion. The current public command is connection-centric: pass one
-`connectionId`, or pass `--all`.
+`ktx ingest` builds or refreshes KTX context from configured connections, and
+can also capture free-form text into KTX memory. Database connections build
+schema context. Context-source connections ingest metadata from tools such as
+dbt, Looker, Metabase, MetricFlow, LookML, and Notion. Pass `--text` or
+`--file` to capture inline text or text files into memory instead.
 
 ## Command signature
 
 ```bash
 ktx ingest [options] [connectionId]
-ktx ingest text [options] [files...]
 ```
 
-Use a connection id to build one configured connection. Use `--all` to build
-every configured connection. Database connections run before context-source
-connections when you use `--all`.
+- Bare `ktx ingest` (no positional, no `--all`) ingests every configured
+  connection.
+- `ktx ingest <connectionId>` ingests one configured connection.
+- `ktx ingest --text "..."` (or `--file <path>`) captures notes into KTX
+  memory instead of ingesting a connection.
 
-## `ktx ingest` Options
+Database connections run before context-source connections when more than one
+connection is selected.
+
+## Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--all` | Ingest all configured connections | `false` |
+| `--all` | Ingest all configured connections (same as bare invocation) | `false` |
 | `--fast` | Use deterministic database schema ingest | Stored connection default, or `fast` |
 | `--deep` | Use AI-enriched database ingest | Stored connection default, or `fast` |
 | `--query-history` | Include database query-history usage patterns | Stored connection default |
 | `--no-query-history` | Skip database query-history usage patterns for this run | Stored connection default |
 | `--query-history-window-days <days>` | BigQuery/Snowflake query-history lookback window for this run | Stored connection default |
+| `--text <content>` | Capture inline text into KTX memory; repeatable | `[]` |
+| `--file <path>` | Capture a text file into KTX memory; use `-` for stdin; repeatable | `[]` |
+| `--connection-id <connectionId>` | KTX connection id to tag captured text/file notes | - |
+| `--user-id <id>` | Memory user id for text/file capture attribution | `local-cli` |
+| `--fail-fast` | Stop after the first failed text/file item | `false` |
 | `--plain` | Print plain text output | `true` |
 | `--json` | Print JSON output | `false` |
 | `--yes` | Install required managed runtime features without prompting | `false` |
@@ -42,8 +51,8 @@ Postgres reads the current `pg_stat_statements` aggregate data instead of a
 time-windowed history table. Query-history ingest runs after schema ingest and
 requires deep ingest readiness.
 
-When `--all` selects both databases and context sources, database ingest runs
-first, then source ingest and memory updates run for source connections.
+When more than one connection is selected, database ingest runs first, then
+source ingest and memory updates run for source connections.
 
 Some ingest paths use the managed KTX Python runtime. Query-history ingest uses
 it for SQL analysis, and Looker source ingest uses it for Looker identifier
@@ -51,23 +60,15 @@ parsing. In an interactive terminal, `ktx ingest` prompts before installing the
 required runtime features. Use `--yes` to install them without prompting, or
 use `--no-input` to fail fast with install guidance.
 
-## `ktx ingest text` Options
-
-Use `ktx ingest text` to capture free-form text artifacts into KTX memory.
-Provide files, pass `--text` one or more times, or use `-` as a file argument to
-read one item from stdin.
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--text <content>` | Text content to ingest; repeat for a batch | `[]` |
-| `--connection-id <connectionId>` | Optional KTX connection id for semantic-layer capture | - |
-| `--user-id <id>` | Memory user id for capture attribution | `local-cli` |
-| `--json` | Print JSON output | `false` |
-| `--fail-fast` | Stop after the first failed text item | `false` |
+`--text` and `--file` cannot be combined with a positional `connectionId` or
+`--all`; pass `--connection-id <id>` instead to tag captured notes.
 
 ## Examples
 
 ```bash
+# Build every configured connection (bare = --all)
+ktx ingest
+
 # Build one database or source connection
 ktx ingest warehouse
 
@@ -85,15 +86,17 @@ ktx ingest warehouse --query-history-window-days 30
 # Build a source connection
 ktx ingest notion
 
-# Build all configured connections
-ktx ingest --all
-ktx ingest --all --deep
+# Capture inline text into memory
+ktx ingest --text "Refunds are excluded from net revenue."
 
-# Capture local Markdown notes into memory
-ktx ingest text docs/revenue-notes.md --connection-id warehouse
+# Capture multiple text snippets in one call
+ktx ingest --text "Revenue is gross receipts." --text "Orders are completed purchases."
+
+# Capture a local Markdown file into memory and tag it to a connection
+ktx ingest --file docs/revenue-notes.md --connection-id warehouse
 
 # Capture one stdin item
-printf "Refunds are excluded from net revenue." | ktx ingest text -
+printf "Refunds are excluded from net revenue." | ktx ingest --file -
 ```
 
 ## Output
@@ -153,7 +156,6 @@ KTX_INGEST_TRACE_LEVEL=trace ktx ingest metabase
 | Connection not configured | The connection id is not present in `ktx.yaml` | Add the connection with `ktx setup` or update `ktx.yaml` |
 | Deep readiness is missing | `--deep` or query history needs model, embedding, and scan-enrichment configuration | Run `ktx setup` or rerun with `--fast` |
 | Query history is unsupported | The selected database driver does not support query history | Run schema ingest without query-history flags |
-| Python runtime is missing | The selected ingest target needs runtime-backed SQL analysis or source parsing | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx dev runtime install` command |
-| No ingest target was selected | No connection id was provided and `--all` was omitted | Run `ktx ingest <connectionId>` or `ktx ingest --all` |
+| Python runtime is missing | The selected ingest target needs runtime-backed SQL analysis or source parsing | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx admin runtime install` command |
 | Source options were ignored | Depth and query-history flags were supplied for a non-database source | Omit database-only flags when ingesting source connections |
 | Text ingest stops early | `--fail-fast` was used and one item failed | Fix the failed item or rerun without `--fail-fast` to collect all failures |

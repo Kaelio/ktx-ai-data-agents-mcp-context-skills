@@ -109,6 +109,8 @@ link_agent_overlays() {
   if [ -n "${CONDUCTOR_ROOT_PATH:-}" ]; then
     link_shared_path "$CONDUCTOR_ROOT_PATH/.agents" .agents || true
     link_shared_path "$CONDUCTOR_ROOT_PATH/.claude" .claude || true
+    mkdir -p docs
+    link_shared_path "$CONDUCTOR_ROOT_PATH/docs/superpowers" docs/superpowers || true
   fi
 }
 

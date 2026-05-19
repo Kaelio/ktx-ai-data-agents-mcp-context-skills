@@ -10,6 +10,7 @@ import { runtimeInstallPolicyFromFlags } from '../managed-python-command.js';
 import type { KtxPublicIngestArgs } from '../public-ingest.js';
 import { profileMark } from '../startup-profile.js';
 import type { KtxTextIngestArgs } from '../text-ingest.js';
+import { resolveConnectionSelection } from './connection-selection.js';
 
 profileMark('module:commands/ingest-commands');
 
@@ -24,15 +25,20 @@ export function registerIngestCommands(
 ): void {
   const ingest = program
     .command('ingest')
-    .description('Build or inspect KTX context')
+    .description('Build or inspect KTX context, or capture text into memory')
     .usage('[options] [connectionId]')
-    .argument('[connectionId]', 'Configured connection id to ingest')
+    .argument('[connectionId]', 'Configured connection id to ingest (omit to ingest all)')
     .option('--all', 'Ingest all configured connections', false)
     .addOption(new Option('--fast', 'Use deterministic database schema ingest').conflicts('deep'))
     .addOption(new Option('--deep', 'Use AI-enriched database ingest').conflicts('fast'))
     .addOption(new Option('--query-history', 'Include database query-history usage patterns').conflicts('noQueryHistory'))
     .addOption(new Option('--no-query-history', 'Skip database query-history usage patterns'))
     .option('--query-history-window-days <days>', 'Query-history lookback window for this run', parsePositiveIntegerOption)
+    .option('--text <content>', 'Capture inline text into KTX memory; repeatable', collectOption, [])
+    .option('--file <path>', 'Capture a text file into KTX memory; use - for stdin; repeatable', collectOption, [])
+    .option('--connection-id <connectionId>', 'KTX connection id to tag captured text/file notes')
+    .option('--user-id <id>', 'Memory user id for text/file capture attribution', 'local-cli')
+    .option('--fail-fast', 'Stop after the first failed text/file item', false)
     .addOption(new Option('--plain', 'Print plain text output').conflicts(['json']))
     .addOption(new Option('--json', 'Print JSON output').conflicts(['plain']))
     .option('--yes', 'Install required managed runtime features without prompting')
@@ -40,14 +46,45 @@ export function registerIngestCommands(
     .showHelpAfterError();
 
   ingest.action(async (connectionId: string | undefined, options, command) => {
+    const projectDir = resolveCommandProjectDir(command);
+    const hasTextCapture = options.text.length > 0 || options.file.length > 0;
+
+    if (hasTextCapture) {
+      if (connectionId !== undefined) {
+        command.error(
+          'error: --text/--file does not accept a positional connection id; use --connection-id <id> to tag captured notes',
+        );
+      }
+      if (options.all === true) {
+        command.error('error: --all cannot be combined with --text or --file');
+      }
+      context.setExitCode(
+        await commandOptions.runTextIngest(
+          {
+            projectDir,
+            texts: options.text,
+            files: options.file,
+            ...(options.connectionId ? { connectionId: options.connectionId } : {}),
+            userId: options.userId,
+            json: options.json === true,
+            failFast: options.failFast === true,
+          },
+          context.io,
+          context.deps,
+        ),
+      );
+      return;
+    }
+
+    const selection = resolveConnectionSelection({ connectionId, all: options.all === true });
     const { runKtxPublicIngest } = await import('../public-ingest.js');
     const queryHistory =
       options.queryHistory === true ? 'enabled' : options.queryHistory === false ? 'disabled' : 'default';
     const args: KtxPublicIngestArgs = {
       command: 'run',
-      projectDir: resolveCommandProjectDir(command),
-      ...(connectionId ? { targetConnectionId: connectionId } : {}),
-      all: options.all === true,
+      projectDir,
+      ...(selection.kind === 'single' ? { targetConnectionId: selection.connectionId } : {}),
+      all: selection.kind === 'all',
       json: options.json === true,
       inputMode: options.input === false ? 'disabled' : 'auto',
       ...(options.fast === true ? { depth: 'fast' as const } : {}),
@@ -63,32 +100,4 @@ export function registerIngestCommands(
   ingest.hook('preAction', (_thisCommand, actionCommand) => {
     context.writeDebug?.('ingest', actionCommand);
   });
-
-  ingest
-    .command('text')
-    .description('Ingest free-form text artifacts into KTX memory')
-    .argument('[files...]', 'Files to ingest; use - to read one item from stdin')
-    .option('--text <content>', 'Text content to ingest; repeat for a batch', collectOption, [])
-    .option('--connection-id <connectionId>', 'Optional KTX connection id for semantic-layer capture')
-    .option('--user-id <id>', 'Memory user id for capture attribution', 'local-cli')
-    .option('--json', 'Print JSON output')
-    .option('--fail-fast', 'Stop after the first failed text item', false)
-    .action(async (files: string[], options, command) => {
-      const parentOptions = command.parent?.opts() as { json?: boolean } | undefined;
-      context.setExitCode(
-        await commandOptions.runTextIngest(
-          {
-            projectDir: resolveCommandProjectDir(command),
-            texts: options.text,
-            files,
-            ...(options.connectionId ? { connectionId: options.connectionId } : {}),
-            userId: options.userId,
-            json: options.json === true || parentOptions?.json === true,
-            failFast: options.failFast === true,
-          },
-          context.io,
-          context.deps,
-        ),
-      );
-    });
 }

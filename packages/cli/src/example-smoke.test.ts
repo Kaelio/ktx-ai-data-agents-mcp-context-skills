@@ -72,13 +72,13 @@ describe('standalone local warehouse example', () => {
   it('runs local CLI commands against the copied example project', async () => {
     const projectDir = await copyExampleProject(tempDir);
 
-    const knowledgeList = await runBuiltCli(['wiki', 'search', 'revenue', '--json', '--project-dir', projectDir]);
+    const knowledgeList = await runBuiltCli(['wiki', 'revenue', '--json', '--project-dir', projectDir]);
     expect(knowledgeList).toMatchObject({ code: 0, stderr: '' });
     expect(
       parseJsonOutput<{ data: { items: Array<{ key: string; summary: string }> } }>(knowledgeList.stdout).data.items,
     ).toContainEqual(expect.objectContaining({ key: 'revenue', summary: 'Paid order value after refunds' }));
 
-    const slList = await runBuiltCli(['sl', 'list', '--json', '--project-dir', projectDir, '--connection-id', 'warehouse']);
+    const slList = await runBuiltCli(['sl', '--json', '--project-dir', projectDir, '--connection-id', 'warehouse']);
     expect(slList).toMatchObject({ code: 0, stderr: '' });
     expect(
       parseJsonOutput<{ data: { items: Array<{ connectionId: string; name: string; columnCount: number }> } }>(
@@ -110,7 +110,7 @@ describe('standalone local warehouse example', () => {
       'fake',
     ]);
     expect(ingest).toMatchObject({ code: 1, stdout: '' });
-    expect(ingest.stderr).toContain("unknown option '--connection-id'");
+    expect(ingest.stderr).toContain("unknown option '--adapter'");
   }, 30_000);
 
 });

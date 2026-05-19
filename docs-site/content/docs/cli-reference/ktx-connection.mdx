@@ -10,15 +10,21 @@ systems. Use `ktx setup` to add, remove, or reconfigure them.
 ## Command signature
 
 ```bash
-ktx connection <subcommand> [options]
+ktx connection                       # list all configured connections
+ktx connection list                  # explicit list
+ktx connection test [connectionId]   # test one (or all, when omitted)
 ```
+
+Bare `ktx connection` lists configured connections. `ktx connection test`
+with no positional and no flag tests every configured connection.
 
 ## Subcommands
 
 | Subcommand | Description |
 |-----------|-------------|
+| (none) | List configured connections (alias for `list`) |
 | `list` | List configured connections |
-| `test [connectionId]` | Test one configured connection, or every connection with `--all` |
+| `test [connectionId]` | Test one configured connection; omit the id (or pass `--all`) to test every connection |
 
 ## Options
 
@@ -29,7 +35,7 @@ ktx connection <subcommand> [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--all` | Test every configured connection and print a summary list | `false` |
+| `--all` | Test every configured connection and print a summary list | implicit when no `connectionId` is supplied |
 
 Project directory resolution defaults to `KTX_PROJECT_DIR`, then the nearest
 `ktx.yaml`, then the current working directory.
@@ -38,12 +44,15 @@ Project directory resolution defaults to `KTX_PROJECT_DIR`, then the nearest
 
 ```bash
 # List all configured connections
-ktx connection list
-
-# Test a connection
-ktx connection test my-warehouse
+ktx connection
 
 # Test every configured connection
+ktx connection test
+
+# Test one connection
+ktx connection test my-warehouse
+
+# Test every connection explicitly
 ktx connection test --all
 
 # Test a connection from outside the project
@@ -58,7 +67,8 @@ Metabase mapping prompts for BI-to-warehouse mappings.
 
 ## Output
 
-`ktx connection list` prints a table of configured ids and drivers.
+`ktx connection` (or `ktx connection list`) prints a table of configured ids
+and drivers.
 
 ```text
 ID            DRIVER
@@ -76,8 +86,8 @@ Driver: postgres
 Status: ok
 ```
 
-`ktx connection test --all` prints one row per configured connection and exits
-non-zero if any probe fails.
+`ktx connection test` (bare) and `ktx connection test --all` print one row per
+configured connection and exit non-zero if any probe fails.
 
 ```text
 ╭  connection test --all

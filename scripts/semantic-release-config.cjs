@@ -166,19 +166,10 @@ function createReleaseConfig(env = process.env) {
             'pnpm run artifacts:check',
             'pnpm run release:readiness',
           ].join(' && '),
-        },
-      ],
-      [
-        '@semantic-release/npm',
-        {
-          pkgRoot: 'dist/public-npm-package',
-          tarballDir: 'dist/artifacts/npm',
-        },
-      ],
-      [
-        '@semantic-release/exec',
-        {
-          publishCmd: 'pnpm run release:published-smoke',
+          publishCmd: [
+            `npm publish dist/artifacts/npm/kaelio-ktx-\${nextRelease.version}.tgz --tag ${tag} --access public --provenance`,
+            'pnpm run release:published-smoke',
+          ].join(' && '),
         },
       ],
       ...releaseGitPlugins(kind),

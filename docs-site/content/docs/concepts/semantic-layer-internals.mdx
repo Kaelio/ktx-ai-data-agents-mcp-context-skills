@@ -6,7 +6,7 @@ description: How KTX compiles a short Semantic Query into safe, dialect-correct 
 import { SemanticLayerFlow } from "@/components/semantic-layer-flow";
 
 KTX's semantic layer is a compiler that turns intent into SQL. The agent
-declares _what_ it wants — measures, dimensions, filters — in a small
+declares _what_ it wants - measures, dimensions, filters - in a small
 Semantic Query. KTX figures out the _how_: which tables to join, what
 grain to aggregate at, how to keep fan-out from inflating measures, and
 what dialect the warehouse speaks.
@@ -21,8 +21,8 @@ This page covers four mechanics:
 ## Imperative SQL vs declarative Semantic Querying
 
 Writing analytics SQL is imperative work. Every question forces the
-agent to hold two things in mind at once: _what_ it wants — a measure, a
-slice, a filter — and _how_ to compute it: which tables to join, which
+agent to hold two things in mind at once: _what_ it wants - a measure, a
+slice, a filter - and _how_ to compute it: which tables to join, which
 key links them, what grain to aggregate at, how to keep one fact from
 inflating another, and what dialect the warehouse speaks. Plumbing on
 top of intent, every query.
@@ -30,7 +30,7 @@ top of intent, every query.
 KTX's semantic layer separates those concerns:
 
 - **You and KTX maintain the how.** Sources, joins, grain, measures, and
-  segments live in reviewable YAML — the analytical contract the team
+  segments live in reviewable YAML - the analytical contract the team
   agrees on, version-controlled.
 - **The agent declares the what.** It sends a Semantic Query and trusts
   the compiler to produce safe SQL.

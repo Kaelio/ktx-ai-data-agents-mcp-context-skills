@@ -74,27 +74,27 @@ export function localEmbeddingsSmokeCommands(input) {
       timeoutMs: 60_000,
     },
     {
-      label: 'ktx dev runtime status missing',
+      label: 'ktx admin runtime status missing',
       command: 'pnpm',
-      args: ['exec', 'ktx', 'dev', 'runtime', 'status', '--json'],
+      args: ['exec', 'ktx', 'admin', 'runtime', 'status', '--json'],
       timeoutMs: 60_000,
     },
     {
-      label: 'ktx dev runtime install local embeddings',
+      label: 'ktx admin runtime install local embeddings',
       command: 'pnpm',
-      args: ['exec', 'ktx', 'dev', 'runtime', 'install', '--feature', 'local-embeddings', '--yes'],
+      args: ['exec', 'ktx', 'admin', 'runtime', 'install', '--feature', 'local-embeddings', '--yes'],
       timeoutMs: 1_200_000,
     },
     {
-      label: 'ktx dev runtime status local embeddings ready',
+      label: 'ktx admin runtime status local embeddings ready',
       command: 'pnpm',
-      args: ['exec', 'ktx', 'dev', 'runtime', 'status', '--json'],
+      args: ['exec', 'ktx', 'admin', 'runtime', 'status', '--json'],
       timeoutMs: 60_000,
     },
     {
-      label: 'ktx dev runtime start local embeddings',
+      label: 'ktx admin runtime start local embeddings',
       command: 'pnpm',
-      args: ['exec', 'ktx', 'dev', 'runtime', 'start', '--feature', 'local-embeddings'],
+      args: ['exec', 'ktx', 'admin', 'runtime', 'start', '--feature', 'local-embeddings'],
       timeoutMs: 300_000,
     },
     {
@@ -118,9 +118,9 @@ export function localEmbeddingsSmokeCommands(input) {
       timeoutMs: 900_000,
     },
     {
-      label: 'ktx dev runtime stop local embeddings',
+      label: 'ktx admin runtime stop local embeddings',
       command: 'pnpm',
-      args: ['exec', 'ktx', 'dev', 'runtime', 'stop'],
+      args: ['exec', 'ktx', 'admin', 'runtime', 'stop'],
       timeoutMs: 60_000,
     },
   ];
@@ -374,7 +374,7 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
     process.stdout.write('KTX local embeddings runtime smoke verified\n');
   } finally {
     if (daemonStarted) {
-      await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'stop'], {
+      await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop'], {
         cwd: installDir,
         env: smokeEnv,
         timeoutMs: 60_000,

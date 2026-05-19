@@ -237,17 +237,17 @@ function parseDaemonBaseUrl(stdout) {
 }
 
 async function startDaemon(cleanInstallDir) {
-  const result = await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'start'], {
+  const result = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'start'], {
     cwd: cleanInstallDir,
     env: managedRuntimeEnv(cleanInstallDir),
     timeout: 120_000,
   });
-  requireSuccess('ktx dev runtime start', result);
+  requireSuccess('ktx admin runtime start', result);
   return parseDaemonBaseUrl(result.stdout);
 }
 
 async function stopDaemon(cleanInstallDir) {
-  await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'stop'], {
+  await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop'], {
     cwd: cleanInstallDir,
     env: managedRuntimeEnv(cleanInstallDir),
     timeout: 30_000,
@@ -271,7 +271,7 @@ async function prepareCleanInstall(layout, cleanInstallDir) {
   await run('pnpm', ['install'], { cwd: cleanInstallDir, timeout: 120_000 }).then((result) =>
     requireSuccess('pnpm install clean artifact project', result),
   );
-  await run('pnpm', ['exec', 'ktx', 'dev', 'runtime', 'install', '--yes'], {
+  await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'install', '--yes'], {
     cwd: cleanInstallDir,
     env: managedRuntimeEnv(cleanInstallDir),
     timeout: 120_000,

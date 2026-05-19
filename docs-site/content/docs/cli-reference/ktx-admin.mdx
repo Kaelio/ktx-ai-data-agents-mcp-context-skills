@@ -1,0 +1,121 @@
+---
+title: "ktx admin"
+description: "Low-level project initialization, runtime, and index management."
+---
+
+`ktx admin` contains low-level project initialization, managed Python runtime,
+and local index management commands. Context building lives at the root as
+[`ktx ingest`](/docs/cli-reference/ktx-ingest). Most users should start with
+`ktx setup`; use `ktx admin` when preparing local fixtures, checking the bundled
+runtime, rebuilding local indexes, or debugging runtime state.
+
+## Command signature
+
+```bash
+ktx admin <subcommand> [options]
+```
+
+## Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `init [directory]` | Initialize a Git-backed KTX project directory for maintenance scripts |
+| `schema` | Print a JSON Schema describing `ktx.yaml` |
+| `runtime` | Install, start, stop, and inspect the KTX-managed Python runtime |
+| `reindex` | Sync local wiki and semantic-layer search indexes from disk |
+
+## `admin init`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--force` | Rewrite `ktx.yaml` and scaffold files in an existing project | `false` |
+
+## `admin schema`
+
+`ktx admin schema` does not require a `ktx.yaml` file or a configured project
+directory. Use it from any directory to generate editor or agent schema files.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--output <file>` | Write the schema to a file instead of stdout | - |
+
+## `admin runtime` Subcommands
+
+| Subcommand | Description |
+|-----------|-------------|
+| `install` | Install the bundled Python runtime wheel into the managed runtime |
+| `start` | Start the KTX-managed Python HTTP daemon |
+| `stop` | Stop the KTX-managed Python HTTP daemon |
+| `status` | Show managed Python runtime status and readiness checks |
+
+## `admin runtime` Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--feature <feature>` | Runtime feature level for `install` and `start` (`core` or `local-embeddings`) | `core` |
+| `--json` | Print JSON output for `status` | `false` |
+| `--yes` | Accepted by `install` for scripted install commands | `false` |
+| `--force` | Reinstall for `install`, or restart for `start` | `false` |
+| `--all` | Stop all recorded or discoverable KTX daemon processes with `stop` | `false` |
+
+## Examples
+
+```bash
+ktx admin init
+ktx admin init ./my-project
+ktx admin init --force
+
+ktx admin schema
+ktx admin schema --output ./ktx.schema.json
+
+ktx admin runtime install --yes
+ktx admin runtime install --feature local-embeddings --yes
+ktx admin runtime status
+ktx admin runtime start
+ktx admin runtime start --feature local-embeddings
+ktx admin runtime stop
+ktx admin runtime stop --all
+
+ktx admin reindex
+ktx admin reindex --force
+ktx admin reindex --output plain
+ktx admin reindex --json
+```
+
+## Output
+
+Runtime commands print the runtime root, installed features, daemon URL, daemon
+pid, and log paths where relevant. `ktx admin runtime status --json` includes the
+runtime status plus readiness checks.
+
+## `admin reindex`
+
+`ktx admin reindex` syncs local wiki and semantic-layer search indexes from
+files on disk into `.ktx/db.sqlite`. The command discovers `wiki/global/`, each
+`wiki/user/<userId>/` directory, and each `semantic-layer/<connectionId>/`
+directory except `_schema`.
+
+```bash
+ktx admin reindex
+ktx admin reindex --force
+ktx admin reindex --output plain
+ktx admin reindex --json
+```
+
+By default, KTX compares stored search text with the files on disk. It only
+re-embeds changed rows and removes rows for files that no longer exist. With
+`--force`, KTX clears each discovered scope first and then rebuilds it.
+
+When embeddings are not configured, KTX still writes lexical FTS rows and
+prints an embeddings warning. If a scope fails, KTX keeps processing the
+remaining scopes and exits with code `1` after output is written. If the local
+state database cannot open or the configured managed embedding runtime is
+missing, KTX prints the error and exits with code `1`.
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| Runtime status reports missing pieces | Packages, Python environment, or linked CLI are not ready | Run `pnpm install`, `pnpm run setup:dev`, `uv sync --all-groups`, then `ktx admin runtime status` |
+| Runtime daemon does not start | The managed Python runtime is missing or stale | Run `ktx admin runtime install --yes`, then `ktx admin runtime start` |
+| Multiple daemon processes remain | Older daemon state files or stray processes exist | Run `ktx admin runtime stop --all`, then start the runtime again |

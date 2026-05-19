@@ -50,6 +50,11 @@
       "import": "./dist/ingest/metabase-mapping.js",
       "default": "./dist/ingest/metabase-mapping.js"
     },
+    "./index-sync": {
+      "types": "./dist/index-sync/index.d.ts",
+      "import": "./dist/index-sync/index.js",
+      "default": "./dist/index-sync/index.js"
+    },
     "./scan": {
       "types": "./dist/scan/index.d.ts",
       "import": "./dist/scan/index.js",
