@@ -197,7 +197,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       await printSlSources({
         rows: sources,
         emptyMessage: `No semantic-layer sources matched "${args.query}" in ${project.projectDir}`,
-        emptyHint: 'Run `ktx sl list` to inspect available sources.',
+        emptyHint: 'Run `ktx sl` to inspect available sources.',
         command: 'sl search',
         output: args.output,
         json: args.json,

@@ -198,8 +198,8 @@ describe('MemoryFlowTuiApp', () => {
     expect(frame).toContain('order lifecycle');
     expect(frame).toContain('customer metrics');
     expect(frame).toContain('KTX finished ingesting your data');
-    expect(frame).toContain('ktx sl list');
-    expect(frame).toContain('ktx wiki list');
+    expect(frame).toContain('ktx sl');
+    expect(frame).toContain('ktx wiki');
     expect(frame).not.toContain('ktx serve --mcp stdio --user-id local');
     expect(frame).not.toContain(['ktx', 'ask'].join(' '));
     expect(frame).not.toContain(['ktx', 'mcp'].join(' '));

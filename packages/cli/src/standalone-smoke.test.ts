@@ -153,7 +153,7 @@ describe('standalone built ktx CLI smoke', () => {
       'fake',
     ]);
     expect(run).toMatchObject({ code: 1, stdout: '' });
-    expect(run.stderr).toContain("unknown option '--connection-id'");
+    expect(run.stderr).toContain("unknown option '--adapter'");
   });
 
   it('rejects the removed agent command through the built binary', async () => {
@@ -280,7 +280,7 @@ describe('standalone built ktx CLI smoke', () => {
 
     expect(add.code).toBe(1);
     expect(add.stdout).toBe('');
-    expect(add.stderr).toContain("unknown command 'add'");
+    expect(add.stderr).toMatch(/unknown (command|option)|too many arguments/);
 
     const yaml = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(yaml).not.toContain('driver: notion');

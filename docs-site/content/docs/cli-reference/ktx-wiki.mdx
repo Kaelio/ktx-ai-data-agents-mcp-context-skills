@@ -10,42 +10,28 @@ them for context when answering questions about your data.
 ## Command signature
 
 ```bash
-ktx wiki <subcommand> [options]
+ktx wiki [options] [query...]
 ```
 
-## Subcommands
+- Bare `ktx wiki` lists local wiki pages.
+- `ktx wiki <query...>` searches local wiki pages (multi-word queries are
+  joined with a space).
 
-| Subcommand | Description |
-|-----------|-------------|
-| `list` | List local wiki pages |
-| `search <query>` | Search local wiki pages |
-
-The current public CLI lists and searches wiki pages. Edit the Markdown files
-under `wiki/` directly, or ingest source content with `ktx ingest`, when you
-need to add or update wiki knowledge.
+Edit the Markdown files under `wiki/` directly, or ingest source content with
+`ktx ingest`, when you need to add or update wiki knowledge.
 
 ## Options
 
-### `wiki list`
-
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--user-id <id>` | Local user id | `local` |
+| `--limit <number>` | Maximum search results (search mode only) | - |
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
-### `wiki search`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--user-id <id>` | Local user id | `local` |
-| `--limit <number>` | Maximum search results | - |
-| `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
-| `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
-
-`wiki search` uses hybrid search when `storage.search` is `sqlite-fts5`. KTX
-combines lexical SQLite FTS5 matches, token matches, and semantic matches from
-wiki page embeddings stored in `.ktx/db.sqlite`. If embeddings are not
+`ktx wiki <query>` uses hybrid search when `storage.search` is `sqlite-fts5`.
+KTX combines lexical SQLite FTS5 matches, token matches, and semantic matches
+from wiki page embeddings stored in `.ktx/db.sqlite`. If embeddings are not
 configured or the embedding backend is unavailable, KTX skips the semantic lane
 and keeps lexical and token results.
 
@@ -53,22 +39,22 @@ and keeps lexical and token results.
 
 ```bash
 # List all wiki pages
-ktx wiki list
+ktx wiki
 
 # List all wiki pages as JSON
-ktx wiki list --json
+ktx wiki --json
 
 # Search wiki pages
-ktx wiki search "monthly recurring revenue"
+ktx wiki "monthly recurring revenue"
 
 # Search wiki pages as JSON
-ktx wiki search "monthly recurring revenue" --json --limit 10
+ktx wiki "monthly recurring revenue" --json --limit 10
 
 # Print search results as TSV
-ktx wiki search "monthly recurring revenue" --output plain
+ktx wiki "monthly recurring revenue" --output plain
 
 # Inspect which search lanes were used
-ktx --debug wiki search "monthly recurring revenue" --json
+ktx --debug wiki "monthly recurring revenue" --json
 ```
 
 ## Output

@@ -42,59 +42,49 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
   const sl = program
     .command(commandName)
     .description('List, search, validate, or query local semantic-layer sources')
+    .usage('[options] [query...]')
+    .argument('[query...]', 'Search query; omit to list all sources')
+    .option('--connection-id <id>', 'KTX connection id')
+    .option('--limit <number>', 'Maximum search results (search mode only)', parsePositiveIntegerOption)
+    .addOption(
+      new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
+        'pretty',
+        'plain',
+        'json',
+      ]),
+    )
+    .option('--json', 'Shortcut for --output=json (overrides --output)', false)
     .showHelpAfterError()
     .addHelpText(
       'after',
       '\nProject directory defaults to KTX_PROJECT_DIR when set, otherwise the current working directory.\n',
-    );
-
-  sl.command('list')
-    .description('List semantic-layer sources')
-    .option('--connection-id <id>', 'KTX connection id')
-    .addOption(
-      new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
-        'pretty',
-        'plain',
-        'json',
-      ]),
     )
-    .option('--json', 'Shortcut for --output=json (overrides --output)', false)
-    .action(
-      async (options: { connectionId?: string; output?: 'pretty' | 'plain' | 'json'; json?: boolean }, command) => {
-        await runSlArgs(context, {
-          command: 'list',
-          projectDir: resolveCommandProjectDir(command),
-          connectionId: options.connectionId,
-          output: options.output,
-          json: options.json,
-        });
-      },
-    );
-
-  sl.command('search')
-    .description('Search semantic-layer sources')
-    .argument('<query>', 'Search query')
-    .option('--connection-id <id>', 'KTX connection id')
-    .option('--limit <number>', 'Maximum search results', parsePositiveIntegerOption)
-    .addOption(
-      new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([
-        'pretty',
-        'plain',
-        'json',
-      ]),
-    )
-    .option('--json', 'Shortcut for --output=json (overrides --output)', false)
     .action(
       async (
-        query: string,
-        options: { connectionId?: string; limit?: number; output?: 'pretty' | 'plain' | 'json'; json?: boolean },
+        query: string[],
+        options: {
+          connectionId?: string;
+          limit?: number;
+          output?: 'pretty' | 'plain' | 'json';
+          json?: boolean;
+        },
         command,
       ) => {
+        if (query.length === 0) {
+          await runSlArgs(context, {
+            command: 'list',
+            projectDir: resolveCommandProjectDir(command),
+            connectionId: options.connectionId,
+            output: options.output,
+            json: options.json,
+          });
+          return;
+        }
         await runSlArgs(context, {
           command: 'search',
           projectDir: resolveCommandProjectDir(command),
           connectionId: options.connectionId,
-          query,
+          query: query.join(' '),
           ...(options.limit !== undefined ? { limit: options.limit } : {}),
           output: options.output,
           json: options.json,
@@ -103,21 +93,24 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
     );
 
   sl.command('validate')
-    .description('Validate a semantic-layer source')
+    .description('Validate a semantic-layer source (set --connection-id on `ktx sl`)')
     .argument('<sourceName>', 'Semantic-layer source name')
-    .requiredOption('--connection-id <id>', 'KTX connection id')
-    .action(async (sourceName: string, options: { connectionId: string }, command) => {
+    .action(async (sourceName: string, _options, command) => {
+      const parentOpts = command.parent?.opts() as { connectionId?: string } | undefined;
+      const connectionId = parentOpts?.connectionId;
+      if (connectionId === undefined) {
+        command.error("error: required option '--connection-id <id>' not specified");
+      }
       await runSlArgs(context, {
         command: 'validate',
         projectDir: resolveCommandProjectDir(command),
-        connectionId: options.connectionId,
+        connectionId: connectionId as string,
         sourceName,
       });
     });
 
   sl.command('query')
-    .description('Compile or execute a semantic-layer query')
-    .option('--connection-id <id>', 'KTX connection id')
+    .description('Compile or execute a semantic-layer query (set --connection-id on `ktx sl`)')
     .option('--query-file <path>', 'JSON semantic-layer query file')
     .option('--measure <measure>', 'Measure to query; repeatable', collectOption, [])
     .option('--dimension <dimension>', 'Dimension to include; repeatable', collectOption, [])
@@ -135,10 +128,11 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
       if (options.measure.length === 0 && !options.queryFile) {
         throw new Error('sl query requires at least one --measure');
       }
+      const parentOpts = command.parent?.opts() as { connectionId?: string } | undefined;
       const args = slQueryCommandSchema.parse({
         command: 'query',
         projectDir: resolveCommandProjectDir(command),
-        connectionId: options.connectionId,
+        connectionId: parentOpts?.connectionId,
         ...(options.queryFile
           ? { queryFile: options.queryFile }
           : {

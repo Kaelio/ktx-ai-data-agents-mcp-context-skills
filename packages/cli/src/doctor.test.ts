@@ -65,8 +65,8 @@ describe('formatDoctorReport', () => {
     expect(output).not.toContain('v22.16.0');
     expect(output).toContain('Everything ready.');
     expect(output).toContain('ktx status --json');
-    expect(output).toContain('ktx sl list');
-    expect(output).toContain('ktx wiki list');
+    expect(output).toContain('ktx sl');
+    expect(output).toContain('ktx wiki');
     expect(output).not.toContain('ktx scan');
     expect(output).not.toContain('ktx sl ask');
   });
@@ -561,8 +561,8 @@ describe('runKtxDoctor', () => {
     expect(out).toContain('info: pg_stat_statements.max is 1000');
     expect(out).not.toContain('Update the Postgres parameter group or config');
     expect(out).toContain('ktx status --json');
-    expect(out).toContain('ktx sl list');
-    expect(out).toContain('ktx wiki list');
+    expect(out).toContain('ktx sl');
+    expect(out).toContain('ktx wiki');
     expect(out).not.toContain('ktx scan');
     expect(out).not.toContain('ktx sl ask');
     delete process.env.ANTHROPIC_API_KEY;

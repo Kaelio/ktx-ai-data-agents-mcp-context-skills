@@ -130,7 +130,7 @@ export async function runKtxKnowledge(
       }
       const mode = resolveOutputMode({ explicit: args.output, json: args.json, io });
       let emptyMessage = `No local wiki pages matched "${args.query}"`;
-      let emptyHint = 'Run `ktx wiki list` to inspect available pages.';
+      let emptyHint = 'Run `ktx wiki` to inspect available pages.';
       if (results.length === 0 && mode !== 'json') {
         const pages = await listLocalKnowledgePages(project, { userId: args.userId });
         if (pages.length === 0) {

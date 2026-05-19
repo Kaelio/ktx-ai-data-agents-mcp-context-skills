@@ -165,10 +165,10 @@ describe('standalone example docs', () => {
 
     for (const command of [
       'ktx status --json',
-      'ktx sl list --json',
-      'ktx sl search "revenue" --json',
+      'ktx sl --json',
+      'ktx sl "revenue" --json',
       'ktx sl query',
-      'ktx wiki search "revenue recognition" --json',
+      'ktx wiki "revenue recognition" --json',
     ]) {
       assert.match(servingAgents, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
@@ -252,7 +252,7 @@ describe('standalone example docs', () => {
     const localWarehouseReadme = await readText('examples/local-warehouse/README.md');
 
     assert.match(ingestReference, /ktx ingest <connectionId>/);
-    assert.match(ingestReference, /ktx ingest --all --deep/);
+    assert.match(ingestReference, /Build every configured connection/);
     assert.match(ingestReference, /--query-history-window-days <days>/);
     assert.match(buildingContext, /ktx ingest <connectionId>/);
     assert.match(buildingContext, /ktx ingest --all/);

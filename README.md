@@ -95,17 +95,21 @@ Agent integration ready: yes (codex:project)
 |---------|---------|
 | `ktx setup` | Create, resume, or update a KTX project |
 | `ktx status` | Check project readiness |
-| `ktx connection list` | List configured connections |
+| `ktx connection` | List configured connections |
+| `ktx connection test` | Test every configured connection |
 | `ktx connection test <id>` | Test one connection |
+| `ktx ingest` | Build context for every configured connection |
 | `ktx ingest <id>` | Build context for one connection |
-| `ktx ingest --all` | Build context for every configured connection |
-| `ktx ingest text <file> --connection-id <connectionId>` | Capture free-form notes into memory |
-| `ktx sl list` | List semantic-layer sources |
-| `ktx sl search "revenue"` | Search semantic-layer sources |
+| `ktx ingest --text "..."` | Capture free-form notes into memory |
+| `ktx ingest --file notes.md --connection-id <id>` | Capture a text file into memory |
+| `ktx sl` | List semantic-layer sources |
+| `ktx sl "revenue"` | Search semantic-layer sources |
 | `ktx sl validate <source> --connection-id <id>` | Validate a semantic source |
 | `ktx sl query --measure <measure> --format sql` | Compile semantic-layer SQL |
 | `ktx sql --connection <id> "select 1"` | Execute read-only SQL |
-| `ktx wiki search "revenue definition"` | Search local wiki context |
+| `ktx wiki` | List local wiki pages |
+| `ktx wiki "revenue definition"` | Search local wiki context |
+| `ktx mcp` | Show MCP daemon status |
 | `ktx mcp start` | Start the local MCP server for agent clients |
 
 Project resolution defaults to `KTX_PROJECT_DIR`, then the nearest `ktx.yaml`,
@@ -140,8 +144,8 @@ A typical agent workflow combines wiki and semantic-layer search before
 querying:
 
 ```bash
-ktx sl search "revenue" --json
-ktx wiki search "refund policy" --json
+ktx sl "revenue" --json
+ktx wiki "refund policy" --json
 ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 ```
 

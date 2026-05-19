@@ -130,10 +130,10 @@ description: Use local KTX semantic context and wiki knowledge for this project.
 
 Available commands:
 - `ktx status --json --project-dir /path/to/project`
-- `ktx sl list --json --project-dir /path/to/project`
-- `ktx sl search '<text>' --json --project-dir /path/to/project --connection-id '<id>'`
+- `ktx sl --json --project-dir /path/to/project`
+- `ktx sl '<text>' --json --project-dir /path/to/project --connection-id '<id>'`
 - `ktx sl query --project-dir /path/to/project --connection-id '<id>' --query-file '<path>' --format json --execute --max-rows 100`
-- `ktx wiki search '<query>' --json --project-dir /path/to/project --limit 10`
+- `ktx wiki '<query>' --json --project-dir /path/to/project --limit 10`
 ```
 
 ### Workflow tips
@@ -281,9 +281,9 @@ Admin CLI skills call the same KTX CLI commands:
 | Command | Description |
 |---------|-------------|
 | `ktx status --json` | Return project setup and context readiness |
-| `ktx wiki search <query> --json` | Search wiki pages |
-| `ktx sl list --json` | List semantic-layer sources |
-| `ktx sl search <query> --json` | Search semantic-layer sources |
+| `ktx wiki <query> --json` | Search wiki pages |
+| `ktx sl --json` | List semantic-layer sources |
+| `ktx sl <query> --json` | Search semantic-layer sources |
 | `ktx sl validate <source> --connection-id <id>` | Validate semantic source definitions |
 | `ktx sl query --format json` | Execute a Semantic Query when semantic compute is configured |
 

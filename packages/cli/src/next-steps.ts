@@ -1,7 +1,7 @@
 export const KTX_CONTEXT_BUILD_COMMANDS = [
   {
-    command: 'ktx ingest --all',
-    description: 'Build or refresh agent-ready context from configured connections',
+    command: 'ktx ingest',
+    description: 'Build or refresh agent-ready context from all configured connections',
   },
   {
     command: 'ktx status',
@@ -15,11 +15,11 @@ export const KTX_NEXT_STEP_DIRECT_COMMANDS = [
     description: 'Verify project setup and context readiness',
   },
   {
-    command: 'ktx sl list',
+    command: 'ktx sl',
     description: 'Inspect generated semantic-layer sources',
   },
   {
-    command: 'ktx wiki list',
+    command: 'ktx wiki',
     description: 'Inspect generated wiki pages',
   },
 ] as const;

@@ -10,34 +10,33 @@ the vocabulary agents use to generate correct SQL.
 ## Command signature
 
 ```bash
-ktx sl <subcommand> [options]
+ktx sl [options] [query...]            # list (bare) or search (with query)
+ktx sl validate <sourceName> [options]
+ktx sl query [options]
 ```
+
+- Bare `ktx sl` lists semantic-layer sources.
+- `ktx sl <query...>` searches semantic-layer sources (multi-word queries are
+  joined with a space).
+- `ktx sl validate` and `ktx sl query` remain as explicit subcommands.
 
 ## Subcommands
 
 | Subcommand | Description |
 |-----------|-------------|
-| `list` | List semantic-layer sources |
-| `search <query>` | Search semantic-layer sources |
+| (none, no query) | List semantic-layer sources |
+| (none, with query) | Search semantic-layer sources |
 | `validate <sourceName>` | Validate a semantic-layer source against the database schema |
 | `query` | Compile or execute a Semantic Query |
 
 ## Options
 
-### `sl list`
+### `sl` (list or search)
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--connection-id <id>` | Filter by KTX connection id | - |
-| `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
-| `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
-
-### `sl search`
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--connection-id <id>` | Filter by KTX connection id | - |
-| `--limit <number>` | Maximum search results | - |
+| `--limit <number>` | Maximum search results (search mode only) | - |
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
@@ -73,16 +72,16 @@ ktx sl <subcommand> [options]
 
 ```bash
 # List all semantic sources
-ktx sl list
+ktx sl
 
 # List sources for a specific connection
-ktx sl list --connection-id my-warehouse
+ktx sl --connection-id my-warehouse
 
 # List sources as JSON
-ktx sl list --json
+ktx sl --json
 
 # Search sources as JSON
-ktx sl search "revenue" --json
+ktx sl "revenue" --json
 
 # Validate a source against the live schema
 ktx sl validate orders --connection-id my-warehouse
@@ -137,13 +136,13 @@ ktx sl query \
 
 ## Output
 
-Semantic-layer list and search commands return human-readable output by
-default. Use `--json` on `list` or `search` when an agent needs structured
-output. Use `--format sql` on `query` to inspect generated SQL before
-execution, or leave `--format json` for the compiled query and optional rows.
-Pretty `sl search` output shows `#1`, `#2`, and later rank badges for the
-displayed results. Plain and JSON output keep the raw `score` value, which is a
-ranking score rather than a percentage.
+Bare `ktx sl` (list) and `ktx sl <query>` (search) return human-readable
+output by default. Use `--json` when an agent needs structured output. Use
+`--format sql` on `query` to inspect generated SQL before execution, or leave
+`--format json` for the compiled query and optional rows. Pretty search output
+shows `#1`, `#2`, and later rank badges for the displayed results. Plain and
+JSON output keep the raw `score` value, which is a ranking score rather than a
+percentage.
 
 ```json
 {
@@ -161,8 +160,8 @@ ranking score rather than a percentage.
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Source not found | Source name or connection id is wrong | Run `ktx sl list --json` and retry with an exact source name and connection id |
+| Source not found | Source name or connection id is wrong | Run `ktx sl --json` and retry with an exact source name and connection id |
 | Validation fails | YAML references missing columns, invalid joins, or invalid SQL expressions | Fix the source YAML and rerun `ktx sl validate` |
-| Query compile fails | Measure, dimension, filter, or segment name is invalid | Search sources with `ktx sl search`, inspect the source YAML in your project files, then retry using declared fields |
+| Query compile fails | Measure, dimension, filter, or segment name is invalid | Search sources with `ktx sl <query>`, inspect the source YAML in your project files, then retry using declared fields |
 | Execution returns too many rows | `--max-rows` is missing or too high | Add `--max-rows` with a bounded value before executing |
 | Runtime install is blocked | Query execution needs the managed Python runtime and prompts are disabled | Run `ktx dev runtime install --feature core --yes`, or rerun `ktx sl query --yes` |

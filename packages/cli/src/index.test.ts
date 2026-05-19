@@ -148,7 +148,7 @@ describe('runKtxCli', () => {
     const knowledge = vi.fn(async () => 0);
 
     const listIo = makeIo();
-    await expect(runKtxCli(['--project-dir', tempDir, 'wiki', 'list', '--json'], listIo.io, { knowledge }))
+    await expect(runKtxCli(['--project-dir', tempDir, 'wiki', '--json'], listIo.io, { knowledge }))
       .resolves.toBe(0);
     expect(knowledge).toHaveBeenCalledWith(
       {
@@ -162,7 +162,7 @@ describe('runKtxCli', () => {
 
     const searchIo = makeIo();
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'wiki', 'search', 'revenue', '--limit', '5'], searchIo.io, { knowledge }),
+      runKtxCli(['--project-dir', tempDir, 'wiki', 'revenue', '--limit', '5'], searchIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
       {
@@ -178,7 +178,7 @@ describe('runKtxCli', () => {
 
     const debugSearchIo = makeIo();
     await expect(
-      runKtxCli(['--project-dir', tempDir, '--debug', 'wiki', 'search', 'revenue'], debugSearchIo.io, { knowledge }),
+      runKtxCli(['--project-dir', tempDir, '--debug', 'wiki', 'revenue'], debugSearchIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
       {
@@ -191,47 +191,57 @@ describe('runKtxCli', () => {
       },
       debugSearchIo.io,
     );
+
+    const multiWordIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'wiki', 'revenue', 'policy'], multiWordIo.io, { knowledge }),
+    ).resolves.toBe(0);
+    expect(knowledge).toHaveBeenLastCalledWith(
+      {
+        command: 'search',
+        projectDir: tempDir,
+        query: 'revenue policy',
+        userId: 'local',
+        json: false,
+      },
+      multiWordIo.io,
+    );
   });
 
-  it('rejects removed public wiki read and write commands', async () => {
+  it('rejects unknown write-style flags on the flattened wiki and sl commands', async () => {
     const knowledge = vi.fn(async () => 0);
-
-    for (const argv of [
-      ['--project-dir', tempDir, 'wiki', 'read', 'revenue', '--json'],
-      ['--project-dir', tempDir, 'wiki', 'write', 'revenue', '--summary', 'Revenue', '--content', 'Revenue.'],
-    ]) {
-      const io = makeIo();
-
-      await expect(runKtxCli(argv, io.io, { knowledge })).resolves.toBe(1);
-
-      expect(io.stderr()).toMatch(/unknown command|error:/);
-    }
-
-    expect(knowledge).not.toHaveBeenCalled();
-  });
-
-  it('rejects removed public sl read/write commands', async () => {
     const sl = vi.fn(async () => 0);
 
-    for (const argv of [
-      ['--project-dir', tempDir, 'sl', 'read', 'orders', '--connection-id', 'warehouse'],
-      ['--project-dir', tempDir, 'sl', 'write', 'orders', '--connection-id', 'warehouse', '--yaml', 'name: orders'],
-    ]) {
-      const io = makeIo();
-      await expect(runKtxCli(argv, io.io, { sl })).resolves.toBe(1);
-      expect(io.stderr()).toMatch(/unknown command|error:/);
-    }
+    const wikiIo = makeIo();
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'wiki', 'revenue', '--summary', 'Revenue', '--content', 'Revenue.'],
+        wikiIo.io,
+        { knowledge },
+      ),
+    ).resolves.toBe(1);
+    expect(wikiIo.stderr()).toMatch(/unknown option|error:/);
+    expect(knowledge).not.toHaveBeenCalled();
 
+    const slIo = makeIo();
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'sl', 'orders', '--yaml', 'name: orders'],
+        slIo.io,
+        { sl },
+      ),
+    ).resolves.toBe(1);
+    expect(slIo.stderr()).toMatch(/unknown option|error:/);
     expect(sl).not.toHaveBeenCalled();
   });
 
-  it('routes sl search and rejects the old sl list --query flag', async () => {
+  it('routes sl search via the flattened query positional and rejects unknown flags', async () => {
     const sl = vi.fn(async () => 0);
 
     const searchIo = makeIo();
     await expect(
       runKtxCli(
-        ['--project-dir', tempDir, 'sl', 'search', 'revenue', '--connection-id', 'warehouse', '--limit', '5', '--json'],
+        ['--project-dir', tempDir, 'sl', 'revenue', '--connection-id', 'warehouse', '--limit', '5', '--json'],
         searchIo.io,
         { sl },
       ),
@@ -249,11 +259,26 @@ describe('runKtxCli', () => {
       searchIo.io,
     );
 
-    const listIo = makeIo();
+    const bareIo = makeIo();
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'sl', 'list', '--query', 'revenue'], listIo.io, { sl }),
+      runKtxCli(['--project-dir', tempDir, 'sl', '--connection-id', 'warehouse', '--json'], bareIo.io, { sl }),
+    ).resolves.toBe(0);
+    expect(sl).toHaveBeenLastCalledWith(
+      {
+        command: 'list',
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        json: true,
+        output: undefined,
+      },
+      bareIo.io,
+    );
+
+    const unknownIo = makeIo();
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'sl', '--query', 'revenue'], unknownIo.io, { sl }),
     ).resolves.toBe(1);
-    expect(listIo.stderr()).toContain("unknown option '--query'");
+    expect(unknownIo.stderr()).toContain("unknown option '--query'");
   });
 
   it('routes runtime management commands with the release runtime version', async () => {
@@ -523,7 +548,7 @@ describe('runKtxCli', () => {
     await initKtxProject({ projectDir });
     const commands = [
       ['--project-dir', projectDir, 'status', '--json'],
-      ['--project-dir', projectDir, 'sl', 'list', '--json'],
+      ['--project-dir', projectDir, 'sl', '--json'],
     ];
 
     for (const argv of commands) {
@@ -871,7 +896,8 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).toContain('--query-history');
     expect(testIo.stdout()).toContain('--no-query-history');
     expect(testIo.stdout()).toContain('--query-history-window-days <days>');
-    expect(testIo.stdout()).toContain('text');
+    expect(testIo.stdout()).toContain('--text');
+    expect(testIo.stdout()).toContain('--file');
     expect(testIo.stdout()).not.toMatch(/^  status\s/m);
     expect(testIo.stdout()).not.toMatch(/^  replay\s/m);
     expect(testIo.stdout()).not.toMatch(/^  run\s/m);
@@ -891,7 +917,6 @@ describe('runKtxCli', () => {
           '--project-dir',
           tempDir,
           'ingest',
-          'text',
           '--text',
           'Revenue means gross receipts.',
           '--text',
@@ -923,19 +948,42 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('documents text ingest inputs without a manifest option', async () => {
+  it('rejects a positional connection id when --text is supplied', async () => {
     const textIngest = vi.fn(async () => 0);
+    const publicIngest = vi.fn(async () => 0);
     const testIo = makeIo();
 
-    await expect(runKtxCli(['ingest', 'text', '--help'], testIo.io, { textIngest })).resolves.toBe(0);
+    await expect(
+      runKtxCli(
+        ['--project-dir', tempDir, 'ingest', 'warehouse', '--text', 'hello'],
+        testIo.io,
+        { textIngest, publicIngest },
+      ),
+    ).resolves.toBe(1);
 
-    expect(testIo.stdout()).toContain('Usage: ktx ingest text [options] [files...]');
-    expect(testIo.stdout()).toContain('--text <content>');
-    expect(testIo.stdout()).toContain('--connection-id <connectionId>');
-    expect(testIo.stdout()).toContain('--user-id <id>');
-    expect(testIo.stdout()).toContain('--fail-fast');
-    expect(testIo.stdout()).not.toContain('--manifest');
     expect(textIngest).not.toHaveBeenCalled();
+    expect(publicIngest).not.toHaveBeenCalled();
+    expect(testIo.stderr()).toMatch(/--text\/--file does not accept a positional connection id/);
+  });
+
+  it('treats bare ingest as ingest --all', async () => {
+    const publicIngest = vi.fn().mockResolvedValue(0);
+    const testIo = makeIo();
+
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'ingest', '--no-input'], testIo.io, { publicIngest }),
+    ).resolves.toBe(0);
+
+    expect(publicIngest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        projectDir: tempDir,
+        all: true,
+      }),
+      testIo.io,
+    );
+    const args = publicIngest.mock.calls[0]?.[0] as { targetConnectionId?: string };
+    expect(args.targetConnectionId).toBeUndefined();
   });
 
   it('rejects old adapter-backed ingest flags at the top level and under dev', async () => {

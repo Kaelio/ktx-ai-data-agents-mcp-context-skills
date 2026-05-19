@@ -475,9 +475,9 @@ describe('verification snippets', () => {
     assert.doesNotMatch(source, /startSemanticDaemon/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'setup'/);
     assert.match(source, /wiki', 'global', 'revenue\.md'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'wiki',\s*'search'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'wiki',\s*'revenue'/);
     assert.match(source, /semantic-layer', 'warehouse', 'orders\.yaml'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'search',\s*'orders'/);
+    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'orders'/);
     assert.match(source, /orders\.order_count/);
     assert.match(source, /node:sqlite/);
     assert.match(source, /driver: sqlite/);

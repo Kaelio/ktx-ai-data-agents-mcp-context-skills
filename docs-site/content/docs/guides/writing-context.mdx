@@ -13,9 +13,9 @@ Use this order for most context changes:
 1. Discover existing context.
 
    ```bash
-   ktx sl list --json
-   ktx sl search "revenue" --json
-   ktx wiki search "revenue recognition" --json --limit 10
+   ktx sl --json
+   ktx sl "revenue" --json
+   ktx wiki "revenue recognition" --json --limit 10
    ```
 
 2. Edit the smallest relevant files under `semantic-layer/<connection-id>/` or
@@ -306,7 +306,7 @@ Useful frontmatter:
 1. Search first.
 
    ```bash
-   ktx wiki search "active customer definition" --json --limit 10
+   ktx wiki "active customer definition" --json --limit 10
    ```
 
 2. If no page covers the rule, create or edit a Markdown file under
@@ -323,8 +323,8 @@ Before accepting agent-written context:
 ```bash
 git diff -- semantic-layer wiki
 ktx sl validate orders --connection-id warehouse
-ktx sl search "revenue" --json
-ktx wiki search "revenue recognition" --json --limit 10
+ktx sl "revenue" --json
+ktx wiki "revenue recognition" --json --limit 10
 ```
 
 Check definitions, hidden columns, join relationships, and generated SQL.

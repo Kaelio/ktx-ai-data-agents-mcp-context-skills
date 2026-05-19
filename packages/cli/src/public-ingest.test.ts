@@ -124,12 +124,15 @@ describe('buildPublicIngestPlan', () => {
     });
   });
 
-  it('rejects bare non-interactive ingest until the interactive confirmation slice exists', () => {
-    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+  it('treats a bare invocation (no connection id, no --all) as all configured connections', () => {
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+      docs: { driver: 'notion' },
+    });
 
-    expect(() => buildPublicIngestPlan(project, { projectDir: '/tmp/project', all: false })).toThrow(
-      'Context build requires a connection id or all targets',
-    );
+    const plan = buildPublicIngestPlan(project, { projectDir: '/tmp/project', all: false });
+
+    expect(plan.targets.map((target) => target.connectionId).sort()).toEqual(['docs', 'warehouse']);
   });
 
   it('resolves database depth from flags, stored context, and defaults', () => {

@@ -169,7 +169,7 @@ describe('setup agents', () => {
     expect(skill).toContain(`--project-dir ${tempDir}`);
     expect(skill).toContain('must not print secrets');
     expect(skill).toContain('status --json');
-    expect(skill).toContain('sl list --json');
+    expect(skill).toContain('sl --json');
     expect(skill).toContain('sl query');
     expect(skill).toContain('--format json');
     expect(skill).not.toContain('sl query --json');

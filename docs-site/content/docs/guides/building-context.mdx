@@ -106,28 +106,30 @@ edits.
 
 ## Text ingest
 
-Use `ktx ingest text` for notes, Markdown, runbooks, Slack exports, or other
-searchable memory.
+Use `ktx ingest --text` / `ktx ingest --file` for notes, Markdown, runbooks,
+Slack exports, or other searchable memory.
 
 ```bash
 # Capture a Markdown file
-ktx ingest text docs/revenue-notes.md --connection-id warehouse
+ktx ingest --file docs/revenue-notes.md --connection-id warehouse
 
 # Capture one stdin item
-printf "Refunds are excluded from net revenue." | ktx ingest text -
+printf "Refunds are excluded from net revenue." | ktx ingest --file -
 
 # Capture direct text
-ktx ingest text --text "ARR excludes one-time implementation fees."
+ktx ingest --text "ARR excludes one-time implementation fees."
 ```
 
 Useful flags:
 
 | Flag | Description |
 |------|-------------|
+| `--text <content>` | Capture inline text into memory; repeatable |
+| `--file <path>` | Capture a text file (or `-` for stdin) into memory; repeatable |
 | `--connection-id <connectionId>` | Attach the captured memory to a KTX connection |
 | `--user-id <id>` | Attribute capture to a user scope, default `local-cli` |
 | `--json` | Print structured output |
-| `--fail-fast` | Stop after the first failed text item |
+| `--fail-fast` | Stop after the first failed text/file item |
 
 Use text ingest for small, high-signal documents. Prefer configured source
 ingest for Notion, dbt, Metabase, and similar systems.
@@ -165,8 +167,8 @@ Then inspect what changed:
 
 ```bash
 git status --short
-ktx sl list --json
-ktx wiki search "revenue" --json --limit 10
+ktx sl --json
+ktx wiki "revenue" --json --limit 10
 ```
 
 ## Common errors
@@ -176,6 +178,6 @@ ktx wiki search "revenue" --json --limit 10
 | Connection not configured | The connection id is missing from `ktx.yaml` | Add it with `ktx setup` |
 | Deep readiness is missing | LLM or embeddings are not setup-ready | Run `ktx setup`, or rerun with `--fast` |
 | Query history is unsupported | The selected database driver does not expose query history | Run schema ingest without query-history flags |
-| No target selected | You omitted both a connection id and `--all` | Run `ktx ingest <connectionId>` or `ktx ingest --all` |
+| No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or source connection |
 | Source flags have no effect | Depth and query-history flags were supplied for a source connector | Use those flags only for database connections |
 | Text ingest stops early | `--fail-fast` stopped on the first failed item | Fix the item or rerun without `--fail-fast` |

@@ -78,14 +78,14 @@ describe('printList — plain mode', () => {
       mode: 'plain',
       command: 'sl search',
       emptyMessage: 'No sources matched "foo"',
-      emptyHint: 'Run `ktx sl list` to see available sources.',
+      emptyHint: 'Run `ktx sl` to see available sources.',
       unit: 'source',
       io: r.io,
     });
     expect(r.out()).toBe('');
     expect(r.err()).toBe(
       'No sources matched "foo"\n' +
-      'Run `ktx sl list` to see available sources.\n',
+      'Run `ktx sl` to see available sources.\n',
     );
   });
 });
@@ -188,13 +188,13 @@ describe('printList — pretty mode', () => {
       mode: 'pretty',
       command: 'sl search',
       emptyMessage: 'No sources matched "foo"',
-      emptyHint: 'Run `ktx sl list` to see available sources.',
+      emptyHint: 'Run `ktx sl` to see available sources.',
       unit: 'source',
       io: r.io,
     });
     const out = stripAnsi(r.out());
     expect(out).toContain('No sources matched "foo"');
-    expect(out).toContain('Run `ktx sl list` to see available sources.');
+    expect(out).toContain('Run `ktx sl` to see available sources.');
   });
 
   it('singularizes the footer when there is one row', () => {

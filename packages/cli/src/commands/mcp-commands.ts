@@ -36,8 +36,24 @@ function formatMcpStartResultMessage(input: { status: 'started' | 'already-runni
   ].join('\n');
 }
 
+async function printMcpStatus(context: KtxCliCommandContext, projectDir: string): Promise<void> {
+  const status = await (context.deps.mcp?.readStatus ?? readKtxMcpDaemonStatus)({ projectDir });
+  context.io.stdout.write(`${status.detail}\n`);
+  if (status.kind === 'running') {
+    context.io.stdout.write(`URL: ${status.url}\n`);
+    context.io.stdout.write(`PID: ${status.state.pid}\n`);
+    context.io.stdout.write(`Token auth: ${status.state.tokenAuth ? 'enabled' : 'disabled'}\n`);
+    context.io.stdout.write(`Project: ${status.state.projectDir}\n`);
+  }
+}
+
 export function registerMcpCommands(program: Command, context: KtxCliCommandContext): void {
-  const mcp = program.command('mcp').description('Run the KTX MCP HTTP server');
+  const mcp = program
+    .command('mcp')
+    .description('Manage the KTX MCP HTTP server (bare command: show status)')
+    .action(async (_options, command) => {
+      await printMcpStatus(context, resolveCommandProjectDir(command));
+    });
 
   mcp
     .command('stdio')
@@ -110,16 +126,7 @@ export function registerMcpCommands(program: Command, context: KtxCliCommandCont
     .command('status')
     .description('Show KTX MCP daemon status')
     .action(async (_options, command) => {
-      const status = await (context.deps.mcp?.readStatus ?? readKtxMcpDaemonStatus)({
-        projectDir: resolveCommandProjectDir(command),
-      });
-      context.io.stdout.write(`${status.detail}\n`);
-      if (status.kind === 'running') {
-        context.io.stdout.write(`URL: ${status.url}\n`);
-        context.io.stdout.write(`PID: ${status.state.pid}\n`);
-        context.io.stdout.write(`Token auth: ${status.state.tokenAuth ? 'enabled' : 'disabled'}\n`);
-        context.io.stdout.write(`Project: ${status.state.projectDir}\n`);
-      }
+      await printMcpStatus(context, resolveCommandProjectDir(command));
     });
 
   mcp
