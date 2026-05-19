@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: KTX Slack — questions and chat
+    url: https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ
+    about: Ask a question, share what you're building, or get help from maintainers and other users. Faster than filing an issue.
+  - name: Documentation
+    url: https://docs.kaelio.com/ktx/docs/
+    about: Many setup, configuration, and integration questions are answered here.
+  - name: Community & Support guide
+    url: https://docs.kaelio.com/ktx/docs/community/support
+    about: Full guide on where to ask what — Slack vs. GitHub Issues vs. docs.
+  - name: Security issues
+    url: https://github.com/Kaelio/ktx/security/advisories/new
+    about: Report security vulnerabilities privately via GitHub Security Advisories. Please do not file security issues publicly.
