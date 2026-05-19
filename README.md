@@ -18,19 +18,38 @@
 
 ---
 
-KTX turns warehouse metadata, semantic definitions, and business knowledge into
-reviewable project files that agents can use to plan, query, and update
-analytics work.
+KTX is a self-improving context layer that teaches agents how to query your
+warehouse accurately - from approved metric definitions, joinable columns, and
+business knowledge it builds and maintains for you.
 
-Use KTX when you want agents to:
+Works with PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
+SQLite. Integrates with dbt, MetricFlow, LookML, Looker, Metabase, and Notion.
 
-- Generate SQL from approved measures and joins
-- Repair semantic definitions through reviewable diffs
-- Explain metric provenance with warehouse evidence
-- Work alongside dbt, MetricFlow, LookML, Looker, Metabase, and Notion
+## Why KTX
 
-Supports PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
-SQLite.
+General-purpose agents struggle on data tasks. They re-explore your warehouse
+on every question, invent their own metric logic, and return numbers that
+don't match approved definitions.
+
+Traditional semantic layers don't fix this. They demand constant manual
+upkeep and don't absorb the rest of your company's knowledge.
+
+KTX does both, automatically:
+
+- **Learns from company knowledge.** Ingests wiki content, organizes it,
+  removes duplicates, and flags contradictions for human review.
+- **Maps the data stack.** Samples tables, captures metadata and usage
+  patterns, detects joinable columns, and annotates sources so agents write
+  better queries.
+- **Builds a semantic layer.** Combines raw tables and high-level metrics
+  through a join graph that automatically resolves chasm and fan traps, so
+  agents fetch metrics declaratively instead of rewriting canonical SQL each
+  time.
+- **Serves agents at execution.** Exposes CLI and MCP tools with combined
+  full-text and semantic search across wiki and semantic-layer entities.
+
+Agents can run raw SQL when they need it, or compose semantic-layer queries
+when they want approved metrics with reliable joins.
 
 <p align="center">
   <img src="docs-site/public/images/ingestion-flow-transparent.svg" alt="KTX ingestion flow from source systems through validation to wiki and semantic-layer outputs" width="900" />
@@ -109,17 +128,17 @@ Commit `ktx.yaml`, `semantic-layer/`, and `wiki/`. Keep `.ktx/` local.
 
 ## Agent Usage
 
-Setup can install KTX instructions for Claude Code, Codex, Cursor, OpenCode,
-and universal `.agents` clients:
+Install KTX integration for Claude Code, Claude Desktop, Codex, Cursor,
+OpenCode, and generic `.agents` clients:
 
 ```bash
 ktx setup --agents
 ```
 
-Use `--target <target>` when you want to install or repair one specific
-integration.
+Pass `--target <target>` to install or repair one specific integration.
 
-Agent-facing workflows typically start with:
+A typical agent workflow combines wiki and semantic-layer search before
+querying:
 
 ```bash
 ktx sl search "revenue" --json
@@ -127,40 +146,14 @@ ktx wiki search "refund policy" --json
 ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 ```
 
-During agent setup, choose **Ask data questions with KTX MCP** for client
-agents. Choose **Ask data questions + manage KTX with CLI commands** only when
-a developer or operator agent also needs pinned `ktx` admin commands.
+During setup, choose **Ask data questions with KTX MCP** for client agents.
+Choose **Ask data questions + manage KTX with CLI commands** when an operator
+agent also needs pinned `ktx` admin commands.
 
-After setup, KTX prints **Required before using agents**. Complete those steps
-before opening the configured agent. If it shows `ktx mcp start --project-dir ...`,
-run that command before using Claude Code, Codex, Cursor, OpenCode, or generic
-MCP clients. The same output also prints the matching `ktx mcp stop` command
-for when you want to stop MCP later. Claude Desktop uses its own launcher for
-MCP and prints separate skill upload steps.
-
-The analytics skill teaches client agents the MCP workflow: discover data,
-prefer semantic-layer measures, inspect entity details before raw SQL, and
-capture durable learnings. Admin CLI skills call `ktx` commands directly
-through a skill file installed in your agent's config:
-
-```bash
-ktx sl query --measure orders.revenue --dimension orders.status --format sql
-ktx wiki search "revenue definition"
-ktx sl validate orders
-```
-
-Supported client agents: Claude Code, Claude Desktop, Codex, Cursor, OpenCode,
-and clients that can use the printed MCP endpoint or `.agents` admin skills.
-Claude Desktop setup registers a local `ktx mcp stdio` server in Claude
-Desktop's config and generates one uploadable ZIP per Claude Desktop skill
-under `.ktx/agents/claude/`. Restart Claude Desktop after setup, then upload
-each ZIP from **Customize** > **Skills** > **+** > **Create skill** >
-**Upload a skill**.
-
-The release artifact manifest contains the public npm tarball and the bundled
-`kaelio-ktx` runtime wheel. The `python/ktx-sl` and `python/ktx-daemon`
-directories remain source packages for development, not public release
-artifacts.
+After setup, KTX prints **Required before using agents** with the exact
+commands to run. If the output includes `ktx mcp start --project-dir ...`, run
+it before opening your agent. Claude Desktop uses its own launcher and prints
+separate skill upload steps under `.ktx/agents/claude/`.
 
 ## Workspace packages
 
