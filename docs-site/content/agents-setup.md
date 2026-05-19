@@ -67,7 +67,6 @@ Drive the existing wizard non-interactively (verify exact flag names with `ktx s
 ```
 ktx setup \
   --project-dir <path> \
-  --new \
   --no-input --yes \
   --llm-backend <claude-code|anthropic|vertex> --llm-model <model> \
   [--anthropic-api-key-env ANTHROPIC_API_KEY | --anthropic-api-key-file <path>] \
@@ -75,14 +74,22 @@ ktx setup \
   --embedding-backend <sentence-transformers|openai> \
   [--embedding-api-key-env OPENAI_API_KEY] \
   --skip-sources \
-  --database <driver> --new-database-connection-id <name> --database-url <url|env:VAR|file:/path> \
+  --database <driver> --database-connection-id <name> --database-url <url|env:VAR|file:/path> \
     [--database-schema <schema> …]
-  # repeat the --database / --new-database-connection-id / --database-url / --database-schema block per connection
 ```
 
 Notes on the flags above:
-- **`--new`** is required when bootstrapping an empty directory; use `--existing` instead when re-running setup against a project that already has a `ktx.yaml`.
-- **There is no `--skip-agents` flag.** The agent integration step is opt-in: setup leaves it alone unless you pass `--agents --target <target>`. So you do not need to skip it — just don't pass `--agents`.
+- **Project creation is automatic with `--no-input --yes`.** When
+  `ktx.yaml` exists, setup resumes it. When it doesn't exist, setup creates it
+  at `--project-dir`.
+- **`--database-connection-id` is dual-purpose.** With `--database` or
+  `--database-url`, it names the new connection. Without those flags, it
+  selects an existing connection id.
+- **Configure one new database connection per setup command.** If the user
+  wants multiple new connections, run setup again for each connection.
+- **You don't need `--skip-agents` in this flow.** The agent integration step
+  is opt-in: setup leaves it alone unless you pass `--agents --target
+  <target>`.
 - **`--skip-sources`** is correct and is the documented way to leave BI/metadata sources unconfigured.
 
 ### Known soft-failure: `ktx setup` exits 1 after a successful fast build
@@ -172,7 +179,7 @@ Verdict:     ready
 
 Then **Next steps** (copy-pasteable):
 1. Enrich with AI descriptions and embeddings: `ktx ingest <connection> --deep` (several minutes per connection).
-2. Add more connections later by rerunning this setup or via `ktx setup --existing --database … --new-database-connection-id …`.
+2. Add more connections later by rerunning this setup or via `ktx setup --database … --database-connection-id …`.
 3. Configure BI sources (dbt, Metabase, Looker, LookML, MetricFlow, Notion) — see `ktx setup --help` for `--source …` flags.
 4. Install agent integration: `ktx setup --agents --target <claude-code|claude-desktop|codex|cursor|opencode|universal>` (with optional `--global` for `claude-code`/`codex`).
 5. Connect the agent / MCP: see docs at `https://docs.kaelio.com/ktx/`.

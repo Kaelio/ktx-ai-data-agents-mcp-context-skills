@@ -27,9 +27,9 @@ below.
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--agents` | Install agent configuration and rules only | `false` |
-| `--target <target>` | Agent target: `claude-code`, `codex`, `cursor`, `opencode`, or `universal` | - |
+| `--target <target>` | Agent target: `claude-code`, `claude-desktop`, `codex`, `cursor`, `opencode`, or `universal` | - |
 | `--global` | Install agent integration into the global target scope for `claude-code` or `codex` | `false` |
-| `--yes` | Accept safe defaults in non-interactive setup | `false` |
+| `--yes` | Accept project creation and runtime install defaults where setup asks for confirmation | `false` |
 | `--no-input` | Disable interactive terminal input | - |
 
 Use the global `--project-dir <path>` option when setup should target a
@@ -40,12 +40,12 @@ specific directory.
 These flags are useful for repeatable setup in examples, tests, CI fixtures, and
 scripted project creation. They are not shown in `ktx setup --help`.
 
-### Project Mode
+### Project Creation
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--new` | Create a new KTX project before setup | `false` |
-| `--existing` | Use an existing KTX project | `false` |
+Setup resumes an existing `ktx.yaml` when one is present. When no project
+exists, interactive setup prompts for where to create it. In scripts, pass
+`--project-dir <dir> --no-input --yes` to create the target directory without
+prompts.
 
 ### LLM Provider
 
@@ -56,7 +56,6 @@ scripted project creation. They are not shown in `ktx setup --help`.
 | `--llm-model <model>` | LLM model ID or backend model alias to validate and save |
 | `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key |
 | `--anthropic-api-key-file <path>` | File containing the Anthropic API key |
-| `--anthropic-model <model>` | Legacy alias for `--llm-model` |
 | `--vertex-project <project>` | Vertex AI project ID, `env:NAME`, or `file:/path` reference |
 | `--vertex-location <location>` | Vertex AI location, `env:NAME`, or `file:/path` reference |
 | `--skip-llm` | Leave LLM setup incomplete |
@@ -105,8 +104,7 @@ runtime features are missing.
 | Flag | Description |
 |------|-------------|
 | `--database <driver>` | Database driver to configure; repeatable. Choices: `sqlite`, `postgres`, `mysql`, `sqlserver`, `bigquery`, `snowflake` |
-| `--database-connection-id <id>` | Existing selected connection id; repeatable |
-| `--new-database-connection-id <id>` | Connection id for one new database connection |
+| `--database-connection-id <id>` | Existing selected connection id; repeatable. With `--database` or `--database-url`, connection id for the new connection. |
 | `--database-url <url>` | URL, `env:NAME`, or `file:/path` for one new URL-style database connection; also used as the SQLite path |
 | `--database-schema <schema>` | Database schema or dataset to include; repeatable |
 | `--skip-databases` | Leave database setup incomplete |
@@ -177,10 +175,11 @@ ktx setup \
 ktx setup \
   --project-dir ./analytics \
   --no-input \
+  --yes \
   --skip-llm \
   --skip-embeddings \
   --database postgres \
-  --new-database-connection-id warehouse \
+  --database-connection-id warehouse \
   --database-url env:DATABASE_URL \
   --database-schema public
 
@@ -188,7 +187,7 @@ ktx setup \
 ktx setup \
   --project-dir ./analytics \
   --database postgres \
-  --new-database-connection-id warehouse \
+  --database-connection-id warehouse \
   --database-url env:DATABASE_URL \
   --enable-query-history \
   --query-history-min-executions 5
@@ -236,4 +235,5 @@ Use `ktx status` for repeatable readiness checks after setup exits.
 | `--enable-query-history` is rejected | The selected database driver does not support query history | Use Postgres, BigQuery, or Snowflake, or rerun without query-history flags |
 | Source setup rejects location flags | Both `--source-path` and `--source-git-url` were supplied | Choose the local path or the Git URL, not both |
 | Agent integration missing | Setup skipped the agents step | Run `ktx setup --agents --target <target>` |
+| Agent setup cannot prompt for a target | Non-TTY `ktx setup --agents` needs a target | Run `ktx setup --agents --target <target>` or rerun in a TTY |
 | Global agent install is rejected | `--global` was used with a target other than `claude-code` or `codex` | Omit `--global`, or choose `--target claude-code` or `--target codex` |

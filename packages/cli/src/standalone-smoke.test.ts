@@ -116,7 +116,6 @@ async function runSetupNewProject(projectDir: string): Promise<CliResult> {
     'setup',
     '--project-dir',
     projectDir,
-    '--new',
     '--no-input',
     '--yes',
     '--skip-llm',

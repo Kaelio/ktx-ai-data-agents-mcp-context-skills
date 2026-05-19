@@ -1222,7 +1222,11 @@ export async function runKtxSetupAgentsStep(
           })) as KtxAgentTarget[]);
   if (targets.includes('back' as KtxAgentTarget)) return { status: 'back', projectDir: args.projectDir };
   if (targets.length === 0) {
-    io.stderr.write('Missing agent target: pass --target or use interactive setup.\n');
+    io.stderr.write(
+      args.inputMode === 'disabled'
+        ? 'Run in a TTY, or pass --target <target>.\n'
+        : 'Missing agent target: pass --target or use interactive setup.\n',
+    );
     return { status: 'missing-input', projectDir: args.projectDir };
   }
 

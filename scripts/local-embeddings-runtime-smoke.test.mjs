@@ -114,7 +114,6 @@ describe('localEmbeddingsSmokeCommands', () => {
       'setup',
       '--project-dir',
       '/tmp/ktx-local-embedding-smoke/project',
-      '--new',
       '--no-input',
       '--yes',
       '--skip-llm',

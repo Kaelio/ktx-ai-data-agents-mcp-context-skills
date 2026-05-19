@@ -184,6 +184,58 @@ describe('setup agents', () => {
     expect(io.stderr()).toBe('');
   });
 
+  it('installs a specified target in non-interactive mode without --yes', async () => {
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: false,
+          agents: true,
+          target: 'claude-code',
+          scope: 'project',
+          mode: 'mcp',
+          skipAgents: false,
+        },
+        io.io,
+      ),
+    ).resolves.toMatchObject({
+      status: 'ready',
+      projectDir: tempDir,
+      installs: [{ target: 'claude-code', scope: 'project', mode: 'mcp' }],
+    });
+
+    await expect(stat(join(tempDir, '.claude/skills/ktx-analytics/SKILL.md'))).resolves.toBeDefined();
+    const mcpConfig = JSON.parse(await readFile(join(tempDir, '.mcp.json'), 'utf-8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(mcpConfig.mcpServers).toHaveProperty('ktx');
+    expect(io.stderr()).toBe('');
+  });
+
+  it('prints concrete target guidance when non-interactive agent setup has no target', async () => {
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'disabled',
+          yes: false,
+          agents: true,
+          scope: 'project',
+          mode: 'mcp',
+          skipAgents: false,
+        },
+        io.io,
+      ),
+    ).resolves.toEqual({ status: 'missing-input', projectDir: tempDir });
+
+    expect(io.stderr()).toBe('Run in a TTY, or pass --target <target>.\n');
+  });
+
   it('prints standalone agent next actions after successful installation', async () => {
     const io = makeIo();
 
