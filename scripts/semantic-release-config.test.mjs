@@ -9,6 +9,14 @@ function releaseExecOptions(config) {
   return config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].prepareCmd)[1];
 }
 
+function releaseExecIndex(config) {
+  return config.plugins.findIndex((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].prepareCmd);
+}
+
+function pluginNames(config) {
+  return config.plugins.map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin));
+}
+
 describe('semantic-release config', () => {
   it('configures rc releases on a dedicated next prerelease branch', () => {
     assert.equal(releaseKind({ KTX_RELEASE_KIND: 'rc' }), 'rc');
@@ -33,7 +41,15 @@ describe('semantic-release config', () => {
       releaseExecOptions(config).prepareCmd,
       /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "next"/,
     );
-    assert.doesNotMatch(releaseExecOptions(config).publishCmd ?? '', /release:npm-publish/);
+    assert.doesNotMatch(JSON.stringify(config.plugins), /release:npm-publish/);
+    const releaseFilePluginNames = pluginNames(config).filter(
+      (plugin) => plugin === '@semantic-release/changelog' || plugin === '@semantic-release/git',
+    );
+    assert.deepEqual(releaseFilePluginNames, ['@semantic-release/changelog', '@semantic-release/git']);
+
+    const names = pluginNames(config);
+    assert.ok(names.indexOf('@semantic-release/changelog') < releaseExecIndex(config));
+    assert.ok(names.indexOf('@semantic-release/git') > releaseExecIndex(config));
   });
 
   it('configures stable releases only from main with latest tag', () => {
@@ -47,6 +63,13 @@ describe('semantic-release config', () => {
       /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "latest"/,
     );
     assert.equal(config.plugins.includes('./scripts/semantic-release-version-policy.cjs'), false);
+  });
+
+  it('does not commit release files back to protected main during stable releases', () => {
+    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'stable', GITHUB_REF_NAME: 'main' });
+
+    assert.equal(pluginNames(config).includes('@semantic-release/git'), false);
+    assert.equal(pluginNames(config).includes('@semantic-release/changelog'), false);
   });
 
   it('rejects stable releases from non-main branches', () => {
