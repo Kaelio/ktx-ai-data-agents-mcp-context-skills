@@ -137,7 +137,6 @@ function createReleaseConfig(env = process.env) {
           },
         },
       ],
-      './scripts/semantic-release-version-policy.cjs',
       '@semantic-release/changelog',
       [
         '@semantic-release/exec',
@@ -147,10 +146,19 @@ function createReleaseConfig(env = process.env) {
             'pnpm run artifacts:check',
             'pnpm run release:readiness',
           ].join(' && '),
-          publishCmd: [
-            'pnpm run release:npm-publish -- --publish',
-            'pnpm run release:published-smoke',
-          ].join(' && '),
+        },
+      ],
+      [
+        '@semantic-release/npm',
+        {
+          pkgRoot: 'dist/public-npm-package',
+          tarballDir: 'dist/artifacts/npm',
+        },
+      ],
+      [
+        '@semantic-release/exec',
+        {
+          publishCmd: 'pnpm run release:published-smoke',
         },
       ],
       [
