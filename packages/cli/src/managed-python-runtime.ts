@@ -20,7 +20,7 @@ export type KtxRuntimeFeature = z.infer<typeof runtimeFeatureSchema>;
  * requires Python >=3.13" error. Pinning here pushes uv to auto-download the
  * right interpreter via its python-management feature.
  */
-export const MANAGED_RUNTIME_PYTHON_VERSION = '3.13';
+const MANAGED_RUNTIME_PYTHON_VERSION = '3.13';
 
 const runtimeAssetManifestSchema = z.object({
   schemaVersion: z.literal(1),
