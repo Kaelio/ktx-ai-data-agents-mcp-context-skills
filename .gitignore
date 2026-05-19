@@ -57,6 +57,7 @@ yarn-error.log*
 .agents
 .claude
 .superpowers
+docs/superpowers
 
 # Editors and OS files
 .idea/
