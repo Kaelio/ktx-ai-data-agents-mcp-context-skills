@@ -31,6 +31,10 @@ Use KTX when you want agents to:
 Supports PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
 SQLite.
 
+<p align="center">
+  <img src="docs-site/public/images/ingestion-flow-transparent.svg" alt="KTX ingestion flow from source systems through validation to wiki and semantic-layer outputs" width="900" />
+</p>
+
 ## Agent Setup
 
 Ask an agent such as Claude Code, Codex, Cursor, or OpenCode to install and
