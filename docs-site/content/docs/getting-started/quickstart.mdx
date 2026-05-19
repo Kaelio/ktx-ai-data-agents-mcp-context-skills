@@ -3,6 +3,8 @@ title: Quickstart
 description: Install KTX, run setup, and connect your coding agent.
 ---
 
+import { CopyButton } from "@/components/copy-button";
+
 This guide takes a local analytics project from empty to agent-ready. You'll
 install the CLI, run one guided setup command, and hand the context to a
 coding assistant.
@@ -11,10 +13,9 @@ If you're a coding assistant choosing a docs route, start with the
 [Agent Quickstart](/docs/ai-resources/agent-quickstart) instead.
 
 <div
-  className="not-prose my-8 rounded-xl border border-l-4 p-5 sm:p-6"
+  className="not-prose my-8 rounded-xl border p-5 sm:p-6"
   style={{
     borderColor: 'color-mix(in oklch, #ff8a4d 35%, transparent)',
-    borderLeftColor: '#ff8a4d',
     background: 'color-mix(in oklch, #ff8a4d 8%, transparent)',
   }}
 >
@@ -22,7 +23,7 @@ If you're a coding assistant choosing a docs route, start with the
     className="text-xs font-semibold uppercase tracking-wider"
     style={{ color: '#ff8a4d' }}
   >
-    No warehouse handy?
+    Need a warehouse to play with?
   </div>
   <div className="mt-2 text-base leading-relaxed text-fd-foreground">
     Try KTX against a real data stack - Postgres, dbt, Metabase, and Notion
@@ -39,6 +40,49 @@ If you're a coding assistant choosing a docs route, start with the
   >
     Get demo credentials at kaelio.com/start →
   </a>
+</div>
+
+<div
+  className="not-prose my-6 rounded-lg border p-4"
+  style={{
+    borderColor: 'color-mix(in oklch, var(--color-fd-primary) 35%, transparent)',
+    background: 'color-mix(in oklch, var(--color-fd-primary) 8%, transparent)',
+  }}
+>
+  <div className="text-sm font-semibold text-fd-foreground">
+    Run setup from an agent
+  </div>
+  <div className="mt-2 text-sm leading-6 text-fd-muted-foreground">
+    You can ask an agent such as Claude Code, Codex, Cursor, or OpenCode to
+    install and configure KTX for you. The{' '}
+    <a href="/ktx/docs/agents-setup.md" className="font-medium underline">
+      agent setup Markdown prompt
+    </a>{' '}
+    tells the agent how to check prerequisites, ask only for credentials or
+    connection choices, run <code>ktx setup</code>, verify connections, and
+    report the result.
+  </div>
+  <div className="mt-3 text-sm leading-6 text-fd-muted-foreground">
+    Use a prompt like this from the project you want to configure:
+  </div>
+  <div className="mt-3 max-w-full overflow-hidden rounded-md border bg-fd-background">
+    <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        Prompt
+      </span>
+      <CopyButton
+        text={`Follow instructions from
+https://docs.kaelio.com/ktx/docs/agents-setup.md
+to install and configure ktx`}
+        className="-my-1"
+      />
+    </div>
+    <div className="p-3 font-mono text-sm leading-6 text-fd-foreground">
+      <div>Follow instructions from</div>
+      <div className="break-all">https://docs.kaelio.com/ktx/docs/agents-setup.md</div>
+      <div>to install and configure ktx</div>
+    </div>
+  </div>
 </div>
 
 ## Install the CLI
