@@ -31,6 +31,17 @@ Use KTX when you want agents to:
 Supports PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
 SQLite.
 
+## Agent Setup
+
+Ask an agent such as Claude Code, Codex, Cursor, or OpenCode to install and
+configure KTX from your project directory:
+
+```text
+Follow instructions from
+https://docs.kaelio.com/ktx/docs/agents-setup.md
+to install and configure ktx
+```
+
 ## Quick Start
 
 ```bash
