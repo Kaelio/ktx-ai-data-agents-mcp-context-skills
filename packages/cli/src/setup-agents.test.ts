@@ -82,7 +82,11 @@ describe('setup agents', () => {
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'claude-desktop', scope: 'global', mode: 'mcp' })).toEqual([
       { kind: 'file', path: join(tempDir, '.ktx/agents/claude/ktx-plugin-runner.sh'), role: 'launcher' },
-      { kind: 'file', path: join(tempDir, '.ktx/agents/claude/ktx-plugin.zip'), role: 'claude-plugin' },
+      {
+        kind: 'file',
+        path: join(tempDir, '.ktx/agents/claude/ktx-skills.zip'),
+        role: 'claude-desktop-skill-bundle',
+      },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'codex', scope: 'project', mode: 'mcp' })).toEqual([
       { kind: 'file', path: join(tempDir, '.agents/skills/ktx-analytics/SKILL.md'), role: 'analytics-skill' },
@@ -123,7 +127,11 @@ describe('setup agents', () => {
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'claude-desktop', scope: 'global', mode: 'mcp-cli' })).toEqual([
       { kind: 'file', path: join(tempDir, '.ktx/agents/claude/ktx-plugin-runner.sh'), role: 'launcher' },
-      { kind: 'file', path: join(tempDir, '.ktx/agents/claude/ktx-plugin.zip'), role: 'claude-plugin' },
+      {
+        kind: 'file',
+        path: join(tempDir, '.ktx/agents/claude/ktx-skills.zip'),
+        role: 'claude-desktop-skill-bundle',
+      },
     ]);
   });
 
@@ -414,7 +422,7 @@ describe('setup agents', () => {
     }
   });
 
-  it('registers Claude Desktop MCP via claude_desktop_config.json and ships a skills-only plugin', async () => {
+  it('registers Claude Desktop MCP and ships an uploadable analytics skill zip', async () => {
     const home = await mkdtemp(join(tmpdir(), 'ktx-setup-agents-home-'));
     const previousHome = process.env.HOME;
     const envSnapshot = captureEnvKeys(process.env, ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']);
@@ -444,9 +452,9 @@ describe('setup agents', () => {
         installs: [{ target: 'claude-desktop', scope: 'global', mode: 'mcp' }],
       });
 
-      const pluginPath = join(tempDir, '.ktx/agents/claude/ktx-plugin.zip');
+      const skillBundlePath = join(tempDir, '.ktx/agents/claude/ktx-skills.zip');
       const launcherPath = join(tempDir, '.ktx/agents/claude/ktx-plugin-runner.sh');
-      await expect(stat(pluginPath)).resolves.toBeDefined();
+      await expect(stat(skillBundlePath)).resolves.toBeDefined();
       const launcherStat = await stat(launcherPath);
       expect(launcherStat.mode & 0o111).not.toBe(0);
       const launcher = await readFile(launcherPath, 'utf-8');
@@ -462,23 +470,23 @@ describe('setup agents', () => {
         args: ['--project-dir', tempDir, 'mcp', 'stdio'],
       });
 
-      expect(await readZipText(pluginPath, '.claude-plugin/plugin.json')).toContain('"name": "ktx"');
-      await expect(readZipText(pluginPath, '.mcp.json')).rejects.toThrow('Missing zip entry');
-      expect(await readZipText(pluginPath, 'skills/ktx-analytics/SKILL.md')).toContain('KTX Analytics Workflow');
-      const setupMd = await readZipText(pluginPath, 'SETUP.md');
-      expect(setupMd).not.toContain('ktx mcp start');
-      expect(setupMd).toContain('no manual plugin install step is required');
-      expect(setupMd).toContain('claude_desktop_config.json');
-      expect(setupMd).not.toContain('Install this plugin ZIP from Claude Desktop');
-      await expect(readZipText(pluginPath, 'skills/ktx/SKILL.md')).rejects.toThrow('Missing zip entry');
+      expect(await readZipText(skillBundlePath, 'ktx-analytics/SKILL.md')).toContain('KTX Analytics Workflow');
+      await expect(readZipText(skillBundlePath, 'ktx/SKILL.md')).rejects.toThrow('Missing zip entry');
+      await expect(readZipText(skillBundlePath, '.claude-plugin/plugin.json')).rejects.toThrow('Missing zip entry');
+      await expect(readZipText(skillBundlePath, 'skills/ktx-analytics/SKILL.md')).rejects.toThrow(
+        'Missing zip entry',
+      );
 
       expect(io.stdout()).toContain('Claude Desktop');
-      expect(io.stdout()).not.toContain('.ktx/agents/claude/ktx-plugin.zip');
+      expect(io.stdout()).toContain(skillBundlePath);
       expect(io.stdout()).toContain('claude_desktop_config.json');
       expect(io.stdout()).toContain('Required before using agents');
       expect(io.stdout()).toContain('1. Restart Claude Desktop');
-      expect(io.stdout()).toContain('Claude Desktop loads KTX after restart.');
-      expect(io.stdout()).not.toContain('install plugin');
+      expect(io.stdout()).toContain('Claude Desktop loads KTX MCP after restart.');
+      expect(io.stdout()).toContain('2. Upload Claude Desktop skills');
+      expect(io.stdout()).toContain('Customize > Skills > + > Create skill > Upload a skill');
+      expect(io.stdout()).toContain('Upload this file:');
+      expect(io.stdout()).toContain('Toggle the uploaded KTX skills on.');
       expect(io.stdout()).not.toContain('Run `ktx mcp start`');
     } finally {
       process.env.HOME = previousHome;
@@ -535,7 +543,7 @@ describe('setup agents', () => {
     }
   });
 
-  it('includes the admin CLI skill in the Claude Desktop plugin zip when requested', async () => {
+  it('includes an uploadable admin CLI skill zip for Claude Desktop when requested', async () => {
     const home = await mkdtemp(join(tmpdir(), 'ktx-setup-agents-home-'));
     const previousHome = process.env.HOME;
     process.env.HOME = home;
@@ -561,12 +569,13 @@ describe('setup agents', () => {
         installs: [{ target: 'claude-desktop', scope: 'global', mode: 'mcp-cli' }],
       });
 
-      const pluginPath = join(tempDir, '.ktx/agents/claude/ktx-plugin.zip');
-      const adminSkill = await readZipText(pluginPath, 'skills/ktx/SKILL.md');
+      const skillBundlePath = join(tempDir, '.ktx/agents/claude/ktx-skills.zip');
+      expect(await readZipText(skillBundlePath, 'ktx-analytics/SKILL.md')).toContain('KTX Analytics Workflow');
+      const adminSkill = await readZipText(skillBundlePath, 'ktx/SKILL.md');
       expect(adminSkill).toContain(`--project-dir ${tempDir}`);
       expect(adminSkill).toContain('status --json');
-      expect(await readZipText(pluginPath, 'SETUP.md')).toContain('admin CLI skill');
-      await expect(readZipText(pluginPath, '.mcp.json')).rejects.toThrow('Missing zip entry');
+      await expect(readZipText(skillBundlePath, '.mcp.json')).rejects.toThrow('Missing zip entry');
+      expect(io.stdout()).toContain(skillBundlePath);
     } finally {
       process.env.HOME = previousHome;
       await rm(home, { recursive: true, force: true });
@@ -798,7 +807,7 @@ describe('setup agents', () => {
     await expect(readKtxAgentInstallManifest(tempDir)).resolves.toEqual(null);
   });
 
-  it('removes generated Claude Desktop plugin from the manifest', async () => {
+  it('removes generated Claude Desktop skill zips from the manifest', async () => {
     const home = await mkdtemp(join(tmpdir(), 'ktx-setup-agents-home-'));
     const previousHome = process.env.HOME;
     process.env.HOME = home;
@@ -817,10 +826,10 @@ describe('setup agents', () => {
         },
         io.io,
       );
-      const pluginPath = join(tempDir, '.ktx/agents/claude/ktx-plugin.zip');
+      const skillBundlePath = join(tempDir, '.ktx/agents/claude/ktx-skills.zip');
       const launcherPath = join(tempDir, '.ktx/agents/claude/ktx-plugin-runner.sh');
       const configPath = join(home, 'Library/Application Support/Claude/claude_desktop_config.json');
-      await expect(stat(pluginPath)).resolves.toBeDefined();
+      await expect(stat(skillBundlePath)).resolves.toBeDefined();
       await expect(stat(launcherPath)).resolves.toBeDefined();
       const beforeConfig = JSON.parse(await readFile(configPath, 'utf-8')) as {
         mcpServers: Record<string, unknown>;
@@ -829,7 +838,7 @@ describe('setup agents', () => {
 
       await expect(removeKtxAgentInstall(tempDir, io.io)).resolves.toBe(0);
 
-      await expect(stat(pluginPath)).rejects.toThrow();
+      await expect(stat(skillBundlePath)).rejects.toThrow();
       await expect(stat(launcherPath)).rejects.toThrow();
       const afterConfig = JSON.parse(await readFile(configPath, 'utf-8')) as {
         mcpServers: Record<string, unknown>;
@@ -1026,9 +1035,11 @@ describe('setup agents', () => {
       expect(output).toContain('RUN:');
       expect(output).toContain(`cd '${tempDir}'`);
       expect(output).toContain('3. Restart Claude Desktop');
-      expect(output).toContain('Claude Desktop loads KTX after restart.');
-      expect(output).not.toContain('install plugin');
-      expect(output).not.toContain(join(tempDir, '.ktx/agents/claude/ktx-plugin.zip'));
+      expect(output).toContain('Claude Desktop loads KTX MCP after restart.');
+      expect(output).toContain('4. Upload Claude Desktop skills');
+      expect(output).toContain('Customize > Skills > + > Create skill > Upload a skill');
+      expect(output).toContain(join(tempDir, '.ktx/agents/claude/ktx-skills.zip'));
+      expect(output).toContain('Upload this file:');
       expect(output).not.toContain('Finish Claude Desktop setup');
       expect(output).not.toContain('Run `ktx mcp start` to enable the configured KTX MCP server.');
     } finally {

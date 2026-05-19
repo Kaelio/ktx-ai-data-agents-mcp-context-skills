@@ -119,8 +119,8 @@ After setup, KTX prints **Required before using agents**. Complete those steps
 before opening the configured agent. If it shows `ktx mcp start --project-dir ...`,
 run that command before using Claude Code, Codex, Cursor, OpenCode, or generic
 MCP clients. The same output also prints the matching `ktx mcp stop` command
-for when you want to stop MCP later. Claude Desktop uses its own launcher and
-only needs a restart.
+for when you want to stop MCP later. Claude Desktop uses its own launcher for
+MCP and prints separate skill upload steps.
 
 The analytics skill teaches client agents the MCP workflow: discover data,
 prefer semantic-layer measures, inspect entity details before raw SQL, and
@@ -136,9 +136,10 @@ ktx sl validate orders
 Supported client agents: Claude Code, Claude Desktop, Codex, Cursor, OpenCode,
 and clients that can use the printed MCP endpoint or `.agents` admin skills.
 Claude Desktop setup registers a local `ktx mcp stdio` server in Claude
-Desktop's config and generates `.ktx/agents/claude/ktx-plugin.zip` with the
-analytics skill. Restart Claude Desktop after setup; no manual plugin install
-step is required.
+Desktop's config and generates `.ktx/agents/claude/ktx-skills.zip` with one or
+two skills, depending on the setup mode. Restart Claude Desktop after setup,
+then upload that ZIP from **Customize** > **Skills** > **+** > **Create
+skill** > **Upload a skill**.
 
 The release artifact manifest contains the public npm tarball and the bundled
 `kaelio-ktx` runtime wheel. The `python/ktx-sl` and `python/ktx-daemon`
