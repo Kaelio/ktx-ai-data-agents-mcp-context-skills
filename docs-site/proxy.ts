@@ -6,7 +6,7 @@ const markdownMimeTypes = new Set([
   "application/markdown",
 ]);
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!isMarkdownPreferred(request.headers.get("accept"))) {
     return NextResponse.next();
   }

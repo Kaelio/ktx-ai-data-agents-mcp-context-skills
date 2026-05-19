@@ -28,8 +28,8 @@ export const metadata: Metadata = {
   description:
     "Open-source context infrastructure that makes agentic analytics reliable.",
   icons: {
-    icon: "/brand/ktx-mascot.svg",
-    shortcut: "/brand/ktx-mascot.svg",
+    icon: "/ktx/brand/ktx-mascot.svg",
+    shortcut: "/ktx/brand/ktx-mascot.svg",
   },
 };
 

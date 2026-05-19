@@ -112,6 +112,18 @@ test("/ktx/docs redirects to the docs introduction", async () => {
   );
 });
 
+test("/ redirects into the /ktx docs site", async () => {
+  const response = await fetch(`${docsSiteUrl}/`, {
+    redirect: "manual",
+  });
+
+  assert.equal(response.status, 307);
+  assert.equal(
+    response.headers.get("location"),
+    `${docsBasePath}/docs/getting-started/introduction`,
+  );
+});
+
 test("/ktx/api/search returns docs search results", async () => {
   const response = await fetch(
     `${docsSiteUrl}${docsBasePath}/api/search?query=setup`,

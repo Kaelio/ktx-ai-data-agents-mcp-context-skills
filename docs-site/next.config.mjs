@@ -16,6 +16,12 @@ const config = {
   async redirects() {
     return [
       {
+        source: "/",
+        destination: "/ktx/docs/getting-started/introduction",
+        permanent: false,
+        basePath: false,
+      },
+      {
         source: "/docs",
         destination: "/docs/getting-started/introduction",
         permanent: false,

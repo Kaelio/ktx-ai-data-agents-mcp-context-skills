@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,23 @@ test("root provider uses the base-path-aware search API", async () => {
 
   assert.match(layout, /search=\{\{/);
   assert.match(layout, /api:\s*"\/ktx\/api\/search"/);
+});
+
+test("metadata icons include the docs base path", async () => {
+  const layout = await readDocsFile("app/layout.tsx");
+
+  assert.match(layout, /icon:\s*"\/ktx\/brand\/ktx-mascot\.svg"/);
+  assert.match(layout, /shortcut:\s*"\/ktx\/brand\/ktx-mascot\.svg"/);
+  assert.doesNotMatch(layout, /:\s*"\/brand\/ktx-mascot\.svg"/);
+});
+
+test("markdown negotiation uses the Next proxy convention", async () => {
+  await assert.doesNotReject(access(join(docsSiteDir, "proxy.ts")));
+  await assert.rejects(access(join(docsSiteDir, "middleware.ts")));
+
+  const proxy = await readDocsFile("proxy.ts");
+  assert.match(proxy, /export function proxy/);
+  assert.doesNotMatch(proxy, /export function middleware/);
 });
 
 test("site background stacking does not target every body child", async () => {
