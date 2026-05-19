@@ -12,6 +12,16 @@ const execFileAsync = promisify(execFile);
 export const runtimeFeatureSchema = z.enum(['core', 'local-embeddings']);
 export type KtxRuntimeFeature = z.infer<typeof runtimeFeatureSchema>;
 
+/**
+ * Python version the managed runtime venv must be built with. KTX's bundled
+ * wheels declare `requires-python = ">=3.13"`; without an explicit `--python`
+ * flag, `uv venv` may pick a too-old system Python (Ubuntu 24.04 ships 3.12)
+ * and the subsequent `uv pip install` fails late with a confusing "package
+ * requires Python >=3.13" error. Pinning here pushes uv to auto-download the
+ * right interpreter via its python-management feature.
+ */
+export const MANAGED_RUNTIME_PYTHON_VERSION = '3.13';
+
 const runtimeAssetManifestSchema = z.object({
   schemaVersion: z.literal(1),
   distributionName: z.literal('kaelio-ktx'),
@@ -334,7 +344,7 @@ export async function installManagedPythonRuntime(
     exec,
     logPath: layout.installLogPath,
     command: 'uv',
-    args: ['venv', layout.venvDir],
+    args: ['venv', layout.venvDir, '--python', MANAGED_RUNTIME_PYTHON_VERSION],
     env: uvEnv,
   });
   const wheelSpec = features.includes('local-embeddings') ? `${asset.wheelPath}[local-embeddings]` : asset.wheelPath;

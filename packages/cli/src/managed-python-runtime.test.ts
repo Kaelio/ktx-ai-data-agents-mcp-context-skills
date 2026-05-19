@@ -222,7 +222,7 @@ describe('installManagedPythonRuntime', () => {
     expect(result.status).toBe('installed');
     expect(commands).toEqual([
       { command: 'uv', args: ['--version'] },
-      { command: 'uv', args: ['venv', result.layout.venvDir] },
+      { command: 'uv', args: ['venv', result.layout.venvDir, '--python', '3.13'] },
       {
         command: 'uv',
         args: ['pip', 'install', '--python', result.layout.pythonPath, result.asset.wheelPath],

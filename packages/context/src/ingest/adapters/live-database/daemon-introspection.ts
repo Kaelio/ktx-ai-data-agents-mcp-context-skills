@@ -243,11 +243,29 @@ export function createDaemonLiveDatabaseIntrospection(
       const raw = requestJson
         ? await requestJson('/database/introspect', payload)
         : await runJson('database-introspect', payload);
-      return mapDaemonSnapshot(raw, {
+      const snapshot = mapDaemonSnapshot(raw, {
         connectionId,
         extractedAt: now().toISOString(),
         schemas,
       });
+      return applyEnabledTablesFilter(snapshot, connection);
     },
+  };
+}
+
+function applyEnabledTablesFilter(
+  snapshot: KtxSchemaSnapshot,
+  connection: KtxProjectConnectionConfig,
+): KtxSchemaSnapshot {
+  const allowlist = (connection as { enabled_tables?: unknown }).enabled_tables;
+  if (!Array.isArray(allowlist) || allowlist.length === 0) return snapshot;
+  const allowed = new Set(allowlist.filter((value): value is string => typeof value === 'string'));
+  if (allowed.size === 0) return snapshot;
+  return {
+    ...snapshot,
+    tables: snapshot.tables.filter((table) => {
+      const qualified = table.db ? `${table.db}.${table.name}` : table.name;
+      return allowed.has(qualified);
+    }),
   };
 }
