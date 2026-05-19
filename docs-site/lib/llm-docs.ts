@@ -53,6 +53,7 @@ KTX provides semantic-layer files, warehouse scans, wiki pages, provenance, and 
 ## Agent Entry Points
 
 ${link("/docs/ai-resources/agent-quickstart", "Agent Quickstart", "Task-first route for coding assistants using KTX")}
+${link("/docs/agents-setup", "Agent Setup", "Copy-pasteable prompt for agents installing and configuring KTX")}
 ${link("/docs/ai-resources/markdown-access", "Markdown Access", "Fetch KTX docs as llms.txt, llms-full.txt, or per-page Markdown")}
 ${link("/docs/ai-resources/agent-instructions", "Agent Instructions", "Suggested instructions for coding assistants that need to read and cite KTX docs")}
 

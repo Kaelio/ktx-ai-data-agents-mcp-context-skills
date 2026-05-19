@@ -105,6 +105,20 @@ progress under `.ktx/setup/` and resumes from the remaining work.
 > resuming setup, connecting an agent, checking status, or exploring a
 > pre-built demo project.
 
+## Run setup from an agent
+
+You can ask an agent such as Claude Code, Codex, Cursor, or OpenCode to install
+and configure KTX for you. The
+[agent setup Markdown prompt](/docs/agents-setup.md) tells the agent how to
+check prerequisites, ask only for credentials or connection choices, run
+`ktx setup`, verify connections, and report the result.
+
+Use a prompt like this from the project you want to configure:
+
+```text
+Follow instructions from https://docs.kaelio.com/ktx/docs/agents-setup.md to install and configure ktx
+```
+
 ## Verify
 
 When setup finishes, check readiness:
