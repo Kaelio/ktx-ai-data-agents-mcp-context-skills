@@ -105,7 +105,6 @@ const WAREHOUSE_W = 304;
 const WAREHOUSE_H = 92;
 const WAREHOUSE_X = (CANVAS_W - WAREHOUSE_W) / 2;
 const WAREHOUSE_Y = LANES_BOTTOM_Y + 56;
-const CANVAS_H = WAREHOUSE_Y + WAREHOUSE_H + 32;
 
 const MANUAL_STROKE = "#94a3b8";
 const KTX_STROKE = "#0891b2";
@@ -869,5 +868,3 @@ export function SemanticLayerFlow() {
     </section>
   );
 }
-
-export default SemanticLayerFlow;
