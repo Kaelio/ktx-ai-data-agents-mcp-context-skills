@@ -17,6 +17,9 @@ describe('release workflow', () => {
     assert.match(workflow, /^  id-token: write$/m);
     assert.match(workflow, /fetch-depth: 0/);
     assert.match(workflow, /registry-url: "https:\/\/registry\.npmjs\.org"/);
+    assert.match(workflow, /Prepare first stable release floor/);
+    assert.match(workflow, /git tag v0\.0\.0 "\$\{root_commit\}"/);
+    assert.match(workflow, /KTX_STABLE_RELEASE_FLOOR_TAG=v0\.0\.0/);
     assert.match(workflow, /Prepare next prerelease branch/);
     assert.match(workflow, /git checkout -B "\$\{KTX_PRERELEASE_BRANCH\}"/);
     assert.match(workflow, /GITHUB_REF="refs\/heads\/\$\{KTX_PRERELEASE_BRANCH\}"/);

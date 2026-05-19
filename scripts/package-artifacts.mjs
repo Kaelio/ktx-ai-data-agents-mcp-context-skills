@@ -481,13 +481,15 @@ export function npmRuntimeSmokeSource() {
   return `
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
 
 async function run(command, args, options = {}) {
   process.stdout.write('$ ' + command + ' ' + args.join(' ') + '\\n');
@@ -547,6 +549,15 @@ function requireOutput(label, result, text) {
   assert.match(result.stdout, text, label + ' output did not match ' + text);
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[|\\\\{}()[\\]^$+*?.]/g, '\\\\$&');
+}
+
+async function installedPackageVersionPattern() {
+  const packageJson = JSON.parse(await readFile(require.resolve('@kaelio/ktx/package.json'), 'utf8'));
+  return new RegExp('^' + escapeRegExp(packageJson.name) + ' ' + escapeRegExp(packageJson.version) + '$', 'm');
+}
+
 function parseJsonResult(label, result) {
   requireSuccess(label, result);
   return JSON.parse(result.stdout);
@@ -592,7 +603,7 @@ try {
 
   const version = await run('pnpm', ['exec', 'ktx', '--version']);
   requireSuccess('ktx public package version', version);
-  requireOutput('ktx public package version', version, /@kaelio\\/ktx 0\\.1\\.0/);
+  requireOutput('ktx public package version', version, await installedPackageVersionPattern());
 
   const runtimeStatusBefore = parseJsonResultWithExitCode(
     'ktx dev runtime status missing',

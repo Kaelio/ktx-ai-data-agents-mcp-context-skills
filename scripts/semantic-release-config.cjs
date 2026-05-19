@@ -137,6 +137,7 @@ function createReleaseConfig(env = process.env) {
           },
         },
       ],
+      './scripts/semantic-release-version-policy.cjs',
       '@semantic-release/changelog',
       [
         '@semantic-release/exec',

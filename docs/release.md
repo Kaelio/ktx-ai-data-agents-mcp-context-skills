@@ -29,11 +29,18 @@ Before you publish, confirm these requirements:
   `.github/workflows/release.yml` workflow.
 - The workflow keeps `id-token: write` permission so npm can verify the
   GitHub Actions run through OpenID Connect.
-- The repository has a baseline semantic-release tag for the latest published
-  package version, such as `v0.1.0-rc.1`.
+- The repository has release metadata in `release-policy.json` for the current
+  public package line, such as `0.1.0-rc.1` or `0.1.0`.
 
-If no baseline tag exists, semantic-release treats the run as the first release
-and may choose a version that doesn't match the currently published package.
+If no stable baseline tag exists, semantic-release treats the stable run as the
+first release. KTX seeds that first stable release from the base version in
+`release-policy.json`, so `0.1.0-rc.6` promotes to `0.1.0` instead of
+semantic-release's default `1.0.0`.
+
+KTX blocks automatic major releases. A major version requires an intentional
+manual release path that updates release metadata and creates the intended
+version explicitly; don't rely on semantic-release commit analysis for major
+bumps.
 
 ## Dry-run a release
 

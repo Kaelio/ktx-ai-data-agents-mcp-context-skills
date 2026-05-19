@@ -35,6 +35,7 @@ describe('semantic-release config', () => {
       releaseExecOptions(config).prepareCmd,
       /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "latest"/,
     );
+    assert.ok(config.plugins.includes('./scripts/semantic-release-version-policy.cjs'));
   });
 
   it('rejects stable releases from non-main branches', () => {
@@ -50,5 +51,17 @@ describe('semantic-release config', () => {
       (plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].analyzeCommitsCmd,
     );
     assert.match(analyzeExec[1].analyzeCommitsCmd, /FORCE_RELEASE === 'true' \? 'patch' : ''/);
+  });
+
+  it('does not configure any commit type to create an automatic major release', () => {
+    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'stable', GITHUB_REF_NAME: 'main' });
+    const analyzer = config.plugins.find(
+      (plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/commit-analyzer',
+    );
+
+    assert.equal(
+      analyzer[1].releaseRules.some((rule) => rule.release === 'major'),
+      false,
+    );
   });
 });
