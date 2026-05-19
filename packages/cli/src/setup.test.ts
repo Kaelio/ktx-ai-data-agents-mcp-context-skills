@@ -517,7 +517,11 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     const output = testIo.stdout();
-    expect(output).toContain('Agent integration complete');
+    expect(output).toContain('Claude Code · Project scope');
+    expect(output).toContain(join(tempDir, '.mcp.json'));
+    expect(output).toContain('Requires MCP to be started.');
+    expect(output).toContain('Analytics skill installed.');
+    expect(output).not.toContain('Agent integration complete');
     expect(output).toContain('Finish KTX agent setup');
     expect(output).not.toContain('KTX project ready');
     expect(output).toContain('REQUIRED BEFORE USING AGENTS');
