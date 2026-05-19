@@ -53,7 +53,7 @@ Ask the user (grouped if your harness supports it; otherwise sequentially):
 3. **Embeddings backend.** Default: `sentence-transformers` (local, no API key, managed Python runtime). Offer `openai` only if the user has a key.
 4. **Database connections.** Ask how many to add, then loop. For each, collect:
    - Connection name (e.g. `warehouse`, `analytics`).
-   - Driver: one of `sqlite`, `postgres`, `mysql`, `clickhouse`, `sqlserver`, `bigquery`, `snowflake`.
+   - Driver: one of `sqlite`, `postgres`, `mysql`, `sqlserver`, `bigquery`, `snowflake`.
    - Connection URL/DSN (or service-account file for BigQuery). Accept `env:VAR_NAME` or `file:/abs/path` to avoid pasting raw secrets.
      - **Heads-up for the user**: even if they paste a literal URL, KTX will silently relocate it into `<project>/.ktx/secrets/<connection>-url` and rewrite `ktx.yaml` to `url: file:…` — this is correct, secure behavior and not a bug.
    - Schemas / datasets to include (postgres / sqlserver / snowflake / bigquery only).

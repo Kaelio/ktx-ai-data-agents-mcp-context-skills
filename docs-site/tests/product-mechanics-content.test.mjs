@@ -127,12 +127,11 @@ test("product mechanics component explains ingestion outputs", async () => {
   assert.doesNotMatch(component, /KTX works in two moments/);
   assert.doesNotMatch(component, /name: "Metabase and query history"/);
   assert.doesNotMatch(component, /name: "dbt, MetricFlow, LookML"/);
-  assert.doesNotMatch(component, /ClickHouse/);
   assert.doesNotMatch(component, /MySQL/);
   assert.doesNotMatch(component, /SQL Server/);
   assert.doesNotMatch(
     component,
-    /\/ktx\/brand\/(?:postgresql|snowflake|bigquery|clickhouse|mysql|sqlserver|sqlite|metabase|dbt|looker|notion)\.svg/,
+    /\/ktx\/brand\/(?:postgresql|snowflake|bigquery|mysql|sqlserver|sqlite|metabase|dbt|looker|notion)\.svg/,
   );
   assert.doesNotMatch(component, /<img/);
   assert.doesNotMatch(component, /w-\[calc\(100vw/);

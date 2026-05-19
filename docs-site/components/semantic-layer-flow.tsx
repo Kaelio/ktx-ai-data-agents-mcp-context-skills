@@ -23,13 +23,19 @@ type AgentNodeData = {
   subtitle: string;
 };
 
+type IssueNote = {
+  id: number;
+  label: string;
+};
+
 type ManualSqlNodeData = {
   variant: "manual";
   badge: string;
   title: string;
   caption: string;
   code: string;
-  notes: string[];
+  notes: IssueNote[];
+  lineIssues: Record<number, number[]>;
 };
 
 type SlQueryNodeData = {
@@ -168,12 +174,30 @@ LIMIT 1000;
 -- net_revenue and open_tickets are both inflated
 -- DATE_TRUNC syntax breaks on BigQuery`,
     notes: [
-      "Re-stitches a 4-way join on every question",
-      "Reinvents net_revenue and the high-value rule",
-      "Hides a chasm trap across three facts",
-      "Filters a LEFT JOIN target in WHERE",
-      "Hardcodes one warehouse's date functions",
+      { id: 1, label: "Re-stitches a 4-way join on every question" },
+      { id: 2, label: "Reinvents net_revenue and the high-value rule" },
+      { id: 3, label: "Hides a chasm trap across three facts" },
+      { id: 4, label: "Filters a LEFT JOIN target in WHERE" },
+      { id: 5, label: "Hardcodes one warehouse's date functions" },
     ],
+    lineIssues: {
+      5: [5],
+      6: [2, 3],
+      7: [3],
+      8: [1],
+      9: [1],
+      10: [1],
+      11: [1],
+      12: [1],
+      13: [1],
+      14: [1],
+      17: [2],
+      18: [4],
+      21: [5],
+      27: [3],
+      28: [3],
+      29: [5],
+    },
   },
   draggable: false,
   selectable: false,
@@ -340,7 +364,7 @@ const warehouse: WarehouseNode = {
   data: {
     variant: "warehouse",
     title: "Warehouse",
-    drivers: ["PostgreSQL", "Snowflake", "BigQuery", "ClickHouse"],
+    drivers: ["PostgreSQL", "Snowflake", "BigQuery"],
   },
   draggable: false,
   selectable: false,
@@ -640,7 +664,91 @@ function CodeBlock({
   );
 }
 
+function AnnotatedSqlBlock({
+  code,
+  lineIssues,
+  activeIssue,
+  onIssueEnter,
+  onIssueLeave,
+}: {
+  code: string;
+  lineIssues: Record<number, number[]>;
+  activeIssue: number | null;
+  onIssueEnter: (n: number) => void;
+  onIssueLeave: () => void;
+}) {
+  const lines = code.split("\n");
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-md border border-fd-border bg-[#fbfaf6] dark:bg-[#0c1417]">
+      <div className="flex flex-none items-center justify-between border-b border-fd-border bg-fd-muted/40 px-3 py-1.5">
+        <span
+          className="font-mono font-medium tracking-wide text-slate-600 dark:text-slate-300"
+          style={{ fontSize: "11px", lineHeight: "16px" }}
+        >
+          sql
+        </span>
+        <span
+          className="font-mono uppercase tracking-[0.08em] text-fd-muted-foreground"
+          style={{ fontSize: "10.5px", lineHeight: "16px" }}
+        >
+          agent-authored
+        </span>
+      </div>
+      <pre
+        className="m-0 flex-1 overflow-auto px-2 py-2 font-mono text-fd-foreground"
+        style={{ fontSize: "11.5px", lineHeight: "17.5px" }}
+      >
+        {lines.map((line, idx) => {
+          const issues = lineIssues[idx] ?? [];
+          const hasIssue = issues.length > 0;
+          const dim =
+            activeIssue !== null && !issues.includes(activeIssue);
+          const active =
+            activeIssue !== null && issues.includes(activeIssue);
+          const classes = [
+            "sl-sql-line",
+            hasIssue ? "is-issue" : "",
+            active ? "is-active" : "",
+            dim ? "is-dim" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <div key={idx} className={classes}>
+              <span className="sl-sql-gutter">
+                {issues.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`sl-issue-pill sl-issue-pill-sql ${
+                      activeIssue === n ? "is-active" : ""
+                    }`}
+                    onMouseEnter={() => onIssueEnter(n)}
+                    onMouseLeave={onIssueLeave}
+                    onFocus={() => onIssueEnter(n)}
+                    onBlur={onIssueLeave}
+                    aria-label={`Issue ${n}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </span>
+              <span className="sl-sql-content">
+                {line.length ? highlightSql(line) : " "}
+              </span>
+            </div>
+          );
+        })}
+      </pre>
+    </div>
+  );
+}
+
 function ManualSqlNodeView({ data }: NodeProps<ManualSqlNode>) {
+  const [activeIssue, setActiveIssue] = useState<number | null>(null);
+  const clearActive = useCallback(() => setActiveIssue(null), []);
+
   return (
     <div
       style={{ width: LANE_W, height: MANUAL_SQL_H }}
@@ -659,23 +767,42 @@ function ManualSqlNodeView({ data }: NodeProps<ManualSqlNode>) {
         </div>
       </div>
       <div className="mt-3 min-h-0 flex-1">
-        <CodeBlock language="sql" code={data.code} tone="manual" />
+        <AnnotatedSqlBlock
+          code={data.code}
+          lineIssues={data.lineIssues}
+          activeIssue={activeIssue}
+          onIssueEnter={setActiveIssue}
+          onIssueLeave={clearActive}
+        />
       </div>
       <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
-        {data.notes.map((note) => (
-          <li
-            key={note}
-            className="flex items-start gap-1.5 text-[11.5px] leading-4 text-fd-muted-foreground"
-          >
-            <span
-              className="mt-[3px] flex h-2.5 w-2.5 flex-none items-center justify-center text-[11px] font-semibold leading-none text-red-500"
-              aria-hidden="true"
+        {data.notes.map((note) => {
+          const dim = activeIssue !== null && activeIssue !== note.id;
+          const active = activeIssue === note.id;
+          return (
+            <li
+              key={note.id}
+              className={`flex items-start gap-2 text-[11.5px] leading-4 transition-opacity duration-150 ${
+                dim ? "opacity-35" : ""
+              } ${active ? "text-fd-foreground" : "text-fd-muted-foreground"}`}
+              onMouseEnter={() => setActiveIssue(note.id)}
+              onMouseLeave={clearActive}
+              onFocus={() => setActiveIssue(note.id)}
+              onBlur={clearActive}
+              tabIndex={0}
             >
-              ×
-            </span>
-            <span>{note}</span>
-          </li>
-        ))}
+              <span
+                className={`sl-issue-pill sl-issue-pill-note ${
+                  active ? "is-active" : ""
+                }`}
+                aria-hidden="true"
+              >
+                {note.id}
+              </span>
+              <span>{note.label}</span>
+            </li>
+          );
+        })}
       </ul>
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </div>
@@ -781,7 +908,7 @@ function CompiledSqlNodeView({ data }: NodeProps<CompiledSqlNode>) {
             className="flex items-start gap-1.5 text-[11.5px] leading-4 text-fd-muted-foreground"
           >
             <span
-              className="mt-1 h-1 w-1 flex-none rounded-full"
+              className="mt-[6px] h-1 w-1 flex-none rounded-full"
               style={{ background: KTX_STROKE }}
               aria-hidden="true"
             />
@@ -865,7 +992,8 @@ export function SemanticLayerFlow() {
 
   return (
     <section
-      className="not-prose my-10 w-full max-w-full min-w-0 space-y-4"
+      id="imperative-vs-declarative"
+      className="not-prose my-10 w-full max-w-full min-w-0 space-y-4 scroll-mt-24"
       aria-labelledby="sl-flow-title"
     >
       <article
@@ -873,9 +1001,18 @@ export function SemanticLayerFlow() {
         aria-label="From Semantic Query to executed SQL: contrast between agent-authored SQL and KTX-compiled SQL"
       >
         <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fd-primary">
+          <a
+            href="#imperative-vs-declarative"
+            className="group/anchor inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fd-primary transition-colors hover:text-fd-primary/80"
+          >
             Imperative vs declarative
-          </p>
+            <span
+              aria-hidden="true"
+              className="opacity-0 transition-opacity duration-150 group-hover/anchor:opacity-100 group-focus-visible/anchor:opacity-100"
+            >
+              #
+            </span>
+          </a>
           <h3
             id="sl-flow-title"
             className="mt-1 text-base font-semibold tracking-normal text-fd-foreground sm:text-lg"
@@ -1009,6 +1146,89 @@ export function SemanticLayerFlow() {
         }
         .sl-flow-canvas .syntax-punctuation {
           color: #64748b;
+        }
+        .sl-flow-canvas .sl-sql-line {
+          display: flex;
+          align-items: center;
+          min-height: 17.5px;
+          padding: 0 6px;
+          border-radius: 4px;
+          transition: background-color 140ms ease, opacity 140ms ease;
+        }
+        .sl-flow-canvas .sl-sql-line.is-issue {
+          background-color: rgba(239, 68, 68, 0.05);
+        }
+        .sl-flow-canvas .sl-sql-line.is-active {
+          background-color: rgba(239, 68, 68, 0.15);
+          box-shadow: inset 2px 0 0 0 #ef4444;
+        }
+        .sl-flow-canvas .sl-sql-line.is-dim {
+          opacity: 0.34;
+        }
+        .sl-flow-canvas .sl-sql-gutter {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          flex: none;
+          width: 38px;
+          padding-right: 8px;
+        }
+        .sl-flow-canvas .sl-sql-content {
+          flex: 1;
+          min-width: 0;
+          white-space: pre;
+        }
+        .sl-flow-canvas .sl-issue-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 9999px;
+          background: #ef4444;
+          color: white;
+          font-weight: 700;
+          line-height: 1;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          border: 0;
+          padding: 0;
+          cursor: pointer;
+          transition: transform 140ms ease, box-shadow 140ms ease,
+            background-color 140ms ease;
+        }
+        .sl-flow-canvas .sl-issue-pill:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35);
+        }
+        .sl-flow-canvas .sl-issue-pill.is-active {
+          background: #dc2626;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28);
+          transform: scale(1.08);
+        }
+        .sl-flow-canvas .sl-issue-pill-sql {
+          width: 14px;
+          height: 14px;
+          font-size: 9.5px;
+        }
+        .sl-flow-canvas .sl-issue-pill-note {
+          width: 16px;
+          height: 16px;
+          font-size: 10.5px;
+          flex: none;
+          margin-top: 0;
+        }
+        .dark .sl-flow-canvas .sl-sql-line.is-issue {
+          background-color: rgba(248, 113, 113, 0.08);
+        }
+        .dark .sl-flow-canvas .sl-sql-line.is-active {
+          background-color: rgba(248, 113, 113, 0.2);
+          box-shadow: inset 2px 0 0 0 #f87171;
+        }
+        .dark .sl-flow-canvas .sl-issue-pill {
+          background: #f87171;
+          color: #1b0408;
+        }
+        .dark .sl-flow-canvas .sl-issue-pill.is-active {
+          background: #fca5a5;
+          box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.32);
         }
         .dark .sl-flow-canvas .syntax-json-key {
           color: #5eead4;
