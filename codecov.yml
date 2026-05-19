@@ -1,0 +1,109 @@
+codecov:
+  branch: main
+  require_ci_to_pass: true
+  notify:
+    after_n_builds: 2
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        if_ci_failed: error
+      typescript:
+        target: auto
+        threshold: 1%
+        flags:
+          - typescript
+        if_ci_failed: error
+      python:
+        target: auto
+        threshold: 1%
+        flags:
+          - python
+        if_ci_failed: error
+    patch:
+      default:
+        target: 75%
+        threshold: 5%
+        if_ci_failed: error
+        informational: true
+
+comment:
+  layout: "header, diff, flags, components, files"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+flags:
+  typescript:
+    paths:
+      - packages/
+    carryforward: false
+  python:
+    paths:
+      - python/
+    carryforward: false
+
+component_management:
+  individual_components:
+    - component_id: pkg_cli
+      name: CLI
+      paths:
+        - packages/cli/src/**
+    - component_id: pkg_context
+      name: Context engine
+      paths:
+        - packages/context/src/**
+    - component_id: pkg_llm
+      name: LLM
+      paths:
+        - packages/llm/src/**
+    - component_id: connector_bigquery
+      name: BigQuery connector
+      paths:
+        - packages/connector-bigquery/src/**
+    - component_id: connector_clickhouse
+      name: ClickHouse connector
+      paths:
+        - packages/connector-clickhouse/src/**
+    - component_id: connector_mysql
+      name: MySQL connector
+      paths:
+        - packages/connector-mysql/src/**
+    - component_id: connector_postgres
+      name: Postgres connector
+      paths:
+        - packages/connector-postgres/src/**
+    - component_id: connector_snowflake
+      name: Snowflake connector
+      paths:
+        - packages/connector-snowflake/src/**
+    - component_id: connector_sqlite
+      name: SQLite connector
+      paths:
+        - packages/connector-sqlite/src/**
+    - component_id: connector_sqlserver
+      name: SQL Server connector
+      paths:
+        - packages/connector-sqlserver/src/**
+    - component_id: py_semantic_layer
+      name: Python semantic layer
+      paths:
+        - python/ktx-sl/semantic_layer/**
+    - component_id: py_daemon
+      name: Python daemon
+      paths:
+        - python/ktx-daemon/src/ktx_daemon/**
+
+ignore:
+  - docs-site/**
+  - examples/**
+  - packages/*/coverage/**
+  - packages/*/dist/**
+  - python/ktx-sl/demos/**

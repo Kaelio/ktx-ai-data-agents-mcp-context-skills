@@ -10,7 +10,8 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@kaelio/ktx"><img src="https://img.shields.io/npm/v/@kaelio/ktx?style=flat-square&color=f97316" alt="npm version" /></a>
-  <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/branch/main/graph/badge.svg" alt="Codecov" /></a>
+  <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/graph/badge.svg?branch=main" alt="Codecov" /></a>
+  <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-KTX-f97316?style=flat-square" alt="Documentation" /></a>
   <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
   <a href="https://github.com/Kaelio/ktx"><img src="https://img.shields.io/github/stars/Kaelio/ktx?style=flat-square" alt="GitHub stars" /></a>
 </p>

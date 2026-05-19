@@ -43,7 +43,7 @@
     "test": "node --test scripts/*.test.mjs && pnpm --filter './packages/*' run test",
     "test:coverage": "pnpm run test:coverage:ts && pnpm run test:coverage:py",
     "test:coverage:py": "uv run pytest --cov=python/ktx-sl/semantic_layer --cov=python/ktx-daemon/src/ktx_daemon --cov-report=xml:coverage/python.xml --cov-report=term",
-    "test:coverage:ts": "pnpm --filter './packages/*' run build && pnpm --filter './packages/*' run test --coverage --coverage.reporter=lcov --coverage.exclude='dist/**'",
+    "test:coverage:ts": "pnpm --filter './packages/*' run build && pnpm --filter './packages/*' run test --coverage --coverage.reporter=lcov --coverage.exclude='dist/**' && node scripts/normalize-lcov-paths.mjs packages/*/coverage/lcov.info",
     "test:slow": "pnpm --filter @ktx/context run test:slow && pnpm --filter @ktx/cli run test:slow",
     "type-check": "pnpm --filter './packages/*' run type-check"
   },
