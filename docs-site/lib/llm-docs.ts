@@ -1,7 +1,7 @@
 import { source } from "@/lib/source";
 import { readDocsPageMarkdown } from "@/lib/docs-markdown";
 
-const siteOrigin = process.env.KTX_DOCS_ORIGIN ?? "https://docs.kaelio.com/ktx";
+const siteOrigin = "https://docs.kaelio.com/ktx";
 
 export type LlmDocsPage = {
   title: string;
@@ -61,7 +61,6 @@ ${link("/docs/ai-resources/agent-instructions", "Agent Instructions", "Suggested
 
 ${link("/docs/getting-started/introduction", "Introduction", "What KTX is and who it is for")}
 ${link("/docs/getting-started/quickstart", "Quickstart", "Set up KTX and build your first context")}
-${link("/docs/getting-started/troubleshooting-linux", "Troubleshooting clean Linux install", "READ FIRST if installing from scratch on Linux/container — covers Python 3.13 prerequisite, IPv6 proxy gotcha, and a minimal working recipe")}
 ${link("/docs/guides/writing-context", "Writing Context", "Write semantic sources and wiki pages")}
 
 ## Machine-Readable Documentation

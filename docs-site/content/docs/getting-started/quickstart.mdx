@@ -296,7 +296,7 @@ surface.
 | Anthropic health check fails | API key, model id, or access is invalid | Fix `ANTHROPIC_API_KEY` or rerun setup with a different key or model |
 | Vertex AI health check fails | Vertex API, Claude access, project, location, or IAM permissions are missing | Check the project, location, Application Default Credentials, and Vertex AI permissions |
 | OpenAI embeddings fail | `OPENAI_API_KEY` is missing or invalid | Export the key or choose local sentence-transformers embeddings |
-| Local embeddings fail | Managed Python runtime cannot install or start | See [Troubleshooting clean Linux install](/docs/getting-started/troubleshooting-linux) — usually missing Python 3.13 or an IPv6 proxy env var |
+| Local embeddings fail | Managed Python runtime cannot install or start | Run `ktx dev runtime status`, then install the local embeddings runtime |
 | Database test fails | Credentials, network access, database, warehouse, or schema is wrong | Test the same values with the database's native client, then rerun setup |
 | Context is not built | Setup saved configuration but skipped or interrupted the build | Run `ktx setup` or `ktx ingest --all` |
 | Agent integration is incomplete | Setup skipped the agents step or installed a different target | Run `ktx setup --agents --target <target>` |
