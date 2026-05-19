@@ -49,7 +49,7 @@ to install and configure ktx
 ## Quick Start
 
 ```bash
-pnpm add --global @kaelio/ktx
+npm install -g @kaelio/ktx
 ktx setup
 ktx status
 ```
