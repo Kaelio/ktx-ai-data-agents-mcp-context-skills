@@ -1,0 +1,56 @@
+name: Bug report
+description: Report something that isn't working
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For questions or general discussion, use the
+        [KTX Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ).
+  - type: textarea
+    id: bug
+    attributes:
+      label: What's the bug?
+      description: What happened, and what did you expect?
+      placeholder: When I run `ktx ingest --all`, the Postgres connector fails with X. I expected Y.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How can we reproduce it?
+      description: Commands or steps. A minimal example helps.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: KTX version
+      placeholder: "0.x.x"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area?
+      options:
+        - CLI / setup
+        - Connector (Postgres)
+        - Connector (Snowflake)
+        - Connector (BigQuery)
+        - Connector (MySQL)
+        - Connector (SQL Server)
+        - Connector (SQLite)
+        - Python semantic layer
+        - Python daemon
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: OS, Node/Python versions, logs, screenshots. Redact secrets.
