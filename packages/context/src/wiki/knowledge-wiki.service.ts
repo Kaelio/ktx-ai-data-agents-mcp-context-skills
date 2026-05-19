@@ -296,22 +296,27 @@ export class KnowledgeWikiService {
       }
     }
 
+    const embeddingService = this.embeddingService;
     const changedPages = pages.filter((page) => {
       const previous = existing.get(page.pageKey);
-      return !previous || previous.searchText !== page.searchText || !previous.hasEmbedding;
+      return (
+        !previous ||
+        previous.searchText !== page.searchText ||
+        (embeddingService !== null && !previous.hasEmbedding)
+      );
     });
 
     let embeddings: (number[] | null)[] = changedPages.map(() => null);
     let embeddingsRecomputed = 0;
     let embeddingsFailed = 0;
 
-    if (this.embeddingService && changedPages.length > 0) {
+    if (embeddingService && changedPages.length > 0) {
       try {
         const changedTexts = changedPages.map((page) => page.searchText);
         const all: number[][] = [];
-        for (let i = 0; i < changedTexts.length; i += this.embeddingService.maxBatchSize) {
-          const batch = changedTexts.slice(i, i + this.embeddingService.maxBatchSize);
-          all.push(...(await this.embeddingService.computeEmbeddingsBulk(batch)));
+        for (let i = 0; i < changedTexts.length; i += embeddingService.maxBatchSize) {
+          const batch = changedTexts.slice(i, i + embeddingService.maxBatchSize);
+          all.push(...(await embeddingService.computeEmbeddingsBulk(batch)));
         }
         embeddings = all;
         embeddingsRecomputed = all.length;

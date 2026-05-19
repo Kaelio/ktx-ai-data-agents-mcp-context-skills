@@ -83,6 +83,44 @@ describe('reindexLocalIndexes', () => {
     expect(summary.embeddingsAvailable).toBe(true);
   });
 
+  it('does not report unchanged lexical-only rows as updated on repeated runs', async () => {
+    const project = await createProject(tempDir);
+    await writeFile(
+      join(project.projectDir, 'wiki/global/revenue.md'),
+      '---\nsummary: Revenue\nusage_mode: auto\n---\n\nPaid orders.\n',
+      'utf-8',
+    );
+    await mkdir(join(project.projectDir, 'semantic-layer/warehouse'), { recursive: true });
+    await writeFile(
+      join(project.projectDir, 'semantic-layer/warehouse/orders.yaml'),
+      'name: orders\ntable: public.orders\ngrain: [id]\ncolumns:\n  - name: id\n    type: number\njoins: []\nmeasures: []\n',
+      'utf-8',
+    );
+
+    const first = await reindexLocalIndexes(project, { force: false, embeddingService: null });
+    expect(first.totals).toMatchObject({
+      scanned: 2,
+      updated: 2,
+      deleted: 0,
+      embeddingsRecomputed: 0,
+      embeddingsFailed: 0,
+    });
+
+    const second = await reindexLocalIndexes(project, { force: false, embeddingService: null });
+
+    expect(second.totals).toMatchObject({
+      scanned: 2,
+      updated: 0,
+      deleted: 0,
+      embeddingsRecomputed: 0,
+      embeddingsFailed: 0,
+    });
+    expect(second.scopes.map((scope) => [scope.label, scope.updated])).toEqual([
+      ['global', 0],
+      ['warehouse', 0],
+    ]);
+  });
+
   it('force clears stale rows before rebuilding each discovered scope', async () => {
     const project = await createProject(tempDir);
     const wikiIndex = new SqliteKnowledgeIndex({ dbPath: join(project.projectDir, '.ktx/db.sqlite') });

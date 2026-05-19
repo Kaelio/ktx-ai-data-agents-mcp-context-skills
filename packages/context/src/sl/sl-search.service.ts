@@ -109,10 +109,15 @@ export class SlSearchService {
 
     const searchTexts = sources.map((s) => this.buildSearchText(s));
 
+    const embeddingService = this.embeddingService;
     const changedIndices: number[] = [];
     for (let i = 0; i < sources.length; i += 1) {
       const previous = existing.get(sources[i]!.name);
-      if (!previous || previous.searchText !== searchTexts[i] || !previous.hasEmbedding) {
+      if (
+        !previous ||
+        previous.searchText !== searchTexts[i] ||
+        (embeddingService !== null && !previous.hasEmbedding)
+      ) {
         changedIndices.push(i);
       }
     }
@@ -121,13 +126,13 @@ export class SlSearchService {
     let embeddingsRecomputed = 0;
     let embeddingsFailed = 0;
 
-    if (this.embeddingService && changedIndices.length > 0) {
+    if (embeddingService && changedIndices.length > 0) {
       try {
         const changedTexts = changedIndices.map((index) => searchTexts[index]!);
         const allEmbeddings: number[][] = [];
-        for (let i = 0; i < changedTexts.length; i += this.embeddingService.maxBatchSize) {
-          const batch = changedTexts.slice(i, i + this.embeddingService.maxBatchSize);
-          allEmbeddings.push(...(await this.embeddingService.computeEmbeddingsBulk(batch)));
+        for (let i = 0; i < changedTexts.length; i += embeddingService.maxBatchSize) {
+          const batch = changedTexts.slice(i, i + embeddingService.maxBatchSize);
+          allEmbeddings.push(...(await embeddingService.computeEmbeddingsBulk(batch)));
         }
         changedEmbeddings = allEmbeddings;
         embeddingsRecomputed = allEmbeddings.length;

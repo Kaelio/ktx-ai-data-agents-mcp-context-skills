@@ -98,6 +98,37 @@ describe('KnowledgeWikiService.syncIndex result stats', () => {
       expect.objectContaining({ pageKey: 'revenue', embedding: null }),
     );
   });
+
+  it('does not update unchanged lexical-only wiki rows on repeated sync', async () => {
+    const { pagesRepository, configService, gitService, logger } = makeService();
+    const service = new KnowledgeWikiService(
+      configService as any,
+      null,
+      pagesRepository as any,
+      gitService as any,
+      logger as any,
+    );
+    configService.listFiles.mockResolvedValue({ files: ['wiki/global/revenue.md'] });
+    configService.readFile.mockResolvedValue({
+      content: '---\nsummary: Revenue\nusage_mode: auto\n---\n\nPaid orders.\n',
+    });
+    pagesRepository.getExistingSearchTexts.mockResolvedValue(
+      new Map([
+        ['revenue', { searchText: 'revenue\nRevenue\nPaid orders.', hasEmbedding: false }],
+      ]),
+    );
+    pagesRepository.deleteStale.mockResolvedValue(0);
+
+    await expect(service.syncIndex('GLOBAL', null)).resolves.toEqual({
+      scanned: 1,
+      updated: 0,
+      deleted: 0,
+      embeddingsRecomputed: 0,
+      embeddingsFailed: 0,
+    });
+    expect(pagesRepository.upsertPage).not.toHaveBeenCalled();
+    expect(pagesRepository.deleteStale).toHaveBeenCalledWith('GLOBAL', null, ['revenue']);
+  });
 });
 
 describe('KnowledgeWikiService.forWorktree isolation', () => {
