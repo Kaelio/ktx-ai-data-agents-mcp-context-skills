@@ -1,12 +1,15 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import {
   Background,
   BackgroundVariant,
+  Controls,
   Handle,
   MarkerType,
   type Node,
   type NodeProps,
+  type OnInit,
   Position,
   ReactFlow,
 } from "@xyflow/react";
@@ -108,6 +111,7 @@ const WAREHOUSE_Y = LANES_BOTTOM_Y + 56;
 
 const MANUAL_STROKE = "#94a3b8";
 const KTX_STROKE = "#0891b2";
+const FIT_VIEW_OPTIONS = { padding: 0.05 };
 
 const agent: AgentNode = {
   id: "agent",
@@ -363,7 +367,7 @@ const edges = [
     id: "agent-manual",
     source: "agent",
     target: "manual-sql",
-    type: "smoothstep" as const,
+    type: "default" as const,
     label: "writes raw SQL",
     labelBgPadding: [6, 3] as [number, number],
     labelBgBorderRadius: 4,
@@ -388,7 +392,8 @@ const edges = [
     id: "manual-warehouse",
     source: "manual-sql",
     target: "warehouse",
-    type: "smoothstep" as const,
+    targetHandle: "warehouse-manual",
+    type: "default" as const,
     style: {
       stroke: MANUAL_STROKE,
       strokeWidth: 1.5,
@@ -400,7 +405,7 @@ const edges = [
     id: "agent-slquery",
     source: "agent",
     target: "sl-query",
-    type: "smoothstep" as const,
+    type: "default" as const,
     label: "sends Semantic Query",
     labelBgPadding: [6, 3] as [number, number],
     labelBgBorderRadius: 4,
@@ -437,11 +442,14 @@ const edges = [
     id: "compiled-warehouse",
     source: "compiled-sql",
     target: "warehouse",
-    type: "smoothstep" as const,
+    targetHandle: "warehouse-compiled",
+    type: "straight" as const,
     style: { stroke: KTX_STROKE, strokeWidth: 1.75 },
     markerEnd: arrowMarker(KTX_STROKE),
   },
 ];
+
+type FlowEdge = (typeof edges)[number];
 
 function AgentNodeView({ data }: NodeProps<AgentNode>) {
   return (
@@ -507,6 +515,88 @@ function LaneBadge({
   );
 }
 
+const JSON_TOKEN_PATTERN =
+  /"(?:\\.|[^"\\])*"|-?\b\d+(?:\.\d+)?\b|\b(?:true|false|null)\b|[{}[\],:]/g;
+const SQL_TOKEN_PATTERN =
+  /--[^\n]*|'(?:''|[^'])*'|\b\d+(?:\.\d+)?\b|\b(?:select|from|join|left|right|inner|outer|on|where|group|by|order|limit|as|sum|count|coalesce|date_trunc|case|when|then|else|end|and|or|is|not|null|false|true|with|having|over|partition)\b|[(),.;=*<>+-]/gi;
+const SQL_FUNCTIONS = new Set(["sum", "count", "coalesce", "date_trunc"]);
+
+function highlightJson(code: string) {
+  const parts = [];
+  let lastIndex = 0;
+  let tokenIndex = 0;
+
+  for (const match of code.matchAll(JSON_TOKEN_PATTERN)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+    if (index > lastIndex) parts.push(code.slice(lastIndex, index));
+
+    const nextText = code.slice(index + token.length);
+    const className = token.startsWith('"')
+      ? /^\s*:/.test(nextText)
+        ? "syntax-json-key"
+        : "syntax-string"
+      : /^-?\d/.test(token)
+        ? "syntax-number"
+        : /^(true|false|null)$/.test(token)
+          ? "syntax-constant"
+          : "syntax-punctuation";
+
+    parts.push(
+      <span key={`json-${tokenIndex}`} className={className}>
+        {token}
+      </span>,
+    );
+    lastIndex = index + token.length;
+    tokenIndex += 1;
+  }
+
+  if (lastIndex < code.length) parts.push(code.slice(lastIndex));
+  return parts;
+}
+
+function highlightSql(code: string) {
+  const parts = [];
+  let lastIndex = 0;
+  let tokenIndex = 0;
+
+  for (const match of code.matchAll(SQL_TOKEN_PATTERN)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+    if (index > lastIndex) parts.push(code.slice(lastIndex, index));
+
+    const lowerToken = token.toLowerCase();
+    const className = token.startsWith("--")
+      ? "syntax-comment"
+      : token.startsWith("'")
+        ? "syntax-string"
+        : /^\d/.test(token)
+          ? "syntax-number"
+          : SQL_FUNCTIONS.has(lowerToken)
+            ? "syntax-function"
+            : /^[a-z_]+$/i.test(token)
+              ? "syntax-keyword"
+              : "syntax-punctuation";
+
+    parts.push(
+      <span key={`sql-${tokenIndex}`} className={className}>
+        {token}
+      </span>,
+    );
+    lastIndex = index + token.length;
+    tokenIndex += 1;
+  }
+
+  if (lastIndex < code.length) parts.push(code.slice(lastIndex));
+  return parts;
+}
+
+function highlightCode(language: string, code: string) {
+  if (language === "json") return highlightJson(code);
+  if (language === "sql") return highlightSql(code);
+  return code;
+}
+
 function CodeBlock({
   language,
   code,
@@ -522,6 +612,8 @@ function CodeBlock({
       : tone === "slQuery"
         ? "text-fd-primary"
         : "text-fd-primary/90";
+  const highlightedCode = highlightCode(language, code);
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-md border border-fd-border bg-[#fbfaf6] dark:bg-[#0c1417]">
       <div className="flex flex-none items-center justify-between border-b border-fd-border bg-fd-muted/40 px-3 py-1.5">
@@ -542,7 +634,7 @@ function CodeBlock({
         className="m-0 flex-1 overflow-auto px-3 py-2 font-mono text-fd-foreground"
         style={{ fontSize: "11.5px", lineHeight: "17.5px" }}
       >
-        {code}
+        {highlightedCode}
       </pre>
     </div>
   );
@@ -576,10 +668,11 @@ function ManualSqlNodeView({ data }: NodeProps<ManualSqlNode>) {
             className="flex items-start gap-1.5 text-[11.5px] leading-4 text-fd-muted-foreground"
           >
             <span
-              className="mt-1 h-1 w-1 flex-none rounded-full"
-              style={{ background: MANUAL_STROKE }}
+              className="mt-[3px] flex h-2.5 w-2.5 flex-none items-center justify-center text-[11px] font-semibold leading-none text-red-500"
               aria-hidden="true"
-            />
+            >
+              ×
+            </span>
             <span>{note}</span>
           </li>
         ))}
@@ -707,7 +800,20 @@ function WarehouseNodeView({ data }: NodeProps<WarehouseNode>) {
       style={{ width: WAREHOUSE_W, height: WAREHOUSE_H }}
       className="flex items-center gap-3 rounded-md border border-fd-border bg-fd-card px-4 py-3 shadow-sm"
     >
-      <Handle type="target" position={Position.Top} className="!opacity-0" />
+      <Handle
+        id="warehouse-manual"
+        type="target"
+        position={Position.Top}
+        className="!opacity-0"
+        style={{ left: "42%" }}
+      />
+      <Handle
+        id="warehouse-compiled"
+        type="target"
+        position={Position.Top}
+        className="!opacity-0"
+        style={{ left: "58%" }}
+      />
       <div className="flex h-10 w-10 flex-none items-center justify-center rounded-md bg-fd-primary/12 text-fd-primary">
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -748,6 +854,15 @@ const nodeTypes = {
 };
 
 export function SemanticLayerFlow() {
+  const [minZoom, setMinZoom] = useState(0.2);
+  const handleFlowInit = useCallback<OnInit<FlowNode, FlowEdge>>((instance) => {
+    requestAnimationFrame(() => {
+      void instance.fitView(FIT_VIEW_OPTIONS).then(() => {
+        setMinZoom(instance.getZoom());
+      });
+    });
+  }, []);
+
   return (
     <section
       className="not-prose my-10 w-full max-w-full min-w-0 space-y-4"
@@ -777,33 +892,36 @@ export function SemanticLayerFlow() {
         </div>
 
         <div
-          className="sl-flow-canvas bg-fd-background"
+          className="sl-flow-canvas relative bg-fd-background"
           style={{
             height: "min(2340px, 290vw)",
             minHeight: 1780,
           }}
         >
+          <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-fd-border/50 bg-white/30 px-1.5 py-px font-mono text-[9.5px] font-medium uppercase tracking-[0.06em] text-fd-muted-foreground shadow-sm backdrop-blur-sm dark:bg-white/10">
+            Pan / zoom
+          </div>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.05 }}
+            onInit={handleFlowInit}
             nodesDraggable={false}
             nodesConnectable={false}
             nodesFocusable={false}
             edgesFocusable={false}
             elementsSelectable={false}
-            panOnDrag={false}
+            panOnDrag
             panOnScroll={false}
-            zoomOnScroll={false}
-            zoomOnPinch={false}
-            zoomOnDoubleClick={false}
-            preventScrolling={false}
-            minZoom={0.2}
+            zoomOnScroll
+            zoomOnPinch
+            zoomOnDoubleClick
+            preventScrolling
+            minZoom={minZoom}
             maxZoom={1.5}
             proOptions={{ hideAttribution: true }}
           >
+            <Controls position="bottom-right" showInteractive={false} />
             <Background
               variant={BackgroundVariant.Dots}
               gap={18}
@@ -839,7 +957,10 @@ export function SemanticLayerFlow() {
           box-shadow: none;
         }
         .sl-flow-canvas .react-flow__pane {
-          cursor: default;
+          cursor: grab;
+        }
+        .sl-flow-canvas .react-flow__pane:active {
+          cursor: grabbing;
         }
         .sl-flow-canvas .react-flow__handle {
           width: 1px;
@@ -863,6 +984,53 @@ export function SemanticLayerFlow() {
         .sl-flow-canvas .react-flow__node pre span {
           font-size: inherit !important;
           line-height: inherit !important;
+        }
+        .sl-flow-canvas .syntax-json-key {
+          color: #0f766e;
+        }
+        .sl-flow-canvas .syntax-keyword {
+          color: #0e7490;
+          font-weight: 650;
+        }
+        .sl-flow-canvas .syntax-function {
+          color: #7c3aed;
+          font-weight: 650;
+        }
+        .sl-flow-canvas .syntax-string {
+          color: #b45309;
+        }
+        .sl-flow-canvas .syntax-number,
+        .sl-flow-canvas .syntax-constant {
+          color: #be123c;
+        }
+        .sl-flow-canvas .syntax-comment {
+          color: #64748b;
+          font-style: italic;
+        }
+        .sl-flow-canvas .syntax-punctuation {
+          color: #64748b;
+        }
+        .dark .sl-flow-canvas .syntax-json-key {
+          color: #5eead4;
+        }
+        .dark .sl-flow-canvas .syntax-keyword {
+          color: #67e8f9;
+        }
+        .dark .sl-flow-canvas .syntax-function {
+          color: #c4b5fd;
+        }
+        .dark .sl-flow-canvas .syntax-string {
+          color: #fbbf24;
+        }
+        .dark .sl-flow-canvas .syntax-number,
+        .dark .sl-flow-canvas .syntax-constant {
+          color: #fb7185;
+        }
+        .dark .sl-flow-canvas .syntax-comment {
+          color: #94a3b8;
+        }
+        .dark .sl-flow-canvas .syntax-punctuation {
+          color: #94a3b8;
         }
       `}</style>
     </section>
