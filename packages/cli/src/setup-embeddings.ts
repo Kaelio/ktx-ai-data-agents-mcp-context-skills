@@ -94,7 +94,6 @@ async function hasCompletedEmbeddings(projectDir: string, config: KtxProjectConf
   return (
     (await readKtxSetupState(projectDir)).completed_steps.includes('embeddings') &&
     config.ingest.embeddings.backend !== 'none' &&
-    config.ingest.embeddings.backend !== 'deterministic' &&
     typeof config.ingest.embeddings.model === 'string' &&
     config.ingest.embeddings.model.length > 0 &&
     config.ingest.embeddings.dimensions > 0

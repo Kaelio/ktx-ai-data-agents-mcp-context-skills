@@ -184,26 +184,13 @@ export function resolveLocalKtxEmbeddingConfig(
     }
     return {
       backend: config.backend,
-      model: config.model ?? 'deterministic',
+      model: config.model ?? 'text-embedding-3-small',
       dimensions: config.dimensions,
       openai,
       batchSize: config.batchSize,
     };
   }
-  return {
-    backend: config.backend,
-    model: config.model ?? 'deterministic',
-    dimensions: config.dimensions,
-    ...(config.sentenceTransformers
-      ? {
-          sentenceTransformers: {
-            baseURL: config.sentenceTransformers.base_url,
-            pathPrefix: config.sentenceTransformers.pathPrefix,
-          },
-        }
-      : {}),
-    batchSize: config.batchSize,
-  };
+  throw new Error(`Unsupported KTX embedding backend: ${String((config as { backend?: string }).backend)}`);
 }
 
 export function createLocalKtxEmbeddingProviderFromConfig(

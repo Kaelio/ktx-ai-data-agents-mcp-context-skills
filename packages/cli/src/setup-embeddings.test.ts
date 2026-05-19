@@ -324,7 +324,7 @@ describe('setup embeddings step', () => {
     expect(result.status).toBe('failed');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
-    expect(config.ingest.embeddings.backend).toBe('deterministic');
+    expect(config.ingest.embeddings.backend).toBe('none');
     expect(io.stderr()).toContain('Local embedding health check failed: 401 invalid api key [redacted]');
     expect(io.stderr()).toContain('Prepare the runtime with: ktx dev runtime start --feature local-embeddings');
     expect(io.stderr()).not.toContain('skip for now');
@@ -436,7 +436,7 @@ describe('setup embeddings step', () => {
     expect(result.status).toBe('skipped');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
-    expect(config.ingest.embeddings.backend).toBe('deterministic');
+    expect(config.ingest.embeddings.backend).toBe('none');
   });
 
   it('returns back without writing config when the local health check fails and Back is selected', async () => {
@@ -460,7 +460,7 @@ describe('setup embeddings step', () => {
 
     expect(result.status).toBe('back');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.ingest.embeddings.backend).toBe('deterministic');
+    expect(config.ingest.embeddings.backend).toBe('none');
   });
 
   it('preserves already completed embeddings setup when no embedding args request changes', async () => {

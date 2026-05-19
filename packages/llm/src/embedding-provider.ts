@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import OpenAI from 'openai';
@@ -32,14 +31,6 @@ export interface KtxEmbeddingProviderDeps {
 }
 
 const DEFAULT_BATCH_SIZE = 100;
-
-function deterministicVector(text: string, dimensions: number): number[] {
-  const digest = createHash('sha256').update(text).digest();
-  return Array.from({ length: dimensions }, (_, index) => {
-    const byte = digest[index % digest.length];
-    return Number(((byte / 255) * 2 - 1).toFixed(6));
-  });
-}
 
 function assertNonEmptyText(text: string): void {
   if (!text.trim()) {
@@ -182,24 +173,6 @@ function runSentenceTransformersProcessJson(options: {
     }
     throw new Error(`ktx-daemon ${subcommand} failed: ${errors.join('; ')}`);
   };
-}
-
-class DeterministicEmbeddingProvider implements KtxEmbeddingProvider {
-  readonly maxBatchSize: number;
-
-  constructor(readonly dimensions: number, batchSize = DEFAULT_BATCH_SIZE) {
-    this.maxBatchSize = batchSize;
-  }
-
-  async embed(text: string): Promise<number[]> {
-    assertNonEmptyText(text);
-    return deterministicVector(text, this.dimensions);
-  }
-
-  async embedMany(texts: string[]): Promise<number[][]> {
-    assertBatchSize(texts, this.maxBatchSize);
-    return texts.map((text) => deterministicVector(text, this.dimensions));
-  }
 }
 
 class OpenAIEmbeddingProvider implements KtxEmbeddingProvider {
@@ -367,8 +340,6 @@ export function createKtxEmbeddingProvider(
   deps: KtxEmbeddingProviderDeps = {},
 ): KtxEmbeddingProvider {
   switch (config.backend) {
-    case 'deterministic':
-      return new DeterministicEmbeddingProvider(config.dimensions, config.batchSize);
     case 'openai':
       return new OpenAIEmbeddingProvider(config, deps);
     case 'sentence-transformers':

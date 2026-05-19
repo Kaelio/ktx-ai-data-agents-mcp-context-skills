@@ -93,7 +93,7 @@ async function writeSqliteScanConfig(projectDir: string, dbPath: string, enrich 
             '  enrichment:',
             '    mode: deterministic',
             '    embeddings:',
-            '      backend: deterministic',
+            '      backend: none',
             '      dimensions: 6',
           ]
         : []),
@@ -166,7 +166,7 @@ describe('standalone built ktx CLI smoke', () => {
   });
 
   it('runs status setup checks through the built binary', async () => {
-    const result = await runBuiltCli(['status', '--verbose', '--no-input']);
+    const result = await runBuiltCli(['status', '--verbose', '--no-input'], { cwd: tempDir });
 
     expect(result.stdout).toMatch(/KTX status/);
     if (result.stdout.includes('No project here yet.')) {

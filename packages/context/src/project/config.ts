@@ -4,7 +4,7 @@ import * as z from 'zod';
 import { connectionConfigSchema } from './driver-schemas.js';
 
 const KTX_LLM_BACKENDS = ['none', 'anthropic', 'vertex', 'gateway', 'claude-code'] as const;
-const KTX_EMBEDDING_BACKENDS = ['none', 'deterministic', 'openai', 'sentence-transformers'] as const;
+const KTX_EMBEDDING_BACKENDS = ['none', 'openai', 'sentence-transformers'] as const;
 const KTX_PROMPT_CACHE_TTLS = ['5m', '1h'] as const;
 const KTX_ENRICHMENT_MODES = ['none', 'deterministic', 'llm'] as const;
 const KTX_WORK_UNIT_FAILURE_MODES = ['abort', 'continue'] as const;
@@ -80,9 +80,9 @@ const embeddingSchema = z
   .strictObject({
     backend: z
       .enum(KTX_EMBEDDING_BACKENDS)
-      .default('deterministic')
-      .describe('Embedding backend. "deterministic" is a built-in hash-based vector for offline use; "openai" and "sentence-transformers" call out to those providers; "none" disables embeddings.'),
-    model: z.string().min(1).optional().describe('Provider-specific embedding model identifier (e.g. "text-embedding-3-small"). Ignored by the "deterministic" backend.'),
+      .default('none')
+      .describe('Embedding backend. "openai" and "sentence-transformers" call out to those providers; "none" disables embeddings.'),
+    model: z.string().min(1).optional().describe('Provider-specific embedding model identifier (e.g. "text-embedding-3-small").'),
     dimensions: z.int().positive().default(8).describe('Embedding vector dimensionality. Must match the chosen model when using a real provider.'),
     openai: apiCredentialsSchema.optional().describe('OpenAI credentials, used when backend is "openai".'),
     sentenceTransformers: sentenceTransformersSchema.optional().describe('Sentence-transformers server config, used when backend is "sentence-transformers".'),
@@ -108,7 +108,7 @@ const ingestSchema = z
       .default([])
       .describe('Ingest adapter identifiers to run (e.g. "metabase", "looker", "historic-sql"). Empty array means no adapters are run.'),
     embeddings: embeddingSchema
-      .prefault({ backend: 'deterministic', model: 'deterministic' })
+      .prefault({ backend: 'none' })
       .describe('Embedding configuration used when ingest adapters need to embed documents.'),
     workUnits: workUnitsSchema.prefault({}).describe('Concurrency and failure handling for ingest work units.'),
   })
