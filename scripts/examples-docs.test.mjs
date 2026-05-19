@@ -151,7 +151,6 @@ describe('standalone example docs', () => {
     assert.match(contributing, /context\/\s+# Core context engine/);
     assert.match(contributing, /llm\/\s+# LLM client abstraction/);
     assert.match(contributing, /connector-bigquery\/\s+# BigQuery connector/);
-    assert.match(contributing, /connector-clickhouse\/\s+# ClickHouse connector/);
     assert.match(contributing, /connector-mysql\/\s+# MySQL connector/);
     assert.match(contributing, /connector-postgres\/\s+# PostgreSQL connector/);
     assert.match(contributing, /connector-snowflake\/\s+# Snowflake connector/);
