@@ -3,7 +3,7 @@
 This runbook covers the maintainer workflow for publishing `@kaelio/ktx` to
 npm through GitHub Actions. The workflow uses semantic-release to choose the
 next version, update release metadata, publish the package, create the GitHub
-release, and commit the release files back to the repository.
+release, and commit prerelease files back to the `next` branch.
 
 ## Release channels
 
@@ -91,8 +91,9 @@ Publish a stable release from `main` after you have validated an rc package.
 7. Run the workflow.
 
 The workflow publishes `@kaelio/ktx` with `--access public --tag latest`, runs
-the published package smoke test, creates a GitHub release, and commits the
-release metadata.
+the published package smoke test, and creates a GitHub release. Stable releases
+don't commit release metadata back to `main`, because `main` is protected and
+requires changes through pull requests.
 
 ## Release metadata
 
@@ -105,7 +106,8 @@ prepare step. That script updates:
 
 The artifact packaging and readiness scripts read `publicNpmPackageVersion`
 from `release-policy.json`, so manual version edits in build scripts aren't
-needed for rc releases.
+needed for rc releases. Stable releases use the updated metadata during the
+workflow run, but that generated metadata isn't committed back to `main`.
 
 The bundled Python runtime wheel also derives its version from
 `publicNpmPackageVersion`. Stable npm versions are reused as-is, and rc
