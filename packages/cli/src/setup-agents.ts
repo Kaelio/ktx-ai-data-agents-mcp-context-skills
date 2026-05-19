@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { styleText } from 'node:util';
 import { log, outro } from '@clack/prompts';
 import {
   loadKtxProject,
@@ -112,6 +113,56 @@ function writeSetupOutro(io: KtxCliIo, message: string): void {
     return;
   }
   io.stdout.write(`\n${message}\n`);
+}
+
+const STEP_HEADING_RE = /^(\d+)\. (.+)$/;
+const ACTION_MARKER_RE = /^(RUN|PASTE|USE|OPEN):$/;
+
+export function createAgentNextActionsLineFormatter(
+  stdout: KtxCliIo['stdout'],
+): (line: string) => string {
+  const maybeHasColors = (stdout as { hasColors?: unknown }).hasColors;
+  const supportsColor = typeof maybeHasColors === 'function' && Boolean(maybeHasColors.call(stdout));
+  if (!supportsColor) return (line) => line;
+
+  const homeDir = process.env.HOME ? resolve(process.env.HOME) : '';
+  const styleOptions = { validateStream: false } as const;
+  const dim = (s: string) => styleText('dim', s, styleOptions);
+  const bold = (s: string) => styleText('bold', s, styleOptions);
+  const cyanBold = (s: string) => styleText(['cyan', 'bold'], s, styleOptions);
+  const dimCyan = (s: string) => styleText(['dim', 'cyan'], s, styleOptions);
+  const shortenPath = (path: string): string => {
+    if (!homeDir) return path;
+    if (path === homeDir) return '~';
+    if (path.startsWith(`${homeDir}/`)) return `~/${path.slice(homeDir.length + 1)}`;
+    return path;
+  };
+
+  return (rawLine: string): string => {
+    if (rawLine.length === 0 || rawLine.includes('[')) return rawLine;
+
+    const heading = rawLine.match(STEP_HEADING_RE);
+    if (heading) {
+      return `${cyanBold(heading[1])}  ${bold(heading[2])}`;
+    }
+
+    if (!rawLine.startsWith('  ')) return rawLine;
+    const body = rawLine.slice(2);
+
+    if (ACTION_MARKER_RE.test(body)) {
+      return `   ${dim(body)}`;
+    }
+
+    if (body.endsWith('.zip') && (body.startsWith('/') || body.startsWith('~'))) {
+      return `     ${dimCyan('•')}  ${shortenPath(body)}`;
+    }
+
+    if (body.includes(' > ')) {
+      return `   ${body.replaceAll(' > ', `  ${dim('›')}  `)}`;
+    }
+
+    return `   ${dim(body)}`;
+  };
 }
 
 async function readJsonObject(path: string): Promise<Record<string, unknown>> {
@@ -1235,7 +1286,9 @@ export async function runKtxSetupAgentsStep(
       snippets,
     });
     if (args.showNextActions !== false) {
-      setupUi.note(nextActions, 'Required before using agents', io, { format: (line) => line });
+      setupUi.note(nextActions, 'Required before using agents', io, {
+        format: createAgentNextActionsLineFormatter(io.stdout),
+      });
       writeSetupOutro(io, 'All set.');
     }
     return { status: 'ready', projectDir: args.projectDir, installs, nextActions };

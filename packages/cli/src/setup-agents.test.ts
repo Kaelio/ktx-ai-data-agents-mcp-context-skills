@@ -5,6 +5,7 @@ import { readKtxSetupState } from '@ktx/context/project';
 import { strFromU8, unzipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createAgentNextActionsLineFormatter,
   formatInstallSummaryLines,
   plannedKtxAgentFiles,
   readKtxAgentInstallManifest,
@@ -1168,5 +1169,64 @@ describe('setup agents', () => {
     expect(output).toContain('Cursor rules installed');
     expect(output).toContain('OpenCode commands installed');
     expect(output).toContain('.agents guidance installed');
+  });
+
+  describe('createAgentNextActionsLineFormatter', () => {
+    function makeColorStdout(): { write: (chunk: string) => boolean; hasColors: () => boolean } {
+      return { write: () => true, hasColors: () => true };
+    }
+
+    function makePlainStdout(): { write: (chunk: string) => boolean; hasColors: () => boolean } {
+      return { write: () => true, hasColors: () => false };
+    }
+
+    const ESC = String.fromCharCode(27);
+
+    it('returns the line untouched when the stream cannot render colors', () => {
+      const format = createAgentNextActionsLineFormatter(makePlainStdout());
+      expect(format('2. Upload Claude Desktop skills')).toBe('2. Upload Claude Desktop skills');
+      expect(format('  /tmp/ktx/.ktx/agents/claude/ktx.zip')).toBe('  /tmp/ktx/.ktx/agents/claude/ktx.zip');
+    });
+
+    it('styles step headings and aligns sub-prose under the title', () => {
+      const format = createAgentNextActionsLineFormatter(makeColorStdout());
+      const heading = format('2. Upload Claude Desktop skills');
+      expect(heading).toContain(ESC);
+      expect(heading).toContain('2');
+      expect(heading).toContain('Upload Claude Desktop skills');
+      expect(heading).not.toMatch(/^2\. /);
+
+      const sub = format('  Toggle the uploaded KTX skills on.');
+      expect(sub).toMatch(/^ {3}/);
+      expect(sub).toContain('Toggle the uploaded KTX skills on.');
+    });
+
+    it('renders skill bundle .zip paths as bullets and shortens HOME to ~', () => {
+      const previousHome = process.env.HOME;
+      process.env.HOME = '/tmp/test-home';
+      try {
+        const format = createAgentNextActionsLineFormatter(makeColorStdout());
+        const line = format('  /tmp/test-home/.ktx/agents/claude/ktx-analytics.zip');
+        expect(line).toContain('•');
+        expect(line).toContain('~/.ktx/agents/claude/ktx-analytics.zip');
+        expect(line).not.toContain('/tmp/test-home/');
+      } finally {
+        if (previousHome === undefined) delete process.env.HOME;
+        else process.env.HOME = previousHome;
+      }
+    });
+
+    it('replaces breadcrumb separators with a typographic chevron', () => {
+      const format = createAgentNextActionsLineFormatter(makeColorStdout());
+      const line = format('  Open Claude Desktop: Customize > Skills > + > Create skill > Upload a skill.');
+      expect(line).toContain('›');
+      expect(line).not.toContain(' > ');
+    });
+
+    it('leaves already-styled lines untouched to avoid double-wrapping', () => {
+      const format = createAgentNextActionsLineFormatter(makeColorStdout());
+      const preStyled = `${ESC}[1m2. Already styled${ESC}[22m`;
+      expect(format(preStyled)).toBe(preStyled);
+    });
   });
 });
