@@ -13,16 +13,16 @@ a developer or operator agent also needs pinned `ktx` admin commands.
 
 ## Install with setup
 
-Start the MCP server before connecting an end-user agent:
-
-```bash
-ktx mcp start
-```
-
-Then install client integration:
+Install client integration first:
 
 ```bash
 ktx setup --agents
+```
+
+Then start the MCP server before using HTTP-based clients:
+
+```bash
+ktx mcp start
 ```
 
 Use `--target` for one target:

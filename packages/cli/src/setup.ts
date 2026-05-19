@@ -339,7 +339,6 @@ export async function readKtxSetupStatus(
   }
   const agents = [...agentMap.values()];
   const runtimeRequirements = resolveProjectRuntimeRequirements(project.config, {
-    agents: agents.length > 0,
     env: options.env ?? process.env,
   });
   let runtimeReady = runtimeRequirements.features.length === 0 || completedSteps.includes('runtime');
@@ -493,12 +492,6 @@ function shouldPrintConciseReadySummary(status: KtxSetupStatus): boolean {
   return setupStatusReady(status) && setupContextReady(status) && status.agents.some((agent) => agent.ready);
 }
 
-function writeContextNotReadyForAgents(projectDir: string, io: KtxCliIo): void {
-  io.stderr.write('KTX context is not ready for agents.\n\n');
-  io.stderr.write(`Build context first:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
-  io.stderr.write(`Then install agent integration:\n  ktx setup --agents --project-dir ${resolve(projectDir)}\n`);
-}
-
 function setupRuntimeInstallPolicy(args: Extract<KtxSetupArgs, { command: 'run' }>): 'prompt' | 'auto' | 'never' {
   if (args.yes) {
     return 'auto';
@@ -587,18 +580,19 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     }
 
     const runOnly = readyAction;
+    const agentOnlySetup = agentsRequested || runOnly === 'agents';
     const shouldRunModels = !runOnly || runOnly === 'models';
     const shouldRunEmbeddings = !runOnly || runOnly === 'embeddings';
     const shouldRunDatabases = !runOnly || runOnly === 'databases';
     const shouldRunSources = !runOnly || runOnly === 'sources';
     const shouldRunRuntime =
-      agentsRequested || !runOnly || runOnly === 'runtime' || runOnly === 'context' || runOnly === 'agents';
-    const shouldRunContext = agentsRequested || !runOnly || runOnly === 'context';
+      !agentOnlySetup && (!runOnly || runOnly === 'runtime' || runOnly === 'context');
+    const shouldRunContext = !agentOnlySetup && (!runOnly || runOnly === 'context');
     const shouldRunAgents = agentsRequested || !runOnly || runOnly === 'agents';
     const showPromptInstructions = projectResult.confirmedCreation !== true;
 
-    const setupSteps: KtxSetupFlowStep[] = agentsRequested
-      ? ['runtime', 'context']
+    const setupSteps: KtxSetupFlowStep[] = agentOnlySetup
+      ? []
       : ['models', 'embeddings', 'databases', 'sources', 'runtime', 'context'];
     if (shouldRunAgents && args.skipAgents !== true) {
       setupSteps.push('agents');
@@ -737,7 +731,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             inputMode: args.inputMode,
             cliVersion: args.cliVersion,
             runtimeInstallPolicy: setupRuntimeInstallPolicy(args),
-            agents: shouldRunAgents && args.skipAgents !== true,
           },
           io,
         );
@@ -799,10 +792,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       }
       if (step === 'context' && stepResult.status !== 'ready') {
         if (shouldRunAgents && args.skipAgents !== true) {
-          if (agentsRequested) {
-            writeContextNotReadyForAgents(projectResult.projectDir, io);
-            return args.inputMode === 'disabled' ? 1 : 0;
-          }
           return 0;
         }
       }
