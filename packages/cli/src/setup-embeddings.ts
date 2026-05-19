@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { resolveKtxConfigReference } from '@ktx/context/core';
 import {
   type KtxProjectConfig,
@@ -59,6 +59,7 @@ export interface KtxSetupEmbeddingsDeps {
   healthCheck?: (config: KtxEmbeddingConfig) => Promise<KtxEmbeddingHealthCheckResult>;
   ensureLocalEmbeddings?: (options: {
     cliVersion: string;
+    projectDir: string;
     installPolicy: KtxManagedPythonInstallPolicy;
     io: KtxCliIo;
   }) => Promise<ManagedLocalEmbeddingsDaemon>;
@@ -85,6 +86,7 @@ const EMBEDDING_OPTION_PROMPT_CONTEXT =
   'KTX uses embeddings for semantic search over semantic-layer sources, wiki context, schema metadata, ' +
   'and relationship evidence.';
 const LOCAL_EMBEDDING_HEALTH_TIMEOUT_MS = 120_000;
+const LOCAL_EMBEDDING_STDERR_TAIL_LINES = 40;
 
 function createPromptAdapter(): KtxSetupEmbeddingsPromptAdapter {
   return createKtxSetupPromptAdapter({ selectCancelValue: 'back' });
@@ -286,14 +288,33 @@ async function chooseEmbeddingBackend(
   return 'back';
 }
 
-function localEmbeddingSetupMessage(message: string): string {
-  return [
+async function readLocalEmbeddingDaemonStderrTail(stderrLog: string | undefined): Promise<string[]> {
+  if (!stderrLog) {
+    return [];
+  }
+  try {
+    const lines = (await readFile(stderrLog, 'utf8'))
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim().length > 0);
+    return lines.slice(-LOCAL_EMBEDDING_STDERR_TAIL_LINES);
+  } catch {
+    return [];
+  }
+}
+
+function localEmbeddingSetupMessage(message: string, stderrTail: string[] = []): string {
+  const lines = [
     `Local embedding health check failed: ${message}`,
     'Local embeddings use the KTX-managed Python runtime.',
     'Prepare the runtime with: ktx dev runtime start --feature local-embeddings',
     'Use --yes with setup to install and start the runtime without prompting.',
     'The first run may download Python packages and the all-MiniLM-L6-v2 model.',
-  ].join('\n');
+  ];
+  if (stderrTail.length > 0) {
+    lines.push('Recent local embeddings daemon stderr:', ...stderrTail);
+  }
+  return lines.join('\n');
 }
 
 async function promptAfterLocalEmbeddingFailure(
@@ -447,9 +468,13 @@ export async function runKtxSetupEmbeddingsStep(
     }
 
     progress.fail('Embedding test failed');
+    const stderrTail =
+      selectedBackend === 'sentence-transformers'
+        ? await readLocalEmbeddingDaemonStderrTail(managedLocalEmbeddings?.stderrLog)
+        : [];
     io.stderr.write(
       selectedBackend === 'sentence-transformers'
-        ? `${localEmbeddingSetupMessage(health.message)}\n`
+        ? `${localEmbeddingSetupMessage(health.message, stderrTail)}\n`
         : `Embedding health check failed: ${health.message}\n`,
     );
     if (args.inputMode === 'disabled') {
