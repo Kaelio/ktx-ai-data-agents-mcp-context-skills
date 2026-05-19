@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
 import { buildDefaultKtxProjectConfig, readKtxSetupState, type KtxProjectConfig } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ManagedPythonCommandRuntime } from './managed-python-command.js';
 import { runKtxSetupRuntimeStep } from './setup-runtime.js';
 
 function makeIo() {
@@ -43,9 +42,9 @@ describe('runKtxSetupRuntimeStep', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('ensures core runtime for agent setup and records the runtime step', async () => {
+  it('skips runtime setup when the project has no direct runtime requirements', async () => {
     const io = makeIo();
-    const ensureRuntime = vi.fn(async (): Promise<ManagedPythonCommandRuntime> => ({} as ManagedPythonCommandRuntime));
+    const ensureRuntime = vi.fn();
 
     await expect(
       runKtxSetupRuntimeStep(
@@ -54,7 +53,6 @@ describe('runKtxSetupRuntimeStep', () => {
           inputMode: 'auto',
           cliVersion: '0.2.0',
           runtimeInstallPolicy: 'prompt',
-          agents: true,
         },
         io.io,
         {
@@ -63,17 +61,11 @@ describe('runKtxSetupRuntimeStep', () => {
           env: {},
         },
       ),
-    ).resolves.toMatchObject({ status: 'ready' });
+    ).resolves.toMatchObject({ status: 'skipped' });
 
-    expect(ensureRuntime).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cliVersion: '0.2.0',
-        installPolicy: 'prompt',
-        feature: 'core',
-      }),
-    );
-    expect((await readKtxSetupState(tempDir)).completed_steps).toContain('runtime');
-    expect(io.stdout()).toContain('Runtime ready: yes (core)');
+    expect(ensureRuntime).not.toHaveBeenCalled();
+    expect((await readKtxSetupState(tempDir)).completed_steps).not.toContain('runtime');
+    expect(io.stdout()).toContain('Runtime setup skipped.');
   });
 
   it('fails fast when required runtime features cannot be installed in no-input mode', async () => {
@@ -89,7 +81,7 @@ describe('runKtxSetupRuntimeStep', () => {
           inputMode: 'disabled',
           cliVersion: '0.2.0',
           runtimeInstallPolicy: 'never',
-          agents: true,
+          databaseIntrospectionFallback: true,
         },
         io.io,
         {
@@ -131,7 +123,6 @@ describe('runKtxSetupRuntimeStep', () => {
           inputMode: 'auto',
           cliVersion: '0.2.0',
           runtimeInstallPolicy: 'auto',
-          agents: false,
         },
         io.io,
         {

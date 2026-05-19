@@ -1733,7 +1733,7 @@ describe('setup status', () => {
     expect(committedConfig.stdout).toContain('warehouse:');
   });
 
-  it('runs agent setup after context succeeds in --agents mode', async () => {
+  it('runs agent setup without runtime or context in --agents mode', async () => {
     const calls: string[] = [];
     const io = makeIo();
     await writeFile(join(tempDir, 'ktx.yaml'), ['connections: {}', ''].join('\n'), 'utf-8');
@@ -1765,11 +1765,11 @@ describe('setup status', () => {
           sources: async () => ({ status: 'skipped', projectDir: tempDir }),
           runtime: async () => {
             calls.push('runtime');
-            return runtimeReady(tempDir);
+            throw new Error('runtime should not run');
           },
           context: async () => {
             calls.push('context');
-            return { status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' };
+            throw new Error('context should not run');
           },
           agents: async () => {
             calls.push('agents');
@@ -1783,11 +1783,13 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(calls).toEqual(['runtime', 'context', 'agents']);
+    expect(calls).toEqual(['agents']);
   });
 
-  it('does not install agents when non-interactive --agents finds context incomplete', async () => {
+  it('installs agents when non-interactive --agents finds context incomplete', async () => {
     const io = makeIo();
+    const runtime = vi.fn(async () => runtimeReady(tempDir));
+    const context = vi.fn(async () => ({ status: 'skipped' as const, projectDir: tempDir }));
     const agents = vi.fn(async () => ({
       status: 'ready' as const,
       projectDir: tempDir,
@@ -1816,15 +1818,17 @@ describe('setup status', () => {
         },
         io.io,
         {
-          runtime: async () => runtimeReady(tempDir),
-          context: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime,
+          context,
           agents,
         },
       ),
-    ).resolves.toBe(1);
+    ).resolves.toBe(0);
 
-    expect(agents).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain('KTX context is not ready for agents.');
+    expect(runtime).not.toHaveBeenCalled();
+    expect(context).not.toHaveBeenCalled();
+    expect(agents).toHaveBeenCalledTimes(1);
+    expect(io.stderr()).not.toContain('KTX context is not ready for agents.');
   });
 
   it('routes a ready project menu selection to agent setup', async () => {
@@ -1945,7 +1949,7 @@ describe('setup status', () => {
       }
     }
 
-    expect(calls).toEqual(['runtime', 'agents']);
+    expect(calls).toEqual(['agents']);
   });
 
   it('skips to agent setup when context is ready but agents are not configured', async () => {
@@ -2042,10 +2046,10 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(readyMenuSelect).not.toHaveBeenCalled();
-    expect(calls).toEqual(['runtime', 'agents']);
+    expect(calls).toEqual(['agents']);
   });
 
-  it('runs only project resolution, runtime, context gate, and agent setup in --agents mode', async () => {
+  it('runs only project resolution and agent setup in --agents mode', async () => {
     const io = makeIo();
     const runtime = vi.fn(async () => runtimeReady(tempDir));
     const context = vi.fn(async () => ({ status: 'ready' as const, projectDir: tempDir, runId: 'setup-context-local-test' }));
@@ -2086,8 +2090,8 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(runtime).toHaveBeenCalledTimes(1);
-    expect(context).toHaveBeenCalledTimes(1);
+    expect(runtime).not.toHaveBeenCalled();
+    expect(context).not.toHaveBeenCalled();
     expect(agents).toHaveBeenCalledTimes(1);
   });
 

@@ -26,7 +26,7 @@ below.
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--agents` | Install agent integration only | `false` |
+| `--agents` | Install agent configuration and rules only | `false` |
 | `--target <target>` | Agent target: `claude-code`, `codex`, `cursor`, `opencode`, or `universal` | - |
 | `--global` | Install agent integration into the global target scope for `claude-code` or `codex` | `false` |
 | `--yes` | Accept safe defaults in non-interactive setup | `false` |
@@ -82,15 +82,19 @@ embedding credential source.
 ### Runtime
 
 Setup prepares the managed Python runtime when your selected configuration
-needs it. The runtime step runs after database and source setup and before the
-initial context build.
+needs it. In the full setup flow, the runtime step runs after database and
+source setup and before the initial context build.
 
-KTX prepares the `core` runtime feature when agent integration, query-history
-ingest, Looker source ingest, or daemon-backed context build paths need it. KTX
-prepares the `local-embeddings` runtime feature when you choose managed local
-`sentence-transformers` embeddings. Existing external daemon URLs, such as
-`KTX_DAEMON_URL` or `KTX_SQL_ANALYSIS_URL`, satisfy the matching dependency and
-skip managed runtime installation for that dependency.
+KTX prepares the `core` runtime feature when query-history ingest, Looker
+source ingest, database introspection fallback, or daemon-backed context build
+paths need it. KTX prepares the `local-embeddings` runtime feature when you
+choose managed local `sentence-transformers` embeddings. Existing external
+daemon URLs, such as `KTX_DAEMON_URL` or `KTX_SQL_ANALYSIS_URL`, satisfy the
+matching dependency and skip managed runtime installation for that dependency.
+
+`ktx setup --agents` doesn't prepare runtime features or build context. It only
+installs agent configuration and rules. Start MCP with `ktx mcp start` before
+using HTTP-based agents; MCP startup prepares the runtime it needs.
 
 Interactive setup prompts before installing runtime features. Use `--yes` to
 install them without prompting. Use `--no-input` to fail fast when required

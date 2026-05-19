@@ -24,7 +24,6 @@ export interface KtxSetupRuntimeArgs {
   inputMode: 'auto' | 'disabled';
   cliVersion: string;
   runtimeInstallPolicy: KtxManagedPythonInstallPolicy;
-  agents: boolean;
   databaseIntrospectionFallback?: boolean;
 }
 
@@ -62,7 +61,6 @@ export async function runKtxSetupRuntimeStep(
   const loadProjectForRuntime = deps.loadProject ?? loadKtxProject;
   const project = await loadProjectForRuntime({ projectDir: args.projectDir });
   const requirements = resolveProjectRuntimeRequirements(project.config, {
-    agents: args.agents,
     databaseIntrospectionFallback: args.databaseIntrospectionFallback,
     env: deps.env ?? process.env,
   });

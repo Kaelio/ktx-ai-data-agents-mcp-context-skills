@@ -7,10 +7,10 @@ import {
 } from './runtime-requirements.js';
 
 describe('runtime requirement detection', () => {
-  it('requires core for agent/MCP setup', () => {
+  it('does not require runtime for agent/MCP setup alone', () => {
     const config = buildDefaultKtxProjectConfig();
 
-    expect(resolveProjectRuntimeRequirements(config, { agents: true }).features).toEqual(['core']);
+    expect(resolveProjectRuntimeRequirements(config).features).toEqual([]);
   });
 
   it('requires core for Looker source ingest unless an external daemon is configured', () => {
