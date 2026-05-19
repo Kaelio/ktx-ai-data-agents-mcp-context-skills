@@ -34,7 +34,7 @@ SQLite.
 ## Quick Start
 
 ```bash
-npm install -g @kaelio/ktx
+pnpm add --global @kaelio/ktx
 ktx setup
 ktx status
 ```
@@ -63,7 +63,7 @@ Agent integration ready: yes (codex:project)
 | `ktx status` | Check project readiness |
 | `ktx connection list` | List configured connections |
 | `ktx connection test <id>` | Test one connection |
-| `ktx ingest <connectionId>` | Build context for one connection |
+| `ktx ingest <id>` | Build context for one connection |
 | `ktx ingest --all` | Build context for every configured connection |
 | `ktx ingest text <file> --connection-id <connectionId>` | Capture free-form notes into memory |
 | `ktx sl list` | List semantic-layer sources |
