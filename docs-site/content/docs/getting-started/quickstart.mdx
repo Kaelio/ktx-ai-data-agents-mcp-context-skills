@@ -41,6 +41,36 @@ If you're a coding assistant choosing a docs route, start with the
   </a>
 </div>
 
+<div
+  className="not-prose my-6 rounded-lg border p-4"
+  style={{
+    borderColor: 'color-mix(in oklch, var(--color-fd-primary) 35%, transparent)',
+    background: 'color-mix(in oklch, var(--color-fd-primary) 8%, transparent)',
+  }}
+>
+  <div className="text-sm font-semibold text-fd-foreground">
+    Run setup from an agent
+  </div>
+  <p className="mt-2 text-sm leading-6 text-fd-muted-foreground">
+    You can ask an agent such as Claude Code, Codex, Cursor, or OpenCode to
+    install and configure KTX for you. The{' '}
+    <a href="/docs/agents-setup.md" className="font-medium underline">
+      agent setup Markdown prompt
+    </a>{' '}
+    tells the agent how to check prerequisites, ask only for credentials or
+    connection choices, run <code>ktx setup</code>, verify connections, and
+    report the result.
+  </p>
+  <p className="mt-3 text-sm leading-6 text-fd-muted-foreground">
+    Use a prompt like this from the project you want to configure:
+  </p>
+  <div className="mt-3 text-sm font-medium leading-6 text-fd-foreground">
+    <div>Follow instructions from</div>
+    <div>https://docs.kaelio.com/ktx/docs/agents-setup.md</div>
+    <div>to install and configure ktx</div>
+  </div>
+</div>
+
 ## Install the CLI
 
 Install the published package globally:
@@ -104,22 +134,6 @@ progress under `.ktx/setup/` and resumes from the remaining work.
 > project opens the same wizard. Inside a project, it opens a menu for
 > resuming setup, connecting an agent, checking status, or exploring a
 > pre-built demo project.
-
-## Run setup from an agent
-
-You can ask an agent such as Claude Code, Codex, Cursor, or OpenCode to install
-and configure KTX for you. The
-[agent setup Markdown prompt](/docs/agents-setup.md) tells the agent how to
-check prerequisites, ask only for credentials or connection choices, run
-`ktx setup`, verify connections, and report the result.
-
-Use a prompt like this from the project you want to configure:
-
-```text
-Follow instructions from
-https://docs.kaelio.com/ktx/docs/agents-setup.md
-to install and configure ktx
-```
 
 ## Verify
 
