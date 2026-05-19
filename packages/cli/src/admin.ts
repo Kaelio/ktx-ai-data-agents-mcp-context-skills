@@ -1,27 +1,28 @@
 import { resolve } from 'node:path';
 import type { Command } from '@commander-js/extra-typings';
 import { type CommandWithGlobalOptions, type KtxCliCommandContext, resolveCommandProjectDir } from './cli-program.js';
+import { registerAdminReindexCommand } from './admin-reindex.js';
 import { registerRuntimeCommands } from './commands/runtime-commands.js';
 import { profileMark } from './startup-profile.js';
 
-profileMark('module:dev');
+profileMark('module:admin');
 
-export function registerDevCommands(program: Command, context: KtxCliCommandContext): void {
-  const dev = program
-    .command('dev')
-    .description('Low-level project initialization and runtime management')
+export function registerAdminCommands(program: Command, context: KtxCliCommandContext): void {
+  const admin = program
+    .command('admin')
+    .description('Low-level project initialization, runtime, and index management')
     .showHelpAfterError();
 
-  dev.hook('preAction', (_thisCommand, actionCommand) => {
-    context.writeDebug?.('dev', actionCommand);
+  admin.hook('preAction', (_thisCommand, actionCommand) => {
+    context.writeDebug?.('admin', actionCommand);
   });
 
-  dev.action(() => {
-    dev.outputHelp();
+  admin.action(() => {
+    admin.outputHelp();
     context.setExitCode(0);
   });
 
-  dev
+  admin
     .command('init')
     .description('Initialize a Git-backed KTX project directory for maintenance scripts')
     .argument('[directory]', 'Project directory')
@@ -44,7 +45,7 @@ export function registerDevCommands(program: Command, context: KtxCliCommandCont
       },
     );
 
-  dev
+  admin
     .command('schema')
     .description('Print a JSON Schema describing ktx.yaml (for editors and LLM agents)')
     .option('--output <file>', 'Write the schema to a file instead of stdout')
@@ -62,5 +63,6 @@ export function registerDevCommands(program: Command, context: KtxCliCommandCont
       context.setExitCode(0);
     });
 
-  registerRuntimeCommands(dev, context);
+  registerRuntimeCommands(admin, context);
+  registerAdminReindexCommand(admin, context);
 }

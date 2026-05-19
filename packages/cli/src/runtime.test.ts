@@ -291,7 +291,7 @@ describe('runKtxRuntime', () => {
           label: 'Managed Python runtime',
           status: 'fail',
           detail: 'No runtime manifest at /runtime/0.2.0/manifest.json',
-          fix: 'Run: ktx dev runtime install --yes',
+          fix: 'Run: ktx admin runtime install --yes',
         },
       ]),
     };

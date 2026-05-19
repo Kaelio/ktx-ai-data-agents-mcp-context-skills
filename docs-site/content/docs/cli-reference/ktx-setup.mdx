@@ -231,7 +231,7 @@ Use `ktx status` for repeatable readiness checks after setup exits.
 | Setup resumes an unexpected project | `KTX_PROJECT_DIR` or nearest `ktx.yaml` points to another directory | Pass `--project-dir <path>` explicitly |
 | Setup cannot run in CI | Required values are missing and `--no-input` disables prompts | Provide the relevant automation flags or create a fixture `ktx.yaml` |
 | Provider health check fails | Provider key, model id, Vertex project, or Vertex location is invalid | Fix the `env:` or `file:` reference and rerun setup |
-| Python runtime is missing | The selected setup needs runtime-backed agent, query-history, Looker, or local embedding features | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx dev runtime install` command |
+| Python runtime is missing | The selected setup needs runtime-backed agent, query-history, Looker, or local embedding features | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx admin runtime install` command |
 | `--enable-query-history` is rejected | The selected database driver does not support query history | Use Postgres, BigQuery, or Snowflake, or rerun without query-history flags |
 | Source setup rejects location flags | Both `--source-path` and `--source-git-url` were supplied | Choose the local path or the Git URL, not both |
 | Agent integration missing | Setup skipped the agents step | Run `ktx setup --agents --target <target>` |

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import type { KtxEmbeddingPort, KtxFileStorePort, KtxLogger } from '../core/index.js';
 import { noopLogger } from '../core/index.js';
+import type { ReindexWorkResult } from '../index-sync/types.js';
 import { assertFlatWikiKey, isFlatWikiKey } from './keys.js';
 import { buildKnowledgeSearchText } from './knowledge-search-text.js';
 import type { KnowledgeGitDiffPort, KnowledgeIndexPort, UpsertPageParams } from './ports.js';
@@ -16,7 +17,7 @@ export class KnowledgeWikiService {
 
   constructor(
     private readonly configService: KtxFileStorePort,
-    private readonly embeddingService: KtxEmbeddingPort,
+    private readonly embeddingService: KtxEmbeddingPort | null,
     private readonly pagesRepository: KnowledgeIndexPort,
     private readonly gitService: KnowledgeGitDiffPort,
     private readonly logger: KtxLogger = noopLogger,
@@ -246,10 +247,12 @@ export class KnowledgeWikiService {
     const searchText = buildKnowledgeSearchText(pageKey, frontmatter.summary, content, frontmatter.tags);
 
     let embedding: number[] | null = null;
-    try {
-      embedding = await this.embeddingService.computeEmbedding(searchText);
-    } catch (err) {
-      this.logger.warn(`Embedding failed for page "${pageKey}": ${err instanceof Error ? err.message : String(err)}`);
+    if (this.embeddingService) {
+      try {
+        embedding = await this.embeddingService.computeEmbedding(searchText);
+      } catch (err) {
+        this.logger.warn(`Embedding failed for page "${pageKey}": ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     await this.pagesRepository.upsertPage({
@@ -269,14 +272,21 @@ export class KnowledgeWikiService {
    * Full sync: load all pages from disk for a scope, reindex changed pages, clean stale entries.
    * Mirrors SlSearchService.indexSources() pattern.
    */
-  async syncIndex(scope: string, scopeId?: string | null): Promise<void> {
+  async syncIndex(scope: string, scopeId?: string | null): Promise<ReindexWorkResult> {
     const pageKeys = await this.listPageKeys(scope, scopeId);
+    const existing = await this.pagesRepository.getExistingSearchTexts(scope, scopeId ?? null);
+
     if (pageKeys.length === 0) {
-      await this.pagesRepository.deleteByScope(scope, scopeId ?? null);
-      return;
+      const deleted = await this.pagesRepository.deleteByScope(scope, scopeId ?? null);
+      return {
+        scanned: 0,
+        updated: 0,
+        deleted,
+        embeddingsRecomputed: 0,
+        embeddingsFailed: 0,
+      };
     }
 
-    // Load and parse all pages
     const pages: Array<{ pageKey: string; frontmatter: WikiFrontmatter; content: string; searchText: string }> = [];
     for (const key of pageKeys) {
       const page = await this.readPage(scope, scopeId, key);
@@ -286,58 +296,53 @@ export class KnowledgeWikiService {
       }
     }
 
-    // Detect changes
-    const existing = await this.pagesRepository.getExistingSearchTexts(scope, scopeId ?? null);
-    const changedPages = pages.filter((p) => {
-      const ex = existing.get(p.pageKey);
-      return !ex || ex.searchText !== p.searchText || !ex.hasEmbedding;
+    const changedPages = pages.filter((page) => {
+      const previous = existing.get(page.pageKey);
+      return !previous || previous.searchText !== page.searchText || !previous.hasEmbedding;
     });
 
-    if (changedPages.length === 0) {
-      // Still clean up stale
-      await this.pagesRepository.deleteStale(scope, scopeId ?? null, pageKeys);
-      this.logger.log(`Wiki sync ${scope}: all ${pages.length} pages up to date`);
-      return;
-    }
+    let embeddings: (number[] | null)[] = changedPages.map(() => null);
+    let embeddingsRecomputed = 0;
+    let embeddingsFailed = 0;
 
-    // Compute embeddings for changed pages (batched)
-    const changedTexts = changedPages.map((p) => p.searchText);
-    let embeddings: (number[] | null)[];
-    try {
-      const batchSize = this.embeddingService.maxBatchSize;
-      const all: number[][] = [];
-      for (let i = 0; i < changedTexts.length; i += batchSize) {
-        const batch = changedTexts.slice(i, i + batchSize);
-        const batchEmb = await this.embeddingService.computeEmbeddingsBulk(batch);
-        all.push(...batchEmb);
+    if (this.embeddingService && changedPages.length > 0) {
+      try {
+        const changedTexts = changedPages.map((page) => page.searchText);
+        const all: number[][] = [];
+        for (let i = 0; i < changedTexts.length; i += this.embeddingService.maxBatchSize) {
+          const batch = changedTexts.slice(i, i + this.embeddingService.maxBatchSize);
+          all.push(...(await this.embeddingService.computeEmbeddingsBulk(batch)));
+        }
+        embeddings = all;
+        embeddingsRecomputed = all.length;
+      } catch (err) {
+        this.logger.warn(`Embedding batch failed during sync: ${err instanceof Error ? err.message : String(err)}`);
+        embeddingsFailed = changedPages.length;
       }
-      embeddings = all;
-    } catch (err) {
-      this.logger.warn(`Embedding batch failed during sync: ${err instanceof Error ? err.message : String(err)}`);
-      embeddings = changedPages.map(() => null);
     }
 
-    // Upsert changed pages
-    for (let i = 0; i < changedPages.length; i++) {
-      const p = changedPages[i];
+    for (let i = 0; i < changedPages.length; i += 1) {
+      const page = changedPages[i]!;
       await this.pagesRepository.upsertPage({
         scope,
         scopeId: scopeId ?? null,
-        pageKey: p.pageKey,
-        summary: p.frontmatter.summary,
-        usageMode: p.frontmatter.usage_mode,
-        sortOrder: p.frontmatter.sort_order ?? 0,
-        searchText: p.searchText,
-        embedding: embeddings[i],
+        pageKey: page.pageKey,
+        summary: page.frontmatter.summary,
+        usageMode: page.frontmatter.usage_mode,
+        sortOrder: page.frontmatter.sort_order ?? 0,
+        searchText: page.searchText,
+        embedding: embeddings[i] ?? null,
       });
     }
 
-    // Clean stale entries
-    await this.pagesRepository.deleteStale(scope, scopeId ?? null, pageKeys);
-
-    this.logger.log(
-      `Wiki sync ${scope}: ${changedPages.length}/${pages.length} reindexed, ${pages.length - changedPages.length} unchanged`,
-    );
+    const deleted = await this.pagesRepository.deleteStale(scope, scopeId ?? null, pageKeys);
+    return {
+      scanned: pages.length,
+      updated: changedPages.length,
+      deleted,
+      embeddingsRecomputed,
+      embeddingsFailed,
+    };
   }
 
   /**
@@ -388,12 +393,14 @@ export class KnowledgeWikiService {
         parsed.frontmatter.tags,
       );
       let embedding: number[] | null = null;
-      try {
-        embedding = await this.embeddingService.computeEmbedding(searchText);
-      } catch (err) {
-        this.logger.warn(
-          `[wiki.sync] embedding failed for ${parsedPath.pageKey}: ${err instanceof Error ? err.message : String(err)}`,
-        );
+      if (this.embeddingService) {
+        try {
+          embedding = await this.embeddingService.computeEmbedding(searchText);
+        } catch (err) {
+          this.logger.warn(
+            `[wiki.sync] embedding failed for ${parsedPath.pageKey}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
       const contentHash = createHash('sha256').update(content).digest('hex');
       upserts.push({

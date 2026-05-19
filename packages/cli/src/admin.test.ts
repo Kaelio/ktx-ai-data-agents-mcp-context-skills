@@ -22,14 +22,14 @@ function makeIo() {
   };
 }
 
-describe('dev Commander tree', () => {
-  it('prints visible dev help with only supported low-level command groups', async () => {
+describe('admin Commander tree', () => {
+  it('prints visible admin help with supported low-level command groups', async () => {
     const testIo = makeIo();
 
-    await expect(runKtxCli(['dev', '--help'], testIo.io)).resolves.toBe(0);
+    await expect(runKtxCli(['admin', '--help'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('Usage: ktx dev [options] [command]');
-    for (const command of ['init', 'runtime']) {
+    expect(testIo.stdout()).toContain('Usage: ktx admin [options] [command]');
+    for (const command of ['init', 'runtime', 'reindex']) {
       expect(testIo.stdout()).toContain(command);
     }
     for (const removed of [
@@ -52,27 +52,35 @@ describe('dev Commander tree', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('lists dev in root command rows', async () => {
+  it('lists admin in root command rows', async () => {
     const testIo = makeIo();
 
     await expect(runKtxCli(['--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).not.toContain('Advanced:');
-    expect(testIo.stdout()).toContain('dev');
-    expect(testIo.stdout()).toMatch(/Low-level project initialization and runtime\s+management/);
+    expect(testIo.stdout()).toContain('admin');
+    expect(testIo.stdout()).toMatch(/Low-level project initialization,\s+runtime,\s+and index management/);
     expect(testIo.stderr()).toBe('');
   });
 
-  it('keeps project scaffolding under dev init', async () => {
+  it('does not keep a dev alias', async () => {
+    const testIo = makeIo();
+
+    await expect(runKtxCli(['dev', '--help'], testIo.io)).resolves.toBe(1);
+
+    expect(testIo.stderr()).toContain("unknown command 'dev'");
+  });
+
+  it('keeps project scaffolding under admin init', async () => {
     const { mkdtemp, readFile, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
-    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-dev-init-'));
+    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-admin-init-'));
     const projectDir = join(tempDir, 'warehouse');
     const testIo = makeIo();
 
     try {
-      await expect(runKtxCli(['dev', 'init', projectDir], testIo.io)).resolves.toBe(0);
+      await expect(runKtxCli(['admin', 'init', projectDir], testIo.io)).resolves.toBe(0);
 
       expect(testIo.stdout()).toContain(`Initialized KTX project at ${projectDir}`);
       await expect(readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).resolves.not.toContain('project:');
@@ -82,17 +90,17 @@ describe('dev Commander tree', () => {
     }
   });
 
-  it('uses global project-dir for dev init when the positional directory is omitted', async () => {
+  it('uses global project-dir for admin init when the positional directory is omitted', async () => {
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
-    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-dev-init-global-'));
+    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-admin-init-global-'));
     const projectDir = join(tempDir, 'global-init');
     const testIo = makeIo();
 
     try {
       await expect(
-        runKtxCli(['--project-dir', projectDir, 'dev', 'init'], testIo.io),
+        runKtxCli(['--project-dir', projectDir, 'admin', 'init'], testIo.io),
       ).resolves.toBe(0);
 
       expect(testIo.stdout()).toContain(`Initialized KTX project at ${projectDir}`);
@@ -106,7 +114,7 @@ describe('dev Commander tree', () => {
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
-    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-dev-schema-'));
+    const tempDir = await mkdtemp(join(tmpdir(), 'ktx-admin-schema-'));
     const missingProjectDir = join(tempDir, 'missing-project');
     const originalProjectDir = process.env.KTX_PROJECT_DIR;
     const testIo = makeIo();
@@ -114,7 +122,7 @@ describe('dev Commander tree', () => {
     try {
       process.env.KTX_PROJECT_DIR = missingProjectDir;
 
-      await expect(runKtxCli(['dev', 'schema'], testIo.io)).resolves.toBe(0);
+      await expect(runKtxCli(['admin', 'schema'], testIo.io)).resolves.toBe(0);
 
       expect(JSON.parse(testIo.stdout())).toMatchObject({
         title: 'ktx.yaml',
@@ -131,19 +139,19 @@ describe('dev Commander tree', () => {
     }
   });
 
-  it('rejects removed dev command groups', async () => {
+  it('rejects removed admin command groups', async () => {
     for (const argv of [
-      ['dev', 'doctor', 'setup'],
-      ['dev', 'runtime', 'doctor'],
-      ['dev', 'runtime', 'prune', '--dry-run'],
-      ['dev', 'scan', 'warehouse'],
-      ['dev', 'ingest', 'run'],
-      ['dev', 'mapping', 'list'],
-      ['dev', 'completion', 'zsh'],
-      ['dev', '__complete', '--shell', 'zsh', '--position', '2', '--', 'ktx', ''],
-      ['dev', 'knowledge', 'list'],
-      ['dev', 'model', 'list'],
-      ['dev', 'artifacts'],
+      ['admin', 'doctor', 'setup'],
+      ['admin', 'runtime', 'doctor'],
+      ['admin', 'runtime', 'prune', '--dry-run'],
+      ['admin', 'scan', 'warehouse'],
+      ['admin', 'ingest', 'run'],
+      ['admin', 'mapping', 'list'],
+      ['admin', 'completion', 'zsh'],
+      ['admin', '__complete', '--shell', 'zsh', '--position', '2', '--', 'ktx', ''],
+      ['admin', 'knowledge', 'list'],
+      ['admin', 'model', 'list'],
+      ['admin', 'artifacts'],
     ]) {
       const testIo = makeIo();
 
@@ -155,8 +163,8 @@ describe('dev Commander tree', () => {
 
   it.each([
     {
-      argv: ['dev', 'runtime', '--help'],
-      expected: ['Usage: ktx dev runtime', 'install', 'start', 'stop', 'status'],
+      argv: ['admin', 'runtime', '--help'],
+      expected: ['Usage: ktx admin runtime', 'install', 'start', 'stop', 'status'],
     },
   ])('prints generated nested help for $argv', async ({ argv, expected }) => {
     const io = makeIo();
@@ -167,7 +175,7 @@ describe('dev Commander tree', () => {
     for (const text of expected) {
       expect(io.stdout()).toContain(text);
     }
-    if (argv.join(' ') === 'dev runtime --help') {
+    if (argv.join(' ') === 'admin runtime --help') {
       expect(io.stdout()).not.toContain('prune');
       expect(io.stdout()).not.toContain('doctor');
     }

@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { buildKnowledgeSearchText } from './knowledge-search-text.js';
 import type { LocalKnowledgeScope } from './local-knowledge.js';
+import type { KnowledgeIndexPageListing, UpsertPageParams } from './ports.js';
 
 export interface SqliteKnowledgeIndexOptions {
   dbPath: string;
@@ -12,6 +13,7 @@ export interface SqliteKnowledgeIndexPage {
   path: string;
   key: string;
   scope: LocalKnowledgeScope;
+  scopeId?: string | null;
   summary: string;
   content: string;
   tags: string[];
@@ -106,6 +108,7 @@ export class SqliteKnowledgeIndex {
         path TEXT PRIMARY KEY,
         key TEXT NOT NULL,
         scope TEXT NOT NULL,
+        scope_id TEXT,
         summary TEXT NOT NULL,
         content TEXT NOT NULL,
         tags TEXT NOT NULL,
@@ -129,6 +132,9 @@ export class SqliteKnowledgeIndex {
     if (!columnNames.has('embedding_json')) {
       this.db.exec('ALTER TABLE knowledge_pages ADD COLUMN embedding_json TEXT');
     }
+    if (!columnNames.has('scope_id')) {
+      this.db.exec('ALTER TABLE knowledge_pages ADD COLUMN scope_id TEXT');
+    }
   }
 
   sync(pages: SqliteKnowledgeIndexPage[]): void {
@@ -142,11 +148,12 @@ export class SqliteKnowledgeIndex {
         ? this.db.prepare('DELETE FROM knowledge_pages_fts')
         : this.db.prepare(`DELETE FROM knowledge_pages_fts WHERE path NOT IN (${keepPaths.map(() => '?').join(', ')})`);
     const upsertPage = this.db.prepare(`
-      INSERT INTO knowledge_pages (path, key, scope, summary, content, tags, search_text, embedding_json)
-      VALUES (@path, @key, @scope, @summary, @content, @tags, @searchText, @embeddingJson)
+      INSERT INTO knowledge_pages (path, key, scope, scope_id, summary, content, tags, search_text, embedding_json)
+      VALUES (@path, @key, @scope, @scopeId, @summary, @content, @tags, @searchText, @embeddingJson)
       ON CONFLICT(path) DO UPDATE SET
         key = excluded.key,
         scope = excluded.scope,
+        scope_id = excluded.scope_id,
         summary = excluded.summary,
         content = excluded.content,
         tags = excluded.tags,
@@ -168,6 +175,7 @@ export class SqliteKnowledgeIndex {
           path: page.path,
           key: page.key,
           scope: page.scope,
+          scopeId: page.scopeId ?? null,
           summary: page.summary,
           content: searchText,
           tags: page.tags.join(' '),
@@ -274,5 +282,202 @@ export class SqliteKnowledgeIndex {
       path: row.path,
       score: scoreFromRank(row.rawScore),
     }));
+  }
+
+  private pathForPage(scope: string, scopeId: string | null, pageKey: string): string {
+    return scope === 'GLOBAL' ? `wiki/global/${pageKey}.md` : `wiki/user/${scopeId ?? 'local'}/${pageKey}.md`;
+  }
+
+  async upsertPage(params: UpsertPageParams): Promise<void> {
+    const path = this.pathForPage(params.scope, params.scopeId, params.pageKey);
+    const row = {
+      path,
+      key: params.pageKey,
+      scope: params.scope,
+      scopeId: params.scopeId,
+      summary: params.summary,
+      content: params.searchText,
+      tags: '',
+      searchText: params.searchText,
+      embeddingJson: params.embedding && params.embedding.length > 0 ? JSON.stringify(params.embedding) : null,
+    };
+    const write = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `
+          INSERT INTO knowledge_pages (path, key, scope, scope_id, summary, content, tags, search_text, embedding_json)
+          VALUES (@path, @key, @scope, @scopeId, @summary, @content, @tags, @searchText, @embeddingJson)
+          ON CONFLICT(path) DO UPDATE SET
+            key = excluded.key,
+            scope = excluded.scope,
+            scope_id = excluded.scope_id,
+            summary = excluded.summary,
+            content = excluded.content,
+            tags = excluded.tags,
+            search_text = excluded.search_text,
+            embedding_json = excluded.embedding_json
+        `,
+        )
+        .run(row);
+      this.db.prepare('DELETE FROM knowledge_pages_fts WHERE path = @path').run(row);
+      this.db
+        .prepare(
+          `
+          INSERT INTO knowledge_pages_fts (path, key, summary, content, tags)
+          VALUES (@path, @key, @summary, @content, @tags)
+        `,
+        )
+        .run(row);
+    });
+    write();
+  }
+
+  async getExistingSearchTexts(
+    scope: string,
+    scopeId: string | null,
+  ): Promise<Map<string, { searchText: string; hasEmbedding: boolean }>> {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT key, search_text, embedding_json
+        FROM knowledge_pages
+        WHERE scope = ?
+          AND scope_id IS ?
+        ORDER BY key ASC
+      `,
+      )
+      .all(scope, scopeId) as Array<{ key: string; search_text: string; embedding_json: string | null }>;
+    return new Map(
+      rows.map((row) => [row.key, { searchText: row.search_text, hasEmbedding: row.embedding_json !== null }]),
+    );
+  }
+
+  async deleteStale(scope: string, scopeId: string | null, keepKeys: string[]): Promise<number> {
+    if (keepKeys.length === 0) {
+      return this.deleteByScope(scope, scopeId);
+    }
+    const placeholders = keepKeys.map(() => '?').join(', ');
+    const stale = this.db
+      .prepare(
+        `
+        SELECT key
+        FROM knowledge_pages
+        WHERE scope = ?
+          AND scope_id IS ?
+          AND key NOT IN (${placeholders})
+      `,
+      )
+      .all(scope, scopeId, ...keepKeys) as Array<{ key: string }>;
+    for (const row of stale) {
+      await this.deleteByKey(scope, scopeId, row.key);
+    }
+    return stale.length;
+  }
+
+  async deleteByScope(scope: string, scopeId: string | null): Promise<number> {
+    return this.clear(scope, scopeId);
+  }
+
+  async deleteByKey(scope: string, scopeId: string | null, pageKey: string): Promise<number> {
+    const path = this.pathForPage(scope, scopeId, pageKey);
+    const remove = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM knowledge_pages_fts WHERE path = ?').run(path);
+      const result = this.db.prepare('DELETE FROM knowledge_pages WHERE path = ?').run(path);
+      return Number(result.changes);
+    });
+    return remove();
+  }
+
+  clear(scope: string, scopeId: string | null): number {
+    const rows = this.db
+      .prepare('SELECT path FROM knowledge_pages WHERE scope = ? AND scope_id IS ?')
+      .all(scope, scopeId) as Array<{ path: string }>;
+    const remove = this.db.transaction((paths: string[]) => {
+      for (const path of paths) {
+        this.db.prepare('DELETE FROM knowledge_pages_fts WHERE path = ?').run(path);
+        this.db.prepare('DELETE FROM knowledge_pages WHERE path = ?').run(path);
+      }
+    });
+    remove(rows.map((row) => row.path));
+    return rows.length;
+  }
+
+  async applyDiffTransactional(params: {
+    runId: string;
+    upserts: UpsertPageParams[];
+    deletes: Array<{ scope: string; scopeId: string | null; pageKey: string }>;
+  }): Promise<void> {
+    void params.runId;
+    for (const page of params.upserts) {
+      await this.upsertPage(page);
+    }
+    for (const page of params.deletes) {
+      await this.deleteByKey(page.scope, page.scopeId, page.pageKey);
+    }
+  }
+
+  async findPageByKey(
+    scope: string,
+    scopeId: string | null,
+    pageKey: string,
+  ): Promise<{ id?: string; page_key: string } | null> {
+    const path = this.pathForPage(scope, scopeId, pageKey);
+    const row = this.db.prepare('SELECT path, key FROM knowledge_pages WHERE path = ?').get(path) as
+      | { path: string; key: string }
+      | undefined;
+    return row ? { id: row.path, page_key: row.key } : null;
+  }
+
+  async listPagesForUser(userId: string): Promise<KnowledgeIndexPageListing[]> {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT path, key, scope, scope_id, summary, tags
+        FROM knowledge_pages
+        WHERE scope = 'GLOBAL'
+           OR (scope = 'USER' AND scope_id = ?)
+        ORDER BY scope ASC, key ASC
+      `,
+      )
+      .all(userId) as Array<{
+      path: string;
+      key: string;
+      scope: string;
+      scope_id: string | null;
+      summary: string;
+      tags: string;
+    }>;
+    return rows.map((row) => ({
+      id: row.path,
+      page_key: row.key,
+      summary: row.summary,
+      scope: row.scope,
+      scope_id: row.scope_id,
+      tags: row.tags.split(/\s+/).filter(Boolean),
+    }));
+  }
+
+  async getUserPageCount(userId: string): Promise<number> {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS count FROM knowledge_pages WHERE scope = 'USER' AND scope_id = ?")
+      .get(userId) as { count: number };
+    return row.count;
+  }
+
+  async incrementUsageCount(): Promise<void> {}
+
+  async searchRRF(
+    userId: string,
+    _embedding: number[] | null,
+    queryText: string,
+    limit: number,
+  ): Promise<Array<{ pageKey: string; summary: string; rrfScore: number }>> {
+    const allowedPages = new Map((await this.listPagesForUser(userId)).map((page) => [page.id, page]));
+    return this.search(queryText, limit)
+      .map((row) => {
+        const page = allowedPages.get(row.path);
+        return page ? { pageKey: page.page_key, summary: page.summary, rrfScore: row.score } : null;
+      })
+      .filter((row): row is { pageKey: string; summary: string; rrfScore: number } => row !== null);
   }
 }

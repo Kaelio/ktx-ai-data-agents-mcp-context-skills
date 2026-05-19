@@ -167,7 +167,7 @@ describe('findPythonArtifacts', () => {
   it('throws when a required Python artifact is missing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-test-'));
     try {
-      await assert.rejects(() => findPythonArtifacts(root), /Missing Python artifact: kaelio-ktx dev runtime wheel/);
+      await assert.rejects(() => findPythonArtifacts(root), /Missing Python artifact: kaelio-ktx runtime wheel/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -491,20 +491,20 @@ describe('verification snippets', () => {
     assert.doesNotMatch(source, /run\('python'/);
     assert.match(source, /KTX_RUNTIME_ROOT/);
     assert.match(source, /managed-runtime/);
-    assert.match(source, /ktx dev runtime status missing/);
+    assert.match(source, /ktx admin runtime status missing/);
     assert.match(source, /runtimeStatusBefore\.kind, 'missing'/);
     assert.ok(source.includes(String.raw`Installing KTX Python runtime \(core\) with uv`));
     assert.match(source, /KTX Python runtime ready:/);
-    assert.match(source, /ktx dev runtime status ready/);
+    assert.match(source, /ktx admin runtime status ready/);
     assert.match(source, /runtimeStatusAfter\.kind, 'ready'/);
     assert.match(source, /runtimeStatusAfter\.manifest\.features/);
-    assert.match(source, /ktx dev runtime status/);
+    assert.match(source, /ktx admin runtime status/);
     assert.match(source, /status: ready/);
-    assert.match(source, /ktx dev runtime start/);
-    assert.match(source, /ktx dev runtime start reuse/);
+    assert.match(source, /ktx admin runtime start/);
+    assert.match(source, /ktx admin runtime start reuse/);
     assert.match(source, /Using existing KTX Python daemon/);
-    assert.match(source, /ktx dev runtime stop/);
-    assert.doesNotMatch(source, /ktx dev runtime prune/);
+    assert.match(source, /ktx admin runtime stop/);
+    assert.doesNotMatch(source, /ktx admin runtime prune/);
     assert.doesNotMatch(source, /staleRuntimeDir/);
     assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'ingest',\s*'warehouse'/);
     assert.match(source, /'--deep'/);

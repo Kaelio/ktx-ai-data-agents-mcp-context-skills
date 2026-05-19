@@ -4,9 +4,9 @@ import { KnowledgeWikiService, type WikiFrontmatter } from './knowledge-wiki.ser
 function makeService() {
   const pagesRepository: Record<string, ReturnType<typeof vi.fn>> = {
     upsertPage: vi.fn().mockResolvedValue(undefined),
-    deleteByKey: vi.fn().mockResolvedValue(undefined),
-    deleteByScope: vi.fn().mockResolvedValue(undefined),
-    deleteStale: vi.fn().mockResolvedValue(undefined),
+    deleteByKey: vi.fn().mockResolvedValue(0),
+    deleteByScope: vi.fn().mockResolvedValue(0),
+    deleteStale: vi.fn().mockResolvedValue(0),
     getExistingSearchTexts: vi.fn().mockResolvedValue(new Map()),
     applyDiffTransactional: vi.fn().mockResolvedValue(undefined),
   };
@@ -49,6 +49,56 @@ function makeService() {
 }
 
 const fm: WikiFrontmatter = { summary: 'sum', usage_mode: 'auto' };
+
+describe('KnowledgeWikiService.syncIndex result stats', () => {
+  it('reports scanned, updated, deleted, and embedding counts', async () => {
+    const { service, pagesRepository, embeddingService, configService } = makeService();
+    configService.listFiles.mockResolvedValue({ files: ['wiki/global/revenue.md'] });
+    configService.readFile.mockResolvedValue({
+      content: '---\nsummary: Revenue\nusage_mode: auto\ntags:\n  - finance\n---\n\nPaid orders.\n',
+    });
+    pagesRepository.getExistingSearchTexts.mockResolvedValue(
+      new Map([
+        ['old-page', { searchText: 'old', hasEmbedding: true }],
+      ]),
+    );
+    embeddingService.computeEmbeddingsBulk.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    pagesRepository.deleteStale.mockResolvedValue(1);
+
+    await expect(service.syncIndex('GLOBAL', null)).resolves.toEqual({
+      scanned: 1,
+      updated: 1,
+      deleted: 1,
+      embeddingsRecomputed: 1,
+      embeddingsFailed: 0,
+    });
+  });
+
+  it('indexes lexical rows when embeddings are not configured', async () => {
+    const { pagesRepository, configService, gitService, logger } = makeService();
+    const service = new KnowledgeWikiService(
+      configService as any,
+      null,
+      pagesRepository as any,
+      gitService as any,
+      logger as any,
+    );
+    configService.listFiles.mockResolvedValue({ files: ['wiki/global/revenue.md'] });
+    configService.readFile.mockResolvedValue({
+      content: '---\nsummary: Revenue\nusage_mode: auto\n---\n\nPaid orders.\n',
+    });
+    pagesRepository.getExistingSearchTexts.mockResolvedValue(new Map());
+    pagesRepository.deleteStale.mockResolvedValue(0);
+
+    const result = await service.syncIndex('GLOBAL', null);
+
+    expect(result.embeddingsRecomputed).toBe(0);
+    expect(result.embeddingsFailed).toBe(0);
+    expect(pagesRepository.upsertPage).toHaveBeenCalledWith(
+      expect.objectContaining({ pageKey: 'revenue', embedding: null }),
+    );
+  });
+});
 
 describe('KnowledgeWikiService.forWorktree isolation', () => {
   it('syncSinglePage in worktree scope does not call pagesRepository.upsertPage', async () => {

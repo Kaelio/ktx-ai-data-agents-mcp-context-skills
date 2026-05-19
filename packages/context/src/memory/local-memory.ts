@@ -205,11 +205,17 @@ class LocalKnowledgeIndex implements KnowledgeIndexPort {
     return new Map();
   }
 
-  async deleteStale(): Promise<void> {}
+  async deleteStale(): Promise<number> {
+    return 0;
+  }
 
-  async deleteByScope(): Promise<void> {}
+  async deleteByScope(): Promise<number> {
+    return 0;
+  }
 
-  async deleteByKey(): Promise<void> {}
+  async deleteByKey(): Promise<number> {
+    return 0;
+  }
 
   async findPageByKey(scope: string, scopeId: string | null, pageKey: string) {
     const path = this.pagePath(scope, scopeId, pageKey);

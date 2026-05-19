@@ -368,8 +368,8 @@ describe('runKtxScan', () => {
     expect(io.stdout()).toContain('Report: raw-sources/warehouse/live-database/sync-1/scan-report.json');
     expect(io.stdout()).toContain('Next:\n');
     expect(io.stdout()).toContain('ktx status --project-dir ');
-    expect(io.stdout()).not.toContain('ktx dev scan status');
-    expect(io.stdout()).not.toContain('ktx dev scan report');
+    expect(io.stdout()).not.toContain('ktx admin scan status');
+    expect(io.stdout()).not.toContain('ktx admin scan report');
     expect(io.stdout()).not.toContain('\u001b[');
     expect(io.stdout()).not.toContain('✓');
     expect(io.stdout()).not.toContain('+1');

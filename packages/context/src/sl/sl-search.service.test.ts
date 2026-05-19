@@ -223,4 +223,39 @@ describe('SlSearchService', () => {
       },
     ]);
   });
+
+  it('indexSources reports stats and supports lexical-only indexing', async () => {
+    const repository = {
+      upsertSources: vi.fn().mockResolvedValue(undefined),
+      getExistingSearchTexts: vi.fn().mockResolvedValue(
+        new Map([
+          ['old_source', { searchText: 'old source', hasEmbedding: true }],
+        ]),
+      ),
+      deleteStale: vi.fn().mockResolvedValue(1),
+      deleteByConnection: vi.fn().mockResolvedValue(0),
+      deleteByConnectionAndName: vi.fn(),
+      search: vi.fn(),
+    };
+    const service = new SlSearchService(null, repository);
+    const source: SemanticLayerSource = {
+      name: 'orders',
+      table: 'public.orders',
+      grain: ['id'],
+      columns: [{ name: 'id', type: 'number' }],
+      joins: [],
+      measures: [],
+    };
+
+    await expect(service.indexSources('warehouse', [source])).resolves.toEqual({
+      scanned: 1,
+      updated: 1,
+      deleted: 1,
+      embeddingsRecomputed: 0,
+      embeddingsFailed: 0,
+    });
+    expect(repository.upsertSources).toHaveBeenCalledWith('warehouse', [
+      expect.objectContaining({ sourceName: 'orders', embedding: null }),
+    ]);
+  });
 });

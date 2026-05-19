@@ -153,7 +153,7 @@ KTX_INGEST_TRACE_LEVEL=trace ktx ingest metabase
 | Connection not configured | The connection id is not present in `ktx.yaml` | Add the connection with `ktx setup` or update `ktx.yaml` |
 | Deep readiness is missing | `--deep` or query history needs model, embedding, and scan-enrichment configuration | Run `ktx setup` or rerun with `--fast` |
 | Query history is unsupported | The selected database driver does not support query history | Run schema ingest without query-history flags |
-| Python runtime is missing | The selected ingest target needs runtime-backed SQL analysis or source parsing | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx dev runtime install` command |
+| Python runtime is missing | The selected ingest target needs runtime-backed SQL analysis or source parsing | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx admin runtime install` command |
 | No ingest target was selected | No connection id was provided and `--all` was omitted | Run `ktx ingest <connectionId>` or `ktx ingest --all` |
 | Source options were ignored | Depth and query-history flags were supplied for a non-database source | Omit database-only flags when ingesting source connections |
 | Text ingest stops early | `--fail-fast` was used and one item failed | Fix the failed item or rerun without `--fail-fast` to collect all failures |

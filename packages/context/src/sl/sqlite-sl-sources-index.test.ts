@@ -105,6 +105,33 @@ describe('SqliteSlSourcesIndex', () => {
     expect(await index.search('finance', null, 'revenue', 10)).toEqual([]);
   });
 
+  it('clear removes sources and dictionary rows for one connection only', async () => {
+    const index = new SqliteSlSourcesIndex({ dbPath });
+    await index.upsertSources('warehouse', [
+      { sourceName: 'orders', searchText: 'orders revenue paid', embedding: null },
+    ]);
+    await index.upsertSources('finance', [
+      { sourceName: 'invoices', searchText: 'invoices revenue paid', embedding: null },
+    ]);
+    await index.replaceDictionaryEntries('warehouse', [
+      { connectionId: 'warehouse', sourceName: 'orders', columnName: 'status', value: 'paid', cardinality: 1 },
+    ]);
+    await index.replaceDictionaryEntries('finance', [
+      { connectionId: 'finance', sourceName: 'invoices', columnName: 'status', value: 'paid', cardinality: 1 },
+    ]);
+
+    await expect(index.clear('warehouse')).resolves.toBe(1);
+
+    expect(await index.search('warehouse', null, 'revenue', 10)).toEqual([]);
+    expect(await index.search('finance', null, 'revenue', 10)).toEqual([
+      expect.objectContaining({ sourceName: 'invoices' }),
+    ]);
+    await expect(index.searchDictionaryCandidates({ connectionIds: ['warehouse'], queryText: 'paid', limit: 10 }))
+      .resolves.toEqual([]);
+    await expect(index.searchDictionaryCandidates({ connectionIds: ['finance'], queryText: 'paid', limit: 10 }))
+      .resolves.toEqual([expect.objectContaining({ connectionId: 'finance', sourceName: 'invoices' })]);
+  });
+
   it('returns lane candidates with stable connection-scoped IDs', async () => {
     const index = new SqliteSlSourcesIndex({ dbPath });
 

@@ -150,7 +150,7 @@ Do **not** run `--deep` ingest in this flow — that requires LLM time and is ou
 
 If the user asks for stronger verification that `sentence-transformers` is actually serving (not just that setup said "ok"), do all of:
 
-1. `ktx dev runtime status --json` → expect `"kind": "ready"` and `"features": [..., "local-embeddings"]`.
+1. `ktx admin runtime status --json` → expect `"kind": "ready"` and `"features": [..., "local-embeddings"]`.
 2. `pgrep -fa ktx-daemon` → expect a process running `ktx-daemon serve-http`.
 3. `curl -sS http://127.0.0.1:<port>/health` → expect HTTP 200 with `{"status":"healthy",…}`.
 4. `curl -sS -X POST http://127.0.0.1:<port>/embeddings/compute -H 'content-type: application/json' -d '{"text":"hello"}'` → expect `{"embedding": [...384 floats...]}`.
