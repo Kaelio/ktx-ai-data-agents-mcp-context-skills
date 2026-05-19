@@ -52,6 +52,7 @@ describe('runKtxRuntime', () => {
         },
         asset: {
           wheelPath: '/assets/python/kaelio_ktx-0.1.0-py3-none-any.whl',
+          requiresPython: { specifier: '>=3.13', minimumVersion: '3.13' },
           manifest: {
             schemaVersion: 1,
             distributionName: 'kaelio-ktx',

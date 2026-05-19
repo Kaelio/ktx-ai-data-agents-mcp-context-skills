@@ -79,6 +79,7 @@ function installResult(root: string, features: Array<'core' | 'local-embeddings'
     asset: {
       manifest: manifest(root, features).asset,
       wheelPath: join(root, 'assets', 'python', 'kaelio_ktx-0.2.0-py3-none-any.whl'),
+      requiresPython: { specifier: '>=3.13', minimumVersion: '3.13' },
     },
     manifest: manifest(root, features),
   };
