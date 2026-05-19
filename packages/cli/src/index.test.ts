@@ -470,8 +470,6 @@ describe('runKtxCli', () => {
     expect(stdout).not.toContain('setup context');
 
     for (const hiddenFlag of [
-      '--new',
-      '--existing',
       '--agent-scope',
       '--skip-agents',
       '--llm-backend',
@@ -480,7 +478,6 @@ describe('runKtxCli', () => {
       '--embedding-backend',
       '--database ',
       '--database-connection-id',
-      '--new-database-connection-id',
       '--enable-historic-sql',
       '--historic-sql-min-executions',
       '--enable-query-history',
@@ -842,8 +839,12 @@ describe('runKtxCli', () => {
   it('rejects removed setup options', async () => {
     const setup = vi.fn(async () => 0);
     const cases = [
+      ['setup', '--new'],
+      ['setup', '--existing'],
       ['setup', '--project'],
       ['setup', '--agent-scope', 'global'],
+      ['setup', '--anthropic-model', 'claude-sonnet-4-6'],
+      ['setup', '--new-database-connection-id', 'warehouse'],
       ['setup', '--skip-initial-source-ingest'],
     ];
 
@@ -1065,7 +1066,7 @@ describe('runKtxCli', () => {
           '--no-input',
           '--anthropic-api-key-env',
           'ANTHROPIC_API_KEY',
-          '--anthropic-model',
+          '--llm-model',
           'claude-sonnet-4-6',
         ],
         setupIo.io,
@@ -1080,7 +1081,7 @@ describe('runKtxCli', () => {
         inputMode: 'disabled',
         cliVersion: '0.1.0-rc.1',
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-        anthropicModel: 'claude-sonnet-4-6',
+        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       setupIo.io,
@@ -1104,7 +1105,7 @@ describe('runKtxCli', () => {
           'local-gcp-project',
           '--vertex-location',
           'us-east5',
-          '--anthropic-model',
+          '--llm-model',
           'claude-sonnet-4-6',
         ],
         setupIo.io,
@@ -1121,7 +1122,7 @@ describe('runKtxCli', () => {
         llmBackend: 'vertex',
         vertexProject: 'local-gcp-project',
         vertexLocation: 'us-east5',
-        anthropicModel: 'claude-sonnet-4-6',
+        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       setupIo.io,
@@ -1239,7 +1240,7 @@ describe('runKtxCli', () => {
           '--skip-embeddings',
           '--database',
           'postgres',
-          '--new-database-connection-id',
+          '--database-connection-id',
           'warehouse',
           '--database-url',
           'env:DATABASE_URL',
@@ -1283,16 +1284,39 @@ describe('runKtxCli', () => {
     const setup = vi.fn(async () => 0);
 
     await expect(
-      runKtxCli(['setup', '--new-database-connection-id', 'status', '--no-input'], testIo.io, { setup }),
+      runKtxCli(['setup', '--database-connection-id', 'status', '--no-input'], testIo.io, { setup }),
     ).resolves.toBe(0);
 
     expect(setup).toHaveBeenCalledWith(
       expect.objectContaining({
         command: 'run',
-        databaseConnectionId: 'status',
+        databaseConnectionIds: ['status'],
       }),
       testIo.io,
     );
+  });
+
+  it('dispatches non-TTY agents setup with target without requiring --no-input or --yes', async () => {
+    const testIo = makeIo({ stdoutIsTty: false });
+    const setup = vi.fn(async () => 0);
+
+    await expect(
+      runKtxCli(['--project-dir', tempDir, 'setup', '--agents', '--target', 'claude-code'], testIo.io, { setup }),
+    ).resolves.toBe(0);
+
+    expect(setup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'run',
+        projectDir: tempDir,
+        agents: true,
+        target: 'claude-code',
+        agentScope: 'project',
+        inputMode: 'auto',
+        yes: false,
+      }),
+      testIo.io,
+    );
+    expect(testIo.stderr()).toBe('');
   });
 
   it('dispatches setup source flags', async () => {

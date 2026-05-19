@@ -18,7 +18,7 @@ import {
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 
-export type KtxSetupProjectMode = 'auto' | 'new' | 'existing' | 'prompt-new';
+export type KtxSetupProjectMode = 'auto' | 'prompt-new';
 export type KtxSetupInputMode = 'auto' | 'disabled';
 
 export interface KtxSetupProjectArgs {
@@ -233,30 +233,14 @@ export async function runKtxSetupProjectStep(
   const homeDir = deps.homeDir ?? homedir();
   const exists = hasProjectConfig(projectDir);
 
-  if (args.mode === 'existing') {
-    if (!exists) {
-      io.stderr.write(`No existing KTX project found at ${projectDir}. Pass --new to create it.\n`);
-      return { status: 'missing-input', projectDir };
-    }
-    const project = await loadExistingProject(projectDir, deps);
-    printProjectSummary(io, projectDir);
-    return { status: 'ready', projectDir, project };
-  }
-
-  if (args.mode === 'new') {
-    const project = await createProject(projectDir, deps);
-    printProjectSummary(io, projectDir);
-    return { status: 'ready', projectDir, project };
-  }
-
   if (args.mode === 'prompt-new') {
     if (args.inputMode === 'disabled') {
-      io.stderr.write('Missing new project folder: pass --new --project-dir to create a project without prompts.\n');
+      io.stderr.write('Missing new project folder: pass --project-dir and --yes to create a project without prompts.\n');
       return { status: 'missing-input', projectDir };
     }
     if (!io.stdout.isTTY && !deps.prompts) {
       io.stderr.write(
-        'Missing new project folder: pass --new --project-dir to create a project outside an interactive terminal.\n',
+        'Missing new project folder: pass --project-dir and --yes to create a project outside an interactive terminal.\n',
       );
       return { status: 'missing-input', projectDir };
     }
@@ -288,7 +272,7 @@ export async function runKtxSetupProjectStep(
 
   if (args.inputMode === 'disabled') {
     if (!args.yes) {
-      io.stderr.write('Missing setup choice: pass --new or --yes to create a project in non-interactive setup.\n');
+      io.stderr.write('Missing setup choice: pass --yes to create a project in non-interactive setup.\n');
       return { status: 'missing-input', projectDir };
     }
     const project = await createProject(projectDir, deps);
@@ -297,7 +281,7 @@ export async function runKtxSetupProjectStep(
   }
 
   if (!io.stdout.isTTY && !deps.prompts) {
-    io.stderr.write('Missing setup choice: pass --new or --yes to create a project outside an interactive terminal.\n');
+    io.stderr.write('Missing setup choice: pass --yes to create a project outside an interactive terminal.\n');
     return { status: 'missing-input', projectDir };
   }
 

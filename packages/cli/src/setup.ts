@@ -76,7 +76,7 @@ export type KtxSetupArgs =
   | {
       command: 'run';
       projectDir: string;
-      mode: 'auto' | 'new' | 'existing';
+      mode: 'auto';
       agents: boolean;
       target?: KtxAgentTarget;
       agentScope?: KtxAgentScope;
@@ -88,7 +88,6 @@ export type KtxSetupArgs =
       anthropicApiKeyEnv?: string;
       anthropicApiKeyFile?: string;
       llmModel?: string;
-      anthropicModel?: string;
       vertexProject?: string;
       vertexLocation?: string;
       skipLlm: boolean;
@@ -633,7 +632,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.anthropicApiKeyEnv ? { anthropicApiKeyEnv: args.anthropicApiKeyEnv } : {}),
             ...(args.anthropicApiKeyFile ? { anthropicApiKeyFile: args.anthropicApiKeyFile } : {}),
             ...(args.llmModel ? { llmModel: args.llmModel } : {}),
-            ...(args.anthropicModel ? { anthropicModel: args.anthropicModel } : {}),
             ...(args.vertexProject ? { vertexProject: args.vertexProject } : {}),
             ...(args.vertexLocation ? { vertexLocation: args.vertexLocation } : {}),
             forcePrompt: forcePromptSteps.has('models') || runOnly === 'models',
@@ -754,7 +752,10 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
         const agentResult = await agentsRunner(
           {
             projectDir: projectResult.projectDir,
-            inputMode: args.inputMode,
+            inputMode:
+              args.inputMode === 'auto' && io.stdout.isTTY !== true && deps.agentsDeps?.prompts === undefined
+                ? 'disabled'
+                : args.inputMode,
             yes: args.yes,
             agents: true,
             ...(args.target ? { target: args.target } : {}),

@@ -106,7 +106,6 @@ export function localEmbeddingsSmokeCommands(input) {
         'setup',
         '--project-dir',
         input.projectDir,
-        '--new',
         '--no-input',
         '--yes',
         '--skip-llm',

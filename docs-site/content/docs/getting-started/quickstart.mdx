@@ -216,10 +216,11 @@ For repeatable fixtures and automation, skip prompts with flags:
 ktx setup \
   --project-dir ./analytics \
   --no-input \
+  --yes \
   --skip-llm \
   --skip-embeddings \
   --database postgres \
-  --new-database-connection-id warehouse \
+  --database-connection-id warehouse \
   --database-url env:DATABASE_URL \
   --database-schema public
 ```
