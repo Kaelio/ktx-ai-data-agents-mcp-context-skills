@@ -13,6 +13,7 @@
   <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-KTX-22c55e?style=flat-square" alt="Documentation" /></a>
   <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><img src="https://img.shields.io/badge/slack-join%20community-4A154B?style=flat-square&logo=slack&logoColor=white" alt="Join the KTX Slack community" /></a>
   <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
+  <a href="https://www.ycombinator.com/companies?batch=P25"><img src="https://img.shields.io/badge/Y%20Combinator-P25-orange?style=flat-square" alt="Y Combinator P25" /></a>
 </p>
 
 ---
