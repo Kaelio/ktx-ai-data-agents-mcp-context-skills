@@ -137,7 +137,7 @@ describe('admin reindex Commander routing', () => {
         force: true,
         json: true,
         output: 'plain',
-        cliVersion: '0.1.0-rc.1',
+        cliVersion: '0.0.0-private',
       },
       io.io,
     );

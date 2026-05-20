@@ -82,46 +82,23 @@ function releaseKind(env) {
   return env.KTX_RELEASE_KIND || env.INPUT_RELEASE_KIND || 'rc';
 }
 
-function prereleaseBranch(env) {
-  return env.KTX_PRERELEASE_BRANCH || env.INPUT_PRERELEASE_BRANCH || 'next';
-}
-
 function releaseTag(kind) {
   return kind === 'rc' ? 'next' : 'latest';
-}
-
-function releaseChangelogPlugins(kind) {
-  return kind === 'rc' ? ['@semantic-release/changelog'] : [];
-}
-
-function releaseGitPlugins(kind) {
-  if (kind !== 'rc') {
-    return [];
-  }
-
-  return [
-    [
-      '@semantic-release/git',
-      {
-        assets: ['CHANGELOG.md', 'package.json', 'release-policy.json'],
-        message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
-      },
-    ],
-  ];
 }
 
 function releaseBranches(env = process.env) {
   const branch = currentBranch(env);
   const kind = releaseKind(env);
 
+  if (branch !== 'main') {
+    throw new Error(`KTX releases must run from main, got ${branch}`);
+  }
+
   if (kind === 'rc') {
-    return ['main', { name: prereleaseBranch(env), prerelease: 'rc', channel: 'next' }];
+    return [{ name: 'main', prerelease: 'rc', channel: 'next' }];
   }
 
   if (kind === 'stable') {
-    if (branch !== 'main') {
-      throw new Error(`Stable KTX releases must run from main, got ${branch}`);
-    }
     return ['main'];
   }
 
@@ -157,7 +134,6 @@ function createReleaseConfig(env = process.env) {
           },
         },
       ],
-      ...releaseChangelogPlugins(kind),
       [
         '@semantic-release/exec',
         {
@@ -172,7 +148,6 @@ function createReleaseConfig(env = process.env) {
           ].join(' && '),
         },
       ],
-      ...releaseGitPlugins(kind),
       [
         '@semantic-release/github',
         {
@@ -188,7 +163,6 @@ function createReleaseConfig(env = process.env) {
 
 module.exports = {
   createReleaseConfig,
-  prereleaseBranch,
   releaseBranches,
   releaseKind,
   releaseTag,

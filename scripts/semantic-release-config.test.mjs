@@ -9,21 +9,16 @@ function releaseExecOptions(config) {
   return config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].prepareCmd)[1];
 }
 
-function releaseExecIndex(config) {
-  return config.plugins.findIndex((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].prepareCmd);
-}
-
 function pluginNames(config) {
   return config.plugins.map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin));
 }
 
 describe('semantic-release config', () => {
-  it('configures rc releases on a dedicated next prerelease branch', () => {
+  it('configures rc releases as a prerelease on main', () => {
     assert.equal(releaseKind({ KTX_RELEASE_KIND: 'rc' }), 'rc');
     assert.equal(releaseTag('rc'), 'next');
     assert.deepEqual(releaseBranches({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'main' }), [
-      'main',
-      { name: 'next', prerelease: 'rc', channel: 'next' },
+      { name: 'main', prerelease: 'rc', channel: 'next' },
     ]);
 
     const config = createReleaseConfig({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'main' });
@@ -42,14 +37,6 @@ describe('semantic-release config', () => {
     );
     assert.match(releaseExecOptions(config).publishCmd, /pnpm run release:published-smoke/);
     assert.doesNotMatch(JSON.stringify(config.plugins), /release:npm-publish/);
-    const releaseFilePluginNames = pluginNames(config).filter(
-      (plugin) => plugin === '@semantic-release/changelog' || plugin === '@semantic-release/git',
-    );
-    assert.deepEqual(releaseFilePluginNames, ['@semantic-release/changelog', '@semantic-release/git']);
-
-    const names = pluginNames(config);
-    assert.ok(names.indexOf('@semantic-release/changelog') < releaseExecIndex(config));
-    assert.ok(names.indexOf('@semantic-release/git') > releaseExecIndex(config));
   });
 
   it('configures stable releases only from main with latest tag', () => {
@@ -69,18 +56,21 @@ describe('semantic-release config', () => {
     assert.equal(config.plugins.includes('./scripts/semantic-release-version-policy.cjs'), false);
   });
 
-  it('does not commit release files back to protected main during stable releases', () => {
-    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'stable', GITHUB_REF_NAME: 'main' });
-
-    assert.equal(pluginNames(config).includes('@semantic-release/git'), false);
-    assert.equal(pluginNames(config).includes('@semantic-release/changelog'), false);
+  it('never commits release files back to the repo', () => {
+    for (const kind of ['rc', 'stable']) {
+      const config = createReleaseConfig({ KTX_RELEASE_KIND: kind, GITHUB_REF_NAME: 'main' });
+      assert.equal(pluginNames(config).includes('@semantic-release/git'), false, `${kind}: @semantic-release/git`);
+      assert.equal(pluginNames(config).includes('@semantic-release/changelog'), false, `${kind}: @semantic-release/changelog`);
+    }
   });
 
-  it('rejects stable releases from non-main branches', () => {
-    assert.throws(
-      () => releaseBranches({ KTX_RELEASE_KIND: 'stable', GITHUB_REF_NAME: 'feature/release-test' }),
-      /Stable KTX releases must run from main, got feature\/release-test/,
-    );
+  it('rejects releases from non-main branches', () => {
+    for (const kind of ['rc', 'stable']) {
+      assert.throws(
+        () => releaseBranches({ KTX_RELEASE_KIND: kind, GITHUB_REF_NAME: 'feature/release-test' }),
+        /KTX releases must run from main, got feature\/release-test/,
+      );
+    }
   });
 
   it('keeps the force-release patch escape hatch', () => {

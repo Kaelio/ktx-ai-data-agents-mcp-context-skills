@@ -21,15 +21,14 @@ describe('release workflow', () => {
     assert.doesNotMatch(workflow, /Prepare first stable release floor/);
     assert.doesNotMatch(workflow, /git tag v0\.0\.0/);
     assert.doesNotMatch(workflow, /KTX_STABLE_RELEASE_FLOOR_TAG/);
-    assert.match(workflow, /Prepare next prerelease branch/);
-    assert.match(workflow, /git checkout -B "\$\{KTX_PRERELEASE_BRANCH\}"/);
+    assert.doesNotMatch(workflow, /Prepare next prerelease branch/);
+    assert.doesNotMatch(workflow, /KTX_PRERELEASE_BRANCH/);
+    assert.doesNotMatch(workflow, /GITHUB_REF="refs\/heads\//);
     assert.match(workflow, /Prepare npm package root for release verification/);
     assert.match(workflow, /dist\/public-npm-package\/package\.json/);
-    assert.match(workflow, /GITHUB_REF="refs\/heads\/\$\{KTX_PRERELEASE_BRANCH\}"/);
     assert.match(workflow, /pnpm run semantic-release:dry-run/);
     assert.match(workflow, /pnpm run semantic-release$/m);
     assert.match(workflow, /KTX_RELEASE_KIND: \$\{\{ inputs.release_kind \}\}/);
-    assert.match(workflow, /KTX_PRERELEASE_BRANCH: next/);
     assert.match(workflow, /FORCE_RELEASE: \$\{\{ inputs.force_release \}\}/);
     assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN/);
     assert.doesNotMatch(workflow, /^  push:/m);

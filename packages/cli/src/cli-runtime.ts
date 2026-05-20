@@ -11,7 +11,7 @@ import type { KtxSlArgs } from './sl.js';
 import type { KtxSqlArgs } from './sql.js';
 import { profileMark, profileSpan } from './startup-profile.js';
 import type { KtxTextIngestArgs } from './text-ingest.js';
-import { resolveKtxRuntimeVersion } from './release-version.js';
+import { assertCliVersion } from './release-version.js';
 
 profileMark('module:cli-runtime');
 
@@ -20,8 +20,6 @@ const requirePackageJson = createRequire(import.meta.url);
 export interface KtxCliPackageInfo {
   name: string;
   version: string;
-  packageVersion: string;
-  runtimeVersion: string;
   contextPackageName: '@ktx/context';
 }
 
@@ -66,16 +64,9 @@ export function packageInfoFromJson(packageJson: unknown): KtxCliPackageInfo {
     throw new Error('Invalid KTX CLI package metadata');
   }
 
-  const runtimeVersion = resolveKtxRuntimeVersion({
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
-  });
-
   return {
     name: packageJson.name,
-    version: runtimeVersion,
-    packageVersion: packageJson.version,
-    runtimeVersion,
+    version: assertCliVersion(packageJson.version, `${packageJson.name}/package.json`),
     contextPackageName: '@ktx/context',
   };
 }
