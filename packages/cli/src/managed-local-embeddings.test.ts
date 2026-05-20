@@ -4,9 +4,11 @@ import {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
   managedLocalEmbeddingProjectConfig,
+  tryUseManagedLocalEmbeddingsDaemon,
 } from './managed-local-embeddings.js';
 import type { ManagedPythonCommandRuntime } from './managed-python-command.js';
 import type { ManagedPythonDaemonStartResult } from './managed-python-daemon.js';
+import type { ManagedPythonDaemonLayout } from './managed-python-runtime.js';
 
 function makeIo() {
   let stdout = '';
@@ -179,5 +181,95 @@ describe('ensureManagedLocalEmbeddingsDaemon', () => {
     });
 
     expect(io.stderr()).toContain('Using KTX daemon: http://127.0.0.1:61234');
+  });
+});
+
+describe('tryUseManagedLocalEmbeddingsDaemon', () => {
+  it('returns the daemon when one is running and healthy', async () => {
+    const readStatus = vi.fn(async () => ({
+      kind: 'running' as const,
+      detail: 'ok',
+      layout: {} as ManagedPythonDaemonLayout,
+      state: {
+        schemaVersion: 1 as const,
+        pid: 123,
+        host: '127.0.0.1' as const,
+        port: 4321,
+        version: '0.5.0',
+        features: ['local-embeddings' as const],
+        startedAt: '2026-05-21T00:00:00Z',
+        stdoutLog: '/tmp/stdout.log',
+        stderrLog: '/tmp/stderr.log',
+      },
+      baseUrl: 'http://127.0.0.1:4321',
+    }));
+    const result = await tryUseManagedLocalEmbeddingsDaemon({
+      cliVersion: '0.5.0',
+      projectDir: '/work/proj',
+      readStatus,
+    });
+    expect(result).toEqual({
+      baseUrl: 'http://127.0.0.1:4321',
+      stdoutLog: '/tmp/stdout.log',
+      stderrLog: '/tmp/stderr.log',
+    });
+    expect(readStatus).toHaveBeenCalledWith({
+      cliVersion: '0.5.0',
+      projectDir: '/work/proj',
+    });
+  });
+
+  it('returns null when no daemon state exists', async () => {
+    const readStatus = vi.fn(async () => ({
+      kind: 'stopped' as const,
+      detail: 'no state',
+      layout: {} as ManagedPythonDaemonLayout,
+    }));
+    const result = await tryUseManagedLocalEmbeddingsDaemon({
+      cliVersion: '0.5.0',
+      projectDir: '/work/proj',
+      readStatus,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('returns null when daemon is stale', async () => {
+    const readStatus = vi.fn(async () => ({
+      kind: 'stale' as const,
+      detail: 'process gone',
+      layout: {} as ManagedPythonDaemonLayout,
+    }));
+    const result = await tryUseManagedLocalEmbeddingsDaemon({
+      cliVersion: '0.5.0',
+      projectDir: '/work/proj',
+      readStatus,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('rejects daemons that do not advertise local-embeddings', async () => {
+    const readStatus = vi.fn(async () => ({
+      kind: 'running' as const,
+      detail: 'ok',
+      layout: {} as ManagedPythonDaemonLayout,
+      state: {
+        schemaVersion: 1 as const,
+        pid: 123,
+        host: '127.0.0.1' as const,
+        port: 4321,
+        version: '0.5.0',
+        features: ['core' as const],
+        startedAt: '2026-05-21T00:00:00Z',
+        stdoutLog: '/tmp/stdout.log',
+        stderrLog: '/tmp/stderr.log',
+      },
+      baseUrl: 'http://127.0.0.1:4321',
+    }));
+    const result = await tryUseManagedLocalEmbeddingsDaemon({
+      cliVersion: '0.5.0',
+      projectDir: '/work/proj',
+      readStatus,
+    });
+    expect(result).toBeNull();
   });
 });

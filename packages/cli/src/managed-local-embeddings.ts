@@ -7,7 +7,12 @@ import {
   type KtxManagedPythonInstallPolicy,
   type ManagedPythonCommandRuntime,
 } from './managed-python-command.js';
-import { startManagedPythonDaemon, type ManagedPythonDaemonStartResult } from './managed-python-daemon.js';
+import {
+  readManagedPythonDaemonStatus,
+  startManagedPythonDaemon,
+  type ManagedPythonDaemonStartResult,
+  type ManagedPythonDaemonStatus,
+} from './managed-python-daemon.js';
 
 export interface ManagedLocalEmbeddingsDaemon {
   baseUrl: string;
@@ -91,5 +96,32 @@ export async function ensureManagedLocalEmbeddingsDaemon(
     baseUrl: daemon.baseUrl,
     stdoutLog: daemon.state.stdoutLog,
     stderrLog: daemon.state.stderrLog,
+  };
+}
+
+export interface TryUseManagedLocalEmbeddingsOptions {
+  cliVersion: string;
+  projectDir: string;
+  readStatus?: typeof readManagedPythonDaemonStatus;
+}
+
+export async function tryUseManagedLocalEmbeddingsDaemon(
+  options: TryUseManagedLocalEmbeddingsOptions,
+): Promise<ManagedLocalEmbeddingsDaemon | null> {
+  const readStatus = options.readStatus ?? readManagedPythonDaemonStatus;
+  const status: ManagedPythonDaemonStatus = await readStatus({
+    cliVersion: options.cliVersion,
+    projectDir: options.projectDir,
+  });
+  if (status.kind !== 'running') {
+    return null;
+  }
+  if (!status.state.features.includes('local-embeddings')) {
+    return null;
+  }
+  return {
+    baseUrl: status.baseUrl,
+    stdoutLog: status.state.stdoutLog,
+    stderrLog: status.state.stderrLog,
   };
 }
