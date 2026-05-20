@@ -3,6 +3,8 @@ title: The Context Layer
 description: What a context layer is, why agents need one, and the YAML and Markdown surfaces KTX writes to disk.
 ---
 
+import { GitIcon } from "@/components/git-icon";
+
 A context layer is the trusted knowledge surface that sits between your data
 stack and the agents that query it. It holds the things a database connection
 can't tell an agent on its own: which metrics are canonical, which joins are
@@ -63,8 +65,12 @@ caveat stays anchored to the definition it explains.
         <p className="font-mono text-[14px] font-semibold tracking-tight" style={{ color: "#3b82f6" }}>
           {"semantic-layer/**/*.yaml"}
         </p>
-        <span className="rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-fd-muted-foreground">
-          {"committed"}
+        <span
+          className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-fd-muted-foreground"
+          title="Committed to git"
+        >
+          <GitIcon className="h-4 w-4" aria-label="Git" />
+          {"git"}
         </span>
       </div>
       <p className="mt-3 text-[19px] font-semibold leading-7 text-fd-foreground" style={{ fontFamily: "var(--font-display)" }}>
@@ -88,8 +94,12 @@ caveat stays anchored to the definition it explains.
         <p className="font-mono text-[14px] font-semibold tracking-tight" style={{ color: "#10b981" }}>
           {"wiki/**/*.md"}
         </p>
-        <span className="rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-fd-muted-foreground">
-          {"committed"}
+        <span
+          className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-fd-muted-foreground"
+          title="Committed to git"
+        >
+          <GitIcon className="h-4 w-4" aria-label="Git" />
+          {"git"}
         </span>
       </div>
       <p className="mt-3 text-[19px] font-semibold leading-7 text-fd-foreground" style={{ fontFamily: "var(--font-display)" }}>
