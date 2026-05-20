@@ -18,7 +18,8 @@ import {
   sanitizeMemoryFlowError,
 } from '@ktx/context/ingest';
 import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
-import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { type KtxLocalProject } from '@ktx/context/project';
+import { loadKtxCliProject } from './cli-project.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
 import { createCliOperationalLogger } from './io/logger.js';
@@ -529,7 +530,7 @@ function assertReportMatchesReplayId(report: IngestReportSnapshot, requestedId: 
 }
 
 async function readStoredIngestReport(
-  project: Awaited<ReturnType<typeof loadKtxProject>>,
+  project: KtxLocalProject,
   runId: string | undefined,
 ): Promise<IngestReportSnapshot | null> {
   return runId ? await getLocalIngestStatus(project, runId) : await getLatestLocalIngestStatus(project);
@@ -681,7 +682,14 @@ export async function runKtxIngest(
   deps: KtxIngestDeps = {},
 ): Promise<number> {
   try {
-    const project = await loadKtxProject({ projectDir: args.projectDir });
+    const cliVersion = args.command === 'run' ? args.cliVersion : undefined;
+    const runtimeInstallPolicy = args.command === 'run' ? args.runtimeInstallPolicy : undefined;
+    const project = await loadKtxCliProject({
+      projectDir: args.projectDir,
+      cliVersion: cliVersion ?? '0.0.0-private',
+      installPolicy: runtimeInstallPolicy ?? 'never',
+      io,
+    });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
       const ingestProject =

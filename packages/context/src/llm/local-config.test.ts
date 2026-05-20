@@ -6,7 +6,6 @@ import {
 } from '../project/config.js';
 import {
   MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
-  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV,
   createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmProviderFromConfig,
   resolveLocalKtxEmbeddingConfig,
@@ -152,32 +151,7 @@ describe('local KTX embedding config', () => {
     });
   });
 
-  it('resolves managed sentence-transformers config from the CLI-provided daemon URL', () => {
-    const config: KtxProjectEmbeddingConfig = {
-      backend: 'sentence-transformers',
-      model: 'all-MiniLM-L6-v2',
-      dimensions: 384,
-      sentenceTransformers: {
-        base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
-        pathPrefix: '',
-      },
-      batchSize: 32,
-    };
-
-    expect(
-      resolveLocalKtxEmbeddingConfig(config, {
-        [MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV]: 'http://127.0.0.1:61234',
-      }),
-    ).toEqual({
-      backend: 'sentence-transformers',
-      model: 'all-MiniLM-L6-v2',
-      dimensions: 384,
-      sentenceTransformers: { baseURL: 'http://127.0.0.1:61234', pathPrefix: '' },
-      batchSize: 32,
-    });
-  });
-
-  it('returns null for managed sentence-transformers when no daemon URL is available', () => {
+  it('returns null when sentence-transformers base_url is still the unresolved managed sentinel', () => {
     const config: KtxProjectEmbeddingConfig = {
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',

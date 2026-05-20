@@ -1,4 +1,5 @@
-import { type KtxLocalProject, type KtxProjectConnectionConfig, loadKtxProject } from '@ktx/context/project';
+import { type KtxLocalProject, type KtxProjectConnectionConfig } from '@ktx/context/project';
+import { loadKtxCliProject } from './cli-project.js';
 import type { KtxProgressPort } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
@@ -90,7 +91,7 @@ export type KtxPublicIngestProject = Pick<KtxLocalProject, 'projectDir' | 'confi
 type KtxPublicIngestPhaseKey = 'database-schema' | 'query-history' | 'source-ingest';
 
 export interface KtxPublicIngestDeps {
-  loadProject?: (options: Parameters<typeof loadKtxProject>[0]) => Promise<KtxPublicIngestProject>;
+  loadProject?: (options: { projectDir: string }) => Promise<KtxPublicIngestProject>;
   runScan?: (args: KtxScanArgs, io: KtxCliIo, deps?: KtxScanDeps) => Promise<number>;
   runIngest?: (args: KtxIngestArgs, io: KtxCliIo, deps?: KtxIngestDeps) => Promise<number>;
   runContextBuild?: (
@@ -867,7 +868,15 @@ export async function runKtxPublicIngest(
   io: KtxCliIo,
   deps: KtxPublicIngestDeps = {},
 ): Promise<number> {
-  const loadProject = deps.loadProject ?? loadKtxProject;
+  const loadProject =
+    deps.loadProject ??
+    ((options: { projectDir: string }) =>
+      loadKtxCliProject({
+        projectDir: options.projectDir,
+        cliVersion: args.cliVersion ?? '0.0.0-private',
+        installPolicy: args.runtimeInstallPolicy ?? 'never',
+        io,
+      }));
   const project = await loadProject({ projectDir: args.projectDir });
   if (shouldUseForegroundContextBuildView(args, io)) {
     const plan = buildPublicIngestPlan(project, args);

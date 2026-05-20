@@ -23,7 +23,6 @@ interface LocalConfigDeps {
 }
 
 export const MANAGED_SENTENCE_TRANSFORMERS_BASE_URL = 'managed:local-embeddings';
-export const MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV = 'KTX_MANAGED_SENTENCE_TRANSFORMERS_BASE_URL';
 
 function resolveOptional(value: string | undefined, env: NodeJS.ProcessEnv): string | undefined {
   return resolveKtxConfigReference(value, env) || undefined;
@@ -141,19 +140,6 @@ export function createLocalKtxLlmRuntimeFromConfig(
   return (deps.createAiSdkRuntime ?? ((runtimeDeps) => new AiSdkKtxLlmRuntime(runtimeDeps)))({ llmProvider });
 }
 
-function resolveSentenceTransformersBaseUrl(
-  value: string | undefined,
-  env: NodeJS.ProcessEnv,
-): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  if (value === MANAGED_SENTENCE_TRANSFORMERS_BASE_URL) {
-    return resolveOptional(`env:${MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV}`, env);
-  }
-  return value;
-}
-
 export function resolveLocalKtxEmbeddingConfig(
   config: KtxProjectEmbeddingConfig,
   env: NodeJS.ProcessEnv,
@@ -162,8 +148,8 @@ export function resolveLocalKtxEmbeddingConfig(
     return null;
   }
   if (config.backend === 'sentence-transformers') {
-    const baseURL = resolveSentenceTransformersBaseUrl(config.sentenceTransformers?.base_url, env);
-    if (!baseURL) {
+    const baseURL = config.sentenceTransformers?.base_url;
+    if (!baseURL || baseURL === MANAGED_SENTENCE_TRANSFORMERS_BASE_URL) {
       return null;
     }
     return {

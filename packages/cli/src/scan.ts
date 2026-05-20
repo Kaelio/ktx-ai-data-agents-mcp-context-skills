@@ -1,4 +1,3 @@
-import { loadKtxProject } from '@ktx/context/project';
 import {
   type KtxProgressPort,
   type KtxScanMode,
@@ -6,6 +5,7 @@ import {
   type KtxScanWarning,
   runLocalScan,
 } from '@ktx/context/scan';
+import { loadKtxCliProject } from './cli-project.js';
 import type { KtxCliIo } from './index.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
@@ -313,7 +313,12 @@ export function createCliScanProgress(
 
 export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps: KtxScanDeps = {}): Promise<number> {
   try {
-    const project = await loadKtxProject({ projectDir: args.projectDir });
+    const project = await loadKtxCliProject({
+      projectDir: args.projectDir,
+      cliVersion: args.cliVersion ?? '0.0.0-private',
+      installPolicy: args.runtimeInstallPolicy ?? 'never',
+      io,
+    });
     const managedDaemon = managedDaemonOptionsForScanRun(args, deps.runtimeIo ?? io);
     const connector =
       args.mode !== 'structural' || args.detectRelationships

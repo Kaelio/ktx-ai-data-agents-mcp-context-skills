@@ -1,18 +1,17 @@
 import {
   createLocalKtxEmbeddingProviderFromConfig,
   KtxIngestEmbeddingPortAdapter,
-  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
   type KtxEmbeddingPort,
 } from '@ktx/context';
 import { reindexLocalIndexes, type ReindexScopeResult, type ReindexSummary } from '@ktx/context/index-sync';
-import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { type KtxLocalProject } from '@ktx/context/project';
 import { Option, type Command } from '@commander-js/extra-typings';
 import { cancel, intro, log, note, outro } from '@clack/prompts';
 import type { KtxCliCommandContext } from './cli-program.js';
+import { loadKtxCliProject } from './cli-project.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { resolveOutputMode } from './io/mode.js';
 import { green, red, SYMBOLS } from './io/symbols.js';
-import { ensureManagedLocalEmbeddingsDaemon } from './managed-local-embeddings.js';
 
 export interface KtxAdminReindexArgs {
   projectDir: string;
@@ -49,30 +48,11 @@ export function registerAdminReindexCommand(admin: Command, context: KtxCliComma
     });
 }
 
-async function resolveReindexEmbeddingService(
-  project: KtxLocalProject,
-  args: KtxAdminReindexArgs,
-  io: KtxCliIo,
-): Promise<KtxEmbeddingPort | null> {
+function resolveReindexEmbeddingService(project: KtxLocalProject): KtxEmbeddingPort | null {
   const config = project.config.ingest.embeddings;
   if (config.backend === 'none') {
     return null;
   }
-
-  if (
-    config.backend === 'sentence-transformers' &&
-    config.sentenceTransformers?.base_url === MANAGED_SENTENCE_TRANSFORMERS_BASE_URL
-  ) {
-    const daemon = await ensureManagedLocalEmbeddingsDaemon({
-      cliVersion: args.cliVersion,
-      projectDir: project.projectDir,
-      installPolicy: 'never',
-      io,
-    });
-    const provider = createLocalKtxEmbeddingProviderFromConfig(config, { env: { ...process.env, ...daemon.env } });
-    return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
-  }
-
   const provider = createLocalKtxEmbeddingProviderFromConfig(config);
   return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
 }
@@ -186,8 +166,13 @@ function renderReindexPretty(summary: ReindexSummary, io: KtxCliIo): void {
 
 async function runKtxAdminReindex(args: KtxAdminReindexArgs, io: KtxCliIo = process): Promise<number> {
   try {
-    const project = await loadKtxProject({ projectDir: args.projectDir });
-    const embeddingService = await resolveReindexEmbeddingService(project, args, io);
+    const project = await loadKtxCliProject({
+      projectDir: args.projectDir,
+      cliVersion: args.cliVersion,
+      installPolicy: 'never',
+      io,
+    });
+    const embeddingService = resolveReindexEmbeddingService(project);
     const summary = await reindexLocalIndexes(project, { force: args.force, embeddingService });
     const mode = resolveOutputMode({ explicit: args.output, json: args.json, io });
 

@@ -1,7 +1,4 @@
-import {
-  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
-  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV,
-} from '@ktx/context';
+import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
 import type { KtxProjectEmbeddingConfig } from '@ktx/context/project';
 import type { KtxEmbeddingConfig } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
@@ -16,7 +13,6 @@ export interface ManagedLocalEmbeddingsDaemon {
   baseUrl: string;
   stdoutLog: string;
   stderrLog: string;
-  env: Record<typeof MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV, string>;
 }
 
 export interface ManagedLocalEmbeddingsOptions {
@@ -95,8 +91,5 @@ export async function ensureManagedLocalEmbeddingsDaemon(
     baseUrl: daemon.baseUrl,
     stdoutLog: daemon.state.stdoutLog,
     stderrLog: daemon.state.stderrLog,
-    env: {
-      [MANAGED_SENTENCE_TRANSFORMERS_BASE_URL_ENV]: daemon.baseUrl,
-    },
   };
 }
