@@ -21,6 +21,11 @@ async function writeReleaseFixture(root) {
     version: '0.0.0-private',
     private: true,
   });
+  await writeJson(join(root, 'packages', 'cli', 'package.json'), {
+    name: '@ktx/cli',
+    version: '0.0.0-private',
+    private: true,
+  });
   await writeJson(join(root, 'release-policy.json'), {
     schemaVersion: 1,
     publicNpmPackageVersion: '0.1.0-rc.1',
@@ -60,6 +65,7 @@ describe('updatePublicReleaseVersion', () => {
       await updatePublicReleaseVersion(root, '0.1.0-rc.2', 'next');
 
       assert.equal((await readJson(join(root, 'package.json'))).version, '0.1.0-rc.2');
+      assert.equal((await readJson(join(root, 'packages', 'cli', 'package.json'))).version, '0.1.0-rc.2');
       assert.deepEqual(await readJson(join(root, 'release-policy.json')), {
         schemaVersion: 1,
         publicNpmPackageVersion: '0.1.0-rc.2',
@@ -88,6 +94,26 @@ describe('updatePublicReleaseVersion', () => {
         },
         requiredBeforePublishing: [],
       });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts branch-prefixed npm release tags produced by branch RC publishes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ktx-release-version-branch-test-'));
+    try {
+      await writeReleaseFixture(root);
+
+      await updatePublicReleaseVersion(root, '0.1.0-feature-foo.0', 'branch-feature-foo');
+
+      assert.equal((await readJson(join(root, 'package.json'))).version, '0.1.0-feature-foo.0');
+      assert.equal(
+        (await readJson(join(root, 'packages', 'cli', 'package.json'))).version,
+        '0.1.0-feature-foo.0',
+      );
+      const policy = await readJson(join(root, 'release-policy.json'));
+      assert.equal(policy.publicNpmPackageVersion, '0.1.0-feature-foo.0');
+      assert.equal(policy.npm.tag, 'branch-feature-foo');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

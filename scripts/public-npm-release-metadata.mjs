@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 export const PUBLIC_NPM_PACKAGE_NAME = '@kaelio/ktx';
 export const PUBLIC_NPM_RELEASE_TAGS = new Set(['latest', 'next']);
+export const PUBLIC_NPM_BRANCH_RELEASE_TAG_PATTERN = /^branch-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -56,10 +57,13 @@ export function publicNpmPackageVersionToPythonVersion(version) {
 }
 
 export function assertPublicNpmReleaseTag(tag) {
-  if (!PUBLIC_NPM_RELEASE_TAGS.has(tag)) {
+  if (typeof tag !== 'string') {
     throw new Error(`Invalid public npm release tag: ${tag}`);
   }
-  return tag;
+  if (PUBLIC_NPM_RELEASE_TAGS.has(tag) || PUBLIC_NPM_BRANCH_RELEASE_TAG_PATTERN.test(tag)) {
+    return tag;
+  }
+  throw new Error(`Invalid public npm release tag: ${tag}`);
 }
 
 export function readPublicNpmReleaseMetadata(rootDir = scriptRootDir()) {

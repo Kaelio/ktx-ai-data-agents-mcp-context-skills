@@ -32,6 +32,11 @@ export async function updatePublicReleaseVersion(rootDir, version, tag) {
   packageJson.version = safeVersion;
   await writeJson(packageJsonPath, packageJson);
 
+  const cliPackageJsonPath = join(rootDir, 'packages', 'cli', 'package.json');
+  const cliPackageJson = await readJson(cliPackageJsonPath);
+  cliPackageJson.version = safeVersion;
+  await writeJson(cliPackageJsonPath, cliPackageJson);
+
   const policyPath = releasePolicyPath(rootDir);
   const policy = await readJson(policyPath);
   policy.publicNpmPackageVersion = safeVersion;

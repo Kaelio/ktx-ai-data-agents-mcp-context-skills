@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { publicNpmPackageVersionToPythonVersion } from './public-npm-release-metadata.mjs';
+import { assertPublicNpmReleaseTag, publicNpmPackageVersionToPythonVersion } from './public-npm-release-metadata.mjs';
 
 describe('publicNpmPackageVersionToPythonVersion', () => {
   it('keeps stable public npm versions unchanged for Python wheels', () => {
@@ -22,5 +22,24 @@ describe('publicNpmPackageVersionToPythonVersion', () => {
       () => publicNpmPackageVersionToPythonVersion('1.2.3+build.1'),
       /Unsupported public npm build metadata for Python runtime version/,
     );
+  });
+});
+
+describe('assertPublicNpmReleaseTag', () => {
+  it('accepts the canonical latest and next tags', () => {
+    assert.equal(assertPublicNpmReleaseTag('latest'), 'latest');
+    assert.equal(assertPublicNpmReleaseTag('next'), 'next');
+  });
+
+  it('accepts branch-prefixed release tags produced by branch RC publishes', () => {
+    assert.equal(assertPublicNpmReleaseTag('branch-feature-foo'), 'branch-feature-foo');
+    assert.equal(assertPublicNpmReleaseTag('branch-rel-1-2-3'), 'branch-rel-1-2-3');
+    assert.equal(assertPublicNpmReleaseTag('branch-x'), 'branch-x');
+  });
+
+  it('rejects malformed or non-string tags', () => {
+    for (const bad of ['', 'BRANCH-x', 'branch-', 'branch--foo', 'branch_foo', 'beta', null, undefined, 42]) {
+      assert.throws(() => assertPublicNpmReleaseTag(bad), /Invalid public npm release tag/);
+    }
   });
 });

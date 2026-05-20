@@ -5,8 +5,17 @@ import { describe, it } from 'node:test';
 const require = createRequire(import.meta.url);
 const { createReleaseConfig, releaseBranches, releaseKind, releaseTag } = require('./semantic-release-config.cjs');
 
-function releaseExecOptions(config) {
+function prepareExecOptions(config) {
   return config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].prepareCmd)[1];
+}
+
+function publishExecOptions(config) {
+  return config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].publishCmd)[1];
+}
+
+function gitPluginOptions(config) {
+  const found = config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/git');
+  return found ? found[1] : undefined;
 }
 
 function pluginNames(config) {
@@ -28,14 +37,14 @@ describe('semantic-release config', () => {
       '@semantic-release/npm must not run; the exec publishCmd publishes the pre-built tarball',
     );
     assert.match(
-      releaseExecOptions(config).prepareCmd,
+      prepareExecOptions(config).prepareCmd,
       /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "next"/,
     );
     assert.match(
-      releaseExecOptions(config).publishCmd,
+      publishExecOptions(config).publishCmd,
       /^npm publish dist\/artifacts\/npm\/kaelio-ktx-\$\{nextRelease\.version\}\.tgz --tag next --access public --provenance/,
     );
-    assert.match(releaseExecOptions(config).publishCmd, /pnpm run release:published-smoke/);
+    assert.match(publishExecOptions(config).publishCmd, /pnpm run release:published-smoke/);
     assert.doesNotMatch(JSON.stringify(config.plugins), /release:npm-publish/);
   });
 
@@ -48,11 +57,11 @@ describe('semantic-release config', () => {
 
     const config = createReleaseConfig({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'feature/branch-release' });
     assert.match(
-      releaseExecOptions(config).prepareCmd,
+      prepareExecOptions(config).prepareCmd,
       /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "branch-feature-branch-release"/,
     );
     assert.match(
-      releaseExecOptions(config).publishCmd,
+      publishExecOptions(config).publishCmd,
       /^npm publish dist\/artifacts\/npm\/kaelio-ktx-\$\{nextRelease\.version\}\.tgz --tag branch-feature-branch-release --access public --provenance/,
     );
   });
@@ -64,22 +73,48 @@ describe('semantic-release config', () => {
 
     const config = createReleaseConfig({ KTX_RELEASE_KIND: 'stable', GITHUB_REF_NAME: 'main' });
     assert.match(
-      releaseExecOptions(config).prepareCmd,
+      prepareExecOptions(config).prepareCmd,
       /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "latest"/,
     );
     assert.match(
-      releaseExecOptions(config).publishCmd,
+      publishExecOptions(config).publishCmd,
       /^npm publish dist\/artifacts\/npm\/kaelio-ktx-\$\{nextRelease\.version\}\.tgz --tag latest --access public --provenance/,
     );
     assert.equal(config.plugins.includes('./scripts/semantic-release-version-policy.cjs'), false);
   });
 
-  it('never commits release files back to the repo', () => {
+  it('commits release version files back to the branch via @semantic-release/git', () => {
     for (const kind of ['rc', 'stable']) {
       const config = createReleaseConfig({ KTX_RELEASE_KIND: kind, GITHUB_REF_NAME: 'main' });
-      assert.equal(pluginNames(config).includes('@semantic-release/git'), false, `${kind}: @semantic-release/git`);
+      const git = gitPluginOptions(config);
+      assert.ok(git, `${kind}: @semantic-release/git plugin must be configured`);
+      assert.deepEqual(git.assets, ['package.json', 'release-policy.json', 'packages/cli/package.json']);
+      assert.match(git.message, /^chore\(release\): \$\{nextRelease\.version\} \[skip ci\]/);
+    }
+  });
+
+  it('keeps @semantic-release/npm and @semantic-release/changelog out of the plugin chain', () => {
+    for (const kind of ['rc', 'stable']) {
+      const config = createReleaseConfig({ KTX_RELEASE_KIND: kind, GITHUB_REF_NAME: 'main' });
+      assert.equal(pluginNames(config).includes('@semantic-release/npm'), false, `${kind}: @semantic-release/npm`);
       assert.equal(pluginNames(config).includes('@semantic-release/changelog'), false, `${kind}: @semantic-release/changelog`);
     }
+  });
+
+  it('orders the prepare exec before @semantic-release/git before the publish exec', () => {
+    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'stable', GITHUB_REF_NAME: 'main' });
+    const prepareIndex = config.plugins.findIndex(
+      (plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].prepareCmd,
+    );
+    const gitIndex = config.plugins.findIndex(
+      (plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/git',
+    );
+    const publishIndex = config.plugins.findIndex(
+      (plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].publishCmd,
+    );
+    assert.ok(prepareIndex !== -1 && gitIndex !== -1 && publishIndex !== -1);
+    assert.ok(prepareIndex < gitIndex, 'prepare exec must run before @semantic-release/git');
+    assert.ok(gitIndex < publishIndex, '@semantic-release/git must run before the publish exec');
   });
 
   it('produces a loadable config regardless of GITHUB_REF_NAME', () => {
