@@ -7,14 +7,12 @@ import { describe, it } from 'node:test';
 import {
   INTERNAL_NPM_WORKSPACE_PACKAGES,
   NPM_ARTIFACT_PACKAGES,
-  RUNTIME_WHEEL_PACKAGE_VERSION,
   packageArtifactLayout,
   writeArtifactManifest,
 } from './package-artifacts.mjs';
 import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
+import { RUNTIME_WHEEL_PACKAGE_VERSION } from './build-python-runtime-wheel.mjs';
 import { readReleasePolicy, releasePolicyPath, releaseReadinessReport } from './release-readiness.mjs';
-
-const RUNTIME_WHEEL_FILE = `kaelio_ktx-${RUNTIME_WHEEL_PACKAGE_VERSION}-py3-none-any.whl`;
 
 async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -40,7 +38,10 @@ async function writeUploadableArtifactFixtures(layout) {
       layout.npmTarballs[packageInfo.name],
       `${packageInfo.name}-tarball`,
     ]),
-    [join(layout.pythonDir, RUNTIME_WHEEL_FILE), 'kaelio-ktx-runtime-wheel'],
+    [
+      join(layout.pythonDir, `kaelio_ktx-${RUNTIME_WHEEL_PACKAGE_VERSION}-py3-none-any.whl`),
+      'kaelio-ktx-runtime-wheel',
+    ],
   ]);
 
   for (const [path, contents] of fileContents) {

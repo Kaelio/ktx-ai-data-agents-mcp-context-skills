@@ -18,7 +18,9 @@ import {
 } from './index.js';
 
 const require = createRequire(import.meta.url);
-const CLI_VERSION = (require('@ktx/cli/package.json') as { version: string }).version;
+
+const cliPackageJson = require('@ktx/cli/package.json') as { name: string; version: string };
+const cliVersion = cliPackageJson.version;
 
 function makeIo(options: { stdoutIsTty?: boolean } = {}) {
   let stdout = '';
@@ -46,7 +48,7 @@ describe('getKtxCliPackageInfo', () => {
   it('identifies the CLI package and its context dependency', () => {
     expect(getKtxCliPackageInfo()).toEqual({
       name: '@ktx/cli',
-      version: CLI_VERSION,
+      version: cliVersion,
       contextPackageName: '@ktx/context',
     });
   });
@@ -56,8 +58,9 @@ describe('getKtxCliPackageInfo', () => {
 
     expect(packageJson).toMatchObject({
       name: '@ktx/cli',
-      version: CLI_VERSION,
+      version: cliVersion,
     });
+    expect(cliVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it('normalizes public package metadata from package.json contents', () => {
@@ -115,7 +118,7 @@ describe('runKtxCli', () => {
 
     await expect(runKtxCli(['--version'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toBe(`@ktx/cli ${CLI_VERSION}\n`);
+    expect(testIo.stdout()).toBe(`@ktx/cli ${cliVersion}\n`);
     expect(testIo.stderr()).toBe('');
   });
 
@@ -305,7 +308,7 @@ describe('runKtxCli', () => {
       1,
       {
         command: 'install',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         feature: 'local-embeddings',
         force: true,
       },
@@ -315,7 +318,7 @@ describe('runKtxCli', () => {
       2,
       {
         command: 'start',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         projectDir: expect.any(String),
         feature: 'local-embeddings',
         force: true,
@@ -326,7 +329,7 @@ describe('runKtxCli', () => {
       3,
       {
         command: 'stop',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         projectDir: expect.any(String),
         all: false,
       },
@@ -336,7 +339,7 @@ describe('runKtxCli', () => {
       4,
       {
         command: 'stop',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         projectDir: expect.any(String),
         all: true,
       },
@@ -346,7 +349,7 @@ describe('runKtxCli', () => {
       5,
       {
         command: 'status',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         json: true,
       },
       statusIo.io,
@@ -419,7 +422,7 @@ describe('runKtxCli', () => {
       expect.objectContaining({
         command: 'query',
         projectDir: tempDir,
-        cliVersion: CLI_VERSION,
+        cliVersion,
         runtimeInstallPolicy: 'prompt',
         query: expect.objectContaining({ measures: ['orders.order_count'], dimensions: [] }),
       }),
@@ -434,7 +437,7 @@ describe('runKtxCli', () => {
     ).resolves.toBe(0);
     expect(sl).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        cliVersion: CLI_VERSION,
+        cliVersion,
         runtimeInstallPolicy: 'auto',
       }),
       autoIo.io,
@@ -450,7 +453,7 @@ describe('runKtxCli', () => {
     ).resolves.toBe(0);
     expect(sl).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        cliVersion: CLI_VERSION,
+        cliVersion,
         runtimeInstallPolicy: 'never',
       }),
       noInputIo.io,
@@ -586,7 +589,7 @@ describe('runKtxCli', () => {
           skipAgents: false,
           inputMode: 'auto',
           yes: false,
-          cliVersion: CLI_VERSION,
+          cliVersion,
           skipLlm: false,
           skipEmbeddings: false,
           databaseSchemas: [],
@@ -716,7 +719,7 @@ describe('runKtxCli', () => {
         inputMode: 'disabled',
         depth: 'fast',
         queryHistory: 'default',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         runtimeInstallPolicy: 'never',
       },
       testIo.io,
@@ -743,7 +746,7 @@ describe('runKtxCli', () => {
         inputMode: 'auto',
         depth: 'deep',
         queryHistory: 'default',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         runtimeInstallPolicy: 'prompt',
       },
       testIo.io,
@@ -820,7 +823,7 @@ describe('runKtxCli', () => {
           json: false,
           inputMode: 'disabled',
           queryHistory: 'default',
-          cliVersion: CLI_VERSION,
+          cliVersion,
           runtimeInstallPolicy: 'never',
         },
         testIo.io,
@@ -1125,7 +1128,7 @@ describe('runKtxCli', () => {
         command: 'run',
         projectDir: tempDir,
         inputMode: 'disabled',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
         llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
@@ -1164,7 +1167,7 @@ describe('runKtxCli', () => {
         command: 'run',
         projectDir: tempDir,
         inputMode: 'disabled',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         llmBackend: 'vertex',
         vertexProject: 'local-gcp-project',
         vertexLocation: 'us-east5',
@@ -1201,7 +1204,7 @@ describe('runKtxCli', () => {
         command: 'run',
         projectDir: tempDir,
         inputMode: 'disabled',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         llmBackend: 'claude-code',
         llmModel: 'opus',
         skipLlm: false,
@@ -1309,7 +1312,7 @@ describe('runKtxCli', () => {
         projectDir: '/tmp/project',
         inputMode: 'disabled',
         yes: true,
-        cliVersion: CLI_VERSION,
+        cliVersion,
         skipLlm: true,
         skipEmbeddings: true,
         databaseDrivers: ['postgres'],
@@ -1650,7 +1653,7 @@ describe('runKtxCli', () => {
         queryFile: '/tmp/query.json',
         execute: false,
         format: 'json',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         runtimeInstallPolicy: 'auto',
       },
       autoIo.io,
@@ -1664,7 +1667,7 @@ describe('runKtxCli', () => {
         queryFile: '/tmp/query.json',
         execute: false,
         format: 'json',
-        cliVersion: CLI_VERSION,
+        cliVersion,
         runtimeInstallPolicy: 'never',
       },
       neverIo.io,

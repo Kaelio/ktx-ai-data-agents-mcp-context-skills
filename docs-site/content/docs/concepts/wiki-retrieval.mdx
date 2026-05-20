@@ -1,0 +1,280 @@
+---
+title: Wiki retrieval
+description: How ktx ranks wiki pages with hybrid search, links them into a graph, and keeps both sides anchored to evidence.
+---
+
+The wiki is the prose half of the context layer. Agents reach it two ways:
+they search for a page, then follow references inside the pages they
+already opened. This page covers how both work.
+
+- The wiki page contract that retrieval and validation depend on.
+- The hybrid search pipeline that turns a question into ranked pages.
+- The reference graph agents traverse without rerunning search.
+- How pages get authored from evidence, and how broken edges get pruned.
+
+## The wiki page contract
+
+A wiki page is a Markdown file with a YAML frontmatter block. Frontmatter
+carries metadata; the prose below it is free-form. Keys are flat tokens
+(`revenue`, `mart_account_segments`), not paths, so every page is
+addressable as `[[key]]` from any other page.
+
+```markdown
+# wiki/global/revenue.md
+---
+summary: Paid order value after refunds
+tags: [finance, orders]
+sl_refs: [warehouse.orders]
+refs: [segment-classification]
+usage_mode: auto
+---
+
+Revenue is paid order amount after refund adjustments.
+
+Use `orders.total_revenue` for recognized order value and
+`orders.order_count` for paid order volume.
+```
+
+| Field | Purpose |
+|-------|---------|
+| `summary` | One-line description shown in search results and the agent's knowledge index |
+| `tags` | Topic labels mixed into the search text and used for filtering |
+| `refs` | Outgoing edges to other wiki pages by key |
+| `sl_refs` | Outgoing edges to semantic-layer sources by `connection.source` name |
+| `usage_mode` | `always`, `auto`, or `never` - whether the agent must, may, or must not surface this page |
+| `source` | Where the page came from when authored by ingest (e.g. `historic-sql`, `dbt`) |
+| `usage` | Stats attached to historic-SQL pattern pages: executions, distinct users, runtime percentiles, error rate |
+
+Pages live under two scopes. `wiki/global/*.md` is the team's shared
+context; `wiki/user/<user>/*.md` is per-agent scratch space that shadows
+global pages with the same key.
+
+## What retrieval does
+
+A wiki search runs the same ordered steps every time.
+
+1. **Normalize the query.** Lowercase, tokenize, deduplicate terms.
+2. **Score in three lanes.** Lexical (SQLite FTS5 bm25), semantic
+   (cosine similarity over embeddings), and token (term-overlap fallback)
+   each rank every page independently.
+3. **Fuse with Reciprocal Rank Fusion.** Each lane contributes
+   `weight / (60 + rank)` to a candidate's score. Lanes that fail or
+   skip are dropped, not zeroed.
+4. **Order and trim.** Sort by fused score, then by how many lanes
+   matched, then by id for stable tie-breaks. Return the top `limit`
+   results with their summaries.
+5. **Hydrate on demand.** The agent calls `wiki_read` to load full
+   bodies for the few pages that look relevant.
+
+<figure
+  className="not-prose my-10 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="Three retrieval lanes fused with Reciprocal Rank Fusion"
+>
+  <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
+    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fd-primary">
+      {"Hybrid retrieval"}
+    </p>
+    <h3
+      className="mt-1 text-base font-semibold tracking-normal text-fd-foreground sm:text-lg"
+      style={{ fontFamily: "var(--font-display)" }}
+    >
+      {"Three lanes, one ranking"}
+    </h3>
+  </div>
+
+  <div className="p-6">
+    <div className="grid gap-3 md:grid-cols-3">
+      <div className="rounded-md border border-fd-border bg-fd-background p-4">
+        <p className="text-sm font-semibold text-fd-foreground">{"lexical"}</p>
+        <p className="mt-1 font-mono text-[11px] text-fd-muted-foreground">{"sqlite fts5 / bm25"}</p>
+        <p className="mt-3 text-xs leading-5 text-fd-muted-foreground">
+          {"Matches stems and phrases. Strong on the exact terms the team already uses."}
+        </p>
+        <p className="mt-3 text-[11px] uppercase tracking-[0.08em] text-fd-muted-foreground">
+          <span className="text-fd-foreground">{"weight "}</span>{"1.5"}
+        </p>
+      </div>
+
+      <div className="rounded-md border border-fd-border bg-fd-background p-4">
+        <p className="text-sm font-semibold text-fd-foreground">{"semantic"}</p>
+        <p className="mt-1 font-mono text-[11px] text-fd-muted-foreground">{"cosine over embeddings"}</p>
+        <p className="mt-3 text-xs leading-5 text-fd-muted-foreground">
+          {"Catches synonyms and paraphrases the lexical lane misses."}
+        </p>
+        <p className="mt-3 text-[11px] uppercase tracking-[0.08em] text-fd-muted-foreground">
+          <span className="text-fd-foreground">{"weight "}</span>{"2"}
+        </p>
+      </div>
+
+      <div className="rounded-md border border-fd-border bg-fd-background p-4">
+        <p className="text-sm font-semibold text-fd-foreground">{"token"}</p>
+        <p className="mt-1 font-mono text-[11px] text-fd-muted-foreground">{"term-overlap fallback"}</p>
+        <p className="mt-3 text-xs leading-5 text-fd-muted-foreground">
+          {"Always available, so short queries still produce candidates."}
+        </p>
+        <p className="mt-3 text-[11px] uppercase tracking-[0.08em] text-fd-muted-foreground">
+          <span className="text-fd-foreground">{"weight "}</span>{"0.75"}
+        </p>
+      </div>
+    </div>
+
+    <div className="mt-5 rounded-md border border-fd-primary/40 bg-fd-background p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fd-primary">
+        {"Reciprocal Rank Fusion"}
+      </p>
+      <p className="mt-1 font-mono text-[12px] text-fd-foreground">
+        {"score = Σ weight / (60 + rank)"}
+      </p>
+      <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+        {"Pages that rank well in multiple lanes outscore pages that rank well in only one."}
+      </p>
+    </div>
+  </div>
+
+  <figcaption className="border-t border-fd-border bg-fd-muted/25 px-5 py-3 text-[11.5px] leading-5 text-fd-muted-foreground">
+    <span className="font-medium text-fd-foreground">{"Defaults are tunable. "}</span>
+    {"Lane weights and the RRF constant K are configuration, not assumptions."}
+  </figcaption>
+</figure>
+
+The text each lane scores is built deterministically: page key, summary,
+body, and tags concatenated in that order. A precise summary and the
+right tags make a page reachable before its body matches anything.
+
+## The page graph
+
+Two frontmatter fields and one inline syntax turn the wiki into a graph
+the agent traverses without re-running search.
+
+| Edge | Source | Target |
+|------|--------|--------|
+| `sl_refs: [warehouse.orders]` | Frontmatter | Semantic source by name |
+| `refs: [segment-classification]` | Frontmatter | Another wiki page by key |
+| `[[segment-classification]]` | Inline in body | Another wiki page by key |
+
+`refs` stays in the prose layer; `sl_refs` crosses into the executable
+half of the context layer. Inline `[[wikilinks]]` are extracted from
+page bodies at validation time and treated as declared `refs`.
+
+<figure
+  className="not-prose my-10 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="Example wiki cross-reference graph"
+>
+  <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
+    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fd-primary">
+      {"Anatomy of a traversal"}
+    </p>
+    <h3
+      className="mt-1 text-base font-semibold tracking-normal text-fd-foreground sm:text-lg"
+      style={{ fontFamily: "var(--font-display)" }}
+    >
+      {"Edges to prose, edges to SQL"}
+    </h3>
+  </div>
+
+  <div className="p-6">
+    <div className="grid gap-3 md:grid-cols-[1fr_1fr]">
+      <div className="rounded-md border-2 bg-fd-background p-4" style={{ borderColor: "#10b981" }}>
+        <p className="font-mono text-[11px] font-semibold" style={{ color: "#10b981" }}>
+          {"wiki/global/revenue.md"}
+        </p>
+        <p className="mt-2 text-sm font-semibold text-fd-foreground">{"revenue"}</p>
+        <p className="mt-3 text-[11px] uppercase tracking-[0.08em] text-fd-muted-foreground">
+          {"declares"}
+        </p>
+        <ul className="mt-1 space-y-1 text-xs text-fd-muted-foreground">
+          <li><span className="font-mono text-fd-foreground">{"sl_refs"}</span>: warehouse.orders</li>
+          <li><span className="font-mono text-fd-foreground">{"refs"}</span>: segment-classification</li>
+        </ul>
+      </div>
+      <div className="rounded-md border bg-fd-background p-4" style={{ borderColor: "#10b981", borderStyle: "dashed" }}>
+        <p className="font-mono text-[11px] font-semibold" style={{ color: "#10b981" }}>
+          {"wiki/global/segment-classification.md"}
+        </p>
+        <p className="mt-2 text-sm font-semibold text-fd-foreground">{"segment-classification"}</p>
+        <p className="mt-3 text-[11px] uppercase tracking-[0.08em] text-fd-muted-foreground">
+          {"declares"}
+        </p>
+        <ul className="mt-1 space-y-1 text-xs text-fd-muted-foreground">
+          <li><span className="font-mono text-fd-foreground">{"sl_refs"}</span>: warehouse.customers</li>
+        </ul>
+      </div>
+    </div>
+
+    <div className="my-4 grid gap-2 text-center text-xs font-medium text-fd-muted-foreground md:grid-cols-[1fr_1fr]">
+      <div>{"revenue → warehouse.orders  ·  sl_refs"}</div>
+      <div>{"revenue → segment-classification  ·  refs"}</div>
+    </div>
+
+    <div className="grid gap-3 md:grid-cols-[1fr_1fr]">
+      <div className="rounded-md border-2 bg-fd-background p-4" style={{ borderColor: "#3b82f6" }}>
+        <p className="font-mono text-[11px] font-semibold" style={{ color: "#3b82f6" }}>
+          {"semantic-layer/warehouse/orders.yaml"}
+        </p>
+        <p className="mt-2 text-sm font-semibold text-fd-foreground">{"warehouse.orders"}</p>
+        <p className="mt-1 text-xs text-fd-muted-foreground">{"grain: order_id  ·  measure: total_revenue"}</p>
+      </div>
+      <div className="rounded-md border-2 bg-fd-background p-4" style={{ borderColor: "#3b82f6" }}>
+        <p className="font-mono text-[11px] font-semibold" style={{ color: "#3b82f6" }}>
+          {"semantic-layer/warehouse/customers.yaml"}
+        </p>
+        <p className="mt-2 text-sm font-semibold text-fd-foreground">{"warehouse.customers"}</p>
+        <p className="mt-1 text-xs text-fd-muted-foreground">{"grain: customer_id  ·  dim: segment"}</p>
+      </div>
+    </div>
+  </div>
+
+  <figcaption className="border-t border-fd-border bg-fd-muted/25 px-5 py-3 text-[11.5px] leading-5 text-fd-muted-foreground">
+    {"Green nodes are wiki pages; blue nodes are semantic sources."}
+  </figcaption>
+</figure>
+
+## Keeping the graph live
+
+A page that references a deleted source is worse than no reference at
+all - it sends the agent confidently to a definition that no longer
+exists. **ktx** prevents that with three layered checks:
+
+- **At write time.** Every `refs` entry and `[[wikilink]]` is validated
+  against the pages visible in the current scope. A write that targets
+  a missing page is rejected before any file changes.
+- **At ingest time.** Adapters prune `sl_refs` when the target source
+  is deleted, mark stale pattern pages with `stale_since`, and set
+  `archived_since` on retired pages instead of removing them silently.
+- **At session end.** Every page touched by an ingest run is re-scanned
+  for references that resolved at write time but no longer point at
+  a live target. Dangling pairs are reported so the next iteration can
+  fix them.
+
+## Where the pages come from
+
+**ktx** writes wiki pages from evidence, not free invention. Each input
+contributes a different kind of page, and accepted edits feed the next
+ingest as input.
+
+| Evidence | What it produces |
+|----------|------------------|
+| Schema scans | One page per material table, with grain, columns, and known constraints |
+| Query history | Pattern pages with `usage` frontmatter for executions, distinct users, runtime percentiles, and error rate |
+| dbt manifests | Pages per model, exposure, and test, with `sl_refs` to the matching semantic source |
+| MetricFlow, Looker, Metabase | Pages per metric, explore, or saved question, linked back to the source artifact |
+| Notion, docs, analyst notes | Pages preserving business definitions, policies, and incident write-ups |
+| Agent and analyst edits | First-class input to the next ingest, not a fork |
+
+Provenance stays with the page. Ingested pages keep HTML comments like
+`<!-- from: raw-sources/.../cards/69.json -->` inline, so a reviewer can
+walk from the prose back to the artifact that produced it.
+
+## Agent usage notes
+
+Point an agent at this page when it needs to explain why a wiki search
+returned the pages it did, why a write was rejected, or how the wiki
+stays in step with the semantic layer.
+
+| Agent task | Relevant section | Next page |
+|------------|------------------|-----------|
+| Explain why two searches return different pages for the same query | What retrieval does | [ktx wiki](/docs/cli-reference/ktx-wiki) |
+| Decide whether to add a `refs` or `sl_refs` entry | The page graph | [Writing Context](/docs/guides/writing-context) |
+| Repair a wiki write rejected for missing references | Keeping the graph live | [Writing Context](/docs/guides/writing-context) |
+| Describe how historic SQL becomes a wiki page | Where the pages come from | [Building Context](/docs/guides/building-context) |
+| Explain raw-source provenance comments | Where the pages come from | [Context as Code](/docs/concepts/context-as-code) |

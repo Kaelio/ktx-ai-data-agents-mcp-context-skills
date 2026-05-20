@@ -141,10 +141,13 @@ async function writeWorkspaceFixture(root) {
 describe('publicNpmPackageLayout', () => {
   it('uses the public npm release version for the tarball name', () => {
     const layout = publicNpmPackageLayout('/repo/ktx');
-    const expectedTarballName = `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`;
 
-    assert.equal(publicNpmPackageTarballName(), expectedTarballName);
-    assert.equal(layout.tarballPath, `/repo/ktx/dist/artifacts/npm/${expectedTarballName}`);
+    assert.match(PUBLIC_NPM_PACKAGE_VERSION, /^\d+\.\d+\.\d+/);
+    assert.equal(publicNpmPackageTarballName(), `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`);
+    assert.equal(
+      layout.tarballPath,
+      `/repo/ktx/dist/artifacts/npm/kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`,
+    );
   });
 });
 
@@ -268,7 +271,6 @@ describe('createPublicNpmPackageTree', () => {
 describe('publicNpmPackCommand', () => {
   it('packs the assembled public package with pnpm', () => {
     const layout = publicNpmPackageLayout('/repo/ktx');
-    const expectedTarballName = `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`;
 
     assert.deepEqual(publicNpmPackCommand(layout), {
       command: 'pnpm',
@@ -276,7 +278,7 @@ describe('publicNpmPackCommand', () => {
         '--config.node-linker=hoisted',
         'pack',
         '--out',
-        `/repo/ktx/dist/artifacts/npm/${expectedTarballName}`,
+        `/repo/ktx/dist/artifacts/npm/kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`,
       ],
       cwd: '/repo/ktx/dist/public-npm-package',
     });
