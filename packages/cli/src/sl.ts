@@ -211,6 +211,10 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
         embeddingService,
         limit: args.limit,
       });
+      if (sources.length === 0 && resolution.kind === 'managed-unavailable' && !args.json) {
+        const { SYMBOLS } = await import('./io/symbols.js');
+        io.stderr.write(`embeddings: unavailable ${SYMBOLS.emDash} ${resolution.reason}\n`);
+      }
       await printSlSources({
         rows: sources,
         emptyMessage: `No semantic-layer sources matched "${args.query}" in ${project.projectDir}`,

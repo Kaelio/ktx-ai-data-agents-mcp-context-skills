@@ -627,6 +627,41 @@ joins: []
     });
   });
 
+  it('search prints embeddings status when results are empty', async () => {
+    const stderr: string[] = [];
+    const io = {
+      stdout: { write: (_chunk: string) => {} },
+      stderr: {
+        write: (chunk: string) => {
+          stderr.push(chunk);
+        },
+      },
+    };
+    const projectDir = join(tempDir, 'empty-status');
+    const project = await initKtxProject({ projectDir });
+    await expect(
+      runKtxSl(
+        {
+          command: 'search',
+          projectDir: project.projectDir,
+          query: 'nope',
+          cliVersion: '0.5.0',
+        },
+        io,
+        {
+          loadProject: async () => project,
+          resolveEmbeddingProvider: async () => ({
+            kind: 'managed-unavailable',
+            reason: 'managed embeddings daemon is not running',
+          }),
+          searchLocalSlSources: async () => [],
+        },
+      ),
+    ).resolves.toBe(0);
+    expect(stderr.join('')).toMatch(/embeddings: unavailable/);
+    expect(stderr.join('')).toMatch(/managed embeddings daemon is not running/);
+  });
+
   it('passes a managed-daemon-backed embedding service into the search', async () => {
     const projectDir = join(tempDir, 'resolver-project');
     const project = await initKtxProject({ projectDir });
