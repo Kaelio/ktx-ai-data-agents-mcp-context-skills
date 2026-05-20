@@ -43,16 +43,16 @@ type OutputNode = Node<OutputNodeData, "output">;
 type FlowNode = SourceNode | StageNode | OutputNode;
 
 const SOURCE_W = 210;
-const SOURCE_H = 200;
-const STAGE_W = 280;
+const SOURCE_H = 220;
+const STAGE_W = 360;
 const STAGE_H = 120;
 const OUTPUT_W = 340;
-const OUTPUT_H = 232;
+const OUTPUT_H = 248;
 
 const ROW_SOURCES_Y = 80;
-const ROW_STAGE_START_Y = 360;
+const ROW_STAGE_START_Y = 380;
 const STAGE_GAP = 30;
-const ROW_OUTPUTS_Y = 1000;
+const ROW_OUTPUTS_Y = 1030;
 
 const STAGE_CENTER_X = 460;
 const STAGE_X = STAGE_CENTER_X - STAGE_W / 2;
@@ -207,7 +207,7 @@ const refsEdge = {
   labelBgPadding: [6, 3] as [number, number],
   labelBgBorderRadius: 4,
   labelStyle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: 500,
     fill: "var(--color-fd-muted-foreground)",
   },
@@ -247,17 +247,17 @@ function SourceNodeView({ data }: NodeProps<SourceNode>) {
       className="overflow-hidden rounded-md border border-fd-border bg-fd-card px-3.5 py-3 shadow-sm"
     >
       <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <p className="text-[16px] font-semibold leading-6 text-fd-foreground">
+      <p className="text-[19px] font-semibold leading-7 text-fd-foreground">
         {data.title}
       </p>
-      <p className="mt-1 line-clamp-3 text-[13px] leading-5 text-fd-muted-foreground">
+      <p className="mt-1.5 line-clamp-3 text-[15px] leading-6 text-fd-muted-foreground">
         {data.body}
       </p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
         {data.items.map((item) => (
           <span
             key={item}
-            className="rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[12px] leading-5 text-fd-muted-foreground"
+            className="rounded border border-fd-border bg-fd-background px-2 py-0.5 text-[13px] leading-5 text-fd-muted-foreground"
           >
             {item}
           </span>
@@ -275,14 +275,14 @@ function StageNodeView({ data }: NodeProps<StageNode>) {
       className="flex items-center gap-3.5 rounded-md border border-cyan-200/20 bg-[#0f1f23] px-4 py-3.5 text-white shadow-sm dark:bg-[#0b181b]"
     >
       <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-cyan-300/95 font-mono text-sm font-semibold text-[#0b1c20]">
+      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-cyan-300/95 font-mono text-base font-semibold text-[#0b1c20]">
         {data.index}
       </span>
       <div className="min-w-0">
-        <p className="text-[16px] font-semibold leading-6 text-white">
+        <p className="text-[19px] font-semibold leading-7 text-white">
           {data.title}
         </p>
-        <p className="mt-1 line-clamp-3 text-[13px] leading-5 text-cyan-50/75">
+        <p className="mt-1.5 line-clamp-3 text-[15px] leading-6 text-cyan-50/75">
           {data.body}
         </p>
       </div>
@@ -315,25 +315,25 @@ function OutputNodeView({ data }: NodeProps<OutputNode>) {
         className="!opacity-0"
       />
       <p
-        className="font-mono text-[13px] font-semibold tracking-tight"
+        className="font-mono text-[15px] font-semibold tracking-tight"
         style={{ color: data.accent }}
       >
         {data.path}
       </p>
-      <p className="mt-1.5 text-[16px] font-semibold leading-6 text-fd-foreground">
+      <p className="mt-1.5 text-[19px] font-semibold leading-7 text-fd-foreground">
         {data.title}
       </p>
-      <div className="mt-1.5 flex flex-nowrap gap-1">
+      <div className="mt-2 flex flex-nowrap gap-1">
         {data.tags.map((tag) => (
           <span
             key={tag}
-            className="whitespace-nowrap rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[12px] leading-5 text-fd-muted-foreground"
+            className="whitespace-nowrap rounded border border-fd-border bg-fd-background px-2 py-0.5 text-[13px] leading-5 text-fd-muted-foreground"
           >
             {tag}
           </span>
         ))}
       </div>
-      <p className="mt-2 line-clamp-3 text-[13px] leading-5 text-fd-muted-foreground">
+      <p className="mt-2.5 line-clamp-3 text-[15px] leading-6 text-fd-muted-foreground">
         {data.body}
       </p>
     </div>
@@ -541,8 +541,8 @@ export function ProductMechanics() {
         <div
           className="mechanics-canvas bg-fd-background"
           style={{
-            height: "min(1180px, 165vw)",
-            minHeight: 680,
+            height: "min(1240px, 170vw)",
+            minHeight: 720,
           }}
         >
           <ReactFlow
