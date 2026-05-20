@@ -86,7 +86,7 @@
     "**/*.gen.ts",
     "**/*.generated.ts"
   ],
-  "ignoreBinaries": ["uv"],
+  "ignoreBinaries": ["uv", "lsof"],
   "ignoreIssues": {
     "packages/cli/src/clack.ts": ["exports"],
     "packages/cli/src/commands/connection-metabase-setup.ts": ["exports", "types"],
