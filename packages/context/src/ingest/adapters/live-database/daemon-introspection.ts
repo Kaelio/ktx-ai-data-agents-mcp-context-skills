@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
 import type { KtxProjectConnectionConfig } from '../../../project/config.js';
+import { filterSnapshotTables, resolveEnabledTables } from '../../../scan/enabled-tables.js';
 import type { KtxSchemaColumn, KtxSchemaForeignKey, KtxSchemaSnapshot, KtxSchemaTable } from '../../../scan/types.js';
 import { inferKtxDimensionType, normalizeKtxNativeType } from '../../../scan/type-normalization.js';
 import type { LiveDatabaseIntrospectionPort } from './types.js';
@@ -248,24 +249,8 @@ export function createDaemonLiveDatabaseIntrospection(
         extractedAt: now().toISOString(),
         schemas,
       });
-      return applyEnabledTablesFilter(snapshot, connection);
+      const enabledTables = resolveEnabledTables(connection);
+      return enabledTables ? filterSnapshotTables(snapshot, enabledTables) : snapshot;
     },
-  };
-}
-
-function applyEnabledTablesFilter(
-  snapshot: KtxSchemaSnapshot,
-  connection: KtxProjectConnectionConfig,
-): KtxSchemaSnapshot {
-  const allowlist = (connection as { enabled_tables?: unknown }).enabled_tables;
-  if (!Array.isArray(allowlist) || allowlist.length === 0) return snapshot;
-  const allowed = new Set(allowlist.filter((value): value is string => typeof value === 'string'));
-  if (allowed.size === 0) return snapshot;
-  return {
-    ...snapshot,
-    tables: snapshot.tables.filter((table) => {
-      const qualified = table.db ? `${table.db}.${table.name}` : table.name;
-      return allowed.has(qualified);
-    }),
   };
 }
