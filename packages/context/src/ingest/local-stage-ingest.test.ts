@@ -351,6 +351,43 @@ describe('local ingest', () => {
     ).rejects.toThrow();
   });
 
+  it('writes a new raw snapshot when an unchanged latest snapshot is missing from disk', async () => {
+    const sourceDir = join(tempDir, 'missing-snapshot-source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders","version":1}\n', 'utf-8');
+
+    const first = await runLocalStageOnlyIngest({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      adapter: 'fake',
+      connectionId: 'warehouse',
+      sourceDir,
+      jobId: 'local-missing-snapshot-1',
+      now: () => new Date('2026-04-27T12:20:00.000Z'),
+    });
+
+    await rm(join(project.projectDir, 'raw-sources/warehouse/fake', first.syncId), { recursive: true, force: true });
+
+    const rerun = await runLocalStageOnlyIngest({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      adapter: 'fake',
+      connectionId: 'warehouse',
+      sourceDir,
+      jobId: 'local-missing-snapshot-2',
+      now: () => new Date('2026-04-27T12:25:00.000Z'),
+    });
+
+    expect(rerun.previousRunId).toBe(first.runId);
+    expect(rerun.syncId).toBe('2026-04-27-122500-local-missing-snapshot-2');
+    expect(rerun.diffSummary).toEqual({ added: 0, modified: 0, deleted: 0, unchanged: 1 });
+    expect(rerun.workUnitCount).toBe(0);
+
+    await expect(
+      readFile(join(project.projectDir, 'raw-sources/warehouse/fake', rerun.syncId, 'orders/orders.json'), 'utf-8'),
+    ).resolves.toBe('{"name":"orders","version":1}\n');
+  });
+
   it('reuses the existing sync id when the same local run id is retried', async () => {
     const sourceDir = join(tempDir, 'idempotent-source');
     await mkdir(join(sourceDir, 'orders'), { recursive: true });

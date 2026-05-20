@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_kind:
-        description: "Release kind: rc publishes to next, stable publishes to latest"
+        description: "Release kind: stable publishes to latest, main rc publishes to next. Branch rc releases publish to branch-specific npm tags."
         required: true
         type: choice
         default: "stable"

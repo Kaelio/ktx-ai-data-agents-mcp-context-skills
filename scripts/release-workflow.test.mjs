@@ -9,6 +9,7 @@ describe('release workflow', () => {
     assert.match(workflow, /^name: KTX Release$/m);
     assert.match(workflow, /^  workflow_dispatch:$/m);
     assert.match(workflow, /release_kind:/);
+    assert.match(workflow, /Branch rc releases publish to branch-specific npm tags/);
     assert.match(workflow, /release_kind:[\s\S]*?default: "stable"/);
     assert.match(workflow, /options:\n          - stable\n          - rc/);
     assert.match(workflow, /force_release:/);

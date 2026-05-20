@@ -209,6 +209,16 @@ async function pruneStaleRawFiles(input: {
   return staleRawPaths;
 }
 
+async function rawSnapshotContainsFiles(
+  project: KtxLocalProject,
+  rawPrefix: string,
+  relativeFiles: string[],
+): Promise<boolean> {
+  const existing = await project.fileStore.listFiles(rawPrefix);
+  const existingFiles = new Set(existing.files);
+  return relativeFiles.every((file) => existingFiles.has(`${rawPrefix}/${file}`));
+}
+
 async function prepareLocalStagedDir(
   project: KtxLocalProject,
   adapter: SourceAdapter,
@@ -292,14 +302,20 @@ async function runLocalStageOnlyIngestInner(options: RunLocalStageOnlyIngestOpti
     priorHashes,
     scopeDescriptor ? scopeDescriptor.isPathInScope.bind(scopeDescriptor) : undefined,
   );
-  const unchangedFromLatestCompletedRun =
+  const matchesLatestCompletedRun =
     !existingRun &&
     !!latestReport &&
     diffSet.added.length === 0 &&
     diffSet.modified.length === 0 &&
     diffSet.deleted.length === 0;
+  const reusableLatestSyncId = matchesLatestCompletedRun ? latestReport.syncId : null;
+  const latestRawPrefix = reusableLatestSyncId
+    ? `raw-sources/${connectionId}/${adapter.source}/${reusableLatestSyncId}`
+    : null;
+  const canReuseLatestCompletedRun =
+    latestRawPrefix !== null && (await rawSnapshotContainsFiles(options.project, latestRawPrefix, relativeFiles));
   const syncId =
-    existingRun?.syncId ?? (unchangedFromLatestCompletedRun ? latestReport.syncId : buildSyncId(started, jobId));
+    existingRun?.syncId ?? (canReuseLatestCompletedRun && reusableLatestSyncId ? reusableLatestSyncId : buildSyncId(started, jobId));
   options.memoryFlow?.update({ syncId });
   options.memoryFlow?.emit({ type: 'raw_snapshot_written', syncId, rawFileCount: relativeFiles.length });
   options.memoryFlow?.emit({
@@ -319,7 +335,7 @@ async function runLocalStageOnlyIngestInner(options: RunLocalStageOnlyIngestOpti
   });
   const rawPrefix = `raw-sources/${connectionId}/${adapter.source}/${syncId}`;
   const rawPaths = relativeFiles.map((file) => `${rawPrefix}/${file}`);
-  const staleRawPaths = options.dryRun || unchangedFromLatestCompletedRun
+  const staleRawPaths = options.dryRun || canReuseLatestCompletedRun
     ? []
     : await pruneStaleRawFiles({
         project: options.project,
@@ -331,7 +347,7 @@ async function runLocalStageOnlyIngestInner(options: RunLocalStageOnlyIngestOpti
   for (const file of relativeFiles) {
     const absolutePath = assertInside(stagedDir, join(stagedDir, file));
     const rawPath = `${rawPrefix}/${file}`;
-    if (!options.dryRun && !unchangedFromLatestCompletedRun) {
+    if (!options.dryRun && !canReuseLatestCompletedRun) {
       await options.project.fileStore.writeFile(
         rawPath,
         await readFile(absolutePath, 'utf-8'),
@@ -387,7 +403,7 @@ async function runLocalStageOnlyIngestInner(options: RunLocalStageOnlyIngestOpti
       rawContentHashes: Object.fromEntries(hashes),
     });
 
-    const commitPaths = unchangedFromLatestCompletedRun ? [] : [...rawPaths, ...staleRawPaths].sort();
+    const commitPaths = canReuseLatestCompletedRun ? [] : [...rawPaths, ...staleRawPaths].sort();
     if (commitPaths.length > 0) {
       await options.project.git.commitFiles(
         commitPaths,

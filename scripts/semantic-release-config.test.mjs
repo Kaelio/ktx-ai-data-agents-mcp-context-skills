@@ -39,6 +39,24 @@ describe('semantic-release config', () => {
     assert.doesNotMatch(JSON.stringify(config.plugins), /release:npm-publish/);
   });
 
+  it('configures rc releases from branches with branch-specific prerelease and npm tag', () => {
+    assert.equal(releaseTag('rc', { GITHUB_REF_NAME: 'feature/branch-release' }), 'branch-feature-branch-release');
+    assert.deepEqual(releaseBranches({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'feature/branch-release' }), [
+      { name: 'main', prerelease: 'rc', channel: 'next' },
+      { name: 'feature/branch-release', prerelease: 'feature-branch-release', channel: 'branch-feature-branch-release' },
+    ]);
+
+    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'feature/branch-release' });
+    assert.match(
+      releaseExecOptions(config).prepareCmd,
+      /update-public-release-version\.mjs "\$\{nextRelease\.version\}" "branch-feature-branch-release"/,
+    );
+    assert.match(
+      releaseExecOptions(config).publishCmd,
+      /^npm publish dist\/artifacts\/npm\/kaelio-ktx-\$\{nextRelease\.version\}\.tgz --tag branch-feature-branch-release --access public --provenance/,
+    );
+  });
+
   it('configures stable releases only from main with latest tag', () => {
     assert.equal(releaseKind({ KTX_RELEASE_KIND: 'stable' }), 'stable');
     assert.equal(releaseTag('stable'), 'latest');

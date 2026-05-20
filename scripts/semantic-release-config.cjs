@@ -78,15 +78,43 @@ function releaseKind(env) {
   return env.KTX_RELEASE_KIND || env.INPUT_RELEASE_KIND || 'rc';
 }
 
-function releaseTag(kind) {
-  return kind === 'rc' ? 'next' : 'latest';
+function currentBranchName(env = process.env) {
+  return env.GITHUB_REF_NAME || env.INPUT_BRANCH || 'main';
+}
+
+function branchPrereleaseId(branchName) {
+  return (
+    branchName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'branch'
+  );
+}
+
+function releaseTag(kind, env = process.env) {
+  if (kind !== 'rc') {
+    return 'latest';
+  }
+
+  const branchName = currentBranchName(env);
+  if (branchName === 'main') {
+    return 'next';
+  }
+
+  return `branch-${branchPrereleaseId(branchName)}`;
 }
 
 function releaseBranches(env = process.env) {
   const kind = releaseKind(env);
 
   if (kind === 'rc') {
-    return [{ name: 'main', prerelease: 'rc', channel: 'next' }];
+    const branches = [{ name: 'main', prerelease: 'rc', channel: 'next' }];
+    const branchName = currentBranchName(env);
+    if (branchName !== 'main') {
+      const prerelease = branchPrereleaseId(branchName);
+      branches.push({ name: branchName, prerelease, channel: `branch-${prerelease}` });
+    }
+    return branches;
   }
 
   if (kind === 'stable') {
@@ -98,7 +126,7 @@ function releaseBranches(env = process.env) {
 
 function createReleaseConfig(env = process.env) {
   const kind = releaseKind(env);
-  const tag = releaseTag(kind);
+  const tag = releaseTag(kind, env);
 
   return {
     tagFormat: 'v${version}',
