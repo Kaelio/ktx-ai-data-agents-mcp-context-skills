@@ -5,7 +5,8 @@ import {
   type KtxScanWarning,
   runLocalScan,
 } from '@ktx/context/scan';
-import { loadKtxCliProject } from './cli-project.js';
+import { loadKtxProject } from '@ktx/context/project';
+import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import type { KtxCliIo } from './index.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
@@ -313,12 +314,15 @@ export function createCliScanProgress(
 
 export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps: KtxScanDeps = {}): Promise<number> {
   try {
-    const project = await loadKtxCliProject({
-      projectDir: args.projectDir,
-      cliVersion: args.cliVersion ?? '0.0.0-private',
+    const project = await loadKtxProject({ projectDir: args.projectDir });
+    const resolution = await resolveProjectEmbeddingProvider(project, {
+      mode: 'ensure',
       installPolicy: args.runtimeInstallPolicy ?? 'never',
+      cliVersion: args.cliVersion ?? '0.0.0-private',
       io,
     });
+    const embeddingProvider =
+      resolution.kind === 'disabled' || resolution.kind === 'managed-unavailable' ? null : resolution.provider;
     const managedDaemon = managedDaemonOptionsForScanRun(args, deps.runtimeIo ?? io);
     const connector =
       args.mode !== 'structural' || args.detectRelationships
@@ -336,6 +340,7 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
         trigger: 'cli',
         databaseIntrospectionUrl: args.databaseIntrospectionUrl,
         connector,
+        embeddingProvider,
         adapters: (deps.createLocalIngestAdapters ?? createKtxCliLocalIngestAdapters)(project, {
           ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
           ...(managedDaemon ? { managedDaemon } : {}),

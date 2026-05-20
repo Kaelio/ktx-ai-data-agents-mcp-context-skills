@@ -18,8 +18,8 @@ import {
   sanitizeMemoryFlowError,
 } from '@ktx/context/ingest';
 import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
-import { type KtxLocalProject } from '@ktx/context/project';
-import { loadKtxCliProject } from './cli-project.js';
+import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
 import { createCliOperationalLogger } from './io/logger.js';
@@ -682,16 +682,17 @@ export async function runKtxIngest(
   deps: KtxIngestDeps = {},
 ): Promise<number> {
   try {
-    const cliVersion = args.command === 'run' ? args.cliVersion : undefined;
-    const runtimeInstallPolicy = args.command === 'run' ? args.runtimeInstallPolicy : undefined;
-    const project = await loadKtxCliProject({
-      projectDir: args.projectDir,
-      cliVersion: cliVersion ?? '0.0.0-private',
-      installPolicy: runtimeInstallPolicy ?? 'never',
-      io,
-    });
+    const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
+      const resolution = await resolveProjectEmbeddingProvider(project, {
+        mode: 'ensure',
+        installPolicy: args.runtimeInstallPolicy ?? 'never',
+        cliVersion: args.cliVersion ?? '0.0.0-private',
+        io,
+      });
+      const embeddingProvider =
+        resolution.kind === 'disabled' || resolution.kind === 'managed-unavailable' ? null : resolution.provider;
       const ingestProject =
         args.allowImplicitAdapter && !project.config.ingest.adapters.includes(args.adapter)
           ? {
@@ -771,6 +772,7 @@ export async function runKtxIngest(
             queryExecutor,
             trigger: 'manual_resync',
             jobIdFactory: deps.jobIdFactory,
+            embeddingProvider,
             ...(memoryFlow ? { memoryFlow } : {}),
             ...(progress ? { progress } : {}),
           });
@@ -843,6 +845,7 @@ export async function runKtxIngest(
           ...localIngestOptions,
           queryExecutor,
           pullConfigOptions: adapterOptions,
+          embeddingProvider,
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),
           ...(memoryFlow ? { memoryFlow } : {}),
         });
