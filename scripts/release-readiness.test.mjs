@@ -11,6 +11,7 @@ import {
   writeArtifactManifest,
 } from './package-artifacts.mjs';
 import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
+import { RUNTIME_WHEEL_PACKAGE_VERSION } from './build-python-runtime-wheel.mjs';
 import { readReleasePolicy, releasePolicyPath, releaseReadinessReport } from './release-readiness.mjs';
 
 async function writeJson(path, value) {
@@ -37,7 +38,10 @@ async function writeUploadableArtifactFixtures(layout) {
       layout.npmTarballs[packageInfo.name],
       `${packageInfo.name}-tarball`,
     ]),
-    [join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'), 'kaelio-ktx-runtime-wheel'],
+    [
+      join(layout.pythonDir, `kaelio_ktx-${RUNTIME_WHEEL_PACKAGE_VERSION}-py3-none-any.whl`),
+      'kaelio-ktx-runtime-wheel',
+    ],
   ]);
 
   for (const [path, contents] of fileContents) {

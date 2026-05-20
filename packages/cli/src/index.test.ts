@@ -19,6 +19,9 @@ import {
 
 const require = createRequire(import.meta.url);
 
+const cliPackageJson = require('@ktx/cli/package.json') as { name: string; version: string };
+const cliVersion = cliPackageJson.version;
+
 function makeIo(options: { stdoutIsTty?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
@@ -45,7 +48,7 @@ describe('getKtxCliPackageInfo', () => {
   it('identifies the CLI package and its context dependency', () => {
     expect(getKtxCliPackageInfo()).toEqual({
       name: '@ktx/cli',
-      version: '0.0.0-private',
+      version: cliVersion,
       contextPackageName: '@ktx/context',
     });
   });
@@ -55,8 +58,9 @@ describe('getKtxCliPackageInfo', () => {
 
     expect(packageJson).toMatchObject({
       name: '@ktx/cli',
-      version: '0.0.0-private',
+      version: cliVersion,
     });
+    expect(cliVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it('normalizes public package metadata from package.json contents', () => {
@@ -114,7 +118,7 @@ describe('runKtxCli', () => {
 
     await expect(runKtxCli(['--version'], testIo.io)).resolves.toBe(0);
 
-    expect(testIo.stdout()).toBe('@ktx/cli 0.0.0-private\n');
+    expect(testIo.stdout()).toBe(`@ktx/cli ${cliVersion}\n`);
     expect(testIo.stderr()).toBe('');
   });
 
@@ -304,7 +308,7 @@ describe('runKtxCli', () => {
       1,
       {
         command: 'install',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         feature: 'local-embeddings',
         force: true,
       },
@@ -314,7 +318,7 @@ describe('runKtxCli', () => {
       2,
       {
         command: 'start',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         projectDir: expect.any(String),
         feature: 'local-embeddings',
         force: true,
@@ -325,7 +329,7 @@ describe('runKtxCli', () => {
       3,
       {
         command: 'stop',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         projectDir: expect.any(String),
         all: false,
       },
@@ -335,7 +339,7 @@ describe('runKtxCli', () => {
       4,
       {
         command: 'stop',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         projectDir: expect.any(String),
         all: true,
       },
@@ -345,7 +349,7 @@ describe('runKtxCli', () => {
       5,
       {
         command: 'status',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         json: true,
       },
       statusIo.io,
@@ -418,7 +422,7 @@ describe('runKtxCli', () => {
       expect.objectContaining({
         command: 'query',
         projectDir: tempDir,
-        cliVersion: '0.0.0-private',
+        cliVersion,
         runtimeInstallPolicy: 'prompt',
         query: expect.objectContaining({ measures: ['orders.order_count'], dimensions: [] }),
       }),
@@ -433,7 +437,7 @@ describe('runKtxCli', () => {
     ).resolves.toBe(0);
     expect(sl).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        cliVersion: '0.0.0-private',
+        cliVersion,
         runtimeInstallPolicy: 'auto',
       }),
       autoIo.io,
@@ -449,7 +453,7 @@ describe('runKtxCli', () => {
     ).resolves.toBe(0);
     expect(sl).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        cliVersion: '0.0.0-private',
+        cliVersion,
         runtimeInstallPolicy: 'never',
       }),
       noInputIo.io,
@@ -585,7 +589,7 @@ describe('runKtxCli', () => {
           skipAgents: false,
           inputMode: 'auto',
           yes: false,
-          cliVersion: '0.0.0-private',
+          cliVersion,
           skipLlm: false,
           skipEmbeddings: false,
           databaseSchemas: [],
@@ -715,7 +719,7 @@ describe('runKtxCli', () => {
         inputMode: 'disabled',
         depth: 'fast',
         queryHistory: 'default',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         runtimeInstallPolicy: 'never',
       },
       testIo.io,
@@ -742,7 +746,7 @@ describe('runKtxCli', () => {
         inputMode: 'auto',
         depth: 'deep',
         queryHistory: 'default',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         runtimeInstallPolicy: 'prompt',
       },
       testIo.io,
@@ -819,7 +823,7 @@ describe('runKtxCli', () => {
           json: false,
           inputMode: 'disabled',
           queryHistory: 'default',
-          cliVersion: '0.0.0-private',
+          cliVersion,
           runtimeInstallPolicy: 'never',
         },
         testIo.io,
@@ -1124,7 +1128,7 @@ describe('runKtxCli', () => {
         command: 'run',
         projectDir: tempDir,
         inputMode: 'disabled',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
         llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
@@ -1163,7 +1167,7 @@ describe('runKtxCli', () => {
         command: 'run',
         projectDir: tempDir,
         inputMode: 'disabled',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         llmBackend: 'vertex',
         vertexProject: 'local-gcp-project',
         vertexLocation: 'us-east5',
@@ -1200,7 +1204,7 @@ describe('runKtxCli', () => {
         command: 'run',
         projectDir: tempDir,
         inputMode: 'disabled',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         llmBackend: 'claude-code',
         llmModel: 'opus',
         skipLlm: false,
@@ -1308,7 +1312,7 @@ describe('runKtxCli', () => {
         projectDir: '/tmp/project',
         inputMode: 'disabled',
         yes: true,
-        cliVersion: '0.0.0-private',
+        cliVersion,
         skipLlm: true,
         skipEmbeddings: true,
         databaseDrivers: ['postgres'],
@@ -1649,7 +1653,7 @@ describe('runKtxCli', () => {
         queryFile: '/tmp/query.json',
         execute: false,
         format: 'json',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         runtimeInstallPolicy: 'auto',
       },
       autoIo.io,
@@ -1663,7 +1667,7 @@ describe('runKtxCli', () => {
         queryFile: '/tmp/query.json',
         execute: false,
         format: 'json',
-        cliVersion: '0.0.0-private',
+        cliVersion,
         runtimeInstallPolicy: 'never',
       },
       neverIo.io,

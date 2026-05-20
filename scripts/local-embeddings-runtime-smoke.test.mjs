@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
+import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
 import {
   buildLocalEmbeddingsSmokeEnv,
   expectedPublicKtxVersionPattern,
@@ -11,6 +12,9 @@ import {
   publicKtxTarballName,
   validateEmbeddingResponse,
 } from './local-embeddings-runtime-smoke.mjs';
+
+const PUBLIC_TARBALL_NAME = `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`;
+const OTHER_PUBLIC_TARBALL_NAME = 'kaelio-ktx-9.9.9.tgz';
 
 describe('localEmbeddingsSmokeOptIn', () => {
   it('skips unless the smoke is explicitly enabled', () => {
@@ -35,10 +39,7 @@ describe('localEmbeddingsSmokeOptIn', () => {
 
 describe('publicKtxTarballName', () => {
   it('selects the public @kaelio/ktx tarball name', () => {
-    assert.equal(
-      publicKtxTarballName(['kaelio-ktx-0.1.0-rc.1.tgz', 'ignore-me.tgz']),
-      'kaelio-ktx-0.1.0-rc.1.tgz',
-    );
+    assert.equal(publicKtxTarballName([PUBLIC_TARBALL_NAME, 'ignore-me.tgz']), PUBLIC_TARBALL_NAME);
   });
 
   it('fails when the public package tarball is missing', () => {
@@ -50,7 +51,7 @@ describe('publicKtxTarballName', () => {
 
   it('fails when multiple public package tarballs are present', () => {
     assert.throws(
-      () => publicKtxTarballName(['kaelio-ktx-0.1.0-rc.1.tgz', 'kaelio-ktx-0.2.0.tgz']),
+      () => publicKtxTarballName([PUBLIC_TARBALL_NAME, OTHER_PUBLIC_TARBALL_NAME]),
       /Expected exactly one @kaelio\/ktx tarball/,
     );
   });
@@ -60,7 +61,7 @@ describe('expectedPublicKtxVersionPattern', () => {
   it('matches the public package version and rejects the private workspace version', () => {
     const pattern = expectedPublicKtxVersionPattern();
 
-    assert.match('@kaelio/ktx 0.1.0-rc.1\n', pattern);
+    assert.match(`@kaelio/ktx ${PUBLIC_NPM_PACKAGE_VERSION}\n`, pattern);
     assert.doesNotMatch('@kaelio/ktx 0.0.0-private\n', pattern);
   });
 });
