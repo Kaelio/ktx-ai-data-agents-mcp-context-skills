@@ -97,7 +97,7 @@ describe('runKtxSetupRuntimeStep', () => {
     expect(io.stderr()).toContain('ktx admin runtime install --yes');
   });
 
-  it('starts the managed local embeddings daemon for configured sentence-transformers embeddings', async () => {
+  it('starts the KTX daemon for configured sentence-transformers embeddings', async () => {
     const io = makeIo();
     const ensureLocalEmbeddings = vi.fn(async () => ({
       baseUrl: 'http://127.0.0.1:61234',

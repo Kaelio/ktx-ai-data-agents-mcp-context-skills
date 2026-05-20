@@ -706,7 +706,7 @@ function failedStepDetail(result: KtxPublicIngestTargetResult): string | null {
 const INTERNAL_FAILURE_LINE_RE =
   /^(Report|Run|Job|Status|Adapter|Connection|Sync|Mode|Dry run|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
 const ACTIONABLE_FAILURE_LINE_RE =
-  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
+  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX daemon HTTP|Error:|Failed\b|Could not\b|Cannot\b)/;
 
 function trimErrorPrefix(line: string): string {
   return line.replace(/^Error:\s*/, '');

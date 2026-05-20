@@ -97,7 +97,7 @@ component_management:
       paths:
         - python/ktx-sl/semantic_layer/**
     - component_id: py_daemon
-      name: Python daemon
+      name: KTX daemon
       paths:
         - python/ktx-daemon/src/ktx_daemon/**
 

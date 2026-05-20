@@ -38,7 +38,7 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
 
   runtime
     .command('start')
-    .description('Start the KTX-managed Python HTTP daemon')
+    .description('Start the KTX daemon')
     .addOption(createRuntimeFeatureOption())
     .option('--force', 'Restart even when a matching daemon is already running', false)
     .action(async (options: { feature: RuntimeFeature; force?: boolean }, command: CommandWithGlobalOptions) => {
@@ -53,7 +53,7 @@ export function registerRuntimeCommands(program: Command, context: KtxCliCommand
 
   runtime
     .command('stop')
-    .description('Stop the KTX-managed Python HTTP daemon')
+    .description('Stop the KTX daemon')
     .option('--all', 'Stop all KTX daemon processes recorded or discoverable on this machine', false)
     .action(async (options: { all?: boolean }, command: CommandWithGlobalOptions) => {
       await runRuntimeArgs(context, {

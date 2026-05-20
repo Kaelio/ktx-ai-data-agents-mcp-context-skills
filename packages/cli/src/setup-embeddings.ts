@@ -312,7 +312,7 @@ function localEmbeddingSetupMessage(message: string, stderrTail: string[] = []):
     'The first run may download Python packages and the all-MiniLM-L6-v2 model.',
   ];
   if (stderrTail.length > 0) {
-    lines.push('Recent local embeddings daemon stderr:', ...stderrTail);
+    lines.push('Recent KTX daemon stderr:', ...stderrTail);
   }
   return lines.join('\n');
 }

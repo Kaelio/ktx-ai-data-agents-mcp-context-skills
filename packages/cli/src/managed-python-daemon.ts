@@ -325,7 +325,7 @@ async function waitForHealth(input: {
     return;
   }
   lastDetail = finalHealth.detail;
-  throw new Error(`KTX Python daemon failed to start: ${lastDetail}. stderr: ${input.state.stderrLog}`);
+  throw new Error(`KTX daemon failed to start: ${lastDetail}. stderr: ${input.state.stderrLog}`);
 }
 
 async function removeState(layout: ManagedPythonDaemonLayout): Promise<void> {
@@ -705,7 +705,7 @@ export async function startManagedPythonDaemon(
     );
     child.unref();
     if (!child.pid) {
-      throw new Error(`KTX Python daemon did not report a pid. stderr: ${layout.daemonStderrPath}`);
+      throw new Error(`KTX daemon did not report a pid. stderr: ${layout.daemonStderrPath}`);
     }
     const state: ManagedPythonDaemonState = {
       schemaVersion: 1,

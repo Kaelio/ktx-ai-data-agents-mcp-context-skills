@@ -89,7 +89,7 @@ export async function ensureManagedLocalEmbeddingsDaemon(
   });
 
   const verb = daemon.status === 'started' ? 'Started' : 'Using';
-  options.io.stderr.write(`${verb} KTX local embeddings daemon: ${daemon.baseUrl}\n`);
+  options.io.stderr.write(`${verb} KTX daemon: ${daemon.baseUrl}\n`);
 
   return {
     baseUrl: daemon.baseUrl,

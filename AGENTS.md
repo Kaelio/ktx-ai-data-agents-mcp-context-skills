@@ -69,7 +69,7 @@ KTX is a pnpm + uv workspace.
 - LLM package: `packages/llm`
 - Database connectors: `packages/connector-*`
 - Python semantic layer: `python/ktx-sl`
-- Python daemon: `python/ktx-daemon`
+- KTX daemon: `python/ktx-daemon`
 - Examples and fixtures: `examples/`
 - Workspace scripts: `scripts/`
 - Local agent skills and internal planning docs are private overlays. Do not
@@ -134,7 +134,7 @@ shared contracts or package exports are affected.
   test file
 - TypeScript dead-code tooling/config changes: `pnpm run dead-code`
 - Python semantic layer: `uv run pytest python/ktx-sl/tests -q`
-- Python daemon: `uv run pytest python/ktx-daemon/tests -q`
+- KTX daemon: `uv run pytest python/ktx-daemon/tests -q`
 - Python files: also run `uv run pre-commit run --files [FILES]` when
   pre-commit is configured
 

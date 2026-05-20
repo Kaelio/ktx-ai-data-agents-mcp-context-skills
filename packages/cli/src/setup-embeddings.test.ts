@@ -361,7 +361,7 @@ describe('setup embeddings step', () => {
     );
 
     expect(result.status).toBe('failed');
-    expect(io.stderr()).toContain('Recent local embeddings daemon stderr:');
+    expect(io.stderr()).toContain('Recent KTX daemon stderr:');
     expect(io.stderr()).toContain('daemon traceback line 6');
     expect(io.stderr()).toContain('daemon traceback line 45');
     expect(io.stderr()).not.toContain('daemon traceback line 5');
@@ -391,7 +391,7 @@ describe('setup embeddings step', () => {
     );
 
     expect(result.status).toBe('failed');
-    expect(io.stderr()).not.toContain('Recent local embeddings daemon stderr:');
+    expect(io.stderr()).not.toContain('Recent KTX daemon stderr:');
   });
 
   it('uses fixed OpenAI defaults and only asks for credentials when OpenAI is selected', async () => {

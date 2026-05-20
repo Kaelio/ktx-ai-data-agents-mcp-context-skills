@@ -44,7 +44,7 @@ body:
         - Connector (SQL Server)
         - Connector (SQLite)
         - Python semantic layer
-        - Python daemon
+        - KTX daemon
         - Docs
         - Other
     validations:

@@ -57,7 +57,7 @@ describe('createManagedPythonDaemonBaseUrlResolver', () => {
       features: ['core'],
       force: false,
     });
-    expect(testIo.stderr()).toContain('Started KTX Python daemon: http://127.0.0.1:61234');
+    expect(testIo.stderr()).toContain('Started KTX daemon: http://127.0.0.1:61234');
   });
 
   it('reports daemon reuse without reinstalling after the first resolved URL', async () => {
@@ -86,7 +86,7 @@ describe('createManagedPythonDaemonBaseUrlResolver', () => {
 
     expect(ensureRuntime).toHaveBeenCalledTimes(1);
     expect(startDaemon).toHaveBeenCalledTimes(1);
-    expect(testIo.stderr()).toContain('Using existing KTX Python daemon: http://127.0.0.1:61234');
+    expect(testIo.stderr()).toContain('Using existing KTX daemon: http://127.0.0.1:61234');
   });
 });
 
@@ -104,8 +104,8 @@ describe('createManagedDaemonHttpJsonRunner', () => {
   });
 });
 
-describe('managed daemon ingest ports', () => {
-  it('creates a Looker table parser backed by the managed daemon runner', async () => {
+describe('KTX daemon ingest ports', () => {
+  it('creates a Looker table parser backed by the KTX daemon runner', async () => {
     const requestJson = vi.fn(async () => ({
       results: {
         'model.explore': {
@@ -135,7 +135,7 @@ describe('managed daemon ingest ports', () => {
     });
   });
 
-  it('creates a SQL analysis port backed by the managed daemon runner', async () => {
+  it('creates a SQL analysis port backed by the KTX daemon runner', async () => {
     const requestJson = vi.fn(async () => ({
       fingerprint: 'select-orders',
       normalized_sql: 'SELECT * FROM public.orders WHERE id = ?',
@@ -157,7 +157,7 @@ describe('managed daemon ingest ports', () => {
     });
   });
 
-  it('routes SQL batch analysis through the managed daemon runner', async () => {
+  it('routes SQL batch analysis through the KTX daemon runner', async () => {
     const requestJson = vi.fn(async () => ({
       results: {
         orders: {

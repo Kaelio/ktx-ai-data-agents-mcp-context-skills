@@ -146,7 +146,7 @@ Success requires (canonical shape - supersedes the example in the docs):
 
 Do **not** run `--deep` ingest in this flow - that requires LLM time and is out of scope.
 
-### Optional: directly probe the embeddings daemon
+### Optional: directly probe the KTX daemon
 
 If the user asks for stronger verification that `sentence-transformers` is actually serving (not just that setup said "ok"), do all of:
 
@@ -155,7 +155,7 @@ If the user asks for stronger verification that `sentence-transformers` is actua
 3. `curl -sS http://127.0.0.1:<port>/health` → expect HTTP 200 with `{"status":"healthy",…}`.
 4. `curl -sS -X POST http://127.0.0.1:<port>/embeddings/compute -H 'content-type: application/json' -d '{"text":"hello"}'` → expect `{"embedding": [...384 floats...]}`.
 
-Discover the port from setup's log line `Started KTX local embeddings daemon: http://127.0.0.1:<port>` or from the daemon's OpenAPI at `GET /openapi.json`. Note: the routes are `/health` and `/embeddings/compute` - not `/healthz` or `/embeddings`.
+Discover the port from setup's log line `Started KTX daemon: http://127.0.0.1:<port>` or from the daemon's OpenAPI at `GET /openapi.json`. Note: the routes are `/health` and `/embeddings/compute` - not `/healthz` or `/embeddings`.
 
 ## Phase 6 - Final report
 
@@ -167,7 +167,7 @@ KTX SETUP COMPLETE
 Project:     <path>
 LLM:         <backend> / <model>
 Embeddings:  <backend> / <model>
-Runtime:     managed Python ✓ (if sentence-transformers daemon was started)
+Runtime:     managed Python ✓ (if the KTX daemon was started)
 
 Connections:
   - <name> (<driver>)  status=ok  schemas=[…]  tables=<N>

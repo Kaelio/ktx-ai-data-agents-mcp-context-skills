@@ -27,7 +27,7 @@ warehouse credential.
 
 `postgres-historic/` is a manual Docker-backed smoke for Postgres
 query-history ingest via `pg_stat_statements`. It verifies setup, staged
-query-history artifacts, managed daemon batch SQL analysis, bounded pattern
+query-history artifacts, KTX daemon batch SQL analysis, bounded pattern
 WorkUnit shards, and no-WorkUnit idempotency for unchanged bucketed table
 inputs and pattern shards.
 

@@ -679,7 +679,7 @@ function createCapturedPublicIngestIo(): CapturedPublicIngestIo {
 const INTERNAL_STATUS_LINE_RE =
   /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
 const ACTIONABLE_FAILURE_LINE_RE =
-  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX managed daemon|Error:|Failed\b|Could not\b|Cannot\b)/;
+  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX daemon HTTP|Error:|Failed\b|Could not\b|Cannot\b)/;
 const RUNTIME_BACKED_RETRY_LINE_RE = /^Then retry the runtime-backed KTX command\.?$/;
 
 function trimErrorPrefix(line: string): string {

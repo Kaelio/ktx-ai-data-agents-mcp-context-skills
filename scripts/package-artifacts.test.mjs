@@ -502,7 +502,7 @@ describe('verification snippets', () => {
     assert.match(source, /status: ready/);
     assert.match(source, /ktx admin runtime start/);
     assert.match(source, /ktx admin runtime start reuse/);
-    assert.match(source, /Using existing KTX Python daemon/);
+    assert.match(source, /Using existing KTX daemon/);
     assert.match(source, /ktx admin runtime stop/);
     assert.doesNotMatch(source, /ktx admin runtime prune/);
     assert.doesNotMatch(source, /staleRuntimeDir/);

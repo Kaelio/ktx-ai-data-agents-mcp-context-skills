@@ -804,19 +804,19 @@ try {
   const runtimeStart = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'start']);
   requireSuccess('ktx admin runtime start', runtimeStart);
   daemonStarted = true;
-  requireOutput('ktx admin runtime start', runtimeStart, /Started KTX Python daemon/);
+  requireOutput('ktx admin runtime start', runtimeStart, /Started KTX daemon/);
   requireOutput('ktx admin runtime start', runtimeStart, /url: http:\\/\\/127\\.0\\.0\\.1:\\d+/);
   requireOutput('ktx admin runtime start', runtimeStart, /features: core/);
 
   const runtimeStartReuse = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'start']);
   requireSuccess('ktx admin runtime start reuse', runtimeStartReuse);
-  requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /Using existing KTX Python daemon/);
+  requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /Using existing KTX daemon/);
   requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /features: core/);
 
   const runtimeStop = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop']);
   requireSuccess('ktx admin runtime stop', runtimeStop);
   daemonStarted = false;
-  requireOutput('ktx admin runtime stop', runtimeStop, /Stopped KTX Python daemon/);
+  requireOutput('ktx admin runtime stop', runtimeStop, /Stopped KTX daemon/);
   process.stdout.write('ktx admin runtime daemon lifecycle verified\\n');
 
   const structuralScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',

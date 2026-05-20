@@ -376,7 +376,7 @@ describe('runKtxScan', () => {
     expect(io.stdout()).not.toContain('/~');
   });
 
-  it('passes managed daemon options to local ingest adapters when no explicit daemon URL is set', async () => {
+  it('passes KTX daemon options to local ingest adapters when no explicit daemon URL is set', async () => {
     await initKtxProject({ projectDir: tempDir });
     const createLocalIngestAdapters = vi.fn(() => []);
     const runLocalScan = vi.fn(

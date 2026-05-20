@@ -109,7 +109,7 @@ describe('runKtxRuntime', () => {
     expect(io.stderr()).toBe('');
   });
 
-  it('starts the managed Python daemon and prints the base URL', async () => {
+  it('starts the KTX daemon and prints the base URL', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
       startDaemon: vi.fn(async (): Promise<ManagedPythonDaemonStartResult> => ({
@@ -160,14 +160,14 @@ describe('runKtxRuntime', () => {
       features: ['local-embeddings'],
       force: true,
     });
-    expect(io.stdout()).toContain('Started KTX Python daemon');
+    expect(io.stdout()).toContain('Started KTX daemon');
     expect(io.stdout()).toContain('url: http://127.0.0.1:61234');
     expect(io.stdout()).toContain('pid: 4242');
     expect(io.stdout()).toContain('features: core, local-embeddings');
     expect(io.stdout()).toContain('stderr: /work/proj/.ktx/runtime/daemon.stderr.log');
   });
 
-  it('stops the managed Python daemon', async () => {
+  it('stops the KTX daemon', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
       stopDaemon: vi.fn(async (): Promise<ManagedPythonDaemonStopResult> => ({
@@ -208,11 +208,11 @@ describe('runKtxRuntime', () => {
     ).resolves.toBe(0);
 
     expect(deps.stopDaemon).toHaveBeenCalledWith({ cliVersion: '0.2.0', projectDir: '/work/proj' });
-    expect(io.stdout()).toContain('Stopped KTX Python daemon');
+    expect(io.stdout()).toContain('Stopped KTX daemon');
     expect(io.stdout()).toContain('pid: 4242');
   });
 
-  it('stops all discovered Python daemons and reports the summary', async () => {
+  it('stops all discovered KTX daemons and reports the summary', async () => {
     const io = makeIo();
     const deps: KtxRuntimeDeps = {
       stopAllDaemons: vi.fn(async (): Promise<ManagedPythonDaemonStopAllResult> => ({
@@ -231,7 +231,7 @@ describe('runKtxRuntime', () => {
     ).resolves.toBe(0);
 
     expect(deps.stopAllDaemons).toHaveBeenCalledWith({ cliVersion: '0.2.0', projectDir: '/work/proj' });
-    expect(io.stdout()).toContain('Stopped 2 KTX Python daemons');
+    expect(io.stdout()).toContain('Stopped 2 KTX daemons');
     expect(io.stdout()).toContain('pid: 4242 source: state url: http://127.0.0.1:61234');
     expect(io.stdout()).toContain('pid: 5252 source: process url: http://127.0.0.1:8765');
   });
@@ -259,7 +259,7 @@ describe('runKtxRuntime', () => {
       runKtxRuntime({ command: 'stop', cliVersion: '0.2.0', projectDir: '/work/proj', all: true }, io.io, deps),
     ).resolves.toBe(1);
 
-    expect(io.stderr()).toContain('Stopped 0 KTX Python daemons; failed 1');
+    expect(io.stderr()).toContain('Stopped 0 KTX daemons; failed 1');
     expect(io.stderr()).toContain('pid: 4242 source: state url: http://127.0.0.1:61234');
     expect(io.stderr()).toContain('process scan: ps failed');
   });

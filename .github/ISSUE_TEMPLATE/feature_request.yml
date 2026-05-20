@@ -24,7 +24,7 @@ body:
         - Connectors
         - Context engine
         - Python semantic layer
-        - Python daemon
+        - KTX daemon
         - Docs
         - Other
     validations:

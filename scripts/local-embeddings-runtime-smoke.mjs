@@ -346,7 +346,7 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
       900_000,
     );
     validateEmbeddingResponse(embeddingResponse, 384);
-    process.stdout.write('KTX local embeddings daemon computed a 384-dimensional embedding\n');
+    process.stdout.write('KTX daemon computed a 384-dimensional embedding\n');
 
     const setup = await run(commands[5].command, commands[5].args, {
       cwd: installDir,
@@ -369,7 +369,7 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
     });
     requireSuccess(commands[6].label, stop);
     daemonStarted = false;
-    requireOutput(commands[6].label, stop, /Stopped KTX Python daemon/);
+    requireOutput(commands[6].label, stop, /Stopped KTX daemon/);
 
     process.stdout.write('KTX local embeddings runtime smoke verified\n');
   } finally {

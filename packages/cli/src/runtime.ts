@@ -56,7 +56,7 @@ function writeInstallResult(io: KtxCliIo, result: ManagedPythonRuntimeInstallRes
 
 function writeDaemonStart(io: KtxCliIo, result: ManagedPythonDaemonStartResult): void {
   const verb = result.status === 'reused' ? 'Using existing' : 'Started';
-  io.stdout.write(`${verb} KTX Python daemon\n`);
+  io.stdout.write(`${verb} KTX daemon\n`);
   io.stdout.write(`url: ${result.baseUrl}\n`);
   io.stdout.write(`pid: ${result.state.pid}\n`);
   io.stdout.write(`version: ${result.state.version}\n`);
@@ -68,10 +68,10 @@ function writeDaemonStart(io: KtxCliIo, result: ManagedPythonDaemonStartResult):
 
 function writeDaemonStop(io: KtxCliIo, result: ManagedPythonDaemonStopResult): void {
   if (result.status === 'already-stopped') {
-    io.stdout.write('KTX Python daemon already stopped\n');
+    io.stdout.write('KTX daemon already stopped\n');
     return;
   }
-  io.stdout.write('Stopped KTX Python daemon\n');
+  io.stdout.write('Stopped KTX daemon\n');
   io.stdout.write(`pid: ${result.state?.pid ?? 'unknown'}\n`);
   io.stdout.write(`state: ${result.layout.daemonStatePath}\n`);
 }
@@ -94,11 +94,11 @@ function writeDaemonStopAll(io: KtxCliIo, result: ManagedPythonDaemonStopAllResu
     result.failed.length === 0 &&
     result.scanErrors.length === 0
   ) {
-    io.stdout.write('No KTX Python daemons found\n');
+    io.stdout.write('No KTX daemons found\n');
     return 0;
   }
   if (failed === 0) {
-    io.stdout.write(`Stopped ${result.stopped.length} KTX Python daemons\n`);
+    io.stdout.write(`Stopped ${result.stopped.length} KTX daemons\n`);
     if (result.stale.length > 0) {
       io.stdout.write(`Cleaned ${result.stale.length} stale daemon states\n`);
     }
@@ -111,7 +111,7 @@ function writeDaemonStopAll(io: KtxCliIo, result: ManagedPythonDaemonStopAllResu
     return 0;
   }
   io.stderr.write(
-    `Stopped ${result.stopped.length} KTX Python daemons; failed ${result.failed.length}${
+    `Stopped ${result.stopped.length} KTX daemons; failed ${result.failed.length}${
       result.stale.length > 0 ? `; cleaned stale ${result.stale.length}` : ''
     }\n`,
   );
