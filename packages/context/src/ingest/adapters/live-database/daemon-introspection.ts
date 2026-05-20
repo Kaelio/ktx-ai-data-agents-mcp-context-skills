@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
 import type { KtxProjectConnectionConfig } from '../../../project/config.js';
+import { filterSnapshotTables, resolveEnabledTables } from '../../../scan/enabled-tables.js';
 import type { KtxSchemaColumn, KtxSchemaForeignKey, KtxSchemaSnapshot, KtxSchemaTable } from '../../../scan/types.js';
 import { inferKtxDimensionType, normalizeKtxNativeType } from '../../../scan/type-normalization.js';
 import type { LiveDatabaseIntrospectionPort } from './types.js';
@@ -243,11 +244,13 @@ export function createDaemonLiveDatabaseIntrospection(
       const raw = requestJson
         ? await requestJson('/database/introspect', payload)
         : await runJson('database-introspect', payload);
-      return mapDaemonSnapshot(raw, {
+      const snapshot = mapDaemonSnapshot(raw, {
         connectionId,
         extractedAt: now().toISOString(),
         schemas,
       });
+      const enabledTables = resolveEnabledTables(connection);
+      return enabledTables ? filterSnapshotTables(snapshot, enabledTables) : snapshot;
     },
   };
 }

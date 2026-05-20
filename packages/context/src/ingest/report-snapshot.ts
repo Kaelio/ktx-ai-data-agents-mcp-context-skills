@@ -129,6 +129,35 @@ const ingestReportFailureSchema = z.object({
   details: z.record(z.string(), z.unknown()).optional(),
 });
 
+const finalizationMismatchSchema = z.object({
+  artifactKind: z.enum(['sl', 'wiki']),
+  key: z.string().min(1),
+  direction: z.enum(['missing_from_adapter_declaration', 'extra_in_adapter_declaration']),
+});
+
+const finalizationProvenanceExclusionSchema = z.object({
+  action: ingestActionSchema,
+  reason: z.enum(['missing_raw_paths', 'raw_path_not_defensible']),
+  invalidRawPaths: z.array(z.string()).optional(),
+});
+
+const finalizationOutcomeSchema = z.object({
+  sourceKey: z.string().min(1),
+  status: z.enum(['success', 'failed', 'skipped']),
+  commitSha: z.string().nullable(),
+  touchedPaths: z.array(z.string()),
+  declaredTouchedSources: z.array(touchedSlSourceSchema),
+  derivedTouchedSources: z.array(touchedSlSourceSchema),
+  declaredChangedWikiPageKeys: z.array(z.string()),
+  derivedChangedWikiPageKeys: z.array(z.string()),
+  mismatches: z.array(finalizationMismatchSchema).default([]),
+  result: z.unknown().optional(),
+  errors: z.array(z.string()),
+  warnings: z.array(z.string()),
+  actions: z.array(ingestActionSchema).default([]),
+  provenanceExclusions: z.array(finalizationProvenanceExclusionSchema).default([]),
+});
+
 export const ingestReportSnapshotSchema = z
   .object({
     id: z.string().min(1),
@@ -188,6 +217,7 @@ export const ingestReportSnapshotSchema = z
         overrideOf: z.string().nullable().default(null),
         provenanceRows: z.array(provenanceDetailSchema).default([]),
         toolTranscripts: z.array(toolTranscriptSummarySchema).default([]),
+        finalization: finalizationOutcomeSchema.optional(),
         memoryFlow: memoryFlowReplayInputSchema.optional(),
       })
       .passthrough(),

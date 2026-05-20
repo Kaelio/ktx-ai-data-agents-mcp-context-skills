@@ -242,12 +242,12 @@ describe('historic-SQL local ingest retrieval acceptance', () => {
     expect(result.result.failedWorkUnits).toEqual([]);
     expect(result.result.workUnitCount).toBe(3);
     expect(agentRunner.runLoop).toHaveBeenCalledTimes(3);
-    const postProcessor = result.report.body.postProcessor;
-    expect(postProcessor).toBeDefined();
-    if (!postProcessor) {
-      throw new Error('Expected historic-SQL post-processor result');
+    const finalization = result.report.body.finalization;
+    expect(finalization).toBeDefined();
+    if (!finalization) {
+      throw new Error('Expected historic-SQL finalization result');
     }
-    expect(postProcessor).toMatchObject({
+    expect(finalization).toMatchObject({
       sourceKey: 'historic-sql',
       status: 'success',
       result: {
@@ -255,7 +255,7 @@ describe('historic-SQL local ingest retrieval acceptance', () => {
         patternPagesWritten: 1,
       },
     });
-    expect(postProcessor.touchedSources).toEqual(
+    expect(finalization.declaredTouchedSources).toEqual(
       expect.arrayContaining([
         { connectionId: 'warehouse', sourceName: 'customers' },
         { connectionId: 'warehouse', sourceName: 'orders' },

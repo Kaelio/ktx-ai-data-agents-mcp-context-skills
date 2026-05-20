@@ -95,6 +95,7 @@ const makeDeps = () => {
     triageSupported: undefined as undefined | boolean,
     detect: vi.fn().mockResolvedValue(true),
     listTargetConnectionIds: undefined as undefined | ((stagedDir: string) => Promise<string[]>),
+    finalize: undefined as any,
     chunk: vi.fn().mockResolvedValue({
       workUnits: [{ unitKey: 'u1', rawFiles: ['a.yml'], peerFileIndex: [], dependencyPaths: [] }],
     }),
@@ -131,6 +132,7 @@ const makeDeps = () => {
     }),
     applyPatchFile3WayIndex: vi.fn(),
     diffNameStatus: vi.fn().mockResolvedValue([]),
+    changedPaths: vi.fn().mockResolvedValue([]),
   };
   const sessionWorktreeService = {
     create: vi.fn().mockResolvedValue({
@@ -1574,27 +1576,69 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
-  it('runs a registered post-processor before squash, records the outcome, and reindexes touched sources after squash', async () => {
+  it('runs adapter finalization before squash, records the outcome, and reindexes touched sources', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'metricflow';
     deps.registry.get.mockReturnValue(deps.adapter);
     deps.adapter.chunk.mockResolvedValue({
-      workUnits: [{ unitKey: 'u1', rawFiles: ['semantic_models.yml'], peerFileIndex: [], dependencyPaths: [] }],
+      workUnits: [],
       parseArtifacts: { semanticModels: [{ name: 'orders' }] },
     });
     deps.adapter.listTargetConnectionIds = vi.fn().mockResolvedValue(['warehouse-2']);
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      result: { sourcesTouched: 1 },
+      warnings: ['kept going'],
+      errors: [],
+      touchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+      changedWikiPageKeys: [],
+      actions: [
+        {
+          target: 'sl',
+          type: 'updated',
+          key: 'orders',
+          targetConnectionId: 'warehouse-2',
+          detail: 'Finalized orders usage',
+          rawPaths: ['semantic_models.yml'],
+        },
+      ],
+    });
     deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
       Promise.resolve({ sources: [{ name: `${connectionId}_source` }], loadErrors: [] }),
     );
-    const postProcessor = {
-      run: vi.fn().mockResolvedValue({
-        result: { sourcesCreated: 1 },
-        warnings: ['kept going'],
-        errors: [],
-        touchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+    let head = 'pre-finalization';
+    const git = {
+      revParseHead: vi.fn(async () => head),
+      commitFiles: vi.fn().mockImplementation(async (paths: string[]) => {
+        if (paths.includes('semantic-layer/warehouse-2/orders.yaml')) {
+          head = 'post-finalization';
+          return { created: true, commitHash: 'finalization-sha' };
+        }
+        return { created: true, commitHash: head };
       }),
+      commitStaged: vi.fn().mockResolvedValue({ created: false, commitHash: 'post-finalization' }),
+      resetHardTo: vi.fn(),
+      assertWorktreeClean: vi.fn().mockResolvedValue(undefined),
+      writeBinaryNoRenamePatch: vi.fn(async (_base: string, _head: string, patchPath: string) => {
+        await writeFile(patchPath, '', 'utf-8');
+      }),
+      applyPatchFile3WayIndex: vi.fn(),
+      diffNameStatus: vi.fn().mockImplementation(async (from: string, to: string) =>
+        from === 'pre-finalization' && to === 'post-finalization'
+          ? [{ status: 'M', path: 'semantic-layer/warehouse-2/orders.yaml' }]
+          : [],
+      ),
+      changedPaths: vi.fn().mockResolvedValue(['semantic-layer/warehouse-2/orders.yaml']),
     };
-    const runner = buildRunner(deps, { postProcessors: { metricflow: postProcessor } });
+    deps.sessionWorktreeService.create.mockResolvedValue({
+      chatId: 'j1',
+      workdir: '/tmp/wt',
+      branch: 'session/j1',
+      baseSha: 'b',
+      createdAt: new Date(),
+      git,
+      config: {},
+    });
+    const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
       currentHashes: new Map([['semantic_models.yml', 'h1']]),
       rawDirInWorktree: 'raw-sources/c1/metricflow/s',
@@ -1609,26 +1653,29 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       bundleRef: { kind: 'upload', uploadId: 'upload-x' },
     });
 
-    expect(postProcessor.run).toHaveBeenCalledWith({
-      connectionId: 'c1',
-      sourceKey: 'metricflow',
-      syncId: expect.any(String),
-      jobId: 'j1',
-      runId: 'run-1',
-      workdir: '/tmp/wt',
-      parseArtifacts: { semanticModels: [{ name: 'orders' }] },
-    });
+    expect(deps.adapter.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'c1',
+        sourceKey: 'metricflow',
+        syncId: expect.any(String),
+        jobId: 'j1',
+        runId: 'run-1',
+        workdir: '/tmp/wt',
+        parseArtifacts: { semanticModels: [{ name: 'orders' }] },
+      }),
+    );
     expect(deps.reportsRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({
-          postProcessor: {
+          finalization: expect.objectContaining({
             sourceKey: 'metricflow',
             status: 'success',
-            result: { sourcesCreated: 1 },
-            warnings: ['kept going'],
-            errors: [],
-            touchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
-          },
+            commitSha: 'finalization-sha',
+            touchedPaths: ['semantic-layer/warehouse-2/orders.yaml'],
+            derivedTouchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+            declaredTouchedSources: [{ connectionId: 'warehouse-2', sourceName: 'orders' }],
+            actions: [expect.objectContaining({ key: 'orders' })],
+          }),
         }),
       }),
     );
@@ -1637,7 +1684,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(deps.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'success');
   });
 
-  it('includes historic-sql post-processor output in memory-flow saved counts', async () => {
+  it('includes finalization actions in memory-flow saved counts', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'historic-sql';
     deps.registry.get.mockReturnValue(deps.adapter);
@@ -1651,21 +1698,19 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         },
       ],
     });
-    const postProcessor = {
-      run: vi.fn().mockResolvedValue({
-        result: {
-          tableUsageMerged: 2,
-          staleTablesMarked: 1,
-          patternPagesWritten: 3,
-          stalePatternPagesMarked: 1,
-          archivedPatternPages: 1,
-        },
-        warnings: [],
-        errors: [],
-        touchedSources: [{ connectionId: 'c1', sourceName: 'orders' }],
-      }),
-    };
-    const runner = buildRunner(deps, { postProcessors: { 'historic-sql': postProcessor } });
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      warnings: [],
+      errors: [],
+      touchedSources: [],
+      changedWikiPageKeys: [],
+      actions: [
+        { target: 'sl', type: 'updated', key: 'orders', detail: 'Merged usage' },
+        { target: 'sl', type: 'updated', key: 'customers', detail: 'Merged usage' },
+        { target: 'wiki', type: 'created', key: 'historic-sql-orders', detail: 'Projected pattern' },
+        { target: 'wiki', type: 'updated', key: 'historic-sql-customers', detail: 'Projected pattern' },
+      ],
+    });
+    const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
       currentHashes: new Map([['tables/public/orders.json', 'h1']]),
       rawDirInWorktree: 'raw-sources/c1/historic-sql/s',
@@ -1691,13 +1736,13 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(memoryFlow.snapshot().events).toContainEqual(
       expect.objectContaining({
         type: 'saved',
-        wikiCount: 5,
-        slCount: 3,
+        wikiCount: 2,
+        slCount: 2,
       }),
     );
   });
 
-  it('marks post-processor infrastructure failure as failed and preserves worktree cleanup state', async () => {
+  it('marks finalization infrastructure failure as failed and preserves worktree cleanup state', async () => {
     const deps = makeDeps();
     deps.adapter.source = 'metricflow';
     deps.registry.get.mockReturnValue(deps.adapter);
@@ -1705,8 +1750,8 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       workUnits: [{ unitKey: 'u1', rawFiles: ['semantic_models.yml'], peerFileIndex: [], dependencyPaths: [] }],
       parseArtifacts: { semanticModels: [{ name: 'orders' }] },
     });
-    const postProcessor = { run: vi.fn().mockRejectedValue(new Error('worktree write failed')) };
-    const runner = buildRunner(deps, { postProcessors: { metricflow: postProcessor } });
+    deps.adapter.finalize = vi.fn().mockRejectedValue(new Error('worktree write failed'));
+    const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
       currentHashes: new Map([['semantic_models.yml', 'h1']]),
       rawDirInWorktree: 'raw-sources/c1/metricflow/s',
@@ -1726,6 +1771,132 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(deps.runsRepo.markFailed).toHaveBeenCalledWith('run-1');
     expect(deps.gitService.squashMergeIntoMain).not.toHaveBeenCalled();
     expect(deps.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'crash');
+  });
+
+  it('reports finalization actions excluded from provenance when raw paths are not defensible', async () => {
+    const deps = makeDeps();
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      warnings: [],
+      errors: [],
+      touchedSources: [],
+      changedWikiPageKeys: [],
+      actions: [
+        { target: 'wiki', type: 'updated', key: 'historic-sql-pattern', detail: 'No raw path' },
+        { target: 'sl', type: 'updated', key: 'orders', detail: 'Invalid raw path', rawPaths: ['missing.json'] },
+      ],
+    });
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['current.json', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect(deps.reportsRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          finalization: expect.objectContaining({
+            provenanceExclusions: [
+              expect.objectContaining({ reason: 'missing_raw_paths' }),
+              expect.objectContaining({ reason: 'raw_path_not_defensible', invalidRawPaths: ['missing.json'] }),
+            ],
+          }),
+        }),
+      }),
+    );
+    expect(deps.provenanceRepo.insertMany).not.toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ rawPath: 'missing.json' })]),
+    );
+  });
+
+  it('passes explicit override replay metadata and no current work unit outcomes', async () => {
+    const deps = makeDeps();
+    deps.reportsRepo.findByJobId.mockResolvedValue({
+      id: 'prior-report',
+      runId: 'prior-run',
+      jobId: 'prior-job',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      body: {
+        status: 'completed',
+        syncId: 'prior-sync',
+        diffSummary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
+        commitSha: 'prior-sha',
+        workUnits: [
+          {
+            unitKey: 'prior-unit',
+            rawFiles: ['prior.json'],
+            status: 'success',
+            actions: [{ target: 'wiki', type: 'created', key: 'prior', detail: 'prior' }],
+            touchedSlSources: [],
+          },
+        ],
+        failedWorkUnits: [],
+        reconciliationSkipped: false,
+        conflictsResolved: [],
+        evictionsApplied: [
+          {
+            rawPath: 'do-not-replay.json',
+            artifactKind: 'wiki',
+            artifactKey: 'old',
+            action: 'removed',
+            reason: 'prior',
+          },
+        ],
+        unmappedFallbacks: [],
+        artifactResolutions: [],
+        evictionInputs: ['evicted-from-prior-report.json'],
+        unresolvedCards: [],
+        supersededBy: null,
+        overrideOf: null,
+        provenanceRows: [],
+        toolTranscripts: [],
+      },
+    });
+    deps.adapter.finalize = vi.fn().mockResolvedValue({
+      warnings: [],
+      errors: [],
+      touchedSources: [],
+      changedWikiPageKeys: [],
+      actions: [],
+    });
+    deps.gitService.listFilesAtHead.mockResolvedValue(['raw-sources/c1/fake/prior-sync/prior.json']);
+    deps.gitService.getFileAtCommit.mockResolvedValue('{"id":1}\n');
+    const runner = buildRunner(deps);
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['prior.json', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/prior-sync',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/prior');
+
+    await runner.run({
+      jobId: 'override-job',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'manual_override',
+      bundleRef: { kind: 'override', priorJobId: 'prior-job' },
+    });
+
+    expect(deps.adapter.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workUnitOutcomes: [],
+        overrideReplay: {
+          priorJobId: 'prior-job',
+          priorRunId: 'prior-run',
+          priorSyncId: 'prior-sync',
+          evictionRawPaths: ['evicted-from-prior-report.json'],
+        },
+      }),
+    );
   });
 
   it('includes existing global wiki pages in WorkUnit prompts', async () => {

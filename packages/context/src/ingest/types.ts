@@ -1,6 +1,10 @@
 import type { KtxEmbeddingPort } from '../core/embedding.js';
+import type { MemoryAction } from '../memory/index.js';
 import type { SemanticLayerService } from '../sl/index.js';
+import type { TouchedSlSource } from '../tools/index.js';
 import type { MemoryFlowEventSink } from './memory-flow/types.js';
+import type { StageIndex } from './stages/stage-index.types.js';
+import type { WorkUnitOutcome } from './stages/stage-3-work-units.js';
 
 export type IngestTrigger = 'upload' | 'scheduled_pull' | 'manual_resync' | 'manual_override';
 
@@ -118,6 +122,37 @@ export interface ProjectionResult {
   result?: unknown;
 }
 
+export interface FinalizationOverrideReplay {
+  priorJobId: string;
+  priorRunId: string;
+  priorSyncId: string;
+  evictionRawPaths: string[];
+}
+
+export interface DeterministicFinalizationContext {
+  connectionId: string;
+  sourceKey: string;
+  syncId: string;
+  jobId: string;
+  runId: string;
+  stagedDir: string;
+  workdir: string;
+  parseArtifacts?: unknown;
+  stageIndex: StageIndex;
+  workUnitOutcomes: WorkUnitOutcome[];
+  reconciliationActions: MemoryAction[];
+  overrideReplay?: FinalizationOverrideReplay;
+}
+
+export interface FinalizationResult {
+  warnings: string[];
+  errors: string[];
+  touchedSources: TouchedSlSource[];
+  changedWikiPageKeys: string[];
+  actions?: MemoryAction[];
+  result?: unknown;
+}
+
 export interface SourceAdapter {
   readonly source: string;
   readonly skillNames: string[];
@@ -132,6 +167,7 @@ export interface SourceAdapter {
   chunk(stagedDir: string, diffSet?: DiffSet): Promise<ChunkResult>;
   clusterWorkUnits?(ctx: ClusterWorkUnitsContext): Promise<WorkUnit[]>;
   project?(ctx: DeterministicProjectionContext): Promise<ProjectionResult>;
+  finalize?(ctx: DeterministicFinalizationContext): Promise<FinalizationResult>;
   describeScope?(stagedDir: string): Promise<ScopeDescriptor>;
   onPullSucceeded?(ctx: {
     connectionId: string;

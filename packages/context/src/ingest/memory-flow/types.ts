@@ -50,7 +50,7 @@ type MemoryFlowEventPayload =
         | 'source'
         | 'integration'
         | 'reconciliation'
-        | 'post_processor'
+        | 'finalization'
         | 'wiki_sl_ref_repair'
         | 'final_gates'
         | 'save'

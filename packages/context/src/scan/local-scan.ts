@@ -15,6 +15,7 @@ import type { KtxProjectLlmConfig, KtxScanEnrichmentConfig, KtxScanRelationshipC
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/local-state-db.js';
 import { redactKtxScanReport } from './credentials.js';
+import { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
 import { completedKtxScanEnrichmentStateSummary } from './enrichment-state.js';
 import { failedKtxScanEnrichmentSummary, ktxScanErrorMessage } from './enrichment-summary.js';
 import {
@@ -320,22 +321,6 @@ async function readScanReport(
   }
 }
 
-export function resolveEnabledTables(connection: Record<string, unknown> | undefined): Set<string> | null {
-  const raw = connection?.enabled_tables;
-  if (!Array.isArray(raw) || raw.length === 0) return null;
-  return new Set(raw.filter((v): v is string => typeof v === 'string'));
-}
-
-export function filterSnapshotTables(snapshot: KtxSchemaSnapshot, enabledTables: Set<string>): KtxSchemaSnapshot {
-  return {
-    ...snapshot,
-    tables: snapshot.tables.filter((table) => {
-      const key = table.db ? `${table.db}.${table.name}` : table.name;
-      return enabledTables.has(key);
-    }),
-  };
-}
-
 function createFilteredConnector(connector: KtxScanConnector, enabledTables: Set<string>): KtxScanConnector {
   return {
     ...connector,
@@ -345,6 +330,8 @@ function createFilteredConnector(connector: KtxScanConnector, enabledTables: Set
     },
   };
 }
+
+export { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
 
 function withInternalLiveDatabaseAdapter(project: KtxLocalProject): KtxLocalProject {
   if (project.config.ingest.adapters.includes(LIVE_DATABASE_ADAPTER)) {

@@ -13,7 +13,7 @@ import type {
   SlValidationDeps,
   SlValidatorPort,
 } from '../sl/index.js';
-import type { ToolContext, ToolSession, TouchedSlSource } from '../tools/index.js';
+import type { ToolContext, ToolSession } from '../tools/index.js';
 import type { KnowledgeIndexPort, KnowledgeWikiService } from '../wiki/index.js';
 import type { CanonicalPin } from './canonical-pins.js';
 import type { IngestTraceLevel } from './ingest-trace.js';
@@ -323,27 +323,6 @@ export interface CuratorPaginationPort {
   }): Promise<ReconciliationOutcome & { report: CuratorPaginationReport; warnings: string[] }>;
 }
 
-export interface IngestBundlePostProcessorInput {
-  connectionId: string;
-  sourceKey: string;
-  syncId: string;
-  jobId: string;
-  runId: string;
-  workdir: string;
-  parseArtifacts: unknown;
-}
-
-export interface IngestBundlePostProcessorResult {
-  result?: unknown;
-  warnings: string[];
-  errors: string[];
-  touchedSources: TouchedSlSource[];
-}
-
-export interface IngestBundlePostProcessorPort {
-  run(input: IngestBundlePostProcessorInput): Promise<IngestBundlePostProcessorResult>;
-}
-
 export interface IngestBundleRunnerDeps {
   runs: IngestRunsPort;
   provenance: IngestProvenancePort;
@@ -377,7 +356,6 @@ export interface IngestBundleRunnerDeps {
   candidateDedup?: CandidateDedupPort;
   contextCandidateCarryforward?: ContextCandidateCarryforwardPort;
   curatorPagination?: CuratorPaginationPort;
-  postProcessors?: Record<string, IngestBundlePostProcessorPort>;
   logger?: KtxLogger;
 }
 

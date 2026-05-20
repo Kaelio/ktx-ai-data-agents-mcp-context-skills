@@ -14,6 +14,11 @@ import { NOTION_DEFAULT_MAX_KNOWLEDGE_CREATES_PER_RUN } from './adapters/notion/
 import { validateFinalIngestArtifacts, validateProvenanceRawPaths } from './artifact-gates.js';
 import { selectRelevantCanonicalPins } from './canonical-pins.js';
 import { finalGateRepairPaths, repairFinalGateFailure } from './final-gate-repair.js';
+import {
+  compareFinalizationDeclarations,
+  deriveFinalizationTouchedSources,
+  deriveFinalizationWikiPageKeys,
+} from './finalization-scope.js';
 import { FileIngestTraceWriter, ingestTracePathForJob, type IngestTraceWriter, traceTimed } from './ingest-trace.js';
 import { integrateWorkUnitPatch } from './isolated-diff/patch-integrator.js';
 import { resolveTextualConflict } from './isolated-diff/textual-conflict-resolver.js';
@@ -33,8 +38,8 @@ import type {
 import { buildSyncId, rawSourcesDirForSync } from './raw-sources-paths.js';
 import {
   buildStageIndexFromReportBody,
-  postProcessorSavedMemoryCounts,
-  type IngestReportPostProcessorOutcome,
+  type IngestReportFinalizationProvenanceExclusion,
+  type IngestReportFinalizationOutcome,
   type IngestReportProvenanceDetail,
   type IngestReportSnapshot,
   type IngestReportWorkUnit,
@@ -171,6 +176,11 @@ type ProvenanceRowOrigin =
     }
   | {
       source: 'reconciliation_action';
+      actionIndex: number;
+      action: MemoryAction;
+    }
+  | {
+      source: 'finalization_action';
       actionIndex: number;
       action: MemoryAction;
     }
@@ -411,6 +421,19 @@ export class IngestBundleRunner {
     return false;
   }
 
+  private async loadSourcesByConnection(
+    workdir: string,
+    connectionIds: string[],
+  ): Promise<Map<string, SemanticLayerSource[]>> {
+    const service = this.deps.semanticLayerService.forWorktree(workdir);
+    const result = new Map<string, SemanticLayerSource[]>();
+    for (const connectionId of connectionIds) {
+      const { sources } = await service.loadAllSources(connectionId);
+      result.set(connectionId, sources);
+    }
+    return result;
+  }
+
   private resolveContextCuratorBudget(
     bundleRef: IngestBundleJob['bundleRef'],
     stageIndex: StageIndex,
@@ -466,6 +489,7 @@ export class IngestBundleRunner {
     currentHashes: Map<string, string>;
     stageIndex: StageIndex;
     reconcileActions: MemoryAction[];
+    finalizationActions: MemoryAction[];
   }): ProvenancePlan {
     const rows: IngestProvenanceInsert[] = [];
     const diagnostics: ProvenanceRowDiagnostic[] = [];
@@ -523,6 +547,15 @@ export class IngestBundleRunner {
         });
       }
     });
+    input.finalizationActions.forEach((action, actionIndex) => {
+      for (const rawPath of action.rawPaths ?? []) {
+        pushActionProvenance(rawPath, action, {
+          source: 'finalization_action',
+          actionIndex,
+          action,
+        });
+      }
+    });
     (input.stageIndex.artifactResolutions ?? []).forEach((resolution, resolutionIndex) => {
       const hash = input.currentHashes.get(resolution.rawPath) ?? '';
       pushRow(
@@ -567,6 +600,35 @@ export class IngestBundleRunner {
     }
 
     return { rows, diagnostics };
+  }
+
+  private partitionFinalizationActionsForProvenance(input: {
+    actions: MemoryAction[];
+    currentRawPaths: Set<string>;
+    currentEvictionRawPaths: Set<string>;
+    overrideEvictionRawPaths: Set<string>;
+  }): { actions: MemoryAction[]; exclusions: IngestReportFinalizationProvenanceExclusion[] } {
+    const defensible = new Set([
+      ...input.currentRawPaths,
+      ...input.currentEvictionRawPaths,
+      ...input.overrideEvictionRawPaths,
+    ]);
+    const actions: MemoryAction[] = [];
+    const exclusions: IngestReportFinalizationProvenanceExclusion[] = [];
+    for (const action of input.actions) {
+      const rawPaths = action.rawPaths ?? [];
+      if (rawPaths.length === 0) {
+        exclusions.push({ action, reason: 'missing_raw_paths' });
+        continue;
+      }
+      const invalidRawPaths = rawPaths.filter((rawPath) => !defensible.has(rawPath)).sort();
+      if (invalidRawPaths.length > 0) {
+        exclusions.push({ action, reason: 'raw_path_not_defensible', invalidRawPaths });
+        continue;
+      }
+      actions.push(action);
+    }
+    return { actions, exclusions };
   }
 
   private toReportProvenanceRows(rows: IngestProvenanceInsert[]): IngestReportProvenanceDetail[] {
@@ -951,6 +1013,7 @@ export class IngestBundleRunner {
     let latestEvictionInputs: string[] = [];
     let latestUnresolvedCards: UnresolvedCardInfo[] = [];
     let latestReportProvenanceRows: IngestReportProvenanceDetail[] = [];
+    let latestFinalizationOutcome: IngestReportFinalizationOutcome | undefined;
     let activeFailureDetails: Record<string, unknown> | undefined;
     let latestIsolatedDiffSummary:
       | {
@@ -1174,7 +1237,7 @@ export class IngestBundleRunner {
       let unresolvedCards: UnresolvedCardInfo[] | undefined;
       let sourceContextReport: { capped?: boolean; warnings?: string[] } | undefined;
       let parseArtifacts: unknown;
-      let postProcessorOutcome: IngestReportPostProcessorOutcome | undefined;
+      let finalizationOutcome: IngestReportFinalizationOutcome | undefined;
       let wikiSlRefRepairResult: WikiSlRefRepairResult | null = null;
       let reconcileNotes: string[] = [];
       let triageResult: PageTriageRunResult | null = null;
@@ -1954,62 +2017,215 @@ export class IngestBundleRunner {
 
       await stage4?.updateProgress(1.0, reconcileOutcome.skipped ? 'No reconciliation needed' : 'Reconciled');
 
-      const postProcessor = this.deps.postProcessors?.[job.sourceKey];
-      activePhase = 'post_processor';
-      if (postProcessor) {
-        const stagePostProcessor = ctx?.startPhase(0.04);
-        emitStageProgress('post_processor', 87, 'Running deterministic imports');
-        await stagePostProcessor?.updateProgress(0.0, 'Running deterministic imports');
-        try {
-          const result = await traceTimed(
-            runTrace,
-            'post_processor',
-            'post_processor',
-            { sourceKey: job.sourceKey },
-            () =>
-              postProcessor.run({
-                connectionId: job.connectionId,
-                sourceKey: job.sourceKey,
-                syncId,
-                jobId: job.jobId,
-                runId: createdRunRow.id,
-                workdir: sessionWorktree.workdir,
-                parseArtifacts,
-              }),
-          );
-          postProcessorOutcome = {
+      const preFinalizationSha = await sessionWorktree.git.revParseHead();
+      const preFinalizationSourcesByConnection = await this.loadSourcesByConnection(
+        sessionWorktree.workdir,
+        slConnectionIds,
+      );
+      let finalizationActions: MemoryAction[] = [];
+      let finalizationTouchedPaths: string[] = [];
+      let finalizationTouchedSources: TouchedSlSource[] = [];
+      let finalizationChangedWikiPageKeys: string[] = [];
+      let finalizationSha: string | null = null;
+
+      activePhase = 'finalization';
+      if (adapter.finalize) {
+        const stageFinalization = ctx?.startPhase(0.04);
+        emitStageProgress('finalization', 87, 'Running deterministic finalization');
+        await stageFinalization?.updateProgress(0.0, 'Running deterministic finalization');
+        await runTrace.event('debug', 'finalization', 'finalization_started', { sourceKey: job.sourceKey });
+        const result = await adapter.finalize({
+          connectionId: job.connectionId,
+          sourceKey: job.sourceKey,
+          syncId,
+          jobId: job.jobId,
+          runId: createdRunRow.id,
+          stagedDir,
+          workdir: sessionWorktree.workdir,
+          ...(overrideReport ? {} : { parseArtifacts }),
+          stageIndex,
+          workUnitOutcomes,
+          reconciliationActions: reconcileActions,
+          ...(overrideReport
+            ? {
+                overrideReplay: {
+                  priorJobId: overrideReport.jobId,
+                  priorRunId: overrideReport.runId,
+                  priorSyncId: overrideReport.body.syncId,
+                  evictionRawPaths: overrideReport.body.evictionInputs,
+                },
+              }
+            : {}),
+        });
+        if (result.errors.length > 0) {
+          finalizationOutcome = {
             sourceKey: job.sourceKey,
-            status: result.errors.length > 0 && result.touchedSources.length === 0 ? 'failed' : 'success',
+            status: 'failed',
+            commitSha: null,
+            touchedPaths: [],
+            declaredTouchedSources: result.touchedSources,
+            derivedTouchedSources: [],
+            declaredChangedWikiPageKeys: result.changedWikiPageKeys,
+            derivedChangedWikiPageKeys: [],
+            mismatches: [],
             result: result.result,
             errors: result.errors,
             warnings: result.warnings,
-            touchedSources: result.touchedSources,
+            actions: result.actions ?? [],
+            provenanceExclusions: [],
           };
-          emitStageProgress('post_processor', 88, 'Deterministic imports complete');
-          await stagePostProcessor?.updateProgress(1.0, 'Deterministic imports complete');
-        } catch (error) {
-          postProcessorOutcome = {
+          latestFinalizationOutcome = finalizationOutcome;
+          await runTrace.event('error', 'finalization', 'finalization_failed', {
+            sourceKey: job.sourceKey,
+            errors: result.errors,
+            warnings: result.warnings,
+          });
+          throw new Error(`deterministic finalization failed: ${result.errors.join('; ')}`);
+        }
+
+        const changedBeforeFinalization = new Set([
+          ...projectionTouchedPaths,
+          ...workUnitOutcomes.flatMap((outcome) => outcome.patchTouchedPaths ?? []),
+          ...(preReconciliationSha && preFinalizationSha !== preReconciliationSha
+            ? (await sessionWorktree.git.diffNameStatus(preReconciliationSha, preFinalizationSha)).map(
+                (entry) => entry.path,
+              )
+            : []),
+        ]);
+        finalizationTouchedPaths = await sessionWorktree.git.changedPaths();
+        const overlapping = finalizationTouchedPaths.filter((path) => changedBeforeFinalization.has(path));
+        if (overlapping.length > 0) {
+          await runTrace.event('error', 'finalization', 'finalization_failed', {
+            sourceKey: job.sourceKey,
+            reason: 'path_overlap',
+            overlappingPaths: overlapping.sort(),
+          });
+          throw new Error(
+            `finalization modified path(s) already changed earlier in this run: ${overlapping.sort().join(', ')}`,
+          );
+        }
+
+        const finalizationCommit =
+          finalizationTouchedPaths.length > 0
+            ? await sessionWorktree.git.commitFiles(
+                finalizationTouchedPaths,
+                `ingest(${job.sourceKey}): deterministic finalization syncId=${syncId}`,
+                this.deps.storage.systemGitAuthor.name,
+                this.deps.storage.systemGitAuthor.email,
+              )
+            : await sessionWorktree.git.commitStaged(
+                `ingest(${job.sourceKey}): deterministic finalization syncId=${syncId}`,
+                this.deps.storage.systemGitAuthor.name,
+                this.deps.storage.systemGitAuthor.email,
+              );
+        finalizationSha = finalizationCommit.created ? finalizationCommit.commitHash : null;
+        const postFinalizationSha = await sessionWorktree.git.revParseHead();
+        finalizationTouchedPaths =
+          preFinalizationSha !== postFinalizationSha
+            ? (await sessionWorktree.git.diffNameStatus(preFinalizationSha, postFinalizationSha)).map(
+                (entry) => entry.path,
+              )
+            : [];
+
+        const changedConnectionIds = [
+          ...new Set([
+            ...slConnectionIds,
+            ...finalizationTouchedPaths
+              .filter((path) => path.startsWith('semantic-layer/'))
+              .map((path) => path.split('/')[1])
+              .filter((connectionId): connectionId is string => Boolean(connectionId)),
+          ]),
+        ].sort();
+        const postFinalizationSourcesByConnection = await this.loadSourcesByConnection(
+          sessionWorktree.workdir,
+          changedConnectionIds,
+        );
+        const scope = await deriveFinalizationTouchedSources({
+          changedPaths: finalizationTouchedPaths,
+          beforeSourcesByConnection: preFinalizationSourcesByConnection,
+          afterSourcesByConnection: postFinalizationSourcesByConnection,
+        });
+        if (scope.unresolvedPaths.length > 0) {
+          await runTrace.event('error', 'finalization', 'finalization_failed', {
+            sourceKey: job.sourceKey,
+            reason: 'unresolved_semantic_layer_paths',
+            unresolvedPaths: scope.unresolvedPaths,
+          });
+          throw new Error(`could not resolve finalization semantic-layer path(s): ${scope.unresolvedPaths.join(', ')}`);
+        }
+        finalizationTouchedSources = scope.touchedSources;
+        finalizationChangedWikiPageKeys = deriveFinalizationWikiPageKeys(finalizationTouchedPaths);
+        const mismatches = compareFinalizationDeclarations({
+          declaredTouchedSources: result.touchedSources,
+          derivedTouchedSources: finalizationTouchedSources,
+          declaredChangedWikiPageKeys: result.changedWikiPageKeys,
+          derivedChangedWikiPageKeys: finalizationChangedWikiPageKeys,
+        });
+        if (mismatches.length > 0) {
+          finalizationOutcome = {
             sourceKey: job.sourceKey,
             status: 'failed',
-            errors: [error instanceof Error ? error.message : String(error)],
-            warnings: [],
-            touchedSources: [],
+            commitSha: finalizationSha,
+            touchedPaths: finalizationTouchedPaths,
+            declaredTouchedSources: result.touchedSources,
+            derivedTouchedSources: finalizationTouchedSources,
+            declaredChangedWikiPageKeys: result.changedWikiPageKeys,
+            derivedChangedWikiPageKeys: finalizationChangedWikiPageKeys,
+            mismatches,
+            result: result.result,
+            errors: ['finalization touched artifact declaration mismatch'],
+            warnings: result.warnings,
+            actions: result.actions ?? [],
+            provenanceExclusions: [],
           };
-          await this.deps.runs.markFailed(runRow.id);
-          throw error;
+          latestFinalizationOutcome = finalizationOutcome;
+          await runTrace.event('error', 'finalization', 'finalization_failed', {
+            sourceKey: job.sourceKey,
+            reason: 'declaration_mismatch',
+            mismatches,
+          });
+          throw new Error(
+            `finalization touched artifact declaration mismatch: ${mismatches
+              .map((mismatch) => `${mismatch.direction}:${mismatch.artifactKind}:${mismatch.key}`)
+              .join(', ')}`,
+          );
         }
+        finalizationActions = result.actions ?? [];
+        finalizationOutcome = {
+          sourceKey: job.sourceKey,
+          status: 'success',
+          commitSha: finalizationSha,
+          touchedPaths: finalizationTouchedPaths,
+          declaredTouchedSources: result.touchedSources,
+          derivedTouchedSources: finalizationTouchedSources,
+          declaredChangedWikiPageKeys: result.changedWikiPageKeys,
+          derivedChangedWikiPageKeys: finalizationChangedWikiPageKeys,
+          mismatches,
+          result: result.result,
+          errors: [],
+          warnings: result.warnings,
+          actions: finalizationActions,
+          provenanceExclusions: [],
+        };
+        latestFinalizationOutcome = finalizationOutcome;
+        emitStageProgress('finalization', 88, 'Deterministic finalization complete');
+        await stageFinalization?.updateProgress(1.0, 'Deterministic finalization complete');
+        await runTrace.event('debug', 'finalization', 'finalization_committed', {
+          sourceKey: job.sourceKey,
+          commitSha: finalizationSha,
+          touchedPaths: finalizationTouchedPaths,
+          touchedSources: finalizationTouchedSources,
+          changedWikiPageKeys: finalizationChangedWikiPageKeys,
+          warnings: result.warnings,
+        });
+      } else {
+        await runTrace.event('debug', 'finalization', 'finalization_skipped', { sourceKey: job.sourceKey });
       }
-      await runTrace.event('debug', 'post_processor', 'post_processor_finished', {
-        sourceKey: job.sourceKey,
-        status: postProcessorOutcome?.status ?? 'skipped',
-        touchedSources: postProcessorOutcome?.touchedSources ?? [],
-        warnings: postProcessorOutcome?.warnings ?? [],
-      });
 
       const repairConnectionIds = [
         ...new Set([
           ...slConnectionIds,
-          ...(postProcessorOutcome?.touchedSources ?? []).map((source) => source.connectionId),
+          ...finalizationTouchedSources.map((source) => source.connectionId),
         ]),
       ].sort();
       activePhase = 'wiki_sl_ref_repair';
@@ -2044,6 +2260,7 @@ export class IngestBundleRunner {
           .flatMap((outcome) => outcome.patchTouchedPaths ?? [])
           .flatMap((path) => this.wikiPageKeysFromPaths([path])),
         ...this.wikiPageKeysFromActions(reconcileActions),
+        ...finalizationChangedWikiPageKeys,
         ...postReconciliationPaths.flatMap((path) => this.wikiPageKeysFromPaths([path])),
         ...wikiSlRefRepairResult.repairs.filter((repair) => repair.scope === 'GLOBAL').map((repair) => repair.pageKey),
       ]);
@@ -2052,7 +2269,7 @@ export class IngestBundleRunner {
         ...workUnitOutcomes.flatMap((outcome) => outcome.touchedSlSources),
         ...this.touchedSlSourcesFromActions(reconcileActions, job.connectionId),
         ...this.touchedSlSourcesFromPaths(postReconciliationPaths),
-        ...(postProcessorOutcome?.touchedSources ?? []),
+        ...finalizationTouchedSources,
       ]);
       const finalWikiGateScope = await this.wikiPageKeysForFinalGates({
         wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
@@ -2066,9 +2283,7 @@ export class IngestBundleRunner {
         ...projectionTouchedPaths,
         ...workUnitOutcomes.flatMap((outcome) => outcome.patchTouchedPaths ?? []),
         ...postReconciliationPaths,
-        ...(postProcessorOutcome?.touchedSources ?? []).map(
-          (source) => `semantic-layer/${source.connectionId}/${source.sourceName}.yaml`,
-        ),
+        ...finalizationTouchedPaths,
       ];
       const targetPolicyTraceData = {
         allowedTargetConnectionIds: slConnectionIds,
@@ -2235,12 +2450,23 @@ export class IngestBundleRunner {
       latestArtifactResolutions = stageIndex.artifactResolutions ?? [];
       latestEvictionInputs = eviction?.deletedRawPaths ?? [];
       latestUnresolvedCards = unresolvedCards ?? [];
+      const finalizationProvenance = this.partitionFinalizationActionsForProvenance({
+        actions: finalizationActions,
+        currentRawPaths: new Set(currentHashes.keys()),
+        currentEvictionRawPaths: new Set(stageIndex.evictionsApplied.map((entry) => entry.rawPath)),
+        overrideEvictionRawPaths: new Set(overrideReport?.body.evictionInputs ?? []),
+      });
+      if (finalizationOutcome) {
+        finalizationOutcome.provenanceExclusions = finalizationProvenance.exclusions;
+        latestFinalizationOutcome = finalizationOutcome;
+      }
       const provenancePlan = this.buildProvenancePlan({
         job,
         syncId,
         currentHashes,
         stageIndex,
         reconcileActions,
+        finalizationActions: finalizationProvenance.actions,
       });
       const provenanceRows = provenancePlan.rows;
       const currentRawPaths = new Set(currentHashes.keys());
@@ -2300,13 +2526,15 @@ export class IngestBundleRunner {
         commitSha,
         touchedPaths: mergeResult.touchedPaths,
       });
-      const memoryFlowSavedActions = stageIndex.workUnits.flatMap((wu) => wu.actions).concat(reconcileActions);
-      const postProcessorMemoryCounts = postProcessorSavedMemoryCounts(postProcessorOutcome);
+      const memoryFlowSavedActions = stageIndex.workUnits
+        .flatMap((wu) => wu.actions)
+        .concat(reconcileActions)
+        .concat(finalizationActions);
       memoryFlow?.emit({
         type: 'saved',
         commitSha,
-        wikiCount: countMemoryFlowActions(memoryFlowSavedActions, 'wiki') + postProcessorMemoryCounts.wikiCount,
-        slCount: countMemoryFlowActions(memoryFlowSavedActions, 'sl') + postProcessorMemoryCounts.slCount,
+        wikiCount: countMemoryFlowActions(memoryFlowSavedActions, 'wiki'),
+        slCount: countMemoryFlowActions(memoryFlowSavedActions, 'sl'),
       });
       await stage6?.updateProgress(1.0, commitSha ? `Saved changes (${commitSha.slice(0, 8)})` : 'No changes to save');
 
@@ -2325,7 +2553,7 @@ export class IngestBundleRunner {
             memoryFlowSavedActions
               .filter((action) => action.target === 'sl')
               .map((action) => actionTargetConnectionId(action, job.connectionId))
-              .concat((postProcessorOutcome?.touchedSources ?? []).map((source) => source.connectionId)),
+              .concat(finalizationTouchedSources.map((source) => source.connectionId)),
           ),
         ].sort();
         for (const connectionId of touchedConnections) {
@@ -2416,7 +2644,7 @@ export class IngestBundleRunner {
         overrideOf: overrideReport?.jobId ?? null,
         provenanceRows: reportProvenanceRows,
         toolTranscripts: reportToolTranscripts,
-        postProcessor: postProcessorOutcome,
+        finalization: finalizationOutcome,
         wikiSlRefRepairs: wikiSlRefRepairResult.repairs,
         wikiSlRefRepairWarnings: wikiSlRefRepairResult.warnings,
         ...(reportMemoryFlow ? { memoryFlow: reportMemoryFlow } : {}),
@@ -2585,6 +2813,7 @@ export class IngestBundleRunner {
             artifactResolutions: latestArtifactResolutions,
             evictionInputs: latestEvictionInputs,
             reconciliationActions: latestReconciliationActions,
+            finalization: latestFinalizationOutcome,
             evictionDecisions: [],
             unresolvedCards: latestUnresolvedCards,
             supersededBy: null,

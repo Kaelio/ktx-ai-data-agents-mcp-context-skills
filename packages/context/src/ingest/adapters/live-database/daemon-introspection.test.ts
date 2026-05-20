@@ -216,4 +216,40 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
     );
     expect(runJson).not.toHaveBeenCalled();
   });
+
+  it('filters out tables not on the enabled_tables allowlist', async () => {
+    const runJson = vi.fn(async () => daemonResponse);
+    const introspection = createDaemonLiveDatabaseIntrospection({
+      connections: {
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgres://localhost:5432/warehouse',
+          enabled_tables: ['public.orders'],
+        },
+      },
+      schemas: ['public'],
+      runJson,
+    });
+
+    const snapshot = await introspection.extractSchema('warehouse');
+    expect(snapshot.tables.map((table) => `${table.db}.${table.name}`)).toEqual(['public.orders']);
+  });
+
+  it('passes through every table when enabled_tables is omitted or empty', async () => {
+    const runJson = vi.fn(async () => daemonResponse);
+    const introspection = createDaemonLiveDatabaseIntrospection({
+      connections: {
+        warehouse: {
+          driver: 'postgres',
+          url: 'postgres://localhost:5432/warehouse',
+          enabled_tables: [],
+        },
+      },
+      schemas: ['public'],
+      runJson,
+    });
+
+    const snapshot = await introspection.extractSchema('warehouse');
+    expect(snapshot.tables.map((table) => table.name)).toEqual(['customers', 'orders']);
+  });
 });

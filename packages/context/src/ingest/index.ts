@@ -349,7 +349,6 @@ export type {
   HistoricSqlTableUsageEvidence,
 } from './adapters/historic-sql/evidence.js';
 export { createEmitHistoricSqlEvidenceTool } from './adapters/historic-sql/evidence-tool.js';
-export { HistoricSqlProjectionPostProcessor } from './adapters/historic-sql/post-processor.js';
 export { projectHistoricSqlEvidence } from './adapters/historic-sql/projection.js';
 export type { HistoricSqlProjectionInput, HistoricSqlProjectionResult } from './adapters/historic-sql/projection.js';
 export {
@@ -664,5 +663,8 @@ export type {
   WorkUnit,
   DeterministicProjectionContext,
   ProjectionResult,
+  DeterministicFinalizationContext,
+  FinalizationOverrideReplay,
+  FinalizationResult,
 } from './types.js';
 export * from './wiki-body-refs.js';
