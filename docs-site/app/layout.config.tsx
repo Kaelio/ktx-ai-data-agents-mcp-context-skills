@@ -19,7 +19,7 @@ export const baseOptions: BaseLayoutProps = {
     },
     {
       type: "icon",
-      label: "Join the KTX Slack community",
+      label: "Join the ktx Slack community",
       icon: <SlackIcon />,
       text: "Slack",
       url: "https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ",

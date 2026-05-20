@@ -1,9 +1,9 @@
 ---
 title: "ktx mcp"
-description: "Run the KTX MCP HTTP server for agent clients."
+description: "Run the ktx MCP HTTP server for agent clients."
 ---
 
-`ktx mcp` starts, stops, inspects, and tails the local KTX MCP server for a KTX
+`ktx mcp` starts, stops, inspects, and tails the local **ktx** MCP server for a **ktx**
 project. Use it when an agent client connects through MCP instead of generated
 CLI instructions.
 
@@ -17,8 +17,8 @@ ktx mcp <subcommand> [options]
 
 | Subcommand | Description |
 |-----------|-------------|
-| `start` | Start the KTX MCP HTTP server |
-| `stop` | Stop the KTX MCP daemon |
+| `start` | Start the **ktx** MCP HTTP server |
+| `stop` | Stop the **ktx** MCP daemon |
 | `status` | Show daemon status, URL, PID, token mode, and project path |
 | `logs` | Print the daemon log |
 
@@ -65,6 +65,6 @@ hosts and origins for browser clients.
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| No KTX project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | Run from a KTX project or pass `--project-dir <path>` |
+| No **ktx** project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | Run from a **ktx** project or pass `--project-dir <path>` |
 | Non-loopback host rejected | The server needs token auth before binding beyond localhost | Pass `--token <token>` or set `KTX_MCP_TOKEN` |
 | Client cannot connect | Host, port, token, allowed host, or allowed origin does not match the client | Check `ktx mcp status`, then restart with explicit `--host`, `--port`, `--allowed-host`, and `--allowed-origin` values |

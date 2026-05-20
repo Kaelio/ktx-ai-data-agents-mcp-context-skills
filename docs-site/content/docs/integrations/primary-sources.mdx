@@ -1,9 +1,9 @@
 ---
 title: Primary Sources
-description: Connect KTX to PostgreSQL, Snowflake, BigQuery, MySQL, SQL Server, or SQLite.
+description: Connect ktx to PostgreSQL, Snowflake, BigQuery, MySQL, SQL Server, or SQLite.
 ---
 
-KTX connects to your data warehouse or database to build schema context,
+**ktx** connects to your data warehouse or database to build schema context,
 discover relationships, and execute semantic layer queries. Each connection is
 defined in `ktx.yaml` under the `connections` key.
 
@@ -16,7 +16,7 @@ All connectors share these conventions:
 
 - Sensitive values support `env:VAR_NAME` (read from environment) and
   `file:/path/to/secret` (read from file) references
-- Connections are read-only; KTX never writes to your database
+- Connections are read-only; **ktx** never writes to your database
 - Database ingest discovers tables, columns, types, and constraints
   automatically
 
@@ -90,11 +90,11 @@ connections:
 ### Query history
 
 PostgreSQL query history mines real query patterns from `pg_stat_statements`.
-This helps KTX understand how your team actually queries the data.
+This helps **ktx** understand how your team actually queries the data.
 
 **Requirements:**
 - `pg_stat_statements` extension enabled
-- `pg_read_all_stats` role granted to the KTX user
+- `pg_read_all_stats` role granted to the **ktx** user
 
 **Config options:**
 
@@ -224,7 +224,7 @@ For multiple datasets:
 | Environment variable | `credentials_json: env:BIGQUERY_CREDENTIALS_JSON` |
 
 The project ID is extracted automatically from the service account JSON file.
-If you set `project_id` in `ktx.yaml`, KTX treats it as local descriptor and
+If you set `project_id` in `ktx.yaml`, **ktx** treats it as local descriptor and
 mapping metadata. The BigQuery connector still authenticates with the
 `project_id` inside `credentials_json`.
 
@@ -426,7 +426,7 @@ url: sqlite:///path/to/db.sqlite
 
 ### Authentication
 
-No authentication required - SQLite is file-based. The file must be readable by the process running KTX.
+No authentication required - SQLite is file-based. The file must be readable by the process running **ktx**.
 
 ### Features
 

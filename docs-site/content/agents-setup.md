@@ -1,6 +1,6 @@
 # Goal
 
-Set up KTX from scratch end-to-end as a fully autonomous, agent-driven replacement for the interactive `ktx setup` wizard. Detect the environment, install missing prerequisites, ask the user only for information you genuinely need (which connections to add, credentials), write a valid configuration, verify it works, and run a fast ingest. Keep the user updated throughout.
+Set up **ktx** from scratch end-to-end as a fully autonomous, agent-driven replacement for the interactive `ktx setup` wizard. Detect the environment, install missing prerequisites, ask the user only for information you genuinely need (which connections to add, credentials), write a valid configuration, verify it works, and run a fast ingest. Keep the user updated throughout.
 
 # Operating principles
 
@@ -14,7 +14,7 @@ Set up KTX from scratch end-to-end as a fully autonomous, agent-driven replaceme
 
 # Authoritative docs
 
-KTX docs are served at `https://docs.kaelio.com/ktx/`. **Start by fetching `https://docs.kaelio.com/ktx/llms.txt`** to discover the docs map. Scan it for a "troubleshooting" entry - if one exists, read it **before** running install/setup so you can apply known fixes preemptively rather than after failing. If no troubleshooting page is listed (current state of the docs), proceed. Then fetch any other `.md` pages you need (setup, ingest, status, connection types). **Never invent CLI flags or config keys** - verify against the docs or `ktx --help` / `ktx <subcommand> --help`.
+**ktx** docs are served at `https://docs.kaelio.com/ktx/`. **Start by fetching `https://docs.kaelio.com/ktx/llms.txt`** to discover the docs map. Scan it for a "troubleshooting" entry - if one exists, read it **before** running install/setup so you can apply known fixes preemptively rather than after failing. If no troubleshooting page is listed (current state of the docs), proceed. Then fetch any other `.md` pages you need (setup, ingest, status, connection types). **Never invent CLI flags or config keys** - verify against the docs or `ktx --help` / `ktx <subcommand> --help`.
 
 > **Note on the `ktx status` JSON example in the docs.** The docs page for `ktx status` shows an example shaped like `{"title": "...", "checks": [...]}`. That example is outdated. The real CLI output uses a top-level `verdict` field plus a `connections[]` array - see Phase 5 for the canonical success criteria. Trust the shape in this prompt over the docs example.
 
@@ -28,7 +28,7 @@ Determine the host OS (e.g. via `uname -s`, `process.platform`, or `$env:OS`). U
 |------|---------------|----------------------|
 | `uv` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` then re-source shell env | `irm https://astral.sh/uv/install.ps1 \| iex` |
 | Node.js | use system / fnm / nvm - **do not** auto-install | use system / nvm-windows - **do not** auto-install |
-| KTX CLI | `npm install -g …` (see Phase 2) | `npm install -g …` (see Phase 2) |
+| **ktx** CLI | `npm install -g …` (see Phase 2) | `npm install -g …` (see Phase 2) |
 
 If Node.js is missing, **stop and ask the user** to install it (https://nodejs.org/). Do not attempt to auto-install Node.
 
@@ -38,7 +38,7 @@ Check each tool in order; install only if missing.
 
 1. **Node.js** - run `node --version`. Require >= 22. If missing or older, stop and instruct the user.
 2. **`uv`** - run `uv --version`. If missing, run the OS-appropriate install command, then re-source the shell environment (`export PATH="$HOME/.local/bin:$PATH"` on Linux/macOS) so `uv` is on `PATH`.
-3. **KTX CLI** -
+3. **ktx CLI** -
    - Install ktx with `npm install -g @kaelio/ktx`
    - Verify with `ktx --version`.
 
@@ -55,7 +55,7 @@ Ask the user (grouped if your harness supports it; otherwise sequentially):
    - Connection name (e.g. `warehouse`, `analytics`).
    - Driver: one of `sqlite`, `postgres`, `mysql`, `sqlserver`, `bigquery`, `snowflake`.
    - Connection URL/DSN (or service-account file for BigQuery). Accept `env:VAR_NAME` or `file:/abs/path` to avoid pasting raw secrets.
-     - **Heads-up for the user**: even if they paste a literal URL, KTX will silently relocate it into `<project>/.ktx/secrets/<connection>-url` and rewrite `ktx.yaml` to `url: file:…` - this is correct, secure behavior and not a bug.
+     - **Heads-up for the user**: even if they paste a literal URL, **ktx** will silently relocate it into `<project>/.ktx/secrets/<connection>-url` and rewrite `ktx.yaml` to `url: file:…` - this is correct, secure behavior and not a bug.
    - Schemas / datasets to include (postgres / sqlserver / snowflake / bigquery only).
    - Optional `enabled_tables` allowlist if the user wants to scope ingest to specific tables.
 5. **Context sources** (dbt, Metabase, Looker, LookML, MetricFlow, Notion). Default: none. Ask only if the user mentions them.
@@ -97,7 +97,7 @@ Notes on the flags above:
 When you select a configuration that only does fast ingest, `ktx setup`'s final readiness verification fails with:
 
 ```
-KTX context build did not pass agent-readiness verification.
+ktx context build did not pass agent-readiness verification.
   <connection>: deep database context has not completed.
 ```
 
@@ -146,7 +146,7 @@ Success requires (canonical shape - supersedes the example in the docs):
 
 Do **not** run `--deep` ingest in this flow - that requires LLM time and is out of scope.
 
-### Optional: directly probe the KTX daemon
+### Optional: directly probe the ktx daemon
 
 If the user asks for stronger verification that `sentence-transformers` is actually serving (not just that setup said "ok"), do all of:
 
@@ -155,19 +155,19 @@ If the user asks for stronger verification that `sentence-transformers` is actua
 3. `curl -sS http://127.0.0.1:<port>/health` → expect HTTP 200 with `{"status":"healthy",…}`.
 4. `curl -sS -X POST http://127.0.0.1:<port>/embeddings/compute -H 'content-type: application/json' -d '{"text":"hello"}'` → expect `{"embedding": [...384 floats...]}`.
 
-Discover the port from setup's log line `Started KTX daemon: http://127.0.0.1:<port>` or from the daemon's OpenAPI at `GET /openapi.json`. Note: the routes are `/health` and `/embeddings/compute` - not `/healthz` or `/embeddings`.
+Discover the port from setup's log line `Started ktx daemon: http://127.0.0.1:<port>` or from the daemon's OpenAPI at `GET /openapi.json`. Note: the routes are `/health` and `/embeddings/compute` - not `/healthz` or `/embeddings`.
 
 ## Phase 6 - Final report
 
 Print a structured report:
 
 ```
-KTX SETUP COMPLETE
+ktx SETUP COMPLETE
 
 Project:     <path>
 LLM:         <backend> / <model>
 Embeddings:  <backend> / <model>
-Runtime:     managed Python ✓ (if the KTX daemon was started)
+Runtime:     managed Python ✓ (if the ktx daemon was started)
 
 Connections:
   - <name> (<driver>)  status=ok  schemas=[…]  tables=<N>
@@ -198,4 +198,4 @@ End with a single line: `RESULT: PASS` or `RESULT: FAIL - <one-line reason>`.
 - On failure: capture the error, fetch the relevant docs page, fix the cause, retry. Never retry an unchanged command.
 - Known soft-failures (listed in Phase 4 and Phase 5) are not real failures - handle them as documented; do not retry or escalate.
 - If you find a docs/CLI gap ("docs say X but CLI does Y"), call it out in the final report.
-- Never commit credentials - KTX accepts `env:` and `file:` references; prefer those. KTX will also auto-relocate literal URLs into `.ktx/secrets/`, but that does not protect anyone who pasted the URL into chat history.
+- Never commit credentials - **ktx** accepts `env:` and `file:` references; prefer those. **ktx** will also auto-relocate literal URLs into `.ktx/secrets/`, but that does not protect anyone who pasted the URL into chat history.

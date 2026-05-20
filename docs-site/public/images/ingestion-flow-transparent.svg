@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1346" height="1710" viewBox="0 0 1346 1710" role="img" aria-labelledby="title desc">
-  <title id="title">KTX ingestion flow</title>
+  <title id="title">ktx ingestion flow</title>
   <desc id="desc">Source systems flow through source connectors, context builder, reconciliation, and validation to create wiki Markdown and semantic-layer YAML outputs.</desc>
   <defs>
     <filter id="card-shadow" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
@@ -198,7 +198,7 @@
         <text class="tag" x="228" y="24">auto-maintained</text>
       </g>
       <text class="body" x="24" y="194">Metrics, joins, tables, dimensions, filters, and</text>
-      <text class="body" x="24" y="222">segments that KTX can validate and compile into</text>
+      <text class="body" x="24" y="222">segments that ktx can validate and compile into</text>
       <text class="body" x="24" y="250">SQL.</text>
     </g>
 

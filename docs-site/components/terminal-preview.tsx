@@ -15,7 +15,7 @@ export function TerminalPreview() {
           <span className="term-cmd">ktx setup</span>
         </div>
         <div className="h-2" />
-        <div className="term-dim">◆ Welcome to KTX setup</div>
+        <div className="term-dim">◆ Welcome to ktx setup</div>
         <div className="term-dim">│</div>
         <div>
           <span className="term-dim">◇</span>{" "}
@@ -43,7 +43,7 @@ export function TerminalPreview() {
           enriching schema · detecting relationships · ingesting dbt
         </div>
         <div className="h-2" />
-        <div className="term-ok">✓ KTX context is ready for agents.</div>
+        <div className="term-ok">✓ ktx context is ready for agents.</div>
         <div className="h-2" />
         <div>
           <span className="term-prompt">$</span>{" "}

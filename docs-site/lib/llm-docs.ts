@@ -44,23 +44,23 @@ export function buildLlmsTxt() {
     return `- [${label}](${absoluteUrl(markdownUrl)}): ${description}`;
   };
 
-  return `# KTX
+  return `# ktx
 
 > Agent-native context layer for analytics engineering and data agents.
 
-KTX provides semantic-layer files, warehouse scans, wiki pages, provenance, and agent-facing tools that help coding agents answer analytics questions without inventing metrics or joins.
+ktx provides semantic-layer files, warehouse scans, wiki pages, provenance, and agent-facing tools that help coding agents answer analytics questions without inventing metrics or joins.
 
 ## Agent Entry Points
 
-${link("/docs/ai-resources/agent-quickstart", "Agent Quickstart", "Task-first route for coding assistants using KTX")}
-${link("/docs/agents-setup", "Agent Setup", "Copy-pasteable prompt for agents installing and configuring KTX")}
-${link("/docs/ai-resources/markdown-access", "Markdown Access", "Fetch KTX docs as llms.txt, llms-full.txt, or per-page Markdown")}
-${link("/docs/ai-resources/agent-instructions", "Agent Instructions", "Suggested instructions for coding assistants that need to read and cite KTX docs")}
+${link("/docs/ai-resources/agent-quickstart", "Agent Quickstart", "Task-first route for coding assistants using ktx")}
+${link("/docs/agents-setup", "Agent Setup", "Copy-pasteable prompt for agents installing and configuring ktx")}
+${link("/docs/ai-resources/markdown-access", "Markdown Access", "Fetch ktx docs as llms.txt, llms-full.txt, or per-page Markdown")}
+${link("/docs/ai-resources/agent-instructions", "Agent Instructions", "Suggested instructions for coding assistants that need to read and cite ktx docs")}
 
 ## Start Here
 
-${link("/docs/getting-started/introduction", "Introduction", "What KTX is and who it is for")}
-${link("/docs/getting-started/quickstart", "Quickstart", "Set up KTX and build your first context")}
+${link("/docs/getting-started/introduction", "Introduction", "What ktx is and who it is for")}
+${link("/docs/getting-started/quickstart", "Quickstart", "Set up ktx and build your first context")}
 ${link("/docs/guides/writing-context", "Writing Context", "Write semantic sources and wiki pages")}
 
 ## Machine-Readable Documentation
@@ -81,7 +81,7 @@ ${link("/docs/cli-reference/ktx-connection", "ktx connection", "Connection manag
 
 ## Integrations
 
-${link("/docs/integrations/primary-sources", "Primary Sources", "Connect KTX to databases and warehouses")}
+${link("/docs/integrations/primary-sources", "Primary Sources", "Connect ktx to databases and warehouses")}
 ${link("/docs/integrations/context-sources", "Context Sources", "Ingest dbt, LookML, Metabase, Looker, MetricFlow, and Notion")}
 
 ## All Documentation
@@ -92,7 +92,7 @@ ${buildPageIndex(pages)}
 
 export async function buildLlmsFullTxt() {
   const rendered = await Promise.all(getLlmDocsPages().map(getPageMarkdown));
-  return [`# KTX Full Documentation`, `Source: ${siteOrigin}`, ...rendered].join(
+  return [`# ktx Full Documentation`, `Source: ${siteOrigin}`, ...rendered].join(
     "\n\n---\n\n",
   );
 }

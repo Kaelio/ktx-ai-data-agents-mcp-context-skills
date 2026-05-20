@@ -3,7 +3,7 @@ title: "ktx sql"
 description: "Execute parser-validated read-only SQL against a configured connection."
 ---
 
-Run read-only SQL against a database connection in your KTX project. The command
+Run read-only SQL against a database connection in your **ktx** project. The command
 validates the statement before execution and only accepts a single `SELECT` or
 `WITH` query.
 
@@ -22,7 +22,7 @@ JSON.
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-c`, `--connection <id>` | KTX database connection id. Required. | - |
+| `-c`, `--connection <id>` | **ktx** database connection id. Required. | - |
 | `--max-rows <n>` | Maximum rows to return. Must be between `1` and `10000`. | `1000` |
 | `--output <mode>` | Output mode: `pretty`, `plain` (TSV), or `json`. | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`). | `false` |

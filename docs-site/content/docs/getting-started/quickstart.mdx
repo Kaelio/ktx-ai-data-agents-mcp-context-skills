@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Install KTX, run setup, and connect your coding agent.
+description: Install ktx, run setup, and connect your coding agent.
 ---
 
 import { CopyButton } from "@/components/copy-button";
@@ -26,7 +26,7 @@ If you're a coding assistant choosing a docs route, start with the
     Need a warehouse to play with?
   </div>
   <div className="mt-2 text-base leading-relaxed text-fd-foreground">
-    Try KTX against a real data stack - Postgres, dbt, Metabase, and Notion
+    Try **ktx** against a real data stack - Postgres, dbt, Metabase, and Notion
     pre-loaded with the Orbit demo corpus. The page lists demo credentials
     you can paste straight into `ktx setup`.
   </div>
@@ -54,7 +54,7 @@ If you're a coding assistant choosing a docs route, start with the
   </div>
   <div className="mt-2 text-sm leading-6 text-fd-muted-foreground">
     You can ask an agent such as Claude Code, Codex, Cursor, or OpenCode to
-    install and configure KTX for you. The{' '}
+    install and configure **ktx** for you. The{' '}
     <a href="/ktx/docs/agents-setup.md" className="font-medium underline">
       agent setup Markdown prompt
     </a>{' '}
@@ -93,7 +93,7 @@ Install the published package globally:
 npm install -g @kaelio/ktx
 ```
 
-KTX is open source. If you'd like to hack on it or run from a local checkout,
+**ktx** is open source. If you'd like to hack on it or run from a local checkout,
 the source lives at [github.com/kaelio/ktx](https://github.com/kaelio/ktx) -
 see [Contributing](/docs/community/contributing) to get set up.
 
@@ -105,7 +105,7 @@ From your project directory, run:
 ktx setup
 ```
 
-The wizard walks you through everything KTX needs in one pass:
+The wizard walks you through everything **ktx** needs in one pass:
 
 1. **Project** - creates or resumes `ktx.yaml` in the current directory.
 2. **LLM** - picks a Claude backend. The default uses your local Claude Code
@@ -122,7 +122,7 @@ The wizard walks you through everything KTX needs in one pass:
 7. **Agent integration** - installs project-local rules for Claude Code,
    Codex, Cursor, OpenCode, or universal `.agents`.
 
-If you choose local `sentence-transformers` embeddings, KTX uses the managed
+If you choose local `sentence-transformers` embeddings, **ktx** uses the managed
 Python runtime. To prepare it before setup, run:
 
 ```bash
@@ -141,10 +141,10 @@ Building schema context for warehouse
   Running fast database ingest
 ```
 
-If setup exits early, rerun `ktx setup` in the same directory. KTX keeps
+If setup exits early, rerun `ktx setup` in the same directory. **ktx** keeps
 progress under `.ktx/setup/` and resumes from the remaining work.
 
-> **Note:** Running bare `ktx` in an interactive terminal outside a KTX
+> **Note:** Running bare `ktx` in an interactive terminal outside a **ktx**
 > project opens the same wizard. Inside a project, it opens a menu for
 > resuming setup, connecting an agent, checking status, or exploring a
 > pre-built demo project.
@@ -158,13 +158,13 @@ ktx status
 ```
 
 ```text
-KTX project: /home/user/analytics
+ktx project: /home/user/analytics
 Project ready: yes
 LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
 Databases configured: yes (warehouse)
 Context sources configured: yes (dbt_main)
-KTX context built: yes
+ktx context built: yes
 Agent integration ready: yes (codex:project)
 ```
 
@@ -173,7 +173,7 @@ For a structured check inside scripts, use `ktx status --json`.
 When setup builds deep context, its final context check looks like:
 
 ```text
-KTX context is ready for agents.
+ktx context is ready for agents.
 
 Databases:
   warehouse: deep context complete
@@ -192,13 +192,13 @@ ktx setup --agents
 ```
 
 Claude Code and Codex also support global installs with `--global`. Agent
-rules point at the KTX CLI path that created them, so agents don't need a
+rules point at the **ktx** CLI path that created them, so agents don't need a
 separate `ktx` binary on `PATH`. If the CLI path changes, rerun
 `ktx setup --agents`.
 
 ## What setup writes
 
-KTX writes plain files so people and agents can review changes in git.
+**ktx** writes plain files so people and agents can review changes in git.
 
 | Path | Purpose |
 |------|---------|

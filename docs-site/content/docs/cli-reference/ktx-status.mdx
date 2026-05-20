@@ -1,9 +1,9 @@
 ---
 title: "ktx status"
-description: "Check KTX setup and project readiness."
+description: "Check ktx setup and project readiness."
 ---
 
-Run the KTX readiness doctor. Inside a KTX project, this checks setup,
+Run the **ktx** readiness doctor. Inside a **ktx** project, this checks setup,
 project configuration, semantic search, query history, connections, and related
 diagnostics. Outside a project, it checks local CLI setup readiness so you know
 whether `ktx setup` can run.
@@ -53,7 +53,7 @@ flow, then rerun `ktx status`.
 
 ```json
 {
-  "title": "KTX project doctor",
+  "title": "ktx project doctor",
   "checks": [
     {
       "id": "project-config",
@@ -69,7 +69,7 @@ flow, then rerun `ktx status`.
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| No KTX project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | `ktx status` runs setup checks; run from a KTX project or set `KTX_PROJECT_DIR` for project checks |
+| No **ktx** project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | `ktx status` runs setup checks; run from a **ktx** project or set `KTX_PROJECT_DIR` for project checks |
 | Project config check fails | The project directory is missing or has an invalid `ktx.yaml` | Run `ktx setup` to resume setup |
 | Schema validation fails | `ktx.yaml` does not match the current config schema | Run `ktx status --validate --json` for structured issue details, then edit `ktx.yaml` or rerun `ktx setup` |
 | Semantic search check warns | Embeddings are not configured or the provider probe failed | Run `ktx setup` or inspect the check's `fix` field in JSON output |

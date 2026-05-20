@@ -19,9 +19,9 @@ ktx admin <subcommand> [options]
 
 | Subcommand | Description |
 |-----------|-------------|
-| `init [directory]` | Initialize a Git-backed KTX project directory for maintenance scripts |
+| `init [directory]` | Initialize a Git-backed **ktx** project directory for maintenance scripts |
 | `schema` | Print a JSON Schema describing `ktx.yaml` |
-| `runtime` | Install, start, stop, and inspect the KTX-managed Python runtime |
+| `runtime` | Install, start, stop, and inspect the **ktx**-managed Python runtime |
 | `reindex` | Sync local wiki and semantic-layer search indexes from disk |
 
 ## `admin init`
@@ -44,8 +44,8 @@ directory. Use it from any directory to generate editor or agent schema files.
 | Subcommand | Description |
 |-----------|-------------|
 | `install` | Install the bundled Python runtime wheel into the managed runtime |
-| `start` | Start the KTX daemon |
-| `stop` | Stop the KTX daemon |
+| `start` | Start the **ktx** daemon |
+| `stop` | Stop the **ktx** daemon |
 | `status` | Show managed Python runtime status and readiness checks |
 
 ## `admin runtime` Options
@@ -56,7 +56,7 @@ directory. Use it from any directory to generate editor or agent schema files.
 | `--json` | Print JSON output for `status` | `false` |
 | `--yes` | Accepted by `install` for scripted install commands | `false` |
 | `--force` | Reinstall for `install`, or restart for `start` | `false` |
-| `--all` | Stop all recorded or discoverable KTX daemon processes with `stop` | `false` |
+| `--all` | Stop all recorded or discoverable **ktx** daemon processes with `stop` | `false` |
 
 ## Examples
 
@@ -102,15 +102,15 @@ ktx admin reindex --output plain
 ktx admin reindex --json
 ```
 
-By default, KTX compares stored search text with the files on disk. It only
+By default, **ktx** compares stored search text with the files on disk. It only
 re-embeds changed rows and removes rows for files that no longer exist. With
-`--force`, KTX clears each discovered scope first and then rebuilds it.
+`--force`, **ktx** clears each discovered scope first and then rebuilds it.
 
-When embeddings are not configured, KTX still writes lexical FTS rows and
-prints an embeddings warning. If a scope fails, KTX keeps processing the
+When embeddings are not configured, **ktx** still writes lexical FTS rows and
+prints an embeddings warning. If a scope fails, **ktx** keeps processing the
 remaining scopes and exits with code `1` after output is written. If the local
 state database cannot open or the configured managed embedding runtime is
-missing, KTX prints the error and exits with code `1`.
+missing, **ktx** prints the error and exits with code `1`.
 
 ## Common errors
 

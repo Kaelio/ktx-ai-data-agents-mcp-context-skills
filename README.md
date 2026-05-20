@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="assets/ktx-lockup.svg" alt="KTX" width="500" />
+  <img src="assets/ktx-lockup.svg" alt="ktx" width="500" />
 </h1>
 
 <h1 align="center">
@@ -10,15 +10,15 @@
   <a href="https://www.npmjs.com/package/@kaelio/ktx"><img src="https://img.shields.io/npm/v/@kaelio/ktx?style=flat-square&color=f97316" alt="npm version" /></a>
   <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/graph/badge.svg?branch=main" alt="Codecov" /></a>
   <a href="https://github.com/Kaelio/ktx/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/Kaelio/ktx/ci.yml?branch=main&label=tests&style=flat-square" alt="Tests" /></a>
-  <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-KTX-22c55e?style=flat-square" alt="Documentation" /></a>
-  <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><img src="https://img.shields.io/badge/slack-join%20community-4A154B?style=flat-square&logo=slack&logoColor=white" alt="Join the KTX Slack community" /></a>
+  <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-ktx-22c55e?style=flat-square" alt="Documentation" /></a>
+  <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><img src="https://img.shields.io/badge/slack-join%20community-4A154B?style=flat-square&logo=slack&logoColor=white" alt="Join the ktx Slack community" /></a>
   <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
   <a href="https://www.ycombinator.com/companies?batch=P25"><img src="https://img.shields.io/badge/Y%20Combinator-P25-orange?style=flat-square" alt="Y Combinator P25" /></a>
 </p>
 
 ---
 
-KTX is a self-improving context layer that teaches agents how to query your
+**ktx** is a self-improving context layer that teaches agents how to query your
 warehouse accurately - from approved metric definitions, joinable columns, and
 business knowledge it builds and maintains for you.
 
@@ -26,9 +26,9 @@ Works with PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
 SQLite. Integrates with dbt, MetricFlow, LookML, Looker, Metabase, and Notion.
 
 Runs with your own LLM API keys or a Claude
-Pro/Max subscription - no extra usage billing from KTX.
+Pro/Max subscription - no extra usage billing from **ktx**.
 
-## Why KTX
+## Why ktx
 
 General-purpose agents struggle on data tasks. They re-explore your warehouse
 on every question, invent their own metric logic, and return numbers that
@@ -37,7 +37,7 @@ don't match approved definitions.
 Traditional semantic layers don't fix this. They demand constant manual
 upkeep and don't absorb the rest of your company's knowledge.
 
-KTX does both, automatically:
+**ktx** does both, automatically:
 
 - **Learns from company knowledge.** Ingests wiki content, organizes it,
   removes duplicates, and flags contradictions for human review.
@@ -55,13 +55,13 @@ Agents can run raw SQL when they need it, or compose semantic-layer queries
 when they want approved metrics with reliable joins.
 
 <p align="center">
-  <img src="docs-site/public/images/ingestion-flow-transparent.svg" alt="KTX ingestion flow from source systems through validation to wiki and semantic-layer outputs" width="900" />
+  <img src="docs-site/public/images/ingestion-flow-transparent.svg" alt="ktx ingestion flow from source systems through validation to wiki and semantic-layer outputs" width="900" />
 </p>
 
 ## Agent Setup
 
 Ask an agent such as Claude Code, Codex, Cursor, or OpenCode to install and
-configure KTX from your project directory:
+configure **ktx** from your project directory:
 
 ```text
 Follow instructions from
@@ -77,19 +77,19 @@ ktx setup
 ktx status
 ```
 
-`ktx setup` creates or resumes a local KTX project, configures providers and
+`ktx setup` creates or resumes a local **ktx** project, configures providers and
 connections, builds context, and installs agent integration.
 
 Example `ktx status` output after setup:
 
 ```text
-KTX project: /home/user/analytics
+ktx project: /home/user/analytics
 Project ready: yes
 LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
 Databases configured: yes (warehouse)
 Context sources configured: yes (dbt_main)
-KTX context built: yes
+ktx context built: yes
 Agent integration ready: yes (codex:project)
 ```
 
@@ -97,7 +97,7 @@ Agent integration ready: yes (codex:project)
 
 | Command | Purpose |
 |---------|---------|
-| `ktx setup` | Create, resume, or update a KTX project |
+| `ktx setup` | Create, resume, or update a **ktx** project |
 | `ktx status` | Check project readiness |
 | `ktx connection` | List configured connections |
 | `ktx connection test` | Test every configured connection |
@@ -135,7 +135,7 @@ Commit `ktx.yaml`, `semantic-layer/`, and `wiki/`. Keep `.ktx/` local.
 
 ## Agent Usage
 
-Install KTX integration for Claude Code, Claude Desktop, Codex, Cursor,
+Install **ktx** integration for Claude Code, Claude Desktop, Codex, Cursor,
 OpenCode, and generic `.agents` clients:
 
 ```bash
@@ -153,11 +153,11 @@ ktx wiki "refund policy" --json
 ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 ```
 
-During setup, choose **Ask data questions with KTX MCP** for client agents.
-Choose **Ask data questions + manage KTX with CLI commands** when an operator
+During setup, choose **Ask data questions with ktx MCP** for client agents.
+Choose **Ask data questions + manage ktx with CLI commands** when an operator
 agent also needs pinned `ktx` admin commands.
 
-After setup, KTX prints **Required before using agents** with the exact
+After setup, **ktx** prints **Required before using agents** with the exact
 commands to run. If the output includes `ktx mcp start --project-dir ...`, run
 it before opening your agent. Claude Desktop uses its own launcher and prints
 separate skill upload steps under `.ktx/agents/claude/`.
@@ -198,7 +198,7 @@ pnpm run link:dev
 ktx-dev --help
 ```
 
-KTX is a pnpm + uv workspace:
+**ktx** is a pnpm + uv workspace:
 
 - TypeScript packages live in `packages/*`
 - CLI source lives in `packages/cli`
@@ -233,4 +233,4 @@ full guide on where to ask what.
 
 ## License
 
-KTX is licensed under the Apache License, Version 2.0. See `LICENSE`.
+**ktx** is licensed under the Apache License, Version 2.0. See `LICENSE`.

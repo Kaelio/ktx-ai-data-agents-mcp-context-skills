@@ -1,15 +1,15 @@
 ---
 title: Serving Agents
-description: Expose KTX context to Claude Code, Codex, Cursor, OpenCode, and custom agents.
+description: Expose ktx context to Claude Code, Codex, Cursor, OpenCode, and custom agents.
 ---
 
-KTX serves agents through the CLI and project-local instruction files. Agents
-read generated rules, call KTX commands, inspect context files, and use JSON for
+**ktx** serves agents through the CLI and project-local instruction files. Agents
+read generated rules, call **ktx** commands, inspect context files, and use JSON for
 structured results.
 
 ## Recommended setup
 
-Run the agent install step from a KTX project:
+Run the agent install step from a ktx project:
 
 ```bash
 ktx setup --agents
@@ -44,7 +44,7 @@ Installed files are recorded in `.ktx/agents/install-manifest.json`. Rerun
 ## Agent command set
 
 All supported clients use the same command surface. Use `--project-dir` outside
-the KTX project directory.
+the **ktx** project directory.
 
 ### Readiness
 
@@ -122,7 +122,7 @@ Use `--deep` only when LLM and embedding setup is ready.
 
 Agents should:
 
-- Run `ktx status --json` before using KTX context.
+- Run `ktx status --json` before using **ktx** context.
 - Use `ktx sl <query>` and `ktx wiki <query>` before writing SQL from memory.
 - Inspect the relevant YAML or Markdown files after search returns candidates.
 - Compile SQL with `ktx sl query --format sql` before executing.
@@ -130,7 +130,7 @@ Agents should:
 - Validate edited semantic sources with `ktx sl validate`.
 - Keep generated context changes reviewable in git.
 
-KTX is a local context layer with a CLI and plain project files. Do not assume a
+**ktx** is a local context layer with a CLI and plain project files. Do not assume a
 background server, ORPC route, frontend app, or external migration system.
 
 ## Manual setup
@@ -144,7 +144,7 @@ Use manual setup for custom agents that can read project-local instructions.
    ```
 
 2. Configure the agent to read `.agents/skills/ktx/SKILL.md`.
-3. Open the agent in the KTX project directory.
+3. Open the agent in the **ktx** project directory.
 4. Ask it to run `ktx status --json` and summarize readiness.
 
 For per-client notes, see [Agent Clients](/docs/integrations/agent-clients).
@@ -153,8 +153,8 @@ For per-client notes, see [Agent Clients](/docs/integrations/agent-clients).
 
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
-| Agent says KTX is unavailable | Agent did not load the generated instruction file | Rerun `ktx setup --agents --target <target>` and restart the agent session |
-| Agent command cannot find the project | Agent is running outside the KTX directory | Add `--project-dir <path>` or open the agent in the project root |
+| Agent says **ktx** is unavailable | Agent did not load the generated instruction file | Rerun `ktx setup --agents --target <target>` and restart the agent session |
+| Agent command cannot find the project | Agent is running outside the **ktx** directory | Add `--project-dir <path>` or open the agent in the project root |
 | Generated rules point at a missing CLI path | CLI was moved, rebuilt, or reinstalled | Rerun `ktx setup --agents` |
 | Agent cannot find a metric | Context is missing or stale | Run `ktx sl <query>`, inspect source YAML, then refresh with `ktx ingest` if needed |
 | Agent query returns too many rows | The command executed without a result cap | Require `--max-rows` for executed queries |

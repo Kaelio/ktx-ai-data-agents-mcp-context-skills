@@ -22,8 +22,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | KTX Docs",
-    default: "KTX Docs",
+    template: "%s | ktx Docs",
+    default: "ktx Docs",
   },
   description:
     "Open-source context infrastructure that makes agentic analytics reliable.",

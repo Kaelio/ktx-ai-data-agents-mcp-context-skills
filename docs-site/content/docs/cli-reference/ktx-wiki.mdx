@@ -3,7 +3,7 @@ title: "ktx wiki"
 description: "List or search wiki pages."
 ---
 
-List and search wiki pages in your KTX project. Wiki pages are Markdown
+List and search wiki pages in your **ktx** project. Wiki pages are Markdown
 documents that capture business definitions, rules, and gotchas. Agents search
 them for context when answering questions about your data.
 
@@ -30,9 +30,9 @@ Edit the Markdown files under `wiki/` directly, or ingest source content with
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
 
 `ktx wiki <query>` uses hybrid search when `storage.search` is `sqlite-fts5`.
-KTX combines lexical SQLite FTS5 matches, token matches, and semantic matches
+**ktx** combines lexical SQLite FTS5 matches, token matches, and semantic matches
 from wiki page embeddings stored in `.ktx/db.sqlite`. If embeddings are not
-configured or the embedding backend is unavailable, KTX skips the semantic lane
+configured or the embedding backend is unavailable, **ktx** skips the semantic lane
 and keeps lexical and token results.
 
 ## Examples
@@ -105,7 +105,7 @@ score rather than a percentage.
 }
 ```
 
-When you pass the global `--debug` flag, KTX writes search diagnostics to
+When you pass the global `--debug` flag, **ktx** writes search diagnostics to
 stderr and leaves stdout unchanged. This is useful with `--json` because stdout
 stays machine-readable:
 

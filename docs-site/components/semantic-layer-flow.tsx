@@ -115,7 +115,7 @@ const WAREHOUSE_X = (CANVAS_W - WAREHOUSE_W) / 2;
 const WAREHOUSE_Y = LANES_BOTTOM_Y + 56;
 
 const MANUAL_STROKE = "#94a3b8";
-const KTX_STROKE = "#0891b2";
+const ktxStroke = "#0891b2";
 const FIT_VIEW_OPTIONS = { padding: 0.05 };
 
 const agent: AgentNode = {
@@ -138,7 +138,7 @@ const manualSql: ManualSqlNode = {
   position: { x: LEFT_LANE_X, y: LANE_TOP_Y },
   data: {
     variant: "manual",
-    badge: "Without KTX",
+    badge: "Without ktx",
     title: "Agent writes the SQL",
     caption:
       "Stitches four tables, mixes grains, and ships numbers that won't match the dashboard.",
@@ -208,7 +208,7 @@ const slQuery: SlQueryNode = {
   position: { x: RIGHT_LANE_X, y: SL_QUERY_Y },
   data: {
     variant: "slQuery",
-    badge: "With KTX",
+    badge: "With ktx",
     title: "Agent sends a semantic query",
     caption:
       "Names the measures, dimensions, segments, and filters it wants. No SQL, no joins.",
@@ -282,7 +282,7 @@ const compiledSql: CompiledSqlNode = {
   data: {
     variant: "compiled",
     badge: "Generated SQL",
-    title: "KTX returns dialect-correct SQL",
+    title: "ktx returns dialect-correct SQL",
     caption:
       "Pre-aggregates each fact at its own grain, then joins back on the shared dimension.",
     code: `WITH orders_agg AS (
@@ -435,31 +435,31 @@ const edges = [
     labelStyle: {
       fontSize: 12,
       fontWeight: 600,
-      fill: KTX_STROKE,
+      fill: ktxStroke,
     },
     labelBgStyle: {
       fill: "var(--color-fd-background)",
       stroke: "var(--color-fd-border)",
       strokeWidth: 1,
     },
-    style: { stroke: KTX_STROKE, strokeWidth: 1.75 },
-    markerEnd: arrowMarker(KTX_STROKE),
+    style: { stroke: ktxStroke, strokeWidth: 1.75 },
+    markerEnd: arrowMarker(ktxStroke),
   },
   {
     id: "slquery-engine",
     source: "sl-query",
     target: "engine",
     type: "straight" as const,
-    style: { stroke: KTX_STROKE, strokeWidth: 1.75 },
-    markerEnd: arrowMarker(KTX_STROKE),
+    style: { stroke: ktxStroke, strokeWidth: 1.75 },
+    markerEnd: arrowMarker(ktxStroke),
   },
   {
     id: "engine-compiled",
     source: "engine",
     target: "compiled-sql",
     type: "straight" as const,
-    style: { stroke: KTX_STROKE, strokeWidth: 1.75 },
-    markerEnd: arrowMarker(KTX_STROKE),
+    style: { stroke: ktxStroke, strokeWidth: 1.75 },
+    markerEnd: arrowMarker(ktxStroke),
   },
   {
     id: "compiled-warehouse",
@@ -467,8 +467,8 @@ const edges = [
     target: "warehouse",
     targetHandle: "warehouse-compiled",
     type: "straight" as const,
-    style: { stroke: KTX_STROKE, strokeWidth: 1.75 },
-    markerEnd: arrowMarker(KTX_STROKE),
+    style: { stroke: ktxStroke, strokeWidth: 1.75 },
+    markerEnd: arrowMarker(ktxStroke),
   },
 ];
 
@@ -530,7 +530,7 @@ function LaneBadge({
       <span
         className="h-1.5 w-1.5 rounded-full"
         style={{
-          background: variant === "manual" ? MANUAL_STROKE : KTX_STROKE,
+          background: variant === "manual" ? MANUAL_STROKE : ktxStroke,
         }}
       />
       {children}
@@ -842,7 +842,7 @@ function EngineNodeView({ data }: NodeProps<EngineNode>) {
     >
       <span
         className="absolute inset-y-0 left-0 w-[3px] rounded-l-lg"
-        style={{ background: KTX_STROKE }}
+        style={{ background: ktxStroke }}
         aria-hidden="true"
       />
       <Handle type="target" position={Position.Top} className="!opacity-0" />
@@ -908,7 +908,7 @@ function CompiledSqlNodeView({ data }: NodeProps<CompiledSqlNode>) {
           >
             <span
               className="mt-[6px] h-1 w-1 flex-none rounded-full"
-              style={{ background: KTX_STROKE }}
+              style={{ background: ktxStroke }}
               aria-hidden="true"
             />
             <span>{note}</span>
@@ -997,7 +997,7 @@ export function SemanticLayerFlow() {
     >
       <article
         className="max-w-full min-w-0 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
-        aria-label="From semantic query to executed SQL: contrast between agent-authored SQL and KTX-compiled SQL"
+        aria-label="From semantic query to executed SQL: contrast between agent-authored SQL and ktx-compiled SQL"
       >
         <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
           <a
@@ -1022,7 +1022,7 @@ export function SemanticLayerFlow() {
           <p className="mt-2 max-w-3xl text-xs leading-5 text-fd-muted-foreground">
             On the left, the agent works imperatively: chooses tables, writes
             joins, picks the grain, and remembers each warehouse's dialect. On
-            the right, the agent only declares what it wants. KTX handles
+            the right, the agent only declares what it wants. ktx handles
             every how.
           </p>
         </div>

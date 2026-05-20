@@ -1,13 +1,13 @@
 ---
 title: Semantic querying
-description: How KTX compiles a short semantic query into safe, dialect-correct SQL using a reviewed join graph.
+description: How ktx compiles a short semantic query into safe, dialect-correct SQL using a reviewed join graph.
 ---
 
 import { SemanticLayerFlow } from "@/components/semantic-layer-flow";
 
-KTX's semantic layer is a compiler that turns intent into SQL. The agent
+**ktx**'s semantic layer is a compiler that turns intent into SQL. The agent
 declares _what_ it wants - measures, dimensions, filters - in a small
-semantic query. KTX figures out the _how_: which tables to join, what
+semantic query. **ktx** figures out the _how_: which tables to join, what
 grain to aggregate at, how to keep fan-out from inflating measures, and
 what dialect the warehouse speaks.
 
@@ -27,15 +27,15 @@ key links them, what grain to aggregate at, how to keep one fact from
 inflating another, and what dialect the warehouse speaks. Plumbing on
 top of intent, every query.
 
-KTX's semantic layer separates those concerns:
+**ktx**'s semantic layer separates those concerns:
 
-- **You and KTX maintain the how.** Sources, joins, grain, measures, and
+- **You and ktx maintain the how.** Sources, joins, grain, measures, and
   segments live in reviewable YAML - the analytical contract the team
   agrees on, version-controlled.
 - **The agent declares the what.** It sends a semantic query and trusts
   the compiler to produce safe SQL.
 
-The agent stops reasoning about plumbing. It states intent. KTX turns
+The agent stops reasoning about plumbing. It states intent. **ktx** turns
 that into SQL the warehouse can run.
 
 <SemanticLayerFlow />
@@ -48,7 +48,7 @@ except `measures`, and column references are fully qualified
 from.
 
 Notice what's _not_ in the payload: no `FROM`, no `JOIN`, no `GROUP BY`,
-no `WITH`. The agent states what it wants. KTX picks the join path, the
+no `WITH`. The agent states what it wants. **ktx** picks the join path, the
 grain, the SQL shape, and the dialect.
 
 | Field | Purpose |
@@ -71,7 +71,7 @@ A typical agent call looks like this:
 }
 ```
 
-That payload is enough for KTX to plan and compile. The agent never
+That payload is enough for **ktx** to plan and compile. The agent never
 authors a join, a CTE, or a dialect-specific cast.
 
 ## What the planner does
@@ -161,7 +161,7 @@ measures:
 
 ## Building and maintaining the graph
 
-KTX builds the graph from evidence and accepted edits, not from runtime
+**ktx** builds the graph from evidence and accepted edits, not from runtime
 inference. Each input contributes a different kind of authority.
 
 | Evidence | What it contributes |
@@ -293,7 +293,7 @@ shared dimension. A naive query joins them all together first, so each
 row from one fact is multiplied by the matching rows from the other.
 Measures duplicate, numbers go wrong, and the agent doesn't notice.
 
-KTX's planner detects the shape by grouping measures by their owning
+**ktx**'s planner detects the shape by grouping measures by their owning
 source. If more than one source contributes raw measures, the generator
 switches to aggregate locality: each fact is pre-aggregated at its own
 grain inside a CTE, and the CTEs are joined back to the dimension at the
@@ -311,7 +311,7 @@ analyst would have written by hand.
 
 ## Where the context comes from
 
-The planner is only as good as the YAML it reads. KTX builds and
+The planner is only as good as the YAML it reads. **ktx** builds and
 maintains that YAML for you.
 
 - `raw-sources/<connection>/` holds scan evidence from your warehouse:
@@ -327,7 +327,7 @@ current as the warehouse changes.
 
 ## Agent usage notes
 
-Point an agent at this page when it needs to explain why KTX asks for
+Point an agent at this page when it needs to explain why **ktx** asks for
 grain, why a query was rejected as unsafe, or why the compiled SQL looks
 different from what the agent first proposed.
 
@@ -335,6 +335,6 @@ different from what the agent first proposed.
 |------------|------------------|-----------|
 | Explain the semantic query shape | The semantic query contract | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Describe what the planner does between query and SQL | What the planner does | [ktx sl](/docs/cli-reference/ktx-sl) |
-| Explain why KTX asks for grain and relationship types | The join graph | [Writing context](/docs/guides/writing-context) |
+| Explain why **ktx** asks for grain and relationship types | The join graph | [Writing context](/docs/guides/writing-context) |
 | Diagnose duplicated measures after a join | Fan-out and aggregate locality | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Describe how semantic context stays current | Building and maintaining the graph | [Context as code](/docs/concepts/context-as-code) |

@@ -17,10 +17,10 @@ export function Logo() {
       </div>
       <div className="flex flex-col items-start leading-none">
         <span
-          className="text-[24px] font-semibold text-fd-foreground tracking-tight"
+          className="text-[42px] font-semibold text-fd-foreground tracking-tight"
           style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
         >
-          KTX
+          ktx
         </span>
         <span
           className="mt-1 whitespace-nowrap text-[13px] font-medium text-fd-muted-foreground/80 tracking-tight"

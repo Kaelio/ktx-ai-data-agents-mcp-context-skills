@@ -1,6 +1,6 @@
 ---
 title: LLM configuration
-description: Configure KTX LLM providers, model roles, and prompt caching.
+description: Configure ktx LLM providers, model roles, and prompt caching.
 ---
 
 Configure text generation, structured extraction, and ingest or memory loops in
@@ -15,7 +15,7 @@ Set `llm.provider.backend` to one of these values:
 - `vertex`: Use Vertex AI Anthropic models through Google Cloud credentials.
 - `gateway`: Use AI Gateway-compatible Anthropic model ids.
 - `claude-code`: Use your local Claude Code session through the Claude Agent
-  SDK. KTX strips provider-routing environment variables from child processes.
+  SDK. **ktx** strips provider-routing environment variables from child processes.
 
 ## Claude Code
 
@@ -40,11 +40,11 @@ During setup, choose the backend interactively or pass the model in automation:
 ktx setup --llm-backend claude-code --llm-model opus --no-input
 ```
 
-For Claude Code, `sonnet`, `opus`, and `haiku` map to KTX defaults. Full Claude
+For Claude Code, `sonnet`, `opus`, and `haiku` map to **ktx** defaults. Full Claude
 model IDs are also accepted.
 
-`claude-code` exposes only KTX MCP tools for the current agent loop. SDK init
-metadata may still list host slash commands, skills, and subagents; KTX does not
+`claude-code` exposes only **ktx** MCP tools for the current agent loop. SDK init
+metadata may still list host slash commands, skills, and subagents; **ktx** does not
 grant execution access to them.
 
 ## Prompt caching

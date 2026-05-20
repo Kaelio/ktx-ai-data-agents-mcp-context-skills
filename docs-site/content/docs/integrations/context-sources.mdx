@@ -3,7 +3,7 @@ title: Context Sources
 description: Ingest semantic context from dbt, MetricFlow, LookML, Metabase, Looker, and Notion.
 ---
 
-Context sources feed your existing analytics tooling into KTX. During ingestion, KTX extracts metadata from each source and uses a reconciliation agent to reconcile it with your existing semantic layer and knowledge base - preserving accepted edits rather than overwriting.
+Context sources feed your existing analytics tooling into **ktx**. During ingestion, **ktx** extracts metadata from each source and uses a reconciliation agent to reconcile it with your existing semantic layer and knowledge base - preserving accepted edits rather than overwriting.
 
 All context sources are configured in `ktx.yaml` under `connections` with their respective `driver` value.
 
@@ -198,7 +198,7 @@ This validates that LookML model `connection:` declarations match expectations, 
 
 ## Metabase
 
-Ingests dashboards, questions, and their underlying SQL queries from a Metabase instance. Maps Metabase databases to your KTX warehouse connections.
+Ingests dashboards, questions, and their underlying SQL queries from a Metabase instance. Maps Metabase databases to your **ktx** warehouse connections.
 
 ### What it provides
 
@@ -217,7 +217,7 @@ connections:
     api_key_ref: env:METABASE_API_KEY
     mappings:
       databaseMappings:
-        "3": postgres-main         # Metabase DB ID → KTX connection
+        "3": postgres-main         # Metabase DB ID → ktx connection
       syncEnabled:
         "3": true
       syncMode: ONLY               # Only ingest mapped databases
@@ -239,7 +239,7 @@ Generate an API key in Metabase: **Admin > Settings > Authentication > API Keys*
 
 ### Warehouse mapping
 
-Metabase databases must be mapped to KTX connections so ingested context links to the correct warehouse:
+Metabase databases must be mapped to **ktx** connections so ingested context links to the correct warehouse:
 
 ```yaml
 mappings:
@@ -256,7 +256,7 @@ Find Metabase database IDs in **Admin > Databases** - the ID is in the URL when 
 
 ## Looker
 
-Ingests explores, looks, and dashboards from a Looker instance via the Looker API. Maps Looker connections to your KTX warehouse connections.
+Ingests explores, looks, and dashboards from a Looker instance via the Looker API. Maps Looker connections to your **ktx** warehouse connections.
 
 ### What it provides
 
@@ -276,7 +276,7 @@ connections:
     client_secret_ref: env:LOOKER_CLIENT_SECRET
     mappings:
       connectionMappings:
-        postgres_connection: postgres-main   # Looker conn → KTX conn
+        postgres_connection: postgres-main   # Looker conn → ktx conn
 ```
 
 ### Authentication
@@ -296,7 +296,7 @@ Generate API credentials in Looker: **Admin > Users > Edit > API Keys**.
 
 ### Warehouse mapping
 
-Map Looker connection names to KTX connections so explores link to the correct warehouse:
+Map Looker connection names to **ktx** connections so explores link to the correct warehouse:
 
 ```yaml
 mappings:

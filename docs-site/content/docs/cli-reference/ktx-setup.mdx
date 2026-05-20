@@ -1,14 +1,14 @@
 ---
 title: "ktx setup"
-description: "Set up or resume a local KTX project."
+description: "Set up or resume a local ktx project."
 ---
 
-`ktx setup` is the guided configuration flow for a local KTX project. It can
+`ktx setup` is the guided configuration flow for a local **ktx** project. It can
 create or resume `ktx.yaml`, configure LLM and embedding providers, add
 database and context-source connections, prepare required runtime features,
 build initial context, and install agent integrations.
 
-When you run bare `ktx` in an interactive terminal outside any KTX project, the
+When you run bare `ktx` in an interactive terminal outside any **ktx** project, the
 CLI starts this same setup flow. Inside an existing project, `ktx setup`
 resumes from incomplete setup state or opens the setup menu.
 
@@ -52,7 +52,7 @@ prompts.
 | Flag | Description |
 |------|-------------|
 | `--llm-backend <backend>` | LLM backend: `anthropic`, `vertex`, or `claude-code` |
-| `--llm-backend claude-code` | Use the local Claude Code session for KTX LLM calls |
+| `--llm-backend claude-code` | Use the local Claude Code session for **ktx** LLM calls |
 | `--llm-model <model>` | LLM model ID or backend model alias to validate and save |
 | `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key |
 | `--anthropic-api-key-file <path>` | File containing the Anthropic API key |
@@ -75,7 +75,7 @@ of Anthropic API key or Vertex flags. For Claude Code, `--llm-model` accepts
 | `--embedding-api-key-file <path>` | File containing the embedding provider API key |
 | `--skip-embeddings` | Leave embedding setup incomplete |
 
-`sentence-transformers` uses the KTX-managed Python runtime. Choose only one
+`sentence-transformers` uses the **ktx**-managed Python runtime. Choose only one
 embedding credential source.
 
 ### Runtime
@@ -84,9 +84,9 @@ Setup prepares the managed Python runtime when your selected configuration
 needs it. In the full setup flow, the runtime step runs after database and
 context-source setup and before the initial context build.
 
-KTX prepares the `core` runtime feature when query-history ingest, Looker
+**ktx** prepares the `core` runtime feature when query-history ingest, Looker
 context-source ingest, database introspection fallback, or daemon-backed
-context build paths need it. KTX prepares the `local-embeddings` runtime feature when you
+context build paths need it. **ktx** prepares the `local-embeddings` runtime feature when you
 choose managed local `sentence-transformers` embeddings. Existing external
 daemon URLs, such as `KTX_DAEMON_URL` or `KTX_SQL_ANALYSIS_URL`, satisfy the
 matching dependency and skip managed runtime installation for that dependency.
@@ -109,7 +109,7 @@ runtime features are missing.
 | `--database-schema <schema>` | Database schema or dataset to include; repeatable |
 | `--skip-databases` | Leave database setup incomplete |
 
-KTX needs at least one database connection before it can build database
+**ktx** needs at least one database connection before it can build database
 context. Use `--skip-databases` only when intentionally leaving the project
 incomplete.
 
@@ -165,7 +165,7 @@ ktx setup
 # Run setup for a specific project directory
 ktx setup --project-dir ./analytics
 
-# Use Claude Code with Opus for KTX LLM calls
+# Use Claude Code with Opus for ktx LLM calls
 ktx setup \
   --project-dir ./analytics \
   --llm-backend claude-code \
@@ -211,14 +211,14 @@ Interactive setup renders prompts and progress messages. Use `ktx status` to
 check setup and context readiness after setup exits.
 
 ```text
-KTX project: /home/user/analytics
+ktx project: /home/user/analytics
 Project ready: yes
 LLM ready: yes (claude-sonnet-4-6)
 Embeddings ready: yes (text-embedding-3-small)
 Databases configured: yes (postgres-warehouse)
 Context sources configured: yes (dbt-main)
 Runtime ready: yes (core)
-KTX context built: yes
+ktx context built: yes
 Agent integration ready: yes (codex:project)
 ```
 

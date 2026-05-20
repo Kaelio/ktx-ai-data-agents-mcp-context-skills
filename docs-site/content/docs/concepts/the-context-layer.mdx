@@ -1,6 +1,6 @@
 ---
 title: The Context Layer
-description: What a context layer is, why agents need one, and the YAML and Markdown surfaces KTX writes to disk.
+description: What a context layer is, why agents need one, and the YAML and Markdown surfaces ktx writes to disk.
 ---
 
 import { GitIcon } from "@/components/git-icon";
@@ -11,7 +11,7 @@ can't tell an agent on its own: which metrics are canonical, which joins are
 safe, what your team means by "active customer", and where every definition
 came from.
 
-KTX builds that layer as plain files - YAML, Markdown, and JSON - that agents
+**ktx** builds that layer as plain files - YAML, Markdown, and JSON - that agents
 can search and humans can review. This page covers what's in it, why agents
 need it, and how it compares to other semantic tooling.
 
@@ -35,14 +35,14 @@ Schema is a starting point, not a contract. The context layer is the contract.
 
 ## The two pillars
 
-A KTX project has two committed surfaces, each tuned for a different question.
+A **ktx** project has two committed surfaces, each tuned for a different question.
 Structured data lives where it can be compiled. Prose lives where it can be
 searched. Wiki pages cross-reference semantic sources by name, so every metric
 caveat stays anchored to the definition it explains.
 
 <figure
   className="not-prose my-10 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
-  aria-label="The two committed pillars of a KTX context layer"
+  aria-label="The two committed pillars of a ktx context layer"
 >
   <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fd-primary">
@@ -121,7 +121,8 @@ caveat stays anchored to the definition it explains.
 
   <figcaption className="border-t border-fd-border bg-fd-muted/25 px-5 py-3 text-[11.5px] leading-5 text-fd-muted-foreground">
     <span className="font-medium text-fd-foreground">{"Behind the scenes. "}</span>
-    {"KTX also keeps scan snapshots and a per-run event log locally so every committed change is traceable to its evidence. You don't read or edit these files yourself - see "}
+    <strong className="font-medium text-fd-foreground">{"ktx"}</strong>
+    {" also keeps scan snapshots and a per-run event log locally so every committed change is traceable to its evidence. You don't read or edit these files yourself - see "}
     <a href="/docs/concepts/context-as-code" className="font-medium underline">{"Context as Code"}</a>
     {" for how that audit trail flows into review."}
   </figcaption>
@@ -189,7 +190,7 @@ a graph agents traverse. An agent that finds this page while searching for
 executable definition, then walks `refs` to related policies without rerunning
 search.
 
-The graph only helps if the edges stay live. KTX validates references when
+The graph only helps if the edges stay live. **ktx** validates references when
 wiki pages are written and prunes `sl_refs` during ingest when their target
 sources are deleted or their measures are renamed - so a stale page can never
 quietly route an agent to a definition that no longer exists.
@@ -206,7 +207,7 @@ The split between the two pillars is sharp:
 If a fact changes how the SQL runs, it goes in YAML. If a human needs it to
 trust the answer, it goes in Markdown.
 
-## How KTX compares
+## How ktx compares
 
 Two adjacent product categories cover parts of this problem - but each leaves
 a different gap.
@@ -224,13 +225,13 @@ hand-written, and the layer doesn't learn from the warehouse, BI tools, or
 query history that surround it. The business context that explains *why* a
 definition exists usually lives somewhere else.
 
-KTX bundles both surfaces - wiki for business context, semantic layer for
+**ktx** bundles both surfaces - wiki for business context, semantic layer for
 queryable definitions - and keeps them current by reading the data stack and
 reconciling new evidence with the reviewed files. You get the breadth of a
 knowledge tool and the SQL safety of a semantic layer, without rewriting
 models every time the warehouse changes.
 
-| Capability | Company brain | Semantic layer | KTX |
+| Capability | Company brain | Semantic layer | **ktx** |
 |------------|---------------|----------------|-----|
 | **Surface** | Indexed docs and chats | Modeling language or runtime | YAML and Markdown files |
 | **Data-stack awareness** | None - treats data tools as text | High for declared metrics, none for the surrounding warehouse | Built in: scans schemas, dbt, BI tools, and query history |
@@ -238,14 +239,14 @@ models every time the warehouse changes.
 | **SQL safety** | None - generates plausible text | Compiled, dialect-correct | Compiled with join-graph and fan-out handling |
 | **Agent edit loop** | Text-only | Tied to the modeling workflow | First-class: patch files, validate, review diffs |
 
-If you already use MetricFlow, LookML, dbt, or BI tools, KTX can ingest that
+If you already use MetricFlow, LookML, dbt, or BI tools, **ktx** can ingest that
 context and turn it into agent-readable files. You don't need to replace your
 serving layer to give agents a better working surface.
 
-## A KTX project on disk
+## A ktx project on disk
 
-A KTX project is a directory of readable files. Semantic sources and wiki
-pages are committed to git; everything else KTX needs at runtime stays local
+A **ktx** project is a directory of readable files. Semantic sources and wiki
+pages are committed to git; everything else **ktx** needs at runtime stays local
 and out of the repo.
 
 ```text
@@ -268,13 +269,13 @@ agents read the updated source of truth.
 
 ## Agent usage notes
 
-Use this page when an agent needs to explain why KTX exists, why schema-only
-database access isn't enough, or how KTX differs from traditional semantic
+Use this page when an agent needs to explain why **ktx** exists, why schema-only
+database access isn't enough, or how **ktx** differs from traditional semantic
 layers.
 
 | Agent task | Relevant section | Next page |
 |------------|------------------|-----------|
 | Explain why a data agent wrote a plausible but wrong query | Database access isn't enough | [Writing Context](/docs/guides/writing-context) |
 | Decide whether a fact belongs in YAML or Markdown | Semantic sources / Wiki pages | [Writing Context](/docs/guides/writing-context) |
-| Compare KTX to another semantic layer | How KTX compares | [Primary Sources](/docs/integrations/primary-sources) |
-| Explain reviewability and source of truth | A KTX project on disk | [Context as Code](/docs/concepts/context-as-code) |
+| Compare **ktx** to another semantic layer | How ktx compares | [Primary Sources](/docs/integrations/primary-sources) |
+| Explain reviewability and source of truth | A ktx project on disk | [Context as Code](/docs/concepts/context-as-code) |

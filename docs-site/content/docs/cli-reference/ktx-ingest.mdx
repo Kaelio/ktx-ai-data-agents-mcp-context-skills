@@ -1,10 +1,10 @@
 ---
 title: "ktx ingest"
-description: "Build or refresh KTX context, or capture text into KTX memory."
+description: "Build or refresh ktx context, or capture text into ktx memory."
 ---
 
-`ktx ingest` builds or refreshes KTX context from configured connections, and
-can also capture free-form text into KTX memory. Database connections build
+`ktx ingest` builds or refreshes **ktx** context from configured connections, and
+can also capture free-form text into **ktx** memory. Database connections build
 schema context. Context-source connections ingest metadata from tools such as
 dbt, Looker, Metabase, MetricFlow, LookML, and Notion. Pass `--text` or
 `--file` to capture inline text or text files into memory instead.
@@ -18,7 +18,7 @@ ktx ingest [options] [connectionId]
 - Bare `ktx ingest` (no positional, no `--all`) ingests every configured
   connection.
 - `ktx ingest <connectionId>` ingests one configured connection.
-- `ktx ingest --text "..."` (or `--file <path>`) captures notes into KTX
+- `ktx ingest --text "..."` (or `--file <path>`) captures notes into **ktx**
   memory instead of ingesting a connection.
 
 Database connections run before context-source connections when more than one
@@ -34,9 +34,9 @@ connection is selected.
 | `--query-history` | Include database query-history usage patterns | Stored connection default |
 | `--no-query-history` | Skip database query-history usage patterns for this run | Stored connection default |
 | `--query-history-window-days <days>` | BigQuery/Snowflake query-history lookback window for this run | Stored connection default |
-| `--text <content>` | Capture inline text into KTX memory; repeatable | `[]` |
-| `--file <path>` | Capture a text file into KTX memory; use `-` for stdin; repeatable | `[]` |
-| `--connection-id <connectionId>` | KTX connection id to tag captured text/file notes | - |
+| `--text <content>` | Capture inline text into **ktx** memory; repeatable | `[]` |
+| `--file <path>` | Capture a text file into **ktx** memory; use `-` for stdin; repeatable | `[]` |
+| `--connection-id <connectionId>` | **ktx** connection id to tag captured text/file notes | - |
 | `--user-id <id>` | Memory user id for text/file capture attribution | `local-cli` |
 | `--fail-fast` | Stop after the first failed text/file item | `false` |
 | `--plain` | Print plain text output | `true` |
@@ -54,7 +54,7 @@ requires deep ingest readiness.
 When more than one connection is selected, database ingest runs first, then
 context-source ingest and memory updates run for context-source connections.
 
-Some ingest paths use the managed KTX Python runtime. Query-history ingest uses
+Some ingest paths use the managed **ktx** Python runtime. Query-history ingest uses
 it for SQL analysis, and Looker context-source ingest uses it for Looker identifier
 parsing. In an interactive terminal, `ktx ingest` prompts before installing the
 required runtime features. Use `--yes` to install them without prompting, or
@@ -141,7 +141,7 @@ jq -c '. | {at, level, phase, event, durationMs, data, error}' \
   .ktx/ingest-traces/<jobId>/trace.jsonl
 ```
 
-KTX writes `debug` trace events by default. Set `KTX_INGEST_TRACE_LEVEL` to
+**ktx** writes `debug` trace events by default. Set `KTX_INGEST_TRACE_LEVEL` to
 `error`, `info`, `debug`, or `trace` before running ingest to change the trace
 verbosity:
 

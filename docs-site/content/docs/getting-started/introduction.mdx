@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: KTX is an open-source, self-improving context layer for data agents.
+description: ktx is an open-source, self-improving context layer for data agents.
 ---
 
 import { ProductMechanics } from "@/components/product-mechanics";
@@ -23,35 +23,35 @@ import { ProductMechanics } from "@/components/product-mechanics";
       Make analytics context usable by agents
     </h1>
     <p className="mt-4 max-w-2xl text-lg text-fd-muted-foreground" style={{ lineHeight: '1.7' }}>
-      {'KTX is an open-source context layer for data agents. It turns warehouse metadata, BI tool definitions, query history, docs, and approved metric definitions into reviewable files agents can search and execute.'}
+      {'ktx is an open-source context layer for data agents. It turns warehouse metadata, BI tool definitions, query history, docs, and approved metric definitions into reviewable files agents can search and execute.'}
     </p>
   </div>
 </div>
 
-## Why KTX helps
+## Why ktx helps
 
-KTX gives agents a shared context workspace before they write SQL, answer a
+**ktx** gives agents a shared context workspace before they write SQL, answer a
 question, or update analytics definitions.
 
-- **Context as code.** KTX writes wiki pages and semantic-layer definitions as
+- **Context as code.** **ktx** writes wiki pages and semantic-layer definitions as
   git-based files you can review, diff, and merge.
-- **Self-improving ingest.** KTX reads warehouses, BI tools, modeling code,
+- **Self-improving ingest.** **ktx** reads warehouses, BI tools, modeling code,
   query history, and notes, then reconciles new evidence with accepted context.
 - **Executable semantics.** Agents can use approved measures, joins, filters,
   dimensions, and segments instead of rebuilding canonical SQL from scratch.
 - **Agent-native access.** CLI and MCP tools let agents search context, compile
   semantic queries, run read-only SQL, and propose updates.
 
-KTX complements existing semantic layers by pairing metric definitions with the
+**ktx** complements existing semantic layers by pairing metric definitions with the
 surrounding business knowledge, caveats, provenance, and review workflow agents
 need for data work.
 
-## How KTX works
+## How ktx works
 
-KTX has two connected sides: it builds and maintains the context layer, then
+**ktx** has two connected sides: it builds and maintains the context layer, then
 serves that context to agents at runtime.
 
-| Side | What KTX does |
+| Side | What **ktx** does |
 |------|---------------|
 | **Ingest and auto-maintain knowledge** | Reads your data stack and company knowledge, reconciles new evidence with accepted context, and keeps changes to `semantic-layer/` plus `wiki/` as version-controlled diffs automatically. |
 | **Serve agents at runtime** | Helps agents find the right wiki pages and semantic-layer entities, then compile or execute semantic queries through CLI and MCP tools. |
@@ -60,7 +60,7 @@ serves that context to agents at runtime.
 
 ## Use it for
 
-Use KTX when agents need more than raw database access. Agents can search wiki
+Use **ktx** when agents need more than raw database access. Agents can search wiki
 context, find semantic-layer entities, compile trusted semantic queries, run
 read-only SQL, and use the same tools through MCP.
 
@@ -77,7 +77,7 @@ best first step for users; contributor setup lives in the community docs.
 
 <Cards>
   <Card title="Quickstart" href="/docs/getting-started/quickstart">
-    Install KTX, run setup, build context, and connect an agent.
+    Install **ktx**, run setup, build context, and connect an agent.
   </Card>
   <Card title="The Context Layer" href="/docs/concepts/the-context-layer">
     Understand why agents need more than schema access and raw SQL.
@@ -89,7 +89,7 @@ best first step for users; contributor setup lives in the community docs.
     Edit semantic-layer YAML and wiki Markdown safely.
   </Card>
   <Card title="CLI Reference" href="/docs/cli-reference/ktx">
-    Complete flag and subcommand reference for every KTX command.
+    Complete flag and subcommand reference for every **ktx** command.
   </Card>
   <Card title="Agent Quickstart" href="/docs/ai-resources/agent-quickstart">
     Machine-readable docs and agent-facing setup notes.
@@ -99,7 +99,7 @@ best first step for users; contributor setup lives in the community docs.
 ## Community
 
 Have questions, want to share what you're building, or chat with maintainers?
-Join the [KTX Slack community](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ).
+Join the [**ktx** Slack community](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ).
 For bug reports and feature requests, open a
 [GitHub issue](https://github.com/Kaelio/ktx/issues). See
 [Community & Support](/docs/community/support) for the full guide on where to

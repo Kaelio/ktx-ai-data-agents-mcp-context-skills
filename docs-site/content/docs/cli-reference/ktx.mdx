@@ -1,6 +1,6 @@
 ---
 title: "ktx"
-description: "Root command map, global options, and project resolution for the KTX CLI."
+description: "Root command map, global options, and project resolution for the ktx CLI."
 ---
 
 The `ktx` CLI sets up local projects, builds agent-ready context, checks
@@ -13,7 +13,7 @@ server, and manages the bundled Python runtime.
 ktx [global-options] <command>
 ```
 
-When you run bare `ktx` in an interactive terminal outside any KTX project, the
+When you run bare `ktx` in an interactive terminal outside any **ktx** project, the
 CLI starts the same guided setup flow as `ktx setup`. Inside an existing
 project, use command-specific help:
 
@@ -66,7 +66,7 @@ The public context-build entrypoint is `ktx ingest [connectionId]` or
 
 | Flag | Description |
 |------|-------------|
-| `--project-dir <path>` | KTX project directory. Defaults to `KTX_PROJECT_DIR`, then the nearest `ktx.yaml`, then the current working directory. |
+| `--project-dir <path>` | **ktx** project directory. Defaults to `KTX_PROJECT_DIR`, then the nearest `ktx.yaml`, then the current working directory. |
 | `--debug` | Print diagnostic dispatch and project-resolution details to stderr. |
 | `-v`, `--version` | Show the CLI package name and version. |
 | `-h`, `--help` | Show help for the current command. |
@@ -74,7 +74,7 @@ The public context-build entrypoint is `ktx ingest [connectionId]` or
 ## Project resolution
 
 Most commands are project-aware. Pass `--project-dir <path>` when scripting or
-when you are outside the project directory. If you omit it, KTX checks
+when you are outside the project directory. If you omit it, **ktx** checks
 `KTX_PROJECT_DIR`, then walks upward for the nearest `ktx.yaml`, then falls back
 to the current directory.
 

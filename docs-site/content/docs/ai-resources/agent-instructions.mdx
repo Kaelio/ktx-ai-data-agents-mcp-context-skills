@@ -1,12 +1,12 @@
 ---
 title: Agent Instructions
-description: Suggested instructions for coding assistants that need to read and cite KTX docs.
+description: Suggested instructions for coding assistants that need to read and cite ktx docs.
 ---
 
-Use these instructions when a coding assistant needs to answer questions from the KTX documentation.
+Use these instructions when a coding assistant needs to answer questions from the **ktx** documentation.
 
 ```text
-When answering KTX docs questions:
+When answering ktx docs questions:
 
 1. Start with https://docs.kaelio.com/ktx/llms.txt.
 2. Fetch the smallest relevant Markdown page from the index.
@@ -20,7 +20,7 @@ When answering KTX docs questions:
 
 This page is for documentation consumption only:
 
-- answering questions about KTX
+- answering questions about **ktx**
 - finding the right docs page
 - citing setup or CLI guidance
 - helping an assistant avoid stale or invented commands
@@ -30,11 +30,11 @@ It does not describe local tool configuration.
 ## Minimal project prompt
 
 ```text
-You are helping with KTX. Read https://docs.kaelio.com/ktx/llms.txt first, then fetch only the Markdown pages needed for the task. Do not scrape the rendered docs site when a .md route exists.
+You are helping with ktx. Read https://docs.kaelio.com/ktx/llms.txt first, then fetch only the Markdown pages needed for the task. Do not scrape the rendered docs site when a .md route exists.
 ```
 
 ## Repository prompt
 
 ```text
-Before editing KTX docs, read /llms.txt and the affected .md docs pages. Keep AI Resources focused on docs consumption. After editing, verify /llms.txt, /llms-full.txt, and any changed .md routes.
+Before editing ktx docs, read /llms.txt and the affected .md docs pages. Keep AI Resources focused on docs consumption. After editing, verify /llms.txt, /llms-full.txt, and any changed .md routes.
 ```

@@ -1,10 +1,10 @@
 ---
 title: Building Context
-description: Build and refresh KTX context from databases, context sources, query history, and text.
+description: Build and refresh ktx context from databases, context sources, query history, and text.
 ---
 
 Build context after `ktx setup` creates `ktx.yaml` and at least one database or
-context-source connection. KTX writes local semantic sources and wiki
+context-source connection. **ktx** writes local semantic sources and wiki
 pages for agents to use before writing SQL.
 
 ## The build loop
@@ -34,7 +34,7 @@ ktx ingest warehouse
 ktx ingest --all
 ```
 
-Depth controls how much context KTX builds:
+Depth controls how much context **ktx** builds:
 
 | Flag | Best for | What it does |
 |------|----------|--------------|
@@ -52,7 +52,7 @@ ktx ingest --all --deep
 Deep ingest needs LLM and embedding readiness. Otherwise run `ktx setup` or use
 `--fast`.
 
-With `claude-code`, KTX agent loops can invoke only the KTX MCP tools for the
+With `claude-code`, **ktx** agent loops can invoke only the **ktx** MCP tools for the
 current run.
 
 ## Query history
@@ -74,7 +74,7 @@ for one run.
 
 ## Relationship evidence
 
-KTX scores relationship candidates during supported deep database ingest. The
+**ktx** scores relationship candidates during supported deep database ingest. The
 public CLI does not expose separate relationship review subcommands.
 
 ## Context-source ingest
@@ -126,7 +126,7 @@ Useful flags:
 |------|-------------|
 | `--text <content>` | Capture inline text into memory; repeatable |
 | `--file <path>` | Capture a text file (or `-` for stdin) into memory; repeatable |
-| `--connection-id <connectionId>` | Attach the captured memory to a KTX connection |
+| `--connection-id <connectionId>` | Attach the captured memory to a **ktx** connection |
 | `--user-id <id>` | Attribute capture to a user scope, default `local-cli` |
 | `--json` | Print structured output |
 | `--fail-fast` | Stop after the first failed text/file item |

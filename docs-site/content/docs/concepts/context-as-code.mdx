@@ -5,11 +5,11 @@ description: Treat analytics context like code - version it, review it, merge it
 
 ## The idea
 
-dbt moved analytics transformations into git. KTX applies the same pattern to
+dbt moved analytics transformations into git. **ktx** applies the same pattern to
 analytics context: metric definitions, joins, business rules, wiki pages, and
 ingest decisions become files that can be reviewed, merged, and audited.
 
-| Before | With KTX |
+| Before | With **ktx** |
 |--------|----------|
 | Context scattered across BI tools, chats, docs, and analyst memory | Context lives in YAML and Markdown |
 | Agent changes are hard to inspect | Agent changes are git diffs |
@@ -19,7 +19,7 @@ ingest decisions become files that can be reviewed, merged, and audited.
 ## Auto-ingestion
 
 Most context already exists in dbt manifests, LookML, MetricFlow, Metabase,
-Notion, warehouse metadata, and analyst notes. KTX reads those inputs through
+Notion, warehouse metadata, and analyst notes. **ktx** reads those inputs through
 connectors, then reconciles them into local files.
 
 ```text
@@ -30,9 +30,9 @@ context sources -> connectors -> reconciliation agent -> YAML + Markdown diffs
 |------|--------------|--------|
 | **Extract** | Connectors read models, metrics, questions, schemas, and docs | Structured metadata |
 | **Reconcile** | The agent compares incoming facts with existing context | Create, update, skip, or flag |
-| **Write** | KTX saves changed semantic sources and wiki pages | Reviewable project files |
+| **Write** | **ktx** saves changed semantic sources and wiki pages | Reviewable project files |
 
-Reconciliation is the key difference from a sync. KTX preserves accepted local
+Reconciliation is the key difference from a sync. **ktx** preserves accepted local
 edits, fills gaps, and surfaces conflicts instead of blindly overwriting files.
 
 ## The git workflow
@@ -103,7 +103,7 @@ they are part of your team's review workflow.
 ## Agent usage notes
 
 Use this page when an agent needs to explain review workflows, ingestion diffs,
-replayability, or why KTX writes YAML and Markdown instead of hiding context in
+replayability, or why **ktx** writes YAML and Markdown instead of hiding context in
 a hosted service.
 
 | Agent task | Relevant section | Next page |

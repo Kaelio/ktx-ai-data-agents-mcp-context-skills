@@ -1,6 +1,6 @@
-# KTX Development Notes
+# ktx Development Notes
 
-KTX is a standalone open-source context layer for database agents. These
+**ktx** is a standalone open-source context layer for database agents. These
 instructions apply to all agents working in this repository (Codex, Claude,
 Gemini, and similar tools). Do not assume an external app server, frontend,
 database migrations, ORPC contracts, or `python-service/` layout exist here.
@@ -22,9 +22,9 @@ database migrations, ORPC contracts, or `python-service/` layout exist here.
 - **MUST**: Remove dead code; do not leave commented-out code, unused wrappers,
   or empty directories.
 - **MUST**: Keep package/public API changes intentional. Do not add compatibility
-  wrappers for old KTX names unless the user explicitly asks for a migration
+  wrappers for old **ktx** names unless the user explicitly asks for a migration
   bridge.
-- **MUST**: Treat KTX as having no public users unless the user says otherwise.
+- **MUST**: Treat **ktx** as having no public users unless the user says otherwise.
   Legacy support is not necessary by default; prefer clean breaking changes over
   compatibility shims, migration bridges, or preserved stale behavior.
 
@@ -40,7 +40,7 @@ database migrations, ORPC contracts, or `python-service/` layout exist here.
   commit when the user asks to save work in progress.
 - **MUST NOT**: Reintroduce external app conventions such as ORPC contracts,
   NestJS controllers, frontend routes, `routeTree.gen.ts`, or app database
-  migration commands unless those systems are intentionally added to KTX later.
+  migration commands unless those systems are intentionally added to **ktx** later.
 
 ### Language Convention
 
@@ -61,7 +61,7 @@ When rules conflict, follow this order:
 
 ## Repository Shape
 
-KTX is a pnpm + uv workspace.
+**ktx** is a pnpm + uv workspace.
 
 - TypeScript packages: `packages/*`
 - CLI package: `packages/cli`
@@ -69,7 +69,7 @@ KTX is a pnpm + uv workspace.
 - LLM package: `packages/llm`
 - Database connectors: `packages/connector-*`
 - Python semantic layer: `python/ktx-sl`
-- KTX daemon: `python/ktx-daemon`
+- **ktx** daemon: `python/ktx-daemon`
 - Examples and fixtures: `examples/`
 - Workspace scripts: `scripts/`
 - Local agent skills and internal planning docs are private overlays. Do not
@@ -134,7 +134,7 @@ shared contracts or package exports are affected.
   test file
 - TypeScript dead-code tooling/config changes: `pnpm run dead-code`
 - Python semantic layer: `uv run pytest python/ktx-sl/tests -q`
-- KTX daemon: `uv run pytest python/ktx-daemon/tests -q`
+- **ktx** daemon: `uv run pytest python/ktx-daemon/tests -q`
 - Python files: also run `uv run pre-commit run --files [FILES]` when
   pre-commit is configured
 
@@ -164,7 +164,7 @@ pnpm run test 2>&1 | tee /tmp/ktx-test-output.log
 
 ### Dead TypeScript Code Checks
 
-KTX uses Biome for local unused-code linting and Knip for workspace graph
+**ktx** uses Biome for local unused-code linting and Knip for workspace graph
 analysis. These checks are intentionally part of CI and pre-commit because the
 normal development workflow is agent-based.
 
@@ -240,9 +240,26 @@ use `PascalCase` without the suffix.
 - Prefer concrete commands, file paths, and acceptance criteria over broad
   prose.
 - When documenting examples, ensure referenced files and commands exist in the
-  standalone KTX tree.
+  standalone **ktx** tree.
 - Remove or rewrite stale external app references unless the doc is explicitly
   historical.
+
+### Product Naming
+
+- **MUST**: Write the product name as lowercase `ktx`.
+- **MUST**: In Markdown prose, write `**ktx**` so the product name stays
+  visually distinct from surrounding text.
+- **MUST**: Use code font for the CLI command, binary, package/path fragments,
+  configuration files, environment variables, source identifiers, and copied
+  terminal output, for example `ktx`, `ktx setup`, `ktx.yaml`,
+  `KTX_PROJECT_DIR`, and `.ktx/`.
+- **MUST**: Use plain lowercase `ktx` in frontmatter, metadata, alt text,
+  headings, nav labels, badges, UI strings, and generated index strings where
+  Markdown emphasis is not rendered or would be visually noisy.
+- **MUST NOT**: Write the bare all-caps spelling for the product name in docs prose.
+  Keep uppercase only when it is part of an exact environment variable,
+  source-code identifier, package/API name, or other literal value that must
+  match the implementation.
 
 ### Updating `docs-site/` After Code Changes
 

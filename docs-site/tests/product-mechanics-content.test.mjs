@@ -22,8 +22,8 @@ test("docs introduction frames the concept before showing product mechanics", as
   assert.match(introduction, /<ProductMechanics\s*\/>/);
 
   const heroIndex = introduction.indexOf("Make analytics context");
-  const whyIndex = introduction.indexOf("## Why KTX");
-  const worksIndex = introduction.indexOf("## How KTX works");
+  const whyIndex = introduction.indexOf("## Why ktx helps");
+  const worksIndex = introduction.indexOf("## How ktx works");
   const mechanicsIndex = introduction.indexOf("<ProductMechanics />");
   const useCaseIndex = introduction.indexOf("## Use it for");
   const heroSource = introduction.slice(0, mechanicsIndex);
@@ -116,15 +116,15 @@ test("product mechanics component explains ingestion outputs", async () => {
   assert.doesNotMatch(component, /raw-sources/);
   assert.doesNotMatch(component, /\.ktx/);
   assert.doesNotMatch(component, /Product mechanics/);
-  assert.doesNotMatch(component, /How KTX works/);
+  assert.doesNotMatch(component, /How ktx works/);
   assert.doesNotMatch(component, /Runtime/);
   assert.doesNotMatch(component, /A semantic compiler for analytics agents/);
-  assert.doesNotMatch(component, /KTX does more than retrieve Markdown/);
+  assert.doesNotMatch(component, /ktx does more than retrieve Markdown/);
   assert.doesNotMatch(component, /Plain Markdown \+ RAG/);
   assert.doesNotMatch(component, /comparisonRows/);
   assert.doesNotMatch(component, /ComparisonTable/);
   assert.doesNotMatch(component, /Not just retrieval/);
-  assert.doesNotMatch(component, /KTX works in two moments/);
+  assert.doesNotMatch(component, /ktx works in two moments/);
   assert.doesNotMatch(component, /name: "Metabase and query history"/);
   assert.doesNotMatch(component, /name: "dbt, MetricFlow, LookML"/);
   assert.doesNotMatch(component, /MySQL/);
