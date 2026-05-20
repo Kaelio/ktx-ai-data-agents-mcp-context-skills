@@ -25,7 +25,7 @@ function pluginNames(config) {
 describe('semantic-release config', () => {
   it('configures rc releases as a prerelease on main', () => {
     assert.equal(releaseKind({ KTX_RELEASE_KIND: 'rc' }), 'rc');
-    assert.equal(releaseTag('rc'), 'next');
+    assert.equal(releaseTag('rc', { GITHUB_REF_NAME: 'main' }), 'next');
     assert.deepEqual(releaseBranches({ KTX_RELEASE_KIND: 'rc', GITHUB_REF_NAME: 'main' }), [
       { name: 'main', prerelease: 'rc', channel: 'next' },
     ]);
