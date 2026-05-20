@@ -1,10 +1,10 @@
 ---
 title: Building Context
-description: Build and refresh KTX context from databases, source tools, query history, and text.
+description: Build and refresh KTX context from databases, context sources, query history, and text.
 ---
 
 Build context after `ktx setup` creates `ktx.yaml` and at least one database or
-context-source connection. KTX writes local semantic-layer sources and wiki
+context-source connection. KTX writes local semantic sources and wiki
 pages for agents to use before writing SQL.
 
 ## The build loop
@@ -38,8 +38,8 @@ Depth controls how much context KTX builds:
 
 | Flag | Best for | What it does |
 |------|----------|--------------|
-| `--fast` | First setup, quick refreshes, CI smoke checks | Deterministic schema ingest with tables, columns, types, constraints, and row counts |
-| `--deep` | Agent-ready context for real analysis | Fast ingest plus AI-enriched descriptions, embeddings, relationship evidence, and optional query history |
+| `--fast` | First setup, quick refreshes, CI smoke checks | Deterministic fast ingest with tables, columns, types, constraints, and row counts |
+| `--deep` | Agent-ready context for real analysis | Fast ingest plus deep enrichment with descriptions, embeddings, relationship evidence, and optional query history |
 
 Examples:
 
@@ -83,10 +83,10 @@ Context-source connections pull metadata from dbt, BI tools, Notion, and other
 configured systems. Pass one connection id or `--all`.
 
 ```bash
-# Build one source connection
+# Build one context-source connection
 ktx ingest dbt_main
 
-# Build every configured database and source connection
+# Build every configured database and context-source connection
 ktx ingest --all
 ```
 
@@ -101,8 +101,8 @@ Supported source types:
 | `metabase` | Metabase API | Questions, dashboards, table metadata, and mappings |
 | `notion` | Notion API | Wiki pages and business knowledge |
 
-Source ingest writes semantic-layer YAML and wiki Markdown, merging with local
-edits.
+Context-source ingest writes semantic source YAML and wiki Markdown, reconciling
+with local edits.
 
 ## Text ingest
 
@@ -131,7 +131,7 @@ Useful flags:
 | `--json` | Print structured output |
 | `--fail-fast` | Stop after the first failed text/file item |
 
-Use text ingest for small, high-signal documents. Prefer configured source
+Use text ingest for small, high-signal documents. Prefer configured context-source
 ingest for Notion, dbt, Metabase, and similar systems.
 
 ## Output and artifacts
@@ -146,8 +146,8 @@ Typical generated files:
 
 | Path | Created by | Purpose |
 |------|------------|---------|
-| `semantic-layer/<connection-id>/*.yaml` | Database and source ingest | Queryable semantic source definitions |
-| `wiki/global/*.md` | Source, text, and memory ingest | Shared business definitions and notes |
+| `semantic-layer/<connection-id>/*.yaml` | Database and context-source ingest | Queryable semantic source definitions |
+| `wiki/global/*.md` | Context-source, text, and memory ingest | Shared business definitions and notes |
 | `wiki/user/<user-id>/*.md` | Text and memory ingest | User-scoped context |
 | `.ktx/setup/context-build.json` | Setup context build | Resume and readiness state for setup |
 
@@ -177,7 +177,7 @@ ktx wiki "revenue" --json --limit 10
 |---------|--------------|----------|
 | Connection not configured | The connection id is missing from `ktx.yaml` | Add it with `ktx setup` |
 | Deep readiness is missing | LLM or embeddings are not setup-ready | Run `ktx setup`, or rerun with `--fast` |
-| Query history is unsupported | The selected database driver does not expose query history | Run schema ingest without query-history flags |
-| No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or source connection |
-| Source flags have no effect | Depth and query-history flags were supplied for a source connector | Use those flags only for database connections |
+| Query history is unsupported | The selected database driver does not expose query history | Run fast ingest without query-history flags |
+| No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or context-source connection |
+| Context-source flags have no effect | Depth and query-history flags were supplied for a context-source connector | Use those flags only for database connections |
 | Text ingest stops early | `--fail-fast` stopped on the first failed item | Fix the item or rerun without `--fail-fast` |

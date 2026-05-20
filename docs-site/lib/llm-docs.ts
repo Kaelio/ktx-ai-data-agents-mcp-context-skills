@@ -46,7 +46,7 @@ export function buildLlmsTxt() {
 
   return `# KTX
 
-> Agent-native context layer for analytics engineering and database agents.
+> Agent-native context layer for analytics engineering and data agents.
 
 KTX provides semantic-layer files, warehouse scans, wiki pages, provenance, and agent-facing tools that help coding agents answer analytics questions without inventing metrics or joins.
 

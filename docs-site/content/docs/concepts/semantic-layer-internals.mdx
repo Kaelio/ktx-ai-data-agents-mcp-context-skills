@@ -1,24 +1,24 @@
 ---
-title: Semantic Querying
-description: How KTX compiles a short Semantic Query into safe, dialect-correct SQL using a reviewed join graph.
+title: Semantic querying
+description: How KTX compiles a short semantic query into safe, dialect-correct SQL using a reviewed join graph.
 ---
 
 import { SemanticLayerFlow } from "@/components/semantic-layer-flow";
 
 KTX's semantic layer is a compiler that turns intent into SQL. The agent
 declares _what_ it wants - measures, dimensions, filters - in a small
-Semantic Query. KTX figures out the _how_: which tables to join, what
+semantic query. KTX figures out the _how_: which tables to join, what
 grain to aggregate at, how to keep fan-out from inflating measures, and
 what dialect the warehouse speaks.
 
 This page covers four mechanics:
 
-- The Semantic Query contract agents send to the compiler.
-- The planner steps that turn a Semantic Query into SQL.
+- The semantic query contract agents send to the compiler.
+- The planner steps that turn a semantic query into SQL.
 - The join graph that backs those steps, and how it's built.
 - The fan-out failure mode the compiler is designed to prevent.
 
-## Imperative SQL vs declarative Semantic Querying
+## Imperative SQL vs declarative semantic querying
 
 Writing analytics SQL is imperative work. Every question forces the
 agent to hold two things in mind at once: _what_ it wants - a measure, a
@@ -32,7 +32,7 @@ KTX's semantic layer separates those concerns:
 - **You and KTX maintain the how.** Sources, joins, grain, measures, and
   segments live in reviewable YAML - the analytical contract the team
   agrees on, version-controlled.
-- **The agent declares the what.** It sends a Semantic Query and trusts
+- **The agent declares the what.** It sends a semantic query and trusts
   the compiler to produce safe SQL.
 
 The agent stops reasoning about plumbing. It states intent. KTX turns
@@ -40,9 +40,9 @@ that into SQL the warehouse can run.
 
 <SemanticLayerFlow />
 
-## The Semantic Query contract
+## The semantic query contract
 
-A Semantic Query is the JSON payload the agent sends. Every field is optional
+A semantic query is the JSON payload the agent sends. Every field is optional
 except `measures`, and column references are fully qualified
 (`source.column`) so the compiler never has to guess where a name came
 from.
@@ -76,7 +76,7 @@ authors a join, a CTE, or a dialect-specific cast.
 
 ## What the planner does
 
-The planner is a deterministic pipeline. Each Semantic Query runs through the
+The planner is a deterministic pipeline. Each semantic query runs through the
 same ordered steps before any SQL is emitted.
 
 1. **Resolve refs.** Qualify bare column names, look up pre-defined
@@ -333,7 +333,7 @@ different from what the agent first proposed.
 
 | Agent task | Relevant section | Next page |
 |------------|------------------|-----------|
-| Explain the Semantic Query shape | The Semantic Query contract | [ktx sl](/docs/cli-reference/ktx-sl) |
+| Explain the semantic query shape | The semantic query contract | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Describe what the planner does between query and SQL | What the planner does | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Explain why KTX asks for grain and relationship types | The join graph | [Writing context](/docs/guides/writing-context) |
 | Diagnose duplicated measures after a join | Fan-out and aggregate locality | [ktx sl](/docs/cli-reference/ktx-sl) |

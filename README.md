@@ -3,7 +3,7 @@
 </h1>
 
 <h1 align="center">
-  The context layer for analytics agents
+  The context layer for data agents
 </h1>
 
 <p align="center">
@@ -106,13 +106,13 @@ Agent integration ready: yes (codex:project)
 | `ktx ingest <id>` | Build context for one connection |
 | `ktx ingest --text "..."` | Capture free-form notes into memory |
 | `ktx ingest --file notes.md --connection-id <id>` | Capture a text file into memory |
-| `ktx sl` | List semantic-layer sources |
-| `ktx sl "revenue"` | Search semantic-layer sources |
+| `ktx sl` | List semantic sources |
+| `ktx sl "revenue"` | Search semantic sources |
 | `ktx sl validate <source> --connection-id <id>` | Validate a semantic source |
 | `ktx sl query --measure <measure> --format sql` | Compile semantic-layer SQL |
 | `ktx sql --connection <id> "select 1"` | Execute read-only SQL |
 | `ktx wiki` | List local wiki pages |
-| `ktx wiki "revenue definition"` | Search local wiki context |
+| `ktx wiki "revenue definition"` | Search local wiki pages |
 | `ktx mcp` | Show MCP daemon status |
 | `ktx mcp start` | Start the local MCP server for agent clients |
 

@@ -20,15 +20,15 @@ ingest decisions become files that can be reviewed, merged, and audited.
 
 Most context already exists in dbt manifests, LookML, MetricFlow, Metabase,
 Notion, warehouse metadata, and analyst notes. KTX reads those inputs through
-adapters, then reconciles them into local files.
+connectors, then reconciles them into local files.
 
 ```text
-source tools -> adapters -> reconciliation agent -> YAML + Markdown diffs
+context sources -> connectors -> reconciliation agent -> YAML + Markdown diffs
 ```
 
 | Step | What happens | Output |
 |------|--------------|--------|
-| **Extract** | Adapters read models, metrics, questions, schemas, and docs | Structured metadata |
+| **Extract** | Connectors read models, metrics, questions, schemas, and docs | Structured metadata |
 | **Reconcile** | The agent compares incoming facts with existing context | Create, update, skip, or flag |
 | **Write** | KTX saves changed semantic sources and wiki pages | Reviewable project files |
 
@@ -88,7 +88,7 @@ context layer converge toward the team's current source of truth.
 
 ## Deterministic replay
 
-Every ingestion session records the adapter inputs, tool calls, LLM responses,
+Every ingestion session records the connector inputs, tool calls, LLM responses,
 write decisions, and reasoning behind each change.
 
 | Use case | What replay gives you |

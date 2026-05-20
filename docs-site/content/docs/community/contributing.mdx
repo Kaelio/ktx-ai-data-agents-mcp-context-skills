@@ -3,7 +3,7 @@ title: Contributing
 description: Contribute to KTX through code, docs, connectors, and examples.
 ---
 
-KTX is an open-source context layer for database agents. The project welcomes
+KTX is an open-source context layer for data agents. The project welcomes
 focused contributions that improve setup, integrations, CLI behavior,
 documentation, connector coverage, and examples.
 
@@ -24,7 +24,7 @@ documentation, connector coverage, and examples.
 | CLI and setup | `packages/cli`, especially setup steps, command definitions, status checks, and smoke tests |
 | Context engine | `packages/context`, including project config, ingest orchestration, and semantic search |
 | Connectors | `packages/connector-*`, plus connector-specific tests and integration docs |
-| Python semantic layer | `python/ktx-sl` for planning and SQL generation |
+| Python semantic layer | `python/ktx-sl` for planning and SQL compilation |
 | KTX daemon | `python/ktx-daemon` for the portable runtime API |
 | Documentation | `docs-site/content/docs` for public docs and `docs-site/tests` for docs behavior |
 
@@ -97,7 +97,7 @@ packages/
   connector-posthog/    # PostHog connector
 
 python/
-  ktx-sl/               # Semantic layer - grain-aware query planning and SQL generation
+  ktx-sl/               # Semantic layer - grain-aware query planning and SQL compilation
   ktx-daemon/           # Daemon - portable API server around the semantic layer
 
 examples/               # Example projects and fixtures
@@ -226,7 +226,7 @@ and statistics.
 
 ### Step 4: Wire it up
 
-Register the new connector driver in `packages/context` so the CLI and scan
+Register the new connector in `packages/context` so the CLI and scan
 engine can instantiate it. Look at how existing connectors are registered for
 the pattern.
 

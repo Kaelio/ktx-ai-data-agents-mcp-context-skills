@@ -1,6 +1,6 @@
 ---
 title: "ktx sl"
-description: "List, search, validate, or query semantic-layer sources."
+description: "List, search, validate, or query semantic sources."
 ---
 
 Interact with your project's semantic layer. Semantic sources are YAML
@@ -15,8 +15,8 @@ ktx sl validate <sourceName> [options]
 ktx sl query [options]
 ```
 
-- Bare `ktx sl` lists semantic-layer sources.
-- `ktx sl <query...>` searches semantic-layer sources (multi-word queries are
+- Bare `ktx sl` lists semantic sources.
+- `ktx sl <query...>` searches semantic sources (multi-word queries are
   joined with a space).
 - `ktx sl validate` and `ktx sl query` remain as explicit subcommands.
 
@@ -24,10 +24,10 @@ ktx sl query [options]
 
 | Subcommand | Description |
 |-----------|-------------|
-| (none, no query) | List semantic-layer sources |
-| (none, with query) | Search semantic-layer sources |
-| `validate <sourceName>` | Validate a semantic-layer source against the database schema |
-| `query` | Compile or execute a Semantic Query |
+| (none, no query) | List semantic sources |
+| (none, with query) | Search semantic sources |
+| `validate <sourceName>` | Validate a semantic source against the database schema |
+| `query` | Compile or execute a semantic query |
 
 ## Options
 
@@ -51,7 +51,7 @@ ktx sl query [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--connection-id <id>` | KTX connection id | - |
-| `--query-file <path>` | JSON Semantic Query file | - |
+| `--query-file <path>` | JSON semantic query file | - |
 | `--measure <measure>` | Measure to query; repeatable (at least one required) | - |
 | `--dimension <dimension>` | Dimension to include; repeatable | - |
 | `--filter <filter>` | Filter expression; repeatable | - |
@@ -66,7 +66,7 @@ ktx sl query [options]
 | `--max-rows <n>` | Maximum rows to return when executing | - |
 
 `sl query` requires at least one `--measure` unless `--query-file` is set.
-`--query-file` should point to a JSON Semantic Query object.
+`--query-file` should point to a JSON semantic query object.
 
 ## Examples
 

@@ -1,11 +1,12 @@
 ---
 title: "ktx connection"
-description: "List and test configured data sources."
+description: "List and test configured database and context-source connections."
 ---
 
 Inspect configured connections in your KTX project. Connections define how KTX
-reaches databases, warehouses, BI tools, source projects, and knowledge
-systems. Use `ktx setup` to add, remove, or reconfigure them.
+reaches primary sources (databases and warehouses) and context sources (BI
+tools, modeling projects, and knowledge systems). Use `ktx setup` to add,
+remove, or reconfigure them.
 
 ## Command signature
 
@@ -77,8 +78,8 @@ my-warehouse  postgres
 
 `ktx connection test <connectionId>` performs a lightweight connection probe.
 Native database connections report `Status: ok` when the connector probe
-passes. Source connectors report connector-specific details such as Metabase
-database count, Looker user, Notion bot, or Git repo URL.
+passes. Context-source connectors report connector-specific details such as
+Metabase database count, Looker user, Notion bot, or Git repo URL.
 
 ```text
 Connection test passed: my-warehouse
@@ -102,7 +103,7 @@ configured connection and exit non-zero if any probe fails.
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or source connection |
+| No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or context-source connection |
 | Connection test fails | Credentials, network access, database, warehouse, or schema is invalid | Verify the same URL with the database's native client, then rerun `ktx setup` and reconfigure the connection |
-| Mapping validation fails during setup | BI database mappings do not point at valid warehouse connections | Rerun `ktx setup` and update the source mapping selections |
+| Mapping validation fails during setup | BI database mappings do not point at valid warehouse connections | Rerun `ktx setup` and update the context-source mapping selections |
 | Notion page picker cannot run | The terminal is non-interactive or Notion discovery failed | Rerun interactive `ktx setup`, or use non-interactive setup flags with explicit root page ids |

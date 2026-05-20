@@ -1,6 +1,6 @@
 # Goal
 
-Set up KTX from scratch end-to-end as a fully autonomous, agent-driven replacement for the interactive `ktx setup` wizard. Detect the environment, install missing prerequisites, ask the user only for information you genuinely need (which connections to add, credentials), write a valid configuration, verify it works, and run a fast schema ingest. Keep the user updated throughout.
+Set up KTX from scratch end-to-end as a fully autonomous, agent-driven replacement for the interactive `ktx setup` wizard. Detect the environment, install missing prerequisites, ask the user only for information you genuinely need (which connections to add, credentials), write a valid configuration, verify it works, and run a fast ingest. Keep the user updated throughout.
 
 # Operating principles
 
@@ -9,7 +9,7 @@ Set up KTX from scratch end-to-end as a fully autonomous, agent-driven replaceme
 - **Verify against docs, never guess.** CLI flags, config keys, and command names must come from the docs or from `ktx <command> --help`. If something looks wrong or missing, say so explicitly.
 - **Print every command you run and its exit code.** Terse, not silent.
 - **Fail loudly with cause + fix.** When a command fails: capture the exact error, identify the cause, change something, retry. Never retry an unchanged command. Exceptions for *known soft-failures* are listed in Phase 4 - handle those without retrying.
-- **No LLM-based ingestion in this flow.** Only `--fast` ingest (schema-only). The user can run `--deep` later.
+- **No LLM-based ingestion in this flow.** Only `--fast` ingest. The user can run `--deep` later.
 - **Platform-agnostic.** Detect the host OS first and pick the right install commands / path syntax. Anything path- or shell-specific must branch on OS.
 
 # Authoritative docs
@@ -58,7 +58,7 @@ Ask the user (grouped if your harness supports it; otherwise sequentially):
      - **Heads-up for the user**: even if they paste a literal URL, KTX will silently relocate it into `<project>/.ktx/secrets/<connection>-url` and rewrite `ktx.yaml` to `url: file:…` - this is correct, secure behavior and not a bug.
    - Schemas / datasets to include (postgres / sqlserver / snowflake / bigquery only).
    - Optional `enabled_tables` allowlist if the user wants to scope ingest to specific tables.
-5. **BI / metadata sources** (dbt, Metabase, Looker, LookML, MetricFlow, Notion). Default: none. Ask only if the user mentions them.
+5. **Context sources** (dbt, Metabase, Looker, LookML, MetricFlow, Notion). Default: none. Ask only if the user mentions them.
 
 ## Phase 4 - Configure the project
 
@@ -90,11 +90,11 @@ Notes on the flags above:
 - **You don't need `--skip-agents` in this flow.** The agent integration step
   is opt-in: setup leaves it alone unless you pass `--agents --target
   <target>`.
-- **`--skip-sources`** is correct and is the documented way to leave BI/metadata sources unconfigured.
+- **`--skip-sources`** is correct and is the documented way to leave context sources unconfigured.
 
 ### Known soft-failure: `ktx setup` exits 1 after a successful fast build
 
-When you select a configuration that only does fast (schema-only) ingest, `ktx setup`'s final readiness verification fails with:
+When you select a configuration that only does fast ingest, `ktx setup`'s final readiness verification fails with:
 
 ```
 KTX context build did not pass agent-readiness verification.
@@ -119,7 +119,7 @@ Use a YAML-aware editor (e.g. `uv run python -c "import yaml; …"`) - do not ha
 
 ## Phase 5 - Verify
 
-`ktx setup` already runs a fast schema ingest of every database connection it configures, so you do not need to re-ingest by default. For each configured connection:
+`ktx setup` already runs a fast ingest of every database connection it configures, so you do not need to re-ingest by default. For each configured connection:
 
 ```
 ktx connection test <connection-name>        # must exit 0
@@ -180,7 +180,7 @@ Verdict:     ready
 Then **Next steps** (copy-pasteable):
 1. Enrich with AI descriptions and embeddings: `ktx ingest <connection> --deep` (several minutes per connection).
 2. Add more connections later by rerunning this setup or via `ktx setup --database … --database-connection-id …`.
-3. Configure BI sources (dbt, Metabase, Looker, LookML, MetricFlow, Notion) - see `ktx setup --help` for `--source …` flags.
+3. Configure context sources (dbt, Metabase, Looker, LookML, MetricFlow, Notion) - see `ktx setup --help` for `--source …` flags.
 4. Install agent integration: `ktx setup --agents --target <claude-code|claude-desktop|codex|cursor|opencode|universal>` (with optional `--global` for `claude-code`/`codex`).
 5. Connect the agent / MCP: see docs at `https://docs.kaelio.com/ktx/`.
 

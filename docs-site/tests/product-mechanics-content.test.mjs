@@ -68,7 +68,7 @@ test("product mechanics component explains ingestion outputs", async () => {
     "BI tools",
     "Modeling code",
     "Docs and notes",
-    "Source adapters",
+    "Source connectors",
     "Context builder",
     "Reconciliation",
     "Validation",

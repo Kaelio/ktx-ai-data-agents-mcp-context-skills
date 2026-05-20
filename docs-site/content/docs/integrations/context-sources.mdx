@@ -3,7 +3,7 @@ title: Context Sources
 description: Ingest semantic context from dbt, MetricFlow, LookML, Metabase, Looker, and Notion.
 ---
 
-Context sources feed your existing analytics tooling into KTX. During ingestion, KTX extracts metadata from each source and uses an LLM agent to reconcile it with your existing semantic layer and knowledge base - merging intelligently rather than overwriting.
+Context sources feed your existing analytics tooling into KTX. During ingestion, KTX extracts metadata from each source and uses a reconciliation agent to reconcile it with your existing semantic layer and knowledge base - preserving accepted edits rather than overwriting.
 
 All context sources are configured in `ktx.yaml` under `connections` with their respective `driver` value.
 
@@ -27,7 +27,7 @@ LookML uses top-level `repoUrl`, and MetricFlow uses nested
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `driver` | Yes | Source adapter: `dbt`, `metricflow`, `lookml`, `metabase`, `looker`, or `notion` |
+| `driver` | Yes | Source connector: `dbt`, `metricflow`, `lookml`, `metabase`, `looker`, or `notion` |
 | `source_dir` | For local file sources | Absolute or project-relative source directory |
 | `repo_url` | For Git-hosted dbt sources | Git repository URL |
 | `repoUrl` | For Git-hosted LookML sources | Git repository URL |
@@ -88,7 +88,7 @@ connections:
 ### What gets ingested
 
 - YAML semantic sources generated from dbt schema files
-- One work unit per model file (for projects with >25 YAML files) or all at once for smaller projects
+- One work unit per semantic source (for projects with >25 YAML files) or all at once for smaller projects
 - Column descriptions, tests, and relationships are preserved
 
 ---
@@ -316,7 +316,7 @@ Ingests pages and databases from a Notion workspace as wiki pages. Useful for ca
 
 - Wiki pages synthesized from Notion content
 - Page hierarchy and relationships
-- Database schemas (when Notion databases describe data sources)
+- Database schemas (when Notion databases describe primary sources)
 - Semantic clustering for organized ingestion
 
 ### Connection config
@@ -378,7 +378,7 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 
 | Error or symptom | Likely cause | Recovery |
 |------------------|--------------|----------|
-| Adapter cannot read source files | `source_dir`, `repo_url`, `repoUrl`, `metricflow.repoUrl`, `branch`, or `path` is wrong | Verify the path locally or clone the repo manually with the same credentials |
+| Connector cannot read source files | `source_dir`, `repo_url`, `repoUrl`, `metricflow.repoUrl`, `branch`, or `path` is wrong | Verify the path locally or clone the repo manually with the same credentials |
 | Private repo/API authentication fails | Token env var or secret file is missing | Export the env var or update `auth_token_ref` to a readable file |
 | Ingest creates duplicate context | Existing source names or wiki pages do not match imported terminology | Review the diff, rename duplicates, and add wiki pages with canonical names |
 | Notion ingest skips pages | Integration lacks access or root ids are missing | Share pages with the Notion integration and set `root_page_ids` or use `all_accessible` carefully |

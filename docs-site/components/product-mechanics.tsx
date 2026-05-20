@@ -96,7 +96,7 @@ const sourceData: SourceNodeData[] = [
 
 const stageData: Omit<StageNodeData, "index">[] = [
   {
-    title: "Source adapters",
+    title: "Source connectors",
     body: "Read each configured system in its native shape.",
   },
   {
@@ -105,7 +105,7 @@ const stageData: Omit<StageNodeData, "index">[] = [
   },
   {
     title: "Reconciliation",
-    body: "Merge new evidence with the context that already exists.",
+    body: "Reconcile new evidence with the context that already exists.",
   },
   {
     title: "Validation",

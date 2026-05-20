@@ -109,7 +109,7 @@ This helps KTX understand how your team actually queries the data.
 
 ### Dialect notes
 
-- SQL generation uses `LIMIT/OFFSET` pagination
+- SQL compilation uses `LIMIT/OFFSET` pagination
 - Named parameters converted to positional (`$1`, `$2`, ...)
 - Supports `COUNT(*) FILTER (WHERE ...)` for null analysis
 - Full support for PostgreSQL types: `uuid`, `jsonb`, `timestamptz`, `numeric`, `text[]`, etc.
@@ -458,4 +458,4 @@ No authentication required - SQLite is file-based. The file must be readable by 
 | Database ingest returns no tables | Schema, database, or project filter is wrong, or the user lacks metadata permissions | Verify the schema list and grant metadata read permissions |
 | Query history is empty | Query history extension or warehouse history view is unavailable | Enable the warehouse-specific history feature, then rerun `ktx ingest <connectionId> --query-history` or `ktx setup` |
 | Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on fast schema context |
-| Semantic Query execution fails | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the `ktx sl query` flags |
+| Semantic query execution fails | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the `ktx sl query` flags |

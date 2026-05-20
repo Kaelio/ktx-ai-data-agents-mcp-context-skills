@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1346" height="1710" viewBox="0 0 1346 1710" role="img" aria-labelledby="title desc">
   <title id="title">KTX ingestion flow</title>
-  <desc id="desc">Source systems flow through source adapters, context builder, reconciliation, and validation to create wiki Markdown and semantic-layer YAML outputs.</desc>
+  <desc id="desc">Source systems flow through source connectors, context builder, reconciliation, and validation to create wiki Markdown and semantic-layer YAML outputs.</desc>
   <defs>
     <filter id="card-shadow" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
       <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.14"/>
@@ -135,7 +135,7 @@
       <rect class="stage" x="0" y="0" width="420" height="180" rx="4"/>
       <circle cx="52" cy="90" r="26" fill="#55dced"/>
       <text class="index" x="52" y="90">1</text>
-      <text class="stage-title" x="98" y="72">Source adapters</text>
+      <text class="stage-title" x="98" y="72">Source connectors</text>
       <text class="stage-body" x="98" y="110">Read each configured system in</text>
       <text class="stage-body" x="98" y="140">its native shape.</text>
     </g>

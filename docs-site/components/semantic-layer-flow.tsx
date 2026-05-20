@@ -209,7 +209,7 @@ const slQuery: SlQueryNode = {
   data: {
     variant: "slQuery",
     badge: "With KTX",
-    title: "Agent sends a Semantic Query",
+    title: "Agent sends a semantic query",
     caption:
       "Names the measures, dimensions, segments, and filters it wants. No SQL, no joins.",
     code: `{
@@ -429,7 +429,7 @@ const edges = [
     source: "agent",
     target: "sl-query",
     type: "default" as const,
-    label: "sends Semantic Query",
+    label: "sends semantic query",
     labelBgPadding: [6, 3] as [number, number],
     labelBgBorderRadius: 4,
     labelStyle: {
@@ -997,7 +997,7 @@ export function SemanticLayerFlow() {
     >
       <article
         className="max-w-full min-w-0 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
-        aria-label="From Semantic Query to executed SQL: contrast between agent-authored SQL and KTX-compiled SQL"
+        aria-label="From semantic query to executed SQL: contrast between agent-authored SQL and KTX-compiled SQL"
       >
         <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
           <a
