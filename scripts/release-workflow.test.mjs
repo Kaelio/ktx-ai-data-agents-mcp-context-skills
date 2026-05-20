@@ -31,6 +31,9 @@ describe('release workflow', () => {
     assert.match(workflow, /pnpm run semantic-release$/m);
     assert.match(workflow, /KTX_RELEASE_KIND: \$\{\{ inputs.release_kind \}\}/);
     assert.match(workflow, /FORCE_RELEASE: \$\{\{ inputs.force_release \}\}/);
+    assert.match(workflow, /token: \$\{\{ secrets.RELEASE_PAT \}\}/);
+    assert.match(workflow, /GITHUB_TOKEN: \$\{\{ secrets.RELEASE_PAT \}\}/);
+    assert.doesNotMatch(workflow, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
     assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN/);
     assert.doesNotMatch(workflow, /^  push:/m);
     assert.doesNotMatch(workflow, /^  pull_request:/m);
