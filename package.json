@@ -23,6 +23,7 @@
     "dead-code:biome": "biome ci . --formatter-enabled=false --assist-enabled=false",
     "dead-code:fix": "biome check . --formatter-enabled=false --assist-enabled=false --write && knip --fix --format",
     "dead-code:knip": "knip --reporter compact",
+    "docs": "kill $(lsof -ti:3000) 2>/dev/null; pnpm --filter ktx-docs run dev",
     "ktx": "node scripts/run-ktx.mjs",
     "link:dev": "node scripts/link-dev-cli.mjs",
     "native:rebuild": "pnpm -r rebuild better-sqlite3",
