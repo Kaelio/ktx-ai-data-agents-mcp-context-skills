@@ -28,6 +28,9 @@ import {
   writeArtifactManifest,
 } from './package-artifacts.mjs';
 
+const PUBLIC_NPM_TARBALL_NAME = `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`;
+const RUNTIME_WHEEL_FILE = `kaelio_ktx-${RUNTIME_WHEEL_PACKAGE_VERSION}-py3-none-any.whl`;
+
 async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
@@ -81,10 +84,7 @@ async function writeUploadableArtifactFixtures(layout) {
       layout.npmTarballs[packageInfo.name],
       `${packageInfo.name}-tarball`,
     ]),
-    [
-      join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
-      'kaelio-ktx-runtime-wheel',
-    ],
+    [join(layout.pythonDir, RUNTIME_WHEEL_FILE), 'kaelio-ktx-runtime-wheel'],
   ]);
 
   for (const [path, contents] of fileContents) {
@@ -99,7 +99,7 @@ describe('packageArtifactLayout', () => {
     assert.equal(layout.artifactDir, '/repo/ktx/dist/artifacts');
     assert.equal(layout.npmDir, '/repo/ktx/dist/artifacts/npm');
     assert.equal(layout.pythonDir, '/repo/ktx/dist/artifacts/python');
-    assert.equal(layout.cliTarball, '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.1.tgz');
+    assert.equal(layout.cliTarball, `/repo/ktx/dist/artifacts/npm/${PUBLIC_NPM_TARBALL_NAME}`);
     assert.deepEqual(Object.keys(layout.npmTarballs), ['@kaelio/ktx']);
   });
 });
@@ -131,7 +131,7 @@ describe('packageReleaseMetadata', () => {
           ecosystem: 'npm',
           packageName: '@kaelio/ktx',
           packageRoot: 'packages/cli',
-          packageVersion: '0.1.0-rc.1',
+          packageVersion: PUBLIC_NPM_PACKAGE_VERSION,
           private: false,
           releaseMode: 'ci-artifact-only',
         },
@@ -139,7 +139,7 @@ describe('packageReleaseMetadata', () => {
           ecosystem: 'python',
           packageName: 'kaelio-ktx',
           packageRoot: 'python/runtime-wheel',
-          packageVersion: '0.1.0rc1',
+          packageVersion: RUNTIME_WHEEL_PACKAGE_VERSION,
           private: false,
           releaseMode: 'ci-artifact-only',
         },
@@ -154,10 +154,10 @@ describe('findPythonArtifacts', () => {
   it('finds the bundled runtime wheel only', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-artifacts-test-'));
     try {
-      await writeFile(join(root, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'), '');
+      await writeFile(join(root, RUNTIME_WHEEL_FILE), '');
 
       assert.deepEqual(await findPythonArtifacts(root), {
-        runtimeWheel: join(root, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
+        runtimeWheel: join(root, RUNTIME_WHEEL_FILE),
       });
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -197,7 +197,7 @@ describe('artifact manifest', () => {
             ecosystem: 'npm',
             packageName: '@kaelio/ktx',
             packageRoot: 'packages/cli',
-            packageVersion: '0.1.0-rc.1',
+            packageVersion: PUBLIC_NPM_PACKAGE_VERSION,
             private: false,
             releaseMode: 'ci-artifact-only',
           },
@@ -210,7 +210,7 @@ describe('artifact manifest', () => {
             ecosystem: 'python',
             packageName: 'kaelio-ktx',
             packageRoot: 'python/runtime-wheel',
-            packageVersion: '0.1.0rc1',
+            packageVersion: RUNTIME_WHEEL_PACKAGE_VERSION,
             private: false,
             releaseMode: 'ci-artifact-only',
           },
@@ -232,8 +232,8 @@ describe('artifact manifest', () => {
             artifactKind: 'tarball',
             ecosystem: 'npm',
             packageName: '@kaelio/ktx',
-            packageVersion: '0.1.0-rc.1',
-            path: 'npm/kaelio-ktx-0.1.0-rc.1.tgz',
+            packageVersion: PUBLIC_NPM_PACKAGE_VERSION,
+            path: `npm/${PUBLIC_NPM_TARBALL_NAME}`,
           },
         ],
       );
@@ -252,13 +252,13 @@ describe('artifact manifest', () => {
             artifactKind: 'wheel',
             ecosystem: 'python',
             packageName: 'kaelio-ktx',
-            packageVersion: '0.1.0rc1',
-            path: 'python/kaelio_ktx-0.1.0rc1-py3-none-any.whl',
+            packageVersion: RUNTIME_WHEEL_PACKAGE_VERSION,
+            path: `python/${RUNTIME_WHEEL_FILE}`,
           },
         ],
       );
 
-      const npmEntry = manifest.files.find((file) => file.path === 'npm/kaelio-ktx-0.1.0-rc.1.tgz');
+      const npmEntry = manifest.files.find((file) => file.path === `npm/${PUBLIC_NPM_TARBALL_NAME}`);
       assert.ok(npmEntry);
       assert.equal(npmEntry.bytes, Buffer.byteLength('@kaelio/ktx-tarball'));
       assert.equal(npmEntry.sha256, createHash('sha256').update('@kaelio/ktx-tarball').digest('hex'));
@@ -361,18 +361,15 @@ describe('copyRuntimeWheelAssets', () => {
     const layout = packageArtifactLayout(root, PUBLIC_NPM_PACKAGE_VERSION);
     try {
       await mkdir(layout.pythonDir, { recursive: true });
-      await writeFile(
-        join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
-        'kaelio-ktx-runtime-wheel',
-      );
+      await writeFile(join(layout.pythonDir, RUNTIME_WHEEL_FILE), 'kaelio-ktx-runtime-wheel');
 
       const assets = await copyRuntimeWheelAssets(layout, {
-        runtimeWheel: join(layout.pythonDir, 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
+        runtimeWheel: join(layout.pythonDir, RUNTIME_WHEEL_FILE),
       });
 
       assert.equal(
         assets.wheelPath,
-        join(root, 'packages', 'cli', 'assets', 'python', 'kaelio_ktx-0.1.0rc1-py3-none-any.whl'),
+        join(root, 'packages', 'cli', 'assets', 'python', RUNTIME_WHEEL_FILE),
       );
       assert.equal(
         assets.manifestPath,
@@ -385,7 +382,7 @@ describe('copyRuntimeWheelAssets', () => {
         normalizedName: RUNTIME_WHEEL_NORMALIZED_NAME,
         version: RUNTIME_WHEEL_PACKAGE_VERSION,
         wheel: {
-          file: 'kaelio_ktx-0.1.0rc1-py3-none-any.whl',
+          file: RUNTIME_WHEEL_FILE,
           sha256: createHash('sha256')
             .update('kaelio-ktx-runtime-wheel')
             .digest('hex'),

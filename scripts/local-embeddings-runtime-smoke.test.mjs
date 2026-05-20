@@ -11,6 +11,10 @@ import {
   publicKtxTarballName,
   validateEmbeddingResponse,
 } from './local-embeddings-runtime-smoke.mjs';
+import {
+  PUBLIC_NPM_PACKAGE_NAME,
+  PUBLIC_NPM_PACKAGE_VERSION,
+} from './build-public-npm-package.mjs';
 
 describe('localEmbeddingsSmokeOptIn', () => {
   it('skips unless the smoke is explicitly enabled', () => {
@@ -60,7 +64,7 @@ describe('expectedPublicKtxVersionPattern', () => {
   it('matches the public package version and rejects the private workspace version', () => {
     const pattern = expectedPublicKtxVersionPattern();
 
-    assert.match('@kaelio/ktx 0.1.0-rc.1\n', pattern);
+    assert.match(`${PUBLIC_NPM_PACKAGE_NAME} ${PUBLIC_NPM_PACKAGE_VERSION}\n`, pattern);
     assert.doesNotMatch('@kaelio/ktx 0.0.0-private\n', pattern);
   });
 });

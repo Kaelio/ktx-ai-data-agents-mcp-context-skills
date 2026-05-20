@@ -139,12 +139,12 @@ async function writeWorkspaceFixture(root) {
 }
 
 describe('publicNpmPackageLayout', () => {
-  it('uses the first public npm release version for the tarball name', () => {
+  it('uses the public npm release version for the tarball name', () => {
     const layout = publicNpmPackageLayout('/repo/ktx');
+    const expectedTarballName = `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`;
 
-    assert.equal(PUBLIC_NPM_PACKAGE_VERSION, '0.1.0-rc.1');
-    assert.equal(publicNpmPackageTarballName(), 'kaelio-ktx-0.1.0-rc.1.tgz');
-    assert.equal(layout.tarballPath, '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.1.tgz');
+    assert.equal(publicNpmPackageTarballName(), expectedTarballName);
+    assert.equal(layout.tarballPath, `/repo/ktx/dist/artifacts/npm/${expectedTarballName}`);
   });
 });
 
@@ -211,7 +211,7 @@ describe('publicNpmPackageJson', () => {
     );
 
     assert.equal(packageJson.name, PUBLIC_NPM_PACKAGE_NAME);
-    assert.equal(packageJson.version, '0.1.0-rc.1');
+    assert.equal(packageJson.version, PUBLIC_NPM_PACKAGE_VERSION);
     assert.equal(packageJson.private, false);
     assert.deepEqual(packageJson.bin, { ktx: './dist/bin.js' });
     assert.deepEqual(packageJson.dependencies, { commander: '14.0.3' });
@@ -268,6 +268,7 @@ describe('createPublicNpmPackageTree', () => {
 describe('publicNpmPackCommand', () => {
   it('packs the assembled public package with pnpm', () => {
     const layout = publicNpmPackageLayout('/repo/ktx');
+    const expectedTarballName = `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`;
 
     assert.deepEqual(publicNpmPackCommand(layout), {
       command: 'pnpm',
@@ -275,7 +276,7 @@ describe('publicNpmPackCommand', () => {
         '--config.node-linker=hoisted',
         'pack',
         '--out',
-        '/repo/ktx/dist/artifacts/npm/kaelio-ktx-0.1.0-rc.1.tgz',
+        `/repo/ktx/dist/artifacts/npm/${expectedTarballName}`,
       ],
       cwd: '/repo/ktx/dist/public-npm-package',
     });
