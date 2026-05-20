@@ -1,119 +1,246 @@
 ---
 title: The Context Layer
-description: What a context layer is, why agents need one, and how KTX compares to other semantic layers.
+description: What a context layer is, why agents need one, and the YAML and Markdown surfaces KTX writes to disk.
 ---
 
-## Why agents need context
+A context layer is the trusted knowledge surface that sits between your data
+stack and the agents that query it. It holds the things a database connection
+can't tell an agent on its own: which metrics are canonical, which joins are
+safe, what your team means by "active customer", and where every definition
+came from.
 
-Database access lets an agent generate SQL. It does not tell the agent which
-tables matter, which joins are safe, which metrics are canonical, or what your
-team means by "enterprise", "net revenue", or "active customer".
+KTX builds that layer as plain files - YAML, Markdown, and JSON - that agents
+can search and humans can review. This page covers what's in it, why agents
+need it, and how it compares to other semantic tooling.
 
-That missing business context is where plausible SQL becomes wrong SQL:
+## Database access isn't enough
 
-- `orders.amount` may include refunds unless filtered.
-- `customers.id` may not be the right join key for every source.
-- `legacy_segments` may be stale even though it still exists.
-- A metric may have a board-approved definition that is not obvious from
-  column names.
+Hand an agent a database connection and it can run SQL. It still has to guess
+the part that matters: which table is the source of truth, which join is the
+one analysts actually use, and what definition the business agreed on. Plausible
+SQL becomes wrong SQL fast.
 
-## Three waves of AI analytics
+| Schema-only access gives the agent | What it still doesn't know |
+|------------------------------------|----------------------------|
+| Tables, columns, and types | Which table is canonical for revenue |
+| Primary and foreign keys | Which join is safe and which fans out measures |
+| Sample rows | Which rows are test accounts the team excludes |
+| `orders.amount` exists | That `amount` includes refunds unless filtered |
+| A `customers.segment` column | That `legacy_segments` is stale even though it exists |
+| Column comments, sometimes | The board-approved definition of ARR |
 
-| Wave | What it gives agents | Where it breaks |
-|------|----------------------|-----------------|
-| **Database access** | Tables, columns, and query execution | Agents guess joins, filters, and metric logic |
-| **Semantic layers** | Modeled metrics, dimensions, joins, and SQL generation | They often miss operating context: anomalies, caveats, ownership, and review history |
-| **Agentic context** | Semantic definitions plus wiki knowledge, scans, provenance, and edit workflows | Requires context to be kept current and reviewable |
+Schema is a starting point, not a contract. The context layer is the contract.
 
-KTX is built for the third wave: agents that generate SQL, maintain semantic
-files, write docs, propose tests, and leave reviewable diffs.
+## The two pillars
 
-## What KTX adds
+A KTX project has two committed surfaces, each tuned for a different question.
+Structured data lives where it can be compiled. Prose lives where it can be
+searched. Wiki pages cross-reference semantic sources by name, so every metric
+caveat stays anchored to the definition it explains.
 
-A context layer is the trusted knowledge surface between analytics systems and
-agents. The semantic layer is the core, but agents also need business rules,
-schema evidence, provenance, and a safe way to update files.
+<figure
+  className="not-prose my-10 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="The two committed pillars of a KTX context layer"
+>
+  <div className="border-b border-fd-border bg-fd-muted/35 px-5 py-4">
+    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fd-primary">
+      {"Anatomy of a context layer"}
+    </p>
+    <h3
+      className="mt-1 text-base font-semibold tracking-normal text-fd-foreground sm:text-lg"
+      style={{ fontFamily: "var(--font-display)" }}
+    >
+      {"Two files, two jobs"}
+    </h3>
+    <p className="mt-2 max-w-3xl text-xs leading-5 text-fd-muted-foreground">
+      {"YAML for what the warehouse can execute. Markdown for what the team needs to interpret it. Both are committed to git and reviewed like code."}
+    </p>
+  </div>
 
-```text
-Warehouses + dbt + BI + docs
-          |
-          v
-      ktx ingest
-          |
-          v
-semantic-layer/ + wiki/ + raw-sources/ + provenance
-          |
-          v
-Agents search, query, explain, validate, and patch context
-```
+  <div className="grid gap-px bg-fd-border md:grid-cols-2">
+    <div className="bg-fd-card p-6" style={{ borderTop: "3px solid #3b82f6" }}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[14px] font-semibold tracking-tight" style={{ color: "#3b82f6" }}>
+          {"semantic-layer/**/*.yaml"}
+        </p>
+        <span className="rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-fd-muted-foreground">
+          {"committed"}
+        </span>
+      </div>
+      <p className="mt-3 text-[19px] font-semibold leading-7 text-fd-foreground" style={{ fontFamily: "var(--font-display)" }}>
+        {"Semantic sources"}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <span className="rounded border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] text-fd-muted-foreground">{"structured"}</span>
+        <span className="rounded border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] text-fd-muted-foreground">{"executable"}</span>
+      </div>
+      <p className="mt-3.5 text-[13.5px] leading-6 text-fd-muted-foreground">
+        {"Tables, grain, joins, measures, dimensions, filters, and segments. The compiler turns these into dialect-correct SQL."}
+      </p>
+      <p className="mt-4 text-[11px] uppercase tracking-[0.08em] text-fd-muted-foreground">
+        <span className="text-fd-foreground">{"Answers: "}</span>
+        {"how do I query this safely?"}
+      </p>
+    </div>
 
-| Pillar | Format | What it answers |
-|--------|--------|-----------------|
-| **Semantic sources** | `semantic-layer/**/*.yaml` | How do agents query a source safely? |
-| **Wiki pages** | `wiki/**/*.md` | What does the business mean, and what caveats matter? |
-| **Scan artifacts** | `raw-sources/**` | What did KTX observe in the warehouse or source tool? |
-| **Provenance** | Ingest transcripts and run state | Why was this context created or changed? |
+    <div className="bg-fd-card p-6" style={{ borderTop: "3px solid #10b981" }}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[14px] font-semibold tracking-tight" style={{ color: "#10b981" }}>
+          {"wiki/**/*.md"}
+        </p>
+        <span className="rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-fd-muted-foreground">
+          {"committed"}
+        </span>
+      </div>
+      <p className="mt-3 text-[19px] font-semibold leading-7 text-fd-foreground" style={{ fontFamily: "var(--font-display)" }}>
+        {"Wiki pages"}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <span className="rounded border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] text-fd-muted-foreground">{"free-form"}</span>
+        <span className="rounded border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] text-fd-muted-foreground">{"searchable"}</span>
+      </div>
+      <p className="mt-3.5 text-[13.5px] leading-6 text-fd-muted-foreground">
+        {"Definitions, caveats, policies, and decisions. Frontmatter links each page back to the semantic sources it explains."}
+      </p>
+      <p className="mt-4 text-[11px] uppercase tracking-[0.08em] text-fd-muted-foreground">
+        <span className="text-fd-foreground">{"Answers: "}</span>
+        {"what does this mean to the business?"}
+      </p>
+    </div>
+  </div>
+
+  <figcaption className="border-t border-fd-border bg-fd-muted/25 px-5 py-3 text-[11.5px] leading-5 text-fd-muted-foreground">
+    <span className="font-medium text-fd-foreground">{"Behind the scenes. "}</span>
+    {"KTX also keeps scan snapshots and a per-run event log locally so every committed change is traceable to its evidence. You don't read or edit these files yourself - see "}
+    <a href="/docs/concepts/context-as-code" className="font-medium underline">{"Context as Code"}</a>
+    {" for how that audit trail flows into review."}
+  </figcaption>
+</figure>
 
 ## Semantic sources
 
-Semantic sources describe data in terms agents can reason about: row grain,
-typed columns, valid joins, named measures, filters, and segments.
+Semantic sources describe a table the way an agent can reason about it: row
+grain, typed columns, named measures, valid joins, filters, and segments. The
+planner compiles these into SQL; nothing else.
 
 ```yaml
+# semantic-layer/warehouse/orders.yaml
 name: orders
 table: public.orders
 grain: [id]
+columns:
+  - name: id
+    type: number
+  - name: status
+    type: string
+  - name: amount
+    type: number
+measures:
+  - name: total_revenue
+    expr: sum(amount)
+    filter: "status != 'refunded'"
 joins:
   - to: customers
     "on": customer_id = customers.id
     relationship: many_to_one
-measures:
-  - name: revenue
-    expr: sum(amount)
-    filter: "status != 'refunded'"
 ```
 
-For join graphs, fan-out handling, and execution mechanics, read
-[Semantic Querying](/docs/concepts/semantic-layer-internals).
+For how the compiler walks the join graph, handles fan-out, and transpiles
+dialects, read [Semantic Querying](/docs/concepts/semantic-layer-internals).
 
 ## Wiki pages
 
-Wiki pages capture the context that does not belong in a measure formula:
-business definitions, reporting policy, known data issues, metric caveats, and
-links back to semantic sources.
+Wiki pages hold the context that doesn't belong in a formula: business
+definitions, reporting policy, anomalies, and metric caveats. Each page links
+back to the semantic sources it explains through frontmatter.
+
+```markdown
+# wiki/global/revenue.md
+---
+summary: Paid order value after refunds
+tags: [finance, orders]
+sl_refs: [warehouse.orders]
+refs: [segment-classification]
+usage_mode: auto
+---
+
+Revenue is paid order amount after refund adjustments.
+
+Use `orders.total_revenue` for recognized order value and
+`orders.order_count` for paid order volume.
+```
+
+### A navigable graph
+
+Those two reference fields - `sl_refs` from a wiki page to a semantic source,
+and `refs` from a wiki page to other wiki pages - turn the context layer into
+a graph agents traverse. An agent that finds this page while searching for
+"revenue" follows `sl_refs` straight to `orders.total_revenue` for the
+executable definition, then walks `refs` to related policies without rerunning
+search.
+
+The graph only helps if the edges stay live. KTX validates references when
+wiki pages are written and prunes `sl_refs` during ingest when their target
+sources are deleted or their measures are renamed - so a stale page can never
+quietly route an agent to a definition that no longer exists.
+
+The split between the two pillars is sharp:
 
 | Put it in YAML | Put it in Markdown |
 |----------------|--------------------|
 | `sum(amount)` | "Net revenue excludes successful refunds." |
-| `many_to_one` join metadata | "Use contract segment for board reporting." |
+| `many_to_one` join metadata | "Use the contract segment for board reporting." |
 | Row grain and column types | "February had a one-time refund anomaly." |
 | Default time dimension | "Finance owns ARR definitions." |
 
+If a fact changes how the SQL runs, it goes in YAML. If a human needs it to
+trust the answer, it goes in Markdown.
+
 ## How KTX compares
 
-KTX overlaps with semantic layers, but the product boundary is broader: it gives
-agents a reviewable context workspace, not only a metric runtime.
+Two adjacent product categories cover parts of this problem - but each leaves
+a different gap.
 
-| Dimension | KTX | MetricFlow / Cube / Malloy |
-|-----------|-----|-----------------------------|
-| **Primary surface** | Plain YAML and Markdown files | Modeling language, project runtime, or API surface |
-| **Models** | Sources, joins, grain, measures, filters, wiki refs, and provenance | Metrics, dimensions, joins, queries, and generated SQL |
-| **Agent edit loop** | First-class: patch files, validate, inspect SQL, and review git diffs | Possible, but usually tied to the tool's modeling workflow |
-| **Surrounding context** | Built in through wiki pages, scans, transcripts, and source evidence | Usually descriptions, annotations, metadata, or app-specific context |
-| **Best fit** | Agents maintaining analytics context and SQL-facing definitions | Teams standardizing metrics, BI APIs, semantic runtimes, or exploratory modeling |
+**Company brains** (Glean, Notion AI, the search-over-everything tools) index
+your wikis, docs, and chats so an agent can find context fast. They aren't
+built for data stacks: there's no join graph, no canonical metrics, and no way
+to compile a question into safe SQL. An agent reading them still has to guess
+how to query the warehouse.
+
+**Traditional semantic layers** (MetricFlow, Cube, Malloy) solve that side.
+They give agents reviewable metric definitions and a compiler that produces
+correct SQL. The cost is maintenance - models, joins, and dimensions are
+hand-written, and the layer doesn't learn from the warehouse, BI tools, or
+query history that surround it. The business context that explains *why* a
+definition exists usually lives somewhere else.
+
+KTX bundles both surfaces - wiki for business context, semantic layer for
+queryable definitions - and keeps them current by reading the data stack and
+reconciling new evidence with the reviewed files. You get the breadth of a
+knowledge tool and the SQL safety of a semantic layer, without rewriting
+models every time the warehouse changes.
+
+| Capability | Company brain | Semantic layer | KTX |
+|------------|---------------|----------------|-----|
+| **Surface** | Indexed docs and chats | Modeling language or runtime | YAML and Markdown files |
+| **Data-stack awareness** | None - treats data tools as text | High for declared metrics, none for the surrounding warehouse | Built in: scans schemas, dbt, BI tools, and query history |
+| **Maintenance** | Manual page authoring | Manual modeling, model-per-change | Auto-maintained: reconciles evidence with accepted files |
+| **SQL safety** | None - generates plausible text | Compiled, dialect-correct | Compiled with join-graph and fan-out handling |
+| **Agent edit loop** | Text-only | Tied to the modeling workflow | First-class: patch files, validate, review diffs |
 
 If you already use MetricFlow, LookML, dbt, or BI tools, KTX can ingest that
-context and turn it into agent-readable files. You do not need to replace your
+context and turn it into agent-readable files. You don't need to replace your
 serving layer to give agents a better working surface.
 
-## Plain files
+## A KTX project on disk
 
-A KTX project is a directory of readable files. Semantic sources and wiki pages
-are committed to git; local indexes and caches stay under `.ktx/`.
+A KTX project is a directory of readable files. Semantic sources and wiki
+pages are committed to git; everything else KTX needs at runtime stays local
+and out of the repo.
 
 ```text
 my-project/
-├── ktx.yaml
+├── ktx.yaml                              # project config and connections
 ├── semantic-layer/
 │   └── warehouse/
 │       ├── orders.yaml
@@ -122,27 +249,22 @@ my-project/
 │   └── global/
 │       ├── revenue.md
 │       └── segment-classification.md
-├── raw-sources/
-│   └── warehouse/
-└── .ktx/              # local state, git-ignored
+└── .ktx/                                 # local runtime state, git-ignored
 ```
 
-This keeps analytics context close to the code review workflow:
-
-- branch context changes;
-- review YAML and Markdown diffs;
-- merge accepted definitions;
-- let agents read the updated source of truth.
+This keeps analytics context close to the code review workflow: branch context
+changes, review YAML and Markdown diffs, merge accepted definitions, and let
+agents read the updated source of truth.
 
 ## Agent usage notes
 
 Use this page when an agent needs to explain why KTX exists, why schema-only
-database access is not enough, or how KTX differs from traditional semantic
+database access isn't enough, or how KTX differs from traditional semantic
 layers.
 
 | Agent task | Relevant section | Next page |
 |------------|------------------|-----------|
-| Explain why a database agent wrote a plausible but wrong query | Why agents need context | [Writing Context](/docs/guides/writing-context) |
+| Explain why a database agent wrote a plausible but wrong query | Database access isn't enough | [Writing Context](/docs/guides/writing-context) |
 | Decide whether a fact belongs in YAML or Markdown | Semantic sources / Wiki pages | [Writing Context](/docs/guides/writing-context) |
 | Compare KTX to another semantic layer | How KTX compares | [Primary Sources](/docs/integrations/primary-sources) |
-| Explain reviewability and source of truth | Plain files | [Context as Code](/docs/concepts/context-as-code) |
+| Explain reviewability and source of truth | A KTX project on disk | [Context as Code](/docs/concepts/context-as-code) |

@@ -341,11 +341,120 @@ function highlightCodeLike(code: string) {
   return parts;
 }
 
+function highlightMarkdownInline(text: string, keyPrefix: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const pattern = /`(?:[^`\\]|\\.)+`/g;
+  let lastIndex = 0;
+  let tokenIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+    if (index > lastIndex) parts.push(text.slice(lastIndex, index));
+    pushMatchedToken(
+      parts,
+      token,
+      "ktx-token-string",
+      `${keyPrefix}-${tokenIndex}`,
+    );
+    lastIndex = index + token.length;
+    tokenIndex += 1;
+  }
+
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+function highlightMarkdown(code: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let tokenIndex = 0;
+
+  const fmMatch = code.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n)?/);
+  if (fmMatch) {
+    pushMatchedToken(
+      parts,
+      "---",
+      "ktx-token-punctuation",
+      `md-fmstart-${tokenIndex}`,
+    );
+    tokenIndex += 1;
+    parts.push("\n");
+    parts.push(...highlightYaml(fmMatch[1]));
+    parts.push("\n");
+    pushMatchedToken(
+      parts,
+      "---",
+      "ktx-token-punctuation",
+      `md-fmend-${tokenIndex}`,
+    );
+    tokenIndex += 1;
+    if (fmMatch[2]) parts.push(fmMatch[2]);
+    cursor = fmMatch[0].length;
+  }
+
+  const rest = code.slice(cursor);
+  const lines = rest.split(/(\n)/);
+
+  for (const line of lines) {
+    if (line === "\n") {
+      parts.push(line);
+      continue;
+    }
+
+    const headingMatch = line.match(/^(\s*)(#{1,6})(\s+)(.*)$/);
+    if (headingMatch) {
+      parts.push(headingMatch[1]);
+      pushMatchedToken(
+        parts,
+        headingMatch[2],
+        "ktx-token-keyword",
+        `md-heading-${tokenIndex}`,
+      );
+      tokenIndex += 1;
+      parts.push(headingMatch[3]);
+      parts.push(
+        ...highlightMarkdownInline(headingMatch[4], `md-heading-${tokenIndex}`),
+      );
+      tokenIndex += 1;
+      continue;
+    }
+
+    const listMatch = line.match(/^(\s*)([-*+]|\d+\.)(\s+)(.*)$/);
+    if (listMatch) {
+      parts.push(listMatch[1]);
+      pushMatchedToken(
+        parts,
+        listMatch[2],
+        "ktx-token-punctuation",
+        `md-list-${tokenIndex}`,
+      );
+      tokenIndex += 1;
+      parts.push(listMatch[3]);
+      parts.push(
+        ...highlightMarkdownInline(listMatch[4], `md-list-${tokenIndex}`),
+      );
+      tokenIndex += 1;
+      continue;
+    }
+
+    parts.push(
+      ...highlightMarkdownInline(line, `md-line-${tokenIndex}`),
+    );
+    tokenIndex += 1;
+  }
+
+  return parts;
+}
+
 function highlightCode(language: string | null, code: string) {
   const normalized = normalizeLanguage(language);
   if (normalized === "json" || normalized === "jsonc") return highlightJson(code);
   if (normalized === "yaml" || normalized === "yml") return highlightYaml(code);
   if (normalized === "sql") return highlightSql(code);
+  if (["markdown", "md", "mdx", "mdc"].includes(normalized)) {
+    return highlightMarkdown(code);
+  }
   if (
     [
       "bash",
