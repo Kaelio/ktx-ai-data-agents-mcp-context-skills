@@ -1,8 +1,10 @@
+import { KtxIngestEmbeddingPortAdapter } from '@ktx/context';
 import { createDefaultKtxMcpServer, createLocalProjectMcpContextPorts } from '@ktx/context/mcp';
 import { createLocalProjectMemoryIngest } from '@ktx/context/memory';
 import type { KtxLocalProject } from '@ktx/context/project';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { createManagedPythonSemanticLayerComputePort } from './managed-python-command.js';
@@ -34,10 +36,20 @@ export async function createKtxMcpServerFactory(input: {
     installPolicy: 'auto',
     io,
   });
+  const resolution = await resolveProjectEmbeddingProvider(input.project, {
+    mode: 'use-if-running',
+    cliVersion: input.cliVersion,
+    io,
+  });
+  const embeddingService =
+    resolution.kind === 'configured' || resolution.kind === 'managed-running' || resolution.kind === 'managed-started'
+      ? new KtxIngestEmbeddingPortAdapter(resolution.provider)
+      : null;
   const contextTools = createLocalProjectMcpContextPorts(input.project, {
     semanticLayerCompute,
     queryExecutor,
     sqlAnalysis,
+    embeddingService,
     localScan: {
       createConnector: async (connectionId) => createKtxCliScanConnector(input.project, connectionId),
     },

@@ -174,7 +174,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
     };
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     expect(Object.keys(ports).sort()).toEqual([
       'connections',
@@ -216,6 +216,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       localScan: {
         createConnector,
       },
+      embeddingService: null,
     });
 
     expect(Object.keys(ports).sort()).toContain('sqlExecution');
@@ -269,6 +270,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       localScan: {
         createConnector,
       },
+      embeddingService: null,
     });
 
     const result = await ports.sqlExecution?.execute(
@@ -313,6 +315,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       localScan: {
         createConnector: vi.fn(async () => connector),
       },
+      embeddingService: null,
     });
 
     await expect(
@@ -332,7 +335,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       url: 'env:DATABASE_URL',
     };
     await seedScanReport(project.projectDir);
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(
       ports.entityDetails?.read({
@@ -358,7 +361,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
     };
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(
       ports.entityDetails?.read({
@@ -411,7 +414,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       'Seed dictionary profile',
     );
 
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(ports.dictionarySearch?.search({ values: ['paid'] })).resolves.toMatchObject({
       searched: [{ connectionId: 'warehouse', status: 'ready' }],
@@ -432,7 +435,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       url: 'env:DATABASE_URL',
     };
 
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(ports.dictionarySearch?.search({ values: ['paid'] })).resolves.toEqual({
       searched: [
@@ -601,7 +604,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       'seed scan report',
     );
 
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
     const results = await ports.discover?.search({ query: 'paid orders', connectionId: 'warehouse', limit: 10 });
 
     expect(results).toEqual(
@@ -635,7 +638,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       'ktx@example.com',
       'Seed wiki',
     );
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(ports.knowledge?.read({ userId: 'local-user', key: 'revenue' })).resolves.toMatchObject({
       key: 'revenue',
@@ -680,7 +683,7 @@ describe('createLocalProjectMcpContextPorts', () => {
         '',
       ].join('\n'),
     });
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(
       ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'orders' }),
@@ -692,7 +695,7 @@ describe('createLocalProjectMcpContextPorts', () => {
 
   it('rejects path traversal keys before touching the project directory', async () => {
     const project = await initKtxProject({ projectDir: tempDir });
-    const ports = createLocalProjectMcpContextPorts(project);
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(
       ports.knowledge?.read({
@@ -746,7 +749,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       })),
       generateSources: vi.fn(),
     };
-    const ports = createLocalProjectMcpContextPorts(project, { semanticLayerCompute });
+    const ports = createLocalProjectMcpContextPorts(project, { semanticLayerCompute, embeddingService: null });
 
     await expect(
       ports.semanticLayer?.query({
@@ -817,6 +820,7 @@ describe('createLocalProjectMcpContextPorts', () => {
     const ports = createLocalProjectMcpContextPorts(project, {
       semanticLayerCompute: compute,
       queryExecutor,
+      embeddingService: null,
     });
 
     const result = await ports.semanticLayer?.query({
