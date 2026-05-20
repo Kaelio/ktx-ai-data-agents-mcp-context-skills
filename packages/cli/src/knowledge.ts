@@ -1,20 +1,20 @@
-import {
-  createLocalKtxEmbeddingProviderFromConfig,
-  KtxIngestEmbeddingPortAdapter,
-  type KtxEmbeddingPort,
-} from '@ktx/context';
+import { KtxIngestEmbeddingPortAdapter, type KtxEmbeddingPort } from '@ktx/context';
 import { loadKtxProject } from '@ktx/context/project';
 import {
   type LocalKnowledgeSearchResult,
   type LocalKnowledgeSummary,
   listLocalKnowledgePages,
-  searchLocalKnowledgePages,
+  searchLocalKnowledgePages as defaultSearchLocalKnowledgePages,
 } from '@ktx/context/wiki';
+import {
+  resolveProjectEmbeddingProvider,
+  type EmbeddingProviderResolution,
+} from './embedding-resolution.js';
 import { resolveOutputMode } from './io/mode.js';
 import { createRankBadgeFormatter, printList, type PrintListColumn } from './io/print-list.js';
 
 export type KtxKnowledgeArgs =
-  | { command: 'list'; projectDir: string; userId: string; output?: string; json?: boolean }
+  | { command: 'list'; projectDir: string; userId: string; output?: string; json?: boolean; cliVersion: string }
   | {
       command: 'search';
       projectDir: string;
@@ -24,6 +24,7 @@ export type KtxKnowledgeArgs =
       json?: boolean;
       limit?: number;
       debug?: boolean;
+      cliVersion: string;
     };
 
 type KtxKnowledgeIo = import('./cli-runtime.js').KtxCliIo;
@@ -54,20 +55,36 @@ function wikiSearchColumns(
 
 interface KtxKnowledgeDeps {
   embeddingService?: KtxEmbeddingPort | null;
-  createEmbeddingProvider?: typeof createLocalKtxEmbeddingProviderFromConfig;
+  resolveEmbeddingProvider?: typeof resolveProjectEmbeddingProvider;
+  searchLocalKnowledgePages?: typeof defaultSearchLocalKnowledgePages;
 }
 
-function wikiSearchEmbeddingService(
+function resolutionToEmbeddingPort(resolution: EmbeddingProviderResolution): KtxEmbeddingPort | null {
+  if (
+    resolution.kind === 'configured' ||
+    resolution.kind === 'managed-running' ||
+    resolution.kind === 'managed-started'
+  ) {
+    return new KtxIngestEmbeddingPortAdapter(resolution.provider);
+  }
+  return null;
+}
+
+async function wikiSearchEmbeddingService(
   project: Awaited<ReturnType<typeof loadKtxProject>>,
   deps: KtxKnowledgeDeps,
-): KtxEmbeddingPort | null {
+  args: { cliVersion: string },
+  io: KtxKnowledgeIo,
+): Promise<KtxEmbeddingPort | null> {
   if ('embeddingService' in deps) {
     return deps.embeddingService ?? null;
   }
-  const provider = (deps.createEmbeddingProvider ?? createLocalKtxEmbeddingProviderFromConfig)(
-    project.config.ingest.embeddings,
-  );
-  return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
+  const resolution = await (deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider)(project, {
+    mode: 'use-if-running',
+    cliVersion: args.cliVersion,
+    io,
+  });
+  return resolutionToEmbeddingPort(resolution);
 }
 
 function writeWikiSearchDebug(
@@ -114,8 +131,9 @@ export async function runKtxKnowledge(
       return 0;
     }
     if (args.command === 'search') {
-      const embeddingService = wikiSearchEmbeddingService(project, deps);
-      const results = await searchLocalKnowledgePages(project, {
+      const embeddingService = await wikiSearchEmbeddingService(project, deps, { cliVersion: args.cliVersion }, io);
+      const search = deps.searchLocalKnowledgePages ?? defaultSearchLocalKnowledgePages;
+      const results = await search(project, {
         query: args.query,
         userId: args.userId,
         embeddingService,

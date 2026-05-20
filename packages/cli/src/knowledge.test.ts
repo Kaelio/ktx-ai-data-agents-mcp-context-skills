@@ -5,7 +5,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { initKtxProject, loadKtxProject } from '@ktx/context/project';
 import type { KtxEmbeddingPort } from '@ktx/context';
 import { writeLocalKnowledgePage } from '@ktx/context/wiki';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxKnowledge } from './knowledge.js';
 
 function makeIo() {
@@ -81,12 +81,17 @@ describe('runKtxKnowledge', () => {
     await seedWikiPage(projectDir);
 
     const listIo = makeIo();
-    await expect(runKtxKnowledge({ command: 'list', projectDir, userId: 'local' }, listIo.io)).resolves.toBe(0);
+    await expect(
+      runKtxKnowledge({ command: 'list', projectDir, userId: 'local', cliVersion: '0.0.0-test' }, listIo.io),
+    ).resolves.toBe(0);
     expect(listIo.stdout()).toContain('GLOBAL\tmetrics-revenue\tRevenue');
 
     const searchIo = makeIo();
     await expect(
-      runKtxKnowledge({ command: 'search', projectDir, query: 'paid order', userId: 'local' }, searchIo.io),
+      runKtxKnowledge(
+        { command: 'search', projectDir, query: 'paid order', userId: 'local', cliVersion: '0.0.0-test' },
+        searchIo.io,
+      ),
     ).resolves.toBe(0);
     expect(searchIo.stdout()).toContain('metrics-revenue');
   });
@@ -99,7 +104,14 @@ describe('runKtxKnowledge', () => {
     const searchIo = makeIo();
     await expect(
       runKtxKnowledge(
-        { command: 'search', projectDir, query: 'paid order', userId: 'local', output: 'pretty' },
+        {
+          command: 'search',
+          projectDir,
+          query: 'paid order',
+          userId: 'local',
+          output: 'pretty',
+          cliVersion: '0.0.0-test',
+        },
         searchIo.io,
       ),
     ).resolves.toBe(0);
@@ -115,9 +127,12 @@ describe('runKtxKnowledge', () => {
     await seedWikiPage(projectDir);
 
     const listIo = makeIo();
-    await expect(runKtxKnowledge({ command: 'list', projectDir, userId: 'local', json: true }, listIo.io)).resolves.toBe(
-      0,
-    );
+    await expect(
+      runKtxKnowledge(
+        { command: 'list', projectDir, userId: 'local', json: true, cliVersion: '0.0.0-test' },
+        listIo.io,
+      ),
+    ).resolves.toBe(0);
     expect(JSON.parse(listIo.stdout())).toMatchObject({
       kind: 'list',
       data: { items: [expect.objectContaining({ key: 'metrics-revenue', summary: 'Revenue' })] },
@@ -127,7 +142,15 @@ describe('runKtxKnowledge', () => {
     const searchIo = makeIo();
     await expect(
       runKtxKnowledge(
-        { command: 'search', projectDir, query: 'paid order', userId: 'local', json: true, limit: 5 },
+        {
+          command: 'search',
+          projectDir,
+          query: 'paid order',
+          userId: 'local',
+          json: true,
+          limit: 5,
+          cliVersion: '0.0.0-test',
+        },
         searchIo.io,
       ),
     ).resolves.toBe(0);
@@ -144,7 +167,10 @@ describe('runKtxKnowledge', () => {
 
     const searchIo = makeIo();
     await expect(
-      runKtxKnowledge({ command: 'search', projectDir, query: 'revenue', userId: 'local' }, searchIo.io),
+      runKtxKnowledge(
+        { command: 'search', projectDir, query: 'revenue', userId: 'local', cliVersion: '0.0.0-test' },
+        searchIo.io,
+      ),
     ).resolves.toBe(0);
 
     expect(searchIo.stdout()).toBe('');
@@ -166,7 +192,7 @@ describe('runKtxKnowledge', () => {
     const searchIo = makeIo();
     await expect(
       runKtxKnowledge(
-        { command: 'search', projectDir, query: 'revenue', userId: 'local' },
+        { command: 'search', projectDir, query: 'revenue', userId: 'local', cliVersion: '0.0.0-test' },
         searchIo.io,
         { embeddingService: new FakeEmbeddingPort() },
       ),
@@ -174,6 +200,37 @@ describe('runKtxKnowledge', () => {
 
     expect(searchIo.stdout()).toContain('active-contract-arr-open-tickets');
     expect(searchIo.stderr()).toBe('');
+  });
+
+  it('routes wiki search through resolveEmbeddingProvider when no embeddingService is injected', async () => {
+    const projectDir = join(tempDir, 'resolver-project');
+    await initKtxProject({ projectDir });
+    const search = vi.fn(async () => []);
+    const searchIo = makeIo();
+    await expect(
+      runKtxKnowledge(
+        {
+          command: 'search',
+          projectDir,
+          query: 'income',
+          userId: 'local',
+          cliVersion: '0.5.0',
+        },
+        searchIo.io,
+        {
+          resolveEmbeddingProvider: async () => ({
+            kind: 'managed-running',
+            provider: { id: 'fake' } as never,
+            baseUrl: 'http://127.0.0.1:51234',
+          }),
+          searchLocalKnowledgePages: search,
+        },
+      ),
+    ).resolves.toBe(0);
+    expect(search).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ embeddingService: expect.any(Object) }),
+    );
   });
 
   it('writes wiki search lane diagnostics to stderr when debug is enabled', async () => {
@@ -184,7 +241,15 @@ describe('runKtxKnowledge', () => {
     const searchIo = makeIo();
     await expect(
       runKtxKnowledge(
-        { command: 'search', projectDir, query: 'paid order', userId: 'local', json: true, debug: true },
+        {
+          command: 'search',
+          projectDir,
+          query: 'paid order',
+          userId: 'local',
+          json: true,
+          debug: true,
+          cliVersion: '0.0.0-test',
+        },
         searchIo.io,
         { embeddingService: new FakeEmbeddingPort() },
       ),
