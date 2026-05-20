@@ -64,12 +64,13 @@ describe('semantic-release config', () => {
     }
   });
 
-  it('rejects releases from non-main branches', () => {
+  it('produces a loadable config regardless of GITHUB_REF_NAME', () => {
+    // Knip and other tooling load .releaserc.cjs on PR runners where
+    // GITHUB_REF_NAME is the merge ref. semantic-release itself enforces the
+    // main-only rule by refusing to publish when the current branch does not
+    // match a configured release branch, so the config must not throw at load.
     for (const kind of ['rc', 'stable']) {
-      assert.throws(
-        () => releaseBranches({ KTX_RELEASE_KIND: kind, GITHUB_REF_NAME: 'feature/release-test' }),
-        /KTX releases must run from main, got feature\/release-test/,
-      );
+      assert.doesNotThrow(() => releaseBranches({ KTX_RELEASE_KIND: kind, GITHUB_REF_NAME: '180/merge' }));
     }
   });
 

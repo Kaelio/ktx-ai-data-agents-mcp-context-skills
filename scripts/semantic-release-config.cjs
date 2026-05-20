@@ -74,10 +74,6 @@ const releaseNoteTypes = [
   { type: 'major', section: 'BREAKING CHANGES', hidden: false },
 ];
 
-function currentBranch(env) {
-  return env.GITHUB_REF_NAME || env.INPUT_BRANCH || 'main';
-}
-
 function releaseKind(env) {
   return env.KTX_RELEASE_KIND || env.INPUT_RELEASE_KIND || 'rc';
 }
@@ -87,12 +83,7 @@ function releaseTag(kind) {
 }
 
 function releaseBranches(env = process.env) {
-  const branch = currentBranch(env);
   const kind = releaseKind(env);
-
-  if (branch !== 'main') {
-    throw new Error(`KTX releases must run from main, got ${branch}`);
-  }
 
   if (kind === 'rc') {
     return [{ name: 'main', prerelease: 'rc', channel: 'next' }];
