@@ -267,9 +267,8 @@ function buildEmbeddingsStatus(config: KtxProjectEmbeddingConfig, env: NodeJS.Pr
       backend,
       model,
       dimensions,
-      status: 'warn',
-      detail: 'no base_url configured',
-      fix: 'Rerun `ktx setup`',
+      status: 'ok',
+      detail: 'managed local embeddings daemon',
     };
   }
   return { backend, model, dimensions, status: 'warn', detail: 'unknown embedding backend' };
