@@ -11,6 +11,7 @@ export interface KtxMysqlConnectionConfig {
   host?: string;
   port?: number;
   database?: string;
+  schemas?: string[];
   username?: string;
   user?: string;
   password?: string;
@@ -79,6 +80,7 @@ export interface KtxMysqlColumnDistinctValuesResult {
 }
 
 interface MysqlTableRow extends RowDataPacket {
+  TABLE_SCHEMA: string;
   TABLE_NAME: string;
   TABLE_TYPE: string;
   TABLE_COMMENT: string | null;
@@ -86,6 +88,7 @@ interface MysqlTableRow extends RowDataPacket {
 }
 
 interface MysqlColumnRow extends RowDataPacket {
+  TABLE_SCHEMA: string;
   TABLE_NAME: string;
   COLUMN_NAME: string;
   DATA_TYPE: string;
@@ -94,11 +97,13 @@ interface MysqlColumnRow extends RowDataPacket {
 }
 
 interface MysqlPrimaryKeyRow extends RowDataPacket {
+  TABLE_SCHEMA: string;
   TABLE_NAME: string;
   COLUMN_NAME: string;
 }
 
 interface MysqlForeignKeyRow extends RowDataPacket {
+  TABLE_SCHEMA: string;
   TABLE_NAME: string;
   COLUMN_NAME: string;
   REFERENCED_TABLE_NAME: string;
@@ -185,22 +190,42 @@ function cleanMySqlTableComment(comment: string | null): string | null {
   return comment;
 }
 
-function groupByTable<T extends { TABLE_NAME: string }>(rows: T[]): Map<string, T[]> {
+function configuredMysqlSchemas(connection: KtxMysqlConnectionConfig, fallbackDatabase: string): string[] {
+  if (Array.isArray(connection.schemas) && connection.schemas.length > 0) {
+    const selected = connection.schemas
+      .filter((schema): schema is string => typeof schema === 'string' && schema.trim().length > 0)
+      .map((schema) => schema.trim());
+    if (selected.length > 0) {
+      return [...new Set(selected)];
+    }
+  }
+  return [fallbackDatabase];
+}
+
+function mysqlTableKey(schema: string, table: string): string {
+  return `${schema}.${table}`;
+}
+
+function groupByTable<T extends { TABLE_SCHEMA?: string; TABLE_NAME: string }>(
+  rows: T[],
+  fallbackDatabase: string,
+): Map<string, T[]> {
   const grouped = new Map<string, T[]>();
   for (const row of rows) {
-    const tableRows = grouped.get(row.TABLE_NAME) ?? [];
+    const tableRows = grouped.get(mysqlTableKey(row.TABLE_SCHEMA ?? fallbackDatabase, row.TABLE_NAME)) ?? [];
     tableRows.push(row);
-    grouped.set(row.TABLE_NAME, tableRows);
+    grouped.set(mysqlTableKey(row.TABLE_SCHEMA ?? fallbackDatabase, row.TABLE_NAME), tableRows);
   }
   return grouped;
 }
 
-function primaryKeyMap(rows: MysqlPrimaryKeyRow[]): Map<string, Set<string>> {
+function primaryKeyMap(rows: MysqlPrimaryKeyRow[], fallbackDatabase: string): Map<string, Set<string>> {
   const grouped = new Map<string, Set<string>>();
   for (const row of rows) {
-    const columns = grouped.get(row.TABLE_NAME) ?? new Set<string>();
+    const key = mysqlTableKey(row.TABLE_SCHEMA ?? fallbackDatabase, row.TABLE_NAME);
+    const columns = grouped.get(key) ?? new Set<string>();
     columns.add(row.COLUMN_NAME);
-    grouped.set(row.TABLE_NAME, columns);
+    grouped.set(key, columns);
   }
   return grouped;
 }
@@ -308,60 +333,68 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
 
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
-    const database = this.poolConfig.database;
+    const databases = configuredMysqlSchemas(this.connection, this.poolConfig.database);
+    const placeholders = databases.map(() => '?').join(', ');
     const tables = await this.queryRaw<MysqlTableRow>(
       `
-      SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, TABLE_ROWS
+      SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, TABLE_ROWS
       FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_SCHEMA = ? AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
-      ORDER BY TABLE_NAME
+      WHERE TABLE_SCHEMA IN (${placeholders}) AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+      ORDER BY TABLE_SCHEMA, TABLE_NAME
       `,
-      [database],
+      databases,
     );
     const columns = await this.queryRaw<MysqlColumnRow>(
       `
-      SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_COMMENT
+      SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_COMMENT
       FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = ?
-      ORDER BY TABLE_NAME, ORDINAL_POSITION
+      WHERE TABLE_SCHEMA IN (${placeholders})
+      ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
       `,
-      [database],
+      databases,
     );
     const primaryKeys = await this.queryRaw<MysqlPrimaryKeyRow>(
       `
-      SELECT TABLE_NAME, COLUMN_NAME
+      SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-      WHERE TABLE_SCHEMA = ?
+      WHERE TABLE_SCHEMA IN (${placeholders})
         AND CONSTRAINT_NAME = 'PRIMARY'
-      ORDER BY TABLE_NAME, ORDINAL_POSITION
+      ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
       `,
-      [database],
+      databases,
     );
     const foreignKeys = await this.queryRaw<MysqlForeignKeyRow>(
       `
-      SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME, CONSTRAINT_NAME
+      SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME, CONSTRAINT_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-      WHERE TABLE_SCHEMA = ?
+      WHERE TABLE_SCHEMA IN (${placeholders})
         AND REFERENCED_TABLE_NAME IS NOT NULL
-      ORDER BY TABLE_NAME, COLUMN_NAME
+      ORDER BY TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       `,
-      [database],
+      databases,
     );
 
-    const columnsByTable = groupByTable(columns);
-    const primaryKeysByTable = primaryKeyMap(primaryKeys);
-    const foreignKeysByTable = groupByTable(foreignKeys);
+    const columnsByTable = groupByTable(columns, this.poolConfig.database);
+    const primaryKeysByTable = primaryKeyMap(primaryKeys, this.poolConfig.database);
+    const foreignKeysByTable = groupByTable(foreignKeys, this.poolConfig.database);
     const schemaTables = tables.map((table) =>
-      this.toSchemaTable(table, columnsByTable.get(table.TABLE_NAME) ?? [], primaryKeysByTable, foreignKeysByTable),
+      this.toSchemaTable(
+        table.TABLE_SCHEMA ?? this.poolConfig.database,
+        table,
+        columnsByTable.get(mysqlTableKey(table.TABLE_SCHEMA ?? this.poolConfig.database, table.TABLE_NAME)) ?? [],
+        primaryKeysByTable,
+        foreignKeysByTable,
+      ),
     );
 
     return {
       connectionId: this.connectionId,
       driver: 'mysql',
       extractedAt: this.now().toISOString(),
-      scope: { schemas: [database] },
+      scope: { schemas: databases },
       metadata: {
-        database,
+        database: this.poolConfig.database,
+        schemas: databases,
         host: this.poolConfig.host,
         table_count: schemaTables.length,
         total_columns: schemaTables.reduce((sum, table) => sum + table.columns.length, 0),
@@ -487,6 +520,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
   }
 
   private toSchemaTable(
+    database: string,
     table: MysqlTableRow,
     columns: MysqlColumnRow[],
     primaryKeysByTable: Map<string, Set<string>>,
@@ -497,13 +531,17 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
     const estimatedRows = kind === 'view' ? null : Number(table.TABLE_ROWS ?? 0);
     return {
       catalog: null,
-      db: this.poolConfig.database,
+      db: database,
       name: tableName,
       kind,
       comment: cleanMySqlTableComment(table.TABLE_COMMENT),
       estimatedRows: Number.isFinite(estimatedRows) ? estimatedRows : null,
-      columns: columns.map((column) => this.toSchemaColumn(column, primaryKeysByTable.get(tableName) ?? new Set())),
-      foreignKeys: (foreignKeysByTable.get(tableName) ?? []).map((row) => this.toSchemaForeignKey(row)),
+      columns: columns.map((column) =>
+        this.toSchemaColumn(column, primaryKeysByTable.get(mysqlTableKey(database, tableName)) ?? new Set()),
+      ),
+      foreignKeys: (foreignKeysByTable.get(mysqlTableKey(database, tableName)) ?? []).map((row) =>
+        this.toSchemaForeignKey(database, row),
+      ),
     };
   }
 
@@ -519,11 +557,11 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
     };
   }
 
-  private toSchemaForeignKey(row: MysqlForeignKeyRow): KtxSchemaForeignKey {
+  private toSchemaForeignKey(database: string, row: MysqlForeignKeyRow): KtxSchemaForeignKey {
     return {
       fromColumn: row.COLUMN_NAME,
       toCatalog: null,
-      toDb: this.poolConfig.database,
+      toDb: database,
       toTable: row.REFERENCED_TABLE_NAME,
       toColumn: row.REFERENCED_COLUMN_NAME,
       constraintName: row.CONSTRAINT_NAME || null,

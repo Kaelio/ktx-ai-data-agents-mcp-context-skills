@@ -12,6 +12,7 @@ export interface KtxClickHouseConnectionConfig {
   host?: string;
   port?: number;
   database?: string;
+  databases?: string[];
   username?: string;
   user?: string;
   password?: string;
@@ -87,12 +88,14 @@ export interface KtxClickHouseColumnDistinctValuesResult {
 }
 
 interface ClickHouseTableRow {
+  database?: string;
   name: string;
   engine: string;
   comment: string;
 }
 
 interface ClickHouseColumnRow {
+  database?: string;
   table: string;
   name: string;
   type: string;
@@ -101,6 +104,7 @@ interface ClickHouseColumnRow {
 }
 
 interface ClickHouseRowCountRow {
+  database?: string;
   table?: string;
   row_count?: string | number;
   count?: string | number;
@@ -172,6 +176,25 @@ function tableKind(engine: string): KtxSchemaTable['kind'] {
 
 function isNullableClickHouseType(type: string): boolean {
   return type.startsWith('Nullable(') || type.startsWith('LowCardinality(Nullable(');
+}
+
+function configuredClickHouseDatabases(
+  connection: KtxClickHouseConnectionConfig,
+  fallbackDatabase: string,
+): string[] {
+  if (Array.isArray(connection.databases) && connection.databases.length > 0) {
+    const selected = connection.databases
+      .filter((database): database is string => typeof database === 'string' && database.trim().length > 0)
+      .map((database) => database.trim());
+    if (selected.length > 0) {
+      return [...new Set(selected)];
+    }
+  }
+  return [fallbackDatabase];
+}
+
+function clickHouseTableKey(database: string, table: string): string {
+  return `${database}.${table}`;
 }
 
 export function isKtxClickHouseConnectionConfig(
@@ -261,52 +284,61 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
 
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
-    const database = this.clientConfig.database;
+    const databases = configuredClickHouseDatabases(this.connection, this.clientConfig.database);
     const tables = await this.queryEachRow<ClickHouseTableRow>(
       `
-      SELECT name, engine, comment
+      SELECT database, name, engine, comment
       FROM system.tables
-      WHERE database = {database:String}
+      WHERE database IN {databases:Array(String)}
         AND engine NOT IN ('Dictionary')
-      ORDER BY name
+      ORDER BY database, name
       `,
-      { database },
+      { databases },
     );
     const columns = await this.queryEachRow<ClickHouseColumnRow>(
       `
-      SELECT table, name, type, comment, is_in_primary_key
+      SELECT database, table, name, type, comment, is_in_primary_key
       FROM system.columns
-      WHERE database = {database:String}
-      ORDER BY table, position
+      WHERE database IN {databases:Array(String)}
+      ORDER BY database, table, position
       `,
-      { database },
+      { databases },
     );
     const rowCounts = await this.queryEachRow<ClickHouseRowCountRow>(
       `
-      SELECT table, sum(rows) AS row_count
+      SELECT database, table, sum(rows) AS row_count
       FROM system.parts
-      WHERE database = {database:String}
+      WHERE database IN {databases:Array(String)}
         AND active = 1
-      GROUP BY table
+      GROUP BY database, table
       `,
-      { database },
+      { databases },
     );
     const columnsByTable = new Map<string, ClickHouseColumnRow[]>();
     for (const column of columns) {
-      columnsByTable.set(column.table, [...(columnsByTable.get(column.table) ?? []), column]);
+      const key = clickHouseTableKey(column.database ?? this.clientConfig.database, column.table);
+      columnsByTable.set(key, [...(columnsByTable.get(key) ?? []), column]);
     }
-    const rowCountByTable = new Map(rowCounts.map((row) => [String(row.table), Number(row.row_count ?? 0)]));
-    const schemaTables = tables.map((table) =>
-      this.toSchemaTable(table, columnsByTable.get(table.name) ?? [], rowCountByTable.get(table.name) ?? 0),
+    const rowCountByTable = new Map(
+      rowCounts.map((row) => [
+        clickHouseTableKey(row.database ?? this.clientConfig.database, String(row.table)),
+        Number(row.row_count ?? 0),
+      ]),
     );
+    const schemaTables = tables.map((table) => {
+      const database = table.database ?? this.clientConfig.database;
+      const key = clickHouseTableKey(database, table.name);
+      return this.toSchemaTable(database, table, columnsByTable.get(key) ?? [], rowCountByTable.get(key) ?? 0);
+    });
 
     return {
       connectionId: this.connectionId,
       driver: 'clickhouse',
       extractedAt: this.now().toISOString(),
-      scope: { schemas: [database] },
+      scope: { schemas: databases },
       metadata: {
-        database,
+        database: this.clientConfig.database,
+        databases,
         host: this.clientConfig.host,
         table_count: schemaTables.length,
         total_columns: schemaTables.reduce((sum, table) => sum + table.columns.length, 0),
@@ -436,11 +468,16 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
     }
   }
 
-  private toSchemaTable(table: ClickHouseTableRow, columns: ClickHouseColumnRow[], estimatedRows: number): KtxSchemaTable {
+  private toSchemaTable(
+    database: string,
+    table: ClickHouseTableRow,
+    columns: ClickHouseColumnRow[],
+    estimatedRows: number,
+  ): KtxSchemaTable {
     const kind = tableKind(table.engine);
     return {
       catalog: null,
-      db: this.clientConfig.database,
+      db: database,
       name: table.name,
       kind,
       comment: table.comment || null,

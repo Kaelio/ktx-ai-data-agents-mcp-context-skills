@@ -85,6 +85,84 @@ function fakePoolFactory(): KtxMysqlPoolFactory {
   };
 }
 
+function multiSchemaMysqlPoolFactory(): KtxMysqlPoolFactory {
+  const query = vi.fn(async (sql: string, params?: unknown): Promise<[RowDataPacket[], FieldPacket[]]> => {
+    if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
+      expect(params).toEqual(['analytics', 'mart']);
+      return mysqlResult(
+        [
+          {
+            TABLE_SCHEMA: 'analytics',
+            TABLE_NAME: 'customers',
+            TABLE_TYPE: 'BASE TABLE',
+            TABLE_COMMENT: '',
+            TABLE_ROWS: 2,
+          },
+          {
+            TABLE_SCHEMA: 'mart',
+            TABLE_NAME: 'orders',
+            TABLE_TYPE: 'BASE TABLE',
+            TABLE_COMMENT: '',
+            TABLE_ROWS: 3,
+          },
+        ],
+        [
+          { name: 'TABLE_SCHEMA' },
+          { name: 'TABLE_NAME' },
+          { name: 'TABLE_TYPE' },
+          { name: 'TABLE_COMMENT' },
+          { name: 'TABLE_ROWS' },
+        ],
+      );
+    }
+    if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) {
+      expect(params).toEqual(['analytics', 'mart']);
+      return mysqlResult(
+        [
+          {
+            TABLE_SCHEMA: 'analytics',
+            TABLE_NAME: 'customers',
+            COLUMN_NAME: 'id',
+            DATA_TYPE: 'int',
+            IS_NULLABLE: 'NO',
+            COLUMN_COMMENT: '',
+          },
+          {
+            TABLE_SCHEMA: 'mart',
+            TABLE_NAME: 'orders',
+            COLUMN_NAME: 'id',
+            DATA_TYPE: 'int',
+            IS_NULLABLE: 'NO',
+            COLUMN_COMMENT: '',
+          },
+        ],
+        [],
+      );
+    }
+    if (sql.includes('INFORMATION_SCHEMA.KEY_COLUMN_USAGE') && sql.includes("CONSTRAINT_NAME = 'PRIMARY'")) {
+      expect(params).toEqual(['analytics', 'mart']);
+      return mysqlResult(
+        [
+          { TABLE_SCHEMA: 'analytics', TABLE_NAME: 'customers', COLUMN_NAME: 'id' },
+          { TABLE_SCHEMA: 'mart', TABLE_NAME: 'orders', COLUMN_NAME: 'id' },
+        ],
+        [],
+      );
+    }
+    if (sql.includes('INFORMATION_SCHEMA.KEY_COLUMN_USAGE') && sql.includes('REFERENCED_TABLE_NAME IS NOT NULL')) {
+      expect(params).toEqual(['analytics', 'mart']);
+      return mysqlResult([], []);
+    }
+    throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params)}`);
+  });
+  return {
+    createPool: vi.fn(() => ({
+      getConnection: vi.fn(async () => ({ query, release: vi.fn() })),
+      end: vi.fn(async () => undefined),
+    })),
+  };
+}
+
 describe('KtxMysqlScanConnector', () => {
   it('resolves MySQL connection configuration safely', () => {
     expect(isKtxMysqlConnectionConfig({ driver: 'mysql', host: 'localhost', database: 'analytics' })).toBe(true);
@@ -166,6 +244,34 @@ describe('KtxMysqlScanConnector', () => {
         toColumn: 'id',
         constraintName: 'orders_customer_id_fk',
       },
+    ]);
+  });
+
+  it('introspects every configured MySQL schema scope', async () => {
+    const connector = new KtxMysqlScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'mysql',
+        host: 'db.example.test',
+        database: 'analytics',
+        schemas: ['analytics', 'mart'],
+        username: 'reader',
+        password: 'secret', // pragma: allowlist secret
+      },
+      poolFactory: multiSchemaMysqlPoolFactory(),
+      now: () => new Date('2026-05-21T10:00:00.000Z'),
+    });
+
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'mysql' },
+      { runId: 'scan-run-1' },
+    );
+
+    expect(snapshot.scope).toEqual({ schemas: ['analytics', 'mart'] });
+    expect(snapshot.metadata).toMatchObject({ database: 'analytics', schemas: ['analytics', 'mart'] });
+    expect(snapshot.tables.map((table) => `${table.db}.${table.name}`)).toEqual([
+      'analytics.customers',
+      'mart.orders',
     ]);
   });
 
