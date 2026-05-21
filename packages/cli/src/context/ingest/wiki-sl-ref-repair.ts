@@ -1,7 +1,9 @@
-import type { KtxFileStorePort } from '../core/index.js';
-import type { SemanticLayerService, SemanticLayerSource } from '../sl/index.js';
+import type { KtxFileStorePort } from '../../context/core/file-store.js';
+import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import type { SemanticLayerSource } from '../../context/sl/types.js';
 import { isFlatWikiKey } from '../wiki/keys.js';
-import type { KnowledgeWikiService, WikiFrontmatter } from '../wiki/index.js';
+import type { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
+import type { WikiFrontmatter } from '../../context/wiki/types.js';
 
 const SYSTEM_AUTHOR = 'System User';
 const SYSTEM_EMAIL = 'system@example.com';

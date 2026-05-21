@@ -1,4 +1,4 @@
-import type { MemoryAction } from '../../memory/index.js';
+import type { MemoryAction } from '../../../context/memory/types.js';
 import type { LocalIngestRunRecord } from '../local-stage-ingest.js';
 import type { IngestReportSnapshot } from '../reports.js';
 import type {
@@ -132,6 +132,7 @@ function detailSectionsFromReport(report: IngestReportSnapshot): MemoryFlowDetai
   };
 }
 
+/** @internal */
 export function localIngestRunToMemoryFlowReplay(record: LocalIngestRunRecord): MemoryFlowReplayInput {
   const events: MemoryFlowEvent[] = [
     { type: 'source_acquired', adapter: record.adapter, trigger: 'manual_resync', fileCount: record.rawFileCount },

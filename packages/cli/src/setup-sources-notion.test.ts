@@ -1,12 +1,8 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  initKtxProject,
-  type KtxProjectConnectionConfig,
-  parseKtxProjectConfig,
-  serializeKtxProjectConfig,
-} from './context/project/index.js';
+import { initKtxProject } from './context/project/project.js';
+import { type KtxProjectConnectionConfig, parseKtxProjectConfig, serializeKtxProjectConfig } from './context/project/config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   runKtxSetupSourcesStep,
@@ -19,8 +15,8 @@ const notionMocks = vi.hoisted(() => ({
   retrievePage: vi.fn(async () => ({ id: 'page-1' })),
 }));
 
-vi.mock('./context/ingest/index.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./context/ingest/index.js')>();
+vi.mock('./context/ingest/adapters/notion/notion-client.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./context/ingest/adapters/notion/notion-client.js')>();
   return {
     ...actual,
     NotionClient: vi.fn().mockImplementation(function NotionClient(token: string) {

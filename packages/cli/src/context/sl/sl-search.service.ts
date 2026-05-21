@@ -1,5 +1,6 @@
-import type { KtxEmbeddingPort, KtxLogger } from '../core/index.js';
-import { noopLogger } from '../core/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxLogger } from '../../context/core/config.js';
+import { noopLogger } from '../../context/core/config.js';
 import type { ReindexWorkResult } from '../index-sync/types.js';
 import { DEFAULT_PRIORITY, resolveDescription } from './descriptions.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';

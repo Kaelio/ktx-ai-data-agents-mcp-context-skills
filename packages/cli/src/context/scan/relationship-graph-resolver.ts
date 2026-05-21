@@ -11,14 +11,14 @@ import type { KtxValidatedRelationshipDiscoveryCandidate } from './relationship-
 
 export type KtxResolvedRelationshipStatus = 'accepted' | 'review' | 'rejected';
 
-export interface KtxRelationshipGraphResolverSettings {
+interface KtxRelationshipGraphResolverSettings {
   acceptThreshold: number;
   reviewThreshold: number;
   minTargetPkScoreForAcceptance: number;
   validationRequiredForManifest: boolean;
 }
 
-export interface KtxResolvedRelationshipPkEvidence {
+interface KtxResolvedRelationshipPkEvidence {
   declaredPrimaryKey: boolean;
   targetUniqueness: number;
   incomingAcceptedCount: number;
@@ -26,7 +26,7 @@ export interface KtxResolvedRelationshipPkEvidence {
   reasons: string[];
 }
 
-export interface KtxResolvedRelationshipPk {
+interface KtxResolvedRelationshipPk {
   table: string;
   columns: string[];
   pkScore: number;
@@ -35,7 +35,7 @@ export interface KtxResolvedRelationshipPk {
   evidence: KtxResolvedRelationshipPkEvidence;
 }
 
-export interface KtxResolvedRelationshipGraphEvidence {
+interface KtxResolvedRelationshipGraphEvidence {
   targetPkScore: number;
   incomingCandidateCount: number;
   conflictRank: number;

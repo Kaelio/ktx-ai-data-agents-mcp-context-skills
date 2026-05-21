@@ -55,7 +55,7 @@ function resolveDevtoolsEnabled(override: boolean | undefined): boolean {
   return value === 'true' || value === '1' || value === 'yes';
 }
 
-export function modelIdFromLanguageModel(model: LanguageModel | string): string {
+function modelIdFromLanguageModel(model: LanguageModel | string): string {
   return typeof model === 'string' ? model : ((model as { modelId?: string }).modelId ?? '');
 }
 

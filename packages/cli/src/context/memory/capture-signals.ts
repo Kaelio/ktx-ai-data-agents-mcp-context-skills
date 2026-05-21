@@ -103,6 +103,7 @@ export function prefilterSkipReason(input: MemoryAgentInput, signals = detectCap
   return null;
 }
 
+/** @internal */
 export function isWorthAnalyzing(input: MemoryAgentInput): boolean {
   return prefilterSkipReason(input, detectCaptureSignals(input)) === null;
 }

@@ -1,6 +1,7 @@
-import type { GitService, KtxFileStorePort } from '../core/index.js';
-import type { SemanticLayerService } from '../sl/index.js';
-import type { KnowledgeWikiService } from '../wiki/index.js';
+import type { GitService } from '../../context/core/git.service.js';
+import type { KtxFileStorePort } from '../../context/core/file-store.js';
+import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import type { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
 import type { TouchedSlSourceSet } from './touched-sl-sources.js';
 
 export interface IngestToolMetadata {

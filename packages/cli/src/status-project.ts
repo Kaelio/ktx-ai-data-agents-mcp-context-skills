@@ -1,14 +1,8 @@
 import { basename } from 'node:path';
-import { runClaudeCodeAuthProbe } from './context/index.js';
-import type {
-  KtxConfigIssue,
-  KtxLocalProject,
-  KtxProjectConfig,
-  KtxProjectConnectionConfig,
-  KtxProjectEmbeddingConfig,
-  KtxProjectLlmConfig,
-} from './context/project/index.js';
-import type { PostgresPgssProbeResult } from './context/ingest/index.js';
+import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
+import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
+import type { KtxLocalProject } from './context/project/project.js';
+import type { PostgresPgssProbeResult } from './context/ingest/adapters/historic-sql/types.js';
 import {
   formatClaudeCodePromptCachingFix,
   formatClaudeCodePromptCachingWarning,
@@ -418,8 +412,12 @@ function readinessDetail(result: PostgresPgssProbeResult): string {
 async function defaultPostgresQueryHistoryProbe(
   input: PostgresQueryHistoryProbeInput,
 ): Promise<PostgresPgssProbeResult> {
-  const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
-    await Promise.all([import('./context/ingest/index.js'), import('./connectors/postgres/index.js')]);
+  const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient }, { isKtxPostgresConnectionConfig }] =
+    await Promise.all([
+      import('./context/ingest/adapters/historic-sql/postgres-pgss-reader.js'),
+      import('./connectors/postgres/historic-sql-query-client.js'),
+      import('./connectors/postgres/connector.js'),
+    ]);
 
   const inputDriver = input.connection.driver ?? 'unknown';
   if (!isKtxPostgresConnectionConfig(input.connection)) {
@@ -748,7 +746,6 @@ function colorForLevel(useColor: boolean, level: ProjectStatusLevel, text: strin
   if (!useColor) return text;
   return level === 'ok' ? green(text) : level === 'warn' ? yellow(text) : red(text);
 }
-
 
 function abbreviateHome(filePath: string, env: NodeJS.ProcessEnv): string {
   const home = env.HOME;

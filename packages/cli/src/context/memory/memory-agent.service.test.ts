@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { validateSingleSource } from '../sl/index.js';
-import { createTouchedSlSources, hasTouchedSlSource } from '../tools/index.js';
+import { validateSingleSource } from '../../context/sl/tools/sl-warehouse-validation.js';
+import { createTouchedSlSources, hasTouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import { detectCaptureSignals, isWorthAnalyzing } from './capture-signals.js';
 import { MemoryAgentService } from './memory-agent.service.js';
 

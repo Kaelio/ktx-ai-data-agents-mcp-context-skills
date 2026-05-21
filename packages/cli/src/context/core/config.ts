@@ -1,10 +1,10 @@
-export interface KtxStorageConfig {
+interface KtxStorageConfig {
   configDir?: string;
   homeDir?: string;
   worktreesDir?: string;
 }
 
-export interface KtxGitConfig {
+interface KtxGitConfig {
   userName: string;
   userEmail: string;
   bootstrapMessage?: string;

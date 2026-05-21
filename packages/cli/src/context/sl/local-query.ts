@@ -1,7 +1,7 @@
-import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
-import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
+import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
+import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
 import type { KtxMcpProgressCallback } from '../mcp/types.js';
-import type { KtxLocalProject } from '../project/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import { loadLocalSlSourceRecords } from './local-sl.js';
 import { toResolvedWire } from './semantic-layer.service.js';
 import type { SemanticLayerQueryExecutionResult, SemanticLayerQueryInput } from './types.js';

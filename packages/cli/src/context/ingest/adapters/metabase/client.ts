@@ -91,6 +91,7 @@ class MetabaseApiError extends Error {
  * `[[`/`]]` literals in string values or regex predicates are preserved. Metabase's
  * grammar disallows nested optional blocks (per docs), so non-greedy matching is safe.
  */
+/** @internal */
 export function stripOptionalClauses(sql: string): string {
   return sql.replace(/\[\[[\s\S]*?\]\]/g, (match) => (match.includes('{{') ? '' : match));
 }
@@ -163,6 +164,7 @@ function injectNativeSql(datasetQuery: MetabaseDatasetQuery, sql: string): Metab
  * format, number widgets need a string scalar, identifier/enum widgets accept `[string]`.
  * Sending `['placeholder']` for a date widget triggers a ClassCastException → HTTP 500.
  */
+/** @internal */
 export function getDummyValueForWidgetType(widgetType: string | undefined): string | string[] {
   switch (widgetType) {
     case 'date/range':

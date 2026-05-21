@@ -1,11 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  type LocalIngestResult,
-  type MemoryFlowReplayInput,
-  type RunLocalIngestOptions,
-} from './context/ingest/index.js';
+import type { LocalIngestResult, RunLocalIngestOptions } from './context/ingest/local-ingest.js';
+import type { MemoryFlowReplayInput } from './context/ingest/memory-flow/types.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxIngest } from './ingest.js';
 import {

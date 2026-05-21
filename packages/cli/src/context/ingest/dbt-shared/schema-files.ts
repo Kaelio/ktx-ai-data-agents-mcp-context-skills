@@ -22,6 +22,7 @@ export async function loadDbtSchemaFiles(projectDir: string): Promise<DbtSchemaF
   );
 }
 
+/** @internal */
 export async function findDbtSchemaFiles(projectDir: string): Promise<string[]> {
   const schemaFiles: string[] = [];
 

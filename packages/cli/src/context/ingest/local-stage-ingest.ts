@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { cp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { KtxLocalProject } from '../project/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import { ktxLocalStateDbPath } from '../project/local-state-db.js';
 import { computeDiffSetFromHashes } from './diff-set.service.js';
 import { localPullConfigForAdapter } from './local-adapters.js';
@@ -11,9 +11,9 @@ import { buildSyncId } from './raw-sources-paths.js';
 import { SqliteLocalIngestStore } from './sqlite-local-ingest-store.js';
 import type { IngestTrigger, SourceAdapter, WorkUnit } from './types.js';
 
-export type LocalIngestStatus = 'running' | 'done' | 'error';
+type LocalIngestStatus = 'running' | 'done' | 'error';
 
-export interface LocalIngestDiffPaths {
+interface LocalIngestDiffPaths {
   added: string[];
   modified: string[];
   deleted: string[];

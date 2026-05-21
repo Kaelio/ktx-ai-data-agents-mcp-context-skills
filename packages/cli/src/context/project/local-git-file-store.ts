@@ -1,14 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type {
-  GitCommitInfo,
-  GitService,
-  KtxFileHistoryEntry,
-  KtxFileListResult,
-  KtxFileReadResult,
-  KtxFileStorePort,
-  KtxFileWriteResult,
-} from '../core/index.js';
+import type { GitCommitInfo, GitService } from '../../context/core/git.service.js';
+import type { KtxFileHistoryEntry, KtxFileListResult, KtxFileReadResult, KtxFileStorePort, KtxFileWriteResult } from '../../context/core/file-store.js';
 
 export interface LocalGitFileStoreDeps {
   rootDir: string;

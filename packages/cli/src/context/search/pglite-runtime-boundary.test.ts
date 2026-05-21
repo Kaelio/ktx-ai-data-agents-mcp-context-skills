@@ -35,16 +35,6 @@ describe('PGlite hybrid search runtime boundary', () => {
 
     expect(packageExportKeys.filter((key) => key.toLowerCase().includes('pglite'))).toEqual([]);
 
-    const publicExportFiles = [
-      'packages/cli/src/context/index.ts',
-      'packages/cli/src/context/search/index.ts',
-      'packages/cli/src/context/sl/index.ts',
-    ];
-
-    for (const relativePath of publicExportFiles) {
-      expect(readKtxFile(relativePath), relativePath).not.toMatch(/pglite/i);
-    }
-
     const productionRoutingFiles = [
       'packages/cli/src/sl.ts',
       'packages/cli/src/knowledge.ts',

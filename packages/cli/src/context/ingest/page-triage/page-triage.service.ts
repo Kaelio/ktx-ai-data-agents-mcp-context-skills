@@ -3,10 +3,10 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import pLimit from 'p-limit';
 import { z } from 'zod';
-import { type KtxLogger, noopLogger } from '../../core/index.js';
-import type { KtxLlmRuntimePort } from '../../llm/index.js';
-import type { PromptService } from '../../prompts/index.js';
-import type { InsertContextCandidateInput } from '../context-candidates/index.js';
+import { type KtxLogger, noopLogger } from '../../../context/core/config.js';
+import type { KtxLlmRuntimePort } from '../../../context/llm/runtime-port.js';
+import type { PromptService } from '../../../context/prompts/prompt.service.js';
+import type { InsertContextCandidateInput } from '../../../context/ingest/context-candidates/types.js';
 import type { JsonValue } from '../ports.js';
 import type { DiffSet, SourceAdapter, TriageLane, TriageSignals } from '../types.js';
 
@@ -42,7 +42,7 @@ interface StagedTriageDocument {
   markdown: string;
 }
 
-export interface PageTriageReport {
+interface PageTriageReport {
   pageCount: number;
   skip: number;
   light: number;
@@ -89,7 +89,7 @@ export interface PageTriageStorePort {
   insertCandidate(input: InsertContextCandidateInput): Promise<unknown>;
 }
 
-export interface PageTriageSettings {
+interface PageTriageSettings {
   enabled: boolean;
   maxConcurrency: number;
   lightExtractionEnabled: boolean;

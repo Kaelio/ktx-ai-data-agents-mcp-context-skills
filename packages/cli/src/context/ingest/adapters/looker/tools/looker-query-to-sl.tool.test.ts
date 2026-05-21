@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ToolOutput } from '../../../../tools/index.js';
+import type { ToolOutput } from '../../../../../context/tools/base-tool.js';
 import { buildLookerSlProposal, createLookerQueryToSlTool, type LookerSlProposal } from './looker-query-to-sl.tool.js';
 
 describe('buildLookerSlProposal', () => {

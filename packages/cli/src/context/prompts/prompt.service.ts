@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import Handlebars from 'handlebars';
-import { type KtxLogger, noopLogger } from '../core/index.js';
+import { type KtxLogger, noopLogger } from '../../context/core/config.js';
 
 export interface PromptContext {
   current_date?: string;

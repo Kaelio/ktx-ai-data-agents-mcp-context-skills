@@ -1,5 +1,5 @@
-import type { LiveDatabaseIntrospectionPort } from '../../context/ingest/index.js';
-import type { KtxProjectConnectionConfig } from '../../context/project/index.js';
+import type { LiveDatabaseIntrospectionPort } from '../../context/ingest/adapters/live-database/types.js';
+import type { KtxProjectConnectionConfig } from '../../context/project/config.js';
 import {
   KtxBigQueryScanConnector,
   type KtxBigQueryClientFactory,

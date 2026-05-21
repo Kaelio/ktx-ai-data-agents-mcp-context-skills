@@ -1,20 +1,22 @@
-import type { KtxModelRole } from '../../llm/index.js';
+import type { KtxModelRole } from '../../llm/types.js';
 import type { KtxEmbeddingPort } from '../core/embedding.js';
-import type { GitService, KtxFileStorePort, KtxLogger, SessionOutcome } from '../core/index.js';
-import type { AgentRunnerPort, KtxLlmRuntimePort, KtxRuntimeToolSet } from '../llm/index.js';
-import type { MemoryAction, MemoryKnowledgeSlRefsPort } from '../memory/index.js';
-import type { PromptService } from '../prompts/index.js';
-import type { SkillsRegistryService } from '../skills/index.js';
-import type {
-  SemanticLayerService,
-  SlConnectionCatalogPort,
-  SlSearchService,
-  SlSourcesIndexPort,
-  SlValidationDeps,
-  SlValidatorPort,
-} from '../sl/index.js';
-import type { ToolContext, ToolSession } from '../tools/index.js';
-import type { KnowledgeIndexPort, KnowledgeWikiService } from '../wiki/index.js';
+import type { GitService } from '../../context/core/git.service.js';
+import type { KtxFileStorePort } from '../../context/core/file-store.js';
+import type { KtxLogger } from '../../context/core/config.js';
+import type { SessionOutcome } from '../../context/core/session-worktree.service.js';
+import type { AgentRunnerPort, KtxLlmRuntimePort, KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import type { MemoryAction, MemoryKnowledgeSlRefsPort } from '../../context/memory/types.js';
+import type { PromptService } from '../../context/prompts/prompt.service.js';
+import type { SkillsRegistryService } from '../../context/skills/skills-registry.service.js';
+import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import type { SlConnectionCatalogPort, SlSourcesIndexPort } from '../../context/sl/ports.js';
+import type { SlSearchService } from '../../context/sl/sl-search.service.js';
+import type { SlValidationDeps } from '../../context/sl/tools/sl-warehouse-validation.js';
+import type { SlValidatorPort } from '../../context/sl/sl-validator.port.js';
+import type { ToolContext } from '../../context/tools/base-tool.js';
+import type { ToolSession } from '../../context/tools/tool-session.js';
+import type { KnowledgeIndexPort } from '../../context/wiki/ports.js';
+import type { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
 import type { CanonicalPin } from './canonical-pins.js';
 import type { IngestTraceLevel } from './ingest-trace.js';
 import type { IngestReportSnapshot } from './reports.js';
@@ -28,7 +30,6 @@ import type { StageIndex } from './stages/stage-index.types.js';
 import type {
   DiffSet,
   EvictionUnit,
-  IngestBundleJob,
   IngestDiffSummary,
   IngestTrigger,
   SourceAdapter,
@@ -120,7 +121,7 @@ export interface IngestLockPort {
   withLock<T>(key: string, fn: () => Promise<T>): Promise<T>;
 }
 
-export interface IngestFileStorePort extends KtxFileStorePort<IngestFileStorePort> {}
+interface IngestFileStorePort extends KtxFileStorePort<IngestFileStorePort> {}
 
 export interface IngestSessionWorktree {
   chatId: string;
@@ -137,7 +138,7 @@ export interface IngestSessionWorktreePort {
   cleanup(session: IngestSessionWorktree, outcome: SessionOutcome): Promise<void>;
 }
 
-export interface IngestSettingsPort {
+interface IngestSettingsPort {
   memoryIngestionModel: string;
   probeRowCount: number;
   workUnitMaxConcurrency?: number;
@@ -146,7 +147,7 @@ export interface IngestSettingsPort {
   ingestTraceLevel?: IngestTraceLevel;
 }
 
-export interface IngestGitAuthor {
+interface IngestGitAuthor {
   name: string;
   email: string;
 }
@@ -172,7 +173,7 @@ export interface IngestToolsetFactoryPort {
   createIngestWuToolset(session: ToolSession, options?: { includeContextEvidenceTools?: boolean }): IngestToolsetLike;
 }
 
-export type IngestKnowledgeIndexPort = Pick<KnowledgeIndexPort, 'listPagesForUser'>;
+type IngestKnowledgeIndexPort = Pick<KnowledgeIndexPort, 'listPagesForUser'>;
 
 export interface SourceAdapterRegistryPort {
   register(adapter: SourceAdapter): void;
@@ -181,7 +182,7 @@ export interface SourceAdapterRegistryPort {
   list(): string[];
 }
 
-export interface DiffSetComputerPort {
+interface DiffSetComputerPort {
   compute(
     connectionId: string,
     sourceKey: string,
@@ -203,7 +204,7 @@ export interface ContextEvidenceIndexSummary {
   warnings: string[];
 }
 
-export interface ContextEvidenceIndexPort {
+interface ContextEvidenceIndexPort {
   indexStagedDir(args: {
     stagedDir: string;
     runId: string;
@@ -230,7 +231,7 @@ export interface PageTriageRunResult {
   warnings: string[];
 }
 
-export interface PageTriagePort {
+interface PageTriagePort {
   triageRun(args: {
     stagedDir: string;
     runId: string;
@@ -243,7 +244,7 @@ export interface PageTriagePort {
   }): Promise<PageTriageRunResult>;
 }
 
-export interface ContextCandidateCarryforwardPort {
+interface ContextCandidateCarryforwardPort {
   carryForward(args: { runId: string; connectionId: string; sourceKey: string }): Promise<{ warnings: string[] }>;
 }
 
@@ -271,7 +272,7 @@ export interface CandidateDedupResult {
   warnings: string[];
 }
 
-export interface CandidateDedupPort {
+interface CandidateDedupPort {
   deduplicateRun(runId: string): Promise<CandidateDedupResult>;
 }
 
@@ -284,7 +285,7 @@ export interface ContextCandidateSummary {
   conflict: number;
 }
 
-export interface ContextEvidenceCandidatesPort {
+interface ContextEvidenceCandidatesPort {
   getCandidateSummary(runId: string): Promise<ContextCandidateSummary>;
 }
 
@@ -359,4 +360,3 @@ export interface IngestBundleRunnerDeps {
   logger?: KtxLogger;
 }
 
-export type IngestRunnerJob = IngestBundleJob;

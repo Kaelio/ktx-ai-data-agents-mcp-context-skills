@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import YAML from 'yaml';
-import type { KtxEmbeddingPort, KtxFileStorePort, KtxLogger } from '../core/index.js';
-import { noopLogger } from '../core/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxFileStorePort } from '../../context/core/file-store.js';
+import type { KtxLogger } from '../../context/core/config.js';
+import { noopLogger } from '../../context/core/config.js';
 import type { ReindexWorkResult } from '../index-sync/types.js';
 import { assertFlatWikiKey, isFlatWikiKey } from './keys.js';
 import { buildKnowledgeSearchText } from './knowledge-search-text.js';
@@ -11,10 +13,8 @@ import type { WikiFrontmatter, WikiPage, WikiPageWithScope } from './types.js';
 const WIKI_PREFIX = 'wiki';
 
 export type { WikiFrontmatter };
-
 export class KnowledgeWikiService {
   private isWorktreeScoped = false;
-
   constructor(
     private readonly configService: KtxFileStorePort,
     private readonly embeddingService: KtxEmbeddingPort | null,

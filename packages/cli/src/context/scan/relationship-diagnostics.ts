@@ -12,7 +12,7 @@ import type { KtxCompositeRelationshipCandidate } from './relationship-composite
 import type { KtxRelationshipProfileArtifact } from './relationship-profiling.js';
 import type { KtxConnectionDriver, KtxScanWarning } from './types.js';
 
-export interface KtxRelationshipArtifactEndpoint {
+interface KtxRelationshipArtifactEndpoint {
   tableId: string;
   columnIds: string[];
   table: {
@@ -23,7 +23,7 @@ export interface KtxRelationshipArtifactEndpoint {
   columns: string[];
 }
 
-export interface KtxRelationshipArtifactEdge {
+interface KtxRelationshipArtifactEdge {
   id: string;
   status: KtxResolvedRelationshipStatus;
   source: string;
@@ -48,20 +48,20 @@ export interface KtxRelationshipArtifact {
   skipped: KtxRelationshipUpdate['skipped'];
 }
 
-export interface KtxRelationshipDiagnosticsSummary {
+interface KtxRelationshipDiagnosticsSummary {
   accepted: number;
   review: number;
   rejected: number;
   skipped: number;
 }
 
-export interface KtxRelationshipDiagnosticsValidation {
+interface KtxRelationshipDiagnosticsValidation {
   available: boolean;
   sqlAvailable: boolean;
   queryCount: number;
 }
 
-export interface KtxRelationshipDiagnosticsThresholds {
+interface KtxRelationshipDiagnosticsThresholds {
   acceptThreshold: number;
   reviewThreshold: number;
 }

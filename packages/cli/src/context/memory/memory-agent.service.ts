@@ -3,24 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as YAML from 'yaml';
 import { z } from 'zod';
-import { type KtxLogger, noopLogger } from '../core/index.js';
-import type { KtxRuntimeToolSet } from '../llm/index.js';
-import {
-  revertSourceToPreHead,
-  type SemanticLayerSource,
-  type SlValidationDeps,
-  type SlValidatorPort,
-} from '../sl/index.js';
-import {
-  createTouchedSlSources,
-  deleteTouchedSlSource,
-  listTouchedSlSources,
-  SYSTEM_GIT_AUTHOR,
-  type ToolContext,
-  type ToolSession,
-  touchedSlSourceCount,
-  touchedSlSourceNamesForConnection,
-} from '../tools/index.js';
+import { type KtxLogger, noopLogger } from '../../context/core/config.js';
+import type { KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import { revertSourceToPreHead, type SlValidationDeps } from '../../context/sl/tools/sl-warehouse-validation.js';
+import type { SemanticLayerSource } from '../../context/sl/types.js';
+import type { SlValidatorPort } from '../../context/sl/sl-validator.port.js';
+import { createTouchedSlSources, deleteTouchedSlSource, listTouchedSlSources, touchedSlSourceCount, touchedSlSourceNamesForConnection } from '../../context/tools/touched-sl-sources.js';
+import { SYSTEM_GIT_AUTHOR } from '../../context/tools/authors.js';
+import type { ToolContext } from '../../context/tools/base-tool.js';
+import type { ToolSession } from '../../context/tools/tool-session.js';
 import {
   buildRequiredSkillsBlock,
   DEFAULT_SKILL_NAMES,

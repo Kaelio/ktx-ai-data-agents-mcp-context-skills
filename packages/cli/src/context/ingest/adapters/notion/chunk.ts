@@ -5,6 +5,7 @@ import type { ChunkResult, DiffSet, ScopeDescriptor, WorkUnit } from '../../type
 import { notionManifestSchema, notionMetadataSchema } from './types.js';
 
 const MAX_NOTION_WORK_UNIT_CHARS = 40_000;
+/** @internal */
 export const NOTION_ORG_KNOWLEDGE_WARNING =
   'Anything accessible to this Notion integration can become organization knowledge.';
 const NOTION_SL_WRITE_GUIDANCE =

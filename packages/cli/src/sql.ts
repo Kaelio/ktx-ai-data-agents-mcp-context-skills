@@ -1,6 +1,6 @@
-import { loadKtxProject, type KtxLocalProject } from './context/project/index.js';
-import type { KtxQueryResult, KtxScanConnector } from './context/scan/index.js';
-import type { SqlAnalysisDialect, SqlAnalysisPort } from './context/sql-analysis/index.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
+import type { KtxQueryResult, KtxScanConnector } from './context/scan/types.js';
+import type { SqlAnalysisDialect, SqlAnalysisPort } from './context/sql-analysis/ports.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { type KtxOutputMode, resolveOutputMode } from './io/mode.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';

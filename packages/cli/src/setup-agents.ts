@@ -5,11 +5,9 @@ import type { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 import { log, outro } from '@clack/prompts';
-import {
-  loadKtxProject,
-  markKtxSetupStateStepComplete,
-  serializeKtxProjectConfig,
-} from './context/project/index.js';
+import { loadKtxProject } from './context/project/project.js';
+import { markKtxSetupStateStepComplete } from './context/project/setup-config.js';
+import { serializeKtxProjectConfig } from './context/project/config.js';
 import { strToU8, zipSync } from 'fflate';
 import type { KtxCliIo } from './cli-runtime.js';
 import {

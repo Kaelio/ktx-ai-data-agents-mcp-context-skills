@@ -1,19 +1,21 @@
-import type { AgentRunnerPort, KtxRuntimeToolSet } from '../llm/index.js';
-import type { GitService, KtxFileStorePort, KtxLogger, SessionWorktreeService } from '../core/index.js';
-import type { PromptService } from '../prompts/index.js';
-import type { SkillsRegistryService } from '../skills/index.js';
-import type {
-  KtxConnectionInfo,
-  KtxQueryResult,
-  SemanticLayerService,
-  SemanticLayerSource,
-  SlSearchService,
-  SlSourcesIndexPort,
-  SlValidationDeps,
-  SlValidatorPort,
-} from '../sl/index.js';
-import type { ToolContext, ToolSession, TouchedSlSourceSet } from '../tools/index.js';
-import type { KnowledgeIndexPort, KnowledgeWikiService } from '../wiki/index.js';
+import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import type { GitService } from '../../context/core/git.service.js';
+import type { KtxFileStorePort } from '../../context/core/file-store.js';
+import type { KtxLogger } from '../../context/core/config.js';
+import type { SessionWorktreeService } from '../../context/core/session-worktree.service.js';
+import type { PromptService } from '../../context/prompts/prompt.service.js';
+import type { SkillsRegistryService } from '../../context/skills/skills-registry.service.js';
+import type { KtxConnectionInfo, KtxQueryResult, SlSourcesIndexPort } from '../../context/sl/ports.js';
+import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import type { SemanticLayerSource } from '../../context/sl/types.js';
+import type { SlSearchService } from '../../context/sl/sl-search.service.js';
+import type { SlValidationDeps } from '../../context/sl/tools/sl-warehouse-validation.js';
+import type { SlValidatorPort } from '../../context/sl/sl-validator.port.js';
+import type { ToolContext } from '../../context/tools/base-tool.js';
+import type { ToolSession } from '../../context/tools/tool-session.js';
+import type { TouchedSlSourceSet } from '../../context/tools/touched-sl-sources.js';
+import type { KnowledgeIndexPort } from '../../context/wiki/ports.js';
+import type { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
 
 export type MemoryAgentSourceType = 'research' | 'external_ingest' | 'backfill';
 
@@ -62,7 +64,7 @@ export interface CaptureSession {
   preHead: string | null;
 }
 
-export interface MemoryAgentSettings {
+interface MemoryAgentSettings {
   knowledge: {
     userScopedKnowledgeEnabled: boolean;
   };
@@ -74,7 +76,7 @@ export interface MemoryAgentSettings {
   };
 }
 
-export interface MemoryTelemetryPort {
+interface MemoryTelemetryPort {
   trackMemoryIngestion(
     userId: string,
     properties: {
@@ -106,7 +108,7 @@ export interface MemoryConnectionPort {
   executeQuery(connectionId: string, sql: string): Promise<KtxQueryResult>;
 }
 
-export interface MemoryCommitMessagePort {
+interface MemoryCommitMessagePort {
   enqueueCommitMessageJobForExternalCommit(
     commit: { commitHash: string },
     message: string,
@@ -129,7 +131,7 @@ export interface MemorySlSourceReconcilerPort {
   upsertRow(parsed: SemanticLayerSource, path: string, contentHash: string): Promise<void>;
 }
 
-export interface MemoryLockPort {
+interface MemoryLockPort {
   withLock<T>(key: 'config:repo', fn: () => Promise<T>): Promise<T>;
 }
 

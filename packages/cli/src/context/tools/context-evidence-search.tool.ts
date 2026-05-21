@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { KtxEmbeddingPort } from '../core/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
 import { BaseTool, type ToolContext, type ToolOutput } from './base-tool.js';
 import type { ContextEvidenceToolStorePort } from './context-evidence-tool-store.js';
 import { ingestMetadataRequired, resolveIngestMetadata, type ToolFailure } from './context-ingest-metadata.js';

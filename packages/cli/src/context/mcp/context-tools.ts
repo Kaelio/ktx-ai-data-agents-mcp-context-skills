@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import type { MemoryAgentInput } from '../memory/index.js';
+import type { MemoryAgentInput } from '../../context/memory/types.js';
 import type {
   KtxMcpContextPorts,
   KtxMcpProgressCallback,
@@ -445,6 +445,7 @@ const memoryIngestStatusOutputSchema = z.object({
   signalDetected: z.boolean(),
 });
 
+/** @internal */
 export function jsonToolResult<T extends NonArrayObject>(structuredContent: T): KtxMcpToolResult<T> {
   return {
     content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
@@ -452,7 +453,7 @@ export function jsonToolResult<T extends NonArrayObject>(structuredContent: T): 
   };
 }
 
-export function jsonErrorToolResult(text: string): KtxMcpToolResult<Record<string, never>> {
+function jsonErrorToolResult(text: string): KtxMcpToolResult<Record<string, never>> {
   return {
     content: [{ type: 'text', text }],
     isError: true,

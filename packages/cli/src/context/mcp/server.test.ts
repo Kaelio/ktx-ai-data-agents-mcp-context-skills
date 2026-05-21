@@ -4,12 +4,10 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createLocalProjectMemoryIngest,
-  detectCaptureSignals,
-  type MemoryAgentInput,
-} from '../memory/index.js';
-import { initKtxProject } from '../project/index.js';
+import { createLocalProjectMemoryIngest } from '../../context/memory/local-memory.js';
+import { detectCaptureSignals } from '../../context/memory/capture-signals.js';
+import type { MemoryAgentInput } from '../../context/memory/types.js';
+import { initKtxProject } from '../../context/project/project.js';
 import { jsonToolResult } from './context-tools.js';
 import { createDefaultKtxMcpServer, createKtxMcpServer } from './server.js';
 import type {

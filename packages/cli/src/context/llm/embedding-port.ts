@@ -1,4 +1,4 @@
-import type { KtxEmbeddingProvider } from '../../llm/index.js';
+import type { KtxEmbeddingProvider } from '../../llm/types.js';
 import type { KtxEmbeddingPort as KtxIngestEmbeddingPort } from '../core/embedding.js';
 import type { KtxEmbeddingPort as KtxScanEmbeddingPort } from '../scan/types.js';
 

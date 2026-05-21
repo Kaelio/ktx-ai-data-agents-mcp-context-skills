@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { SlConnectionCatalogPort } from '../../../sl/index.js';
-import type { ToolContext } from '../../../tools/index.js';
+import type { SlConnectionCatalogPort } from '../../../../context/sl/ports.js';
+import type { ToolContext } from '../../../../context/tools/base-tool.js';
 import { SqlExecutionTool } from './sql-execution.tool.js';
 
 describe('SqlExecutionTool', () => {

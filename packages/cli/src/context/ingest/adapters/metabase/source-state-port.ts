@@ -5,7 +5,7 @@ export interface MetabaseSourceStateSelection {
   metabaseObjectId: number;
 }
 
-export interface MetabaseSourceStateMapping {
+interface MetabaseSourceStateMapping {
   metabaseDatabaseId: number;
   metabaseDatabaseName: string | null;
   metabaseEngine: string | null;

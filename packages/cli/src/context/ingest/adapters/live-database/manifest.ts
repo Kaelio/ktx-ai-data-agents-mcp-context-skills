@@ -22,7 +22,7 @@ const HISTORIC_SQL_MANAGED_USAGE_KEYS = new Set([
   'staleSince',
 ]);
 
-export interface LiveDatabaseManifestColumn {
+interface LiveDatabaseManifestColumn {
   name: string;
   type: string;
   pk?: boolean;
@@ -37,7 +37,7 @@ export interface LiveDatabaseManifestJoinEntry {
   source: string;
 }
 
-export interface LiveDatabaseManifestTableEntry {
+interface LiveDatabaseManifestTableEntry {
   table: string;
   descriptions?: Record<string, string>;
   usage?: TableUsageOutput;

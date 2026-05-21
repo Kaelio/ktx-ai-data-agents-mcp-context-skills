@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildDefaultKtxProjectConfig, type KtxLocalProject, type KtxProjectConfig } from './context/project/index.js';
+import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from './context/project/config.js';
+import type { KtxLocalProject } from './context/project/project.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import type { ManagedLocalEmbeddingsDaemon } from './managed-local-embeddings.js';
 

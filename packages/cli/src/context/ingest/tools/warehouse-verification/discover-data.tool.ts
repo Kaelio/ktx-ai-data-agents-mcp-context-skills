@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { WarehouseCatalogService, type RawSchemaHit } from '../../../scan/warehouse-catalog.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../../context/tools/base-tool.js';
 
 const discoverDataInputSchema = z.object({
   query: z.string().optional(),

@@ -1,13 +1,10 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { SourceAdapter } from './context/ingest/index.js';
-import { initKtxProject } from './context/project/index.js';
-import type {
-  KtxScanReport,
-  LocalScanRunResult,
-  RunLocalScanOptions,
-} from './context/scan/index.js';
+import type { SourceAdapter } from './context/ingest/types.js';
+import { initKtxProject } from './context/project/project.js';
+import type { KtxScanReport } from './context/scan/types.js';
+import type { LocalScanRunResult, RunLocalScanOptions } from './context/scan/local-scan.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCliScanProgress, runKtxScan, type KtxScanDeps } from './scan.js';
 
@@ -138,28 +135,36 @@ const KtxPostgresScanConnector = vi.hoisted(
     },
 );
 
-vi.mock('./connectors/sqlserver/index.js', () => ({
-  createSqlServerLiveDatabaseIntrospection,
+vi.mock('./connectors/sqlserver/connector.js', () => ({
   isKtxSqlServerConnectionConfig,
   KtxSqlServerScanConnector,
 }));
+vi.mock('./connectors/sqlserver/live-database-introspection.js', () => ({
+  createSqlServerLiveDatabaseIntrospection,
+}));
 
-vi.mock('./connectors/bigquery/index.js', () => ({
-  createBigQueryLiveDatabaseIntrospection,
+vi.mock('./connectors/bigquery/connector.js', () => ({
   isKtxBigQueryConnectionConfig,
   KtxBigQueryScanConnector,
 }));
+vi.mock('./connectors/bigquery/live-database-introspection.js', () => ({
+  createBigQueryLiveDatabaseIntrospection,
+}));
 
-vi.mock('./connectors/snowflake/index.js', () => ({
-  createSnowflakeLiveDatabaseIntrospection,
+vi.mock('./connectors/snowflake/connector.js', () => ({
   isKtxSnowflakeConnectionConfig,
   KtxSnowflakeScanConnector,
 }));
+vi.mock('./connectors/snowflake/live-database-introspection.js', () => ({
+  createSnowflakeLiveDatabaseIntrospection,
+}));
 
-vi.mock('./connectors/postgres/index.js', () => ({
-  createPostgresLiveDatabaseIntrospection,
+vi.mock('./connectors/postgres/connector.js', () => ({
   isKtxPostgresConnectionConfig,
   KtxPostgresScanConnector,
+}));
+vi.mock('./connectors/postgres/live-database-introspection.js', () => ({
+  createPostgresLiveDatabaseIntrospection,
 }));
 
 function makeIo(options: { isTTY?: boolean } = {}) {

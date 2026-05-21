@@ -2,7 +2,7 @@ import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initKtxProject } from '../project/index.js';
+import { initKtxProject } from '../../context/project/project.js';
 import { createLocalProjectMemoryIngest } from './local-memory.js';
 import { LocalMemoryRunStore } from './local-memory-runs.js';
 

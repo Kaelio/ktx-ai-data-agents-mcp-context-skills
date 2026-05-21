@@ -1,14 +1,13 @@
-import type { createKtxEmbeddingProvider, createKtxLlmProvider, KtxEmbeddingProvider } from '../../llm/index.js';
-import {
-  createDefaultLocalIngestAdapters,
-  getLocalStageOnlyIngestStatus,
-  type LocalIngestRunRecord,
-  runLocalStageOnlyIngest,
-  type SourceAdapter,
-} from '../ingest/index.js';
-import { createLocalKtxLlmRuntimeFromConfig, KtxScanEmbeddingPortAdapter } from '../llm/index.js';
+import type { createKtxEmbeddingProvider } from '../../llm/embedding-provider.js';
+import type { createKtxLlmProvider } from '../../llm/model-provider.js';
+import type { KtxEmbeddingProvider } from '../../llm/types.js';
+import { createDefaultLocalIngestAdapters } from '../../context/ingest/local-adapters.js';
+import { getLocalStageOnlyIngestStatus, type LocalIngestRunRecord, runLocalStageOnlyIngest } from '../../context/ingest/local-stage-ingest.js';
+import type { SourceAdapter } from '../../context/ingest/types.js';
+import { createLocalKtxLlmRuntimeFromConfig } from '../../context/llm/local-config.js';
+import { KtxScanEmbeddingPortAdapter } from '../../context/llm/embedding-port.js';
 import type { KtxProjectLlmConfig, KtxScanEnrichmentConfig, KtxScanRelationshipConfig } from '../project/config.js';
-import type { KtxLocalProject } from '../project/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import { ktxLocalStateDbPath } from '../project/local-state-db.js';
 import { redactKtxScanReport } from './credentials.js';
 import { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
@@ -96,6 +95,7 @@ export interface LocalScanRunResult {
   report: KtxScanReport;
 }
 
+/** @internal */
 export interface LocalScanStatusResponse {
   runId: string;
   status: LocalIngestRunRecord['status'];
@@ -380,7 +380,6 @@ function createFilteredConnector(connector: KtxScanConnector, enabledTables: Set
   };
 }
 
-export { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
 
 function withInternalLiveDatabaseAdapter(project: KtxLocalProject): KtxLocalProject {
   if (project.config.ingest.adapters.includes(LIVE_DATABASE_ADAPTER)) {
@@ -588,6 +587,7 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
   };
 }
 
+/** @internal */
 export async function getLocalScanReport(project: KtxLocalProject, runId: string): Promise<KtxScanReport | null> {
   const status = await getLocalStageOnlyIngestStatus(project, runId);
   if (!status || status.adapter !== LIVE_DATABASE_ADAPTER) {
@@ -605,6 +605,7 @@ export async function getLocalScanReport(project: KtxLocalProject, runId: string
   };
 }
 
+/** @internal */
 export async function getLocalScanStatus(
   project: KtxLocalProject,
   runId: string,

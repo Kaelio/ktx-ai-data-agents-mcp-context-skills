@@ -1,7 +1,7 @@
 import type { KtxEmbeddingPort } from '../core/embedding.js';
-import type { MemoryAction } from '../memory/index.js';
-import type { SemanticLayerService } from '../sl/index.js';
-import type { TouchedSlSource } from '../tools/index.js';
+import type { MemoryAction } from '../../context/memory/types.js';
+import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import type { MemoryFlowEventSink } from './memory-flow/types.js';
 import type { StageIndex } from './stages/stage-index.types.js';
 import type { WorkUnitOutcome } from './stages/stage-3-work-units.js';
@@ -62,7 +62,7 @@ type SourceFetchIssueKind =
   | 'derived_table_not_supported'
   | 'lookml_connection_mismatch';
 
-export interface SourceFetchIssue {
+interface SourceFetchIssue {
   rawPath: string;
   entityType: string;
   entityId: string | null;
@@ -179,7 +179,7 @@ export interface SourceAdapter {
   }): Promise<void>;
 }
 
-export type IngestBundleRef =
+type IngestBundleRef =
   | { kind: 'upload'; uploadId: string }
   | { kind: 'scheduled_pull'; config: unknown }
   | { kind: 'override'; priorJobId: string };

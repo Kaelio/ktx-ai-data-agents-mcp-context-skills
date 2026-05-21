@@ -1,12 +1,14 @@
-import type { KtxEmbeddingPort } from '../core/index.js';
-import type { KtxLocalProject } from '../project/index.js';
-import type { KtxScanReport, KtxSchemaColumn, KtxSchemaTable, KtxTableRef } from '../scan/index.js';
-import { DEFAULT_PRIORITY, loadLocalSlSourceRecords, resolveDescription } from '../sl/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import type { KtxScanReport, KtxSchemaColumn, KtxSchemaTable, KtxTableRef } from '../../context/scan/types.js';
+import { DEFAULT_PRIORITY, resolveDescription } from '../../context/sl/descriptions.js';
+import { loadLocalSlSourceRecords } from '../../context/sl/local-sl.js';
 import { readLocalKnowledgePage, searchLocalKnowledgePages } from '../wiki/local-knowledge.js';
-import { HybridSearchCore, type FusedSearchCandidate, type SearchCandidateGenerator } from './index.js';
+import { HybridSearchCore } from '../../context/search/hybrid-search-core.js';
+import type { FusedSearchCandidate, SearchCandidateGenerator } from '../../context/search/types.js';
 
-export type KtxDiscoverDataKind = 'wiki' | 'sl_source' | 'sl_measure' | 'sl_dimension' | 'table' | 'column';
-export type KtxDiscoverDataMatchedOn = 'name' | 'display' | 'description' | 'comment' | 'expr' | 'sample_value' | 'body';
+type KtxDiscoverDataKind = 'wiki' | 'sl_source' | 'sl_measure' | 'sl_dimension' | 'table' | 'column';
+type KtxDiscoverDataMatchedOn = 'name' | 'display' | 'description' | 'comment' | 'expr' | 'sample_value' | 'body';
 
 export interface KtxDiscoverDataInput {
   query: string;
@@ -15,7 +17,7 @@ export interface KtxDiscoverDataInput {
   limit?: number;
 }
 
-export interface KtxDiscoverDataRef {
+interface KtxDiscoverDataRef {
   kind: KtxDiscoverDataKind;
   id: string;
   score: number;

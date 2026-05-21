@@ -1,5 +1,6 @@
-import type { KtxLocalProject, KtxProjectConnectionConfig } from '../../../project/index.js';
-import { ktxLocalStateDbPath } from '../../../project/index.js';
+import type { KtxLocalProject } from '../../../../context/project/project.js';
+import type { KtxProjectConnectionConfig } from '../../../../context/project/config.js';
+import { ktxLocalStateDbPath } from '../../../../context/project/local-state-db.js';
 import { resolveKtxConfigReference } from '../../../core/config-reference.js';
 import {
   DEFAULT_METABASE_CLIENT_CONFIG,

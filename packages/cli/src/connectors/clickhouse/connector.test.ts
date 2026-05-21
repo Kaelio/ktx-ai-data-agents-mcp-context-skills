@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  clickHouseClientConfigFromConfig,
-  createClickHouseLiveDatabaseIntrospection,
-  isKtxClickHouseConnectionConfig,
-  KtxClickHouseScanConnector,
-  type KtxClickHouseClientFactory,
-} from './index.js';
+import { clickHouseClientConfigFromConfig, isKtxClickHouseConnectionConfig, KtxClickHouseScanConnector, type KtxClickHouseClientFactory } from '../../connectors/clickhouse/connector.js';
+import { createClickHouseLiveDatabaseIntrospection } from '../../connectors/clickhouse/live-database-introspection.js';
 
 function result<T>(payload: T) {
   return {

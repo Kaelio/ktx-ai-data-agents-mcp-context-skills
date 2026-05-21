@@ -5,12 +5,13 @@ import type {
   MemoryFlowViewModel,
 } from './types.js';
 
+/** @internal */
 export interface MemoryFlowStatusBadge {
   label: '..' | '>>' | 'OK' | '!!' | 'XX';
   text: 'waiting' | 'active' | 'complete' | 'warning' | 'failed';
 }
 
-export interface MemoryFlowVisualColumn {
+interface MemoryFlowVisualColumn {
   id: MemoryFlowColumnId;
   title: string;
   status: MemoryFlowDisplayStatus;
@@ -18,12 +19,14 @@ export interface MemoryFlowVisualColumn {
   pulse: boolean;
 }
 
+/** @internal */
 export interface MemoryFlowVisualModel {
   columns: MemoryFlowVisualColumn[];
   connectorLine: string;
   pulseColumnId: MemoryFlowColumnId;
 }
 
+/** @internal */
 export function memoryFlowStatusBadge(status: MemoryFlowDisplayStatus): MemoryFlowStatusBadge {
   if (status === 'active') return { label: '>>', text: 'active' };
   if (status === 'complete') return { label: 'OK', text: 'complete' };
@@ -56,6 +59,7 @@ function renderColumn(column: MemoryFlowVisualColumn): string {
   return `${column.badge.label} ${column.title}`;
 }
 
+/** @internal */
 export function buildMemoryFlowVisualModel(view: MemoryFlowViewModel): MemoryFlowVisualModel {
   const pulseColumn = selectPulseColumn(view.columns);
   const columns = view.columns.map((column) => ({

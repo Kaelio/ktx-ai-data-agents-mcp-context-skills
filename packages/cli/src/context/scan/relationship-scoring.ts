@@ -1,4 +1,4 @@
-export const KTX_RELATIONSHIP_SCORE_SIGNAL_KEYS = [
+const KTX_RELATIONSHIP_SCORE_SIGNAL_KEYS = [
   'nameSimilarity',
   'typeCompatibility',
   'valueOverlap',
@@ -8,7 +8,7 @@ export const KTX_RELATIONSHIP_SCORE_SIGNAL_KEYS = [
   'structuralPrior',
 ] as const;
 
-export type KtxRelationshipScoreSignal = (typeof KTX_RELATIONSHIP_SCORE_SIGNAL_KEYS)[number];
+type KtxRelationshipScoreSignal = (typeof KTX_RELATIONSHIP_SCORE_SIGNAL_KEYS)[number];
 
 export type KtxRelationshipFixtureOrigin = 'synthetic' | 'public' | 'customer';
 
@@ -31,6 +31,7 @@ export interface KtxRelationshipScoreBreakdown {
   contributions: KtxRelationshipScoreWeights;
 }
 
+/** @internal */
 export interface KtxRelationshipScoringCalibrationObservation {
   fixtureId: string;
   origin: KtxRelationshipFixtureOrigin;
@@ -71,10 +72,12 @@ function sanitizeSignalVector(signals: KtxRelationshipSignalVector): KtxRelation
   };
 }
 
+/** @internal */
 export function defaultKtxRelationshipScoreWeights(): KtxRelationshipScoreWeights {
   return { ...DEFAULT_WEIGHTS };
 }
 
+/** @internal */
 export function normalizeKtxRelationshipScoreWeights(
   weights: Partial<KtxRelationshipScoreWeights> = DEFAULT_WEIGHTS,
 ): KtxRelationshipScoreWeights {
@@ -123,6 +126,7 @@ function averageSignal(
   return observations.reduce((sum, observation) => sum + clampScore(observation.signals[key]), 0) / observations.length;
 }
 
+/** @internal */
 export function calibrateWeightsFromSyntheticFixtures(
   observations: readonly KtxRelationshipScoringCalibrationObservation[],
 ): KtxRelationshipScoreWeights {

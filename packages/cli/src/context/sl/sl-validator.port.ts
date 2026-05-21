@@ -1,4 +1,4 @@
-export interface SlValidationResult {
+interface SlValidationResult {
   errors: string[];
   warnings: string[];
 }

@@ -1,4 +1,4 @@
-import type { InsertContextCandidateInput } from '../ingest/context-candidates/index.js';
+import type { InsertContextCandidateInput } from '../../context/ingest/context-candidates/types.js';
 import type { JsonValue } from '../ingest/ports.js';
 
 export interface ContextEvidenceSearchArgs {
@@ -40,7 +40,7 @@ export interface ContextEvidenceSearchResult {
   lanes?: ContextEvidenceSearchLaneSummary[];
 }
 
-export interface ContextEvidenceDocumentForRead {
+interface ContextEvidenceDocumentForRead {
   id: string;
   title: string;
   path: string;
@@ -48,7 +48,7 @@ export interface ContextEvidenceDocumentForRead {
   url: string | null;
 }
 
-export interface ContextEvidenceChunkForRead {
+interface ContextEvidenceChunkForRead {
   id: string;
   content: string;
   citation?: JsonValue;
@@ -89,7 +89,7 @@ export interface ContextEvidenceChunkForCandidate {
   lastEditedAt: Date | null;
 }
 
-export interface ContextCandidateInsertResult {
+interface ContextCandidateInsertResult {
   id: string;
   candidate_key: string;
   promotion_score: number;

@@ -1,10 +1,6 @@
-import type { SemanticLayerService, SemanticLayerSource } from '../../../sl/index.js';
-import {
-  addTouchedSlSource,
-  createTouchedSlSources,
-  listTouchedSlSources,
-  type TouchedSlSource,
-} from '../../../tools/index.js';
+import type { SemanticLayerService } from '../../../../context/sl/semantic-layer.service.js';
+import type { SemanticLayerSource } from '../../../../context/sl/types.js';
+import { addTouchedSlSource, createTouchedSlSources, listTouchedSlSources, type TouchedSlSource } from '../../../../context/tools/touched-sl-sources.js';
 import type { MetricFlowParseResult } from './deep-parse.js';
 import {
   buildMetricflowJoinsForModel,
@@ -29,12 +25,12 @@ export interface MetricFlowImportResult {
   touchedSources: TouchedSlSource[];
 }
 
-export type MetricflowSemanticLayerWriter = Pick<
+type MetricflowSemanticLayerWriter = Pick<
   SemanticLayerService,
   'getManifestEntry' | 'isManifestBacked' | 'loadAllSources' | 'loadSource' | 'writeSource'
 >;
 
-export type MetricflowSemanticLayerService = MetricflowSemanticLayerWriter & {
+type MetricflowSemanticLayerService = MetricflowSemanticLayerWriter & {
   forWorktree(workdir: string): MetricflowSemanticLayerWriter;
 };
 

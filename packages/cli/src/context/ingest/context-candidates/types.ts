@@ -1,7 +1,7 @@
 import type { JsonValue } from '../ports.js';
 
-export type ContextCandidateActionHint = 'create' | 'update' | 'merge' | 'conflict' | 'skip';
-export type ContextCandidateStatus = 'pending' | 'promoted' | 'merged' | 'rejected' | 'conflict';
+type ContextCandidateActionHint = 'create' | 'update' | 'merge' | 'conflict' | 'skip';
+type ContextCandidateStatus = 'pending' | 'promoted' | 'merged' | 'rejected' | 'conflict';
 export type ContextCandidateRejectionReason =
   | 'low_score'
   | 'duplicates_existing_wiki'
@@ -10,20 +10,9 @@ export type ContextCandidateRejectionReason =
   | 'exceeded_run_budget'
   | 'exceeded_curator_passes'
   | 'curator_pass_error';
-export type ContextCandidateLane = 'light' | 'full' | null;
-export type ContextCandidateScoreAggregation = 'max' | 'mean' | 'sum';
+type ContextCandidateLane = 'light' | 'full' | null;
+type ContextCandidateScoreAggregation = 'max' | 'mean' | 'sum';
 
-export interface ContextCandidateForPrompt {
-  candidateKey: string;
-  topic: string;
-  assertion: string;
-  rationale: string;
-  actionHint: string;
-  status: string;
-  promotionScore: number;
-  suggestedPageKey: string | null;
-  evidenceRefs: JsonValue;
-}
 
 export interface ContextCandidateVerdictSummary {
   pending: number;

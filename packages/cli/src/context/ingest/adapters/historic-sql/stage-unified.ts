@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { SqlAnalysisPort } from '../../../sql-analysis/index.js';
+import type { SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js';
 import {
   bucketDistinctUsers,
   bucketErrorRate,

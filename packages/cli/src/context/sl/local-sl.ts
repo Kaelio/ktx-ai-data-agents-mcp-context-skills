@@ -1,9 +1,11 @@
 import { join } from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
-import type { KtxEmbeddingPort, KtxFileWriteResult } from '../core/index.js';
-import type { KtxLocalProject } from '../project/index.js';
-import { HybridSearchCore, type SearchCandidateGenerator } from '../search/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxFileWriteResult } from '../../context/core/file-store.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { HybridSearchCore } from '../../context/search/hybrid-search-core.js';
+import type { SearchCandidateGenerator } from '../../context/search/types.js';
 import { DEFAULT_PRIORITY, resolveDescription } from './descriptions.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
@@ -301,6 +303,7 @@ export async function validateLocalSlSource(
   }
 }
 
+/** @internal */
 export async function writeLocalSlSource(
   project: KtxLocalProject,
   input: { connectionId: string; sourceName: string; yaml: string },

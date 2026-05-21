@@ -1,7 +1,7 @@
-import type { KtxFileStorePort } from '../../../core/index.js';
-import type { SlConnectionCatalogPort } from '../../../sl/index.js';
+import type { KtxFileStorePort } from '../../../core/file-store.js';
+import type { SlConnectionCatalogPort } from '../../../sl/ports.js';
 import { WarehouseCatalogService } from '../../../scan/warehouse-catalog.js';
-import type { BaseTool, ToolContext } from '../../../tools/index.js';
+import type { BaseTool, ToolContext } from '../../../tools/base-tool.js';
 import { DiscoverDataTool } from './discover-data.tool.js';
 import { EntityDetailsTool } from './entity-details.tool.js';
 import { SqlExecutionTool } from './sql-execution.tool.js';

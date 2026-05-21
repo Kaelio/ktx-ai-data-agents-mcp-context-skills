@@ -8,7 +8,7 @@ import {
 } from '../ingest/adapters/notion/types.js';
 import type { KtxProjectConnectionConfig } from '../project/config.js';
 
-export const KTX_NOTION_ORG_KNOWLEDGE_WARNING =
+const KTX_NOTION_ORG_KNOWLEDGE_WARNING =
   'Anything accessible to this Notion integration can become organization knowledge.';
 
 type KtxNotionCrawlMode = 'all_accessible' | 'selected_roots';
@@ -39,6 +39,7 @@ export type KtxNotionConnectionConfig = Omit<
   max_knowledge_updates_per_run: number;
 };
 
+/** @internal */
 export interface RedactedKtxNotionConnectionConfig {
   driver: 'notion';
   hasAuthToken: boolean;
@@ -152,6 +153,7 @@ export function parseNotionConnectionConfig(raw: unknown): KtxNotionConnectionCo
   };
 }
 
+/** @internal */
 export function redactNotionConnectionConfig(config: KtxNotionConnectionConfig): RedactedKtxNotionConnectionConfig {
   return {
     driver: 'notion',
@@ -171,6 +173,7 @@ function expandHome(path: string): string {
   return path === '~' || path.startsWith('~/') ? resolve(homedir(), path.slice(2)) : path;
 }
 
+/** @internal */
 export async function resolveNotionAuthToken(
   authTokenRef: string,
   options: ResolveNotionTokenOptions = {},

@@ -1,9 +1,9 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentRunnerPort, RunLoopParams } from '../llm/index.js';
+import type { AgentRunnerPort, RunLoopParams } from '../../context/llm/runtime-port.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initKtxProject, type KtxLocalProject } from '../project/index.js';
+import { initKtxProject, type KtxLocalProject } from '../../context/project/project.js';
 import { LocalMetabaseDiscoveryCache } from './adapters/metabase/local-source-state-store.js';
 import { getLocalIngestStatus, runLocalMetabaseIngest } from './local-ingest.js';
 import type { ChunkResult, FetchContext, SourceAdapter } from './types.js';

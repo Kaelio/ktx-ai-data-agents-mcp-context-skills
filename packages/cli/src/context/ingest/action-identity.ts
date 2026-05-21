@@ -1,4 +1,4 @@
-import type { MemoryAction } from '../memory/index.js';
+import type { MemoryAction } from '../../context/memory/types.js';
 
 export function actionTargetConnectionId(action: MemoryAction, runConnectionId: string): string {
   return action.target === 'sl' ? (action.targetConnectionId ?? runConnectionId) : runConnectionId;

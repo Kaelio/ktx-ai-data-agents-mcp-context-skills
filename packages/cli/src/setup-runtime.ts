@@ -1,8 +1,5 @@
-import {
-  loadKtxProject,
-  markKtxSetupStateStepComplete,
-  type KtxLocalProject,
-} from './context/project/index.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
+import { markKtxSetupStateStepComplete } from './context/project/setup-config.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,

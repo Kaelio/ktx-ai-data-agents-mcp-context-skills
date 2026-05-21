@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { parsedTargetTableSchema } from '../../parsed-target-table.js';
 
-export const metricflowPullConfigSchema = z.object({
+const metricflowPullConfigSchema = z.object({
   repoUrl: z.string().url(),
   branch: z.string().default('main'),
   path: z.string().nullable().default(null),

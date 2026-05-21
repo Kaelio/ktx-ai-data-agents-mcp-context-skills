@@ -109,9 +109,3 @@ export interface SlSearchLaneSummary {
   reason?: string;
 }
 
-export interface SlSearchMetadata {
-  score: number;
-  matchReasons: SlSearchMatchReason[];
-  dictionaryMatches?: SlDictionaryMatch[];
-  lanes?: SlSearchLaneSummary[];
-}

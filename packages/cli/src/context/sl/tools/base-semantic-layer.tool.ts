@@ -1,14 +1,13 @@
 import type { ZodType } from 'zod';
-import type { GitAuthorResolverPort, ToolContext, ToolOutput } from '../../tools/index.js';
-import { BaseTool } from '../../tools/index.js';
+import type { GitAuthorResolverPort } from '../../../context/tools/authors.js';
+import type { ToolContext, ToolOutput } from '../../../context/tools/base-tool.js';
+import { BaseTool } from '../../../context/tools/base-tool.js';
 import { sourceDefinitionSchema } from '../schemas.js';
 import { SemanticLayerService } from '../semantic-layer.service.js';
 import { SlSearchService } from '../sl-search.service.js';
 
 export { sourceDefinitionSchema };
-
 // ── Shared output types ──
-
 export interface SemanticLayerStructured {
   success: boolean;
   sourceName: string;

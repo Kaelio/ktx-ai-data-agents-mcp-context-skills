@@ -42,13 +42,13 @@ export function createKtxConnectorCapabilities(
   };
 }
 
-export interface KtxSchemaScope {
+interface KtxSchemaScope {
   catalogs?: string[];
   schemas?: string[];
   datasets?: string[];
 }
 
-export type KtxSchemaTableKind = 'table' | 'view' | 'external' | 'event_stream';
+type KtxSchemaTableKind = 'table' | 'view' | 'external' | 'event_stream';
 
 export type KtxSchemaDimensionType = 'time' | 'string' | 'number' | 'boolean';
 
@@ -91,17 +91,17 @@ export interface KtxSchemaSnapshot {
   metadata: Record<string, unknown>;
 }
 
-export interface KtxCredentialEnvReference {
+interface KtxCredentialEnvReference {
   kind: 'env';
   name: string;
 }
 
-export interface KtxCredentialFileReference {
+interface KtxCredentialFileReference {
   kind: 'file';
   path: string;
 }
 
-export interface KtxResolvedCredentialEnvelope {
+interface KtxResolvedCredentialEnvelope {
   kind: 'resolved';
   source: 'standalone' | 'host';
   values: Record<string, unknown>;
@@ -113,13 +113,14 @@ export type KtxCredentialEnvelope =
   | KtxCredentialFileReference
   | KtxResolvedCredentialEnvelope;
 
+/** @internal */
 export interface KtxNetworkEndpoint {
   host: string;
   port: number;
   close?: () => Promise<void>;
 }
 
-export interface KtxNetworkTunnelRequest<TConnection = Record<string, unknown>> {
+interface KtxNetworkTunnelRequest<TConnection = Record<string, unknown>> {
   connectionId: string;
   driver: KtxConnectionDriver;
   host: string;
@@ -127,6 +128,7 @@ export interface KtxNetworkTunnelRequest<TConnection = Record<string, unknown>> 
   connection: TConnection;
 }
 
+/** @internal */
 export interface KtxNetworkTunnelPort<TConnection = Record<string, unknown>> {
   resolveEndpoint(input: KtxNetworkTunnelRequest<TConnection>): Promise<KtxNetworkEndpoint | null>;
 }
@@ -211,6 +213,7 @@ export interface KtxColumnStatsResult {
   distinctCount: number | null;
 }
 
+/** @internal */
 export interface KtxEventTypeDiscoveryInput {
   connectionId: string;
   table: KtxTableRef;
@@ -220,11 +223,13 @@ export interface KtxEventTypeDiscoveryInput {
   lookbackDays?: number;
 }
 
+/** @internal */
 export interface KtxEventTypeDiscovery {
   value: string;
   count: number;
 }
 
+/** @internal */
 export interface KtxEventPropertyDiscoveryInput {
   connectionId: string;
   table: KtxTableRef;
@@ -234,11 +239,13 @@ export interface KtxEventPropertyDiscoveryInput {
   lookbackDays?: number;
 }
 
+/** @internal */
 export interface KtxEventPropertyDiscovery {
   key: string;
   count: number;
 }
 
+/** @internal */
 export interface KtxEventPropertyValuesInput {
   connectionId: string;
   table: KtxTableRef;
@@ -249,11 +256,13 @@ export interface KtxEventPropertyValuesInput {
   lookbackDays?: number;
 }
 
+/** @internal */
 export interface KtxEventPropertyValuesResult {
   values: string[];
   cardinality: number;
 }
 
+/** @internal */
 export interface KtxEventStreamDiscoveryPort {
   listEventTypes(input: KtxEventTypeDiscoveryInput, ctx: KtxScanContext): Promise<KtxEventTypeDiscovery[]>;
   listPropertyKeys(input: KtxEventPropertyDiscoveryInput, ctx: KtxScanContext): Promise<KtxEventPropertyDiscovery[]>;
@@ -283,7 +292,7 @@ export interface KtxTableListEntry {
   kind: 'table' | 'view';
 }
 
-export interface KtxConnectorTestResult {
+interface KtxConnectorTestResult {
   success: boolean;
   error?: string;
 }
@@ -308,7 +317,7 @@ export interface KtxEmbeddingPort {
   embedBatch(texts: string[]): Promise<number[][]>;
 }
 
-export interface KtxStructuralSyncStats {
+interface KtxStructuralSyncStats {
   tablesCreated: number;
   tablesUpdated: number;
   tablesDeleted: number;
@@ -317,7 +326,7 @@ export interface KtxStructuralSyncStats {
   columnsDeleted: number;
 }
 
-export interface KtxScanDiffSummary {
+interface KtxScanDiffSummary {
   tablesAdded: number;
   tablesModified: number;
   tablesDeleted: number;
@@ -327,14 +336,14 @@ export interface KtxScanDiffSummary {
   columnsDeleted: number;
 }
 
-export interface KtxScanArtifactPaths {
+interface KtxScanArtifactPaths {
   rawSourcesDir: string | null;
   reportPath: string | null;
   manifestShards: string[];
   enrichmentArtifacts: string[];
 }
 
-export type KtxScanWarningCode =
+type KtxScanWarningCode =
   | 'connector_capability_missing'
   | 'sampling_failed'
   | 'statistics_failed'

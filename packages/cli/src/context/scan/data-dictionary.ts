@@ -36,17 +36,19 @@ export const defaultKtxDataDictionarySettings: KtxDataDictionarySettings = {
   ],
 };
 
-export type KtxDataDictionarySkipReason =
+type KtxDataDictionarySkipReason =
   | 'not_candidate'
   | 'already_populated'
   | 'empty_column'
   | 'high_cardinality';
 
+/** @internal */
 export interface KtxDataDictionarySampleDecision {
   sample: boolean;
   reason?: KtxDataDictionarySkipReason;
 }
 
+/** @internal */
 export interface KtxDataDictionaryColumnState {
   columnType: string;
   columnName: string;
@@ -83,6 +85,7 @@ export function isKtxDataDictionaryCandidate(
   return true;
 }
 
+/** @internal */
 export function shouldKtxSampleColumnForDictionary(
   input: KtxDataDictionaryColumnState,
 ): KtxDataDictionarySampleDecision {

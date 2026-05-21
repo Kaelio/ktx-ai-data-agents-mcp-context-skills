@@ -1,13 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import {
-  type KtxLocalProject,
-  loadKtxProject,
-  markKtxSetupStateStepComplete,
-  readKtxSetupState,
-  serializeKtxProjectConfig,
-} from './context/project/index.js';
+import { type KtxLocalProject, loadKtxProject } from './context/project/project.js';
+import { markKtxSetupStateStepComplete, readKtxSetupState } from './context/project/setup-config.js';
+import { serializeKtxProjectConfig } from './context/project/config.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
 import {

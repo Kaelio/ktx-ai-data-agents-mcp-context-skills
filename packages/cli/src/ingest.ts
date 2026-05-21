@@ -1,24 +1,13 @@
-import {
-  buildMemoryFlowViewModel,
-  createMemoryFlowLiveBuffer,
-  formatMemoryFlowFinalSummary,
-  getLatestLocalIngestStatus,
-  getLocalIngestStatus,
-  type IngestReportSnapshot,
-  ingestReportToMemoryFlowReplay,
-  type LocalMetabaseFanoutResult,
-  type LocalMetabaseFanoutProgress,
-  type MemoryFlowEvent,
-  type MemoryFlowReplayInput,
-  type RunLocalIngestOptions,
-  renderMemoryFlowReplay,
-  runLocalIngest,
-  runLocalMetabaseIngest,
-  savedMemoryCountsForReport,
-  sanitizeMemoryFlowError,
-} from './context/ingest/index.js';
-import type { KtxSqlQueryExecutorPort } from './context/connections/index.js';
-import { loadKtxProject, type KtxLocalProject } from './context/project/index.js';
+import { buildMemoryFlowViewModel } from './context/ingest/memory-flow/view-model.js';
+import { createMemoryFlowLiveBuffer, sanitizeMemoryFlowError } from './context/ingest/memory-flow/live-buffer.js';
+import { formatMemoryFlowFinalSummary } from './context/ingest/memory-flow/summary.js';
+import { getLatestLocalIngestStatus, getLocalIngestStatus, type LocalMetabaseFanoutResult, type LocalMetabaseFanoutProgress, type RunLocalIngestOptions, runLocalIngest, runLocalMetabaseIngest } from './context/ingest/local-ingest.js';
+import { type IngestReportSnapshot, savedMemoryCountsForReport } from './context/ingest/reports.js';
+import { ingestReportToMemoryFlowReplay } from './context/ingest/memory-flow/events.js';
+import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/memory-flow/types.js';
+import { renderMemoryFlowReplay } from './context/ingest/memory-flow/render.js';
+import type { KtxSqlQueryExecutorPort } from './context/connections/query-executor.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';

@@ -1,4 +1,4 @@
-import type { KtxPostgresQueryClient } from '../../context/ingest/index.js';
+import type { KtxPostgresQueryClient } from '../../context/ingest/adapters/historic-sql/types.js';
 import { KtxPostgresScanConnector, type KtxPostgresScanConnectorOptions } from './connector.js';
 
 export type KtxPostgresHistoricSqlQueryClientOptions = KtxPostgresScanConnectorOptions;

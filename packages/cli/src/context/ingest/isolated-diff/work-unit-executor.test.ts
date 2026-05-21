@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { GitService } from '../../core/index.js';
+import { GitService } from '../../../context/core/git.service.js';
 import { FileIngestTraceWriter } from '../ingest-trace.js';
 import { runIsolatedWorkUnit } from './work-unit-executor.js';
 

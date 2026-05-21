@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 
-import type { ReindexSummary } from './context/index-sync/index.js';
+import type { ReindexSummary } from './context/index-sync/types.js';
 import { describe, expect, it, vi } from 'vitest';
 import { renderReindexJson, renderReindexPlain, reindexHasErrors } from './admin-reindex.js';
 import { runKtxCli } from './index.js';

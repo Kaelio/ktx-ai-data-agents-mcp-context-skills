@@ -1,8 +1,8 @@
 import type { KtxSchemaDimensionType, KtxTableRef } from './types.js';
 
-export type KtxDescriptionSource = 'ai' | 'db' | 'dbt' | 'user' | (string & {});
+type KtxDescriptionSource = 'ai' | 'db' | 'dbt' | 'user' | (string & {});
 
-export type KtxRelationshipSource = 'formal' | 'inferred' | 'manual';
+type KtxRelationshipSource = 'formal' | 'inferred' | 'manual';
 
 export type KtxRelationshipType = 'many_to_one' | 'one_to_many' | 'one_to_one';
 
@@ -54,12 +54,14 @@ export interface KtxEnrichedSchema {
   relationships: KtxEnrichedRelationship[];
 }
 
+/** @internal */
 export interface KtxStructuralSyncPlan {
   connectionId: string;
   snapshotId: string;
   operations: Array<Record<string, unknown>>;
 }
 
+/** @internal */
 export interface KtxDescriptionUpdate {
   connectionId: string;
   table: KtxTableRef;
@@ -68,14 +70,8 @@ export interface KtxDescriptionUpdate {
   columnDescriptions?: Record<string, string | null>;
 }
 
-export interface KtxMetadataUpdate {
-  connectionId: string;
-  table: KtxTableRef;
-  source: KtxDescriptionSource;
-  tableFields?: Record<string, unknown>;
-  columnFields?: Record<string, Record<string, unknown>>;
-}
 
+/** @internal */
 export interface KtxJoinUpdate {
   connectionId: string;
   fromTable: string;
@@ -87,6 +83,7 @@ export interface KtxJoinUpdate {
   authorEmail: string;
 }
 
+/** @internal */
 export interface KtxColumnSampleUpdate {
   columnId: string;
   sampleValues: string[] | null;
@@ -111,6 +108,7 @@ export interface KtxRelationshipUpdate {
   skipped: KtxSkippedRelationship[];
 }
 
+/** @internal */
 export interface KtxScanMetadataStore {
   loadSchema(connectionId: string): Promise<KtxEnrichedSchema | null>;
   applyStructuralPlan(plan: KtxStructuralSyncPlan): Promise<KtxEnrichedSchema>;

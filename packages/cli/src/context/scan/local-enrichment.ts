@@ -1,5 +1,5 @@
 import pLimit from 'p-limit';
-import type { KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import { buildDefaultKtxProjectConfig, type KtxScanRelationshipConfig } from '../project/config.js';
 import { type KtxDescriptionColumnTable, KtxDescriptionGenerator } from './description-generation.js';
 import { buildKtxColumnEmbeddingText } from './embedding-text.js';

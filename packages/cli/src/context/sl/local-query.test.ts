@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
-import { initKtxProject, type KtxLocalProject } from '../project/index.js';
+import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
+import { initKtxProject, type KtxLocalProject } from '../../context/project/project.js';
 import { compileLocalSlQuery } from './local-query.js';
 
 describe('compileLocalSlQuery', () => {

@@ -9,9 +9,9 @@ import {
 } from './relationship-profiling.js';
 import type { KtxConnectionDriver, KtxQueryResult, KtxScanContext } from './types.js';
 
-export type KtxValidatedRelationshipStatus = 'accepted' | 'review' | 'rejected';
+type KtxValidatedRelationshipStatus = 'accepted' | 'review' | 'rejected';
 
-export interface KtxRelationshipValidationSettings {
+interface KtxRelationshipValidationSettings {
   acceptThreshold: number;
   reviewThreshold: number;
   minTargetUniqueness: number;
@@ -22,7 +22,7 @@ export interface KtxRelationshipValidationSettings {
   validationBudget?: KtxRelationshipValidationBudget;
 }
 
-export interface KtxRelationshipValidationEvidence {
+interface KtxRelationshipValidationEvidence {
   targetUniqueness: number;
   sourceCoverage: number;
   violationCount: number;

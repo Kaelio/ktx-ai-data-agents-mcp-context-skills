@@ -1,5 +1,6 @@
-import type { SlValidationDeps, SlValidatorPort } from '../../sl/index.js';
-import type { TouchedSlSource } from '../../tools/index.js';
+import type { SlValidationDeps } from '../../../context/sl/tools/sl-warehouse-validation.js';
+import type { SlValidatorPort } from '../../../context/sl/sl-validator.port.js';
+import type { TouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
 
 export interface WuValidationResult {
   validSources: string[];

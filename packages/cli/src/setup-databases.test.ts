@@ -1,7 +1,9 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetupState } from './context/project/index.js';
+import { initKtxProject } from './context/project/project.js';
+import { parseKtxProjectConfig } from './context/project/config.js';
+import { readKtxSetupState, writeKtxSetupState } from './context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type KtxSetupDatabaseDriver,

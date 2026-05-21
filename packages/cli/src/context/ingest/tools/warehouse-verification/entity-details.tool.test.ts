@@ -2,9 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { initKtxProject, type KtxLocalProject } from '../../../project/index.js';
+import { initKtxProject, type KtxLocalProject } from '../../../../context/project/project.js';
 import { WarehouseCatalogService } from '../../../scan/warehouse-catalog.js';
-import type { ToolContext } from '../../../tools/index.js';
+import type { ToolContext } from '../../../../context/tools/base-tool.js';
 import { EntityDetailsTool } from './entity-details.tool.js';
 
 describe('EntityDetailsTool', () => {

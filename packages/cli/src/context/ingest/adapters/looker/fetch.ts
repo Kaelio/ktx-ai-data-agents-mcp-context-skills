@@ -31,7 +31,7 @@ import {
   stagedUserFileSchema,
 } from './types.js';
 
-export interface LookerEntityRef {
+interface LookerEntityRef {
   id: string;
   updatedAt?: string | null;
 }

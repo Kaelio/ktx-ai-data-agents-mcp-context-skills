@@ -1,5 +1,5 @@
-import type { SemanticLayerSource } from '../sl/index.js';
-import type { TouchedSlSource } from '../tools/index.js';
+import type { SemanticLayerSource } from '../../context/sl/types.js';
+import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import type { IngestReportFinalizationMismatch } from './reports.js';
 
 interface DeriveTouchedSourcesInput {

@@ -1,18 +1,11 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
-import {
-  createDaemonLookerTableIdentifierParser,
-  type DaemonLiveDatabaseIntrospectionOptions,
-  type KtxDaemonDatabaseHttpJsonRunner,
-  type KtxDaemonTableIdentifierHttpJsonRunner,
-  type LookerTableIdentifierParser,
-} from './context/ingest/index.js';
-import {
-  createHttpSqlAnalysisPort,
-  type KtxSqlAnalysisHttpJsonRunner,
-  type SqlAnalysisPort,
-} from './context/sql-analysis/index.js';
+import { createDaemonLookerTableIdentifierParser, type KtxDaemonTableIdentifierHttpJsonRunner } from './context/ingest/adapters/looker/daemon-table-identifier-parser.js';
+import type { DaemonLiveDatabaseIntrospectionOptions, KtxDaemonDatabaseHttpJsonRunner } from './context/ingest/adapters/live-database/daemon-introspection.js';
+import type { LookerTableIdentifierParser } from './context/ingest/adapters/looker/mapping.js';
+import { createHttpSqlAnalysisPort, type KtxSqlAnalysisHttpJsonRunner } from './context/sql-analysis/http-sql-analysis-port.js';
+import type { SqlAnalysisPort } from './context/sql-analysis/ports.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
   ensureManagedPythonCommandRuntime,

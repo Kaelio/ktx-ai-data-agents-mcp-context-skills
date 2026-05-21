@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { DEFAULT_PRIORITY, resolveDescription } from '../descriptions.js';
 import type { SemanticLayerService } from '../semantic-layer.service.js';
 import type { SemanticLayerSource } from '../types.js';
-import type { ToolContext, ToolOutput } from '../../tools/index.js';
+import type { ToolContext, ToolOutput } from '../../../context/tools/base-tool.js';
 import { BaseSemanticLayerTool, type BaseSemanticLayerToolDeps } from './base-semantic-layer.tool.js';
 import { slToolConnectionIdSchema } from './connection-id-schema.js';
 

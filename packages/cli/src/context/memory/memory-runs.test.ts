@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MemoryAgentInput, MemoryAgentResult, MemoryAgentService } from './index.js';
+import type { MemoryAgentInput, MemoryAgentResult } from '../../context/memory/types.js';
+import type { MemoryAgentService } from '../../context/memory/memory-agent.service.js';
 import { MemoryIngestService, type MemoryRunStorePort } from './memory-runs.js';
 
 class InMemoryRunStore implements MemoryRunStorePort {

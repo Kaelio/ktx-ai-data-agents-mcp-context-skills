@@ -1,10 +1,11 @@
-import type { MemoryIngestService } from '../memory/index.js';
+import type { MemoryIngestService } from '../../context/memory/memory-runs.js';
 import type { KtxEntityDetailsInput, KtxEntityDetailsResponse } from '../scan/entity-details.js';
-import type { KtxDiscoverDataInput, KtxDiscoverDataResponse } from '../search/index.js';
-import type { KtxDictionarySearchInput, KtxDictionarySearchResponse, SemanticLayerQueryInput } from '../sl/index.js';
-import type { WikiSearchLaneSummary, WikiSearchMatchReason } from '../wiki/index.js';
+import type { KtxDiscoverDataInput, KtxDiscoverDataResponse } from '../../context/search/discover.js';
+import type { KtxDictionarySearchInput, KtxDictionarySearchResponse } from '../../context/sl/dictionary-search.js';
+import type { SemanticLayerQueryInput } from '../../context/sl/types.js';
+import type { WikiSearchLaneSummary, WikiSearchMatchReason } from '../../context/wiki/types.js';
 
-export interface KtxMcpTextContent {
+interface KtxMcpTextContent {
   type: 'text';
   text: string;
 }
@@ -38,6 +39,7 @@ export interface KtxMcpToolHandlerContext {
   }) => Promise<void>;
 }
 
+/** @internal */
 export interface MemoryIngestPort {
   ingest: MemoryIngestService['ingest'];
   status: MemoryIngestService['status'];
@@ -61,17 +63,17 @@ export interface KtxMcpServerLike {
   ): void;
 }
 
-export interface KtxConnectionSummary {
+interface KtxConnectionSummary {
   id: string;
   name: string;
   connectionType: string;
 }
 
-export interface KtxConnectionsMcpPort {
+interface KtxConnectionsMcpPort {
   list(): Promise<KtxConnectionSummary[]>;
 }
 
-export interface KtxKnowledgeSearchResult {
+interface KtxKnowledgeSearchResult {
   key: string;
   path: string;
   scope: 'GLOBAL' | 'USER';
@@ -81,12 +83,12 @@ export interface KtxKnowledgeSearchResult {
   lanes?: WikiSearchLaneSummary[];
 }
 
-export interface KtxKnowledgeSearchResponse {
+interface KtxKnowledgeSearchResponse {
   results: KtxKnowledgeSearchResult[];
   totalFound: number;
 }
 
-export interface KtxKnowledgePage {
+interface KtxKnowledgePage {
   key: string;
   summary: string;
   content: string;
@@ -96,17 +98,18 @@ export interface KtxKnowledgePage {
   slRefs?: string[];
 }
 
+/** @internal */
 export interface KtxKnowledgeMcpPort {
   search(input: { userId: string; query: string; limit: number }): Promise<KtxKnowledgeSearchResponse>;
   read(input: { userId: string; key: string }): Promise<KtxKnowledgePage | null>;
 }
 
-export interface KtxSemanticLayerReadResponse {
+interface KtxSemanticLayerReadResponse {
   sourceName: string;
   yaml: string;
 }
 
-export interface KtxSemanticLayerQueryResponse {
+interface KtxSemanticLayerQueryResponse {
   sql: string;
   headers: string[];
   rows: unknown[][];
@@ -114,6 +117,7 @@ export interface KtxSemanticLayerQueryResponse {
   plan?: Record<string, unknown>;
 }
 
+/** @internal */
 export interface KtxSemanticLayerMcpPort {
   readSource(input: { connectionId: string; sourceName: string }): Promise<KtxSemanticLayerReadResponse | null>;
   query(
@@ -122,14 +126,17 @@ export interface KtxSemanticLayerMcpPort {
   ): Promise<KtxSemanticLayerQueryResponse>;
 }
 
+/** @internal */
 export interface KtxEntityDetailsMcpPort {
   read(input: KtxEntityDetailsInput): Promise<KtxEntityDetailsResponse>;
 }
 
+/** @internal */
 export interface KtxDictionarySearchMcpPort {
   search(input: KtxDictionarySearchInput): Promise<KtxDictionarySearchResponse>;
 }
 
+/** @internal */
 export interface KtxDiscoverDataMcpPort {
   search(input: KtxDiscoverDataInput): Promise<KtxDiscoverDataResponse>;
 }

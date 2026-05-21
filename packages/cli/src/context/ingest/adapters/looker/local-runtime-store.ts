@@ -5,7 +5,7 @@ import type { LookerWarehouseConnectionInfo } from './client.js';
 import type { LookerConnectionMapping } from './mapping.js';
 import type { LookerRuntimeCursors } from './types.js';
 
-export type LocalLookerMappingSource = 'ktx.yaml' | 'cli' | 'refresh';
+type LocalLookerMappingSource = 'ktx.yaml' | 'cli' | 'refresh';
 
 interface LocalLookerRuntimeStoreOptions {
   dbPath: string;
@@ -41,7 +41,7 @@ export interface ClearLocalLookerMappingsInput {
   lookerConnectionName?: string;
 }
 
-export interface LookerSourceStateReader {
+interface LookerSourceStateReader {
   readMappings(lookerConnectionId: string): Promise<LookerConnectionMapping[]>;
   readCursors(lookerConnectionId: string): Promise<LookerRuntimeCursors>;
 }

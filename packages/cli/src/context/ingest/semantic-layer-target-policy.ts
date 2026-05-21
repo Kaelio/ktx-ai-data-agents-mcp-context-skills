@@ -9,12 +9,14 @@ export interface SemanticLayerTargetPolicyViolation {
   connectionId: string;
 }
 
+/** @internal */
 export function semanticLayerConnectionIdFromPath(path: string): string | null {
   const normalized = path.replace(/^[ab]\//, '');
   const match = /^semantic-layer\/([^/]+)\//.exec(normalized);
   return match?.[1] ?? null;
 }
 
+/** @internal */
 export function findDisallowedSemanticLayerTargetPaths(
   input: SemanticLayerTargetPolicyInput,
 ): SemanticLayerTargetPolicyViolation[] {

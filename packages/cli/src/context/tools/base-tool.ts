@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z, type ZodType } from 'zod';
-import { noopLogger, type KtxLogger } from '../core/index.js';
+import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import type { KtxRuntimeToolDescriptor } from '../llm/runtime-port.js';
 import { normalizeKtxRuntimeToolOutput } from '../llm/runtime-tools.js';
 import type { IngestToolMetadata, ToolSession } from './tool-session.js';
@@ -10,12 +10,12 @@ export interface ToolOutput<T = unknown> {
   structured: T;
 }
 
-export interface ToolTimingTrackerPort {
+interface ToolTimingTrackerPort {
   recordToolExecutionStart(messageId: string, toolName: string, toolCallId: string): void;
   recordToolExecutionEnd(messageId: string, toolName: string, toolCallId: string, state: string): void;
 }
 
-export interface ToolProgressRelayPort {
+interface ToolProgressRelayPort {
   emit(event: unknown): void;
 }
 
@@ -62,7 +62,7 @@ export interface ToolContext {
   };
 }
 
-export interface MethodologyEntry {
+interface MethodologyEntry {
   key: string;
   toolName: string;
   label: string;

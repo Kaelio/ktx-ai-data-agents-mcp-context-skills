@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
 import {
   normalizeKtxRelationshipName,
@@ -31,7 +31,7 @@ const relationshipLlmProposalSchema = z.object({
 
 type KtxRelationshipLlmProposalOutput = z.infer<typeof relationshipLlmProposalSchema>;
 
-export interface KtxRelationshipLlmProposalSettings {
+interface KtxRelationshipLlmProposalSettings {
   maxTablesPerBatch: number;
   maxColumnsPerTable: number;
   maxSampleValuesPerColumn: number;

@@ -25,7 +25,7 @@ export interface SqlAnalysisFingerprintResult {
   error?: string | null;
 }
 
-export type SqlAnalysisClause = 'select' | 'where' | 'join' | 'groupBy' | 'having' | 'orderBy' | (string & {});
+type SqlAnalysisClause = 'select' | 'where' | 'join' | 'groupBy' | 'having' | 'orderBy' | (string & {});
 
 export interface SqlAnalysisBatchItem {
   id: string;

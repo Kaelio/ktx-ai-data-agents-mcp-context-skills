@@ -1,15 +1,12 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
-import {
-  parseMetabaseMappingBootstrap,
-  type KtxLocalProject,
-  type MetabaseMappingBootstrap,
-} from '../../../project/index.js';
+import { parseMetabaseMappingBootstrap, type MetabaseMappingBootstrap } from '../../../../context/project/mappings-yaml-schema.js';
+import type { KtxLocalProject } from '../../../../context/project/project.js';
 import type { DiscoveredMetabaseDatabase } from './mapping.js';
 import type { MetabaseSourceState, MetabaseSourceStateReader, MetabaseSourceStateSelection } from './source-state-port.js';
 
-export type LocalMetabaseMappingSource = 'ktx.yaml' | 'refresh';
+type LocalMetabaseMappingSource = 'ktx.yaml' | 'refresh';
 
 interface LocalMetabaseDiscoveryCacheOptions {
   dbPath: string;

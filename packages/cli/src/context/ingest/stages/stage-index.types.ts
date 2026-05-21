@@ -1,5 +1,5 @@
-import type { MemoryAction } from '../../memory/index.js';
-import type { TouchedSlSource } from '../../tools/index.js';
+import type { MemoryAction } from '../../../context/memory/types.js';
+import type { TouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
 
 interface StageIndexWorkUnit {
   unitKey: string;

@@ -1,6 +1,8 @@
-import { KtxIngestEmbeddingPortAdapter, type KtxEmbeddingPort } from './context/index.js';
-import { reindexLocalIndexes, type ReindexScopeResult, type ReindexSummary } from './context/index-sync/index.js';
-import { loadKtxProject } from './context/project/index.js';
+import { KtxIngestEmbeddingPortAdapter } from './context/llm/embedding-port.js';
+import type { KtxEmbeddingPort } from './context/core/embedding.js';
+import { reindexLocalIndexes } from './context/index-sync/reindex.js';
+import type { ReindexScopeResult, ReindexSummary } from './context/index-sync/types.js';
+import { loadKtxProject } from './context/project/project.js';
 import { Option, type Command } from '@commander-js/extra-typings';
 import { cancel, intro, log, note, outro } from '@clack/prompts';
 import type { KtxCliCommandContext } from './cli-program.js';

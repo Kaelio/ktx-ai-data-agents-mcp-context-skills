@@ -1,12 +1,9 @@
 import YAML from 'yaml';
 import { z } from 'zod';
-import {
-  addTouchedSlSource,
-  type ToolContext,
-  type ToolOutput,
-  validateActionRawPaths,
-  validateActionTargetConnection,
-} from '../../tools/index.js';
+import { addTouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
+import type { ToolContext, ToolOutput } from '../../../context/tools/base-tool.js';
+import { validateActionRawPaths } from '../../../context/tools/action-raw-paths.js';
+import { validateActionTargetConnection } from '../../../context/tools/action-target-connection.js';
 import { sourceOverlaySchema } from '../schemas.js';
 import type { SemanticLayerService } from '../semantic-layer.service.js';
 import type { SemanticLayerSource } from '../types.js';

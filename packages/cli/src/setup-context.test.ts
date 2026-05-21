@@ -1,14 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  buildDefaultKtxProjectConfig,
-  parseKtxProjectConfig,
-  readKtxSetupState,
-  serializeKtxProjectConfig,
-  type KtxProjectConfig,
-  writeKtxSetupState,
-} from './context/project/index.js';
+import { buildDefaultKtxProjectConfig, parseKtxProjectConfig, serializeKtxProjectConfig, type KtxProjectConfig } from './context/project/config.js';
+import { readKtxSetupState, writeKtxSetupState } from './context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

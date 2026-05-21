@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { MemoryFlowReplayInput } from './context/ingest/index.js';
+import type { MemoryFlowReplayInput } from './context/ingest/memory-flow/types.js';
 import { describe, expect, it, vi } from 'vitest';
 import { memoryFlowCommandForKey, renderMemoryFlowInteractively } from './memory-flow-interactive.js';
 

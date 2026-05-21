@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { GitService, type KtxCoreConfig, type KtxLogger, noopLogger } from '../core/index.js';
+import { GitService } from '../../context/core/git.service.js';
+import { type KtxCoreConfig, type KtxLogger, noopLogger } from '../../context/core/config.js';
 import type { KtxProjectConfig } from './config.js';
 import { buildDefaultKtxProjectConfig, parseKtxProjectConfig, serializeKtxProjectConfig } from './config.js';
 import { LocalGitFileStore } from './local-git-file-store.js';

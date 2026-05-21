@@ -18,6 +18,7 @@ export interface ResolveJinjaVariablesResult {
   unresolvedVars: string[];
 }
 
+/** @internal */
 export function parseProjectVars(yamlContent: string): Map<string, string> {
   const variables = new Map<string, string>();
   const project = parseProjectYaml(yamlContent);
@@ -30,6 +31,7 @@ export function parseProjectVars(yamlContent: string): Map<string, string> {
   return variables;
 }
 
+/** @internal */
 export function parseProjectName(yamlContent: string): string | null {
   const project = parseProjectYaml(yamlContent);
 

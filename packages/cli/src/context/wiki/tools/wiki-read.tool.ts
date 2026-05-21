@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { KnowledgeIndexPort } from '../ports.js';
-import { KnowledgeWikiService } from '../index.js';
+import { KnowledgeWikiService } from '../../../context/wiki/knowledge-wiki.service.js';
 import { validateFlatWikiKey } from '../keys.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../context/tools/base-tool.js';
 
 const WikiReadInputSchema = z.object({
   key: z

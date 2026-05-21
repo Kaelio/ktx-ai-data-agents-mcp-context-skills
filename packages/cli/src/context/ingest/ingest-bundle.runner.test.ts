@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { addTouchedSlSource } from '../tools/index.js';
+import { addTouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import { createMemoryFlowLiveBuffer } from './memory-flow/live-buffer.js';
 import type { MemoryFlowReplayInput } from './memory-flow/types.js';

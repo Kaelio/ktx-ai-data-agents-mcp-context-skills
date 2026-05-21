@@ -2,9 +2,10 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { GitService, SessionWorktreeService } from '../core/index.js';
+import { GitService } from '../../context/core/git.service.js';
+import { SessionWorktreeService } from '../../context/core/session-worktree.service.js';
 import { LocalGitFileStore } from '../project/local-git-file-store.js';
-import { addTouchedSlSource } from '../tools/index.js';
+import { addTouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import { IngestBundleRunner } from './ingest-bundle.runner.js';
 import type { IngestBundleRunnerDeps } from './ports.js';
 

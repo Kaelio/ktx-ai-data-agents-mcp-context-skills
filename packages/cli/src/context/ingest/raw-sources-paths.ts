@@ -1,3 +1,4 @@
+/** @internal */
 export const rawSourcesRoot = 'raw-sources';
 
 export function buildSyncId(now: Date, jobId: string): string {
@@ -14,6 +15,7 @@ export function rawSourcesDirForSync(connectionId: string, sourceKey: string, sy
   return `${rawSourcesRoot}/${connectionId}/${sourceKey}/${syncId}`;
 }
 
+/** @internal */
 export function provenanceMarker(rawPath: string, startLine: number, endLine: number): string {
   return `<!-- from: ${rawPath}#L${startLine}-${endLine} -->`;
 }

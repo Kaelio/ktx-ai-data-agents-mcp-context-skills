@@ -1,4 +1,4 @@
-import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/memory-flow/index.js';
+import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/memory-flow/types.js';
 
 const DEFAULT_INPUT_TOKENS_PER_STEP = 4500;
 const DEFAULT_OUTPUT_TOKENS_PER_STEP = 700;

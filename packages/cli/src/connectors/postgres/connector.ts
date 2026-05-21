@@ -1,27 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/index.js';
-import {
-  createKtxConnectorCapabilities,
-  type KtxColumnSampleInput,
-  type KtxColumnSampleResult,
-  type KtxColumnStatsInput,
-  type KtxColumnStatsResult,
-  type KtxQueryResult,
-  type KtxReadOnlyQueryInput,
-  type KtxScanConnector,
-  type KtxScanContext,
-  type KtxScanInput,
-  type KtxSchemaColumn,
-  type KtxSchemaForeignKey,
-  type KtxSchemaSnapshot,
-  type KtxSchemaTable,
-  type KtxTableListEntry,
-  type KtxTableRef,
-  type KtxTableSampleInput,
-  type KtxTableSampleResult,
-} from '../../context/scan/index.js';
+import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
+import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { Pool } from 'pg';
 import { KtxPostgresDialect } from './dialect.js';
 
@@ -297,6 +278,7 @@ export function isKtxPostgresConnectionConfig(
   return driver === 'postgres' || driver === 'postgresql';
 }
 
+/** @internal */
 export function postgresPoolConfigFromConfig(input: {
   connectionId: string;
   connection: KtxPostgresConnectionConfig | undefined;

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolSession } from '../../tools/index.js';
-import { createTouchedSlSources, hasTouchedSlSource, type ToolContext } from '../../tools/index.js';
+import type { ToolSession } from '../../../context/tools/tool-session.js';
+import { createTouchedSlSources, hasTouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
+import type { ToolContext } from '../../../context/tools/base-tool.js';
 import { SlRollbackTool } from './sl-rollback.tool.js';
 
 function makeSession(overrides: Partial<ToolSession> = {}): ToolSession {

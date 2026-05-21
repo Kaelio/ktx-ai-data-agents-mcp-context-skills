@@ -1,7 +1,7 @@
-import type { KtxModelRole } from '../../../llm/index.js';
-import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../index.js';
-import type { CaptureSession, MemoryAction } from '../../memory/index.js';
-import { listTouchedSlSources, type TouchedSlSource } from '../../tools/index.js';
+import type { KtxModelRole } from '../../../llm/types.js';
+import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
+import type { CaptureSession, MemoryAction } from '../../../context/memory/types.js';
+import { listTouchedSlSources, type TouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
 import type { WorkUnit } from '../types.js';
 
 const MAX_WORK_UNIT_PROMPT_CHARS = 240_000;

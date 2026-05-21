@@ -1,9 +1,8 @@
-import {
-  type KtxEmbeddingProvider,
-  createKtxEmbeddingProvider as defaultCreateKtxEmbeddingProvider,
-} from './llm/index.js';
-import type { KtxLocalProject, KtxProjectEmbeddingConfig } from './context/project/index.js';
-import { resolveLocalKtxEmbeddingConfig } from './context/index.js';
+import type { KtxEmbeddingProvider } from './llm/types.js';
+import { createKtxEmbeddingProvider as defaultCreateKtxEmbeddingProvider } from './llm/embedding-provider.js';
+import type { KtxLocalProject } from './context/project/project.js';
+import type { KtxProjectEmbeddingConfig } from './context/project/config.js';
+import { resolveLocalKtxEmbeddingConfig } from './context/llm/local-config.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
   ensureManagedLocalEmbeddingsDaemon as defaultEnsureManagedDaemon,

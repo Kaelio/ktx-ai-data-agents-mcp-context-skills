@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
+import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../../context/project/project.js';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
 import { createDefaultLocalIngestAdapters } from './local-adapters.js';
 import {

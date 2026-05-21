@@ -1,4 +1,4 @@
-import type { MemoryAction } from '../tools/index.js';
+import type { MemoryAction } from '../../context/tools/tool-session.js';
 import { isFlatWikiKey } from './keys.js';
 import type { KnowledgeWikiService } from './knowledge-wiki.service.js';
 import type { WikiScope } from './types.js';

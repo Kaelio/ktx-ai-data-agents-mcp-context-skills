@@ -1,6 +1,7 @@
 import YAML from 'yaml';
-import type { GitService, KtxFileStorePort } from '../../core/index.js';
-import { SYSTEM_GIT_AUTHOR } from '../../tools/index.js';
+import type { GitService } from '../../../context/core/git.service.js';
+import type { KtxFileStorePort } from '../../../context/core/file-store.js';
+import { SYSTEM_GIT_AUTHOR } from '../../../context/tools/authors.js';
 import type { SlConnectionCatalogPort, SlSourcesIndexPort } from '../ports.js';
 import { sourceOverlaySchema } from '../schemas.js';
 import { SemanticLayerService } from '../semantic-layer.service.js';
@@ -16,6 +17,7 @@ export interface SlValidationDeps {
   probeRowCount: number;
 }
 
+/** @internal */
 export interface SourceValidationResult {
   errors: string[];
   warnings: string[];
@@ -52,6 +54,7 @@ function wrapWithSingleRowQuery(sql: string, dialect: string): string {
  * Returns errors and hint-style warnings. An empty errors array means the YAML is
  * structurally valid AND the warehouse can execute a probe against its embedded sql.
  */
+/** @internal */
 export async function validateSingleSource(
   deps: SlValidationDeps,
   connectionId: string,

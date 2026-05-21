@@ -1,4 +1,4 @@
-import type { KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import type {
   KtxColumnSampleInput,
   KtxColumnSampleResult,
@@ -24,13 +24,13 @@ export interface KtxDescriptionCachePort {
   set(key: string, value: string): Promise<void>;
 }
 
-export interface KtxDescriptionSamplingPort {
+interface KtxDescriptionSamplingPort {
   id: string;
   sampleColumn?(input: KtxColumnSampleInput, ctx: KtxScanContext): Promise<KtxColumnSampleResult>;
   sampleTable?(input: KtxTableSampleInput, ctx: KtxScanContext): Promise<KtxTableSampleResult>;
 }
 
-export interface KtxDescriptionGenerationSettings {
+interface KtxDescriptionGenerationSettings {
   columnMaxWords: number;
   tableMaxWords: number;
   dataSourceMaxWords: number;
@@ -57,7 +57,7 @@ export interface KtxDescriptionColumnTable extends KtxTableRef {
   columns: KtxDescriptionColumn[];
 }
 
-export interface KtxDescriptionTableInput extends KtxTableRef {
+interface KtxDescriptionTableInput extends KtxTableRef {
   rawDescriptions?: Record<string, string>;
   columns?: KtxDescriptionTableColumn[];
 }
@@ -68,6 +68,7 @@ export interface KtxColumnAnalysisResult {
   skippedColumns: string[];
 }
 
+/** @internal */
 export interface KtxColumnDescriptionPromptInput {
   columnName: string;
   columnValues: unknown[];
@@ -77,6 +78,7 @@ export interface KtxColumnDescriptionPromptInput {
   rawDescriptions?: Record<string, string>;
 }
 
+/** @internal */
 export interface KtxTableDescriptionPromptInput {
   tableName: string;
   sampleData?: KtxTableSampleResult;
@@ -85,6 +87,7 @@ export interface KtxTableDescriptionPromptInput {
   rawDescriptions?: Record<string, string>;
 }
 
+/** @internal */
 export interface KtxDataSourceDescriptionPromptInput {
   tableSamples: Array<[string, KtxTableSampleResult]>;
   dataSourceType: string;
@@ -247,6 +250,7 @@ function wordLimitLine(maxWords: number): string {
   return `Please provide a concise description in ${maxWords} words or less.`;
 }
 
+/** @internal */
 export function buildKtxColumnDescriptionPrompt(
   input: KtxColumnDescriptionPromptInput & { maxWords?: number },
 ): KtxDescriptionPrompt {
@@ -295,6 +299,7 @@ Example:
   return { system: systemParts.join('\n\n'), user: user.trim() };
 }
 
+/** @internal */
 export function buildKtxTableDescriptionPrompt(
   input: KtxTableDescriptionPromptInput & { maxWords?: number },
 ): KtxDescriptionPrompt {
@@ -363,6 +368,7 @@ Data source type: ${input.dataSourceType}`;
   return { system: systemParts.join('\n\n'), user: user.trim() };
 }
 
+/** @internal */
 export function buildKtxDataSourceDescriptionPrompt(
   input: KtxDataSourceDescriptionPromptInput & { maxWords?: number },
 ): KtxDescriptionPrompt {

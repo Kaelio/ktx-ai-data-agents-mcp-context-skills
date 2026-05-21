@@ -26,6 +26,7 @@ export interface KtxRelationshipColumnProfile {
   maxTextLength: number | null;
 }
 
+/** @internal */
 export interface KtxRelationshipTableProfile {
   table: KtxTableRef;
   rowCount: number;

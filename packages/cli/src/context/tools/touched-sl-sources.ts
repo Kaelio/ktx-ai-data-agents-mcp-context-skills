@@ -30,6 +30,7 @@ export function deleteTouchedSlSource(touched: TouchedSlSourceSet, connectionId:
   }
 }
 
+/** @internal */
 export function hasTouchedSlSource(touched: TouchedSlSourceSet, connectionId: string, sourceName: string): boolean {
   return touched.get(connectionId)?.has(sourceName) ?? false;
 }

@@ -1,7 +1,8 @@
-import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider } from '../../llm/index.js';
+import { KtxMessageBuilder, splitKtxSystemMessages } from '../../llm/message-builder.js';
+import type { KtxLlmProvider } from '../../llm/types.js';
 import { generateText, Output, stepCountIs, type FlexibleSchema, type TelemetrySettings, type ToolSet } from 'ai';
 import type { z } from 'zod';
-import { noopLogger, type KtxLogger } from '../core/index.js';
+import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import { summarizeKtxLlmDebugRequest, type KtxLlmDebugRequestRecorder } from './debug-request-recorder.js';
 import { createAiSdkToolSet } from './runtime-tools.js';
 import type {
@@ -12,7 +13,7 @@ import type {
   RunLoopResult,
 } from './runtime-port.js';
 
-export interface AgentTelemetryPort {
+interface AgentTelemetryPort {
   createTelemetry(tags: Record<string, string>): TelemetrySettings;
 }
 

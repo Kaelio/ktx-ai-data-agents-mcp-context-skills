@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
+/** @internal */
 export function resolveKtxHomePath(path: string): string {
   if (path === '~') {
     return homedir();

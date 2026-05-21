@@ -1,13 +1,8 @@
 import { emitKeypressEvents } from 'node:readline';
-import {
-  buildMemoryFlowViewModel,
-  createInitialMemoryFlowInteractionState,
-  reduceMemoryFlowInteractionState,
-  renderMemoryFlowInteractive,
-  type MemoryFlowInteractionCommand,
-  type MemoryFlowInteractionState,
-  type MemoryFlowReplayInput,
-} from './context/ingest/index.js';
+import { buildMemoryFlowViewModel } from './context/ingest/memory-flow/view-model.js';
+import { createInitialMemoryFlowInteractionState, reduceMemoryFlowInteractionState } from './context/ingest/memory-flow/interaction.js';
+import { renderMemoryFlowInteractive } from './context/ingest/memory-flow/interactive-render.js';
+import type { MemoryFlowInteractionCommand, MemoryFlowInteractionState, MemoryFlowReplayInput } from './context/ingest/memory-flow/types.js';
 
 interface KtxMemoryFlowKey {
   name?: string;

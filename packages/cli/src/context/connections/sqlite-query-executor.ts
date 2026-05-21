@@ -49,6 +49,7 @@ function sqlitePathFromUrl(url: string): string {
   return url;
 }
 
+/** @internal */
 export function sqliteDatabasePathFromConnection(input: KtxSqlQueryExecutionInput): string {
   const driver = connectionDriver(input);
   if (driver !== 'sqlite' && driver !== 'sqlite3') {

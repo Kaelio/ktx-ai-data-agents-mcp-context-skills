@@ -1,8 +1,10 @@
 import { join } from 'node:path';
-import { localConnectionToWarehouseDescriptor, notionConnectionToPullConfig, parseNotionConnectionConfig } from '../connections/index.js';
+import { localConnectionToWarehouseDescriptor } from '../../context/connections/local-warehouse-descriptor.js';
+import { notionConnectionToPullConfig, parseNotionConnectionConfig } from '../../context/connections/notion-config.js';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
-import { ktxLocalStateDbPath, type KtxLocalProject } from '../project/index.js';
-import type { SqlAnalysisPort } from '../sql-analysis/index.js';
+import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import type { SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
 import { DbtSourceAdapter } from './adapters/dbt/dbt.adapter.js';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
 import { HistoricSqlSourceAdapter } from './adapters/historic-sql/historic-sql.adapter.js';

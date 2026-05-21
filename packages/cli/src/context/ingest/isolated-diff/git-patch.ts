@@ -1,5 +1,6 @@
 import { assertSemanticLayerTargetPathsAllowed } from '../semantic-layer-target-policy.js';
 
+/** @internal */
 export const textArtifactRoots = ['wiki/', 'semantic-layer/'] as const;
 
 export interface PatchTouchedPath {

@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DiffSetService } from './diff-set.service.js';
-import type { IngestDiffSummary, IngestReportBody, IngestTrigger } from './index.js';
+import type { IngestDiffSummary, IngestTrigger } from '../../context/ingest/types.js';
+import type { IngestReportBody } from '../../context/ingest/reports.js';
 import { SqliteBundleIngestStore } from './sqlite-bundle-ingest-store.js';
 
 function idFactory(ids: string[]): () => string {

@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerKtxContextTools } from './context-tools.js';
 import type { KtxMcpServerDeps, KtxMcpServerLike } from './types.js';
 
+/** @internal */
 export function createKtxMcpServer(deps: KtxMcpServerDeps): KtxMcpServerDeps['server'] {
   if (deps.contextTools) {
     registerKtxContextTools({

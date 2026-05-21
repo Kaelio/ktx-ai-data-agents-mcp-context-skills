@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import type { MemoryAction, MemoryAgentInput, MemoryAgentResult, MemoryAgentService } from './index.js';
+import type { MemoryAction, MemoryAgentInput, MemoryAgentResult } from '../../context/memory/types.js';
+import type { MemoryAgentService } from '../../context/memory/memory-agent.service.js';
 
 export type MemoryRunStatus = 'running' | 'done' | 'error';
 

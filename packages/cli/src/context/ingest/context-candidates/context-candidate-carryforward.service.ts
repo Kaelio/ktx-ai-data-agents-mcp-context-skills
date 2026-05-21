@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { type KtxLogger, noopLogger } from '../../core/index.js';
+import { type KtxLogger, noopLogger } from '../../../context/core/config.js';
 import type { JsonValue } from '../ports.js';
 import type { ContextCandidateStorePort } from './store.js';
 import type {

@@ -1,5 +1,6 @@
 import type { KtxSchemaDimensionType } from './types.js';
 
+/** @internal */
 export interface KtxColumnTypeMapping {
   normalizedType: string;
   dimensionType: KtxSchemaDimensionType;
@@ -24,6 +25,7 @@ export function inferKtxDimensionType(nativeType: string): KtxSchemaDimensionTyp
   return 'string';
 }
 
+/** @internal */
 export function ktxColumnTypeMappingFromNative(nativeType: string): KtxColumnTypeMapping {
   return {
     normalizedType: normalizeKtxNativeType(nativeType),

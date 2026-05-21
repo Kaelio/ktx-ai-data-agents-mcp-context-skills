@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createPostgresLiveDatabaseIntrospection,
-  isKtxPostgresConnectionConfig,
-  KtxPostgresScanConnector,
-  postgresPoolConfigFromConfig,
-  type KtxPostgresPoolFactory,
-} from './index.js';
+import { createPostgresLiveDatabaseIntrospection } from '../../connectors/postgres/live-database-introspection.js';
+import { isKtxPostgresConnectionConfig, KtxPostgresScanConnector, postgresPoolConfigFromConfig, type KtxPostgresPoolFactory } from '../../connectors/postgres/connector.js';
 
 interface FakeQueryResult {
   rows: Record<string, unknown>[];

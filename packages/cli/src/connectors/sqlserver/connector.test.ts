@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createSqlServerLiveDatabaseIntrospection,
-  isKtxSqlServerConnectionConfig,
-  KtxSqlServerScanConnector,
-  sqlServerConnectionPoolConfigFromConfig,
-  type KtxSqlServerPoolFactory,
-  type KtxSqlServerQueryResult,
-} from './index.js';
+import { createSqlServerLiveDatabaseIntrospection } from '../../connectors/sqlserver/live-database-introspection.js';
+import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
 
 function recordset<T extends Record<string, unknown>>(
   rows: T[],

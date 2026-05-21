@@ -8,9 +8,9 @@ import type { KtxSchemaColumn, KtxSchemaForeignKey, KtxSchemaSnapshot, KtxSchema
 import { inferKtxDimensionType, normalizeKtxNativeType } from '../../../scan/type-normalization.js';
 import type { LiveDatabaseIntrospectionPort } from './types.js';
 
-export type KtxDaemonDatabaseIntrospectionCommand = 'database-introspect';
+type KtxDaemonDatabaseIntrospectionCommand = 'database-introspect';
 
-export type KtxDaemonDatabaseJsonRunner = (
+type KtxDaemonDatabaseJsonRunner = (
   subcommand: KtxDaemonDatabaseIntrospectionCommand,
   payload: Record<string, unknown>,
 ) => Promise<Record<string, unknown>>;

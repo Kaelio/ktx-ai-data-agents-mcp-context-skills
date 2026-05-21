@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { SqlAnalysisPort } from '../../../sql-analysis/index.js';
+import type { SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js';
 import { stageHistoricSqlAggregatedSnapshot } from './stage-unified.js';
 import type { AggregatedTemplate, HistoricSqlReader } from './types.js';
 

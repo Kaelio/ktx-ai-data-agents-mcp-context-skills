@@ -1,3 +1,4 @@
+/** @internal */
 export const CLAUDE_CODE_PROVIDER_ENV_DENYLIST = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',

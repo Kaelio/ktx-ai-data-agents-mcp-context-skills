@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import type { AgentRunnerPort, KtxRuntimeToolSet } from '../llm/index.js';
-import type { TouchedSlSource } from '../tools/index.js';
+import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import type { IngestTraceWriter } from './ingest-trace.js';
 import { traceTimed } from './ingest-trace.js';
 

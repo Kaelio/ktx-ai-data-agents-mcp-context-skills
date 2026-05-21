@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentRunnerPort } from '../llm/index.js';
-import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
+import type { AgentRunnerPort } from '../../context/llm/runtime-port.js';
+import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../../context/project/project.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
 import { createLocalBundleIngestRuntime } from './local-bundle-runtime.js';

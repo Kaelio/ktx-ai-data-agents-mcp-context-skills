@@ -1,12 +1,6 @@
-import {
-  createKtxEmbeddingProvider,
-  createKtxLlmProvider,
-  type KtxEmbeddingConfig,
-  type KtxEmbeddingProvider,
-  type KtxLlmConfig,
-  type KtxLlmProvider,
-  type KtxModelRole,
-} from '../../llm/index.js';
+import { createKtxEmbeddingProvider } from '../../llm/embedding-provider.js';
+import { createKtxLlmProvider } from '../../llm/model-provider.js';
+import type { KtxEmbeddingConfig, KtxEmbeddingProvider, KtxLlmConfig, KtxLlmProvider, KtxModelRole } from '../../llm/types.js';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
 import type { KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from '../project/config.js';
 import { AiSdkKtxLlmRuntime } from './ai-sdk-runtime.js';
@@ -104,6 +98,7 @@ export function resolveLocalKtxLlmConfig(config: KtxProjectLlmConfig, env: NodeJ
   };
 }
 
+/** @internal */
 export function createLocalKtxLlmProviderFromConfig(
   config: KtxProjectLlmConfig,
   deps: LocalConfigDeps = {},
@@ -177,6 +172,7 @@ export function resolveLocalKtxEmbeddingConfig(
   throw new Error(`Unsupported KTX embedding backend: ${String((config as { backend?: string }).backend)}`);
 }
 
+/** @internal */
 export function createLocalKtxEmbeddingProviderFromConfig(
   config: KtxProjectEmbeddingConfig,
   deps: LocalConfigDeps = {},

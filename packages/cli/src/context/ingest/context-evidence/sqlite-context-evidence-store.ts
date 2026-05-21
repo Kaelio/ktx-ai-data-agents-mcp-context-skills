@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
-import { HybridSearchCore, type SearchCandidateGenerator, type SearchLaneBreakdown } from '../../search/index.js';
+import { HybridSearchCore } from '../../../context/search/hybrid-search-core.js';
+import type { SearchCandidateGenerator, SearchLaneBreakdown } from '../../../context/search/types.js';
 import type {
   ContextCandidateStatusResult,
   ContextEvidenceChunkForCandidate,
@@ -14,16 +15,9 @@ import type {
   ContextEvidenceSearchResult,
   ContextEvidenceToolStorePort,
 } from '../../tools/context-evidence-tool-store.js';
-import type {
-  BudgetExhaustedCandidateForCarryForward,
-  ContextCandidateRejectionReason,
-  ContextCandidateStorePort,
-  ContextCandidateVerdictSummary,
-  CurrentRunEvidenceChunkForCarryForward,
-  InsertContextCandidateInput,
-  MarkContextCandidateClusterInput,
-} from '../context-candidates/index.js';
-import type { PageTriageEvidenceChunk, PageTriageStorePort } from '../page-triage/index.js';
+import type { BudgetExhaustedCandidateForCarryForward, ContextCandidateRejectionReason, ContextCandidateVerdictSummary, CurrentRunEvidenceChunkForCarryForward, InsertContextCandidateInput, MarkContextCandidateClusterInput } from '../../../context/ingest/context-candidates/types.js';
+import type { ContextCandidateStorePort } from '../../../context/ingest/context-candidates/store.js';
+import type { PageTriageEvidenceChunk, PageTriageStorePort } from '../../../context/ingest/page-triage/page-triage.service.js';
 import type { ContextCandidateForDedup, ContextCandidateSummary, JsonValue } from '../ports.js';
 import type { ContextEvidenceIndexStorePort } from './store.js';
 import type {

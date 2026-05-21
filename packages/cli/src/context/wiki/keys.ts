@@ -10,7 +10,7 @@ export function suggestFlatWikiKey(key: string): string {
   return suggested.length > 0 ? suggested : 'page-key';
 }
 
-export function invalidFlatWikiKeyMessage(key: string): string {
+function invalidFlatWikiKeyMessage(key: string): string {
   return `Invalid wiki key "${key}". Wiki keys must be flat; use "${suggestFlatWikiKey(key)}".`;
 }
 

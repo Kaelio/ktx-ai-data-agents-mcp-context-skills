@@ -1,7 +1,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDefaultKtxProjectConfig, readKtxSetupState, type KtxProjectConfig } from './context/project/index.js';
+import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from './context/project/config.js';
+import { readKtxSetupState } from './context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxSetupRuntimeStep } from './setup-runtime.js';
 

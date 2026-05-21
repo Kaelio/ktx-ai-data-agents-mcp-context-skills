@@ -2,9 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'vitest';
-import { SqliteContextEvidenceStore } from '../ingest/context-evidence/index.js';
+import { SqliteContextEvidenceStore } from '../ingest/context-evidence/sqlite-context-evidence-store.js';
 import type { JsonValue } from '../ingest/ports.js';
-import { initKtxProject, type KtxLocalProject } from '../project/index.js';
+import { initKtxProject, type KtxLocalProject } from '../project/project.js';
 import { type LocalSlSourceSearchResult, searchLocalSlSources, writeLocalSlSource } from '../sl/local-sl.js';
 import type { ContextEvidenceSearchResult } from '../tools/context-evidence-tool-store.js';
 import {
@@ -16,7 +16,7 @@ import {
   assertSearchBackendCapabilities,
   assertSearchBackendConformanceCase,
   type SearchBackendConformanceResult,
-} from './backend-conformance.js';
+} from './backend-conformance.test-utils.js';
 import type { SearchBackendCapabilities } from './types.js';
 
 const SQLITE_SEARCH_CAPABILITIES = {

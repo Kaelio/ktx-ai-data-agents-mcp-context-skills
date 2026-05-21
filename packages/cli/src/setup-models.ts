@@ -1,16 +1,14 @@
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { resolveLocalKtxLlmConfig, runClaudeCodeAuthProbe } from './context/index.js';
-import { resolveKtxConfigReference } from './context/core/index.js';
-import {
-  type KtxProjectConfig,
-  type KtxProjectLlmConfig,
-  loadKtxProject,
-  markKtxSetupStateStepComplete,
-  serializeKtxProjectConfig,
-} from './context/project/index.js';
-import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from './llm/index.js';
+import { resolveLocalKtxLlmConfig } from './context/llm/local-config.js';
+import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
+import { resolveKtxConfigReference } from './context/core/config-reference.js';
+import { type KtxProjectConfig, type KtxProjectLlmConfig, serializeKtxProjectConfig } from './context/project/config.js';
+import { loadKtxProject } from './context/project/project.js';
+import { markKtxSetupStateStepComplete } from './context/project/setup-config.js';
+import type { KtxLlmConfig } from './llm/types.js';
+import { type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from './llm/model-health.js';
 import {
   formatClaudeCodePromptCachingWarning,
   ignoredClaudeCodePromptCachingFields,

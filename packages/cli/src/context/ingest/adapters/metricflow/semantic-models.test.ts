@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { composeOverlay, type SemanticLayerSource } from '../../../sl/index.js';
+import { composeOverlay } from '../../../../context/sl/semantic-layer.service.js';
+import type { SemanticLayerSource } from '../../../../context/sl/types.js';
 import type { ParsedCrossModelMetric, ParsedMetricflowRelationship, ParsedSemanticModel } from './deep-parse.js';
 import {
   buildMetricflowColumns,

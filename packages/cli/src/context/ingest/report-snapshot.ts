@@ -158,7 +158,7 @@ const finalizationOutcomeSchema = z.object({
   provenanceExclusions: z.array(finalizationProvenanceExclusionSchema).default([]),
 });
 
-export const ingestReportSnapshotSchema = z
+const ingestReportSnapshotSchema = z
   .object({
     id: z.string().min(1),
     runId: z.string().min(1),

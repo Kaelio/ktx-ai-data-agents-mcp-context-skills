@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { KtxEmbeddingPort } from '../core/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
 import { SqliteContextEvidenceStore } from '../ingest/context-evidence/sqlite-context-evidence-store.js';
 import { ContextCandidateMarkTool } from './context-candidate-mark.tool.js';
 import { ContextCandidateWriteTool } from './context-candidate-write.tool.js';
@@ -11,7 +11,9 @@ import { ContextEvidenceNeighborsTool } from './context-evidence-neighbors.tool.
 import { ContextEvidenceReadTool } from './context-evidence-read.tool.js';
 import { ContextEvidenceSearchTool } from './context-evidence-search.tool.js';
 import type { ContextEvidenceToolStorePort } from './context-evidence-tool-store.js';
-import { createTouchedSlSources, type ToolContext, type ToolSession } from './index.js';
+import { createTouchedSlSources } from '../../context/tools/touched-sl-sources.js';
+import type { ToolContext } from '../../context/tools/base-tool.js';
+import type { ToolSession } from '../../context/tools/tool-session.js';
 
 const ingestContext = (): ToolContext => ({
   sourceId: 'ingest',

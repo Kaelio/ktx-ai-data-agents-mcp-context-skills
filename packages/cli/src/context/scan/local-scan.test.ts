@@ -3,10 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import YAML from 'yaml';
-import type { SourceAdapter } from '../ingest/index.js';
-import type { KtxLlmRuntimePort } from '../llm/index.js';
-import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../project/index.js';
-import { filterSnapshotTables, getLocalScanReport, getLocalScanStatus, resolveEnabledTables, runLocalScan } from './local-scan.js';
+import type { SourceAdapter } from '../../context/ingest/types.js';
+import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
+import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../../context/project/project.js';
+import { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
+import { getLocalScanReport, getLocalScanStatus, runLocalScan } from './local-scan.js';
 import type { KtxQueryResult, KtxReadOnlyQueryInput, KtxSchemaSnapshot, KtxSchemaTable } from './types.js';
 
 function relationshipSqlResult(

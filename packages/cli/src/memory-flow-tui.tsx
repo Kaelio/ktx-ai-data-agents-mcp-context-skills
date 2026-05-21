@@ -1,17 +1,19 @@
 /* @jsxImportSource react */
+import { buildMemoryFlowViewModel } from './context/ingest/memory-flow/view-model.js';
 import {
-  buildMemoryFlowViewModel,
   createInitialMemoryFlowInteractionState,
   findMemoryFlowSearchMatches,
-  type MemoryFlowColumnId,
-  type MemoryFlowInteractionCommand,
-  type MemoryFlowInteractionState,
-  type MemoryFlowReplayInput,
-  type MemoryFlowViewModel,
   reduceMemoryFlowInteractionState,
   selectedMemoryFlowColumn,
   selectedMemoryFlowDetails,
-} from './context/ingest/index.js';
+} from './context/ingest/memory-flow/interaction.js';
+import type {
+  MemoryFlowColumnId,
+  MemoryFlowInteractionCommand,
+  MemoryFlowInteractionState,
+  MemoryFlowReplayInput,
+  MemoryFlowViewModel,
+} from './context/ingest/memory-flow/types.js';
 import { Box, Text, render as renderInkRuntime, useApp, useInput } from 'ink';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {

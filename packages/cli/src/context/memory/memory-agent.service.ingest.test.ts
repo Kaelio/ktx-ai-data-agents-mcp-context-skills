@@ -13,7 +13,7 @@ vi.mock('ai', () => ({
 
 // Imported AFTER vi.mock so the mocked module is used.
 import { generateText } from 'ai';
-import { SYSTEM_GIT_AUTHOR } from '../tools/index.js';
+import { SYSTEM_GIT_AUTHOR } from '../../context/tools/authors.js';
 import { MemoryAgentService } from './memory-agent.service.js';
 
 interface BuiltMocks {

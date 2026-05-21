@@ -1,5 +1,6 @@
-import type { SemanticLayerSource } from '../sl/index.js';
+import type { SemanticLayerSource } from '../../context/sl/types.js';
 
+/** @internal */
 export type WikiBodyRef =
   | { kind: 'sl_entity'; connectionId: string | null; sourceName: string; entityName: string }
   | { kind: 'sl_source'; connectionId: string | null; sourceName: string }
@@ -42,6 +43,7 @@ function isIdentifierToken(value: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 }
 
+/** @internal */
 export function parseWikiBodyRefs(body: string): WikiBodyRef[] {
   const refs: WikiBodyRef[] = [];
   for (const line of visibleLinesOutsideFences(body)) {

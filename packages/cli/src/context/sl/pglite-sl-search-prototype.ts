@@ -1,8 +1,9 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { KtxEmbeddingPort } from '../core/index.js';
-import type { KtxLocalProject } from '../project/index.js';
-import { HybridSearchCore, type SearchCandidateGenerator } from '../search/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { HybridSearchCore } from '../../context/search/hybrid-search-core.js';
+import type { SearchCandidateGenerator } from '../../context/search/types.js';
 import { KtxPGliteOwnerProcess } from '../search/pglite-owner-process.js';
 import {
   listLocalSlSources,

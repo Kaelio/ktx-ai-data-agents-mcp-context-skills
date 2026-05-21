@@ -1,11 +1,15 @@
-import { type KtxSqlQueryExecutorPort, localConnectionInfoFromConfig } from '../connections/index.js';
-import type { KtxEmbeddingPort } from '../core/index.js';
-import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
-import type { KtxLocalProject } from '../project/index.js';
-import { createKtxEntityDetailsService, type KtxScanConnector, type LocalScanMcpOptions } from '../scan/index.js';
-import { createKtxDiscoverDataService } from '../search/index.js';
-import type { SqlAnalysisDialect, SqlAnalysisPort } from '../sql-analysis/index.js';
-import { compileLocalSlQuery, createKtxDictionarySearchService } from '../sl/index.js';
+import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
+import { localConnectionInfoFromConfig } from '../../context/connections/local-warehouse-descriptor.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { createKtxEntityDetailsService } from '../../context/scan/entity-details.js';
+import type { KtxScanConnector } from '../../context/scan/types.js';
+import type { LocalScanMcpOptions } from '../../context/scan/local-scan.js';
+import { createKtxDiscoverDataService } from '../../context/search/discover.js';
+import type { SqlAnalysisDialect, SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
+import { compileLocalSlQuery } from '../../context/sl/local-query.js';
+import { createKtxDictionarySearchService } from '../../context/sl/dictionary-search.js';
 import { readLocalKnowledgePage, searchLocalKnowledgePages } from '../wiki/local-knowledge.js';
 import type { KtxMcpContextPorts, KtxMcpProgressCallback, KtxSqlExecutionResponse } from './types.js';
 

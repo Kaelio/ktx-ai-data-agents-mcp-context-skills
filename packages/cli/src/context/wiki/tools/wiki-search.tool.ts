@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../context/tools/base-tool.js';
 import type { WikiSearchLaneSummary, WikiSearchMatchReason } from '../types.js';
 
 const WikiSearchInputSchema = z.object({

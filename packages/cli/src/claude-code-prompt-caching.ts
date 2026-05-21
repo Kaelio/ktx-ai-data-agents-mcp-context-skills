@@ -1,4 +1,4 @@
-import type { KtxProjectLlmConfig } from './context/project/index.js';
+import type { KtxProjectLlmConfig } from './context/project/config.js';
 
 const CLAUDE_CODE_IGNORED_PROMPT_CACHING_FIELDS = [
   'systemTtl',

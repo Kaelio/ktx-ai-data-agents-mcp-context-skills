@@ -9,6 +9,7 @@ function safeEvidenceSegment(value: string): string {
   return segment;
 }
 
+/** @internal */
 export const historicSqlTableUsageEvidenceSchema = z.object({
   kind: z.literal('table_usage'),
   connectionId: z.string().min(1),
@@ -16,15 +17,14 @@ export const historicSqlTableUsageEvidenceSchema = z.object({
   rawPath: z.string().min(1),
   usage: tableUsageOutputSchema,
 });
-export type HistoricSqlTableUsageEvidence = z.infer<typeof historicSqlTableUsageEvidenceSchema>;
 
+/** @internal */
 export const historicSqlPatternEvidenceSchema = z.object({
   kind: z.literal('pattern'),
   connectionId: z.string().min(1),
   rawPath: z.string().min(1),
   pattern: patternOutputSchema,
 });
-export type HistoricSqlPatternEvidence = z.infer<typeof historicSqlPatternEvidenceSchema>;
 
 export const historicSqlEvidenceEnvelopeSchema = z.discriminatedUnion('kind', [
   historicSqlTableUsageEvidenceSchema,

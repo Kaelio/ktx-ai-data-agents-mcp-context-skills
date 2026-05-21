@@ -1,4 +1,4 @@
-import type { KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import type { KtxScanRelationshipConfig } from '../project/config.js';
 import type { KtxEnrichedRelationship, KtxEnrichedSchema, KtxRelationshipUpdate } from './enrichment-types.js';
 import {

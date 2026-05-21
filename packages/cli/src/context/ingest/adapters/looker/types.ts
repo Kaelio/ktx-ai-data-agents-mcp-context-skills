@@ -5,9 +5,9 @@ import { parsedTargetTableSchema } from '../../parsed-target-table.js';
 const lookerIdSchema = z.union([z.string(), z.number().int()]).transform(String);
 const nullableLookerIdSchema = z.union([lookerIdSchema, z.null()]).default(null);
 
-export const lookerConnectionIdSchema = z.string().min(1).regex(/^[A-Za-z0-9_-]+$/);
+const lookerConnectionIdSchema = z.string().min(1).regex(/^[A-Za-z0-9_-]+$/);
 
-export const lookerRuntimeCursorsSchema = z.object({
+const lookerRuntimeCursorsSchema = z.object({
   dashboardsLastSyncedAt: z.iso.datetime().nullable().default(null),
   looksLastSyncedAt: z.iso.datetime().nullable().default(null),
 });
@@ -215,6 +215,7 @@ const stagedLookerFetchIssueKindSchema = z.enum([
   'lookml_connection_mismatch',
 ]);
 
+/** @internal */
 export const stagedLookerFetchIssueSchema = z.object({
   rawPath: z.string().min(1),
   entityType: z.enum(['dashboard', 'look', 'explore', 'signals', 'lookml_models', 'looker_connection_mapping']),

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { initKtxProject, type KtxLocalProject } from '../project/index.js';
+import { initKtxProject, type KtxLocalProject } from '../../context/project/project.js';
 import { createKtxEntityDetailsService } from './entity-details.js';
 import type { KtxConnectionDriver, KtxScanReport, KtxSchemaTable } from './types.js';
 

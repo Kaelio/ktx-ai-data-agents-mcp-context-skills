@@ -1,12 +1,12 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ModelMessage } from 'ai';
-import type { KtxModelRole } from '../../llm/index.js';
+import type { KtxModelRole } from '../../llm/types.js';
 
 type ProviderOptionsCarrier = { providerOptions?: unknown; [key: string]: unknown };
 type ToolMap = Record<string, ProviderOptionsCarrier>;
 
-export interface KtxLlmDebugProviderOptionsEntry {
+interface KtxLlmDebugProviderOptionsEntry {
   target: 'message' | 'message-part' | 'tool';
   index?: number;
   role?: string;
@@ -121,6 +121,7 @@ export function summarizeKtxLlmDebugRequest(input: SummarizeKtxLlmDebugRequestIn
   };
 }
 
+/** @internal */
 export function createJsonlKtxLlmDebugRequestRecorder(filePath: string): KtxLlmDebugRequestRecorder {
   return {
     async record(request) {

@@ -1,6 +1,6 @@
 export type KtxRelationshipValidationBudget = number | 'all' | undefined;
 
-export interface KtxRelationshipBudgetedCandidate<TCandidate> {
+interface KtxRelationshipBudgetedCandidate<TCandidate> {
   candidate: TCandidate;
   originalIndex: number;
   score: number;
@@ -19,6 +19,7 @@ export interface ApplyKtxRelationshipValidationBudgetInput<TCandidate> {
   score: (candidate: TCandidate) => number;
 }
 
+/** @internal */
 export function defaultKtxRelationshipValidationBudget(tableCount: number): number {
   const safeTableCount = Number.isFinite(tableCount) ? Math.max(0, Math.floor(tableCount)) : 0;
   return Math.min(2 * safeTableCount, 1000);

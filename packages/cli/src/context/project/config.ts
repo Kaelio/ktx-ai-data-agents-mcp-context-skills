@@ -1,4 +1,4 @@
-import { KTX_MODEL_ROLES } from '../../llm/index.js';
+import { KTX_MODEL_ROLES } from '../../llm/types.js';
 import YAML from 'yaml';
 import * as z from 'zod';
 import { connectionConfigSchema } from './driver-schemas.js';
@@ -260,8 +260,6 @@ export type KtxProjectEmbeddingConfig = z.infer<typeof embeddingSchema>;
 export type KtxScanEnrichmentConfig = z.infer<typeof scanEnrichmentSchema>;
 export type KtxScanRelationshipConfig = z.infer<typeof scanRelationshipsSchema>;
 export type KtxProjectConnectionConfig = z.infer<typeof connectionSchema>;
-export type KtxStorageState = z.infer<typeof storageSchema>['state'];
-export type KtxSearchBackend = z.infer<typeof storageSchema>['search'];
 
 export interface KtxConfigIssue {
   path: string;

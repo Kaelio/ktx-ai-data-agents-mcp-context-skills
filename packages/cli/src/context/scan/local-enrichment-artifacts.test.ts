@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import YAML from 'yaml';
-import { initKtxProject, type KtxLocalProject } from '../project/index.js';
+import { initKtxProject, type KtxLocalProject } from '../../context/project/project.js';
 import type { KtxLocalScanEnrichmentResult } from './local-enrichment.js';
 import { writeLocalScanEnrichmentArtifacts, writeLocalScanManifestShards } from './local-enrichment-artifacts.js';
 import type { KtxSchemaSnapshot } from './types.js';

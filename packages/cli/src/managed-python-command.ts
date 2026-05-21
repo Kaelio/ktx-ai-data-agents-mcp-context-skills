@@ -1,4 +1,4 @@
-import { createPythonSemanticLayerComputePort, type KtxSemanticLayerComputePort } from './context/daemon/index.js';
+import { createPythonSemanticLayerComputePort, type KtxSemanticLayerComputePort } from './context/daemon/semantic-layer-compute.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { createClackPromptAdapter, createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
 import {

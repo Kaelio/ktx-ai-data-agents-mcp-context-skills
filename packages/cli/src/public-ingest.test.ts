@@ -1,4 +1,4 @@
-import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from './context/project/index.js';
+import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from './context/project/config.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildPublicIngestPlan,

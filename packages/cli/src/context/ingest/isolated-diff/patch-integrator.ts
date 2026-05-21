@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
-import type { GitService } from '../../core/index.js';
+import type { GitService } from '../../../context/core/git.service.js';
 import type { FinalGateRepairResult } from '../final-gate-repair.js';
 import type { IngestTraceWriter } from '../ingest-trace.js';
 import { traceTimed } from '../ingest-trace.js';
 import { assertPatchAllowedForWorkUnit, parsePatchTouchedPaths } from './git-patch.js';
 import type { TextualConflictResolutionResult } from './textual-conflict-resolver.js';
 
-export type PatchIntegrationTextualResolution =
+type PatchIntegrationTextualResolution =
   | { status: 'repaired'; attempts: number; changedPaths: string[] }
   | { status: 'failed'; attempts: number; reason: string };
 

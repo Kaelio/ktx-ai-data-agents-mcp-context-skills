@@ -2,14 +2,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initKtxProject } from '../project/index.js';
-import {
-  createKtxConnectorCapabilities,
-  type KtxQueryResult,
-  type KtxScanConnector,
-  type KtxSchemaSnapshot,
-} from '../scan/index.js';
-import { writeLocalSlSource } from '../sl/index.js';
+import { initKtxProject } from '../../context/project/project.js';
+import { createKtxConnectorCapabilities, type KtxQueryResult, type KtxScanConnector, type KtxSchemaSnapshot } from '../../context/scan/types.js';
+import { writeLocalSlSource } from '../../context/sl/local-sl.js';
 import { createLocalProjectMcpContextPorts } from './local-project-ports.js';
 
 describe('createLocalProjectMcpContextPorts', () => {

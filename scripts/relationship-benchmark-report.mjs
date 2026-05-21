@@ -1,14 +1,16 @@
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  KTX_RELATIONSHIP_BENCHMARK_MODES,
   buildKtxRelationshipBenchmarkReport,
-  currentKtxRelationshipBenchmarkDetector,
   formatKtxRelationshipBenchmarkReportMarkdown,
+} from '../packages/cli/dist/context/scan/relationship-benchmark-report.js';
+import {
+  KTX_RELATIONSHIP_BENCHMARK_MODES,
+  currentKtxRelationshipBenchmarkDetector,
   ktxRelationshipBenchmarkDetectorWithLlm,
   loadKtxRelationshipBenchmarkFixtures,
   runKtxRelationshipBenchmarkSuite,
-} from '../packages/cli/dist/context/scan/index.js';
+} from '../packages/cli/dist/context/scan/relationship-benchmarks.js';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const ktxRoot = resolve(scriptDir, '..');

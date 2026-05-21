@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { REDACTED_KTX_CREDENTIAL_VALUE } from '../core/redaction.js';
 import {
-  REDACTED_KTX_CREDENTIAL_VALUE,
   redactKtxCredentialEnvelope,
   redactKtxCredentialValue,
   redactKtxScanMetadata,

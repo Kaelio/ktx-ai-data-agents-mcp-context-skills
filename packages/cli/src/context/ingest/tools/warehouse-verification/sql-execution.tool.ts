@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { assertReadOnlySql, limitSqlForExecution } from '../../../connections/index.js';
-import type { SlConnectionCatalogPort } from '../../../sl/index.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../../tools/index.js';
+import { assertReadOnlySql, limitSqlForExecution } from '../../../../context/connections/read-only-sql.js';
+import type { SlConnectionCatalogPort } from '../../../../context/sl/ports.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../../context/tools/base-tool.js';
 
 const sqlExecutionInputSchema = z.object({
   connectionId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),

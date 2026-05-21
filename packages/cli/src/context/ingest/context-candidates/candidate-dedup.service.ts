@@ -1,4 +1,4 @@
-import { type KtxLogger, noopLogger } from '../../core/index.js';
+import { type KtxLogger, noopLogger } from '../../../context/core/config.js';
 import type { CandidateDedupResult, ContextCandidateForDedup, JsonValue } from '../ports.js';
 import { buildContextCandidateEmbeddingText } from './embedding-text.js';
 import type { ContextCandidateStorePort } from './store.js';

@@ -6,7 +6,7 @@ import { gunzipSync } from 'node:zlib';
 import Database from 'better-sqlite3';
 import YAML from 'yaml';
 import { z } from 'zod';
-import type { KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../llm/runtime-port.js';
 import type { KtxEnrichedRelationship, KtxEnrichedSchema, KtxRelationshipType } from './enrichment-types.js';
 import { snapshotToKtxEnrichedSchema } from './local-enrichment.js';
 import type { KtxRelationshipDiscoveryCandidate } from './relationship-candidates.js';

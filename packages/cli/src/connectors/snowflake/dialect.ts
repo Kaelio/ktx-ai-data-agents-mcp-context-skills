@@ -1,4 +1,4 @@
-import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/index.js';
+import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type SnowflakeTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 

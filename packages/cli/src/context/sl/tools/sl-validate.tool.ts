@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { type ToolContext, type ToolOutput, touchedSlSourceNamesForConnection } from '../../tools/index.js';
+import type { ToolContext, ToolOutput } from '../../../context/tools/base-tool.js';
+import { touchedSlSourceNamesForConnection } from '../../../context/tools/touched-sl-sources.js';
 import { SemanticLayerService } from '../semantic-layer.service.js';
 import {
   BaseSemanticLayerTool,
@@ -19,6 +20,7 @@ type ValidationReport = {
   warnings: string[];
 };
 
+/** @internal */
 export async function validateSemanticLayerEndpoint(
   connectionId: string,
   semanticLayerService: SemanticLayerService,

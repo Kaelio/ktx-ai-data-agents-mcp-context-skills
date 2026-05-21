@@ -233,6 +233,7 @@ export function createInitialMemoryFlowInteractionState(view: MemoryFlowViewMode
   };
 }
 
+/** @internal */
 export function selectMemoryFlowColumn(
   view: MemoryFlowViewModel,
   state: MemoryFlowInteractionState,
@@ -253,6 +254,7 @@ export function selectMemoryFlowColumn(
   return { ...nextState, selectedChipIndex: clampChipIndex(column, nextState, view) };
 }
 
+/** @internal */
 export function selectMemoryFlowChip(
   view: MemoryFlowViewModel,
   state: MemoryFlowInteractionState,

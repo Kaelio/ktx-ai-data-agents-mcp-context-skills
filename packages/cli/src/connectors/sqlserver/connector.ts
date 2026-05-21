@@ -1,24 +1,5 @@
-import { assertReadOnlySql } from '../../context/connections/index.js';
-import {
-  createKtxConnectorCapabilities,
-  type KtxColumnSampleInput,
-  type KtxColumnSampleResult,
-  type KtxColumnStatsInput,
-  type KtxColumnStatsResult,
-  type KtxQueryResult,
-  type KtxReadOnlyQueryInput,
-  type KtxScanConnector,
-  type KtxScanContext,
-  type KtxScanInput,
-  type KtxSchemaColumn,
-  type KtxSchemaForeignKey,
-  type KtxSchemaSnapshot,
-  type KtxSchemaTable,
-  type KtxTableListEntry,
-  type KtxTableRef,
-  type KtxTableSampleInput,
-  type KtxTableSampleResult,
-} from '../../context/scan/index.js';
+import { assertReadOnlySql } from '../../context/connections/read-only-sql.js';
+import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -50,6 +31,7 @@ export interface KtxSqlServerPoolConfig {
   pool: { max: number; min: number; idleTimeoutMillis: number };
 }
 
+/** @internal */
 export interface KtxSqlServerQueryResult {
   recordset?: Array<Record<string, unknown>> & { columns?: Record<string, { type?: { declaration?: string } }> };
 }
@@ -239,6 +221,7 @@ export function isKtxSqlServerConnectionConfig(
   return String(connection?.driver ?? '').toLowerCase() === 'sqlserver';
 }
 
+/** @internal */
 export function sqlServerConnectionPoolConfigFromConfig(input: {
   connectionId: string;
   connection: KtxSqlServerConnectionConfig | undefined;

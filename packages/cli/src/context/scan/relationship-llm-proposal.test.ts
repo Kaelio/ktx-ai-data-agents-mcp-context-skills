@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
 import type { KtxRelationshipProfileArtifact } from './relationship-profiling.js';
 import { proposeKtxRelationshipCandidatesWithLlm } from './relationship-llm-proposal.js';

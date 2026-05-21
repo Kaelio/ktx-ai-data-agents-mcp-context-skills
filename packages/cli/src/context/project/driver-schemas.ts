@@ -208,4 +208,3 @@ export const connectionConfigSchema = z.discriminatedUnion('driver', [
   metricflowConnectionSchema,
 ]);
 
-export type KtxConnectionConfig = z.infer<typeof connectionConfigSchema>;

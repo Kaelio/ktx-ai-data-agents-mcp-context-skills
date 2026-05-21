@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SqlAnalysisPort } from '../../../sql-analysis/index.js';
+import type { SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js';
 
 export const HISTORIC_SQL_SOURCE_KEY = 'historic-sql' as const;
 
@@ -115,9 +115,8 @@ export const stagedManifestSchema = z.object({
   probeWarnings: z.array(z.string()),
   staleArchiveAfterDays: z.number().int().positive().default(90),
 });
-export type StagedManifest = z.infer<typeof stagedManifestSchema>;
 
-export interface HistoricSqlProbeResult {
+interface HistoricSqlProbeResult {
   warnings: string[];
   info?: string[];
 }

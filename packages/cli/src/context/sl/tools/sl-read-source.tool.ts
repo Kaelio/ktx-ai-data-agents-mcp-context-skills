@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolContext, ToolOutput } from '../../tools/index.js';
+import type { ToolContext, ToolOutput } from '../../../context/tools/base-tool.js';
 import { BaseSemanticLayerTool, type BaseSemanticLayerToolDeps } from './base-semantic-layer.tool.js';
 import { slToolConnectionIdSchema } from './connection-id-schema.js';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolContext } from '../../tools/index.js';
+import type { ToolContext } from '../../../context/tools/base-tool.js';
 import { WikiListTagsTool } from './wiki-list-tags.tool.js';
 
 describe('WikiListTagsTool', () => {

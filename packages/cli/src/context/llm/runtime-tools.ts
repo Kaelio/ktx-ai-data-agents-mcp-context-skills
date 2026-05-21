@@ -84,8 +84,3 @@ export function createRuntimeToolDescriptorFromAiTool(name: string, aiSdkTool: T
   };
 }
 
-export function createRuntimeToolSetFromAiSdkTools(tools: ToolSet = {}): KtxRuntimeToolSet {
-  return Object.fromEntries(
-    Object.entries(tools).map(([name, aiSdkTool]) => [name, createRuntimeToolDescriptorFromAiTool(name, aiSdkTool as Tool)]),
-  );
-}

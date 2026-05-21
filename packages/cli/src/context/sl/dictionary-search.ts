@@ -1,15 +1,15 @@
-import type { KtxLocalProject } from '../project/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import { loadLatestSlDictionaryEntries, type SlDictionaryEntry } from './sl-dictionary-profile.js';
 
-export type KtxDictionarySearchStatus = 'ready' | 'no_profile_artifact' | 'no_candidate_columns';
-export type KtxDictionarySearchMissReason = 'no_profile_artifact' | 'no_candidate_columns' | 'value_not_in_sample';
+type KtxDictionarySearchStatus = 'ready' | 'no_profile_artifact' | 'no_candidate_columns';
+type KtxDictionarySearchMissReason = 'no_profile_artifact' | 'no_candidate_columns' | 'value_not_in_sample';
 
 export interface KtxDictionarySearchInput {
   values: string[];
   connectionId?: string;
 }
 
-export interface KtxDictionarySearchCoverage {
+interface KtxDictionarySearchCoverage {
   sampledRows: number | null;
   valuesPerColumn: number | null;
   profiledColumns: number;
@@ -17,13 +17,13 @@ export interface KtxDictionarySearchCoverage {
   profiledAt: string | null;
 }
 
-export interface KtxDictionarySearchSearchedConnection {
+interface KtxDictionarySearchSearchedConnection {
   connectionId: string;
   coverage: KtxDictionarySearchCoverage;
   status: KtxDictionarySearchStatus;
 }
 
-export interface KtxDictionarySearchMatch {
+interface KtxDictionarySearchMatch {
   connectionId: string;
   sourceName: string;
   columnName: string;
@@ -31,12 +31,12 @@ export interface KtxDictionarySearchMatch {
   cardinality: number | null;
 }
 
-export interface KtxDictionarySearchMiss {
+interface KtxDictionarySearchMiss {
   connectionId: string;
   reason: KtxDictionarySearchMissReason;
 }
 
-export interface KtxDictionarySearchValueResult {
+interface KtxDictionarySearchValueResult {
   value: string;
   matches: KtxDictionarySearchMatch[];
   misses: KtxDictionarySearchMiss[];

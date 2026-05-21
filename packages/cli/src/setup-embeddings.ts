@@ -1,14 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolveKtxConfigReference } from './context/core/index.js';
-import {
-  type KtxProjectConfig,
-  type KtxProjectEmbeddingConfig,
-  loadKtxProject,
-  markKtxSetupStateStepComplete,
-  readKtxSetupState,
-  serializeKtxProjectConfig,
-} from './context/project/index.js';
-import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from './llm/index.js';
+import { resolveKtxConfigReference } from './context/core/config-reference.js';
+import { type KtxProjectConfig, type KtxProjectEmbeddingConfig, serializeKtxProjectConfig } from './context/project/config.js';
+import { loadKtxProject } from './context/project/project.js';
+import { markKtxSetupStateStepComplete, readKtxSetupState } from './context/project/setup-config.js';
+import type { KtxEmbeddingConfig } from './llm/types.js';
+import { type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from './llm/embedding-health.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
 import {

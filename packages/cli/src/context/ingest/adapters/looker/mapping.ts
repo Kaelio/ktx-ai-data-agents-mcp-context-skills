@@ -2,7 +2,7 @@ import type { ParsedTargetTable } from '../../parsed-target-table.js';
 import type { LookerWarehouseConnectionInfo } from './client.js';
 import type { LookerPullConfig, LookerRuntimeCursors, StagedExploreFile, StagedLookmlModelsFile } from './types.js';
 
-export const LOOKER_DIALECT_TO_CONNECTION_TYPE = {
+const LOOKER_DIALECT_TO_CONNECTION_TYPE = {
   bigquery: 'BIGQUERY',
   bigquery_standard_sql: 'BIGQUERY',
   snowflake: 'SNOWFLAKE',
@@ -16,6 +16,7 @@ export const LOOKER_DIALECT_TO_CONNECTION_TYPE = {
   clickhouse: 'CLICKHOUSE',
 } as const;
 
+/** @internal */
 export type LookerWarehouseTargetConnectionType =
   (typeof LOOKER_DIALECT_TO_CONNECTION_TYPE)[keyof typeof LOOKER_DIALECT_TO_CONNECTION_TYPE];
 
@@ -33,6 +34,7 @@ export interface LookerTargetConnection {
   connection_params?: Record<string, unknown> | null;
 }
 
+/** @internal */
 export interface LookerMappingCandidateConnection extends LookerTargetConnection {}
 
 export interface LookerMappingDrift {
@@ -89,6 +91,7 @@ export async function discoverLookerConnections(
   return client.listLookerConnections();
 }
 
+/** @internal */
 export function lookerDialectToConnectionType(dialect: string | null): LookerWarehouseTargetConnectionType | null {
   if (!dialect) {
     return null;
@@ -98,10 +101,12 @@ export function lookerDialectToConnectionType(dialect: string | null): LookerWar
   );
 }
 
+/** @internal */
 export function sqlglotDialectForConnectionType(connectionType: string): string | null {
   return SQLGLOT_DIALECT_BY_CONNECTION_TYPE[connectionType as LookerWarehouseTargetConnectionType] ?? null;
 }
 
+/** @internal */
 export function validateLookerWarehouseTarget(connectionType: string): { ok: true } | { ok: false; reason: string } {
   return sqlglotDialectForConnectionType(connectionType)
     ? { ok: true }
@@ -111,7 +116,7 @@ export function validateLookerWarehouseTarget(connectionType: string): { ok: tru
       };
 }
 
-export function extractWarehouseHost(params: unknown, connectionType: string): string | null {
+function extractWarehouseHost(params: unknown, connectionType: string): string | null {
   const record = isRecord(params) ? params : {};
   switch (connectionType) {
     case 'POSTGRESQL':
@@ -126,7 +131,7 @@ export function extractWarehouseHost(params: unknown, connectionType: string): s
   }
 }
 
-export function extractWarehouseDatabase(params: unknown, connectionType: string): string | null {
+function extractWarehouseDatabase(params: unknown, connectionType: string): string | null {
   const record = isRecord(params) ? params : {};
   switch (connectionType) {
     case 'POSTGRESQL':
@@ -142,14 +147,15 @@ export function extractWarehouseDatabase(params: unknown, connectionType: string
   }
 }
 
-export function normalizeHost(value: string | null): string | null {
+function normalizeHost(value: string | null): string | null {
   return value ? value.toLowerCase().replace(/:\d+$/, '') : null;
 }
 
-export function normalizeName(value: string | null): string | null {
+function normalizeName(value: string | null): string | null {
   return value ? value.toLowerCase() : null;
 }
 
+/** @internal */
 export function suggestKtxConnectionForLookerConnection(args: {
   lookerConnection: LookerWarehouseConnectionInfo;
   candidateConnections: LookerMappingCandidateConnection[];
@@ -224,6 +230,7 @@ export function validateLookerMappings(args: {
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
 
+/** @internal */
 export function refreshLookerMappingPlaceholders(args: {
   stored: LookerConnectionMapping[];
   live: LookerWarehouseConnectionInfo[];
@@ -264,6 +271,7 @@ export function refreshLookerMappingPlaceholders(args: {
   return { mappings: [...byName.values()], changed };
 }
 
+/** @internal */
 export function collectExploreParseItems(args: {
   explore: StagedExploreFile;
   connectionMappings: Record<string, string>;
@@ -309,6 +317,7 @@ export function collectExploreParseItems(args: {
   return { parsedTargetTables, parseItems };
 }
 
+/** @internal */
 export function projectParsedIdentifier(row: LookerParsedIdentifier | undefined): ParsedTargetTable {
   if (!row) {
     return { ok: false, reason: 'parse_error', detail: 'Python parser response was missing this key.' };

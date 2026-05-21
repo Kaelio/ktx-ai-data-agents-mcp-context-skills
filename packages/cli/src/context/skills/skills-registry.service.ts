@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { noopLogger, type KtxLogger } from '../core/index.js';
+import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 
 export type SkillCaller = 'research' | 'memory_agent';
 

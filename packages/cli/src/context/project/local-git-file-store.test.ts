@@ -2,7 +2,8 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { GitService, type KtxCoreConfig } from '../core/index.js';
+import { GitService } from '../../context/core/git.service.js';
+import type { KtxCoreConfig } from '../../context/core/config.js';
 import { LocalGitFileStore } from './local-git-file-store.js';
 
 describe('LocalGitFileStore', () => {

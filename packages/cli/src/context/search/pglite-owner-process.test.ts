@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { assertSearchBackendConformanceCase } from './index.js';
+import { assertSearchBackendConformanceCase } from '../../context/search/backend-conformance.test-utils.js';
 import { KtxPGliteOwnerProcess } from './pglite-owner-process.js';
 
 async function allocatePort(): Promise<number> {

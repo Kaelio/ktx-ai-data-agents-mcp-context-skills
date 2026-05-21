@@ -1,5 +1,5 @@
-import type { MemoryAction } from '../memory/index.js';
-import type { TouchedSlSource } from '../tools/index.js';
+import type { MemoryAction } from '../../context/memory/types.js';
+import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import type { MemoryFlowReplayInput } from './memory-flow/types.js';
 import type { IngestProvenanceInsert } from './ports.js';
 import type {
@@ -31,7 +31,7 @@ export interface IngestReportProvenanceDetail {
   actionType: IngestProvenanceInsert['actionType'];
 }
 
-export interface IngestReportToolTranscriptSummary {
+interface IngestReportToolTranscriptSummary {
   unitKey: string;
   path: string;
   toolCallCount: number;
@@ -68,7 +68,7 @@ export interface IngestReportFinalizationOutcome {
   provenanceExclusions: IngestReportFinalizationProvenanceExclusion[];
 }
 
-export interface IngestReportFailure {
+interface IngestReportFailure {
   phase: string;
   message: string;
   details?: Record<string, unknown>;
@@ -133,16 +133,6 @@ export interface IngestReportSnapshot {
 export interface IngestSavedMemoryCounts {
   wikiCount: number;
   slCount: number;
-}
-
-export function finalizationSavedMemoryCounts(
-  finalization: IngestReportFinalizationOutcome | undefined,
-): IngestSavedMemoryCounts {
-  const actions = finalization?.actions ?? [];
-  return {
-    wikiCount: actions.filter((action) => action.target === 'wiki').length,
-    slCount: actions.filter((action) => action.target === 'sl').length,
-  };
 }
 
 export function savedMemoryCountsForReport(report: IngestReportSnapshot): IngestSavedMemoryCounts {

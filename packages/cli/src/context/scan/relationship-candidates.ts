@@ -12,7 +12,6 @@ import {
   pluralizeKtxRelationshipToken,
   singularizeKtxRelationshipToken,
 } from './relationship-name-similarity.js';
-;
 export { normalizeKtxRelationshipName } from './relationship-name-similarity.js';
 import type { KtxRelationshipProfileArtifact } from './relationship-profiling.js';
 import {
@@ -21,7 +20,7 @@ import {
   type KtxRelationshipSignalVector,
 } from './relationship-scoring.js';
 
-export type KtxRelationshipDiscoveryCandidateSource =
+type KtxRelationshipDiscoveryCandidateSource =
   | 'exact_column_match'
   | 'normalized_table_match'
   | 'parent_table_name_match'
@@ -32,9 +31,9 @@ export type KtxRelationshipDiscoveryCandidateSource =
   | 'embedding_similarity'
   | 'llm_proposal';
 
-export type KtxRelationshipDiscoveryCandidateStatus = 'review';
+type KtxRelationshipDiscoveryCandidateStatus = 'review';
 
-export interface KtxRelationshipDiscoveryCandidateEvidence {
+interface KtxRelationshipDiscoveryCandidateEvidence {
   sourceColumnBase: string;
   targetTableBase: string;
   targetColumnBase: string;
@@ -69,6 +68,7 @@ export interface KtxRelationshipDiscoveryCandidateOptions {
   profiles?: KtxRelationshipProfileArtifact;
 }
 
+/** @internal */
 export interface KtxRelationshipInferredTargetPk {
   table: string;
   columns: string[];
@@ -758,6 +758,7 @@ export function mergeKtxRelationshipDiscoveryCandidates(
   return Array.from(byId.values()).sort((left, right) => candidateSortKey(left).localeCompare(candidateSortKey(right)));
 }
 
+/** @internal */
 export function inferKtxRelationshipTargetPks(
   candidates: readonly KtxRelationshipDiscoveryCandidate[],
 ): KtxRelationshipInferredTargetPk[] {

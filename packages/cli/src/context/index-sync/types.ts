@@ -1,4 +1,4 @@
-import type { KtxEmbeddingPort } from '../core/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
 
 export interface ReindexOptions {
   force: boolean;

@@ -1,6 +1,7 @@
 import YAML from 'yaml';
-import type { KtxFileStorePort, KtxLogger } from '../core/index.js';
-import { noopLogger } from '../core/index.js';
+import type { KtxFileStorePort } from '../../context/core/file-store.js';
+import type { KtxLogger } from '../../context/core/config.js';
+import { noopLogger } from '../../context/core/config.js';
 import type { TableUsageOutput } from '../ingest/adapters/historic-sql/skill-schemas.js';
 import type { SlConnectionCatalogPort, SlPythonPort } from './ports.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
@@ -1404,6 +1405,7 @@ function parseJoinColumns(
  * Returns one message per measure-level segment reference that doesn't resolve to
  * a segment defined on the source. Array is empty when every reference checks out.
  */
+/** @internal */
 export function findDanglingSegmentRefs(source: Record<string, unknown>): string[] {
   const segmentDefs = (source.segments as Array<{ name: string }> | undefined) ?? [];
   const segmentNames = new Set(segmentDefs.map((s) => s.name));
@@ -1571,6 +1573,7 @@ function parseJoinOn(
  * matching manifest column (by name). Local values always win. Columns absent from
  * the manifest pass through unchanged. Returns a new source; does not mutate input.
  */
+/** @internal */
 export function enrichColumnsFromManifest(
   source: SemanticLayerSource,
   manifestEntry: SemanticLayerSource | null | undefined,

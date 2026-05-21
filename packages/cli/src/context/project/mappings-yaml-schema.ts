@@ -69,6 +69,7 @@ export type LookerMappingBootstrap = {
   connectionMappings: Record<string, string | null>;
 };
 
+/** @internal */
 export type LookmlMappingBootstrap = {
   adapter: 'lookml';
   connectionId: string;
@@ -117,6 +118,7 @@ export function parseMetabaseMappingBootstrap(
   };
 }
 
+/** @internal */
 export function parseLookerMappingBootstrap(
   connectionId: string,
   connection: MappingConnectionInput,
@@ -129,6 +131,7 @@ export function parseLookerMappingBootstrap(
   };
 }
 
+/** @internal */
 export function parseLookmlMappingBootstrap(
   connectionId: string,
   connection: MappingConnectionInput,

@@ -3,12 +3,14 @@ import { join } from 'node:path';
 import type { CloneOptions } from 'simple-git';
 import { createSimpleGit } from './git-env.js';
 
+/** @internal */
 export interface RepoFetchConfig {
   repoUrl: string;
   branch?: string;
   authToken?: string | null;
 }
 
+/** @internal */
 export class RepoConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -16,6 +18,7 @@ export class RepoConfigError extends Error {
   }
 }
 
+/** @internal */
 export class RepoFetchError extends Error {
   constructor(message: string) {
     super(message);
@@ -23,6 +26,7 @@ export class RepoFetchError extends Error {
   }
 }
 
+/** @internal */
 export function validateRepoConfig(config: RepoFetchConfig): void {
   if (!config.repoUrl) {
     throw new RepoConfigError('Repository URL is required');
@@ -35,6 +39,7 @@ export function validateRepoConfig(config: RepoFetchConfig): void {
   }
 }
 
+/** @internal */
 export function buildAuthenticatedUrl(repoUrl: string, authToken: string | null | undefined): string {
   if (!authToken) {
     return repoUrl;
@@ -70,6 +75,7 @@ export function sanitizeRepoError(err: unknown, authToken: string | null | undef
   return sanitized;
 }
 
+/** @internal */
 export async function repoDirExists(dir: string): Promise<boolean> {
   try {
     await access(join(dir, '.git'));
@@ -130,6 +136,7 @@ export async function testRepoConnection(args: {
   }
 }
 
+/** @internal */
 export async function cleanupRepoDir(dir: string): Promise<void> {
   await rm(dir, { recursive: true, force: true });
 }

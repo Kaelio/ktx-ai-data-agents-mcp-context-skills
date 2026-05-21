@@ -1,6 +1,7 @@
 import { buildCanonicalPinsPromptBlock, type CanonicalPin } from '../canonical-pins.js';
 import { createLookerQueryToSlTool } from '../adapters/looker/tools/looker-query-to-sl.tool.js';
-import { createRuntimeToolDescriptorFromAiTool, type KtxRuntimeToolSet } from '../../llm/index.js';
+import { createRuntimeToolDescriptorFromAiTool } from '../../../context/llm/runtime-tools.js';
+import type { KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
 import type { IngestProvenanceRow } from '../ports.js';
 import { createReadRawFileTool } from '../tools/read-raw-file.tool.js';
 import { createReadRawSpanTool } from '../tools/read-raw-span.tool.js';

@@ -1,9 +1,6 @@
-import {
-  ktxLocalStateDbPath,
-  parseConnectionMappingBootstrap,
-  type KtxLocalProject,
-  type LookerMappingBootstrap,
-} from '../project/index.js';
+import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
+import { parseConnectionMappingBootstrap, type LookerMappingBootstrap } from '../../context/project/mappings-yaml-schema.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
 
 function lookerMappings(bootstrap: LookerMappingBootstrap) {

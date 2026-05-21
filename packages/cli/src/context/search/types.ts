@@ -1,5 +1,6 @@
 export type SearchLaneName = 'lexical' | 'semantic' | 'dictionary' | 'token' | string;
 
+/** @internal */
 export type SearchLaneStatus = 'available' | 'skipped' | 'failed';
 
 export interface NormalizedSearchQuery {
@@ -16,7 +17,7 @@ export interface SearchCandidate {
   evidence?: unknown;
 }
 
-export interface SearchCandidateGeneratorArgs {
+interface SearchCandidateGeneratorArgs {
   queryText: string;
   normalizedQuery: NormalizedSearchQuery;
   finalLimit: number;
@@ -64,9 +65,6 @@ export interface FusedSearchCandidate {
   evidenceByLane: Record<SearchLaneName, unknown[]>;
 }
 
-export interface SearchResultHydrator<TResult> {
-  hydrate(candidates: FusedSearchCandidate[]): Promise<TResult[]>;
-}
 
 export interface HybridSearchResult {
   query: NormalizedSearchQuery;
@@ -76,6 +74,7 @@ export interface HybridSearchResult {
   lanes: SearchLaneBreakdown[];
 }
 
+/** @internal */
 export interface SearchBackendCapabilities {
   fts: boolean;
   vector: boolean;

@@ -1,4 +1,4 @@
-import type { KtxModelRole } from '../../llm/index.js';
+import type { KtxModelRole } from '../../llm/types.js';
 import type { z } from 'zod';
 
 export interface KtxRuntimeToolOutput<TOutput = unknown> {
@@ -17,6 +17,7 @@ export type KtxRuntimeToolSet = Record<string, KtxRuntimeToolDescriptor>;
 
 export type RunLoopStopReason = 'budget' | 'natural' | 'error';
 
+/** @internal */
 export interface RunLoopStepInfo {
   stepIndex: number;
   stepBudget: number;

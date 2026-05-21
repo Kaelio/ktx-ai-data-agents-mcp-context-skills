@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { BaseTool, deleteTouchedSlSource, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../context/tools/base-tool.js';
+import { deleteTouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
 import type { SlConnectionCatalogPort, SlSourcesIndexPort } from '../ports.js';
 import { revertSourceToPreHead } from './sl-warehouse-validation.js';
 

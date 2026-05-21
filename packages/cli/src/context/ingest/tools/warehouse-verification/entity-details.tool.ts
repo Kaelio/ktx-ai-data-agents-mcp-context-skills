@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { KtxTableRef } from '../../../scan/types.js';
 import { WarehouseCatalogService, type TableDetail } from '../../../scan/warehouse-catalog.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../../context/tools/base-tool.js';
 
 const targetSchema = z.union([
   z.object({ display: z.string().min(1) }),

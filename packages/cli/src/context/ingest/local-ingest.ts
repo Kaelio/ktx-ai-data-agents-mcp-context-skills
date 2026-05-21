@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
-import type { KtxSqlQueryExecutorPort } from '../connections/index.js';
-import type { KtxLogger } from '../core/index.js';
-import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
-import type { AgentRunnerPort, KtxLlmRuntimePort } from '../llm/index.js';
-import type { KtxLocalProject } from '../project/index.js';
-import { ktxLocalStateDbPath } from '../project/index.js';
+import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
+import type { KtxLogger } from '../../context/core/config.js';
+import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
+import type { AgentRunnerPort, KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
 import { planMetabaseFanoutChildren } from './adapters/metabase/fanout-planner.js';
 import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from './adapters/metabase/local-source-state-store.js';
 import { localPullConfigForAdapter, type DefaultLocalIngestAdaptersOptions } from './local-adapters.js';
@@ -34,24 +34,7 @@ export interface RunLocalIngestOptions {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
-  embeddingProvider?: import('../../llm/index.js').KtxEmbeddingProvider | null;
-}
-
-export interface LocalIngestMcpOptions
-  extends Pick<
-    RunLocalIngestOptions,
-    | 'agentRunner'
-    | 'llmRuntime'
-    | 'memoryModel'
-    | 'semanticLayerCompute'
-    | 'queryExecutor'
-    | 'logger'
-    | 'pullConfigOptions'
-  > {
-  adapters?: SourceAdapter[];
-  jobIdFactory?: () => string;
-  runLocalIngest?: (options: RunLocalIngestOptions) => Promise<LocalIngestResult>;
-  runLocalMetabaseIngest?: (options: RunLocalMetabaseIngestOptions) => Promise<LocalMetabaseFanoutResult>;
+  embeddingProvider?: import('../../llm/types.js').KtxEmbeddingProvider | null;
 }
 
 export interface LocalIngestResult {
@@ -59,7 +42,7 @@ export interface LocalIngestResult {
   report: IngestReportSnapshot;
 }
 
-export interface LocalMetabaseFanoutChild {
+interface LocalMetabaseFanoutChild {
   jobId: string;
   metabaseConnectionId: string;
   metabaseDatabaseId: number;
@@ -75,7 +58,7 @@ export interface LocalMetabaseFanoutResult {
   totals?: { workUnits: number; failedWorkUnits: number };
 }
 
-export interface LocalMetabaseFanoutProgressChild {
+interface LocalMetabaseFanoutProgressChild {
   metabaseDatabaseId: number;
   targetConnectionId: string;
 }
@@ -173,7 +156,7 @@ async function runScheduledPullJob(options: {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
-  embeddingProvider?: import('../../llm/index.js').KtxEmbeddingProvider | null;
+  embeddingProvider?: import('../../llm/types.js').KtxEmbeddingProvider | null;
 }): Promise<LocalIngestResult> {
   const runtime = createLocalBundleIngestRuntime(options);
   const jobId = options.jobId ?? runtime.nextJobId();

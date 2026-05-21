@@ -1,5 +1,6 @@
 import type { MetabaseDatabase, MetabaseRuntimeClient } from './client-port.js';
 
+/** @internal */
 export const METABASE_ENGINE_TO_CONNECTION_TYPE = {
   postgres: 'POSTGRESQL',
   bigquery: 'BIGQUERY',
@@ -9,8 +10,6 @@ export const METABASE_ENGINE_TO_CONNECTION_TYPE = {
   mysql: 'MYSQL',
 } as const;
 
-export type MetabaseMappedConnectionType =
-  (typeof METABASE_ENGINE_TO_CONNECTION_TYPE)[keyof typeof METABASE_ENGINE_TO_CONNECTION_TYPE];
 
 export interface DiscoveredMetabaseDatabase {
   id: number;
@@ -42,26 +41,31 @@ export interface KtxConnectionPhysicalInfo {
   [key: string]: unknown;
 }
 
+/** @internal */
 export interface PhysicalMismatchInput {
   mappingId: string;
   metabase: MappingPhysicalInfo;
   target: KtxConnectionPhysicalInfo;
 }
 
+/** @internal */
 export interface PhysicalMismatch {
   mappingId: string;
   reason: string;
 }
 
+/** @internal */
 export interface MappingRefreshReport {
   drift: MetabaseMappingDrift;
   physicalMismatches: PhysicalMismatch[];
 }
 
+/** @internal */
 export type MetabaseMappingValidationResult =
   | { ok: true }
   | { ok: false; errors: Array<{ key: string; reason: string }> };
 
+/** @internal */
 export interface AutoMatchCandidate {
   id: string;
   name: string;
@@ -69,6 +73,7 @@ export interface AutoMatchCandidate {
   connection_params: unknown;
 }
 
+/** @internal */
 export interface AutoMatchResult {
   connectionId: string;
   connectionName: string;
@@ -170,6 +175,7 @@ export function computeMetabaseMappingDrift(args: {
   return { unmappedDiscovered, staleMappings, inSync };
 }
 
+/** @internal */
 export function validateMetabaseMappings(args: {
   mappings: Record<string, string | null | undefined>;
   knownKtxConnectionIds: Set<string>;
@@ -236,6 +242,7 @@ export function validateMappingPhysicalMatch(
   return null;
 }
 
+/** @internal */
 export function computeMetabaseMappingPhysicalMismatches(inputs: PhysicalMismatchInput[]): PhysicalMismatch[] {
   const mismatches: PhysicalMismatch[] = [];
   for (const input of inputs) {
@@ -247,6 +254,7 @@ export function computeMetabaseMappingPhysicalMismatches(inputs: PhysicalMismatc
   return mismatches;
 }
 
+/** @internal */
 export async function refreshMetabaseMapping(args: {
   client: Pick<MetabaseRuntimeClient, 'getDatabases'>;
   currentMappings: Record<string, string | null | undefined>;
@@ -286,6 +294,7 @@ export async function refreshMetabaseMapping(args: {
   return { drift, physicalMismatches };
 }
 
+/** @internal */
 export function findBestMatch(mapping: MappingPhysicalInfo, candidates: AutoMatchCandidate[]): AutoMatchResult | null {
   const engine = mapping.metabaseEngine?.toLowerCase();
   if (!engine) {

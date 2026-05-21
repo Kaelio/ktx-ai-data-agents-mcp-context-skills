@@ -1,4 +1,4 @@
-export interface KtxColumnEmbeddingForeignKeys {
+interface KtxColumnEmbeddingForeignKeys {
   outgoing: Array<{ toTable: string; toColumn: string }>;
   incoming: Array<{ fromTable: string; fromColumn: string }>;
 }

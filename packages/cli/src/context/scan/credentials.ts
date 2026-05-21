@@ -2,20 +2,20 @@ import {
   redactKtxSensitiveMetadata,
   redactKtxSensitiveText,
   redactKtxSensitiveValue,
-  REDACTED_KTX_CREDENTIAL_VALUE,
 } from '../core/redaction.js';
 import type { KtxCredentialEnvelope, KtxScanReport, KtxScanWarning } from './types.js';
 
-export { REDACTED_KTX_CREDENTIAL_VALUE };
-
+/** @internal */
 export function redactKtxCredentialValue(key: string, value: unknown): unknown {
   return redactKtxSensitiveValue(key, value);
 }
 
+/** @internal */
 export function redactKtxScanMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   return redactKtxSensitiveMetadata(metadata);
 }
 
+/** @internal */
 export function redactKtxCredentialEnvelope(envelope: KtxCredentialEnvelope): KtxCredentialEnvelope {
   if (envelope.kind !== 'resolved') {
     return envelope;
@@ -28,6 +28,7 @@ export function redactKtxCredentialEnvelope(envelope: KtxCredentialEnvelope): Kt
   };
 }
 
+/** @internal */
 export function redactKtxScanWarning(warning: KtxScanWarning): KtxScanWarning {
   if (!warning.metadata) {
     return {

@@ -1,29 +1,19 @@
 import { EventEmitter } from 'node:events';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AgentRunnerPort, RunLoopParams } from './context/index.js';
-import {
-  KtxYamlMetabaseSourceStateReader,
-  LocalMetabaseDiscoveryCache,
-  MetabaseSourceAdapter,
-  getLocalIngestStatus,
-  type ChunkResult,
-  type FetchContext,
-  type IngestReportSnapshot,
-  type LocalIngestResult,
-  type LookerMappingClient,
-  type LookerRuntimeClient,
-  type LookerTableIdentifierParser,
-  type MemoryFlowEventSink,
-  type MetabaseCard,
-  type MetabaseCardSummary,
-  type MetabaseClientFactory,
-  type MetabaseRuntimeClient,
-  type RunLocalIngestOptions,
-  type SourceAdapter,
-  type SqliteBundleIngestStore,
-} from './context/ingest/index.js';
-import { ktxLocalStateDbPath, loadKtxProject } from './context/project/index.js';
+import type { AgentRunnerPort, RunLoopParams } from './context/llm/runtime-port.js';
+import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from './context/ingest/adapters/metabase/local-source-state-store.js';
+import { MetabaseSourceAdapter } from './context/ingest/adapters/metabase/metabase.adapter.js';
+import { getLocalIngestStatus, type LocalIngestResult, type RunLocalIngestOptions } from './context/ingest/local-ingest.js';
+import type { ChunkResult, FetchContext, SourceAdapter } from './context/ingest/types.js';
+import type { IngestReportSnapshot } from './context/ingest/reports.js';
+import type { LookerMappingClient, LookerTableIdentifierParser } from './context/ingest/adapters/looker/mapping.js';
+import type { LookerRuntimeClient } from './context/ingest/adapters/looker/fetch.js';
+import type { MemoryFlowEventSink } from './context/ingest/memory-flow/types.js';
+import type { MetabaseCard, MetabaseCardSummary, MetabaseClientFactory, MetabaseRuntimeClient } from './context/ingest/adapters/metabase/client-port.js';
+import type { SqliteBundleIngestStore } from './context/ingest/sqlite-bundle-ingest-store.js';
+import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
+import { loadKtxProject } from './context/project/project.js';
 import { expect, vi } from 'vitest';
 import { runKtxIngest } from './ingest.js';
 
@@ -685,7 +675,7 @@ export function localFakeBundleReport(
 }
 
 export async function localBundleStore(projectDir: string, ids: [string, string]): Promise<SqliteBundleIngestStore> {
-  const { SqliteBundleIngestStore } = await import('./context/ingest/index.js');
+  const { SqliteBundleIngestStore } = await import('./context/ingest/sqlite-bundle-ingest-store.js');;
   const project = await loadKtxProject({ projectDir });
   return new SqliteBundleIngestStore({
     dbPath: ktxLocalStateDbPath(project),

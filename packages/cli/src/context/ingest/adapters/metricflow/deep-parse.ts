@@ -1,7 +1,7 @@
 import { parse as parseYaml } from 'yaml';
-import { noopLogger, type KtxLogger } from '../../../core/index.js';
+import { noopLogger, type KtxLogger } from '../../../../context/core/config.js';
 
-export interface DimensionDefinition {
+interface DimensionDefinition {
   name: string;
   column: string;
   type: string;
@@ -9,7 +9,7 @@ export interface DimensionDefinition {
   description?: string;
 }
 
-export interface SimpleMeasureDefinition {
+interface SimpleMeasureDefinition {
   type: 'simple';
   name: string;
   column: string;
@@ -20,7 +20,7 @@ export interface SimpleMeasureDefinition {
   cumulative?: boolean;
 }
 
-export type MeasureDefinition =
+type MeasureDefinition =
   | SimpleMeasureDefinition
   | {
       type: 'derived';
@@ -186,6 +186,7 @@ export function parseMetricflowFiles(
   return parser.parseFiles(files);
 }
 
+/** @internal */
 export function translateMetricflowJinjaFilter(filter: string): string {
   return new MetricflowDeepParser(noopLogger).translateJinjaFilter(filter);
 }

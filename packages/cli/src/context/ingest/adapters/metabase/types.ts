@@ -3,7 +3,7 @@ import { z } from 'zod';
 const metabaseSyncModeSchema = z.enum(['ALL', 'ONLY', 'EXCEPT']);
 export type MetabaseSyncMode = z.infer<typeof metabaseSyncModeSchema>;
 
-export const metabaseLocalConnectionIdSchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
+const metabaseLocalConnectionIdSchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
 
 /**
  * The lean config the adapter needs at `fetch()` time. Lives in the BullMQ payload's
@@ -11,6 +11,7 @@ export const metabaseLocalConnectionIdSchema = z.string().regex(/^[a-zA-Z0-9][a-
  * job — the persisted state (enabled/disabled, auth, scheduling) lives on the
  * Metabase connection's `connections.config` JSONB.
  */
+/** @internal */
 export const metabasePullConfigSchema = z.object({
   /** The Metabase connection (source) — the thing being swept. */
   metabaseConnectionId: metabaseLocalConnectionIdSchema,

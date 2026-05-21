@@ -3,8 +3,8 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { initKtxProject, type KtxLocalProject } from '../project/index.js';
-import { assertSearchBackendConformanceCase } from '../search/index.js';
+import { initKtxProject, type KtxLocalProject } from '../../context/project/project.js';
+import { assertSearchBackendConformanceCase } from '../../context/search/backend-conformance.test-utils.js';
 import { searchLocalSlSources, writeLocalSlSource, type LocalSlSourceSearchResult } from './local-sl.js';
 import { searchLocalSlSourcesWithPglitePrototype } from './pglite-sl-search-prototype.js';
 

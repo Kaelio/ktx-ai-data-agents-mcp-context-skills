@@ -1,54 +1,41 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
-import { localConnectionInfoFromConfig } from '../connections/index.js';
-import type { KtxEmbeddingPort, KtxFileStorePort, KtxFileWriteResult } from '../core/index.js';
-import { type KtxLogger, noopLogger, SessionWorktreeService } from '../core/index.js';
-import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
-import {
-  createLocalKtxLlmRuntimeFromConfig,
-  RuntimeAgentRunner,
-  type AgentRunnerPort,
-  type KtxLlmRuntimePort,
-  type KtxRuntimeToolSet,
-} from '../llm/index.js';
-import type { KtxLocalProject } from '../project/index.js';
-import { PromptService } from '../prompts/index.js';
-import { SkillsRegistryService } from '../skills/index.js';
-import {
-  type KtxConnectionInfo,
-  type KtxQueryResult,
-  SemanticLayerService,
-  type SemanticLayerSource,
-  type SlConnectionCatalogPort,
-  SlDiscoverTool,
-  SlEditSourceTool,
-  type SlPythonPort,
-  SlReadSourceTool,
-  SlRollbackTool,
-  SlSearchService,
-  type SlSourcesIndexPort,
-  SlValidateTool,
-  type SlValidationDeps,
-  type SlValidatorPort,
-  SlWriteSourceTool,
-  SqliteSlSourcesIndex,
-  sourceDefinitionSchema,
-  sourceOverlaySchema,
-} from '../sl/index.js';
-import { BaseTool, type GitAuthorResolverPort, type ToolContext } from '../tools/index.js';
-import {
-  type KnowledgeEventPort,
-  type KnowledgeIndexPort,
-  type KnowledgeIndexPageListing,
-  KnowledgeWikiService,
-  searchLocalKnowledgePages,
-  WikiListTagsTool,
-  WikiReadTool,
-  WikiRemoveTool,
-  WikiSearchTool,
-  WikiWriteTool,
-} from '../wiki/index.js';
+import { localConnectionInfoFromConfig } from '../../context/connections/local-warehouse-descriptor.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxFileStorePort, KtxFileWriteResult } from '../../context/core/file-store.js';
+import { type KtxLogger, noopLogger } from '../../context/core/config.js';
+import { SessionWorktreeService } from '../../context/core/session-worktree.service.js';
+import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
+import { createLocalKtxLlmRuntimeFromConfig } from '../../context/llm/local-config.js';
+import { RuntimeAgentRunner, type AgentRunnerPort, type KtxLlmRuntimePort, type KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { PromptService } from '../../context/prompts/prompt.service.js';
+import { SkillsRegistryService } from '../../context/skills/skills-registry.service.js';
+import type { KtxConnectionInfo, KtxQueryResult, SlConnectionCatalogPort, SlPythonPort, SlSourcesIndexPort } from '../../context/sl/ports.js';
+import { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import type { SemanticLayerSource } from '../../context/sl/types.js';
+import { SlDiscoverTool } from '../../context/sl/tools/sl-discover.tool.js';
+import { SlEditSourceTool } from '../../context/sl/tools/sl-edit-source.tool.js';
+import { SlReadSourceTool } from '../../context/sl/tools/sl-read-source.tool.js';
+import { SlRollbackTool } from '../../context/sl/tools/sl-rollback.tool.js';
+import { SlSearchService } from '../../context/sl/sl-search.service.js';
+import { SlValidateTool } from '../../context/sl/tools/sl-validate.tool.js';
+import type { SlValidationDeps } from '../../context/sl/tools/sl-warehouse-validation.js';
+import type { SlValidatorPort } from '../../context/sl/sl-validator.port.js';
+import { SlWriteSourceTool } from '../../context/sl/tools/sl-write-source.tool.js';
+import { SqliteSlSourcesIndex } from '../../context/sl/sqlite-sl-sources-index.js';
+import { sourceDefinitionSchema, sourceOverlaySchema } from '../../context/sl/schemas.js';
+import { BaseTool, type ToolContext } from '../../context/tools/base-tool.js';
+import type { GitAuthorResolverPort } from '../../context/tools/authors.js';
+import type { KnowledgeEventPort, KnowledgeIndexPort, KnowledgeIndexPageListing } from '../../context/wiki/ports.js';
+import { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
+import { searchLocalKnowledgePages } from '../../context/wiki/local-knowledge.js';
+import { WikiListTagsTool } from '../../context/wiki/tools/wiki-list-tags.tool.js';
+import { WikiReadTool } from '../../context/wiki/tools/wiki-read.tool.js';
+import { WikiRemoveTool } from '../../context/wiki/tools/wiki-remove.tool.js';
+import { WikiSearchTool } from '../../context/wiki/tools/wiki-search.tool.js';
+import { WikiWriteTool } from '../../context/wiki/tools/wiki-write.tool.js';
 import { LocalMemoryRunStore } from './local-memory-runs.js';
 import { MemoryAgentService } from './memory-agent.service.js';
 import { MemoryIngestService } from './memory-runs.js';

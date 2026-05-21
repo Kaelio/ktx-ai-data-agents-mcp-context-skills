@@ -50,8 +50,3 @@ export interface WikiSearchLaneSummary {
   reason?: string;
 }
 
-export interface WikiSearchMetadata {
-  score: number;
-  matchReasons: WikiSearchMatchReason[];
-  lanes?: WikiSearchLaneSummary[];
-}

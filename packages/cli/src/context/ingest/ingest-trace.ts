@@ -20,7 +20,7 @@ export interface IngestTraceContext {
   level?: IngestTraceLevel;
 }
 
-export interface IngestTraceEvent {
+interface IngestTraceEvent {
   schemaVersion: 1;
   at: string;
   level: IngestTraceLevel;
@@ -121,22 +121,6 @@ export class FileIngestTraceWriter implements IngestTraceWriter {
   }
 }
 
-export class NoopIngestTraceWriter implements IngestTraceWriter {
-  readonly tracePath = '';
-  readonly context: IngestTraceContext = {
-    tracePath: '',
-    jobId: '',
-    connectionId: '',
-    sourceKey: '',
-    level: 'error',
-  };
-
-  withContext(): IngestTraceWriter {
-    return this;
-  }
-
-  async event(): Promise<void> {}
-}
 
 export async function traceTimed<T>(
   trace: IngestTraceWriter,

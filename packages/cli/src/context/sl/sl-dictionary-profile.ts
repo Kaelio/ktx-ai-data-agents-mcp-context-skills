@@ -1,5 +1,5 @@
-import type { KtxLocalProject } from '../project/index.js';
-import { defaultKtxDataDictionarySettings, isKtxDataDictionaryCandidate } from '../scan/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { defaultKtxDataDictionarySettings, isKtxDataDictionaryCandidate } from '../../context/scan/data-dictionary.js';
 
 export interface SlDictionaryEntry {
   connectionId: string;

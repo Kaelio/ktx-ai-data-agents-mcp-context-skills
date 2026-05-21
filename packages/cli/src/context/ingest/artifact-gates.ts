@@ -1,10 +1,10 @@
-import type { SemanticLayerService } from '../sl/index.js';
-import type { TouchedSlSource } from '../tools/index.js';
-import type { KnowledgeWikiService } from '../wiki/index.js';
+import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
+import type { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
 import { findMissingWikiRefs } from '../wiki/wiki-ref-validation.js';
 import { findInvalidWikiBodyRefs } from './wiki-body-refs.js';
 
-export interface TouchedValidationResult {
+interface TouchedValidationResult {
   invalidSources: string[];
   validSources: string[];
 }

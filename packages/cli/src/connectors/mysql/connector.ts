@@ -2,27 +2,8 @@ import mysql, { type FieldPacket, type Pool, type RowDataPacket } from 'mysql2/p
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/index.js';
-import {
-  createKtxConnectorCapabilities,
-  type KtxColumnSampleInput,
-  type KtxColumnSampleResult,
-  type KtxColumnStatsInput,
-  type KtxColumnStatsResult,
-  type KtxQueryResult,
-  type KtxReadOnlyQueryInput,
-  type KtxScanConnector,
-  type KtxScanContext,
-  type KtxScanInput,
-  type KtxSchemaColumn,
-  type KtxTableListEntry,
-  type KtxSchemaForeignKey,
-  type KtxSchemaSnapshot,
-  type KtxSchemaTable,
-  type KtxTableRef,
-  type KtxTableSampleInput,
-  type KtxTableSampleResult,
-} from '../../context/scan/index.js';
+import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
+import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxTableListEntry, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { KtxMysqlDialect } from './dialect.js';
 
 export interface KtxMysqlConnectionConfig {
@@ -237,6 +218,7 @@ export function isKtxMysqlConnectionConfig(
   return String(connection?.driver ?? '').toLowerCase() === 'mysql';
 }
 
+/** @internal */
 export function mysqlConnectionPoolConfigFromConfig(input: {
   connectionId: string;
   connection: KtxMysqlConnectionConfig | undefined;

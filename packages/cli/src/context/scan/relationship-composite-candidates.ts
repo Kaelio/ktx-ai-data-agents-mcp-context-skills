@@ -7,9 +7,9 @@ import {
 } from './relationship-profiling.js';
 import type { KtxConnectionDriver, KtxQueryResult, KtxScanContext, KtxTableRef } from './types.js';
 
-export type KtxCompositeRelationshipStatus = 'accepted' | 'review' | 'rejected';
+type KtxCompositeRelationshipStatus = 'accepted' | 'review' | 'rejected';
 
-export interface KtxCompositeRelationshipTupleEndpoint {
+interface KtxCompositeRelationshipTupleEndpoint {
   tableId: string;
   columnIds: string[];
   table: KtxTableRef;
@@ -33,7 +33,7 @@ export interface KtxCompositePrimaryKeyCandidate {
   };
 }
 
-export interface KtxCompositeRelationshipValidationEvidence {
+interface KtxCompositeRelationshipValidationEvidence {
   targetUniqueness: number;
   sourceCoverage: number;
   violationCount: number;

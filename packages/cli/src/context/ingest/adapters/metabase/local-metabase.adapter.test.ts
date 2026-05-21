@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { KtxProjectConnectionConfig } from '../../../project/index.js';
+import type { KtxProjectConnectionConfig } from '../../../../context/project/config.js';
 import { metabaseRuntimeConfigFromLocalConnection } from './local-metabase.adapter.js';
 
 describe('metabaseRuntimeConfigFromLocalConnection', () => {

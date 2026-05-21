@@ -1,8 +1,12 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { ktxLocalStateDbPath, type KtxLocalProject } from '../project/index.js';
-import { loadLocalSlSourceRecords, SlSearchService, SqliteSlSourcesIndex } from '../sl/index.js';
-import { KnowledgeWikiService, SqliteKnowledgeIndex } from '../wiki/index.js';
+import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { loadLocalSlSourceRecords } from '../../context/sl/local-sl.js';
+import { SlSearchService } from '../../context/sl/sl-search.service.js';
+import { SqliteSlSourcesIndex } from '../../context/sl/sqlite-sl-sources-index.js';
+import { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
+import { SqliteKnowledgeIndex } from '../../context/wiki/sqlite-knowledge-index.js';
 import type { ReindexOptions, ReindexScopeResult, ReindexSummary, ReindexWorkResult } from './types.js';
 
 type DiscoveredScope =
@@ -41,7 +45,7 @@ async function childDirectories(path: string): Promise<string[]> {
   }
 }
 
-export async function discoverReindexScopes(project: KtxLocalProject): Promise<DiscoveredScope[]> {
+async function discoverReindexScopes(project: KtxLocalProject): Promise<DiscoveredScope[]> {
   const scopes: DiscoveredScope[] = [];
   if (await directoryExists(join(project.projectDir, 'wiki/global'))) {
     scopes.push({ kind: 'wiki', scope: 'GLOBAL', scopeId: null, label: 'global' });

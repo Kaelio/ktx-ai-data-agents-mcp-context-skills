@@ -1,6 +1,6 @@
 import { parseMetabasePullConfig, type MetabasePullConfig } from './types.js';
 
-export interface MetabaseFanoutMappingInput {
+interface MetabaseFanoutMappingInput {
   metabaseDatabaseId: number;
   targetConnectionId: string | null;
   syncEnabled: boolean;

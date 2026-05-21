@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { parse as parseYaml } from 'yaml';
-import { type KtxLogger, noopLogger } from '../../../core/index.js';
+import { type KtxLogger, noopLogger } from '../../../../context/core/config.js';
 import { resolveJinjaVariables } from '../../dbt-shared/project-vars.js';
 
-export interface DbtParsedColumn {
+interface DbtParsedColumn {
   name: string;
   description: string | null;
   dataType: string | null;
@@ -12,20 +12,20 @@ export interface DbtParsedColumn {
   enumValuesDbt?: string[];
 }
 
-export interface DbtDataTestRef {
+interface DbtDataTestRef {
   name: string;
   package: string;
   kwargs?: Record<string, unknown>;
 }
 
-export interface DbtColumnConstraints {
+interface DbtColumnConstraints {
   dbt: {
     not_null?: boolean;
     unique?: boolean;
   };
 }
 
-export interface DbtParsedRelationship {
+interface DbtParsedRelationship {
   fromTable: string;
   fromColumn: string;
   toTable: string;
@@ -35,7 +35,7 @@ export interface DbtParsedRelationship {
   description?: string;
 }
 
-export interface DbtParsedTable {
+interface DbtParsedTable {
   name: string;
   description: string | null;
   database: string | null;
@@ -126,6 +126,7 @@ type DbtSchemaDataTest =
       [key: string]: unknown;
     };
 
+/** @internal */
 export function parseDbtSchemaFile(content: string, options: ParseDbtSchemaOptions = {}): DbtSchemaParseResult {
   return new DbtSchemaParser(options.logger ?? noopLogger).parseFile(content, options);
 }
@@ -138,13 +139,6 @@ export function parseDbtSchemaFiles(
   return new DbtSchemaParser(options.logger ?? noopLogger).parseFiles(files, variables, options.projectName ?? null);
 }
 
-export function computeDbtSchemaHash(files: DbtSchemaFile[]): string {
-  const combined = [...files]
-    .sort((a, b) => a.path.localeCompare(b.path))
-    .map((file) => `${file.path}:${file.content}`)
-    .join('\n');
-  return createHash('sha256').update(combined).digest('hex').substring(0, 16);
-}
 
 class DbtSchemaParser {
   constructor(private readonly logger: KtxLogger) {}

@@ -2,14 +2,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import YAML from 'yaml';
-import type { AgentRunnerPort, RunLoopParams } from '../../../llm/index.js';
-import { initKtxProject, loadKtxProject, type KtxLocalProject } from '../../../project/index.js';
-import {
-  type SqlAnalysisBatchItem,
-  type SqlAnalysisBatchResult,
-  type SqlAnalysisDialect,
-  type SqlAnalysisPort,
-} from '../../../sql-analysis/index.js';
+import type { AgentRunnerPort, RunLoopParams } from '../../../../context/llm/runtime-port.js';
+import { initKtxProject, loadKtxProject, type KtxLocalProject } from '../../../../context/project/project.js';
+import type { SqlAnalysisBatchItem, SqlAnalysisBatchResult, SqlAnalysisDialect, SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js';
 import { searchLocalSlSources } from '../../../sl/local-sl.js';
 import { searchLocalKnowledgePages } from '../../../wiki/local-knowledge.js';
 import { runLocalIngest } from '../../local-ingest.js';

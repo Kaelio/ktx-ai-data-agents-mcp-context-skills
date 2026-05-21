@@ -1,4 +1,4 @@
-import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/memory-flow/index.js';
+import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/memory-flow/types.js';
 import { describe, expect, it } from 'vitest';
 import {
   buildDemoMetrics,

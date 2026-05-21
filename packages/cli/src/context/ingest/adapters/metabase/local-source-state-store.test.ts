@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildDefaultKtxProjectConfig } from '../../../project/index.js';
+import { buildDefaultKtxProjectConfig } from '../../../../context/project/config.js';
 import { connectionConfigSchema } from '../../../project/driver-schemas.js';
 import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache } from './local-source-state-store.js';
 

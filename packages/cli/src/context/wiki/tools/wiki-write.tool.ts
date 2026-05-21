@@ -2,11 +2,13 @@ import { z } from 'zod';
 import type { KnowledgeIndexPort } from '../ports.js';
 import type { KnowledgeEventPort } from '../ports.js';
 type BlockScope = 'GLOBAL' | 'USER';
-import { KnowledgeWikiService, type WikiFrontmatter } from '../index.js';
+import { KnowledgeWikiService } from '../../../context/wiki/knowledge-wiki.service.js';
+import type { WikiFrontmatter } from '../../../context/wiki/types.js';
 import { validateFlatWikiKey } from '../keys.js';
 import { findMissingWikiRefs } from '../wiki-ref-validation.js';
 import { applySqlEdits } from '../../tools/sql-edit-replacer.js';
-import { BaseTool, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../context/tools/base-tool.js';
+import { validateActionRawPaths } from '../../../context/tools/action-raw-paths.js';
 
 const MAX_USER_BLOCKS = 100;
 const SYSTEM_AUTHOR = 'System User';

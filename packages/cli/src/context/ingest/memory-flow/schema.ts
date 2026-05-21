@@ -1,7 +1,7 @@
 import * as z from 'zod';
 import type { MemoryFlowReplayInput } from './types.js';
 
-export const memoryFlowRunStatusSchema = z.enum(['running', 'done', 'error']);
+const memoryFlowRunStatusSchema = z.enum(['running', 'done', 'error']);
 
 const memoryFlowEventTimestampShape = {
   emittedAt: z.string().datetime().optional(),
@@ -22,7 +22,7 @@ const memoryFlowReplayMetadataSchema = z.object({
   fallbackReason: z.string().min(1).nullable(),
 });
 
-export const memoryFlowEventSchema = z.discriminatedUnion('type', [
+const memoryFlowEventSchema = z.discriminatedUnion('type', [
   eventSchema({
     type: z.literal('source_acquired'),
     adapter: z.string().min(1),
@@ -114,14 +114,14 @@ export const memoryFlowEventSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-export const memoryFlowPlannedWorkUnitSchema = z.object({
+const memoryFlowPlannedWorkUnitSchema = z.object({
   unitKey: z.string().min(1),
   rawFiles: z.array(z.string()),
   peerFileCount: z.number().int().min(0),
   dependencyCount: z.number().int().min(0),
 });
 
-export const memoryFlowActionDetailSchema = z.object({
+const memoryFlowActionDetailSchema = z.object({
   unitKey: z.string().min(1),
   target: z.enum(['wiki', 'sl']),
   action: z.enum(['created', 'updated', 'removed']),
@@ -146,7 +146,7 @@ const memoryFlowTranscriptDetailSchema = z.object({
   toolNames: z.array(z.string()),
 });
 
-export const memoryFlowDetailSectionsSchema = z.object({
+const memoryFlowDetailSectionsSchema = z.object({
   actions: z.array(memoryFlowActionDetailSchema),
   provenance: z.array(memoryFlowProvenanceDetailSchema),
   transcripts: z.array(memoryFlowTranscriptDetailSchema),
@@ -168,6 +168,7 @@ export const memoryFlowReplayInputSchema: z.ZodType<MemoryFlowReplayInput> = z.o
   details: memoryFlowDetailSectionsSchema,
 });
 
+/** @internal */
 export const memoryFlowStreamEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('snapshot'), snapshot: memoryFlowReplayInputSchema }),
   z.object({
@@ -177,8 +178,8 @@ export const memoryFlowStreamEventSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-export type MemoryFlowStreamEvent = z.infer<typeof memoryFlowStreamEventSchema>;
 
+/** @internal */
 export function parseMemoryFlowReplayInput(value: unknown): MemoryFlowReplayInput {
   const result = memoryFlowReplayInputSchema.safeParse(value);
   if (!result.success) {

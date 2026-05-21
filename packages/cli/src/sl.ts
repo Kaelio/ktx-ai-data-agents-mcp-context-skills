@@ -1,18 +1,13 @@
 import { readFile } from 'node:fs/promises';
-import { createDefaultLocalQueryExecutor, type KtxSqlQueryExecutorPort } from './context/connections/index.js';
-import { KtxIngestEmbeddingPortAdapter, type KtxEmbeddingPort } from './context/index.js';
-import type { KtxSemanticLayerComputePort } from './context/daemon/index.js';
-import { loadKtxProject, type KtxLocalProject } from './context/project/index.js';
-import {
-  compileLocalSlQuery,
-  listLocalSlSources,
-  readLocalSlSource,
-  searchLocalSlSources as defaultSearchLocalSlSources,
-  validateLocalSlSource,
-  type LocalSlSourceSearchResult,
-  type LocalSlSourceSummary,
-  type SemanticLayerQueryInput,
-} from './context/sl/index.js';
+import { createDefaultLocalQueryExecutor } from './context/connections/local-query-executor.js';
+import type { KtxSqlQueryExecutorPort } from './context/connections/query-executor.js';
+import { KtxIngestEmbeddingPortAdapter } from './context/llm/embedding-port.js';
+import type { KtxEmbeddingPort } from './context/core/embedding.js';
+import type { KtxSemanticLayerComputePort } from './context/daemon/semantic-layer-compute.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
+import { compileLocalSlQuery } from './context/sl/local-query.js';
+import { listLocalSlSources, readLocalSlSource, searchLocalSlSources as defaultSearchLocalSlSources, validateLocalSlSource, type LocalSlSourceSearchResult, type LocalSlSourceSummary } from './context/sl/local-sl.js';
+import type { SemanticLayerQueryInput } from './context/sl/types.js';
 import {
   resolveProjectEmbeddingProvider,
   type EmbeddingProviderResolution,

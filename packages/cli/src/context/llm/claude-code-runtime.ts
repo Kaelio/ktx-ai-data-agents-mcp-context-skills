@@ -6,7 +6,7 @@ import {
   type SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { noopLogger, type KtxLogger } from '../core/index.js';
+import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import { createKtxClaudeCodeEnv } from './claude-code-env.js';
 import { resolveClaudeCodeModel } from './claude-code-models.js';
 import { createClaudeSdkTools, mcpToolIds } from './runtime-tools.js';
@@ -59,6 +59,7 @@ function resultError(result: SDKResultMessage): Error | undefined {
   return new Error(`Claude Code query failed (${result.subtype})${details}`);
 }
 
+/** @internal */
 export function mapClaudeCodeStopReason(result: SDKResultMessage): RunLoopStopReason {
   if (result.subtype === 'error_max_turns') {
     return 'budget';

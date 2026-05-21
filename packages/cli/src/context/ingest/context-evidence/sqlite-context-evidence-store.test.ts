@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { InsertContextCandidateInput } from '../context-candidates/index.js';
+import type { InsertContextCandidateInput } from '../../../context/ingest/context-candidates/types.js';
 import type { JsonValue } from '../ports.js';
 import { SqliteContextEvidenceStore } from './sqlite-context-evidence-store.js';
 

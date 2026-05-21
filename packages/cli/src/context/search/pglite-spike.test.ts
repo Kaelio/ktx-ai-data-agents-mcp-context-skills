@@ -5,11 +5,8 @@ import { PGlite, type PGliteInterface } from '@electric-sql/pglite';
 import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 import { vector } from '@electric-sql/pglite/vector';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  assertSearchBackendCapabilities,
-  assertSearchBackendConformanceCase,
-  type SearchBackendCapabilities,
-} from './index.js';
+import { assertSearchBackendCapabilities, assertSearchBackendConformanceCase } from '../../context/search/backend-conformance.test-utils.js';
+import type { SearchBackendCapabilities } from '../../context/search/types.js';
 
 type PGliteDb = PGliteInterface;
 

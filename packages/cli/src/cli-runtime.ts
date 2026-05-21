@@ -70,7 +70,7 @@ export function packageInfoFromJson(packageJson: unknown): KtxCliPackageInfo {
 }
 
 async function runInit(args: { projectDir: string; force: boolean }, io: KtxCliIo): Promise<number> {
-  const { initKtxProject } = await import('./context/project/index.js');
+  const { initKtxProject } = await import('./context/project/project.js');;
   const result = await initKtxProject({
     projectDir: args.projectDir,
     force: args.force,

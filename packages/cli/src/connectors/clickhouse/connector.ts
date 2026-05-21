@@ -1,24 +1,6 @@
 import { createClient } from '@clickhouse/client';
-import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/index.js';
-import {
-  createKtxConnectorCapabilities,
-  type KtxColumnSampleInput,
-  type KtxColumnSampleResult,
-  type KtxColumnStatsInput,
-  type KtxColumnStatsResult,
-  type KtxQueryResult,
-  type KtxReadOnlyQueryInput,
-  type KtxScanConnector,
-  type KtxScanContext,
-  type KtxScanInput,
-  type KtxSchemaColumn,
-  type KtxSchemaSnapshot,
-  type KtxSchemaTable,
-  type KtxTableRef,
-  type KtxTableSampleInput,
-  type KtxTableListEntry,
-  type KtxTableSampleResult,
-} from '../../context/scan/index.js';
+import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
+import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableListEntry, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { readFileSync } from 'node:fs';
 import { Agent as HttpsAgent } from 'node:https';
 import { homedir } from 'node:os';
@@ -198,6 +180,7 @@ export function isKtxClickHouseConnectionConfig(
   return String(connection?.driver ?? '').toLowerCase() === 'clickhouse';
 }
 
+/** @internal */
 export function clickHouseClientConfigFromConfig(input: {
   connectionId: string;
   connection: KtxClickHouseConnectionConfig | undefined;

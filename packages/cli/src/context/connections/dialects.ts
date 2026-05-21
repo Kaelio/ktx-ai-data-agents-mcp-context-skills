@@ -1,6 +1,6 @@
 import type { KtxSchemaDimensionType, KtxTableRef } from '../scan/types.js';
 
-export type SupportedDriver =
+type SupportedDriver =
   | 'postgres'
   | 'postgresql'
   | 'mysql'

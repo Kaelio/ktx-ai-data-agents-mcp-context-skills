@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { KtxScanEnrichmentStage, KtxScanEnrichmentStateSummary, KtxScanMode, KtxSchemaSnapshot } from './types.js';
 
-export const KTX_SCAN_ENRICHMENT_STAGES: readonly KtxScanEnrichmentStage[] = [
+const KTX_SCAN_ENRICHMENT_STAGES: readonly KtxScanEnrichmentStage[] = [
   'descriptions',
   'embeddings',
   'relationships',

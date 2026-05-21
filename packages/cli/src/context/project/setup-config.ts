@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { KtxProjectConfig } from './config.js';
 
-export const KTX_SETUP_STEPS = [
+const KTX_SETUP_STEPS = [
   'project',
   'llm',
   'embeddings',
@@ -40,7 +40,7 @@ function uniqueSetupSteps(steps: unknown): KtxSetupStep[] {
   return [...new Set(steps.filter(isKtxSetupStep))];
 }
 
-export function ktxSetupStatePath(projectDir: string): string {
+function ktxSetupStatePath(projectDir: string): string {
   return join(projectDir, '.ktx', 'setup', 'state.json');
 }
 
@@ -56,6 +56,7 @@ export async function readKtxSetupState(projectDir: string): Promise<KtxSetupSta
   }
 }
 
+/** @internal */
 export async function writeKtxSetupState(projectDir: string, state: KtxSetupState): Promise<void> {
   await mkdir(join(projectDir, '.ktx', 'setup'), { recursive: true });
   await writeFile(

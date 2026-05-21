@@ -1,4 +1,4 @@
-import type { KtxTableListEntry } from './context/scan/index.js';
+import type { KtxTableListEntry } from './context/scan/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { profileMark } from './startup-profile.js';
 import {

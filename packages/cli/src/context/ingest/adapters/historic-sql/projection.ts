@@ -1,7 +1,7 @@
 import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import YAML from 'yaml';
-import type { MemoryAction } from '../../../memory/index.js';
+import type { MemoryAction } from '../../../../context/memory/types.js';
 import { rawSourcesDirForSync } from '../../raw-sources-paths.js';
 import type { FinalizationOverrideReplay } from '../../types.js';
 import { mergeUsagePreservingExternal } from '../live-database/manifest.js';

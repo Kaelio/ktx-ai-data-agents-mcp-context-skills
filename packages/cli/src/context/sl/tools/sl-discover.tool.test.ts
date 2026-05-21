@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolContext, ToolSession } from '../../tools/index.js';
-import { createTouchedSlSources } from '../../tools/index.js';
+import type { ToolContext } from '../../../context/tools/base-tool.js';
+import type { ToolSession } from '../../../context/tools/tool-session.js';
+import { createTouchedSlSources } from '../../../context/tools/touched-sl-sources.js';
 import type { SemanticLayerSource } from '../types.js';
 import { SlDiscoverTool } from './sl-discover.tool.js';
 

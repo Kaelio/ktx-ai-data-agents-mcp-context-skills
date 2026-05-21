@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { KnowledgeIndexPort } from '../ports.js';
-import { BaseTool, type ToolContext, type ToolOutput } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../context/tools/base-tool.js';
 
 const wikiListTagsInputSchema = z.object({});
 

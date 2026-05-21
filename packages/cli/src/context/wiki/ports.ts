@@ -1,4 +1,3 @@
-import type { KtxFileStorePort } from '../core/file-store.js';
 
 export interface UpsertPageParams {
   scope: string;
@@ -72,4 +71,3 @@ export interface KnowledgeGitDiffPort {
   getFileAtCommit(path: string, sha: string): Promise<string>;
 }
 
-export type WikiFileStorePort = KtxFileStorePort<WikiFileStorePort>;

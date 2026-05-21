@@ -1,19 +1,15 @@
-import {
-  DEFAULT_METABASE_CLIENT_CONFIG,
-  DefaultLookerConnectionClientFactory,
-  DefaultMetabaseConnectionClientFactory,
-  type LookerClient,
-  type MetabaseRuntimeClient,
-  type NotionBotInfo,
-  NotionClient,
-  createLocalLookerCredentialResolver,
-  metabaseRuntimeConfigFromLocalConnection,
-  testRepoConnection,
-} from './context/ingest/index.js';
-import { parseNotionConnectionConfig, resolveNotionConnectionAuthToken } from './context/connections/index.js';
-import { resolveKtxConfigReference } from './context/core/index.js';
-import { type KtxLocalProject, loadKtxProject } from './context/project/index.js';
-import type { KtxScanConnector } from './context/scan/index.js';
+import { DEFAULT_METABASE_CLIENT_CONFIG, DefaultMetabaseConnectionClientFactory } from './context/ingest/adapters/metabase/client.js';
+import { DefaultLookerConnectionClientFactory } from './context/ingest/adapters/looker/factory.js';
+import type { LookerClient } from './context/ingest/adapters/looker/client.js';
+import type { MetabaseRuntimeClient } from './context/ingest/adapters/metabase/client-port.js';
+import { type NotionBotInfo, NotionClient } from './context/ingest/adapters/notion/notion-client.js';
+import { createLocalLookerCredentialResolver } from './context/ingest/adapters/looker/local-looker.adapter.js';
+import { metabaseRuntimeConfigFromLocalConnection } from './context/ingest/adapters/metabase/local-metabase.adapter.js';
+import { testRepoConnection } from './context/ingest/repo-fetch.js';
+import { parseNotionConnectionConfig, resolveNotionConnectionAuthToken } from './context/connections/notion-config.js';
+import { resolveKtxConfigReference } from './context/core/config-reference.js';
+import { type KtxLocalProject, loadKtxProject } from './context/project/project.js';
+import type { KtxScanConnector } from './context/scan/types.js';
 import type { KtxCliIo } from './index.js';
 import { bold, dim, green, red, SYMBOLS } from './io/symbols.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';

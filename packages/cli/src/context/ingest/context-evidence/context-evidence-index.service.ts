@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { noopLogger, type KtxLogger } from '../../core/index.js';
+import { noopLogger, type KtxLogger } from '../../../context/core/config.js';
 import type { JsonValue } from '../ports.js';
 import type { DiffSet } from '../types.js';
 import type { ContextEvidenceIndexStorePort } from './store.js';

@@ -15,7 +15,7 @@ export async function describeLookerScope(stagedDir: string): Promise<ScopeDescr
   };
 }
 
-export async function readLookerScope(stagedDir: string): Promise<StagedLookerScopeFile> {
+async function readLookerScope(stagedDir: string): Promise<StagedLookerScopeFile> {
   try {
     const body = await readFile(join(stagedDir, STAGED_FILES.scope), 'utf-8');
     return stagedLookerScopeFileSchema.parse(JSON.parse(body));
@@ -27,6 +27,7 @@ export async function readLookerScope(stagedDir: string): Promise<StagedLookerSc
   }
 }
 
+/** @internal */
 export function hashLookerScope(scope: StagedLookerScopeFile): string {
   const canonical = JSON.stringify({
     mode: scope.mode,
@@ -36,6 +37,7 @@ export function hashLookerScope(scope: StagedLookerScopeFile): string {
   return createHash('sha256').update(canonical).digest('hex');
 }
 
+/** @internal */
 export function isPathInLookerScope(rawPath: string, scope: StagedLookerScopeFile): boolean {
   if (scope.mode === 'full') {
     return true;

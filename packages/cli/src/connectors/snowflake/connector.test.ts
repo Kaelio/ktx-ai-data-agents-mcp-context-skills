@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createSnowflakeLiveDatabaseIntrospection,
-  isKtxSnowflakeConnectionConfig,
-  KtxSnowflakeScanConnector,
-  snowflakeConnectionConfigFromConfig,
-  type KtxSnowflakeDriver,
-  type KtxSnowflakeDriverFactory,
-} from './index.js';
+import { createSnowflakeLiveDatabaseIntrospection } from '../../connectors/snowflake/live-database-introspection.js';
+import { isKtxSnowflakeConnectionConfig, KtxSnowflakeScanConnector, snowflakeConnectionConfigFromConfig, type KtxSnowflakeDriver, type KtxSnowflakeDriverFactory } from '../../connectors/snowflake/connector.js';
 
 function fakeDriverFactory(): KtxSnowflakeDriverFactory {
   const driver: KtxSnowflakeDriver = {

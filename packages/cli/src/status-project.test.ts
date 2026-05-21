@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildDefaultKtxProjectConfig, type KtxLocalProject, type KtxProjectConfig } from './context/project/index.js';
+import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from './context/project/config.js';
+import type { KtxLocalProject } from './context/project/project.js';
 import { buildProjectStatus } from './status-project.js';
 
 function projectWithConfig(config: KtxProjectConfig): KtxLocalProject {

@@ -4,21 +4,21 @@ import { URL } from 'node:url';
 import { spawn } from 'node:child_process';
 import type { ResolvedSemanticLayerSource, SemanticLayerQueryInput } from '../sl/types.js';
 
-export interface KtxSemanticLayerComputeQueryResult {
+interface KtxSemanticLayerComputeQueryResult {
   sql: string;
   dialect: string;
   columns: Array<Record<string, unknown>>;
   plan: Record<string, unknown>;
 }
 
-export interface KtxSemanticLayerComputeValidationResult {
+interface KtxSemanticLayerComputeValidationResult {
   valid: boolean;
   errors: string[];
   warnings: string[];
   perSourceWarnings: Record<string, string[]>;
 }
 
-export interface KtxSemanticLayerSourceGenerationColumnInput {
+interface KtxSemanticLayerSourceGenerationColumnInput {
   name: string;
   type: string;
   primaryKey?: boolean;
@@ -26,7 +26,7 @@ export interface KtxSemanticLayerSourceGenerationColumnInput {
   comment?: string | null;
 }
 
-export interface KtxSemanticLayerSourceGenerationTableInput {
+interface KtxSemanticLayerSourceGenerationTableInput {
   name: string;
   catalog?: string | null;
   db?: string | null;
@@ -34,7 +34,7 @@ export interface KtxSemanticLayerSourceGenerationTableInput {
   columns: KtxSemanticLayerSourceGenerationColumnInput[];
 }
 
-export interface KtxSemanticLayerSourceGenerationLinkInput {
+interface KtxSemanticLayerSourceGenerationLinkInput {
   fromTable: string;
   fromColumn: string;
   toTable: string;
@@ -42,13 +42,13 @@ export interface KtxSemanticLayerSourceGenerationLinkInput {
   relationshipType: string;
 }
 
-export interface KtxSemanticLayerSourceGenerationInput {
+interface KtxSemanticLayerSourceGenerationInput {
   tables: KtxSemanticLayerSourceGenerationTableInput[];
   links: KtxSemanticLayerSourceGenerationLinkInput[];
   dialect?: string;
 }
 
-export interface KtxSemanticLayerSourceGenerationResult {
+interface KtxSemanticLayerSourceGenerationResult {
   sources: Array<Record<string, unknown>>;
   sourceCount: number;
 }
@@ -75,14 +75,14 @@ export interface KtxSemanticLayerComputePort {
   generateSources(input: KtxSemanticLayerSourceGenerationInput): Promise<KtxSemanticLayerSourceGenerationResult>;
 }
 
-export type KtxDaemonCommand = 'semantic-query' | 'semantic-validate' | 'semantic-generate-sources';
+type KtxDaemonCommand = 'semantic-query' | 'semantic-validate' | 'semantic-generate-sources';
 
-export type KtxDaemonJsonRunner = (
+type KtxDaemonJsonRunner = (
   subcommand: KtxDaemonCommand,
   payload: Record<string, unknown>,
 ) => Promise<Record<string, unknown>>;
 
-export type KtxDaemonHttpJsonRunner = (path: string, payload: Record<string, unknown>) => Promise<Record<string, unknown>>;
+type KtxDaemonHttpJsonRunner = (path: string, payload: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
 export interface PythonSemanticLayerComputeOptions {
   command?: string;
@@ -92,6 +92,7 @@ export interface PythonSemanticLayerComputeOptions {
   runJson?: KtxDaemonJsonRunner;
 }
 
+/** @internal */
 export interface HttpSemanticLayerComputeOptions {
   baseUrl: string;
   requestJson?: KtxDaemonHttpJsonRunner;
@@ -272,6 +273,7 @@ export function createPythonSemanticLayerComputePort(
   };
 }
 
+/** @internal */
 export function createHttpSemanticLayerComputePort(
   options: HttpSemanticLayerComputeOptions,
 ): KtxSemanticLayerComputePort {

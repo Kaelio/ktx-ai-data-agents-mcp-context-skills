@@ -5,7 +5,7 @@ import { GitService } from './git.service.js';
 
 export type SessionOutcome = 'success' | 'empty' | 'conflict' | 'crash';
 
-export interface SentinelPayload {
+interface SentinelPayload {
   outcome: SessionOutcome;
   at: string;
   chatId: string;

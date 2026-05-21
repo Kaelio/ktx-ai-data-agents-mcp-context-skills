@@ -1,4 +1,4 @@
-import type { KtxProjectConnectionConfig } from '../project/index.js';
+import type { KtxProjectConnectionConfig } from '../../context/project/config.js';
 
 export interface KtxSqlQueryExecutionInput {
   connectionId: string;

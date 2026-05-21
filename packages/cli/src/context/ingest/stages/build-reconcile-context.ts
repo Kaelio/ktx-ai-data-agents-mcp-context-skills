@@ -1,5 +1,5 @@
 import { buildCanonicalPinsPromptBlock, type CanonicalPin } from '../canonical-pins.js';
-import type { KtxRuntimeToolSet } from '../../llm/index.js';
+import type { KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
 import {
   createVerificationLedgerState,
   VERIFICATION_LEDGER_PROMPT,

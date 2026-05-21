@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import { buildDefaultKtxProjectConfig } from '../project/config.js';
 import { snapshotToKtxEnrichedSchema } from './local-enrichment.js';
 import {

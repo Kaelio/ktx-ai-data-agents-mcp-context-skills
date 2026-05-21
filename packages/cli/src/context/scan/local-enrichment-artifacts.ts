@@ -1,15 +1,8 @@
 import YAML from 'yaml';
-import {
-  buildLiveDatabaseManifestShards,
-  type LiveDatabaseManifestExistingDescriptions,
-  type LiveDatabaseManifestJoinData,
-  type LiveDatabaseManifestJoinEntry,
-  type LiveDatabaseManifestShard,
-  type LiveDatabaseManifestTableData,
-  type TableUsageOutput,
-} from '../ingest/index.js';
+import { buildLiveDatabaseManifestShards, type LiveDatabaseManifestExistingDescriptions, type LiveDatabaseManifestJoinData, type LiveDatabaseManifestJoinEntry, type LiveDatabaseManifestShard, type LiveDatabaseManifestTableData } from '../../context/ingest/adapters/live-database/manifest.js';
+import type { TableUsageOutput } from '../../context/ingest/adapters/historic-sql/skill-schemas.js';
 import type { KtxScanRelationshipConfig } from '../project/config.js';
-import type { KtxLocalProject } from '../project/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import type { KtxLocalScanEnrichmentResult } from './local-enrichment.js';
 import {
   buildKtxRelationshipArtifacts,

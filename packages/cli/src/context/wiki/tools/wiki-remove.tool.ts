@@ -2,9 +2,10 @@ import { z } from 'zod';
 import type { KnowledgeIndexPort } from '../ports.js';
 import type { KnowledgeEventPort } from '../ports.js';
 type BlockScope = 'GLOBAL' | 'USER';
-import { KnowledgeWikiService } from '../index.js';
+import { KnowledgeWikiService } from '../../../context/wiki/knowledge-wiki.service.js';
 import { validateFlatWikiKey } from '../keys.js';
-import { BaseTool, type ToolContext, type ToolOutput, validateActionRawPaths } from '../../tools/index.js';
+import { BaseTool, type ToolContext, type ToolOutput } from '../../../context/tools/base-tool.js';
+import { validateActionRawPaths } from '../../../context/tools/action-raw-paths.js';
 
 const SYSTEM_AUTHOR = 'System User';
 const SYSTEM_EMAIL = 'system@example.com';

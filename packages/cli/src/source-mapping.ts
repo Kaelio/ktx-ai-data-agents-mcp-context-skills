@@ -1,26 +1,17 @@
-import { localConnectionToWarehouseDescriptor } from './context/connections/index.js';
-import {
-  DEFAULT_METABASE_CLIENT_CONFIG,
-  DefaultLookerConnectionClientFactory,
-  DefaultMetabaseConnectionClientFactory,
-  KtxYamlMetabaseSourceStateReader,
-  LocalLookerRuntimeStore,
-  LocalMetabaseDiscoveryCache,
-  computeLookerMappingDrift,
-  computeMetabaseMappingDrift,
-  discoverLookerConnections,
-  discoverMetabaseDatabases,
-  lookerCredentialsFromLocalConnection,
-  metabaseRuntimeConfigFromLocalConnection,
-  planMetabaseFanoutChildren,
-  seedLocalMappingStateFromKtxYaml,
-  validateLookerMappings,
-  validateMappingPhysicalMatch,
-  type LookerMappingClient,
-  type LocalMetabaseMappingListRow,
-  type MetabaseRuntimeClient,
-} from './context/ingest/index.js';
-import { type KtxLocalProject, ktxLocalStateDbPath, loadKtxProject } from './context/project/index.js';
+import { localConnectionToWarehouseDescriptor } from './context/connections/local-warehouse-descriptor.js';
+import { DEFAULT_METABASE_CLIENT_CONFIG, DefaultMetabaseConnectionClientFactory } from './context/ingest/adapters/metabase/client.js';
+import { DefaultLookerConnectionClientFactory } from './context/ingest/adapters/looker/factory.js';
+import { KtxYamlMetabaseSourceStateReader, LocalMetabaseDiscoveryCache, type LocalMetabaseMappingListRow } from './context/ingest/adapters/metabase/local-source-state-store.js';
+import { LocalLookerRuntimeStore } from './context/ingest/adapters/looker/local-runtime-store.js';
+import { computeLookerMappingDrift, discoverLookerConnections, validateLookerMappings, type LookerMappingClient } from './context/ingest/adapters/looker/mapping.js';
+import { computeMetabaseMappingDrift, discoverMetabaseDatabases, validateMappingPhysicalMatch } from './context/ingest/adapters/metabase/mapping.js';
+import { lookerCredentialsFromLocalConnection } from './context/ingest/adapters/looker/local-looker.adapter.js';
+import { metabaseRuntimeConfigFromLocalConnection } from './context/ingest/adapters/metabase/local-metabase.adapter.js';
+import { planMetabaseFanoutChildren } from './context/ingest/adapters/metabase/fanout-planner.js';
+import { seedLocalMappingStateFromKtxYaml } from './context/ingest/local-mapping-reconcile.js';
+import type { MetabaseRuntimeClient } from './context/ingest/adapters/metabase/client-port.js';
+import { type KtxLocalProject, loadKtxProject } from './context/project/project.js';
+import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { profileMark } from './startup-profile.js';
 

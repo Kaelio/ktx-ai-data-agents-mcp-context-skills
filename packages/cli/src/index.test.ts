@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject } from './context/project/index.js';
+import { initKtxProject } from './context/project/project.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

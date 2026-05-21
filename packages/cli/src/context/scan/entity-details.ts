@@ -1,4 +1,4 @@
-import type { KtxLocalProject } from '../project/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import { readLocalScanStructuralSnapshot } from './local-structural-artifacts.js';
 import type {
   KtxConnectionDriver,
@@ -25,7 +25,7 @@ export interface KtxEntityDetailsSnapshotInfo {
   scanRunId: string | null;
 }
 
-export interface KtxEntityDetailsColumn {
+interface KtxEntityDetailsColumn {
   name: string;
   nativeType: string;
   normalizedType: string;
@@ -35,7 +35,7 @@ export interface KtxEntityDetailsColumn {
   comment: string | null;
 }
 
-export interface KtxEntityDetailsRecord {
+interface KtxEntityDetailsRecord {
   ok: true;
   connectionId: string;
   tableRef: KtxTableRef;
@@ -48,9 +48,9 @@ export interface KtxEntityDetailsRecord {
   snapshot: KtxEntityDetailsSnapshotInfo;
 }
 
-export type KtxEntityDetailsErrorCode = 'scan_missing' | 'table_not_found' | 'ambiguous_table' | 'column_not_found';
+type KtxEntityDetailsErrorCode = 'scan_missing' | 'table_not_found' | 'ambiguous_table' | 'column_not_found';
 
-export interface KtxEntityDetailsErrorResult {
+interface KtxEntityDetailsErrorResult {
   ok: false;
   connectionId: string;
   table: KtxEntityDetailsTableInput;

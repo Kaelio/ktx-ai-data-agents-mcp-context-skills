@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { KtxEmbeddingPort } from '../core/index.js';
-import { initKtxProject, loadKtxProject, type KtxLocalProject } from '../project/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import { initKtxProject, loadKtxProject, type KtxLocalProject } from '../../context/project/project.js';
 import { SqliteKnowledgeIndex } from '../wiki/sqlite-knowledge-index.js';
 import { reindexLocalIndexes } from './reindex.js';
 

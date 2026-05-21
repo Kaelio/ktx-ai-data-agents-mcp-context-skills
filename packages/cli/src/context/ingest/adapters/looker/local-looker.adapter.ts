@@ -1,11 +1,8 @@
-import type { KtxLocalProject, KtxProjectConnectionConfig } from '../../../project/index.js';
-import type { LookerClientLogger } from './client.js';
+import type { KtxLocalProject } from '../../../../context/project/project.js';
+import type { KtxProjectConnectionConfig } from '../../../../context/project/config.js';
 import {
-  DefaultLookerClientFactory,
-  DefaultLookerConnectionClientFactory,
   type LookerCredentialResolver,
 } from './factory.js';
-import { LookerSourceAdapter } from './looker.adapter.js';
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -53,17 +50,4 @@ export function createLocalLookerCredentialResolver(
       return lookerCredentialsFromLocalConnection(lookerConnectionId, project.config.connections[lookerConnectionId], env);
     },
   };
-}
-
-export function createLocalLookerSourceAdapter(
-  project: KtxLocalProject,
-  env: NodeJS.ProcessEnv = process.env,
-  logger?: LookerClientLogger,
-): LookerSourceAdapter {
-  const connectionFactory = new DefaultLookerConnectionClientFactory(createLocalLookerCredentialResolver(project, env), {
-    ...(logger ? { logger } : {}),
-  });
-  return new LookerSourceAdapter({
-    clientFactory: new DefaultLookerClientFactory(connectionFactory),
-  });
 }

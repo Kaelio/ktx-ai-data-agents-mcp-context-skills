@@ -1,8 +1,10 @@
 import { join } from 'node:path';
 import YAML from 'yaml';
-import type { KtxEmbeddingPort, KtxFileWriteResult } from '../core/index.js';
-import type { KtxLocalProject } from '../project/index.js';
-import { HybridSearchCore, type SearchCandidateGenerator } from '../search/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import type { KtxFileWriteResult } from '../../context/core/file-store.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
+import { HybridSearchCore } from '../../context/search/hybrid-search-core.js';
+import type { SearchCandidateGenerator } from '../../context/search/types.js';
 import { buildKnowledgeSearchText } from './knowledge-search-text.js';
 import { assertFlatWikiKey, isFlatWikiKey } from './keys.js';
 import { SqliteKnowledgeIndex, type SqliteKnowledgeIndexPage } from './sqlite-knowledge-index.js';
@@ -34,6 +36,7 @@ export interface LocalKnowledgeSearchResult extends LocalKnowledgeSummary {
   lanes?: WikiSearchLaneSummary[];
 }
 
+/** @internal */
 export interface WriteLocalKnowledgePageInput {
   key: string;
   scope: LocalKnowledgeScope;
@@ -148,6 +151,7 @@ async function readPageAtPath(
   }
 }
 
+/** @internal */
 export async function writeLocalKnowledgePage(
   project: KtxLocalProject,
   input: WriteLocalKnowledgePageInput,

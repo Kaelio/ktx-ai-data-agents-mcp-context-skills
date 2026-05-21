@@ -1,6 +1,6 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { KtxRuntimeToolSet } from '../../llm/index.js';
+import type { KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
 
 export interface ToolCallLogEntry {
   ts: string;

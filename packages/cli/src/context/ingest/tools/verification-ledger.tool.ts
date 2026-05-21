@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { KtxRuntimeToolDescriptor, KtxRuntimeToolSet } from '../../llm/index.js';
+import type { KtxRuntimeToolDescriptor, KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
 
 const verificationLedgerInputSchema = z.object({
   summary: z.string().min(1).max(2000),

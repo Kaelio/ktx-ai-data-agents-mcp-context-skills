@@ -6,6 +6,7 @@ export interface KtxRelationshipNormalizedName {
   tokens: string[];
 }
 
+/** @internal */
 export type KtxRelationshipTokenInput = string | readonly string[] | KtxRelationshipNormalizedName;
 
 const WAREHOUSE_LAYER_PREFIXES = new Set(['stg', 'stage', 'staging', 'dim', 'fct', 'fact', 'int', 'mart']);
@@ -132,6 +133,7 @@ function roundedScore(value: number): number {
   return Number(Math.max(0, Math.min(1, value)).toFixed(3));
 }
 
+/** @internal */
 export function tokenSimilarity(leftInput: KtxRelationshipTokenInput, rightInput: KtxRelationshipTokenInput): number {
   const left = tokensFromInput(leftInput);
   const right = tokensFromInput(rightInput);

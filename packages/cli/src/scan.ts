@@ -1,11 +1,6 @@
-import {
-  type KtxProgressPort,
-  type KtxScanMode,
-  type KtxScanReport,
-  type KtxScanWarning,
-  runLocalScan,
-} from './context/scan/index.js';
-import { loadKtxProject } from './context/project/index.js';
+import type { KtxProgressPort, KtxScanMode, KtxScanReport, KtxScanWarning } from './context/scan/types.js';
+import { runLocalScan } from './context/scan/local-scan.js';
+import { loadKtxProject } from './context/project/project.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import type { KtxCliIo } from './index.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';

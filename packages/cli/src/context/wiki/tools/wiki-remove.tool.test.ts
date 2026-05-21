@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolSession } from '../../tools/index.js';
-import { createTouchedSlSources, type ToolContext } from '../../tools/index.js';
+import type { ToolSession } from '../../../context/tools/tool-session.js';
+import { createTouchedSlSources } from '../../../context/tools/touched-sl-sources.js';
+import type { ToolContext } from '../../../context/tools/base-tool.js';
 import { WikiRemoveTool } from './wiki-remove.tool.js';
 
 describe('WikiRemoveTool', () => {

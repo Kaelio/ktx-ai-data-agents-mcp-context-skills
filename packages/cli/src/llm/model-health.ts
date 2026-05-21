@@ -4,7 +4,7 @@ import type { KtxLlmConfig } from './types.js';
 
 export type KtxLlmHealthCheckResult = { ok: true } | { ok: false; message: string };
 
-export interface KtxLlmHealthCheckDeps extends Omit<KtxLlmProviderFactoryDeps, 'generateText'> {
+interface KtxLlmHealthCheckDeps extends Omit<KtxLlmProviderFactoryDeps, 'generateText'> {
   generateText?: (options: Parameters<typeof generateText>[0]) => Promise<unknown>;
 }
 

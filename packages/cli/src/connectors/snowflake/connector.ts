@@ -2,26 +2,8 @@ import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/index.js';
-import {
-  createKtxConnectorCapabilities,
-  type KtxColumnSampleInput,
-  type KtxColumnSampleResult,
-  type KtxColumnStatsInput,
-  type KtxColumnStatsResult,
-  type KtxQueryResult,
-  type KtxReadOnlyQueryInput,
-  type KtxScanConnector,
-  type KtxScanContext,
-  type KtxScanInput,
-  type KtxSchemaColumn,
-  type KtxSchemaSnapshot,
-  type KtxSchemaTable,
-  type KtxTableRef,
-  type KtxTableSampleInput,
-  type KtxTableListEntry,
-  type KtxTableSampleResult,
-} from '../../context/scan/index.js';
+import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
+import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableListEntry, type KtxTableSampleResult } from '../../context/scan/types.js';
 import * as snowflake from 'snowflake-sdk';
 import { KtxSnowflakeDialect } from './dialect.js';
 
@@ -196,6 +178,7 @@ export function isKtxSnowflakeConnectionConfig(
   return String(connection?.driver ?? '').toLowerCase() === 'snowflake';
 }
 
+/** @internal */
 export function snowflakeConnectionConfigFromConfig(input: {
   connectionId: string;
   connection: KtxSnowflakeConnectionConfig | undefined;

@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { PromptService } from '../prompts/index.js';
-import { SkillsRegistryService } from '../skills/index.js';
-import { DEFAULT_SKILL_NAMES, type MemoryAgentSourceType, promptNameFor } from './index.js';
+import { PromptService } from '../../context/prompts/prompt.service.js';
+import { SkillsRegistryService } from '../../context/skills/skills-registry.service.js';
+import { DEFAULT_SKILL_NAMES, promptNameFor } from '../../context/memory/capture-signals.js';
+import type { MemoryAgentSourceType } from '../../context/memory/types.js';
 
 const promptsDir = fileURLToPath(new URL('../../prompts', import.meta.url));
 const skillsDir = fileURLToPath(new URL('../../skills', import.meta.url));

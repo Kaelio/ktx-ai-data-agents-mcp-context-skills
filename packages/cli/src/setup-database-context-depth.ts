@@ -1,10 +1,6 @@
 import { writeFile } from 'node:fs/promises';
-import {
-  type KtxLocalProject,
-  type KtxProjectConnectionConfig,
-  loadKtxProject,
-  serializeKtxProjectConfig,
-} from './context/project/index.js';
+import { type KtxLocalProject, loadKtxProject } from './context/project/project.js';
+import { type KtxProjectConnectionConfig, serializeKtxProjectConfig } from './context/project/config.js';
 import {
   type KtxDatabaseContextDepth,
   databaseContextDepth,

@@ -26,6 +26,6 @@ export const patternOutputSchema = z.object({
   slRefs: z.array(z.string()),
   constituentTemplateIds: z.array(z.string()),
 });
-export type PatternOutput = z.infer<typeof patternOutputSchema>;
 
+/** @internal */
 export const patternsArraySchema = z.array(patternOutputSchema);

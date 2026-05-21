@@ -1,3 +1,4 @@
+/** @internal */
 export const REDACTED_KTX_CREDENTIAL_VALUE = '<redacted>';
 
 const SENSITIVE_FIELD_NAME = /(password|secret|token|api[_-]?key|private[_-]?key|passphrase|credential|authorization|url)/i;

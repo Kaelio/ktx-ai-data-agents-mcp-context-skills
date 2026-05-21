@@ -3,10 +3,10 @@ import type { LanguageModel, TelemetrySettings, ToolCallRepairFunction, ToolSet 
 export const KTX_MODEL_ROLES = ['default', 'triage', 'candidateExtraction', 'curator', 'reconcile', 'repair'] as const;
 
 export type KtxModelRole = (typeof KTX_MODEL_ROLES)[number];
-export type KtxLlmBackend = 'anthropic' | 'vertex' | 'gateway' | 'claude-code';
+type KtxLlmBackend = 'anthropic' | 'vertex' | 'gateway' | 'claude-code';
 export type KtxPromptCacheTtl = '5m' | '1h';
 
-export type KtxJsonValue =
+type KtxJsonValue =
   | null
   | string
   | number
@@ -27,7 +27,7 @@ export interface KtxPromptCachingConfig {
   vertexFallbackTo5m: boolean;
 }
 
-export interface KtxTokenUsageEvent {
+interface KtxTokenUsageEvent {
   source?: string;
   modelId?: string;
   inputTokens?: number;
@@ -62,9 +62,9 @@ export interface KtxLlmProvider {
   activeBackend(): KtxLlmBackend;
 }
 
-export type KtxEmbeddingBackend = 'openai' | 'sentence-transformers';
+type KtxEmbeddingBackend = 'openai' | 'sentence-transformers';
 
-export interface KtxEmbeddingTokenUsageEvent {
+interface KtxEmbeddingTokenUsageEvent {
   backend: KtxEmbeddingBackend;
   model: string;
   inputCount: number;

@@ -1,4 +1,4 @@
-import type { SemanticLayerSource } from '../../../sl/index.js';
+import type { SemanticLayerSource } from '../../../../context/sl/types.js';
 import type {
   ParsedCrossModelMetric,
   ParsedMetricflowRelationship,
@@ -25,6 +25,7 @@ export type MetricflowSemanticModelJoin = SemanticLayerSource['joins'][number];
 export type MetricflowWritableSemanticLayerSource = Pick<SemanticLayerSource, 'name'> &
   Partial<Omit<SemanticLayerSource, 'name'>>;
 
+/** @internal */
 export function toKebabCaseMetricflowName(str: string): string {
   return str
     .toLowerCase()
@@ -32,6 +33,7 @@ export function toKebabCaseMetricflowName(str: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** @internal */
 export function mapSemanticModelToSource(model: ParsedSemanticModel, tableRef?: string): SemanticLayerSource {
   return {
     name: toKebabCaseMetricflowName(model.modelRef),
@@ -177,7 +179,7 @@ export function buildMetricflowSemanticModelSource(
   return mapMetricflowSemanticModelToStandalone(model, sourceName, matchedTable?.name ?? model.modelRef, joins);
 }
 
-export function buildMetricflowMeasures(model: ParsedSemanticModel): SemanticLayerSource['measures'] {
+function buildMetricflowMeasures(model: ParsedSemanticModel): SemanticLayerSource['measures'] {
   return model.measures.map((measure) => {
     if (measure.type === 'simple') {
       return {
@@ -195,6 +197,7 @@ export function buildMetricflowMeasures(model: ParsedSemanticModel): SemanticLay
   });
 }
 
+/** @internal */
 export function buildMetricflowColumns(model: ParsedSemanticModel): SemanticLayerSource['columns'] {
   const columns: SemanticLayerSource['columns'] = model.dimensions.map((dimension) => ({
     name: dimension.column,
@@ -243,6 +246,7 @@ export function getMetricflowAvailableColumnNames(context: MetricflowSemanticMod
   return new Set(columns.map((column) => column.name.toLowerCase()));
 }
 
+/** @internal */
 export function countImportableMetricflowRelationships(
   relationships: ParsedMetricflowRelationship[],
   hostTables: MetricflowHostTable[],
@@ -336,10 +340,11 @@ function mergeMetricflowJoins(
   return [...baseJoins, ...newJoins];
 }
 
-export function normalizeMetricflowJoinOn(on: string): string {
+function normalizeMetricflowJoinOn(on: string): string {
   return on.replace(/\s+/g, ' ').trim();
 }
 
+/** @internal */
 export function rewriteMetricflowManifestJoins(
   joins: SemanticLayerSource['joins'],
   sourceNameByManifestName: Map<string, string>,
@@ -351,7 +356,7 @@ export function rewriteMetricflowManifestJoins(
   }));
 }
 
-export function rewriteMetricflowJoinOn(on: string, sourceNameByManifestName: Map<string, string>): string {
+function rewriteMetricflowJoinOn(on: string, sourceNameByManifestName: Map<string, string>): string {
   const parts = on.split('=');
   if (parts.length !== 2) {
     return on;
@@ -366,7 +371,7 @@ export function rewriteMetricflowJoinOn(on: string, sourceNameByManifestName: Ma
   return `${leftTable}.${left.column} = ${rightTable}.${right.column}`;
 }
 
-export function parseMetricflowJoinReference(ref: string): { table: string; column: string } | null {
+function parseMetricflowJoinReference(ref: string): { table: string; column: string } | null {
   const lastDot = ref.lastIndexOf('.');
   if (lastDot <= 0 || lastDot === ref.length - 1) {
     return null;

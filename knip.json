@@ -2,48 +2,41 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.mjs"],
-      "project": ["scripts/**/*.mjs"],
-      "ignoreDependencies": [
-        "@semantic-release/commit-analyzer",
-        "@semantic-release/github",
-        "@semantic-release/npm",
-        "@semantic-release/release-notes-generator",
-        "conventional-changelog-conventionalcommits"
+      "entry": [
+        "scripts/**/*.mjs",
+        "scripts/**/*.cjs",
+        ".releaserc.cjs!"
       ]
     },
     "packages/cli": {
       "entry": [
-        "src/llm/index.ts!",
-        "src/context/**/index.ts!",
-        "src/connectors/*/index.ts!",
         "src/print-command-tree.ts!",
+        "scripts/**/*.mjs",
         "src/**/*.test-utils.ts",
-        "src/**/acceptance-fixtures.ts"
-      ],
-      "project": ["src/**/*.{ts,tsx}!", "scripts/**/*.mjs", "vitest.config.ts"]
+        "src/**/acceptance-fixtures.ts",
+        "src/context/scan/relationship-benchmarks.ts!",
+        "src/context/scan/relationship-benchmark-report.ts!"
+      ]
     },
     "docs-site": {
       "entry": [
         "components/**/*.{ts,tsx}!",
         "source.config.ts!"
       ],
-      "project": [
-        "app/**/*.{ts,tsx}!",
-        "components/**/*.{ts,tsx}!",
-        "lib/**/*.{ts,tsx}!",
-        "*.ts!",
-        "*.mjs",
-        "tests/**/*.mjs"
-      ],
-      "ignoreDependencies": ["tailwindcss"]
+      "ignoreDependencies": [
+        "tailwindcss"
+      ]
     }
   },
-  "ignore": [
-    "**/dist/**",
-    "**/coverage/**",
-    "**/.next/**",
-    "**/node_modules/**"
+  "ignoreDependencies": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/github",
+    "@semantic-release/npm",
+    "@semantic-release/release-notes-generator",
+    "conventional-changelog-conventionalcommits"
   ],
-  "ignoreBinaries": ["uv", "lsof"]
+  "ignoreBinaries": [
+    "uv",
+    "lsof"
+  ]
 }

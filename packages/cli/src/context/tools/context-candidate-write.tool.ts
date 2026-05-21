@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { KtxEmbeddingPort } from '../core/index.js';
-import { buildContextCandidateEmbeddingText } from '../ingest/context-candidates/index.js';
+import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
+import { buildContextCandidateEmbeddingText } from '../../context/ingest/context-candidates/embedding-text.js';
 import { BaseTool, type ToolContext, type ToolOutput } from './base-tool.js';
 import { chunkIdSchema } from './context-evidence-ids.js';
 import type { ContextEvidenceToolStorePort } from './context-evidence-tool-store.js';

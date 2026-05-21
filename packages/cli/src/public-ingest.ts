@@ -1,5 +1,6 @@
-import { loadKtxProject, type KtxLocalProject, type KtxProjectConnectionConfig } from './context/project/index.js';
-import type { KtxProgressPort } from './context/scan/index.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
+import type { KtxProjectConnectionConfig } from './context/project/config.js';
+import type { KtxProgressPort } from './context/scan/types.js';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
 import {

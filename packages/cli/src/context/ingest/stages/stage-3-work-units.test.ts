@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CaptureSession, MemoryAction } from '../../memory/index.js';
-import { addTouchedSlSource, createTouchedSlSources } from '../../tools/index.js';
+import type { CaptureSession, MemoryAction } from '../../../context/memory/types.js';
+import { addTouchedSlSource, createTouchedSlSources } from '../../../context/tools/touched-sl-sources.js';
 import type { WorkUnit } from '../types.js';
 import { executeWorkUnit, type WorkUnitExecutionDeps } from './stage-3-work-units.js';
 

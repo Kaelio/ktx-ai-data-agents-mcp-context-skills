@@ -1,6 +1,6 @@
 import process from 'node:process';
 import type { Readable, Writable } from 'node:stream';
-import { loadKtxProject } from './context/project/index.js';
+import { loadKtxProject } from './context/project/project.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { KtxCliIo } from './cli-runtime.js';

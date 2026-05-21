@@ -7,6 +7,7 @@ export interface LookerCredentialResolver {
   resolve(lookerConnectionId: string): Promise<LookerConnectionParams>;
 }
 
+/** @internal */
 export interface LookerConnectionClientFactory {
   createClient(lookerConnectionId: string): Promise<LookerRuntimeClient>;
 }
@@ -23,6 +24,7 @@ export class DefaultLookerConnectionClientFactory implements LookerConnectionCli
   }
 }
 
+/** @internal */
 export class DefaultLookerClientFactory implements LookerClientFactory {
   constructor(private readonly inner: LookerConnectionClientFactory) {}
 

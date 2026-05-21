@@ -1,5 +1,5 @@
-import { getDialectForDriver } from '../connections/index.js';
-import type { KtxFileStorePort } from '../core/index.js';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
+import type { KtxFileStorePort } from '../../context/core/file-store.js';
 import type {
   KtxConnectionDriver,
   KtxSchemaColumn,

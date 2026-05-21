@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WarehouseCatalogService } from '../../../scan/warehouse-catalog.js';
-import type { BaseTool, ToolContext } from '../../../tools/index.js';
+import type { BaseTool, ToolContext } from '../../../../context/tools/base-tool.js';
 import { DiscoverDataTool } from './discover-data.tool.js';
 
 describe('DiscoverDataTool', () => {

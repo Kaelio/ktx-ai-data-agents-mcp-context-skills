@@ -1,6 +1,6 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { SessionOutcome } from '../../core/index.js';
+import type { SessionOutcome } from '../../../context/core/session-worktree.service.js';
 import type { IngestSessionWorktree, IngestSessionWorktreePort } from '../ports.js';
 import type { WorkUnit } from '../types.js';
 import type { IngestTraceWriter } from '../ingest-trace.js';

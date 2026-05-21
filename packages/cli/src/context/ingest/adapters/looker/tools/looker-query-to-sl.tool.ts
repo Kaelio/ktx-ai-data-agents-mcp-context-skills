@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { ToolOutput } from '../../../../tools/index.js';
+import type { ToolOutput } from '../../../../../context/tools/base-tool.js';
 import type { ParsedTargetTable } from '../../../parsed-target-table.js';
 import { stagedLookerQuerySchema } from '../types.js';
 
@@ -9,7 +9,7 @@ const lookerUsageInputSchema = z.object({
   uniqueUsers30d: z.number().int().nonnegative().default(0),
 });
 
-export const lookerQueryToSlInputSchema = z.object({
+const lookerQueryToSlInputSchema = z.object({
   query: stagedLookerQuerySchema,
   contentTitle: z.string().min(1).optional(),
   contentType: z.enum(['look', 'dashboard_tile']).default('look'),
@@ -20,17 +20,17 @@ export type LookerQueryToSlInput = z.input<typeof lookerQueryToSlInputSchema>;
 
 type LookerTargetStatus = 'mapped' | 'unmapped' | 'unparseable' | 'missing_target_table';
 
-export interface LookerSlFieldProposal {
+interface LookerSlFieldProposal {
   name: string;
   lookerField: string;
 }
 
-export interface LookerSlMeasureProposal extends LookerSlFieldProposal {
+interface LookerSlMeasureProposal extends LookerSlFieldProposal {
   expr: string;
   description: string;
 }
 
-export interface LookerSlSegmentProposal {
+interface LookerSlSegmentProposal {
   name: string;
   filters: Record<string, unknown>;
   suggestedPredicate: string;
@@ -89,6 +89,7 @@ function targetNotes(status: LookerTargetStatus, targetTable: ParsedTargetTable 
   ];
 }
 
+/** @internal */
 export function buildLookerSlProposal(raw: LookerQueryToSlInput): LookerSlProposal {
   const input = lookerQueryToSlInputSchema.parse(raw);
   const sourceName = `looker__${toSlName(input.query.model)}__${toSlName(input.query.view)}`;
@@ -182,7 +183,7 @@ export function createLookerQueryToSlTool() {
   });
 }
 
-export function formatLookerSlProposal(proposal: LookerSlProposal): string {
+function formatLookerSlProposal(proposal: LookerSlProposal): string {
   const lines = [
     '## Looker query SL proposal',
     '',

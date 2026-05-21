@@ -1,4 +1,4 @@
-import type { KtxLocalProject } from '../project/index.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import type {
   KtxConnectionDriver,
   KtxSchemaColumn,

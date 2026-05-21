@@ -1,15 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  bigQueryConnectionConfigFromConfig,
-  createBigQueryLiveDatabaseIntrospection,
-  isKtxBigQueryConnectionConfig,
-  type KtxBigQueryClient,
-  KtxBigQueryScanConnector,
-  type KtxBigQueryClientFactory,
-  type KtxBigQueryDataset,
-  type KtxBigQueryQueryJob,
-  type KtxBigQueryTableRef,
-} from './index.js';
+import { bigQueryConnectionConfigFromConfig, isKtxBigQueryConnectionConfig, type KtxBigQueryClient, KtxBigQueryScanConnector, type KtxBigQueryClientFactory, type KtxBigQueryDataset, type KtxBigQueryQueryJob, type KtxBigQueryTableRef } from '../../connectors/bigquery/connector.js';
+import { createBigQueryLiveDatabaseIntrospection } from '../../connectors/bigquery/live-database-introspection.js';
 
 function fakeClientFactory(): KtxBigQueryClientFactory {
   const queryResults = vi.fn(async (): ReturnType<KtxBigQueryQueryJob['getQueryResults']> => [

@@ -1,24 +1,6 @@
 import { BigQuery, type TableField } from '@google-cloud/bigquery';
-import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/index.js';
-import {
-  createKtxConnectorCapabilities,
-  type KtxColumnSampleInput,
-  type KtxColumnSampleResult,
-  type KtxColumnStatsInput,
-  type KtxColumnStatsResult,
-  type KtxQueryResult,
-  type KtxReadOnlyQueryInput,
-  type KtxScanConnector,
-  type KtxScanContext,
-  type KtxScanInput,
-  type KtxSchemaColumn,
-  type KtxSchemaSnapshot,
-  type KtxSchemaTable,
-  type KtxTableListEntry,
-  type KtxTableRef,
-  type KtxTableSampleInput,
-  type KtxTableSampleResult,
-} from '../../context/scan/index.js';
+import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
+import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -57,12 +39,14 @@ export interface KtxBigQueryColumnDistinctValuesResult {
   cardinality: number;
 }
 
+/** @internal */
 export interface KtxBigQueryQueryJob {
   getQueryResults(): Promise<
     [Array<Record<string, unknown>>, unknown, { schema?: { fields?: TableField[] } }?, ...unknown[]]
   >;
 }
 
+/** @internal */
 export interface KtxBigQueryTableRef {
   id?: string;
   metadata?: { type?: string };
@@ -81,6 +65,7 @@ export interface KtxBigQueryTableRef {
   >;
 }
 
+/** @internal */
 export interface KtxBigQueryDataset {
   get(): Promise<unknown>;
   getTables(): Promise<[KtxBigQueryTableRef[], ...unknown[]]>;
@@ -223,6 +208,7 @@ export function isKtxBigQueryConnectionConfig(
   return String(connection?.driver ?? '').toLowerCase() === 'bigquery';
 }
 
+/** @internal */
 export function bigQueryConnectionConfigFromConfig(input: {
   connectionId: string;
   connection: KtxBigQueryConnectionConfig | undefined;

@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FieldPacket, RowDataPacket } from 'mysql2/promise';
-import {
-  createMysqlLiveDatabaseIntrospection,
-  isKtxMysqlConnectionConfig,
-  KtxMysqlScanConnector,
-  mysqlConnectionPoolConfigFromConfig,
-  type KtxMysqlPoolFactory,
-} from './index.js';
+import { createMysqlLiveDatabaseIntrospection } from '../../connectors/mysql/live-database-introspection.js';
+import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
 
 function mysqlResult(rows: Record<string, unknown>[], fields: Array<{ name: string; type?: number }>): [RowDataPacket[], FieldPacket[]] {
   return [rows as RowDataPacket[], fields as FieldPacket[]];

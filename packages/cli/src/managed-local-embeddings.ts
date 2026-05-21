@@ -1,4 +1,4 @@
-import type { KtxEmbeddingConfig } from './llm/index.js';
+import type { KtxEmbeddingConfig } from './llm/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
   ensureManagedPythonCommandRuntime,

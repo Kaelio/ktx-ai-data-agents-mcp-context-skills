@@ -1,15 +1,12 @@
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  LocalLookerRuntimeStore,
-  LocalMetabaseDiscoveryCache,
-  type LocalIngestResult,
-  type LocalMetabaseFanoutProgress,
-  type RunLocalIngestOptions,
-  type SourceAdapter,
-} from './context/ingest/index.js';
-import { initKtxProject, ktxLocalStateDbPath, loadKtxProject } from './context/project/index.js';
+import { LocalLookerRuntimeStore } from './context/ingest/adapters/looker/local-runtime-store.js';
+import { LocalMetabaseDiscoveryCache } from './context/ingest/adapters/metabase/local-source-state-store.js';
+import type { LocalIngestResult, LocalMetabaseFanoutProgress, RunLocalIngestOptions } from './context/ingest/local-ingest.js';
+import type { SourceAdapter } from './context/ingest/types.js';
+import { initKtxProject, loadKtxProject } from './context/project/project.js';
+import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type KtxIngestArgs, type KtxIngestDeps, runKtxIngest } from './ingest.js';
 import type { KtxCliLocalIngestAdaptersOptions } from './local-adapters.js';

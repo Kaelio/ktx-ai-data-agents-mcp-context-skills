@@ -2,7 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ktxLocalStateDbPath, type KtxLocalProject } from '../project/index.js';
+import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
+import type { KtxLocalProject } from '../../context/project/project.js';
 import { LocalLookerRuntimeStore } from './adapters/looker/local-runtime-store.js';
 import { seedLocalMappingStateFromKtxYaml } from './local-mapping-reconcile.js';
 

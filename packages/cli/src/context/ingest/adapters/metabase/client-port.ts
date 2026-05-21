@@ -69,7 +69,7 @@ export interface MetabaseCardSummary {
   collection_id?: number | 'root' | null;
 }
 
-export interface MetabaseResultMetadataColumn {
+interface MetabaseResultMetadataColumn {
   name: string;
   base_type: string;
   semantic_type?: string | null;
@@ -79,7 +79,7 @@ export interface MetabaseResultMetadataColumn {
   field_ref?: unknown[] | null;
 }
 
-export interface MetabaseParameter {
+interface MetabaseParameter {
   id: string;
   name: string;
   type: string;
@@ -103,7 +103,7 @@ export interface MetabaseTemplateTag {
   'widget-type'?: string;
 }
 
-export interface MetabaseResolvedTemplateTag {
+interface MetabaseResolvedTemplateTag {
   name: string;
   type: string;
   cardReference?: number | null;
