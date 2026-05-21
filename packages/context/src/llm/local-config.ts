@@ -22,8 +22,6 @@ interface LocalConfigDeps {
   createAiSdkRuntime?: (deps: { llmProvider: KtxLlmProvider }) => KtxLlmRuntimePort;
 }
 
-export const MANAGED_SENTENCE_TRANSFORMERS_BASE_URL = 'managed:local-embeddings';
-
 function resolveOptional(value: string | undefined, env: NodeJS.ProcessEnv): string | undefined {
   return resolveKtxConfigReference(value, env) || undefined;
 }
@@ -149,7 +147,7 @@ export function resolveLocalKtxEmbeddingConfig(
   }
   if (config.backend === 'sentence-transformers') {
     const baseURL = config.sentenceTransformers?.base_url;
-    if (!baseURL || baseURL === MANAGED_SENTENCE_TRANSFORMERS_BASE_URL) {
+    if (!baseURL) {
       return null;
     }
     return {

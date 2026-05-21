@@ -37,7 +37,6 @@ export {
   summarizeKtxLlmDebugRequest,
 } from './debug-request-recorder.js';
 export {
-  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
   createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmProviderFromConfig,
   createLocalKtxLlmRuntimeFromConfig,

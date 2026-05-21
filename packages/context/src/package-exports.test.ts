@@ -143,7 +143,6 @@ describe('@ktx/context package exports', () => {
     expect(root.assertSearchBackendConformanceCase).toBeTypeOf('function');
     expect(root.assertSearchBackendCapabilities).toBeTypeOf('function');
     expect(root.createLocalKtxEmbeddingProviderFromConfig).toBeTypeOf('function');
-    expect(root.MANAGED_SENTENCE_TRANSFORMERS_BASE_URL).toBe('managed:local-embeddings');
     expect(agent).toBeDefined();
     expect(agent.AgentRunnerService).toBeTypeOf('function');
     expect(root.AgentRunnerService).toBeTypeOf('function');

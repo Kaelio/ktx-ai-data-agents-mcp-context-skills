@@ -5,7 +5,6 @@ import {
   type KtxProjectLlmConfig,
 } from '../project/config.js';
 import {
-  MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
   createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmProviderFromConfig,
   resolveLocalKtxEmbeddingConfig,
@@ -151,13 +150,13 @@ describe('local KTX embedding config', () => {
     });
   });
 
-  it('returns null when sentence-transformers base_url is still the unresolved managed sentinel', () => {
+  it('returns null when sentence-transformers has no base_url (managed daemon delegation)', () => {
     const config: KtxProjectEmbeddingConfig = {
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
       sentenceTransformers: {
-        base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
+        base_url: '',
         pathPrefix: '',
       },
     };

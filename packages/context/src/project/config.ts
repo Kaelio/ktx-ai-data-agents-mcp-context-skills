@@ -36,7 +36,7 @@ const vertexProviderSchema = z
 
 const sentenceTransformersSchema = z
   .strictObject({
-    base_url: z.string().default('').describe('Base URL of the sentence-transformers HTTP server. Empty string uses the managed local runtime.'),
+    base_url: z.string().default('').describe('Base URL of the sentence-transformers HTTP server. Leave empty (or omit) to use the project-managed local daemon.'),
     pathPrefix: z.string().optional().describe('Optional URL path prefix prepended to embedding requests.'),
   })
   .describe('Sentence-transformers embedding server configuration.');
