@@ -1,0 +1,614 @@
+---
+title: ktx.yaml reference
+description: Every top-level block of the ktx.yaml project file, what it controls, accepted values, and defaults.
+---
+
+`ktx.yaml` is the single source of truth for a **ktx** project. The file lives
+at the project root and tells **ktx** which databases to read, which context
+sources to ingest, which LLM and embedding providers to use, how to store
+state, and how the scan and agent layers behave. Every block below is optional
+and falls back to a documented default, so a minimal `ktx.yaml` is just one
+connection.
+
+This page is the canonical reference for the file. For the guided flow that
+writes it, see [`ktx setup`](/docs/cli-reference/ktx-setup).
+
+## Where blocks fit
+
+`ktx.yaml` has eight top-level keys. They group into three layers: what to
+read, how to think, and where to put the results.
+
+<figure
+  className="not-prose my-8 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm"
+  aria-label="ktx.yaml block layout"
+>
+  <div className="border-b border-fd-border bg-fd-muted/35 px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+      ktx.yaml at a glance
+    </p>
+    <p className="mt-1 text-sm leading-6 text-fd-muted-foreground">
+      Inputs flow left to right. Storage and memory persist the result.
+    </p>
+  </div>
+  <div className="grid gap-3 p-4 md:grid-cols-[1.1fr_1.1fr_1fr]">
+    <div className="rounded-md border border-fd-border bg-fd-background p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        Inputs
+      </p>
+      <ul className="mt-3 space-y-2 text-sm leading-6 text-fd-foreground">
+        <li><code className="text-[13px] font-semibold">connections</code> - warehouses, BI tools, dbt, Notion</li>
+        <li><code className="text-[13px] font-semibold">setup</code> - which connections are primary databases</li>
+      </ul>
+    </div>
+    <div className="rounded-md border-2 border-fd-primary bg-fd-background p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-primary">
+        Compute
+      </p>
+      <ul className="mt-3 space-y-2 text-sm leading-6 text-fd-foreground">
+        <li><code className="text-[13px] font-semibold">llm</code> - provider, models, prompt cache</li>
+        <li><code className="text-[13px] font-semibold">ingest</code> - adapters, embeddings, work units</li>
+        <li><code className="text-[13px] font-semibold">scan</code> - enrichment, relationships</li>
+        <li><code className="text-[13px] font-semibold">agent</code> - research-agent feature flags</li>
+      </ul>
+    </div>
+    <div className="rounded-md border border-fd-border bg-fd-background p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground">
+        Persistence
+      </p>
+      <ul className="mt-3 space-y-2 text-sm leading-6 text-fd-foreground">
+        <li><code className="text-[13px] font-semibold">storage</code> - state and search backends, git policy</li>
+        <li><code className="text-[13px] font-semibold">memory</code> - agent memory commit policy</li>
+      </ul>
+    </div>
+  </div>
+</figure>
+
+## Minimal config
+
+A working `ktx.yaml` needs one entry in `connections`. Everything else accepts
+defaults. The example below is enough for `ktx ingest warehouse` to run a fast
+schema scan against a local Postgres.
+
+```yaml
+connections:
+  warehouse:
+    driver: postgres
+    url: env:DATABASE_URL
+```
+
+## Secret references
+
+Several fields accept either a literal value or a reference. References keep
+secrets out of `ktx.yaml` so the file can stay in git.
+
+| Form | Resolved to | Used for |
+|------|-------------|----------|
+| `env:VAR_NAME` | The value of the environment variable `VAR_NAME` at runtime | API keys, connection URLs, OAuth secrets |
+| `file:/abs/path` or `file:~/path` | The first line of the referenced file, with `~` expanded to your home directory | Long-lived credentials kept under `.ktx/secrets/` |
+| Literal string | Used as-is | Non-secret values such as `base_url` |
+
+References work in: warehouse `url`, Metabase `api_key` / `api_key_ref`, Looker
+`client_secret` / `client_secret_ref`, Notion / dbt / LookML / MetricFlow
+`auth_token` / `auth_token_ref`, and any `api_key` under the `llm` and
+`ingest.embeddings` blocks.
+
+## `connections`
+
+The `connections` block is a map from a connection ID you choose to the
+configuration for that connector. The connection ID is what every other part
+of **ktx** uses to address a connector - `ktx ingest warehouse`,
+`ktx sql --connection warehouse`, the semantic-layer path
+`semantic-layer/warehouse/`, and so on.
+
+Each entry is discriminated by the `driver` field. Warehouse drivers and
+context-source drivers share the map.
+
+| Driver | Kind | Required fields | Common optional fields |
+|--------|------|-----------------|------------------------|
+| `postgres` / `postgresql` | Warehouse | `driver` | `url`, `enabled_tables`, `historicSql`, `context.queryHistory` |
+| `mysql` | Warehouse | `driver` | `url`, `enabled_tables` |
+| `sqlite` | Warehouse | `driver` | `url` or `path`, `enabled_tables` |
+| `sqlserver` | Warehouse | `driver` | `url`, `enabled_tables` |
+| `bigquery` | Warehouse | `driver` | `url`, `enabled_tables`, `historicSql` |
+| `snowflake` | Warehouse | `driver` | `url`, `enabled_tables`, `historicSql` |
+| `clickhouse` | Warehouse | `driver` | `url`, `enabled_tables` |
+| `metabase` | Context source | `driver`, `api_url` | `api_key_ref`, `mappings` |
+| `looker` | Context source | `driver`, `base_url`, `client_id` | `client_secret_ref`, `mappings` |
+| `lookml` | Context source | `driver`, `repoUrl` | `branch`, `path`, `auth_token_ref`, `mappings` |
+| `dbt` | Context source | `driver`, one of `source_dir` or `repo_url` | `branch`, `path`, `profiles_path`, `target`, `project_name` |
+| `metricflow` | Context source | `driver`, `metricflow.repoUrl` | `metricflow.branch`, `metricflow.path`, `metricflow.auth_token_ref` |
+| `notion` | Context source | `driver`, `auth_token_ref` | `crawl_mode`, `root_*_ids`, `max_*_per_run` |
+
+### Warehouse drivers
+
+Warehouse connections are open objects: the listed fields are validated, and
+any other field is preserved and passed through to the connector. Use
+`enabled_tables` to scope deep ingest to a specific list of
+`schema.table` names - useful for smoke tests.
+
+```yaml
+connections:
+  warehouse:
+    driver: postgres
+    url: env:DATABASE_URL
+    enabled_tables:
+      - public.orders
+      - public.customers
+```
+
+For Postgres, BigQuery, and Snowflake, `historicSql` and `context.queryHistory`
+toggle query-history ingest. The shape is connector-specific; the setup wizard
+writes these fields when you pass `--enable-query-history`.
+
+```yaml
+connections:
+  warehouse:
+    driver: postgres
+    url: env:DATABASE_URL
+    context:
+      queryHistory:
+        enabled: true
+        minExecutions: 5
+```
+
+### Metabase
+
+```yaml
+connections:
+  metabase:
+    driver: metabase
+    api_url: https://metabase.example.com
+    api_key_ref: env:METABASE_API_KEY
+    mappings:
+      databaseMappings:
+        "1": warehouse        # Metabase DB id "1" -> ktx connection "warehouse"
+      syncMode: ALL           # ALL | ONLY | EXCEPT
+```
+
+| Field | Purpose |
+|-------|---------|
+| `api_url` | Metabase instance URL. Required. |
+| `api_key` | Literal token. Prefer `api_key_ref`. |
+| `api_key_ref` | Reference to the token (`env:` or `file:`). |
+| `mappings.databaseMappings` | Map of Metabase database ID (positive-integer string) to a `ktx` warehouse connection ID. `null` explicitly unmaps. |
+| `mappings.syncEnabled` | Per-database boolean toggle, keyed by Metabase DB ID. |
+| `mappings.syncMode` | `ALL` (all mapped DBs), `ONLY` (those with `syncEnabled: true`), or `EXCEPT` (skip those with `syncEnabled: true`). Default `ALL`. |
+| `mappings.selections.collections` / `items` | Optional Metabase collection or item IDs to scope ingest. |
+| `mappings.defaultTagNames` | Default tag names attached to ingested artifacts. |
+| `network_proxy` / `networkProxy` | Optional proxy configuration. |
+
+### Looker
+
+```yaml
+connections:
+  looker:
+    driver: looker
+    base_url: https://looker.example.com
+    client_id: ktx-integration
+    client_secret_ref: env:LOOKER_CLIENT_SECRET
+    mappings:
+      connectionMappings:
+        prod_warehouse: warehouse
+```
+
+| Field | Purpose |
+|-------|---------|
+| `base_url` | Looker instance URL. Required. |
+| `client_id` | Looker OAuth client ID. Required. |
+| `client_secret` / `client_secret_ref` | Literal secret or reference. Prefer the `_ref`. |
+| `mappings.connectionMappings` | Map of Looker connection name to `ktx` warehouse connection ID. |
+
+### LookML
+
+```yaml
+connections:
+  lookml:
+    driver: lookml
+    repoUrl: git@github.com:org/lookml.git
+    branch: main
+    path: lookml/
+    auth_token_ref: env:GITHUB_TOKEN
+    mappings:
+      expectedLookerConnectionName: prod_warehouse
+```
+
+| Field | Purpose |
+|-------|---------|
+| `repoUrl` | Git URL of the LookML project (`https`, `ssh`, or `file:`). Required. Camel-case by convention. |
+| `branch` | Branch to fetch. Defaults to `main`. |
+| `path` | Subdirectory inside the repo when LookML lives in a monorepo. |
+| `auth_token_ref` | Reference to a Git auth token for private repos. |
+| `mappings.expectedLookerConnectionName` | Looker connection name LookML models must declare. Mismatches block semantic-layer writes during ingest. |
+
+### dbt
+
+```yaml
+connections:
+  dbt_main:
+    driver: dbt
+    source_dir: ../dbt-project
+    target: prod
+```
+
+| Field | Purpose |
+|-------|---------|
+| `source_dir` | Absolute or project-relative path to a local dbt project. |
+| `repo_url` | Git URL of the dbt project. Use this instead of `source_dir` when fetching remotely. |
+| `branch` | Branch to fetch when using `repo_url`. |
+| `path` | Subdirectory inside the repo. |
+| `auth_token_ref` | Git auth reference for private repos. |
+| `profiles_path` | Override path to `profiles.yml`. |
+| `target` | dbt target name (for example `dev`, `prod`). |
+| `project_name` | Override the auto-detected dbt project name. |
+
+### MetricFlow
+
+```yaml
+connections:
+  metricflow:
+    driver: metricflow
+    metricflow:
+      repoUrl: git@github.com:org/sl-config.git
+      branch: main
+      path: semantic_models/
+      auth_token_ref: env:GITHUB_TOKEN
+```
+
+The MetricFlow connector wraps its fields in a nested `metricflow` block.
+`repoUrl` is required; the rest mirrors the LookML / dbt git fields.
+
+### Notion
+
+```yaml
+connections:
+  notion:
+    driver: notion
+    auth_token_ref: env:NOTION_TOKEN
+    crawl_mode: selected_roots
+    root_database_ids:
+      - 9f30c2c4d4f24a8d9a8d8e2c1b2a3d4e
+    max_pages_per_run: 500
+    max_knowledge_creates_per_run: 5
+    max_knowledge_updates_per_run: 25
+```
+
+| Field | Purpose |
+|-------|---------|
+| `auth_token` / `auth_token_ref` | Notion integration token. Prefer the `_ref`. |
+| `crawl_mode` | `selected_roots` (requires at least one `root_*_ids`) or `all_accessible`. |
+| `root_page_ids`, `root_database_ids`, `root_data_source_ids` | Notion IDs to crawl when `crawl_mode` is `selected_roots`. |
+| `max_pages_per_run` | Max pages fetched per ingest run (1-10000). |
+| `max_knowledge_creates_per_run` | Max new wiki pages created per run (0-25). |
+| `max_knowledge_updates_per_run` | Max existing wiki pages updated per run (0-100). |
+
+## `setup`
+
+Captured by the setup wizard. The only field **ktx** still reads is
+`database_connection_ids`, which tells the ingest layer which entries in
+`connections` are primary warehouses. When omitted, every warehouse-typed
+connection is treated as primary.
+
+```yaml
+setup:
+  database_connection_ids:
+    - warehouse
+```
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `database_connection_ids` | `string[]` | `[]` | IDs in `connections` treated as primary warehouses by ingest and scan. |
+
+## `storage`
+
+`storage` controls where **ktx** keeps its own state and search index, and how
+state changes are committed. Defaults work for a single-user local project.
+
+```yaml
+storage:
+  state: sqlite          # sqlite | postgres
+  search: sqlite-fts5    # sqlite-fts5 | postgres-hybrid
+  git:
+    auto_commit: true
+    author: "ktx <ktx@example.com>"
+```
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `state` | `sqlite` \| `postgres` | `sqlite` | Backend for ktx state. `sqlite` uses `.ktx/db.sqlite`; `postgres` expects a configured Postgres connection. |
+| `search` | `sqlite-fts5` \| `postgres-hybrid` | `sqlite-fts5` | Backend for search indexes. `postgres-hybrid` combines lexical and vector search in Postgres. |
+| `git.auto_commit` | `boolean` | `true` | When `true`, ktx auto-commits changes to the git-backed state store. |
+| `git.author` | `string` | `ktx <ktx@example.com>` | Git author identity for auto-commits. Standard `Name <email>` form. |
+
+## `llm`
+
+The `llm` block selects the LLM provider, lets you override the model used for
+specific roles, and tunes prompt caching.
+
+```yaml
+llm:
+  provider:
+    backend: anthropic
+    anthropic:
+      api_key: env:ANTHROPIC_API_KEY
+  models:
+    default: claude-sonnet-4-6
+    triage: claude-haiku-4-5
+  promptCaching:
+    enabled: true
+    systemTtl: 1h
+    toolsTtl: 1h
+    historyTtl: 5m
+    vertexFallbackTo5m: true
+```
+
+### Provider
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `provider.backend` | `none` \| `anthropic` \| `vertex` \| `gateway` \| `claude-code` | `none` | Selected backend. `none` disables LLM features. `claude-code` uses the local Claude Code session and needs no API key. |
+| `provider.anthropic.api_key` | `string` | - | Anthropic API key. Required when `backend: anthropic`. Accepts `env:` or `file:` references. |
+| `provider.anthropic.base_url` | `string` | - | Override the Anthropic API base URL (proxy, self-hosted gateway). |
+| `provider.gateway.api_key` / `base_url` | `string` | - | Credentials for an AI Gateway provider. Required when `backend: gateway`. |
+| `provider.vertex.project` | `string` | - | Google Cloud project ID hosting the Vertex AI endpoint. |
+| `provider.vertex.location` | `string` | - | Vertex AI region (for example `us-east5`). Required when the `vertex` block is present. |
+
+### Model roles
+
+`models` overrides the per-role model. Keys are fixed; values are
+provider-specific model identifiers.
+
+| Role | Used for |
+|------|----------|
+| `default` | Catch-all when no role-specific override exists. |
+| `triage` | Cheap routing decisions during ingest and scan. |
+| `candidateExtraction` | Extracting relationship and entity candidates from data. |
+| `curator` | Reconciling proposed context against accepted files. |
+| `reconcile` | Resolving conflicts between incoming and existing context. |
+| `repair` | Fixing invalid generated YAML before write. |
+
+### Prompt caching
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `promptCaching.enabled` | `boolean` | backend default | Master switch for Anthropic-style prompt caching. |
+| `promptCaching.systemTtl` | `5m` \| `1h` | backend default | Cache TTL for the system prompt segment. |
+| `promptCaching.toolsTtl` | `5m` \| `1h` | backend default | Cache TTL for the tools/schema segment. |
+| `promptCaching.historyTtl` | `5m` \| `1h` | backend default | Cache TTL for conversation-history breakpoints. |
+| `promptCaching.vertexFallbackTo5m` | `boolean` | `false` | When `true`, downgrade `1h` TTLs to `5m` on Vertex, which does not support `1h` caching. |
+
+## `ingest`
+
+`ingest` controls how **ktx** builds context from your stack. It lists the
+adapters to run, the embedding provider used when adapters embed documents,
+and the concurrency and failure policy for work units.
+
+```yaml
+ingest:
+  adapters:
+    - live-database
+    - dbt
+    - metabase
+  embeddings:
+    backend: openai
+    model: text-embedding-3-small
+    dimensions: 1536
+    openai:
+      api_key: env:OPENAI_API_KEY
+  workUnits:
+    stepBudget: 40
+    maxConcurrency: 2
+    failureMode: continue
+```
+
+### Adapters
+
+`adapters` is a list of adapter IDs that should run. Each ID matches a
+connector that **ktx** ships locally:
+
+| Adapter ID | What it ingests |
+|------------|-----------------|
+| `live-database` | Live warehouse introspection (schemas, tables, columns, samples). |
+| `historic-sql` | Query history from Postgres `pg_stat_statements`, BigQuery `INFORMATION_SCHEMA.JOBS`, or Snowflake query history. |
+| `dbt` | dbt manifest models, sources, tests, and exposures. |
+| `metricflow` | MetricFlow / Semantic Layer models and metrics. |
+| `lookml` | LookML projects (models, explores, views, joins). |
+| `looker` | Looker dashboards and looks via the API. |
+| `metabase` | Metabase cards, dashboards, and database mappings. |
+| `notion` | Notion pages and databases for wiki context. |
+| `fake` | Test/demo adapter. Useful in fixtures. |
+
+### Embeddings
+
+The `embeddings` block can also appear inside `scan.enrichment`; that override
+wins when present.
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `backend` | `none` \| `openai` \| `sentence-transformers` | `none` | Embedding provider. `none` disables embeddings. |
+| `model` | `string` | - | Provider model ID, for example `text-embedding-3-small` or `all-MiniLM-L6-v2`. |
+| `dimensions` | `int > 0` | `8` | Vector size. Default `8` is a placeholder that's only valid with `backend: none`. Set explicitly to match your model (1536 for `text-embedding-3-small`, 384 for `all-MiniLM-L6-v2`). |
+| `openai.api_key` / `base_url` | `string` | - | OpenAI credentials. Required when `backend: openai`. |
+| `sentenceTransformers.base_url` | `string` | `""` | URL of the sentence-transformers server. Empty when ktx manages the local daemon for you. |
+| `sentenceTransformers.pathPrefix` | `string` | - | Optional URL path prefix prepended to embedding requests. |
+| `batchSize` | `int > 0` | provider default | Texts per embedding API call. |
+
+### Work units
+
+A work unit is one unit of agent-driven ingest work (for example one table or
+one Metabase question). These knobs bound how long it runs and how the run
+handles failures.
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `workUnits.stepBudget` | `int > 0` | `40` | Maximum agent steps allowed per work unit before it's force-terminated. |
+| `workUnits.maxConcurrency` | `int > 0` | `1` | How many work units run in parallel. |
+| `workUnits.failureMode` | `abort` \| `continue` | `continue` | `abort` stops the whole ingest run on the first failure; `continue` records it and keeps going. |
+
+## `scan`
+
+`scan` configures how schema-level inputs become structured context:
+column-level enrichment and inferred relationships between tables.
+
+```yaml
+scan:
+  enrichment:
+    mode: llm           # none | deterministic | llm
+  relationships:
+    enabled: true
+    llmProposals: true
+    validationRequiredForManifest: true
+    acceptThreshold: 0.85
+    reviewThreshold: 0.55
+    maxLlmTablesPerBatch: 40
+    maxCandidatesPerColumn: 25
+    profileSampleRows: 10000
+    validationConcurrency: 4
+    validationBudget: all
+```
+
+### Enrichment
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `enrichment.mode` | `none` \| `deterministic` \| `llm` | `none` | How columns and tables get described. `deterministic` uses local heuristics; `llm` calls the configured provider. |
+| `enrichment.embeddings` | embedding block | - | Optional override for enrichment-time vectorization. Falls back to `ingest.embeddings`. |
+
+### Relationships
+
+The relationship discovery step proposes joins between tables, scores them,
+and optionally validates each one against the database before writing it to
+the manifest.
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `relationships.enabled` | `boolean` | `true` | Master switch for relationship discovery. |
+| `relationships.llmProposals` | `boolean` | `true` | When `true`, propose relationships using the LLM in addition to deterministic candidates. |
+| `relationships.validationRequiredForManifest` | `boolean` | `true` | When `true`, only proposals that pass database-side validation reach the manifest. |
+| `relationships.acceptThreshold` | `number 0-1` | `0.85` | Confidence at or above which a proposal is auto-accepted. |
+| `relationships.reviewThreshold` | `number 0-1` | `0.55` | Confidence at or above which a proposal is surfaced for human review (but not auto-accepted). |
+| `relationships.maxLlmTablesPerBatch` | `int > 0` | `40` | Max tables included in a single LLM relationship-proposal batch. |
+| `relationships.maxCandidatesPerColumn` | `int > 0` | `25` | Max join partners considered per column. |
+| `relationships.profileSampleRows` | `int > 0` | `10000` | Rows sampled per table when profiling values for relationship inference. |
+| `relationships.validationConcurrency` | `int > 0` | `4` | Parallel relationship validation queries against the database. |
+| `relationships.validationBudget` | `all` \| `int ≥ 0` | runtime default | Cap on validation queries per scan. `all` means unlimited. |
+
+## `agent`
+
+`agent` carries feature flags for **ktx**-side agent behavior. Today the only
+block is `run_research`, which gates the research agent invoked by
+`ktx mcp` and CLI research tools.
+
+```yaml
+agent:
+  run_research:
+    enabled: true
+    max_iterations: 20
+    default_toolset:
+      - sl_query
+      - wiki_search
+      - sl_read_source
+```
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `run_research.enabled` | `boolean` | `false` | Master switch for the research agent. |
+| `run_research.max_iterations` | `int ≥ 0` | `20` | Maximum tool-call iterations per research run. |
+| `run_research.default_toolset` | `string[]` | `[sl_query, wiki_search, sl_read_source]` | Tool identifiers exposed to the research agent. |
+
+## `memory`
+
+`memory` controls the agent memory subsystem.
+
+```yaml
+memory:
+  auto_commit: true
+```
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `auto_commit` | `boolean` | `true` | When `true`, ktx auto-commits memory updates to the git-backed store. |
+
+## A full example
+
+Combining the blocks above:
+
+```yaml
+connections:
+  warehouse:
+    driver: postgres
+    url: env:DATABASE_URL
+  metabase:
+    driver: metabase
+    api_url: https://metabase.example.com
+    api_key_ref: env:METABASE_API_KEY
+    mappings:
+      databaseMappings:
+        "1": warehouse
+      syncMode: ALL
+setup:
+  database_connection_ids:
+    - warehouse
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    auto_commit: true
+    author: "ktx <ktx@example.com>"
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+ingest:
+  adapters:
+    - live-database
+    - metabase
+  embeddings:
+    backend: openai
+    model: text-embedding-3-small
+    dimensions: 1536
+    openai:
+      api_key: env:OPENAI_API_KEY
+  workUnits:
+    maxConcurrency: 2
+scan:
+  enrichment:
+    mode: llm
+  relationships:
+    acceptThreshold: 0.85
+    reviewThreshold: 0.55
+agent:
+  run_research:
+    enabled: true
+memory:
+  auto_commit: true
+```
+
+## Validating your config
+
+**ktx** validates `ktx.yaml` strictly: unknown keys at the top level or inside
+strict blocks cause setup and CLI commands to fail with a precise path
+(`scan.relationships.acceptThreshhold: Unrecognized key`). Warehouse
+connections accept extra driver-specific fields, so passthrough values like
+`historicSql` and `context.queryHistory` are allowed.
+
+To re-validate without running anything else:
+
+```bash
+ktx status
+```
+
+`ktx status` parses `ktx.yaml`, surfaces validation issues, and reports which
+inputs are ready.
+
+## Related references
+
+- [`ktx setup`](/docs/cli-reference/ktx-setup) - the guided flow that writes
+  most of these fields for you.
+- [`ktx status`](/docs/cli-reference/ktx-status) - readiness check for the
+  current `ktx.yaml`.
+- [LLM configuration](/docs/guides/llm-configuration) - provider-specific
+  setup notes.
+- [Primary sources](/docs/integrations/primary-sources) and
+  [Context sources](/docs/integrations/context-sources) - connector-specific
+  details and credentials.
