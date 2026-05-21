@@ -101,7 +101,9 @@ function makePromptAdapter(options: {
       if (options.initialValues && options.initialValues.length > 0) {
         return options.initialValues;
       }
-      return options.options.length > 0 ? options.options.map((option) => option.value) : ['back'];
+      return options.options.length > 0
+        ? options.options.map((option: { value: string }) => option.value)
+        : ['back'];
     }),
     select: vi.fn(async ({ message }) => {
       if (message.startsWith('Save ') && message.includes(' or refine tables?')) {

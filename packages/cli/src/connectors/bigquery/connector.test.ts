@@ -236,9 +236,11 @@ describe('KtxBigQueryScanConnector', () => {
 
   it('constructs for discovery without dataset scope and lists tables through one region information schema query', async () => {
     const createQueryJob = vi.fn(
-      async (input: { query: string; params?: Record<string, unknown>; location?: string }) => [
+      async (
+        input: { query: string; params?: Record<string, unknown>; location?: string },
+      ): ReturnType<KtxBigQueryClient['createQueryJob']> => [
         {
-          getQueryResults: async () => [
+          getQueryResults: async (): ReturnType<KtxBigQueryQueryJob['getQueryResults']> => [
             [
               { table_schema: 'analytics', table_name: 'orders', table_type: 'BASE TABLE' },
               { table_schema: 'analytics', table_name: 'order_clone', table_type: 'CLONE' },
@@ -260,10 +262,10 @@ describe('KtxBigQueryScanConnector', () => {
     );
     const clientFactory: KtxBigQueryClientFactory = {
       createClient: vi.fn(() => ({
-        getDatasets: vi.fn(async () => [[{ id: 'analytics' }, { id: 'mart' }]]),
+        getDatasets: vi.fn(async () => [[{ id: 'analytics' }, { id: 'mart' }]] as [{ id: string }[]]),
         dataset: vi.fn((datasetId: string) => ({
           get: vi.fn(async () => [{ id: datasetId }]),
-          getTables: vi.fn(async () => [[]]),
+          getTables: vi.fn(async () => [[]] as [never[]]),
         })),
         createQueryJob,
       })),
