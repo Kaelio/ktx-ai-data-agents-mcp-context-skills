@@ -10,7 +10,7 @@ const identifierSkipPrefixes = ['docs/', 'docs-site/', 'examples/', 'python/ktx-
 const identifierAllowPatterns = [
   /^packages\/cli\/src\/(?:index|managed-local-embeddings|managed-python-command|managed-python-daemon|managed-python-runtime|release-version|runtime)(?:\.test)?\.ts$/,
   /^python\/ktx-daemon\/src\/ktx_daemon\/__init__\.py$/,
-  /^scripts\/(?:build-public-npm-package|build-python-runtime-wheel|local-embeddings-runtime-smoke|package-artifacts|public-npm-release-metadata|published-package-smoke|release-readiness)(?:\.test)?\.mjs$/,
+  /^scripts\/(?:build-python-runtime-wheel|local-embeddings-runtime-smoke|package-artifacts|public-npm-release-metadata|published-package-smoke|release-readiness)(?:\.test)?\.mjs$/,
   /^scripts\/semantic-release-config\.cjs$/,
 ];
 const forbiddenIdentifierTerms = ['kae' + 'lio', 'Kae' + 'lio', 'KAE' + 'LIO_'];

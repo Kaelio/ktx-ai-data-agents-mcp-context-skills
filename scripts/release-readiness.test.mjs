@@ -5,12 +5,11 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import {
-  INTERNAL_NPM_WORKSPACE_PACKAGES,
   NPM_ARTIFACT_PACKAGES,
   packageArtifactLayout,
   writeArtifactManifest,
 } from './package-artifacts.mjs';
-import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
+import { PUBLIC_NPM_PACKAGE_VERSION } from './public-npm-release-metadata.mjs';
 import { RUNTIME_WHEEL_PACKAGE_VERSION } from './build-python-runtime-wheel.mjs';
 import { readReleasePolicy, releasePolicyPath, releaseReadinessReport } from './release-readiness.mjs';
 
@@ -19,12 +18,11 @@ async function writeJson(path, value) {
 }
 
 async function writeReleaseMetadataInputs(root) {
-  for (const packageInfo of INTERNAL_NPM_WORKSPACE_PACKAGES) {
+  for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
     await mkdir(join(root, packageInfo.packageRoot), { recursive: true });
     await writeJson(join(root, packageInfo.packageRoot, 'package.json'), {
       name: packageInfo.name,
-      version: '0.0.0-private',
-      private: true,
+      version: PUBLIC_NPM_PACKAGE_VERSION,
     });
   }
 }
@@ -528,7 +526,7 @@ describe('release readiness policy', () => {
       await writeReadyFixture(root, {
         policy: releasePolicy({
           publishedPackageSmoke: {
-            packageName: '@ktx/cli public',
+            packageName: '@kaelio/ktx public',
             version: 'latest',
             registry: null,
           },

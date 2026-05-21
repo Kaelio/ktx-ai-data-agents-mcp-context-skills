@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import {
   PUBLIC_NPM_PACKAGE_NAME,
   PUBLIC_NPM_PACKAGE_VERSION,
-} from './build-public-npm-package.mjs';
+} from './public-npm-release-metadata.mjs';
 import { npmSmokePnpmWorkspaceYaml } from './package-artifacts.mjs';
 
 const execFileAsync = promisify(execFile);

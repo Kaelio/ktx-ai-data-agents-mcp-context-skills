@@ -109,7 +109,7 @@ jobs:
         run: pnpm run build
 
       - name: Run slow CLI tests
-        run: pnpm --filter @ktx/cli run test:slow
+        run: pnpm --filter @kaelio/ktx run test:slow
 
   cli-smoke-tests:
     name: CLI smoke tests

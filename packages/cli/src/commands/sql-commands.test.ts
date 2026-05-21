@@ -11,7 +11,7 @@ function makeContext(overrides: Partial<KtxCliCommandContext> = {}): KtxCliComma
       stderr: { write: vi.fn() },
     },
     deps: {},
-    packageInfo: { name: '@ktx/cli', version: '0.0.0-test' },
+    packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
     setExitCode: (code) => {
       exitCode = code;
     },

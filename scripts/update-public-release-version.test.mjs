@@ -22,9 +22,8 @@ async function writeReleaseFixture(root) {
     private: true,
   });
   await writeJson(join(root, 'packages', 'cli', 'package.json'), {
-    name: '@ktx/cli',
+    name: '@kaelio/ktx',
     version: '0.0.0-private',
-    private: true,
   });
   await writeJson(join(root, 'release-policy.json'), {
     schemaVersion: 1,

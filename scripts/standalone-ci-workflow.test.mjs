@@ -40,7 +40,7 @@ describe('standalone KTX CI workflow', () => {
       'pnpm install --frozen-lockfile',
       'pnpm run check',
       'pnpm run build',
-      'pnpm --filter @ktx/cli run test:slow',
+      'pnpm --filter @kaelio/ktx run test:slow',
       'pnpm run smoke',
       'actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405',
       'python-version: "3.13"',

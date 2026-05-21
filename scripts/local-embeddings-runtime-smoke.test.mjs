@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
-import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
+import { PUBLIC_NPM_PACKAGE_VERSION } from './public-npm-release-metadata.mjs';
 import {
   buildLocalEmbeddingsSmokeEnv,
   expectedPublicKtxVersionPattern,

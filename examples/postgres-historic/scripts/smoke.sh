@@ -198,8 +198,7 @@ NODE
 }
 
 cd "$KTX_ROOT"
-pnpm --filter @ktx/context run build
-pnpm --filter @ktx/cli run build
+pnpm --filter @kaelio/ktx run build
 
 docker compose -f "$COMPOSE_FILE" up -d --wait
 "$EXAMPLE_DIR/scripts/generate-workload.sh" base

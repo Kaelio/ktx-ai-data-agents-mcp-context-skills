@@ -4,7 +4,7 @@
 
 It supports portable compute in two modes:
 
-- One-shot commands, used by default by `@ktx/context`.
+- One-shot commands, used by default by the `@kaelio/ktx` CLI.
 - An explicit HTTP server for long-running local MCP sessions.
 
 ## One-shot semantic query

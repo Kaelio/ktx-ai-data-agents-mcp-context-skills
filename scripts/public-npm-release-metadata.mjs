@@ -8,6 +8,10 @@ export const PUBLIC_NPM_PACKAGE_NAME = '@kaelio/ktx';
 export const PUBLIC_NPM_RELEASE_TAGS = new Set(['latest', 'next']);
 export const PUBLIC_NPM_BRANCH_RELEASE_TAG_PATTERN = /^branch-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+export function publicNpmPackageTarballName(version) {
+  return `kaelio-ktx-${version}.tgz`;
+}
+
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const SEMVER_PARTS_PATTERN =
@@ -81,6 +85,8 @@ export function readPublicNpmReleaseMetadata(rootDir = scriptRootDir()) {
 export function publicNpmPackageVersion(rootDir = scriptRootDir()) {
   return readPublicNpmReleaseMetadata(rootDir).version;
 }
+
+export const PUBLIC_NPM_PACKAGE_VERSION = publicNpmPackageVersion();
 
 export function publicPythonRuntimePackageVersion(rootDir = scriptRootDir()) {
   return publicNpmPackageVersionToPythonVersion(publicNpmPackageVersion(rootDir));

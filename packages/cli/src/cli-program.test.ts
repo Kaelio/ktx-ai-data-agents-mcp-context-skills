@@ -12,7 +12,7 @@ function stubIo(): KtxCliIo {
 
 function stubPackageInfo(): KtxCliPackageInfo {
   return {
-    name: '@ktx/cli',
+    name: '@kaelio/ktx',
     version: '0.0.0-test',
   };
 }

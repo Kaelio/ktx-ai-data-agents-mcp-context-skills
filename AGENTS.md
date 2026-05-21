@@ -89,7 +89,7 @@ pnpm run type-check
 pnpm run test
 pnpm run check
 pnpm run dead-code
-pnpm --filter @ktx/cli run smoke
+pnpm --filter @kaelio/ktx run smoke
 pnpm --filter './packages/*' run build
 pnpm --filter './packages/*' run test
 pnpm --filter './packages/*' run type-check

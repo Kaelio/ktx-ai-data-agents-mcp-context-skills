@@ -60,7 +60,7 @@ describe('test tiering', () => {
   it('provides explicit slow package test scripts for CI', async () => {
     const rootPackage = await readJson('../package.json');
     const cliPackage = await readJson('../packages/cli/package.json');
-    assert.equal(rootPackage.scripts['test:slow'], 'pnpm --filter @ktx/cli run test:slow');
+    assert.equal(rootPackage.scripts['test:slow'], 'pnpm --filter @kaelio/ktx run test:slow');
     assertScriptContainsAll(cliPackage.scripts['test:slow'], cliSlowTests);
     assertScriptContainsAll(cliPackage.scripts['test:slow'], contextSlowTests);
     assert.doesNotMatch(cliPackage.scripts['test:slow'], /relationship-benchmarks\.test\.ts/);

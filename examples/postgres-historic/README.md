@@ -58,7 +58,7 @@ Create a project and enable query history:
 
 ```bash
 export WAREHOUSE_DATABASE_URL=postgresql://ktx_reader:ktx_reader@127.0.0.1:55432/analytics # pragma: allowlist secret
-pnpm --filter @ktx/cli run build
+pnpm --filter @kaelio/ktx run build
 node packages/cli/dist/bin.js --project-dir /tmp/ktx-postgres-historic setup \
   --new \
   --skip-agents \

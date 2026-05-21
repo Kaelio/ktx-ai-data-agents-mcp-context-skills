@@ -1,8 +1,7 @@
 {
-  "name": "@ktx/cli",
+  "name": "@kaelio/ktx",
   "version": "0.4.1",
-  "description": "Standalone ktx context layer CLI",
-  "private": true,
+  "description": "Standalone ktx context layer for database agents",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -24,6 +23,10 @@
     "dist",
     "assets"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "assets:demo": "node scripts/build-demo-assets.mjs",
     "build": "tsc -p tsconfig.json && node scripts/copy-runtime-assets.mjs && node ../../scripts/prepare-cli-bin.mjs",
@@ -89,11 +92,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kaelio/ktx.git",
+    "url": "https://github.com/Kaelio/ktx",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/kaelio/ktx/issues"
+    "url": "https://github.com/Kaelio/ktx/issues"
   },
-  "homepage": "https://github.com/kaelio/ktx#readme"
+  "homepage": "https://github.com/Kaelio/ktx#readme"
 }

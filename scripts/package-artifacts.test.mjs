@@ -5,10 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { PUBLIC_NPM_PACKAGE_VERSION } from './build-public-npm-package.mjs';
+import { PUBLIC_NPM_PACKAGE_VERSION } from './public-npm-release-metadata.mjs';
 import {
   CLI_PYTHON_ASSET_MANIFEST,
-  INTERNAL_NPM_WORKSPACE_PACKAGES,
   RUNTIME_WHEEL_DISTRIBUTION_NAME,
   RUNTIME_WHEEL_NORMALIZED_NAME,
   RUNTIME_WHEEL_PACKAGE_VERSION,
@@ -62,12 +61,11 @@ async function writeReleaseMetadataInputs(root) {
     requiredBeforePublishing: ['Choose public release version.'],
   });
 
-  for (const packageInfo of INTERNAL_NPM_WORKSPACE_PACKAGES) {
+  for (const packageInfo of NPM_ARTIFACT_PACKAGES) {
     await mkdir(join(root, packageInfo.packageRoot), { recursive: true });
     await writeJson(join(root, packageInfo.packageRoot, 'package.json'), {
       name: packageInfo.name,
-      version: '0.0.0-private',
-      private: true,
+      version: PUBLIC_NPM_PACKAGE_VERSION,
     });
   }
 }
@@ -112,16 +110,20 @@ describe('packageArtifactLayout', () => {
 });
 
 describe('buildArtifactCommands', () => {
-  it('builds the CLI package, then the runtime wheel, then packs npm artifacts', () => {
+  it('builds the CLI package, then the runtime wheel, then packs the npm tarball directly', () => {
     const layout = packageArtifactLayout('/repo/ktx', PUBLIC_NPM_PACKAGE_VERSION);
     const commands = buildArtifactCommands(layout);
 
     assert.deepEqual(
-      commands.map((command) => [command.command, command.args]),
+      commands.map((command) => [command.command, command.args, command.cwd]),
       [
-        ['pnpm', ['--filter', '@ktx/cli', 'run', 'build']],
-        [process.execPath, ['scripts/build-python-runtime-wheel.mjs']],
-        [process.execPath, ['scripts/build-public-npm-package.mjs']],
+        ['pnpm', ['--filter', '@kaelio/ktx', 'run', 'build'], '/repo/ktx'],
+        [process.execPath, ['scripts/build-python-runtime-wheel.mjs'], '/repo/ktx'],
+        [
+          'pnpm',
+          ['pack', '--out', `/repo/ktx/dist/artifacts/npm/kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`],
+          '/repo/ktx/packages/cli',
+        ],
       ],
     );
   });

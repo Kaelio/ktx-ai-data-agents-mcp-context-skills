@@ -105,7 +105,7 @@ describe('published package smoke config', () => {
       /Invalid KTX_PUBLISHED_KTX_PACKAGE/,
     );
     assert.throws(
-      () => readPublishedPackageSmokeConfig({ KTX_PUBLISHED_KTX_PACKAGE: '@ktx/cli public' }, []),
+      () => readPublishedPackageSmokeConfig({ KTX_PUBLISHED_KTX_PACKAGE: '@kaelio/ktx public' }, []),
       /Invalid KTX_PUBLISHED_KTX_PACKAGE/,
     );
     assert.throws(
@@ -114,7 +114,7 @@ describe('published package smoke config', () => {
           {},
           [],
           {
-            packageName: '@ktx/cli public',
+            packageName: '@kaelio/ktx public',
             version: 'latest',
             registry: null,
           },

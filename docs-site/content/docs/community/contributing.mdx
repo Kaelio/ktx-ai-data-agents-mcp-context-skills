@@ -63,7 +63,7 @@ pnpm run build
 This builds the TypeScript package. You can also build the package directly:
 
 ```bash
-pnpm --filter @ktx/cli run build
+pnpm --filter @kaelio/ktx run build
 ```
 
 ### Link the CLI for local testing
@@ -110,16 +110,16 @@ resolution. The Python projects use `pyproject.toml` for dependency management.
 pnpm run test
 
 # Run tests for the TypeScript package
-pnpm --filter @ktx/cli run test
+pnpm --filter @kaelio/ktx run test
 
 # Type-check all packages
 pnpm run type-check
 
 # Type-check the TypeScript package
-pnpm --filter @ktx/cli run type-check
+pnpm --filter @kaelio/ktx run type-check
 
 # CLI smoke test
-pnpm --filter @ktx/cli run smoke
+pnpm --filter @kaelio/ktx run smoke
 ```
 
 ### Python
@@ -204,9 +204,9 @@ it. Keep runtime loading dynamic when the driver is optional.
 ### Step 5: Test
 
 ```bash
-pnpm --filter @ktx/cli run build
-pnpm --filter @ktx/cli run type-check
-pnpm --filter @ktx/cli run test
+pnpm --filter @kaelio/ktx run build
+pnpm --filter @kaelio/ktx run type-check
+pnpm --filter @kaelio/ktx run test
 ```
 
 Use `packages/cli/src/connectors/sqlite/` as a minimal reference and

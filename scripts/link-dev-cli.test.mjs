@@ -13,7 +13,7 @@ test('linkDevCli writes a ktx-dev launcher by default', async () => {
     execText: async (command, args) => {
       assert.equal(command, 'ktx-dev');
       assert.deepEqual(args, ['--version']);
-      return '@ktx/cli 0.0.0-private';
+      return '@kaelio/ktx 0.0.0-private';
     },
     writeFile: async (path, content) => writes.push({ path, content }),
     chmod: async (path, mode) => chmods.push({ path, mode }),
@@ -34,7 +34,7 @@ test('linkDevCli can explicitly write ktx when requested', async () => {
     binaryName: 'ktx',
     globalBin: '/pnpm/bin',
     binPath: '/workspace/ktx/packages/cli/dist/bin.js',
-    execText: async () => '@ktx/cli 0.0.0-private',
+    execText: async () => '@kaelio/ktx 0.0.0-private',
     writeFile: async (path, content) => writes.push({ path, content }),
     chmod: async () => undefined,
     access: async () => undefined,

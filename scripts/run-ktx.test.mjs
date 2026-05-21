@@ -40,7 +40,7 @@ test('runWorkspaceKtx runs the built CLI when it already exists', async () => {
     readdir: fs.readdir,
     execFile: async (command, args, options) => {
       calls.push({ command, args, cwd: options.cwd });
-      return { stdout: '@ktx/cli 0.0.0-private\n', stderr: '' };
+      return { stdout: '@kaelio/ktx 0.0.0-private\n', stderr: '' };
     },
     stdout: { write: (chunk) => logs.push(['stdout', chunk]) },
     stderr: { write: (chunk) => logs.push(['stderr', chunk]) },
@@ -54,7 +54,7 @@ test('runWorkspaceKtx runs the built CLI when it already exists', async () => {
       cwd: '/workspace/ktx',
     },
   ]);
-  assert.deepEqual(logs, [['stdout', '@ktx/cli 0.0.0-private\n']]);
+  assert.deepEqual(logs, [['stdout', '@kaelio/ktx 0.0.0-private\n']]);
 });
 
 test('runWorkspaceKtx forwards a caller-provided environment to buffered commands', async () => {
@@ -69,7 +69,7 @@ test('runWorkspaceKtx forwards a caller-provided environment to buffered command
     env: { PATH: '/bin', GIT_CEILING_DIRECTORIES: '/workspace/ktx/examples' },
     execFile: async (command, args, options) => {
       calls.push({ command, args, cwd: options.cwd, env: options.env });
-      return { stdout: '@ktx/cli 0.0.0-private\n', stderr: '' };
+      return { stdout: '@kaelio/ktx 0.0.0-private\n', stderr: '' };
     },
     stdout: { write: () => undefined },
     stderr: { write: () => undefined },

@@ -106,7 +106,7 @@ describe('runSetupDoctorChecks', () => {
         if (command === 'pnpm' && args[0] === '--version') return '10.28.0';
         if (command === 'corepack' && args[0] === '--version') return '0.32.0';
         if (command === 'uv' && args[0] === '--version') return 'uv 0.9.5';
-        if (command === process.execPath && args.includes('--version')) return '@ktx/cli 0.0.0-private';
+        if (command === process.execPath && args.includes('--version')) return '@kaelio/ktx 0.0.0-private';
         throw new Error(`${command} ${args.join(' ')}`);
       },
       pathExists: async () => true,
@@ -163,7 +163,7 @@ describe('runSetupDoctorChecks', () => {
         if (command === 'pnpm' && args[0] === '--version') return '10.28.0';
         if (command === 'corepack' && args[0] === '--version') throw new Error('spawn corepack ENOENT');
         if (command === 'uv' && args[0] === '--version') return 'uv 0.9.5';
-        if (command === process.execPath && args.includes('--version')) return '@ktx/cli 0.0.0-private';
+        if (command === process.execPath && args.includes('--version')) return '@kaelio/ktx 0.0.0-private';
         throw new Error(`${command} ${args.join(' ')}`);
       },
       pathExists: async () => true,
