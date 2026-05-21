@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py']);
-const runtimeAssetPatterns = [/^packages\/[^/]+\/prompts\/.+\.md$/, /^packages\/[^/]+\/skills\/.+\.md$/];
+const runtimeAssetPatterns = [/^packages\/cli\/src\/prompts\/.+\.md$/, /^packages\/cli\/src\/skills\/.+\.md$/];
 const identifierSkipPrefixes = ['docs/', 'docs-site/', 'examples/', 'python/ktx-sl/plans/', 'python/ktx-sl/openspec/'];
 const identifierAllowPatterns = [
   /^packages\/cli\/src\/(?:index|managed-local-embeddings|managed-python-command|managed-python-daemon|managed-python-runtime|release-version|runtime)(?:\.test)?\.ts$/,
@@ -85,7 +85,7 @@ function scansForAppImports(relativePath) {
 }
 
 function scansForLlmBoundaries(relativePath) {
-  return isCodeSource(relativePath) && relativePath.startsWith('packages/context/src/');
+  return isCodeSource(relativePath) && relativePath.startsWith('packages/cli/src/context/');
 }
 
 function isTestSource(relativePath) {
@@ -133,7 +133,7 @@ export function scanFileContent(relativePath, content) {
         violations.push({
           file: normalizedPath,
           kind: 'llm-boundary',
-          message: `Forbidden ${llmBoundaryPattern.label}; use @ktx/llm`,
+          message: `Forbidden ${llmBoundaryPattern.label}; use packages/cli/src/llm`,
         });
       }
     }
@@ -145,7 +145,7 @@ export function scanFileContent(relativePath, content) {
         violations.push({
           file: normalizedPath,
           kind: 'llm-boundary',
-          message: `Forbidden ${llmBoundaryPattern.label}; use getModel(role) inside @ktx/context`,
+          message: `Forbidden ${llmBoundaryPattern.label}; use getModel(role) inside context modules`,
         });
       }
     }

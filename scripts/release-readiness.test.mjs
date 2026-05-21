@@ -550,7 +550,7 @@ describe('release readiness policy', () => {
       await writeReadyFixture(root, {
         policy: releasePolicy({
           npm: {
-            packages: ['@kaelio/ktx', '@ktx/context'],
+            packages: ['@kaelio/ktx', '@ktx/internal-only'],
           },
         }),
       });

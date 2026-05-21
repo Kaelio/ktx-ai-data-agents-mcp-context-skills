@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MemoryIngestStatus } from '@ktx/context/memory';
-import type { KtxLocalProject } from '@ktx/context/project';
+import type { MemoryIngestStatus } from './context/memory/index.js';
+import type { KtxLocalProject } from './context/project/index.js';
 import { runKtxTextIngest, type TextMemoryIngestPort } from './text-ingest.js';
 
 function makeIo(options: { isTTY?: boolean } = {}) {

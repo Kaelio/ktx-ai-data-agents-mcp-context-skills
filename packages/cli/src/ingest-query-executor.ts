@@ -1,6 +1,6 @@
-import type { KtxSqlQueryExecutionInput, KtxSqlQueryExecutorPort } from '@ktx/context/connections';
-import type { KtxLocalProject } from '@ktx/context/project';
-import type { KtxScanConnector, KtxScanContext } from '@ktx/context/scan';
+import type { KtxSqlQueryExecutionInput, KtxSqlQueryExecutorPort } from './context/connections/index.js';
+import type { KtxLocalProject } from './context/project/index.js';
+import type { KtxScanConnector, KtxScanContext } from './context/scan/index.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 
 type CreateConnector = typeof createKtxCliScanConnector;

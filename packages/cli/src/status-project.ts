@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { runClaudeCodeAuthProbe } from '@ktx/context';
+import { runClaudeCodeAuthProbe } from './context/index.js';
 import type {
   KtxConfigIssue,
   KtxLocalProject,
@@ -7,8 +7,8 @@ import type {
   KtxProjectConnectionConfig,
   KtxProjectEmbeddingConfig,
   KtxProjectLlmConfig,
-} from '@ktx/context/project';
-import type { PostgresPgssProbeResult } from '@ktx/context/ingest';
+} from './context/project/index.js';
+import type { PostgresPgssProbeResult } from './context/ingest/index.js';
 import {
   formatClaudeCodePromptCachingFix,
   formatClaudeCodePromptCachingWarning,
@@ -419,7 +419,7 @@ async function defaultPostgresQueryHistoryProbe(
   input: PostgresQueryHistoryProbeInput,
 ): Promise<PostgresPgssProbeResult> {
   const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient, isKtxPostgresConnectionConfig }] =
-    await Promise.all([import('@ktx/context/ingest'), import('@ktx/connector-postgres')]);
+    await Promise.all([import('./context/ingest/index.js'), import('./connectors/postgres/index.js')]);
 
   const inputDriver = input.connection.driver ?? 'unknown';
   if (!isKtxPostgresConnectionConfig(input.connection)) {

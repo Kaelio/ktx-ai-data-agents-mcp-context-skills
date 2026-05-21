@@ -5,8 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   localConnectionTypeForConfig,
   resolveNotionConnectionAuthToken,
-} from '@ktx/context/connections';
-import { resolveKtxConfigReference } from '@ktx/context/core';
+} from './context/connections/index.js';
+import { resolveKtxConfigReference } from './context/core/index.js';
 import {
   cloneOrPull,
   DEFAULT_METABASE_CLIENT_CONFIG,
@@ -20,14 +20,14 @@ import {
   parseLookmlStagedDir,
   parseMetricflowFiles,
   testRepoConnection,
-} from '@ktx/context/ingest';
+} from './context/ingest/index.js';
 import {
   type KtxProjectConfig,
   type KtxProjectConnectionConfig,
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { pickNotionRootPages } from './notion-page-picker.js';
 import { runKtxSourceMapping } from './source-mapping.js';

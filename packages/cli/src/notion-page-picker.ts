@@ -1,6 +1,6 @@
-import { resolveNotionConnectionAuthToken } from '@ktx/context/connections';
-import { type NotionApi, type NotionBotInfo, NotionClient } from '@ktx/context/ingest';
-import type { KtxProjectConnectionConfig } from '@ktx/context/project';
+import { resolveNotionConnectionAuthToken } from './context/connections/index.js';
+import { type NotionApi, type NotionBotInfo, NotionClient } from './context/ingest/index.js';
+import type { KtxProjectConnectionConfig } from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { profileMark } from './startup-profile.js';
 import {

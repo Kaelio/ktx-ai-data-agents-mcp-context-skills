@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject } from '@ktx/context/project';
+import { initKtxProject } from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -45,11 +45,10 @@ function makeIo(options: { stdoutIsTty?: boolean } = {}) {
 }
 
 describe('getKtxCliPackageInfo', () => {
-  it('identifies the CLI package and its context dependency', () => {
+  it('identifies the CLI package', () => {
     expect(getKtxCliPackageInfo()).toEqual({
       name: '@ktx/cli',
       version: cliVersion,
-      contextPackageName: '@ktx/context',
     });
   });
 
@@ -72,7 +71,6 @@ describe('getKtxCliPackageInfo', () => {
     ).toEqual({
       name: '@kaelio/ktx',
       version: '0.1.0',
-      contextPackageName: '@ktx/context',
     });
   });
 });

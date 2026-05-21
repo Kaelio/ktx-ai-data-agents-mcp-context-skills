@@ -16,9 +16,9 @@ import {
   runLocalMetabaseIngest,
   savedMemoryCountsForReport,
   sanitizeMemoryFlowError,
-} from '@ktx/context/ingest';
-import type { KtxSqlQueryExecutorPort } from '@ktx/context/connections';
-import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+} from './context/ingest/index.js';
+import type { KtxSqlQueryExecutorPort } from './context/connections/index.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/index.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';

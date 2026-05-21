@@ -17,8 +17,8 @@ describe('scanFileContent', () => {
     const pythonAppPath = `${['python', 'service'].join('-')}/app/api/endpoints/semantic_layer.py`;
 
     const violations = [
-      ...scanFileContent('packages/context/src/index.ts', `import { orpc } from '${serverAlias}';`),
-      ...scanFileContent('packages/context/src/index.ts', `import "${pythonAppPath}";`),
+      ...scanFileContent('packages/cli/src/context/index.ts', `import { orpc } from '${serverAlias}';`),
+      ...scanFileContent('packages/cli/src/context/index.ts', `import "${pythonAppPath}";`),
     ];
 
     assert.deepEqual(
@@ -28,7 +28,7 @@ describe('scanFileContent', () => {
   });
 
   it('rejects forbidden product identifiers in code source files', () => {
-    const violations = scanFileContent('packages/context/src/index.ts', `export const owner = '${lowerProductName()}';`);
+    const violations = scanFileContent('packages/cli/src/context/index.ts', `export const owner = '${lowerProductName()}';`);
 
     assert.equal(violations.length, 1);
     assert.equal(violations[0]?.kind, 'identifier');
@@ -36,24 +36,24 @@ describe('scanFileContent', () => {
 
   it('rejects forbidden product identifiers in shipped runtime prompt assets', () => {
     const violations = scanFileContent(
-      'packages/context/prompts/memory_agent_bundle_ingest_work_unit.md',
+      'packages/cli/src/prompts/memory_agent_bundle_ingest_work_unit.md',
       `Write output for ${productName()}.`,
     );
 
     assert.equal(violations.length, 1);
     assert.equal(violations[0]?.kind, 'identifier');
-    assert.equal(violations[0]?.file, 'packages/context/prompts/memory_agent_bundle_ingest_work_unit.md');
+    assert.equal(violations[0]?.file, 'packages/cli/src/prompts/memory_agent_bundle_ingest_work_unit.md');
   });
 
   it('rejects forbidden product identifiers in shipped runtime skill assets', () => {
     const violations = scanFileContent(
-      'packages/context/skills/metabase_ingest/SKILL.md',
+      'packages/cli/src/skills/metabase_ingest/SKILL.md',
       `Use ${productName()} project conventions.`,
     );
 
     assert.equal(violations.length, 1);
     assert.equal(violations[0]?.kind, 'identifier');
-    assert.equal(violations[0]?.file, 'packages/context/skills/metabase_ingest/SKILL.md');
+    assert.equal(violations[0]?.file, 'packages/cli/src/skills/metabase_ingest/SKILL.md');
   });
 
   it('allows product identifiers in docs, examples, and transition metadata', () => {
@@ -69,7 +69,7 @@ describe('scanFileContent', () => {
     const name = lowerProductName();
 
     assert.equal(scanFileContent('packages/cli/src/setup.test.ts', `project: ${name}-dev`).length, 0);
-    assert.equal(scanFileContent('packages/context/src/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
+    assert.equal(scanFileContent('packages/cli/src/context/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
     assert.equal(scanFileContent('python/ktx-daemon/tests/test_package.py', `${name}-ktx`).length, 0);
   });
 
@@ -87,23 +87,23 @@ describe('scanFileContent', () => {
 
   it('allows clean source files and clean runtime prompt assets', () => {
     assert.deepEqual(
-      scanFileContent('packages/context/src/index.ts', "export const packageName = '@ktx/context';"),
+      scanFileContent('packages/cli/src/context/index.ts', "export const packageName = 'ktx';"),
       [],
     );
     assert.deepEqual(
-      scanFileContent('packages/context/prompts/memory_agent_bundle_ingest_work_unit.md', 'Write output for KTX.'),
+      scanFileContent('packages/cli/src/prompts/memory_agent_bundle_ingest_work_unit.md', 'Write output for KTX.'),
       [],
     );
   });
 
-  it('rejects context-owned LLM provider construction outside @ktx/llm', () => {
+  it('rejects context-owned LLM provider construction outside llm modules', () => {
     const violations = [
       ...scanFileContent(
-        'packages/context/src/agent/local-llm-provider.ts',
+        'packages/cli/src/context/agent/local-llm-provider.ts',
         "import { createAnthropic } from '@ai-sdk/anthropic';",
       ),
-      ...scanFileContent('packages/context/src/scan/local-ai-gateway-enrichment.ts', "import { createGateway } from 'ai';"),
-      ...scanFileContent('packages/context/src/core/local-embedding-provider.ts', "import { embedMany } from 'ai';"),
+      ...scanFileContent('packages/cli/src/context/scan/local-ai-gateway-enrichment.ts', "import { createGateway } from 'ai';"),
+      ...scanFileContent('packages/cli/src/context/core/local-embedding-provider.ts', "import { embedMany } from 'ai';"),
     ];
 
     assert.deepEqual(
@@ -114,9 +114,9 @@ describe('scanFileContent', () => {
 
   it('rejects old KTX LLM port declarations in context', () => {
     const violations = [
-      ...scanFileContent('packages/context/src/agent/agent-runner.service.ts', 'export interface LlmProviderPort {}'),
-      ...scanFileContent('packages/context/src/scan/types.ts', 'export interface KtxScanLlmPort {}'),
-      ...scanFileContent('packages/context/src/agent/gateway-llm-provider.ts', 'export function createGatewayLlmProvider() {}'),
+      ...scanFileContent('packages/cli/src/context/agent/agent-runner.service.ts', 'export interface LlmProviderPort {}'),
+      ...scanFileContent('packages/cli/src/context/scan/types.ts', 'export interface KtxScanLlmPort {}'),
+      ...scanFileContent('packages/cli/src/context/agent/gateway-llm-provider.ts', 'export function createGatewayLlmProvider() {}'),
     ];
 
     assert.deepEqual(
@@ -127,7 +127,7 @@ describe('scanFileContent', () => {
 
   it('rejects getModelByName calls in context production source', () => {
     const violations = scanFileContent(
-      'packages/context/src/ingest/page-triage/page-triage.service.ts',
+      'packages/cli/src/context/ingest/page-triage/page-triage.service.ts',
       "const model = this.deps.llmProvider.getModelByName('claude-sonnet-4-6');",
     );
 
@@ -135,14 +135,14 @@ describe('scanFileContent', () => {
     assert.equal(violations[0]?.kind, 'llm-boundary');
     assert.equal(
       violations[0]?.message,
-      'Forbidden context getModelByName call; use getModel(role) inside @ktx/context',
+      'Forbidden context getModelByName call; use getModel(role) inside context modules',
     );
   });
 
   it('allows role-driven getModel calls, test calls, and provider shape declarations', () => {
     assert.deepEqual(
       scanFileContent(
-        'packages/context/src/ingest/page-triage/page-triage.service.ts',
+        'packages/cli/src/context/ingest/page-triage/page-triage.service.ts',
         "const model = this.deps.llmProvider.getModel('triage');",
       ),
       [],
@@ -150,7 +150,7 @@ describe('scanFileContent', () => {
 
     assert.deepEqual(
       scanFileContent(
-        'packages/context/src/ingest/page-triage/page-triage.service.test.ts',
+        'packages/cli/src/context/ingest/page-triage/page-triage.service.test.ts',
         "const model = this.deps.llmProvider.getModelByName('test-model');",
       ),
       [],
@@ -158,7 +158,7 @@ describe('scanFileContent', () => {
 
     assert.deepEqual(
       scanFileContent(
-        'packages/context/src/scan/local-enrichment.ts',
+        'packages/cli/src/context/scan/local-enrichment.ts',
         'return { getModel() { return model; }, getModelByName() { return model; } };',
       ),
       [],

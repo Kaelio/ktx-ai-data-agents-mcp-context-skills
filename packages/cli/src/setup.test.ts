@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { writeKtxSetupState } from '@ktx/context/project';
+import { writeKtxSetupState } from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';

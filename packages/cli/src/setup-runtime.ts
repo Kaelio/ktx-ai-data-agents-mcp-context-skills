@@ -2,7 +2,7 @@ import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
   type KtxLocalProject,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,

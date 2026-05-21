@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { createDefaultLocalQueryExecutor, type KtxSqlQueryExecutorPort } from '@ktx/context/connections';
-import { KtxIngestEmbeddingPortAdapter, type KtxEmbeddingPort } from '@ktx/context';
-import type { KtxSemanticLayerComputePort } from '@ktx/context/daemon';
-import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { createDefaultLocalQueryExecutor, type KtxSqlQueryExecutorPort } from './context/connections/index.js';
+import { KtxIngestEmbeddingPortAdapter, type KtxEmbeddingPort } from './context/index.js';
+import type { KtxSemanticLayerComputePort } from './context/daemon/index.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/index.js';
 import {
   compileLocalSlQuery,
   listLocalSlSources,
@@ -12,7 +12,7 @@ import {
   type LocalSlSourceSearchResult,
   type LocalSlSourceSummary,
   type SemanticLayerQueryInput,
-} from '@ktx/context/sl';
+} from './context/sl/index.js';
 import {
   resolveProjectEmbeddingProvider,
   type EmbeddingProviderResolution,

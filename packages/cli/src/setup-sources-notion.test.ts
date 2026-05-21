@@ -6,7 +6,7 @@ import {
   type KtxProjectConnectionConfig,
   parseKtxProjectConfig,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   runKtxSetupSourcesStep,
@@ -19,8 +19,8 @@ const notionMocks = vi.hoisted(() => ({
   retrievePage: vi.fn(async () => ({ id: 'page-1' })),
 }));
 
-vi.mock('@ktx/context/ingest', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@ktx/context/ingest')>();
+vi.mock('./context/ingest/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./context/ingest/index.js')>();
   return {
     ...actual,
     NotionClient: vi.fn().mockImplementation(function NotionClient(token: string) {

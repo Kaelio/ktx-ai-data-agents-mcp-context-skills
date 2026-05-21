@@ -7,7 +7,7 @@ import { expectedLinksFromSnapshot, normalizeSqliteType } from './build-benchmar
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
-const require = createRequire(new URL('../packages/context/package.json', import.meta.url));
+const require = createRequire(new URL('../packages/cli/package.json', import.meta.url));
 const Database = require('better-sqlite3');
 const { stringify: yamlStringify } = require('yaml');
 
@@ -224,7 +224,7 @@ async function main() {
   }
 
   const source = JSON.parse(readFileSync(path.join(scriptDir, 'adventureworks-oltp-source.json'), 'utf8'));
-  const { KtxSqlServerScanConnector } = await import('../packages/connector-sqlserver/dist/index.js');
+  const { KtxSqlServerScanConnector } = await import('../packages/cli/dist/connectors/sqlserver/index.js');
   const connector = new KtxSqlServerScanConnector({
     connectionId: fixtureId,
     connection: {

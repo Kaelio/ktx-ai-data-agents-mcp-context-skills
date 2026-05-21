@@ -63,11 +63,10 @@ When rules conflict, follow this order:
 
 **ktx** is a pnpm + uv workspace.
 
-- TypeScript packages: `packages/*`
-- CLI package: `packages/cli`
-- Core context package: `packages/context`
-- LLM package: `packages/llm`
-- Database connectors: `packages/connector-*`
+- TypeScript package: `packages/cli` (the sole npm-published package source)
+- Core context modules: `packages/cli/src/context/`
+- LLM provider modules: `packages/cli/src/llm/`
+- Database connector modules: `packages/cli/src/connectors/<driver>/`
 - Python semantic layer: `python/ktx-sl`
 - **ktx** daemon: `python/ktx-daemon`
 - Examples and fixtures: `examples/`
@@ -76,9 +75,8 @@ When rules conflict, follow this order:
   commit `.agents/`, `.claude/`, or `docs/superpowers/` to this public
   repository.
 
-Some package names still contain `ktx` during the split. Do not mass-rename
-symbols, package names, paths, or docs to `ktx` unless the task asks for that
-rename.
+Some source identifiers still contain historical package-oriented names. Do not
+mass-rename symbols, paths, or docs unless the task asks for that rename.
 
 ## Quick Commands
 
@@ -154,11 +152,11 @@ pnpm run test 2>&1 | tee /tmp/ktx-test-output.log
 - Keep package exports, `types`, and built `dist` expectations aligned when
   changing public APIs.
 - Use `zod` schemas for runtime validation at CLI/config/API boundaries.
-- Keep connector packages thin: connector-specific scanning/auth behavior
-  belongs in `packages/connector-*`; shared types and orchestration belong in
-  `packages/context`.
-- Avoid circular package dependencies. Shared code should move to the lowest
-  sensible package, not be duplicated across connectors.
+- Keep connector modules thin: connector-specific scanning/auth behavior
+  belongs in `packages/cli/src/connectors/<driver>/`; shared types and
+  orchestration belong in `packages/cli/src/context/`.
+- Avoid circular module dependencies. Shared code should move to the lowest
+  sensible module, not be duplicated across connectors.
 - Do not manually edit generated or built output under `dist/`; edit source and
   rebuild.
 

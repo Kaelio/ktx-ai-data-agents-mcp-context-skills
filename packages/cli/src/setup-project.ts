@@ -9,7 +9,7 @@ import {
   markKtxSetupStateStepComplete,
   mergeKtxSetupGitignoreEntries,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { gray } from './io/symbols.js';
 import { withTextInputNavigation } from './prompt-navigation.js';

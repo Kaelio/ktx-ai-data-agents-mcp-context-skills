@@ -14,7 +14,6 @@ function stubPackageInfo(): KtxCliPackageInfo {
   return {
     name: '@ktx/cli',
     version: '0.0.0-test',
-    contextPackageName: '@ktx/context',
   };
 }
 

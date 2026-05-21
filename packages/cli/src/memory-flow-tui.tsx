@@ -11,7 +11,7 @@ import {
   reduceMemoryFlowInteractionState,
   selectedMemoryFlowColumn,
   selectedMemoryFlowDetails,
-} from '@ktx/context/ingest';
+} from './context/ingest/index.js';
 import { Box, Text, render as renderInkRuntime, useApp, useInput } from 'ink';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {

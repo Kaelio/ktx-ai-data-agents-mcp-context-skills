@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AgentRunnerPort, RunLoopParams } from '@ktx/context';
+import type { AgentRunnerPort, RunLoopParams } from './context/index.js';
 import {
   KtxYamlMetabaseSourceStateReader,
   LocalMetabaseDiscoveryCache,
@@ -22,8 +22,8 @@ import {
   type RunLocalIngestOptions,
   type SourceAdapter,
   type SqliteBundleIngestStore,
-} from '@ktx/context/ingest';
-import { ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
+} from './context/ingest/index.js';
+import { ktxLocalStateDbPath, loadKtxProject } from './context/project/index.js';
 import { expect, vi } from 'vitest';
 import { runKtxIngest } from './ingest.js';
 
@@ -685,7 +685,7 @@ export function localFakeBundleReport(
 }
 
 export async function localBundleStore(projectDir: string, ids: [string, string]): Promise<SqliteBundleIngestStore> {
-  const { SqliteBundleIngestStore } = await import('@ktx/context/ingest');
+  const { SqliteBundleIngestStore } = await import('./context/ingest/index.js');
   const project = await loadKtxProject({ projectDir });
   return new SqliteBundleIngestStore({
     dbPath: ktxLocalStateDbPath(project),

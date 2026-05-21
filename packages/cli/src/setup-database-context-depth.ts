@@ -4,7 +4,7 @@ import {
   type KtxProjectConnectionConfig,
   loadKtxProject,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import {
   type KtxDatabaseContextDepth,
   databaseContextDepth,

@@ -5,21 +5,21 @@ import { describe, it } from 'node:test';
 const KTX_ROOT = new URL('../', import.meta.url);
 
 const RELATIONSHIP_RUNTIME_SOURCES = Object.freeze([
-  'packages/context/src/scan/relationship-benchmarks.ts',
-  'packages/context/src/scan/relationship-budget.ts',
-  'packages/context/src/scan/relationship-candidates.ts',
-  'packages/context/src/scan/relationship-composite-candidates.ts',
-  'packages/context/src/scan/relationship-graph-resolver.ts',
-  'packages/context/src/scan/relationship-locality.ts',
-  'packages/context/src/scan/relationship-name-similarity.ts',
-  'packages/context/src/scan/relationship-discovery.ts',
-  'packages/context/src/scan/relationship-profiling.ts',
-  'packages/context/src/scan/relationship-scoring.ts',
-  'packages/context/src/scan/relationship-validation.ts',
+  'packages/cli/src/context/scan/relationship-benchmarks.ts',
+  'packages/cli/src/context/scan/relationship-budget.ts',
+  'packages/cli/src/context/scan/relationship-candidates.ts',
+  'packages/cli/src/context/scan/relationship-composite-candidates.ts',
+  'packages/cli/src/context/scan/relationship-graph-resolver.ts',
+  'packages/cli/src/context/scan/relationship-locality.ts',
+  'packages/cli/src/context/scan/relationship-name-similarity.ts',
+  'packages/cli/src/context/scan/relationship-discovery.ts',
+  'packages/cli/src/context/scan/relationship-profiling.ts',
+  'packages/cli/src/context/scan/relationship-scoring.ts',
+  'packages/cli/src/context/scan/relationship-validation.ts',
 ]);
 
 async function checkedInFixtureIds() {
-  const fixtureRoot = new URL('packages/context/test/fixtures/relationship-benchmarks/', KTX_ROOT);
+  const fixtureRoot = new URL('packages/cli/src/test/fixtures/relationship-benchmarks/', KTX_ROOT);
   const entries = await readdir(fixtureRoot, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isDirectory())

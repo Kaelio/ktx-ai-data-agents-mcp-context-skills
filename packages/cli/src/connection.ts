@@ -9,11 +9,11 @@ import {
   createLocalLookerCredentialResolver,
   metabaseRuntimeConfigFromLocalConnection,
   testRepoConnection,
-} from '@ktx/context/ingest';
-import { parseNotionConnectionConfig, resolveNotionConnectionAuthToken } from '@ktx/context/connections';
-import { resolveKtxConfigReference } from '@ktx/context/core';
-import { type KtxLocalProject, loadKtxProject } from '@ktx/context/project';
-import type { KtxScanConnector } from '@ktx/context/scan';
+} from './context/ingest/index.js';
+import { parseNotionConnectionConfig, resolveNotionConnectionAuthToken } from './context/connections/index.js';
+import { resolveKtxConfigReference } from './context/core/index.js';
+import { type KtxLocalProject, loadKtxProject } from './context/project/index.js';
+import type { KtxScanConnector } from './context/scan/index.js';
 import type { KtxCliIo } from './index.js';
 import { bold, dim, green, red, SYMBOLS } from './io/symbols.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';

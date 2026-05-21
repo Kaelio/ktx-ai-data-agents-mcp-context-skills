@@ -7,7 +7,7 @@ import {
   parseKtxProjectConfig,
   readKtxSetupState,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { KtxCliIo } from './cli-runtime.js';
 import {

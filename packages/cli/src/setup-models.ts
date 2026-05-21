@@ -1,15 +1,15 @@
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { resolveLocalKtxLlmConfig, runClaudeCodeAuthProbe } from '@ktx/context';
-import { resolveKtxConfigReference } from '@ktx/context/core';
+import { resolveLocalKtxLlmConfig, runClaudeCodeAuthProbe } from './context/index.js';
+import { resolveKtxConfigReference } from './context/core/index.js';
 import {
   type KtxProjectConfig,
   type KtxProjectLlmConfig,
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from './llm/index.js';
 import {
   formatClaudeCodePromptCachingWarning,

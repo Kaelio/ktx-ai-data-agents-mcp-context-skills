@@ -1,7 +1,7 @@
 import { readFile as fsReadFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
-import { createLocalProjectMemoryIngest, type MemoryAgentInput, type MemoryIngestStatus } from '@ktx/context/memory';
-import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { createLocalProjectMemoryIngest, type MemoryAgentInput, type MemoryIngestStatus } from './context/memory/index.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { createRepainter, initViewState, renderContextBuildView, type ContextBuildTargetState } from './context-build-view.js';
 import { formatDuration } from './demo-metrics.js';

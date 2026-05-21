@@ -9,7 +9,7 @@ import { buildBenchmarkSnapshot, writeFixtureFiles } from './build-benchmark-sna
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const ktxRoot = path.resolve(scriptDir, '..');
 const fixtureRoot = path.join(ktxRoot, 'packages', 'context', 'test', 'fixtures', 'relationship-benchmarks');
-const require = createRequire(new URL('../packages/context/package.json', import.meta.url));
+const require = createRequire(new URL('../packages/cli/package.json', import.meta.url));
 const Database = require('better-sqlite3');
 const { stringify: yamlStringify } = require('yaml');
 

@@ -4,8 +4,8 @@ import {
   type KtxScanReport,
   type KtxScanWarning,
   runLocalScan,
-} from '@ktx/context/scan';
-import { loadKtxProject } from '@ktx/context/project';
+} from './context/scan/index.js';
+import { loadKtxProject } from './context/project/index.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import type { KtxCliIo } from './index.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';

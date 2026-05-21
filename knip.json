@@ -16,46 +16,15 @@
       "entry": [
         "src/index.ts",
         "src/bin.ts",
+        "src/llm/index.ts",
+        "src/context/index.ts",
+        "src/context/**/index.ts",
+        "src/connectors/*/index.ts",
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
         "scripts/**/*.mjs"
       ],
       "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs", "vitest.config.ts"]
-    },
-    "packages/context": {
-      "entry": [
-        "src/index.ts",
-        "src/agent/index.ts",
-        "src/core/index.ts",
-        "src/connections/index.ts",
-        "src/daemon/index.ts",
-        "src/ingest/index.ts",
-        "src/ingest/memory-flow/index.ts",
-        "src/ingest/metabase-mapping.ts",
-        "src/scan/index.ts",
-        "src/search/index.ts",
-        "src/sql-analysis/index.ts",
-        "src/memory/index.ts",
-        "src/mcp/index.ts",
-        "src/project/index.ts",
-        "src/prompts/index.ts",
-        "src/skills/index.ts",
-        "src/sl/index.ts",
-        "src/sl/descriptions.ts",
-        "src/tools/index.ts",
-        "src/wiki/index.ts",
-        "src/**/*.test.ts",
-        "scripts/**/*.mjs"
-      ],
-      "project": ["src/**/*.ts", "scripts/**/*.mjs", "vitest.config.ts"]
-    },
-    "packages/llm": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"],
-      "project": ["src/**/*.ts", "vitest.config.ts"]
-    },
-    "packages/connector-*": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"],
-      "project": ["src/**/*.ts"]
     },
     "docs-site": {
       "entry": [
@@ -106,17 +75,17 @@
     "packages/cli/src/setup-project.ts": ["types"],
     "packages/cli/src/setup-ready-menu.ts": ["types"],
     "packages/cli/src/setup-sources.ts": ["types"],
-    "packages/context/src/ingest/adapters/historic-sql/pattern-inputs.ts": ["exports", "types"],
-    "packages/context/src/ingest/adapters/lookml/pull-config.ts": ["exports"],
-    "packages/context/src/ingest/adapters/metabase/serialize-card.ts": ["types"],
-    "packages/context/src/ingest/adapters/metabase/types.ts": ["exports"],
-    "packages/context/src/ingest/adapters/metricflow/parse.ts": ["types"],
-    "packages/context/src/ingest/ports.ts": ["types"],
-    "packages/context/src/ingest/stages/stage-3-work-units.ts": ["types"],
-    "packages/context/src/ingest/stages/stage-index.types.ts": ["types"],
-    "packages/context/src/project/config.ts": ["types"],
-    "packages/context/src/scan/relationship-candidates.ts": ["types"],
-    "packages/context/src/scan/relationship-diagnostics.ts": ["types"],
-    "packages/context/src/tools/context-evidence-tool-store.ts": ["types"]
+    "packages/cli/src/context/ingest/adapters/historic-sql/pattern-inputs.ts": ["exports", "types"],
+    "packages/cli/src/context/ingest/adapters/lookml/pull-config.ts": ["exports"],
+    "packages/cli/src/context/ingest/adapters/metabase/serialize-card.ts": ["types"],
+    "packages/cli/src/context/ingest/adapters/metabase/types.ts": ["exports"],
+    "packages/cli/src/context/ingest/adapters/metricflow/parse.ts": ["types"],
+    "packages/cli/src/context/ingest/ports.ts": ["types"],
+    "packages/cli/src/context/ingest/stages/stage-3-work-units.ts": ["types"],
+    "packages/cli/src/context/ingest/stages/stage-index.types.ts": ["types"],
+    "packages/cli/src/context/project/config.ts": ["types"],
+    "packages/cli/src/context/scan/relationship-candidates.ts": ["types"],
+    "packages/cli/src/context/scan/relationship-diagnostics.ts": ["types"],
+    "packages/cli/src/context/tools/context-evidence-tool-store.ts": ["types"]
   }
 }

@@ -2,9 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
-import { initKtxProject, loadKtxProject } from '@ktx/context/project';
-import type { KtxEmbeddingPort } from '@ktx/context';
-import { writeLocalKnowledgePage } from '@ktx/context/wiki';
+import { initKtxProject, loadKtxProject } from './context/project/index.js';
+import type { KtxEmbeddingPort } from './context/index.js';
+import { writeLocalKnowledgePage } from './context/wiki/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxKnowledge } from './knowledge.js';
 

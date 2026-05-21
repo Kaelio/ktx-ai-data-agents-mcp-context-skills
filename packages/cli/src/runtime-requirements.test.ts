@@ -1,4 +1,4 @@
-import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '@ktx/context/project';
+import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from './context/project/index.js';
 import { describe, expect, it } from 'vitest';
 import {
   resolveProjectRuntimeRequirements,

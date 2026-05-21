@@ -22,6 +22,12 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.15
         version: 2.4.15
+      '@electric-sql/pglite':
+        specifier: ^0.4.5
+        version: 0.4.5
+      '@electric-sql/pglite-socket':
+        specifier: ^0.1.5
+        version: 0.1.5(@electric-sql/pglite@0.4.5)
       '@semantic-release/commit-analyzer':
         specifier: ^13.0.1
         version: 13.0.1(semantic-release@25.0.3(typescript@6.0.3))
@@ -52,6 +58,9 @@ importers:
       knip:
         specifier: ^6.12.2
         version: 6.12.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
       semantic-release:
         specifier: ^25.0.3
         version: 25.0.3(typescript@6.0.3)
@@ -116,260 +125,21 @@ importers:
       '@ai-sdk/google-vertex':
         specifier: ^4.0.128
         version: 4.0.128(zod@4.4.3)
-      '@clack/prompts':
-        specifier: 1.4.0
-        version: 1.4.0
-      '@commander-js/extra-typings':
-        specifier: 14.0.0
-        version: 14.0.0(commander@14.0.3)
-      '@ktx/connector-bigquery':
-        specifier: workspace:*
-        version: file:packages/connector-bigquery(js-yaml@4.1.1)(ws@8.20.1)
-      '@ktx/connector-clickhouse':
-        specifier: workspace:*
-        version: file:packages/connector-clickhouse(js-yaml@4.1.1)(ws@8.20.1)
-      '@ktx/connector-mysql':
-        specifier: workspace:*
-        version: file:packages/connector-mysql(@types/node@24.12.2)(js-yaml@4.1.1)(ws@8.20.1)
-      '@ktx/connector-postgres':
-        specifier: workspace:*
-        version: file:packages/connector-postgres(js-yaml@4.1.1)(ws@8.20.1)
-      '@ktx/connector-snowflake':
-        specifier: workspace:*
-        version: file:packages/connector-snowflake(asn1.js@5.4.1)(js-yaml@4.1.1)(ws@8.20.1)
-      '@ktx/connector-sqlite':
-        specifier: workspace:*
-        version: file:packages/connector-sqlite(js-yaml@4.1.1)(ws@8.20.1)
-      '@ktx/connector-sqlserver':
-        specifier: workspace:*
-        version: file:packages/connector-sqlserver(js-yaml@4.1.1)(ws@8.20.1)
-      '@ktx/context':
-        specifier: workspace:*
-        version: link:../context
-      '@ktx/llm':
-        specifier: workspace:*
-        version: link:../llm
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(zod@4.4.3)
-      ai:
-        specifier: ^6.0.180
-        version: 6.0.180(zod@4.4.3)
-      commander:
-        specifier: 14.0.3
-        version: 14.0.3
-      fflate:
-        specifier: ^0.8.2
-        version: 0.8.2
-      ink:
-        specifier: ^7.0.2
-        version: 7.0.2(@types/react@19.2.14)(react@19.2.6)
-      openai:
-        specifier: ^6.37.0
-        version: 6.37.0(ws@8.20.1)(zod@4.4.3)
-      react:
-        specifier: ^19.2.6
-        version: 19.2.6
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.14
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      better-sqlite3:
-        specifier: ^12.10.0
-        version: 12.10.0
-      ink-testing-library:
-        specifier: ^4.0.0
-        version: 4.0.0(@types/react@19.2.14)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/connector-bigquery:
-    dependencies:
-      '@google-cloud/bigquery':
-        specifier: ^8.3.1
-        version: 8.3.1
-      '@ktx/context':
-        specifier: workspace:*
-        version: file:packages/context(js-yaml@4.1.1)
-    devDependencies:
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/connector-clickhouse:
-    dependencies:
-      '@clickhouse/client':
-        specifier: ^1.18.4
-        version: 1.18.4
-      '@ktx/context':
-        specifier: workspace:*
-        version: file:packages/context(js-yaml@4.1.1)
-    devDependencies:
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/connector-mysql:
-    dependencies:
-      '@ktx/context':
-        specifier: workspace:*
-        version: file:packages/context(js-yaml@4.1.1)
-      mysql2:
-        specifier: ^3.22.3
-        version: 3.22.3(@types/node@24.12.2)
-    devDependencies:
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/connector-postgres:
-    dependencies:
-      '@ktx/context':
-        specifier: workspace:*
-        version: file:packages/context(js-yaml@4.1.1)
-      pg:
-        specifier: ^8.20.0
-        version: 8.20.0
-    devDependencies:
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/connector-snowflake:
-    dependencies:
-      '@ktx/context':
-        specifier: workspace:*
-        version: file:packages/context(js-yaml@4.1.1)
-      snowflake-sdk:
-        specifier: ^2.4.1
-        version: 2.4.1(asn1.js@5.4.1)
-    devDependencies:
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/connector-sqlite:
-    dependencies:
-      '@ktx/context':
-        specifier: workspace:*
-        version: file:packages/context(js-yaml@4.1.1)
-      better-sqlite3:
-        specifier: ^12.10.0
-        version: 12.10.0
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/connector-sqlserver:
-    dependencies:
-      '@ktx/context':
-        specifier: workspace:*
-        version: file:packages/context(js-yaml@4.1.1)
-      mssql:
-        specifier: ^12.5.2
-        version: 12.5.2(@azure/core-client@1.10.1)
-    devDependencies:
-      '@types/mssql':
-        specifier: ^12.3.0
-        version: 12.3.0(@azure/core-client@1.10.1)
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/context:
-    dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.142
         version: 0.3.142(zod@4.4.3)
-      '@ktx/llm':
-        specifier: workspace:*
-        version: link:../llm
+      '@clack/prompts':
+        specifier: 1.4.0
+        version: 1.4.0
+      '@clickhouse/client':
+        specifier: ^1.18.4
+        version: 1.18.4
+      '@commander-js/extra-typings':
+        specifier: 14.0.0
+        version: 14.0.0(commander@14.0.3)
+      '@google-cloud/bigquery':
+        specifier: ^8.3.1
+        version: 8.3.1
       '@looker/sdk':
         specifier: ^26.8.0
         version: 26.8.0
@@ -391,24 +161,48 @@ importers:
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
+      commander:
+        specifier: 14.0.3
+        version: 14.0.3
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
       handlebars:
         specifier: ^4.7.9
         version: 4.7.9
+      ink:
+        specifier: ^7.0.2
+        version: 7.0.2(@types/react@19.2.14)(react@19.2.6)
       lookml-parser:
         specifier: 7.1.0
         version: 7.1.0(js-yaml@4.1.1)
       minimatch:
         specifier: ^10.2.5
         version: 10.2.5
+      mssql:
+        specifier: ^12.5.2
+        version: 12.5.2(@azure/core-client@1.10.1)
+      mysql2:
+        specifier: ^3.22.3
+        version: 3.22.3(@types/node@24.12.2)
+      openai:
+        specifier: ^6.37.0
+        version: 6.37.0(ws@8.20.1)(zod@4.4.3)
       p-limit:
         specifier: ^7.3.0
         version: 7.3.0
       pg:
         specifier: ^8.20.0
         version: 8.20.0
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
       simple-git:
         specifier: 3.36.0
         version: 3.36.0
+      snowflake-sdk:
+        specifier: ^2.4.1
+        version: 2.4.1(asn1.js@5.4.1)
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -425,49 +219,27 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
+      '@types/mssql':
+        specifier: ^12.3.0
+        version: 12.3.0(@azure/core-client@1.10.1)
       '@types/node':
         specifier: ^24.3.0
         version: 24.12.2
       '@types/pg':
         specifier: ^8.20.0
         version: 8.20.0
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
       '@vitest/coverage-v8':
         specifier: ^4.1.6
         version: 4.1.6(vitest@4.1.6)
       ajv:
         specifier: 8.20.0
         version: 8.20.0
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/llm:
-    dependencies:
-      '@ai-sdk/anthropic':
-        specifier: 3.0.77
-        version: 3.0.77(zod@4.4.3)
-      '@ai-sdk/devtools':
-        specifier: 0.0.17
-        version: 0.0.17
-      '@ai-sdk/google-vertex':
-        specifier: ^4.0.128
-        version: 4.0.128(zod@4.4.3)
-      ai:
-        specifier: ^6.0.180
-        version: 6.0.180(zod@4.4.3)
-      openai:
-        specifier: ^6.37.0
-        version: 6.37.0(ws@8.20.1)(zod@4.4.3)
-    devDependencies:
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.12.2
-      '@vitest/coverage-v8':
-        specifier: ^4.1.6
-        version: 4.1.6(vitest@4.1.6)
+      ink-testing-library:
+        specifier: ^4.0.0
+        version: 4.0.0(@types/react@19.2.14)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -632,10 +404,6 @@ packages:
     resolution: {integrity: sha512-oDJJ7rM1osvfBdfZuhQ5DM6lHD9iuypL9m2LsEiA/lB8xuE5uPYsftNDcS0J9VRXFSvYTqC14K7Y5vMMKMg0vw==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/core@3.974.7':
-    resolution: {integrity: sha512-YhRC90ofz5oolTJZlA8voU/oUrCB2azi8Usx51k8hhB5LpWbYQMMXKUqSqkoL0Cru+RQJgWTHpAfEDDIwfUhJw==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/core@3.974.8':
     resolution: {integrity: sha512-njR2qoG6ZuB0kvAS2FyICsFZJ6gmCcf2X/7JcD14sUvGDm26wiZ5BrA6LOiUxKFEF+IVe7kdroxyE00YlkiYsw==}
     engines: {node: '>=20.0.0'}
@@ -644,64 +412,32 @@ packages:
     resolution: {integrity: sha512-QUagVVBbC8gODCF6e1aV0mE2TXWB9Opz4k8EJFdNrujUVQm5R4AjJa1mpOqzwOuROBzqJU9zawzig7M96L8Ejg==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/credential-provider-env@3.972.33':
-    resolution: {integrity: sha512-bJV7eViSJV6GSuuN+VIdNVPdwPsNSf75BiC2v5alPrjR/OCcqgKwSZInKbDFz9mNeizldsyf67jt6YSIiv53Cw==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/credential-provider-env@3.972.34':
     resolution: {integrity: sha512-XT0jtf8Fw9JE6ppsQeoNnZRiG+jqRixMT1v1ZR17G60UvVdsQmTG8nbEyHuEPfMxDXEhfdARaM/XiEhca4lGHQ==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/credential-provider-http@3.972.35':
-    resolution: {integrity: sha512-x/BQGEIdq0oI+4WxLjKmnQvT7CnF9r8ezdGt7wXwxb7ckHXQz0Zmgxt8v3Ne0JaT3R5YefmuybHX6E8EnsDXyA==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/credential-provider-http@3.972.36':
     resolution: {integrity: sha512-DPoGWfy7J7RKxvbf5kOKIGQkD2ek3dbKgzKIGrnLuvZBz5myU+Im/H6pmc14QcnFbqHMqxvtWSgRDSJW3qXLQg==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/credential-provider-ini@3.972.37':
-    resolution: {integrity: sha512-eUTpmWfd/BKsq9medhCRcu+GRAhFP2Zrn7/2jKDHHOOjCkhrMoTp/t4cEthqFoG7gE0VGp5wUxrXTdvBCmSmJg==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/credential-provider-ini@3.972.38':
     resolution: {integrity: sha512-oDzUBu2MGJFgoar05sPMCwSrhw44ASyccrHzj66vO69OZqi7I6hZZxXfuPLC8OCzW7C+sU+bI73XHij41yekgQ==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/credential-provider-login@3.972.37':
-    resolution: {integrity: sha512-Ty68y8ISSC+g5Q3D0K8uAaoINwvfaOslnNpsF/LgVUxyosYXHawcK2yV4HLXDVugiTTYLQfJfcw0ce5meAGkKw==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/credential-provider-login@3.972.38':
     resolution: {integrity: sha512-g1NosS8qe4OF++G2UFCM5ovSkgipC7YYor5KCWatG0UoMSO5YFj9C8muePlyVmOBV/WTI16Jo3/s1NUo/o1Bww==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/credential-provider-node@3.972.38':
-    resolution: {integrity: sha512-BQ9XYnBDVxR2HuV5huXYQYF/PZMTsY+EnwfGnCU2cA8Zw63XpkOtPY8WqiMIZMQCrKPQQEiFURS/o9CIolRLqg==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/credential-provider-node@3.972.39':
     resolution: {integrity: sha512-HEswDQyxUtadoZ/bJsPPENHg7R0Lzym5LuMksJeHvqhCOpP+rtkDLKI4/ZChH4w3cf5kG8n6bZuI8PzajoiqMg==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/credential-provider-process@3.972.33':
-    resolution: {integrity: sha512-yfjGksI9WQbdMObb0VeLXqzTLI+a0qXLJT9gCDiv0+X/xjPpI3mTz6a5FibrhpuEKIe0gSgvs3MaoFZy5cx4WA==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/credential-provider-process@3.972.34':
     resolution: {integrity: sha512-T3IFs4EVmVi1dVN5RciFnklCANSzvrQd/VuHY9ThHSQmYkTogjcGkoJEr+oNUPQZnso52183088NqysMPji1/Q==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/credential-provider-sso@3.972.37':
-    resolution: {integrity: sha512-fpwE+20ntpp3i9Xb9vUuQfXLDKYHH+5I2V+ZG96SX1nBzrruhy10RXDgmN7t1etOz3c55stlA3TeQASUA451NQ==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/credential-provider-sso@3.972.38':
     resolution: {integrity: sha512-5ZxG+t0+3Q3QPh8KEjX6syskhgNf7I0MN7oGioTf6Lm1NTjfP7sIcYGNsthXC2qR8vcD3edNZwCr2ovfSSWuRA==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/credential-provider-web-identity@3.972.37':
-    resolution: {integrity: sha512-aryawqyebf+3WhAFNHfF62rekFpYtVcVN7dQ89qnAWsa4n5hJst8qBG6gXC24WHtW7Nnhkf9ScYnjwo0Brn3bw==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/credential-provider-web-identity@3.972.38':
@@ -740,10 +476,6 @@ packages:
     resolution: {integrity: sha512-+zz6f79Kj9V5qFK2P+D8Ehjnw4AhphAlCAsPjUqEcInA9umtSSKMrHbSagEeOIsDNuvVrH98bjRHcyQukTrhaQ==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/middleware-sdk-s3@3.972.36':
-    resolution: {integrity: sha512-YhPix+0x/MdQrb1Ug1GDKeS5fqylIy+naz800asX8II4jqfTk2KY2KhmmYCwZcky8YWtRQQwWCGdoqeAnip8Uw==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/middleware-sdk-s3@3.972.37':
     resolution: {integrity: sha512-Km7M+i8DrLArVzrid1gfxeGhYHBd3uxvE77g0s5a52zPSVosxzQBnJ0gwWb6NIp/DOk8gsBMhi7V+cpJG0ndTA==}
     engines: {node: '>=20.0.0'}
@@ -752,16 +484,8 @@ packages:
     resolution: {integrity: sha512-Gli9A0u8EVVb+5bFDGS/QbSVg28w/wpEidg1ggVcSj65BDTdGR6punsOcVjqdiu1i42WHWo51MCvARPIIz9juw==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/middleware-user-agent@3.972.37':
-    resolution: {integrity: sha512-N1oNpdiLoVAWYD3WFBnUi3LlfoDA06ZHo4ozyjbsJNLvILzvt//0CnR8N+CZ0NWeYgVB/5V59ivixHCWCx2ALw==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/middleware-user-agent@3.972.38':
     resolution: {integrity: sha512-iz+B29TXcAZsJpwB+AwG/TTGA5l/VnmMZ2UxtiySOZjI6gCdmviXPwdgzcmuazMy16rXoPY4mYCGe7zdNKfx5A==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/nested-clients@3.997.5':
-    resolution: {integrity: sha512-jGFr6DxtcMTmzOkG/a0jCZYv4BBDmeNYVeO+/memSoDkYCJu4Y58xviYmzwJfYyIVSts+X/BVjJm1uGBnwHEMg==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/nested-clients@3.997.6':
@@ -772,16 +496,8 @@ packages:
     resolution: {integrity: sha512-CvJ2ZIjK/jVD/lbOpowBVElJyC1YxLTIJ13yM0AEo0t2v7swOzGjSA6lJGH+DwZXQhcjUjoYwc8bVYCX5MDr1A==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/signature-v4-multi-region@3.996.24':
-    resolution: {integrity: sha512-amP7tLikppN940wbBFISYqiuzVmpzMS9U3mcgtmVLjX4fdWI/SNCvrXv6ZxfVzTT4cT0rPKOLhFah2xLwzREWw==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/signature-v4-multi-region@3.996.25':
     resolution: {integrity: sha512-+CMIt3e1VzlklAECmG+DtP1sV8iKq25FuA0OKpnJ4KA0kxUtd7CgClY7/RU6VzJBQwbN4EJ9Ue6plvqx1qGadw==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/token-providers@3.1039.0':
-    resolution: {integrity: sha512-NMSFL2HwkAOoCeLCQiqoOq5pT3vVbSjww2QZTuYgYknVwhhv125PSDzZIcL5EYnlxuPWjEOdauZK+FspkZDVdw==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/token-providers@3.1041.0':
@@ -806,15 +522,6 @@ packages:
 
   '@aws-sdk/util-user-agent-browser@3.972.10':
     resolution: {integrity: sha512-FAzqXvfEssGdSIz8ejatan0bOdx1qefBWKF/gWmVBXIP1HkS7v/wjjaqrAGGKvyihrXTXW00/2/1nTJtxpXz7g==}
-
-  '@aws-sdk/util-user-agent-node@3.973.23':
-    resolution: {integrity: sha512-gGwq8L2Euw0aNG6Ey4EktiAo3fSCVoDy1CaBIthd+oeaKHPXUrNaApMewQ6La5Hv0lcznOtECZaNvYyc5LXXfA==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      aws-crt: '>=1.0.0'
-    peerDependenciesMeta:
-      aws-crt:
-        optional: true
 
   '@aws-sdk/util-user-agent-node@3.973.24':
     resolution: {integrity: sha512-ZWwlkjcIp7cEL8ZfTpTAPNkwx25p7xol0xlKoWVVf22+nsjwmLcHYtTPjIV1cSpmB/b6DaK4cb1fSkvCXHgRdw==}
@@ -1434,42 +1141,6 @@ packages:
 
   '@js-joda/core@5.7.0':
     resolution: {integrity: sha512-WBu4ULVVxySLLzK1Ppq+OdfP+adRS4ntmDQT915rzDJ++i95gc2jZkM5B6LWEAwN3lGXpfie3yPABozdD3K3Vg==}
-
-  '@ktx/connector-bigquery@file:packages/connector-bigquery':
-    resolution: {directory: packages/connector-bigquery, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/connector-clickhouse@file:packages/connector-clickhouse':
-    resolution: {directory: packages/connector-clickhouse, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/connector-mysql@file:packages/connector-mysql':
-    resolution: {directory: packages/connector-mysql, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/connector-postgres@file:packages/connector-postgres':
-    resolution: {directory: packages/connector-postgres, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/connector-snowflake@file:packages/connector-snowflake':
-    resolution: {directory: packages/connector-snowflake, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/connector-sqlite@file:packages/connector-sqlite':
-    resolution: {directory: packages/connector-sqlite, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/connector-sqlserver@file:packages/connector-sqlserver':
-    resolution: {directory: packages/connector-sqlserver, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/context@file:packages/context':
-    resolution: {directory: packages/context, type: directory}
-    engines: {node: '>=22.0.0'}
-
-  '@ktx/llm@file:packages/llm':
-    resolution: {directory: packages/llm, type: directory}
-    engines: {node: '>=22.0.0'}
 
   '@kwsites/file-exists@1.1.1':
     resolution: {integrity: sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw==}
@@ -6543,23 +6214,6 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@aws-sdk/core@3.974.7':
-    dependencies:
-      '@aws-sdk/types': 3.973.8
-      '@aws-sdk/xml-builder': 3.972.22
-      '@smithy/core': 3.23.17
-      '@smithy/node-config-provider': 4.3.14
-      '@smithy/property-provider': 4.2.14
-      '@smithy/protocol-http': 5.3.14
-      '@smithy/signature-v4': 5.3.14
-      '@smithy/smithy-client': 4.12.13
-      '@smithy/types': 4.14.1
-      '@smithy/util-base64': 4.3.2
-      '@smithy/util-middleware': 4.2.14
-      '@smithy/util-retry': 4.3.6
-      '@smithy/util-utf8': 4.2.2
-      tslib: 2.8.1
-
   '@aws-sdk/core@3.974.8':
     dependencies:
       '@aws-sdk/types': 3.973.8
@@ -6582,33 +6236,12 @@ snapshots:
       '@smithy/types': 4.14.1
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-env@3.972.33':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/types': 3.973.8
-      '@smithy/property-provider': 4.2.14
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-
   '@aws-sdk/credential-provider-env@3.972.34':
     dependencies:
       '@aws-sdk/core': 3.974.8
       '@aws-sdk/types': 3.973.8
       '@smithy/property-provider': 4.2.14
       '@smithy/types': 4.14.1
-      tslib: 2.8.1
-
-  '@aws-sdk/credential-provider-http@3.972.35':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/types': 3.973.8
-      '@smithy/fetch-http-handler': 5.3.17
-      '@smithy/node-http-handler': 4.6.1
-      '@smithy/property-provider': 4.2.14
-      '@smithy/protocol-http': 5.3.14
-      '@smithy/smithy-client': 4.12.13
-      '@smithy/types': 4.14.1
-      '@smithy/util-stream': 4.5.25
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-http@3.972.36':
@@ -6623,25 +6256,6 @@ snapshots:
       '@smithy/types': 4.14.1
       '@smithy/util-stream': 4.5.25
       tslib: 2.8.1
-
-  '@aws-sdk/credential-provider-ini@3.972.37':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/credential-provider-env': 3.972.33
-      '@aws-sdk/credential-provider-http': 3.972.35
-      '@aws-sdk/credential-provider-login': 3.972.37
-      '@aws-sdk/credential-provider-process': 3.972.33
-      '@aws-sdk/credential-provider-sso': 3.972.37
-      '@aws-sdk/credential-provider-web-identity': 3.972.37
-      '@aws-sdk/nested-clients': 3.997.5
-      '@aws-sdk/types': 3.973.8
-      '@smithy/credential-provider-imds': 4.2.14
-      '@smithy/property-provider': 4.2.14
-      '@smithy/shared-ini-file-loader': 4.4.9
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
 
   '@aws-sdk/credential-provider-ini@3.972.38':
     dependencies:
@@ -6662,19 +6276,6 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@aws-sdk/credential-provider-login@3.972.37':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/nested-clients': 3.997.5
-      '@aws-sdk/types': 3.973.8
-      '@smithy/property-provider': 4.2.14
-      '@smithy/protocol-http': 5.3.14
-      '@smithy/shared-ini-file-loader': 4.4.9
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
-
   '@aws-sdk/credential-provider-login@3.972.38':
     dependencies:
       '@aws-sdk/core': 3.974.8
@@ -6682,23 +6283,6 @@ snapshots:
       '@aws-sdk/types': 3.973.8
       '@smithy/property-provider': 4.2.14
       '@smithy/protocol-http': 5.3.14
-      '@smithy/shared-ini-file-loader': 4.4.9
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
-
-  '@aws-sdk/credential-provider-node@3.972.38':
-    dependencies:
-      '@aws-sdk/credential-provider-env': 3.972.33
-      '@aws-sdk/credential-provider-http': 3.972.35
-      '@aws-sdk/credential-provider-ini': 3.972.37
-      '@aws-sdk/credential-provider-process': 3.972.33
-      '@aws-sdk/credential-provider-sso': 3.972.37
-      '@aws-sdk/credential-provider-web-identity': 3.972.37
-      '@aws-sdk/types': 3.973.8
-      '@smithy/credential-provider-imds': 4.2.14
-      '@smithy/property-provider': 4.2.14
       '@smithy/shared-ini-file-loader': 4.4.9
       '@smithy/types': 4.14.1
       tslib: 2.8.1
@@ -6722,15 +6306,6 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@aws-sdk/credential-provider-process@3.972.33':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/types': 3.973.8
-      '@smithy/property-provider': 4.2.14
-      '@smithy/shared-ini-file-loader': 4.4.9
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-
   '@aws-sdk/credential-provider-process@3.972.34':
     dependencies:
       '@aws-sdk/core': 3.974.8
@@ -6740,36 +6315,11 @@ snapshots:
       '@smithy/types': 4.14.1
       tslib: 2.8.1
 
-  '@aws-sdk/credential-provider-sso@3.972.37':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/nested-clients': 3.997.5
-      '@aws-sdk/token-providers': 3.1039.0
-      '@aws-sdk/types': 3.973.8
-      '@smithy/property-provider': 4.2.14
-      '@smithy/shared-ini-file-loader': 4.4.9
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
-
   '@aws-sdk/credential-provider-sso@3.972.38':
     dependencies:
       '@aws-sdk/core': 3.974.8
       '@aws-sdk/nested-clients': 3.997.6
       '@aws-sdk/token-providers': 3.1041.0
-      '@aws-sdk/types': 3.973.8
-      '@smithy/property-provider': 4.2.14
-      '@smithy/shared-ini-file-loader': 4.4.9
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
-
-  '@aws-sdk/credential-provider-web-identity@3.972.37':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/nested-clients': 3.997.5
       '@aws-sdk/types': 3.973.8
       '@smithy/property-provider': 4.2.14
       '@smithy/shared-ini-file-loader': 4.4.9
@@ -6861,23 +6411,6 @@ snapshots:
       '@smithy/types': 4.14.1
       tslib: 2.8.1
 
-  '@aws-sdk/middleware-sdk-s3@3.972.36':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/types': 3.973.8
-      '@aws-sdk/util-arn-parser': 3.972.3
-      '@smithy/core': 3.23.17
-      '@smithy/node-config-provider': 4.3.14
-      '@smithy/protocol-http': 5.3.14
-      '@smithy/signature-v4': 5.3.14
-      '@smithy/smithy-client': 4.12.13
-      '@smithy/types': 4.14.1
-      '@smithy/util-config-provider': 4.2.2
-      '@smithy/util-middleware': 4.2.14
-      '@smithy/util-stream': 4.5.25
-      '@smithy/util-utf8': 4.2.2
-      tslib: 2.8.1
-
   '@aws-sdk/middleware-sdk-s3@3.972.37':
     dependencies:
       '@aws-sdk/core': 3.974.8
@@ -6901,17 +6434,6 @@ snapshots:
       '@smithy/types': 4.14.1
       tslib: 2.8.1
 
-  '@aws-sdk/middleware-user-agent@3.972.37':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/types': 3.973.8
-      '@aws-sdk/util-endpoints': 3.996.8
-      '@smithy/core': 3.23.17
-      '@smithy/protocol-http': 5.3.14
-      '@smithy/types': 4.14.1
-      '@smithy/util-retry': 4.3.6
-      tslib: 2.8.1
-
   '@aws-sdk/middleware-user-agent@3.972.38':
     dependencies:
       '@aws-sdk/core': 3.974.8
@@ -6922,50 +6444,6 @@ snapshots:
       '@smithy/types': 4.14.1
       '@smithy/util-retry': 4.3.6
       tslib: 2.8.1
-
-  '@aws-sdk/nested-clients@3.997.5':
-    dependencies:
-      '@aws-crypto/sha256-browser': 5.2.0
-      '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/middleware-host-header': 3.972.10
-      '@aws-sdk/middleware-logger': 3.972.10
-      '@aws-sdk/middleware-recursion-detection': 3.972.11
-      '@aws-sdk/middleware-user-agent': 3.972.37
-      '@aws-sdk/region-config-resolver': 3.972.13
-      '@aws-sdk/signature-v4-multi-region': 3.996.24
-      '@aws-sdk/types': 3.973.8
-      '@aws-sdk/util-endpoints': 3.996.8
-      '@aws-sdk/util-user-agent-browser': 3.972.10
-      '@aws-sdk/util-user-agent-node': 3.973.23
-      '@smithy/config-resolver': 4.4.17
-      '@smithy/core': 3.23.17
-      '@smithy/fetch-http-handler': 5.3.17
-      '@smithy/hash-node': 4.2.14
-      '@smithy/invalid-dependency': 4.2.14
-      '@smithy/middleware-content-length': 4.2.14
-      '@smithy/middleware-endpoint': 4.4.32
-      '@smithy/middleware-retry': 4.5.7
-      '@smithy/middleware-serde': 4.2.20
-      '@smithy/middleware-stack': 4.2.14
-      '@smithy/node-config-provider': 4.3.14
-      '@smithy/node-http-handler': 4.6.1
-      '@smithy/protocol-http': 5.3.14
-      '@smithy/smithy-client': 4.12.13
-      '@smithy/types': 4.14.1
-      '@smithy/url-parser': 4.2.14
-      '@smithy/util-base64': 4.3.2
-      '@smithy/util-body-length-browser': 4.2.2
-      '@smithy/util-body-length-node': 4.2.3
-      '@smithy/util-defaults-mode-browser': 4.3.49
-      '@smithy/util-defaults-mode-node': 4.2.54
-      '@smithy/util-endpoints': 3.4.2
-      '@smithy/util-middleware': 4.2.14
-      '@smithy/util-retry': 4.3.6
-      '@smithy/util-utf8': 4.2.2
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
 
   '@aws-sdk/nested-clients@3.997.6':
     dependencies:
@@ -7019,15 +6497,6 @@ snapshots:
       '@smithy/types': 4.14.1
       tslib: 2.8.1
 
-  '@aws-sdk/signature-v4-multi-region@3.996.24':
-    dependencies:
-      '@aws-sdk/middleware-sdk-s3': 3.972.36
-      '@aws-sdk/types': 3.973.8
-      '@smithy/protocol-http': 5.3.14
-      '@smithy/signature-v4': 5.3.14
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-
   '@aws-sdk/signature-v4-multi-region@3.996.25':
     dependencies:
       '@aws-sdk/middleware-sdk-s3': 3.972.37
@@ -7036,18 +6505,6 @@ snapshots:
       '@smithy/signature-v4': 5.3.14
       '@smithy/types': 4.14.1
       tslib: 2.8.1
-
-  '@aws-sdk/token-providers@3.1039.0':
-    dependencies:
-      '@aws-sdk/core': 3.974.7
-      '@aws-sdk/nested-clients': 3.997.5
-      '@aws-sdk/types': 3.973.8
-      '@smithy/property-provider': 4.2.14
-      '@smithy/shared-ini-file-loader': 4.4.9
-      '@smithy/types': 4.14.1
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
 
   '@aws-sdk/token-providers@3.1041.0':
     dependencies:
@@ -7087,15 +6544,6 @@ snapshots:
       '@aws-sdk/types': 3.973.8
       '@smithy/types': 4.14.1
       bowser: 2.14.1
-      tslib: 2.8.1
-
-  '@aws-sdk/util-user-agent-node@3.973.23':
-    dependencies:
-      '@aws-sdk/middleware-user-agent': 3.972.37
-      '@aws-sdk/types': 3.973.8
-      '@smithy/node-config-provider': 4.3.14
-      '@smithy/types': 4.14.1
-      '@smithy/util-config-provider': 4.2.2
       tslib: 2.8.1
 
   '@aws-sdk/util-user-agent-node@3.973.24':
@@ -7155,11 +6603,6 @@ snapshots:
     dependencies:
       '@azure/abort-controller': 2.1.2
       '@azure/core-client': 1.10.1
-      '@azure/core-rest-pipeline': 1.23.0
-
-  '@azure/core-http-compat@2.4.0(@azure/core-rest-pipeline@1.23.0)':
-    dependencies:
-      '@azure/abort-controller': 2.1.2
       '@azure/core-rest-pipeline': 1.23.0
 
   '@azure/core-lro@2.7.2':
@@ -7231,24 +6674,6 @@ snapshots:
       '@azure/logger': 1.3.0
       tslib: 2.8.1
     transitivePeerDependencies:
-      - supports-color
-
-  '@azure/keyvault-keys@4.10.0':
-    dependencies:
-      '@azure-rest/core-client': 2.6.0
-      '@azure/abort-controller': 2.1.2
-      '@azure/core-auth': 1.10.1
-      '@azure/core-http-compat': 2.4.0(@azure/core-rest-pipeline@1.23.0)
-      '@azure/core-lro': 2.7.2
-      '@azure/core-paging': 1.6.2
-      '@azure/core-rest-pipeline': 1.23.0
-      '@azure/core-tracing': 1.3.1
-      '@azure/core-util': 1.13.1
-      '@azure/keyvault-common': 2.1.0
-      '@azure/logger': 1.3.0
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - '@azure/core-client'
       - supports-color
 
   '@azure/keyvault-keys@4.10.0(@azure/core-client@1.10.1)':
@@ -7680,164 +7105,6 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.5.5
 
   '@js-joda/core@5.7.0': {}
-
-  '@ktx/connector-bigquery@file:packages/connector-bigquery(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@google-cloud/bigquery': 8.3.1
-      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.1)
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/connector-clickhouse@file:packages/connector-clickhouse(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@clickhouse/client': 1.18.4
-      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.1)
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/connector-mysql@file:packages/connector-mysql(@types/node@24.12.2)(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.1)
-      mysql2: 3.22.3(@types/node@24.12.2)
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - '@types/node'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/connector-postgres@file:packages/connector-postgres(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.1)
-      pg: 8.20.0
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/connector-snowflake@file:packages/connector-snowflake(asn1.js@5.4.1)(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.1)
-      snowflake-sdk: 2.4.1(asn1.js@5.4.1)
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - asn1.js
-      - aws-crt
-      - debug
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/connector-sqlite@file:packages/connector-sqlite(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.1)
-      better-sqlite3: 12.10.0
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/connector-sqlserver@file:packages/connector-sqlserver(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@ktx/context': file:packages/context(js-yaml@4.1.1)(ws@8.20.1)
-      mssql: 12.5.2
-    transitivePeerDependencies:
-      - '@azure/core-client'
-      - '@cfworker/json-schema'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/context@file:packages/context(js-yaml@4.1.1)':
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk': 0.3.142(zod@4.4.3)
-      '@ktx/llm': file:packages/llm(zod@4.4.3)
-      '@looker/sdk': 26.8.0
-      '@looker/sdk-node': 26.8.0
-      '@looker/sdk-rtl': 21.6.5
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-      '@notionhq/client': 5.21.0
-      ai: 6.0.180(zod@4.4.3)
-      better-sqlite3: 12.10.0
-      handlebars: 4.7.9
-      lookml-parser: 7.1.0(js-yaml@4.1.1)
-      minimatch: 10.2.5
-      p-limit: 7.3.0
-      pg: 8.20.0
-      simple-git: 3.36.0
-      yaml: 2.9.0
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/context@file:packages/context(js-yaml@4.1.1)(ws@8.20.1)':
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk': 0.3.142(zod@4.4.3)
-      '@ktx/llm': file:packages/llm(ws@8.20.1)(zod@4.4.3)
-      '@looker/sdk': 26.8.0
-      '@looker/sdk-node': 26.8.0
-      '@looker/sdk-rtl': 21.6.5
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-      '@notionhq/client': 5.21.0
-      ai: 6.0.180(zod@4.4.3)
-      better-sqlite3: 12.10.0
-      handlebars: 4.7.9
-      lookml-parser: 7.1.0(js-yaml@4.1.1)
-      minimatch: 10.2.5
-      p-limit: 7.3.0
-      pg: 8.20.0
-      simple-git: 3.36.0
-      yaml: 2.9.0
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - js-yaml
-      - pg-native
-      - supports-color
-      - ws
-
-  '@ktx/llm@file:packages/llm(ws@8.20.1)(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/anthropic': 3.0.77(zod@4.4.3)
-      '@ai-sdk/devtools': 0.0.17
-      '@ai-sdk/google-vertex': 4.0.128(zod@4.4.3)
-      ai: 6.0.180(zod@4.4.3)
-      openai: 6.37.0(ws@8.20.1)(zod@4.4.3)
-    transitivePeerDependencies:
-      - supports-color
-      - ws
-      - zod
-
-  '@ktx/llm@file:packages/llm(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/anthropic': 3.0.77(zod@4.4.3)
-      '@ai-sdk/devtools': 0.0.17
-      '@ai-sdk/google-vertex': 4.0.128(zod@4.4.3)
-      ai: 6.0.180(zod@4.4.3)
-      openai: 6.37.0(zod@4.4.3)
-    transitivePeerDependencies:
-      - supports-color
-      - ws
-      - zod
 
   '@kwsites/file-exists@1.1.1':
     dependencies:
@@ -11553,17 +10820,6 @@ snapshots:
 
   ms@2.1.3: {}
 
-  mssql@12.5.2:
-    dependencies:
-      '@tediousjs/connection-string': 1.1.0
-      commander: 11.1.0
-      debug: 4.4.3
-      tarn: 3.0.2
-      tedious: 19.2.1
-    transitivePeerDependencies:
-      - '@azure/core-client'
-      - supports-color
-
   mssql@12.5.2(@azure/core-client@1.10.1):
     dependencies:
       '@tediousjs/connection-string': 1.1.0
@@ -11738,10 +10994,6 @@ snapshots:
   openai@6.37.0(ws@8.20.1)(zod@4.4.3):
     optionalDependencies:
       ws: 8.20.1
-      zod: 4.4.3
-
-  openai@6.37.0(zod@4.4.3):
-    optionalDependencies:
       zod: 4.4.3
 
   oxc-parser@0.128.0:
@@ -12483,7 +11735,7 @@ snapshots:
       '@aws-crypto/sha256-js': 5.2.0
       '@aws-sdk/client-s3': 3.1045.0
       '@aws-sdk/client-sts': 3.1045.0
-      '@aws-sdk/credential-provider-node': 3.972.38
+      '@aws-sdk/credential-provider-node': 3.972.39
       '@aws-sdk/ec2-metadata-service': 3.1045.0
       '@azure/identity': 4.13.1
       '@azure/storage-blob': 12.26.0
@@ -12684,22 +11936,6 @@ snapshots:
       readable-stream: 3.6.2
 
   tarn@3.0.2: {}
-
-  tedious@19.2.1:
-    dependencies:
-      '@azure/core-auth': 1.10.1
-      '@azure/identity': 4.13.1
-      '@azure/keyvault-keys': 4.10.0
-      '@js-joda/core': 5.7.0
-      '@types/node': 24.12.2
-      bl: 6.1.6
-      iconv-lite: 0.7.2
-      js-md4: 0.3.2
-      native-duplexpair: 1.0.0
-      sprintf-js: 1.1.3
-    transitivePeerDependencies:
-      - '@azure/core-client'
-      - supports-color
 
   tedious@19.2.1(@azure/core-client@1.10.1):
     dependencies:

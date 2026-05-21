@@ -1,4 +1,4 @@
-import { localConnectionToWarehouseDescriptor } from '@ktx/context/connections';
+import { localConnectionToWarehouseDescriptor } from './context/connections/index.js';
 import {
   DEFAULT_METABASE_CLIENT_CONFIG,
   DefaultLookerConnectionClientFactory,
@@ -19,8 +19,8 @@ import {
   type LookerMappingClient,
   type LocalMetabaseMappingListRow,
   type MetabaseRuntimeClient,
-} from '@ktx/context/ingest';
-import { type KtxLocalProject, ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
+} from './context/ingest/index.js';
+import { type KtxLocalProject, ktxLocalStateDbPath, loadKtxProject } from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { profileMark } from './startup-profile.js';
 

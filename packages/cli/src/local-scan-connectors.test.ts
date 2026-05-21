@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, loadKtxProject } from '@ktx/context/project';
+import { initKtxProject, loadKtxProject } from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 
@@ -12,7 +12,7 @@ const bigQueryMock = vi.hoisted(() => ({
   }>,
 }));
 
-vi.mock('@ktx/connector-bigquery', () => ({
+vi.mock('./connectors/bigquery/index.js', () => ({
   isKtxBigQueryConnectionConfig: (connection: { driver?: unknown } | undefined) =>
     String(connection?.driver ?? '').toLowerCase() === 'bigquery',
   KtxBigQueryScanConnector: class {

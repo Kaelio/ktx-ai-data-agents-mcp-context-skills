@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadKtxProject } from '@ktx/context/project';
+import { loadKtxProject } from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 

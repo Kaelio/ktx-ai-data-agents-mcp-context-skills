@@ -8,8 +8,8 @@ import {
   type LocalMetabaseFanoutProgress,
   type RunLocalIngestOptions,
   type SourceAdapter,
-} from '@ktx/context/ingest';
-import { initKtxProject, ktxLocalStateDbPath, loadKtxProject } from '@ktx/context/project';
+} from './context/ingest/index.js';
+import { initKtxProject, ktxLocalStateDbPath, loadKtxProject } from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type KtxIngestArgs, type KtxIngestDeps, runKtxIngest } from './ingest.js';
 import type { KtxCliLocalIngestAdaptersOptions } from './local-adapters.js';

@@ -1,5 +1,5 @@
 /* @jsxImportSource react */
-import type { MemoryFlowReplayInput } from '@ktx/context/ingest';
+import type { MemoryFlowReplayInput } from './context/ingest/index.js';
 import { render as renderInkTest } from 'ink-testing-library';
 import React, { type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';

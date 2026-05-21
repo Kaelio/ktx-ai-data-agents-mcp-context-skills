@@ -1,5 +1,5 @@
-import type { KtxLocalProject } from '@ktx/context/project';
-import { createKtxConnectorCapabilities, type KtxScanConnector } from '@ktx/context/scan';
+import type { KtxLocalProject } from './context/project/index.js';
+import { createKtxConnectorCapabilities, type KtxScanConnector } from './context/scan/index.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 

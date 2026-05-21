@@ -50,7 +50,7 @@ export function registerAdminCommands(program: Command, context: KtxCliCommandCo
     .description('Print a JSON Schema describing ktx.yaml (for editors and LLM agents)')
     .option('--output <file>', 'Write the schema to a file instead of stdout')
     .action(async (options: { output?: string }) => {
-      const { generateKtxProjectConfigJsonSchema } = await import('@ktx/context/project');
+      const { generateKtxProjectConfigJsonSchema } = await import('./context/project/index.js');
       const json = `${JSON.stringify(generateKtxProjectConfigJsonSchema(), null, 2)}\n`;
       if (options.output) {
         const { writeFile } = await import('node:fs/promises');

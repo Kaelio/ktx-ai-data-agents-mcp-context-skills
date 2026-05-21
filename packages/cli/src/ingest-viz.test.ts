@@ -5,7 +5,7 @@ import {
   type LocalIngestResult,
   type MemoryFlowReplayInput,
   type RunLocalIngestOptions,
-} from '@ktx/context/ingest';
+} from './context/ingest/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxIngest } from './ingest.js';
 import {

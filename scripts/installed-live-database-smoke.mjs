@@ -263,8 +263,7 @@ async function assertPathExists(path, label) {
 }
 
 async function prepareCleanInstall(layout, cleanInstallDir) {
-  await assertPathExists(layout.contextTarball, '@ktx/context tarball');
-  await assertPathExists(layout.cliTarball, '@ktx/cli tarball');
+  await assertPathExists(layout.cliTarball, 'CLI tarball');
   await mkdir(cleanInstallDir, { recursive: true });
   await writeFile(join(cleanInstallDir, 'package.json'), `${JSON.stringify(npmSmokePackageJson(layout), null, 2)}\n`);
   await writeFile(join(cleanInstallDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());

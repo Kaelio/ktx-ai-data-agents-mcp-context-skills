@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import Database from 'better-sqlite3';
-import { initKtxProject } from '@ktx/context/project';
+import { initKtxProject } from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxSl } from './sl.js';
 

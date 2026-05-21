@@ -4,7 +4,7 @@ import { access, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import type { KtxConfigIssue } from '@ktx/context/project';
+import type { KtxConfigIssue } from './context/project/index.js';
 import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 import type { BuildProjectStatusOptions } from './status-project.js';
 
@@ -593,7 +593,7 @@ export async function runKtxDoctor(
         renderMissingProjectMessage(args.projectDir, args.outputMode, io);
         return 1;
       }
-      const { validateKtxProjectConfig } = await import('@ktx/context/project');
+      const { validateKtxProjectConfig } = await import('./context/project/index.js');
       const rawConfig = await readFile(configPath, 'utf-8');
       const validation = validateKtxProjectConfig(rawConfig);
       if (!validation.ok) {
@@ -610,7 +610,7 @@ export async function runKtxDoctor(
         renderMissingProjectMessage(args.projectDir, args.outputMode, io);
         return 1;
       }
-      const { loadKtxProject, validateKtxProjectConfig } = await import('@ktx/context/project');
+      const { loadKtxProject, validateKtxProjectConfig } = await import('./context/project/index.js');
       const { buildProjectStatus, renderProjectStatus } = await import('./status-project.js');
       const rawConfig = await readFile(configPath, 'utf-8');
       const validation = validateKtxProjectConfig(rawConfig);

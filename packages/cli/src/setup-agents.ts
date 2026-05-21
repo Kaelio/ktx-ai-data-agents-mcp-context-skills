@@ -9,7 +9,7 @@ import {
   loadKtxProject,
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import { strToU8, zipSync } from 'fflate';
 import type { KtxCliIo } from './cli-runtime.js';
 import {

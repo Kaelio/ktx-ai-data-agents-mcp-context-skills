@@ -1,9 +1,9 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { LookerClient, MetabaseRuntimeClient, NotionClient } from '@ktx/context/ingest';
-import { initKtxProject, parseKtxProjectConfig, serializeKtxProjectConfig } from '@ktx/context/project';
-import type { KtxConnectionDriver, KtxScanConnector } from '@ktx/context/scan';
+import type { LookerClient, MetabaseRuntimeClient, NotionClient } from './context/ingest/index.js';
+import { initKtxProject, parseKtxProjectConfig, serializeKtxProjectConfig } from './context/project/index.js';
+import type { KtxConnectionDriver, KtxScanConnector } from './context/scan/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxConnection } from './connection.js';
 

@@ -20,7 +20,6 @@ const requirePackageJson = createRequire(import.meta.url);
 export interface KtxCliPackageInfo {
   name: string;
   version: string;
-  contextPackageName: '@ktx/context';
 }
 
 export interface KtxCliIo {
@@ -67,12 +66,11 @@ export function packageInfoFromJson(packageJson: unknown): KtxCliPackageInfo {
   return {
     name: packageJson.name,
     version: assertCliVersion(packageJson.version, `${packageJson.name}/package.json`),
-    contextPackageName: '@ktx/context',
   };
 }
 
 async function runInit(args: { projectDir: string; force: boolean }, io: KtxCliIo): Promise<number> {
-  const { initKtxProject } = await import('@ktx/context/project');
+  const { initKtxProject } = await import('./context/project/index.js');
   const result = await initKtxProject({
     projectDir: args.projectDir,
     force: args.force,

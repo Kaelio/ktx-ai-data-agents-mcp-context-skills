@@ -1,5 +1,5 @@
 /* @jsxImportSource react */
-import type { MemoryFlowEvent, MemoryFlowReplayInput } from '@ktx/context/ingest/memory-flow';
+import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/memory-flow/index.js';
 import { Box, Text } from 'ink';
 import { type ReactNode } from 'react';
 import { buildDemoMetrics, formatCost, formatDuration } from './demo-metrics.js';

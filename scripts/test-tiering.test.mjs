@@ -33,41 +33,36 @@ describe('test tiering', () => {
   ];
 
   const contextSlowTests = [
-    'src/scan/local-scan.test.ts',
-    'src/mcp/local-project-ports.test.ts',
-    'src/ingest/local-stage-ingest.test.ts',
-    'src/sl/pglite-sl-search-prototype.test.ts',
-    'src/core/git.service.test.ts',
-    'src/ingest/local-adapters.test.ts',
-    'src/ingest/local-bundle-ingest.test.ts',
-    'src/ingest/local-metabase-ingest.test.ts',
-    'src/sl/local-sl.test.ts',
-    'src/search/pglite-owner-process.test.ts',
-    'src/scan/local-enrichment-artifacts.test.ts',
-    'src/search/pglite-spike.test.ts',
-    'src/wiki/local-knowledge.test.ts',
-    'src/sl/local-query.test.ts',
-    'src/scan/relationship-review-decisions.test.ts',
-    'src/scan/relationship-profiling.test.ts',
+    'src/context/scan/local-scan.test.ts',
+    'src/context/mcp/local-project-ports.test.ts',
+    'src/context/ingest/local-stage-ingest.test.ts',
+    'src/context/sl/pglite-sl-search-prototype.test.ts',
+    'src/context/core/git.service.test.ts',
+    'src/context/ingest/local-adapters.test.ts',
+    'src/context/ingest/local-bundle-ingest.test.ts',
+    'src/context/ingest/local-metabase-ingest.test.ts',
+    'src/context/sl/local-sl.test.ts',
+    'src/context/search/pglite-owner-process.test.ts',
+    'src/context/scan/local-enrichment-artifacts.test.ts',
+    'src/context/search/pglite-spike.test.ts',
+    'src/context/wiki/local-knowledge.test.ts',
+    'src/context/sl/local-query.test.ts',
+    'src/context/scan/relationship-review-decisions.test.ts',
+    'src/context/scan/relationship-profiling.test.ts',
   ];
 
   it('keeps slow package tests out of default local package test scripts', async () => {
     const cliPackage = await readJson('../packages/cli/package.json');
-    const contextPackage = await readJson('../packages/context/package.json');
-
     assertScriptContainsAll(cliPackage.scripts.test, cliSlowTests.map((file) => `--exclude ${file}`));
-    assertScriptContainsAll(contextPackage.scripts.test, contextSlowTests.map((file) => `--exclude ${file}`));
-    assert.match(contextPackage.scripts.test, /--exclude src\/scan\/relationship-benchmarks\.test\.ts/);
+    assertScriptContainsAll(cliPackage.scripts.test, contextSlowTests.map((file) => `--exclude ${file}`));
   });
 
   it('provides explicit slow package test scripts for CI', async () => {
     const rootPackage = await readJson('../package.json');
     const cliPackage = await readJson('../packages/cli/package.json');
-    const contextPackage = await readJson('../packages/context/package.json');
-
-    assert.equal(rootPackage.scripts['test:slow'], 'pnpm --filter @ktx/context run test:slow && pnpm --filter @ktx/cli run test:slow');
+    assert.equal(rootPackage.scripts['test:slow'], 'pnpm --filter @ktx/cli run test:slow');
     assertScriptContainsAll(cliPackage.scripts['test:slow'], cliSlowTests);
-    assertScriptContainsAll(contextPackage.scripts['test:slow'], contextSlowTests);
-    assert.doesNotMatch(contextPackage.scripts['test:slow'], /relationship-benchmarks\.test\.ts/);
+    assertScriptContainsAll(cliPackage.scripts['test:slow'], contextSlowTests);
+    assert.doesNotMatch(cliPackage.scripts['test:slow'], /relationship-benchmarks\.test\.ts/);
   });
 });

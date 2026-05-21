@@ -2,7 +2,7 @@ import type {
   KtxProjectConfig,
   KtxProjectConnectionConfig,
   KtxProjectEmbeddingConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import type { KtxRuntimeFeature } from './managed-python-runtime.js';
 import type { KtxPublicIngestPlan } from './public-ingest.js';
 

@@ -144,18 +144,13 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(orbitConfig, legacyPublicAdapter);
   });
 
-  it('lists every workspace package in the contributor docs', async () => {
+  it('lists the consolidated workspace layout in the contributor docs', async () => {
     const contributing = await readText('docs-site/content/docs/community/contributing.mdx');
 
-    assert.match(contributing, /cli\/\s+# CLI entry point/);
-    assert.match(contributing, /context\/\s+# Core context engine/);
-    assert.match(contributing, /llm\/\s+# LLM client abstraction/);
-    assert.match(contributing, /connector-bigquery\/\s+# BigQuery connector/);
-    assert.match(contributing, /connector-mysql\/\s+# MySQL connector/);
-    assert.match(contributing, /connector-postgres\/\s+# PostgreSQL connector/);
-    assert.match(contributing, /connector-snowflake\/\s+# Snowflake connector/);
-    assert.match(contributing, /connector-sqlite\/\s+# SQLite connector/);
-    assert.match(contributing, /connector-sqlserver\/\s+# SQL Server connector/);
+    assert.match(contributing, /cli\/\s+# CLI package and published npm package source/);
+    assert.match(contributing, /src\/context\/\s+# Core context engine/);
+    assert.match(contributing, /src\/llm\/\s+# LLM client abstraction/);
+    assert.match(contributing, /src\/connectors\/\s+# Database connectors/);
     assert.match(contributing, /ktx-sl\/\s+# Semantic layer/);
     assert.match(contributing, /ktx-daemon\/\s+# Daemon/);
   });

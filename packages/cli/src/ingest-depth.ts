@@ -1,4 +1,4 @@
-import type { KtxProjectConfig, KtxProjectConnectionConfig } from '@ktx/context/project';
+import type { KtxProjectConfig, KtxProjectConnectionConfig } from './context/project/index.js';
 
 export type KtxDatabaseContextDepth = 'fast' | 'deep';
 

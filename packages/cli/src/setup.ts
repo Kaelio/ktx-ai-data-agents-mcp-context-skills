@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
-import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from '@ktx/context/ingest';
+import { getLatestLocalIngestStatus, savedMemoryCountsForReport } from './context/ingest/index.js';
 import {
   ktxLocalStateDbPath,
   loadKtxProject,
   readKtxSetupState,
   type KtxLocalProject,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { formatSetupNextStepLines } from './next-steps.js';
 import { runtimeInstallPolicyFromFlags } from './managed-python-command.js';

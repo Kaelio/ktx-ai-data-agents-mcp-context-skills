@@ -7,7 +7,7 @@ import {
   type MemoryFlowInteractionCommand,
   type MemoryFlowInteractionState,
   type MemoryFlowReplayInput,
-} from '@ktx/context/ingest';
+} from './context/ingest/index.js';
 
 interface KtxMemoryFlowKey {
   name?: string;

@@ -25,15 +25,6 @@ export {
 };
 
 export const INTERNAL_NPM_WORKSPACE_PACKAGES = [
-  { name: '@ktx/context', packageRoot: 'packages/context' },
-  { name: '@ktx/llm', packageRoot: 'packages/llm' },
-  { name: '@ktx/connector-bigquery', packageRoot: 'packages/connector-bigquery' },
-  { name: '@ktx/connector-clickhouse', packageRoot: 'packages/connector-clickhouse' },
-  { name: '@ktx/connector-mysql', packageRoot: 'packages/connector-mysql' },
-  { name: '@ktx/connector-postgres', packageRoot: 'packages/connector-postgres' },
-  { name: '@ktx/connector-snowflake', packageRoot: 'packages/connector-snowflake' },
-  { name: '@ktx/connector-sqlite', packageRoot: 'packages/connector-sqlite' },
-  { name: '@ktx/connector-sqlserver', packageRoot: 'packages/connector-sqlserver' },
   { name: '@ktx/cli', packageRoot: 'packages/cli' },
 ];
 
@@ -81,14 +72,11 @@ export function packageArtifactLayout(rootDir = scriptRootDir(), version = publi
 }
 
 export function buildArtifactCommands(layout) {
-  // One recursive pnpm invocation; topology comes from workspace deps in
-  // each package.json, parallelism from --workspace-concurrency.
   const npmBuildCommand = {
     command: 'pnpm',
     args: [
       '--filter',
-      './packages/*',
-      '--workspace-concurrency=10',
+      '@ktx/cli',
       'run',
       'build',
     ],

@@ -1,4 +1,4 @@
-import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
+import { loadKtxProject, type KtxLocalProject } from './context/project/index.js';
 
 export interface LoadKtxCliProjectOptions {
   projectDir: string;

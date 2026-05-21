@@ -1,4 +1,4 @@
-import type { KtxProgressPort, KtxProgressUpdateOptions } from '@ktx/context/scan';
+import type { KtxProgressPort, KtxProgressUpdateOptions } from './context/scan/index.js';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestProgressUpdate } from './ingest.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';

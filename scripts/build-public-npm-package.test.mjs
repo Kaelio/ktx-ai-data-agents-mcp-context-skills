@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import {
-  PUBLIC_BUNDLED_WORKSPACE_PACKAGES,
   PUBLIC_NPM_PACKAGE_NAME,
   PUBLIC_NPM_PACKAGE_VERSION,
   collectPublicDependencies,
@@ -56,8 +55,9 @@ async function writeWorkspaceFixture(root) {
       files: ['dist', 'assets'],
       dependencies: {
         '@clack/prompts': '1.3.0',
-        '@ktx/context': 'workspace:*',
+        ai: '^6.0.168',
         commander: '14.0.3',
+        yaml: '^2.8.2',
       },
       license: 'Apache-2.0',
       repository: {
@@ -74,68 +74,6 @@ async function writeWorkspaceFixture(root) {
     },
   );
 
-  await writePackage(
-    root,
-    'packages/context',
-    {
-      name: '@ktx/context',
-      version: '0.0.0-private',
-      type: 'module',
-      main: 'dist/index.js',
-      exports: { '.': './dist/index.js' },
-      files: ['dist', 'prompts', 'skills'],
-      dependencies: {
-        '@ktx/llm': 'workspace:*',
-        yaml: '^2.8.2',
-      },
-    },
-    {
-      'dist/index.js': 'export const context = true;\n',
-      'prompts/system.md': 'prompt\n',
-      'skills/sl/SKILL.md': 'skill\n',
-    },
-  );
-
-  await writePackage(
-    root,
-    'packages/llm',
-    {
-      name: '@ktx/llm',
-      version: '0.0.0-private',
-      type: 'module',
-      main: 'dist/index.js',
-      exports: { '.': './dist/index.js' },
-      files: ['dist'],
-      dependencies: {
-        ai: '^6.0.168',
-      },
-    },
-    {
-      'dist/index.js': 'export const llm = true;\n',
-    },
-  );
-
-  for (const packageName of PUBLIC_BUNDLED_WORKSPACE_PACKAGES.filter((name) => name.startsWith('@ktx/connector-'))) {
-    const directory = packageName.replace('@ktx/', '');
-    await writePackage(
-      root,
-      `packages/${directory}`,
-      {
-        name: packageName,
-        version: '0.0.0-private',
-        type: 'module',
-        main: 'dist/index.js',
-        exports: { '.': './dist/index.js' },
-        files: ['dist'],
-        dependencies: {
-          '@ktx/context': 'workspace:*',
-        },
-      },
-      {
-        'dist/index.js': `export const name = ${JSON.stringify(packageName)};\n`,
-      },
-    );
-  }
 }
 
 describe('publicNpmPackageLayout', () => {
@@ -152,51 +90,25 @@ describe('publicNpmPackageLayout', () => {
 });
 
 describe('collectPublicDependencies', () => {
-  it('unions external runtime dependencies and omits workspace packages', () => {
+  it('returns CLI external runtime dependencies and omits workspace packages', () => {
     assert.deepEqual(
-      collectPublicDependencies([
-        {
-          name: '@ktx/cli',
-          dependencies: {
-            '@ktx/context': 'workspace:*',
-            commander: '14.0.3',
-            zod: '^4.4.3',
-          },
+      collectPublicDependencies({
+        name: '@ktx/cli',
+        dependencies: {
+          '@ktx/internal-only': 'workspace:*',
+          commander: '14.0.3',
+          zod: '^4.4.3',
         },
-        {
-          name: '@ktx/context',
-          dependencies: {
-            '@ktx/llm': 'workspace:*',
-            commander: '14.0.3',
-            yaml: '^2.8.2',
-            zod: '^4.1.13',
-          },
-        },
-      ]),
+      }),
       {
         commander: '14.0.3',
-        yaml: '^2.8.2',
         zod: '^4.4.3',
       },
-    );
-  });
-
-  it('fails on incompatible external dependency ranges', () => {
-    assert.throws(
-      () =>
-        collectPublicDependencies([
-          { name: '@ktx/cli', dependencies: { zod: '^4.4.3' } },
-          { name: '@ktx/context', dependencies: { zod: '^3.25.0' } },
-        ]),
-      /Incompatible dependency versions for zod/,
     );
   });
 });
 
 describe('publicNpmPackageJson', () => {
-  it('does not bundle the removed PostHog connector package', () => {
-    assert.equal(PUBLIC_BUNDLED_WORKSPACE_PACKAGES.includes('@ktx/connector-posthog'), false);
-  });
 
   it('describes the public @kaelio/ktx binary package', () => {
     const packageJson = publicNpmPackageJson(
@@ -218,7 +130,6 @@ describe('publicNpmPackageJson', () => {
     assert.equal(packageJson.private, false);
     assert.deepEqual(packageJson.bin, { ktx: './dist/bin.js' });
     assert.deepEqual(packageJson.dependencies, { commander: '14.0.3' });
-    assert.deepEqual(packageJson.bundledDependencies, PUBLIC_BUNDLED_WORKSPACE_PACKAGES);
     assert.deepEqual(packageJson.files, ['dist', 'assets']);
     assert.deepEqual(packageJson.repository, {
       type: 'git',
@@ -232,7 +143,7 @@ describe('publicNpmPackageJson', () => {
 });
 
 describe('createPublicNpmPackageTree', () => {
-  it('copies CLI files, assets, and bundled internal workspace packages', async () => {
+  it('copies CLI files and assets without bundled internal workspace packages', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-public-npm-test-'));
     try {
       await writeWorkspaceFixture(root);
@@ -248,20 +159,10 @@ describe('createPublicNpmPackageTree', () => {
         await readFile(join(layout.packRoot, 'assets', 'python', 'manifest.json'), 'utf8'),
         '{"schemaVersion":1}\n',
       );
-      assert.equal(
-        await readFile(join(layout.packRoot, 'node_modules', '@ktx', 'context', 'dist', 'index.js'), 'utf8'),
-        'export const context = true;\n',
+      await assert.rejects(
+        () => readFile(join(layout.packRoot, 'node_modules', '@ktx', 'context', 'package.json'), 'utf8'),
+        /ENOENT/,
       );
-      assert.equal(
-        await readFile(join(layout.packRoot, 'node_modules', '@ktx', 'context', 'prompts', 'system.md'), 'utf8'),
-        'prompt\n',
-      );
-
-      const bundledContextJson = JSON.parse(
-        await readFile(join(layout.packRoot, 'node_modules', '@ktx', 'context', 'package.json'), 'utf8'),
-      );
-      assert.equal(bundledContextJson.private, true);
-      assert.equal(bundledContextJson.dependencies, undefined);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

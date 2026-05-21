@@ -22,8 +22,8 @@ documentation, connector coverage, and examples.
 | Area | Good first context |
 |------|--------------------|
 | CLI and setup | `packages/cli`, especially setup steps, command definitions, status checks, and smoke tests |
-| Context engine | `packages/context`, including project config, ingest orchestration, and semantic search |
-| Connectors | `packages/connector-*`, plus connector-specific tests and integration docs |
+| Context engine | `packages/cli/src/context`, including project config, ingest orchestration, and semantic search |
+| Connectors | `packages/cli/src/connectors/<driver>`, plus connector-specific tests and integration docs |
 | Python semantic layer | `python/ktx-sl` for planning and SQL compilation |
 | **ktx** daemon | `python/ktx-daemon` for the portable runtime API |
 | Documentation | `docs-site/content/docs` for public docs and `docs-site/tests` for docs behavior |
@@ -50,7 +50,7 @@ pnpm install
 uv sync --all-groups
 ```
 
-`pnpm install` sets up all TypeScript packages in the workspace.
+`pnpm install` sets up the TypeScript workspace.
 `uv sync --all-groups` installs Python dependencies for the semantic layer and
 daemon, including dev and test groups.
 
@@ -60,11 +60,10 @@ daemon, including dev and test groups.
 pnpm run build
 ```
 
-This builds all TypeScript packages. You can also build individual packages:
+This builds the TypeScript package. You can also build the package directly:
 
 ```bash
 pnpm --filter @ktx/cli run build
-pnpm --filter @ktx/context run build
 ```
 
 ### Link the CLI for local testing
@@ -80,21 +79,15 @@ changes.
 
 ## Repository structure
 
-**ktx** is a pnpm + uv workspace. TypeScript packages live in `packages/`, Python
-projects in `python/`.
+**ktx** is a pnpm + uv workspace. TypeScript source lives in `packages/cli`,
+and Python projects live in `python/`.
 
 ```text
 packages/
-  cli/                  # CLI entry point and commands
-  context/              # Core context engine (scan, ingest, MCP, semantic layer)
-  llm/                  # LLM client abstraction
-  connector-postgres/   # PostgreSQL connector
-  connector-snowflake/  # Snowflake connector
-  connector-bigquery/   # BigQuery connector
-  connector-mysql/      # MySQL connector
-  connector-sqlserver/  # SQL Server connector
-  connector-sqlite/     # SQLite connector
-  connector-posthog/    # PostHog connector
+  cli/                  # CLI package and published npm package source
+    src/context/        # Core context engine (scan, ingest, MCP, semantic layer)
+    src/llm/            # LLM client abstraction
+    src/connectors/     # Database connectors
 
 python/
   ktx-sl/               # Semantic layer - grain-aware query planning and SQL compilation
@@ -105,7 +98,7 @@ scripts/                # Workspace scripts (benchmarks, verification, release)
 docs-site/              # Documentation site (Fumadocs)
 ```
 
-All TypeScript packages are ESM (`"type": "module"`) and use `NodeNext` module
+The TypeScript package is ESM (`"type": "module"`) and uses `NodeNext` module
 resolution. The Python projects use `pyproject.toml` for dependency management.
 
 ## Running tests
@@ -116,15 +109,14 @@ resolution. The Python projects use `pyproject.toml` for dependency management.
 # Run all tests
 pnpm run test
 
-# Run tests for a specific package
+# Run tests for the TypeScript package
 pnpm --filter @ktx/cli run test
-pnpm --filter @ktx/context run test
 
 # Type-check all packages
 pnpm run type-check
 
-# Type-check a specific package
-pnpm --filter @ktx/context run type-check
+# Type-check the TypeScript package
+pnpm --filter @ktx/cli run type-check
 
 # CLI smoke test
 pnpm --filter @ktx/cli run smoke
@@ -164,43 +156,22 @@ uv run pytest -q
 
 ## Adding a connector
 
-Database connectors live in `packages/connector-<name>/`. Each connector
-implements the `KtxScanConnector` interface from `@ktx/context`.
+Database connectors live in `packages/cli/src/connectors/<name>/`. Each
+connector implements the `KtxScanConnector` interface from the internal context
+modules.
 
-### Step 1: Scaffold the package
+### Step 1: Scaffold the connector
 
-Create a new directory at `packages/connector-<name>/` with:
+Create a new directory at `packages/cli/src/connectors/<name>/` with:
 
 ```text
-packages/connector-<name>/
-  package.json
-  tsconfig.json
-  src/
-    index.ts          # Public exports
-    connector.ts      # KtxScanConnector implementation
-    dialect.ts        # SQL dialect handling
+packages/cli/src/connectors/<name>/
+  index.ts          # Internal connector exports
+  connector.ts      # KtxScanConnector implementation
+  dialect.ts        # SQL dialect handling
 ```
 
-The `package.json` should follow the pattern of existing connectors:
-
-```json
-{
-  "name": "@ktx/connector-<name>",
-  "private": true,
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "dependencies": {
-    "@ktx/context": "workspace:*"
-  }
-}
-```
+Add any driver-specific npm dependency to `packages/cli/package.json`.
 
 ### Step 2: Implement the connector
 
@@ -226,20 +197,20 @@ and statistics.
 
 ### Step 4: Wire it up
 
-Register the new connector in `packages/context` so the CLI and scan
-engine can instantiate it. Look at how existing connectors are registered for
-the pattern.
+Register the new connector in `packages/cli/src/local-scan-connectors.ts` and
+`packages/cli/src/local-adapters.ts` so the CLI and scan engine can instantiate
+it. Keep runtime loading dynamic when the driver is optional.
 
 ### Step 5: Test
 
 ```bash
-pnpm --filter @ktx/connector-<name> run build
-pnpm --filter @ktx/connector-<name> run type-check
-pnpm --filter @ktx/connector-<name> run test
+pnpm --filter @ktx/cli run build
+pnpm --filter @ktx/cli run type-check
+pnpm --filter @ktx/cli run test
 ```
 
-Use `packages/connector-sqlite/` as a minimal reference and
-`packages/connector-postgres/` as a full-featured one.
+Use `packages/cli/src/connectors/sqlite/` as a minimal reference and
+`packages/cli/src/connectors/postgres/` as a full-featured one.
 
 ## Code conventions
 

@@ -1,13 +1,13 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { SourceAdapter } from '@ktx/context/ingest';
-import { initKtxProject } from '@ktx/context/project';
+import type { SourceAdapter } from './context/ingest/index.js';
+import { initKtxProject } from './context/project/index.js';
 import type {
   KtxScanReport,
   LocalScanRunResult,
   RunLocalScanOptions,
-} from '@ktx/context/scan';
+} from './context/scan/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCliScanProgress, runKtxScan, type KtxScanDeps } from './scan.js';
 
@@ -138,25 +138,25 @@ const KtxPostgresScanConnector = vi.hoisted(
     },
 );
 
-vi.mock('@ktx/connector-sqlserver', () => ({
+vi.mock('./connectors/sqlserver/index.js', () => ({
   createSqlServerLiveDatabaseIntrospection,
   isKtxSqlServerConnectionConfig,
   KtxSqlServerScanConnector,
 }));
 
-vi.mock('@ktx/connector-bigquery', () => ({
+vi.mock('./connectors/bigquery/index.js', () => ({
   createBigQueryLiveDatabaseIntrospection,
   isKtxBigQueryConnectionConfig,
   KtxBigQueryScanConnector,
 }));
 
-vi.mock('@ktx/connector-snowflake', () => ({
+vi.mock('./connectors/snowflake/index.js', () => ({
   createSnowflakeLiveDatabaseIntrospection,
   isKtxSnowflakeConnectionConfig,
   KtxSnowflakeScanConnector,
 }));
 
-vi.mock('@ktx/connector-postgres', () => ({
+vi.mock('./connectors/postgres/index.js', () => ({
   createPostgresLiveDatabaseIntrospection,
   isKtxPostgresConnectionConfig,
   KtxPostgresScanConnector,

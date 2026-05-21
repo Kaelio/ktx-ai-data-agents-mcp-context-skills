@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetupState } from '@ktx/context/project';
+import { initKtxProject, parseKtxProjectConfig, readKtxSetupState, writeKtxSetupState } from './context/project/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type KtxSetupEmbeddingsPromptAdapter, runKtxSetupEmbeddingsStep } from './setup-embeddings.js';
 

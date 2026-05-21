@@ -112,14 +112,14 @@ describe('packageArtifactLayout', () => {
 });
 
 describe('buildArtifactCommands', () => {
-  it('builds TypeScript packages in parallel topology, then the runtime wheel, then packs npm artifacts', () => {
+  it('builds the CLI package, then the runtime wheel, then packs npm artifacts', () => {
     const layout = packageArtifactLayout('/repo/ktx', PUBLIC_NPM_PACKAGE_VERSION);
     const commands = buildArtifactCommands(layout);
 
     assert.deepEqual(
       commands.map((command) => [command.command, command.args]),
       [
-        ['pnpm', ['--filter', './packages/*', '--workspace-concurrency=10', 'run', 'build']],
+        ['pnpm', ['--filter', '@ktx/cli', 'run', 'build']],
         [process.execPath, ['scripts/build-python-runtime-wheel.mjs']],
         [process.execPath, ['scripts/build-public-npm-package.mjs']],
       ],

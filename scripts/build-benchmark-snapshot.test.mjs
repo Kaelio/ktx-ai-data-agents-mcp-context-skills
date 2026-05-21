@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
 import { buildBenchmarkSnapshot } from './build-benchmark-snapshot.mjs';
 
-const require = createRequire(new URL('../packages/context/package.json', import.meta.url));
+const require = createRequire(new URL('../packages/cli/package.json', import.meta.url));
 const Database = require('better-sqlite3');
 
 describe('buildBenchmarkSnapshot', () => {
@@ -252,12 +252,12 @@ describe('buildBenchmarkSnapshot', () => {
     ]);
   });
 
-  it('exposes relationship benchmarks as an explicit context package script', async () => {
-    const packageJson = JSON.parse(await readFile(new URL('../packages/context/package.json', import.meta.url), 'utf8'));
+  it('exposes relationship benchmarks as an explicit CLI package script', async () => {
+    const packageJson = JSON.parse(await readFile(new URL('../packages/cli/package.json', import.meta.url), 'utf8'));
 
     assert.equal(
       packageJson.scripts['relationships:benchmarks:test'],
-      'KTX_RUN_RELATIONSHIP_BENCHMARKS=1 vitest run src/scan/relationship-benchmarks.test.ts',
+      'KTX_RUN_RELATIONSHIP_BENCHMARKS=1 vitest run src/context/scan/relationship-benchmarks.test.ts',
     );
   });
 });

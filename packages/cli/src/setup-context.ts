@@ -7,7 +7,7 @@ import {
   markKtxSetupStateStepComplete,
   readKtxSetupState,
   serializeKtxProjectConfig,
-} from '@ktx/context/project';
+} from './context/project/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
 import {

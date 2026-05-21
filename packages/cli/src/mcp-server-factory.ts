@@ -1,7 +1,7 @@
-import { KtxIngestEmbeddingPortAdapter } from '@ktx/context';
-import { createDefaultKtxMcpServer, createLocalProjectMcpContextPorts } from '@ktx/context/mcp';
-import { createLocalProjectMemoryIngest } from '@ktx/context/memory';
-import type { KtxLocalProject } from '@ktx/context/project';
+import { KtxIngestEmbeddingPortAdapter } from './context/index.js';
+import { createDefaultKtxMcpServer, createLocalProjectMcpContextPorts } from './context/mcp/index.js';
+import { createLocalProjectMemoryIngest } from './context/memory/index.js';
+import type { KtxLocalProject } from './context/project/index.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';

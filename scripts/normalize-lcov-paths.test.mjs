@@ -8,11 +8,11 @@ describe('normalizeLcovContent', () => {
     const input = ['TN:', 'SF:src/index.ts', 'SF:src\\windows.ts', 'DA:1,1', 'end_of_record'].join('\n');
 
     assert.equal(
-      normalizeLcovContent(input, 'packages/context'),
+      normalizeLcovContent(input, 'packages/cli'),
       [
         'TN:',
-        'SF:packages/context/src/index.ts',
-        'SF:packages/context/src/windows.ts',
+        'SF:packages/cli/src/index.ts',
+        'SF:packages/cli/src/windows.ts',
         'DA:1,1',
         'end_of_record',
       ].join('\n'),

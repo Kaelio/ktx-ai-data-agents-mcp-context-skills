@@ -20,30 +20,6 @@ export function publicNpmPackageTarballName(version = PUBLIC_NPM_PACKAGE_VERSION
   return `kaelio-ktx-${version}.tgz`;
 }
 
-export const PUBLIC_BUNDLED_WORKSPACE_PACKAGES = [
-  '@ktx/llm',
-  '@ktx/context',
-  '@ktx/connector-bigquery',
-  '@ktx/connector-clickhouse',
-  '@ktx/connector-mysql',
-  '@ktx/connector-postgres',
-  '@ktx/connector-snowflake',
-  '@ktx/connector-sqlite',
-  '@ktx/connector-sqlserver',
-];
-
-export const PUBLIC_BUNDLED_WORKSPACE_PACKAGE_ROOTS = {
-  '@ktx/llm': 'packages/llm',
-  '@ktx/context': 'packages/context',
-  '@ktx/connector-bigquery': 'packages/connector-bigquery',
-  '@ktx/connector-clickhouse': 'packages/connector-clickhouse',
-  '@ktx/connector-mysql': 'packages/connector-mysql',
-  '@ktx/connector-postgres': 'packages/connector-postgres',
-  '@ktx/connector-snowflake': 'packages/connector-snowflake',
-  '@ktx/connector-sqlite': 'packages/connector-sqlite',
-  '@ktx/connector-sqlserver': 'packages/connector-sqlserver',
-};
-
 function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
@@ -75,50 +51,10 @@ function isWorkspacePackageName(name) {
   return name.startsWith('@ktx/');
 }
 
-function parseCaretVersion(value) {
-  const match = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(value);
-  if (!match) {
-    return null;
-  }
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-  };
-}
-
-function compareParsedVersions(left, right) {
-  return left.major - right.major || left.minor - right.minor || left.patch - right.patch;
-}
-
-function mergeDependencyVersion(name, previous, next) {
-  if (previous === next) {
-    return previous;
-  }
-
-  const previousCaret = parseCaretVersion(previous);
-  const nextCaret = parseCaretVersion(next);
-  if (previousCaret && nextCaret && previousCaret.major === nextCaret.major) {
-    return compareParsedVersions(previousCaret, nextCaret) >= 0 ? previous : next;
-  }
-
-  throw new Error(`Incompatible dependency versions for ${name}: ${previous} and ${next}`);
-}
-
-export function collectPublicDependencies(packageJsons) {
-  const dependencies = new Map();
-
-  for (const packageJson of packageJsons) {
-    for (const [name, version] of Object.entries(packageJson.dependencies ?? {})) {
-      if (isWorkspacePackageName(name)) {
-        continue;
-      }
-      const previous = dependencies.get(name);
-      dependencies.set(name, previous ? mergeDependencyVersion(name, previous, version) : version);
-    }
-  }
-
-  return sortedObject(dependencies);
+export function collectPublicDependencies(cliPackageJson) {
+  return sortedObject(
+    Object.entries(cliPackageJson.dependencies ?? {}).filter(([name]) => !isWorkspacePackageName(name)),
+  );
 }
 
 export function publicNpmPackageJson(cliPackageJson, dependencies, version = PUBLIC_NPM_PACKAGE_VERSION) {
@@ -142,7 +78,6 @@ export function publicNpmPackageJson(cliPackageJson, dependencies, version = PUB
     },
     files: ['dist', 'assets'],
     dependencies,
-    bundledDependencies: PUBLIC_BUNDLED_WORKSPACE_PACKAGES,
     license: cliPackageJson.license ?? 'Apache-2.0',
     repository: {
       type: 'git',
@@ -152,20 +87,6 @@ export function publicNpmPackageJson(cliPackageJson, dependencies, version = PUB
       url: 'https://github.com/Kaelio/ktx/issues',
     },
     homepage: 'https://github.com/Kaelio/ktx#readme',
-  };
-}
-
-function bundledWorkspacePackageJson(packageJson) {
-  return {
-    name: packageJson.name,
-    version: packageJson.version ?? PUBLIC_NPM_PACKAGE_VERSION,
-    private: true,
-    type: packageJson.type ?? 'module',
-    main: packageJson.main,
-    types: packageJson.types,
-    exports: packageJson.exports,
-    files: packageJson.files,
-    license: packageJson.license ?? 'Apache-2.0',
   };
 }
 
@@ -186,46 +107,18 @@ async function copyCliPackage(layout, cliPackageJson, dependencies) {
   );
 }
 
-async function copyBundledWorkspacePackage(rootDir, packageName, packageJson) {
-  const packageRoot = PUBLIC_BUNDLED_WORKSPACE_PACKAGE_ROOTS[packageName];
-  if (!packageRoot) {
-    throw new Error(`Missing bundled workspace package root for ${packageName}`);
-  }
-
-  const sourceRoot = join(rootDir, packageRoot);
-  const targetRoot = join(rootDir, 'dist', 'public-npm-package', 'node_modules', ...packageName.split('/'));
-  await mkdir(targetRoot, { recursive: true });
-  await copyPackageFileEntries(sourceRoot, targetRoot, packageJson);
-  await writeJson(join(targetRoot, 'package.json'), bundledWorkspacePackageJson(packageJson));
-}
-
 export async function createPublicNpmPackageTree(layout = publicNpmPackageLayout()) {
   const cliPackageJson = await readJson(join(layout.cliPackageRoot, 'package.json'));
-  const bundledPackageJsons = await Promise.all(
-    PUBLIC_BUNDLED_WORKSPACE_PACKAGES.map(async (packageName) => {
-      const packageRoot = PUBLIC_BUNDLED_WORKSPACE_PACKAGE_ROOTS[packageName];
-      const packageJson = await readJson(join(layout.rootDir, packageRoot, 'package.json'));
-      if (packageJson.name !== packageName) {
-        throw new Error(`Unexpected package name in ${packageRoot}/package.json: ${packageJson.name}`);
-      }
-      return packageJson;
-    }),
-  );
-  const dependencies = collectPublicDependencies([cliPackageJson, ...bundledPackageJsons]);
+  const dependencies = collectPublicDependencies(cliPackageJson);
 
   await rm(layout.packRoot, { recursive: true, force: true });
   await mkdir(layout.packRoot, { recursive: true });
   await mkdir(layout.npmDir, { recursive: true });
   await copyCliPackage(layout, cliPackageJson, dependencies);
 
-  for (const packageJson of bundledPackageJsons) {
-    await copyBundledWorkspacePackage(layout.rootDir, packageJson.name, packageJson);
-  }
-
   return {
     layout,
     packageJson: publicNpmPackageJson(cliPackageJson, dependencies, layout.packageVersion),
-    bundledPackages: PUBLIC_BUNDLED_WORKSPACE_PACKAGES,
   };
 }
 

@@ -44,11 +44,13 @@
     "test:coverage": "pnpm run test:coverage:ts && pnpm run test:coverage:py",
     "test:coverage:py": "uv run pytest --cov=python/ktx-sl/semantic_layer --cov=python/ktx-daemon/src/ktx_daemon --cov-report=xml:coverage/python.xml --cov-report=term",
     "test:coverage:ts": "pnpm --filter './packages/*' run build && pnpm --filter './packages/*' run test --coverage --coverage.reporter=lcov --coverage.exclude='dist/**' && node scripts/normalize-lcov-paths.mjs packages/*/coverage/lcov.info",
-    "test:slow": "pnpm --filter @ktx/context run test:slow && pnpm --filter @ktx/cli run test:slow",
+    "test:slow": "pnpm --filter @ktx/cli run test:slow",
     "type-check": "pnpm --filter './packages/*' run type-check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
+    "@electric-sql/pglite": "^0.4.5",
+    "@electric-sql/pglite-socket": "^0.1.5",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
@@ -59,6 +61,7 @@
     "better-sqlite3": "^12.10.0",
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "knip": "^6.12.2",
+    "pg": "^8.20.0",
     "semantic-release": "^25.0.3",
     "typescript": "^6.0.3",
     "yaml": "^2.9.0"

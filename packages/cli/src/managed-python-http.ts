@@ -7,12 +7,12 @@ import {
   type KtxDaemonDatabaseHttpJsonRunner,
   type KtxDaemonTableIdentifierHttpJsonRunner,
   type LookerTableIdentifierParser,
-} from '@ktx/context/ingest';
+} from './context/ingest/index.js';
 import {
   createHttpSqlAnalysisPort,
   type KtxSqlAnalysisHttpJsonRunner,
   type SqlAnalysisPort,
-} from '@ktx/context/sql-analysis';
+} from './context/sql-analysis/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
   ensureManagedPythonCommandRuntime,

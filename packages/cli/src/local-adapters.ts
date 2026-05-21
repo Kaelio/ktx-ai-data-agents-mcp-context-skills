@@ -3,17 +3,17 @@ import {
   isKtxBigQueryConnectionConfig,
   KtxBigQueryScanConnector,
   type KtxBigQueryConnectionConfig,
-} from '@ktx/connector-bigquery';
-import { createClickHouseLiveDatabaseIntrospection, isKtxClickHouseConnectionConfig } from '@ktx/connector-clickhouse';
-import { createMysqlLiveDatabaseIntrospection, isKtxMysqlConnectionConfig } from '@ktx/connector-mysql';
+} from './connectors/bigquery/index.js';
+import { createClickHouseLiveDatabaseIntrospection, isKtxClickHouseConnectionConfig } from './connectors/clickhouse/index.js';
+import { createMysqlLiveDatabaseIntrospection, isKtxMysqlConnectionConfig } from './connectors/mysql/index.js';
 import {
   createPostgresLiveDatabaseIntrospection,
   isKtxPostgresConnectionConfig,
   type KtxPostgresConnectionConfig,
   KtxPostgresHistoricSqlQueryClient,
-} from '@ktx/connector-postgres';
-import { createSqliteLiveDatabaseIntrospection, isKtxSqliteConnectionConfig } from '@ktx/connector-sqlite';
-import { createSqlServerLiveDatabaseIntrospection, isKtxSqlServerConnectionConfig } from '@ktx/connector-sqlserver';
+} from './connectors/postgres/index.js';
+import { createSqliteLiveDatabaseIntrospection, isKtxSqliteConnectionConfig } from './connectors/sqlite/index.js';
+import { createSqlServerLiveDatabaseIntrospection, isKtxSqlServerConnectionConfig } from './connectors/sqlserver/index.js';
 import {
   BigQueryHistoricSqlQueryHistoryReader,
   createDaemonLiveDatabaseIntrospection,
@@ -25,9 +25,9 @@ import {
   PostgresPgssReader,
   SnowflakeHistoricSqlQueryHistoryReader,
   type SourceAdapter,
-} from '@ktx/context/ingest';
-import type { KtxLocalProject } from '@ktx/context/project';
-import { createHttpSqlAnalysisPort, type SqlAnalysisPort } from '@ktx/context/sql-analysis';
+} from './context/ingest/index.js';
+import type { KtxLocalProject } from './context/project/index.js';
+import { createHttpSqlAnalysisPort, type SqlAnalysisPort } from './context/sql-analysis/index.js';
 import {
   createManagedDaemonLookerTableIdentifierParser,
   createManagedDaemonSqlAnalysisPort,
@@ -44,7 +44,7 @@ function hasSnowflakeDriver(connection: unknown): boolean {
   );
 }
 
-type SnowflakeConnectorModule = typeof import('@ktx/connector-snowflake');
+type SnowflakeConnectorModule = typeof import('./connectors/snowflake/index.js');
 
 function ktxCliDaemonDatabaseIntrospectionOptions(
   options: KtxCliLocalIngestAdaptersOptions,
@@ -142,7 +142,7 @@ function createKtxCliLiveDatabaseIntrospection(
       }
       if (hasSnowflakeDriver(connection)) {
         const { createSnowflakeLiveDatabaseIntrospection, isKtxSnowflakeConnectionConfig } = await import(
-          '@ktx/connector-snowflake'
+          './connectors/snowflake/index.js'
         );
         if (!isKtxSnowflakeConnectionConfig(connection)) {
           return daemon.extractSchema(connectionId);
@@ -342,7 +342,7 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
     reader: new SnowflakeHistoricSqlQueryHistoryReader() satisfies HistoricSqlReader,
     queryClient: {
       async executeQuery(query: string) {
-        const connectorModule = await import('@ktx/connector-snowflake');
+        const connectorModule = await import('./connectors/snowflake/index.js');
         const client = await createEphemeralSnowflakeHistoricSqlClient(project, connectionId, connectorModule);
         return client.executeQuery(query);
       },
