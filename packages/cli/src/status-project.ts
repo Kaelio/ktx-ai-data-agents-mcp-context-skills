@@ -121,6 +121,7 @@ interface LocalStatsProjectDir {
   semanticLayerYamlCount: number;
 }
 
+/** @internal */
 export interface LocalStatsStatus {
   ingest: {
     totalCompletedRuns: number;
@@ -834,6 +835,7 @@ function tryQuery<T>(run: () => T, fallback: T): T {
   }
 }
 
+/** @internal */
 export async function buildLocalStatsStatus(project: KtxLocalProject): Promise<LocalStatsStatus> {
   const dbPath = ktxLocalStateDbPath(project);
   const dbSqliteBytes = await fileSizeOrNull(dbPath);
