@@ -261,6 +261,16 @@ use `PascalCase` without the suffix.
   source-code identifier, package/API name, or other literal value that must
   match the implementation.
 
+### Terminology
+
+For canonical vocabulary used across docs, code, comments, CLI strings, and
+error messages — including the disambiguation rule for the overloaded word
+`source` (semantic / primary / context / source of truth) — see
+[`docs/terminology.md`](docs/terminology.md). Follow that file when choosing
+between near-synonyms (e.g. `connector` vs `adapter`, `data agent` vs
+`database agent`, `fast ingest` vs `schema ingest`). Product-name rules in
+this section take precedence over anything in that file when they conflict.
+
 ### Updating `docs-site/` After Code Changes
 
 Before finishing a task, decide whether `docs-site/content/docs/` needs an
