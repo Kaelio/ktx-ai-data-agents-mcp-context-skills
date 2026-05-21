@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { initKtxProject } from './context/project/project.js';
+import { initKtxProject, loadKtxProject } from './context/project/project.js';
 import { parseKtxProjectConfig } from './context/project/config.js';
 import { readKtxSetupState, writeKtxSetupState } from './context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -435,15 +435,12 @@ describe('setup databases step', () => {
       {
         driver: 'bigquery',
         selectValues: ['no'],
-        textValues: ['', 'analytics', '/path/to/service-account.json', ''],
+        textValues: ['', '/path/to/service-account.json', ''],
         expectedTextPrompts: [
           {
             message: connectionNamePrompt('BigQuery'),
             placeholder: 'bigquery-warehouse',
             initialValue: 'bigquery-warehouse',
-          },
-          {
-            message: 'BigQuery dataset\nFor example analytics.',
           },
           {
             message: 'Path to service account JSON file',
@@ -1455,6 +1452,88 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
     });
+  });
+
+  it('offers schema scope discovery for MySQL and writes selected schemas', async () => {
+    const prompts = makePromptAdapter({
+      multiselectValues: [['mysql']],
+      selectValues: ['url', 'continue'],
+      textValues: ['mysql-warehouse', 'mysql://reader@localhost/analytics'],
+    });
+    const listSchemas = vi.fn(async () => ['analytics', 'mart']);
+    const listTables = vi.fn(async (_projectDir: string, _connectionId: string, schemas?: string[]) =>
+      (schemas ?? []).map((schema) => ({ schema, name: 'orders', kind: 'table' as const })),
+    );
+    const pickDatabaseScope = vi.fn(async (args: PickDatabaseScopeArgs) => {
+      const scopedArgs = args as PickDatabaseScopeArgs & {
+        schemaSuggestion: { suggested: Set<string> };
+      };
+      expect(args.schemaNoun).toBe('database');
+      expect(args.discovered.map((table) => table.schema)).toEqual(['analytics', 'mart']);
+      expect(scopedArgs.schemaSuggestion.suggested).toEqual(new Set(['analytics', 'mart']));
+      return { kind: 'selected' as const, activeSchemas: ['mart'], enabledTables: ['mart.orders'] };
+    });
+
+    await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      { prompts, testConnection: vi.fn(async () => 0), scanConnection: vi.fn(async () => 0), listSchemas, listTables, pickDatabaseScope },
+    );
+
+    const project = await loadKtxProject({ projectDir: tempDir });
+    expect(project.config.connections['mysql-warehouse']).toMatchObject({
+      driver: 'mysql',
+      schemas: ['mart'],
+      enabled_tables: ['mart.orders'],
+    });
+  });
+
+  it('maps ClickHouse scripted database schema input to databases and preserves database', async () => {
+    await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        skipDatabases: false,
+        databaseDrivers: ['clickhouse'],
+        databaseConnectionId: 'clickhouse-warehouse',
+        databaseUrl: 'clickhouse://reader@localhost/analytics',
+        databaseSchemas: ['analytics', 'mart'],
+      },
+      makeIo().io,
+      { testConnection: vi.fn(async () => 0), scanConnection: vi.fn(async () => 0) },
+    );
+
+    const project = await loadKtxProject({ projectDir: tempDir });
+    expect(project.config.connections['clickhouse-warehouse']).toMatchObject({
+      driver: 'clickhouse',
+      database: 'analytics',
+      databases: ['analytics', 'mart'],
+    });
+    expect(project.config.connections['clickhouse-warehouse']).not.toHaveProperty('schemas');
+  });
+
+  it('does not prompt for a bootstrap BigQuery dataset before scope discovery', async () => {
+    const prompts = makePromptAdapter({
+      multiselectValues: [['bigquery']],
+      selectValues: ['no', 'continue'],
+      textValues: ['bigquery-warehouse', '/tmp/service-account.json', 'US'],
+    });
+    const listSchemas = vi.fn(async () => ['analytics']);
+    const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'orders', kind: 'table' as const }]);
+    const pickDatabaseScope = vi.fn(async () => ({
+      kind: 'selected' as const,
+      activeSchemas: ['analytics'],
+      enabledTables: ['analytics.orders'],
+    }));
+
+    await runKtxSetupDatabasesStep(
+      { projectDir: tempDir, inputMode: 'auto', skipDatabases: false, databaseSchemas: [] },
+      makeIo().io,
+      { prompts, testConnection: vi.fn(async () => 0), scanConnection: vi.fn(async () => 0), listSchemas, listTables, pickDatabaseScope },
+    );
+
+    const textMessages = vi.mocked(prompts.text).mock.calls.map(([options]) => options.message);
+    expect(textMessages).not.toContain(textInputPrompt('BigQuery dataset\nFor example analytics.'));
   });
 
   it('prompts for discovered Postgres schemas before the first scan', async () => {

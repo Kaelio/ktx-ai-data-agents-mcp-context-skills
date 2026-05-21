@@ -134,8 +134,39 @@ interface ScopeDiscoverySpec {
   nounPlural: string;
   promptLabel: string;
   configArrayField: string;
-  configSingleField: string;
-  defaultSelection: (values: string[]) => string[];
+  configSingleField?: string;
+  suggest: ScopeSuggest;
+}
+
+interface ScopeSuggestion {
+  excluded: Set<string>;
+  suggested: Set<string>;
+}
+
+type ScopeSuggest = (values: string[]) => ScopeSuggestion;
+
+const SUGGESTED_SCOPE_PATTERN = /^(mart|prod|analytics|core|dim|fact|gold)(_|$)/i;
+const EXCLUDED_SCOPE_PATTERN = /^(information_schema|pg_catalog|pg_toast|_airbyte_|mysql$|performance_schema$|sys$)/i;
+
+function defaultSuggest(values: string[]): ScopeSuggestion {
+  const excluded = new Set(values.filter((value) => EXCLUDED_SCOPE_PATTERN.test(value)));
+  const suggested = new Set(
+    values.filter((value) => !excluded.has(value) && SUGGESTED_SCOPE_PATTERN.test(value)),
+  );
+  return { excluded, suggested };
+}
+
+function legacyDefaultSchemasForPicker(
+  schemas: string[],
+  suggestion: ScopeSuggestion,
+): string[] {
+  const suggested = schemas.filter((schema) => suggestion.suggested.has(schema));
+  if (suggested.length > 0) {
+    return suggested;
+  }
+  const visible = schemas.filter((schema) => !suggestion.excluded.has(schema));
+  const nonPublic = visible.filter((schema) => schema !== 'public' && schema !== 'PUBLIC');
+  return nonPublic.length > 0 ? nonPublic : visible;
 }
 
 const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscoverySpec>> = {
@@ -145,10 +176,22 @@ const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscove
     promptLabel: 'PostgreSQL schemas',
     configArrayField: 'schemas',
     configSingleField: 'schema',
-    defaultSelection(schemas) {
-      const nonPublic = schemas.filter((s) => s !== 'public');
-      return nonPublic.length > 0 ? nonPublic : schemas;
-    },
+    suggest: defaultSuggest,
+  },
+  mysql: {
+    noun: 'database',
+    nounPlural: 'databases',
+    promptLabel: 'MySQL databases',
+    configArrayField: 'schemas',
+    configSingleField: 'schema',
+    suggest: defaultSuggest,
+  },
+  clickhouse: {
+    noun: 'database',
+    nounPlural: 'databases',
+    promptLabel: 'ClickHouse databases',
+    configArrayField: 'databases',
+    suggest: defaultSuggest,
   },
   sqlserver: {
     noun: 'schema',
@@ -156,7 +199,7 @@ const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscove
     promptLabel: 'SQL Server schemas',
     configArrayField: 'schemas',
     configSingleField: 'schema',
-    defaultSelection: (schemas) => schemas,
+    suggest: defaultSuggest,
   },
   bigquery: {
     noun: 'dataset',
@@ -164,7 +207,7 @@ const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscove
     promptLabel: 'BigQuery datasets',
     configArrayField: 'dataset_ids',
     configSingleField: 'dataset_id',
-    defaultSelection: (datasets) => datasets,
+    suggest: defaultSuggest,
   },
   snowflake: {
     noun: 'schema',
@@ -172,10 +215,7 @@ const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscove
     promptLabel: 'Snowflake schemas',
     configArrayField: 'schema_names',
     configSingleField: 'schema_name',
-    defaultSelection(schemas) {
-      const nonPublic = schemas.filter((s) => s !== 'PUBLIC');
-      return nonPublic.length > 0 ? nonPublic : schemas;
-    },
+    suggest: defaultSuggest,
   },
 };
 
@@ -379,6 +419,28 @@ async function defaultListSchemas(projectDir: string, connectionId: string): Pro
     const { KtxSqlServerScanConnector, isKtxSqlServerConnectionConfig } = await import('./connectors/sqlserver/connector.js');;
     if (!isKtxSqlServerConnectionConfig(connection)) return [];
     const connector = new KtxSqlServerScanConnector({ connectionId, connection });
+    try {
+      return await connector.listSchemas();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'mysql') {
+    const { KtxMysqlScanConnector, isKtxMysqlConnectionConfig } = await import('./connectors/mysql/connector.js');;
+    if (!isKtxMysqlConnectionConfig(connection)) return [];
+    const connector = new KtxMysqlScanConnector({ connectionId, connection });
+    try {
+      return await connector.listSchemas();
+    } finally {
+      await connector.cleanup();
+    }
+  }
+
+  if (driver === 'clickhouse') {
+    const { KtxClickHouseScanConnector, isKtxClickHouseConnectionConfig } = await import('./connectors/clickhouse/connector.js');;
+    if (!isKtxClickHouseConnectionConfig(connection)) return [];
+    const connector = new KtxClickHouseScanConnector({ connectionId, connection });
     try {
       return await connector.listSchemas();
     } finally {
@@ -606,6 +668,27 @@ function normalizeFileReference(value: string): string {
   return `file:${normalized}`;
 }
 
+function scriptedScopeConfigForDriver(
+  driver: KtxSetupDatabaseDriver,
+  databaseSchemas: string[],
+): Record<string, unknown> {
+  if (databaseSchemas.length === 0) return {};
+  if (driver === 'bigquery') return { dataset_ids: databaseSchemas };
+  if (driver === 'clickhouse') return { databases: databaseSchemas };
+  return { schemas: databaseSchemas };
+}
+
+function databaseNameFromLiteralUrl(url: string): string | undefined {
+  if (url.startsWith('env:') || url.startsWith('file:')) {
+    return undefined;
+  }
+  try {
+    return new URL(url).pathname.replace(/^\/+/, '') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function promptCredential(input: {
   prompts: KtxSetupDatabasesPromptAdapter;
   message: string;
@@ -694,7 +777,7 @@ async function buildFieldsConnectionConfig(input: {
     database,
     username,
     ...(passwordRef ? { password: passwordRef } : {}),
-    ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
+    ...scriptedScopeConfigForDriver(input.driver, input.args.databaseSchemas),
   };
 }
 
@@ -720,10 +803,11 @@ async function buildPastedUrlConnectionConfig(input: {
     return {
       driver: input.driver,
       url,
-      ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
+      ...scriptedScopeConfigForDriver(input.driver, input.args.databaseSchemas),
     };
   }
 
+  const database = input.driver === 'clickhouse' ? databaseNameFromLiteralUrl(url) : undefined;
   if (urlHasCredentials(url)) {
     const ref = await writeProjectLocalSecretReference({
       projectDir: input.args.projectDir,
@@ -733,14 +817,16 @@ async function buildPastedUrlConnectionConfig(input: {
     return {
       driver: input.driver,
       url: ref,
-      ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
+      ...(database ? { database } : {}),
+      ...scriptedScopeConfigForDriver(input.driver, input.args.databaseSchemas),
     };
   }
 
   return {
     driver: input.driver,
     url,
-    ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
+    ...(database ? { database } : {}),
+    ...scriptedScopeConfigForDriver(input.driver, input.args.databaseSchemas),
   };
 }
 
@@ -756,6 +842,7 @@ async function buildUrlConnectionConfig(input: {
   if (input.args.databaseUrl) {
     const url = normalizeInputReference(input.args.databaseUrl);
     if (urlHasCredentials(url)) {
+      const database = input.driver === 'clickhouse' ? databaseNameFromLiteralUrl(url) : undefined;
       const ref = await writeProjectLocalSecretReference({
         projectDir: input.args.projectDir,
         fileName: `${input.connectionId}-url`,
@@ -764,13 +851,16 @@ async function buildUrlConnectionConfig(input: {
       return {
         driver: input.driver,
         url: ref,
-        ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
+        ...(database ? { database } : {}),
+        ...scriptedScopeConfigForDriver(input.driver, input.args.databaseSchemas),
       };
     }
+    const database = input.driver === 'clickhouse' ? databaseNameFromLiteralUrl(url) : undefined;
     return {
       driver: input.driver,
       url,
-      ...(input.args.databaseSchemas.length > 0 ? { schemas: input.args.databaseSchemas } : {}),
+      ...(database ? { database } : {}),
+      ...scriptedScopeConfigForDriver(input.driver, input.args.databaseSchemas),
     };
   }
 
@@ -822,12 +912,6 @@ async function buildConnectionConfig(input: {
     });
   }
   if (driver === 'bigquery') {
-    const datasetId = await promptText(
-      prompts,
-      'BigQuery dataset\nFor example analytics.',
-      stringConfigField(input.existingConnection, 'dataset_id'),
-    );
-    if (datasetId === undefined) return 'back';
     const credentialsPath = await promptText(
       prompts,
       'Path to service account JSON file',
@@ -840,12 +924,12 @@ async function buildConnectionConfig(input: {
       stringConfigField(input.existingConnection, 'location') ?? 'US',
     );
     if (location === undefined) return 'back';
-    if (!datasetId || !credentialsPath) return null;
+    if (!credentialsPath) return null;
     return {
       driver: 'bigquery',
-      dataset_id: datasetId,
       credentials_json: normalizeFileReference(credentialsPath),
       ...(location ? { location } : {}),
+      ...scriptedScopeConfigForDriver('bigquery', args.databaseSchemas),
     };
   }
   if (driver === 'snowflake') {
@@ -1260,9 +1344,17 @@ function withExistingPrimaryEditPromptDefaults(input: {
       Array.isArray(previousArray) &&
       previousArray.length > 0
     ) {
-      delete merged[spec.configSingleField];
+      if (spec.configSingleField) {
+        delete merged[spec.configSingleField];
+      }
       merged[spec.configArrayField] = previousArray;
-    } else if (!Object.hasOwn(input.next, spec.configArrayField) && !Object.hasOwn(input.next, spec.configSingleField)) {
+    } else if (
+      !Object.hasOwn(input.next, spec.configArrayField) &&
+      (!spec.configSingleField || !Object.hasOwn(input.next, spec.configSingleField))
+    ) {
+      if (!spec.configSingleField) {
+        return merged;
+      }
       const previousSingle = input.previous[spec.configSingleField];
       if (typeof previousSingle === 'string' && previousSingle.trim().length > 0) {
         merged[spec.configSingleField] = previousSingle;
@@ -1285,6 +1377,9 @@ function configuredScopeValues(
     return arrayVal
       .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
       .map((v) => v.trim());
+  }
+  if (!spec.configSingleField) {
+    return [];
   }
   const singleVal = connection[spec.configSingleField];
   return typeof singleVal === 'string' && singleVal.trim().length > 0 ? [singleVal.trim()] : [];
@@ -1428,8 +1523,12 @@ async function maybeConfigureDatabaseScope(input: {
   const defaultSchemas = (() => {
     if (cliSchemas.length > 0) return cliSchemas;
     if (!spec) return schemasInDiscovery;
-    return spec.defaultSelection(schemasInDiscovery);
+    const suggestion = spec.suggest(schemasInDiscovery);
+    return legacyDefaultSchemasForPicker(schemasInDiscovery, suggestion);
   })();
+  const schemaSuggestion = cliSchemas.length > 0
+    ? { excluded: new Set<string>(), suggested: new Set(cliSchemas) }
+    : spec?.suggest(schemasInDiscovery);
 
   const existingEnabled =
     hasExistingTables && input.forcePrompt === true
@@ -1453,6 +1552,7 @@ async function maybeConfigureDatabaseScope(input: {
         discovered,
         existing: { enabledTables: existingEnabled },
         defaultSchemas,
+        ...(schemaSuggestion ? { schemaSuggestion } : {}),
         supportsSchemaScope: spec !== undefined,
       },
       input.io,

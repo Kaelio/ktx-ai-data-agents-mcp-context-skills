@@ -38,6 +38,11 @@ export type DatabaseScopePickResult =
   | { kind: 'selected'; activeSchemas: string[]; enabledTables: string[] }
   | { kind: 'back' };
 
+interface ScopeSuggestion {
+  excluded: Set<string>;
+  suggested: Set<string>;
+}
+
 export interface PickDatabaseScopeArgs {
   connectionId: string;
   schemaNoun: string;
@@ -45,6 +50,7 @@ export interface PickDatabaseScopeArgs {
   discovered: readonly KtxTableListEntry[];
   existing: { enabledTables: readonly string[] };
   defaultSchemas: readonly string[];
+  schemaSuggestion?: ScopeSuggestion;
   supportsSchemaScope: boolean;
 }
 
