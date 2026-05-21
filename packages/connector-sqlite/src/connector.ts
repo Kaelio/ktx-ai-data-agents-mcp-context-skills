@@ -90,6 +90,8 @@ function resolveStringReference(key: keyof KtxSqliteConnectionConfig, value: str
   if (value.startsWith('env:')) {
     return process.env[value.slice('env:'.length)] ?? '';
   }
+  // `file:` on the `url` key is SQLite's native URI form (e.g. `file:///db.sqlite`), not a
+  // file-contents reference — skip the read so the URI passes through verbatim.
   if (key !== 'url' && value.startsWith('file:')) {
     const rawPath = value.slice('file:'.length);
     const path = rawPath.startsWith('~') ? resolve(homedir(), rawPath.slice(1)) : rawPath;

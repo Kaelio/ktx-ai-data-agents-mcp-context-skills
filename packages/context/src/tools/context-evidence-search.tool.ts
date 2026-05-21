@@ -74,10 +74,12 @@ export class ContextEvidenceSearchTool extends BaseTool<typeof contextEvidenceSe
     }
 
     let queryEmbedding: number[] | null = null;
+    let embeddingUnhealthyReason: string | null = null;
     try {
       queryEmbedding = await this.embeddingService.computeEmbedding(input.query);
-    } catch {
+    } catch (error) {
       queryEmbedding = null;
+      embeddingUnhealthyReason = error instanceof Error ? error.message : String(error);
     }
 
     const connectionId = input.connectionId ?? context.connectionId ?? context.session?.connectionId;
@@ -102,16 +104,20 @@ export class ContextEvidenceSearchTool extends BaseTool<typeof contextEvidenceSe
       currentRunId: ingest.runId,
     });
 
+    const embeddingHealthSuffix = embeddingUnhealthyReason
+      ? ` (semantic lane skipped: embedding_unhealthy:${embeddingUnhealthyReason})`
+      : '';
+
     if (results.length === 0) {
       return {
-        markdown: `No context evidence found for "${input.query}".`,
+        markdown: `No context evidence found for "${input.query}"${embeddingHealthSuffix}.`,
         structured: { success: true, results: [], totalFound: 0 },
       };
     }
 
     return {
       markdown: [
-        `Found ${results.length} evidence chunk(s):`,
+        `Found ${results.length} evidence chunk(s)${embeddingHealthSuffix}:`,
         '',
         ...results.map((result, index) => {
           const reasonLine =

@@ -46,7 +46,10 @@ export class WikiSearchTool extends BaseTool<typeof WikiSearchInputSchema> {
 
   get description(): string {
     return (
-      'Search knowledge blocks by hybrid lexical, semantic, and token matching. ' +
+      'Search knowledge blocks. Active lanes vary by project storage: ' +
+      'projects on sqlite-fts5 storage use hybrid lexical + token + semantic matching, ' +
+      'others fall back to token-only matching. ' +
+      'Inspect `lanes` and `matchReasons` on each result to see which lanes contributed. ' +
       'Use this when you need to find knowledge on a topic not visible in the discovery index. ' +
       'Returns ranked summaries — use wiki_read to load the full content of specific results.'
     );

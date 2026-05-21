@@ -125,7 +125,7 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-export function contextBuildCommands(projectDir: string, runId?: string): KtxSetupContextCommands {
+export function contextBuildCommands(projectDir: string): KtxSetupContextCommands {
   const resolvedProjectDir = resolve(projectDir);
   return {
     build: `ktx setup --project-dir ${resolvedProjectDir}`,
@@ -177,7 +177,7 @@ function normalizeState(projectDir: string, value: unknown): KtxSetupContextStat
     retryableFailedTargets: Array.isArray(record.retryableFailedTargets)
       ? record.retryableFailedTargets.filter((item): item is string => typeof item === 'string')
       : [],
-    commands: contextBuildCommands(projectDir, runId),
+    commands: contextBuildCommands(projectDir),
     ...(typeof record.failureReason === 'string' ? { failureReason: record.failureReason } : {}),
     ...(normalizeSourceProgress(record.sourceProgress) ? { sourceProgress: normalizeSourceProgress(record.sourceProgress) } : {}),
   };
@@ -241,7 +241,7 @@ export async function writeKtxSetupContextState(projectDir: string, state: KtxSe
   await mkdir(join(resolvedProjectDir, '.ktx', 'setup'), { recursive: true });
   const normalized = normalizeState(resolvedProjectDir, {
     ...state,
-    commands: contextBuildCommands(resolvedProjectDir, state.runId),
+    commands: contextBuildCommands(resolvedProjectDir),
   });
   await writeFile(statePath(resolvedProjectDir), `${JSON.stringify(normalized, null, 2)}\n`, 'utf-8');
 }
@@ -323,8 +323,11 @@ function stringArrayValue(value: unknown): string[] {
 async function readJsonFile(path: string): Promise<unknown | null> {
   try {
     return JSON.parse(await readFile(path, 'utf-8')) as unknown;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw new Error(`Failed to read JSON file ${path}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -549,7 +552,7 @@ async function runBuild(
     reportIds: [],
     artifactPaths: [],
     retryableFailedTargets: [],
-    commands: contextBuildCommands(args.projectDir, runId),
+    commands: contextBuildCommands(args.projectDir),
     failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
   };
   await writeKtxSetupContextState(args.projectDir, incompleteState);
@@ -663,7 +666,7 @@ async function completeExistingContext(
     reportIds: [],
     artifactPaths: [],
     retryableFailedTargets: [],
-    commands: contextBuildCommands(args.projectDir, runId),
+    commands: contextBuildCommands(args.projectDir),
   });
   writeExistingContextSuccess(readiness, io);
   return { status: 'ready', projectDir: args.projectDir, runId };

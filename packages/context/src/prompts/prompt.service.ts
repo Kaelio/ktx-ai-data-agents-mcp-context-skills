@@ -28,7 +28,7 @@ export class PromptService {
 
   constructor(private readonly options: PromptServiceOptions) {
     this.logger = options.logger ?? noopLogger;
-    this.partials = options.partials ?? ['clinical_policy'];
+    this.partials = options.partials ?? [];
     Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a === b);
     Handlebars.registerHelper('json', (context: unknown) => JSON.stringify(context, null, 2));
     Handlebars.registerHelper('truncate', (str: string, len: number) =>

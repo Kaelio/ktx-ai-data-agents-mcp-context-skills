@@ -65,7 +65,6 @@ describe('@ktx/context package exports', () => {
     expect(scan.isKtxDataDictionaryCandidate).toBeTypeOf('function');
     expect(scan.buildKtxColumnEmbeddingText).toBeTypeOf('function');
     expect(scan.KtxDescriptionGenerator).toBeTypeOf('function');
-    expect(scan.KtxScanOrchestrator).toBeTypeOf('function');
     expect(scan.runLocalScan).toBeTypeOf('function');
     expect(scan.writeLocalScanEnrichmentArtifacts).toBeTypeOf('function');
     expect(scan.readLocalScanStructuralSnapshot).toBeTypeOf('function');
@@ -145,8 +144,8 @@ describe('@ktx/context package exports', () => {
     expect(root.createLocalKtxEmbeddingProviderFromConfig).toBeTypeOf('function');
     expect(root.MANAGED_SENTENCE_TRANSFORMERS_BASE_URL).toBe('managed:local-embeddings');
     expect(agent).toBeDefined();
-    expect(agent.AgentRunnerService).toBeTypeOf('function');
-    expect(root.AgentRunnerService).toBeTypeOf('function');
+    expect(agent.RuntimeAgentRunner).toBeTypeOf('function');
+    expect(root.RuntimeAgentRunner).toBeTypeOf('function');
     expect(root.createLocalKtxLlmProviderFromConfig).toBeTypeOf('function');
     expect(prompts).toBeDefined();
     expect(skills).toBeDefined();

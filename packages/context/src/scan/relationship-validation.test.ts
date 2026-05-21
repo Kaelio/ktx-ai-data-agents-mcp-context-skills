@@ -115,6 +115,7 @@ describe('relationship validation', () => {
       profiles,
       executor,
       ctx: { runId: 'validate-test' },
+      tableCount: testSchema.tables.length,
     });
 
     expect(validated).toHaveLength(1);
@@ -163,6 +164,7 @@ describe('relationship validation', () => {
       profiles,
       executor,
       ctx: { runId: 'validate-test' },
+      tableCount: testSchema.tables.length,
       settings: {
         minSourceCoverage: 0.9,
         maxViolationRatio: 0.01,
@@ -332,6 +334,7 @@ describe('relationship validation', () => {
       profiles,
       executor,
       ctx: { runId: 'llm-rejected-validation' },
+      tableCount: testSchema.tables.length,
     });
 
     expect(validated?.status).toBe('rejected');
@@ -385,6 +388,7 @@ describe('relationship validation', () => {
       profiles,
       executor: throttled,
       ctx: { runId: 'validation-concurrency' },
+      tableCount: testSchema.tables.length,
       settings: { concurrency: 1 },
     });
 
@@ -476,6 +480,7 @@ describe('relationship validation', () => {
       profiles,
       executor,
       ctx: { runId: 'rule-b-validation-score' },
+      tableCount: 2,
     });
 
     expect(validated).toMatchObject({

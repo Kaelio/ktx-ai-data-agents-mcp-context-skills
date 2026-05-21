@@ -1,9 +1,9 @@
 export type {
-  AgentRunnerServiceDeps,
-  AgentTelemetryPort,
+  AgentRunnerPort,
   RunLoopParams,
   RunLoopResult,
   RunLoopStepInfo,
   RunLoopStopReason,
-} from './agent-runner.service.js';
-export { AgentRunnerService } from './agent-runner.service.js';
+} from '../llm/runtime-port.js';
+export { RuntimeAgentRunner } from '../llm/runtime-port.js';
+export type { AgentTelemetryPort } from '../llm/ai-sdk-runtime.js';

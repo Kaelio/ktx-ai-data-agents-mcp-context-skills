@@ -206,7 +206,7 @@ describe('setup context build state', () => {
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-abc123'),
+      commands: contextBuildCommands(tempDir),
       failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
       sourceProgress: [
         {
@@ -638,7 +638,7 @@ describe('setup context build state', () => {
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-stale'),
+      commands: contextBuildCommands(tempDir),
       failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
     });
     const io = makeIo();

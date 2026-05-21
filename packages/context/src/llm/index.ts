@@ -4,7 +4,6 @@ export type { AgentTelemetryPort, AiSdkKtxLlmRuntimeDeps } from './ai-sdk-runtim
 export { createKtxClaudeCodeEnv, CLAUDE_CODE_PROVIDER_ENV_DENYLIST } from './claude-code-env.js';
 export { resolveClaudeCodeModel } from './claude-code-models.js';
 export { ClaudeCodeKtxLlmRuntime, mapClaudeCodeStopReason, runClaudeCodeAuthProbe } from './claude-code-runtime.js';
-export { generateKtxObject, generateKtxText } from './generation.js';
 export type {
   AgentRunnerPort,
   KtxGenerateObjectInput,

@@ -19,47 +19,60 @@ export async function createKtxCliScanConnector(
   }
   if (driver === 'sqlite' || driver === 'sqlite3') {
     const { KtxSqliteScanConnector, isKtxSqliteConnectionConfig } = await import('@ktx/connector-sqlite');
-    if (isKtxSqliteConnectionConfig(connection)) {
-      return new KtxSqliteScanConnector({ connectionId, connection, projectDir: project.projectDir });
+    if (!isKtxSqliteConnectionConfig(connection)) {
+      throw invalidConnectionConfigError(connectionId, driver);
     }
+    return new KtxSqliteScanConnector({ connectionId, connection, projectDir: project.projectDir });
   }
   if (driver === 'postgres' || driver === 'postgresql') {
     const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('@ktx/connector-postgres');
-    if (isKtxPostgresConnectionConfig(connection)) {
-      return new KtxPostgresScanConnector({ connectionId, connection });
+    if (!isKtxPostgresConnectionConfig(connection)) {
+      throw invalidConnectionConfigError(connectionId, driver);
     }
+    return new KtxPostgresScanConnector({ connectionId, connection });
   }
   if (driver === 'mysql') {
     const { KtxMysqlScanConnector, isKtxMysqlConnectionConfig } = await import('@ktx/connector-mysql');
-    if (isKtxMysqlConnectionConfig(connection)) {
-      return new KtxMysqlScanConnector({ connectionId, connection });
+    if (!isKtxMysqlConnectionConfig(connection)) {
+      throw invalidConnectionConfigError(connectionId, driver);
     }
+    return new KtxMysqlScanConnector({ connectionId, connection });
   }
   if (driver === 'clickhouse') {
     const { KtxClickHouseScanConnector, isKtxClickHouseConnectionConfig } = await import('@ktx/connector-clickhouse');
-    if (isKtxClickHouseConnectionConfig(connection)) {
-      return new KtxClickHouseScanConnector({ connectionId, connection });
+    if (!isKtxClickHouseConnectionConfig(connection)) {
+      throw invalidConnectionConfigError(connectionId, driver);
     }
+    return new KtxClickHouseScanConnector({ connectionId, connection });
   }
   if (driver === 'sqlserver') {
     const { KtxSqlServerScanConnector, isKtxSqlServerConnectionConfig } = await import('@ktx/connector-sqlserver');
-    if (isKtxSqlServerConnectionConfig(connection)) {
-      return new KtxSqlServerScanConnector({ connectionId, connection });
+    if (!isKtxSqlServerConnectionConfig(connection)) {
+      throw invalidConnectionConfigError(connectionId, driver);
     }
+    return new KtxSqlServerScanConnector({ connectionId, connection });
   }
   if (driver === 'bigquery') {
     const { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig } = await import('@ktx/connector-bigquery');
-    if (isKtxBigQueryConnectionConfig(connection)) {
-      return new KtxBigQueryScanConnector({ connectionId, connection });
+    if (!isKtxBigQueryConnectionConfig(connection)) {
+      throw invalidConnectionConfigError(connectionId, driver);
     }
+    return new KtxBigQueryScanConnector({ connectionId, connection });
   }
   if (driver === 'snowflake') {
     const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('@ktx/connector-snowflake');
-    if (isKtxSnowflakeConnectionConfig(connection)) {
-      return new KtxSnowflakeScanConnector({ connectionId, connection });
+    if (!isKtxSnowflakeConnectionConfig(connection)) {
+      throw invalidConnectionConfigError(connectionId, driver);
     }
+    return new KtxSnowflakeScanConnector({ connectionId, connection });
   }
   throw new Error(
     `Connection "${connectionId}" uses driver "${driver}", which has no native standalone KTX scan connector. Supported drivers: ${SUPPORTED_DRIVERS}.`,
+  );
+}
+
+function invalidConnectionConfigError(connectionId: string, driver: string): Error {
+  return new Error(
+    `Connection "${connectionId}" uses driver "${driver}" but its configuration in ktx.yaml does not match the expected shape for that driver. Check the required fields for ${driver} (e.g. url/host/database).`,
   );
 }

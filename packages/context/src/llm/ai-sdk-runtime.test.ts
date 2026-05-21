@@ -7,10 +7,11 @@ vi.mock('ai', () => ({
 }));
 
 import { generateText } from 'ai';
-import { AgentRunnerService, type RunLoopStepInfo } from './agent-runner.service.js';
+import { AiSdkKtxLlmRuntime } from './ai-sdk-runtime.js';
+import type { RunLoopStepInfo } from './runtime-port.js';
 
-describe('AgentRunnerService.runLoop', () => {
-  let runner: AgentRunnerService;
+describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
+  let runtime: AiSdkKtxLlmRuntime;
   const llmProvider = {
     getModel: vi.fn().mockReturnValue({ modelId: 'claude-sonnet-4-6', provider: 'anthropic' }),
     getModelByName: vi.fn(),
@@ -33,7 +34,7 @@ describe('AgentRunnerService.runLoop', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    runner = new AgentRunnerService({ llmProvider: llmProvider as any });
+    runtime = new AiSdkKtxLlmRuntime({ llmProvider: llmProvider as any });
   });
 
   afterEach(() => vi.clearAllMocks());
@@ -43,7 +44,7 @@ describe('AgentRunnerService.runLoop', () => {
     const repairHandler = vi.fn();
     llmProvider.repairToolCallHandler.mockReturnValueOnce(repairHandler);
     const tools = { noop: { description: 'noop', inputSchema: {}, execute: vi.fn() } };
-    await runner.runLoop({
+    await runtime.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: 'SYS',
       userPrompt: 'USR',
@@ -72,7 +73,7 @@ describe('AgentRunnerService.runLoop', () => {
 
   it('returns stopReason=natural when the loop completes without error', async () => {
     (generateText as any).mockResolvedValue({ text: 'done', toolCalls: [], steps: [] });
-    const result = await runner.runLoop({
+    const result = await runtime.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: 'system',
       userPrompt: 'user',
@@ -94,7 +95,7 @@ describe('AgentRunnerService.runLoop', () => {
   it('returns stopReason=error with the error on generateText failure', async () => {
     const err = new Error('LLM unavailable');
     (generateText as any).mockRejectedValue(err);
-    const result = await runner.runLoop({
+    const result = await runtime.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: '',
       userPrompt: '',
@@ -115,7 +116,7 @@ describe('AgentRunnerService.runLoop', () => {
       return { text: 'ok', toolCalls: [], steps: [] };
     });
 
-    await runner.runLoop({
+    await runtime.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: '',
       userPrompt: '',
@@ -140,7 +141,7 @@ describe('AgentRunnerService.runLoop', () => {
       return { text: 'ok', toolCalls: [], steps: [] };
     });
 
-    const result = await runner.runLoop({
+    const result = await runtime.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: '',
       userPrompt: '',
@@ -167,7 +168,7 @@ describe('AgentRunnerService.runLoop', () => {
         config: { instance: { name: 'test-instance' } },
       },
     } as any;
-    const runnerWithTelemetry = new AgentRunnerService({
+    const runtimeWithTelemetry = new AiSdkKtxLlmRuntime({
       llmProvider: llmProvider as any,
       telemetry: {
         createTelemetry: (tags) => ({
@@ -180,7 +181,7 @@ describe('AgentRunnerService.runLoop', () => {
         }),
       },
     });
-    await runnerWithTelemetry.runLoop({
+    await runtimeWithTelemetry.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: '',
       userPrompt: '',
@@ -204,7 +205,7 @@ describe('AgentRunnerService.runLoop', () => {
         config: { instance: { name: 'test-instance' } },
       },
     } as any;
-    const runnerWithTelemetry = new AgentRunnerService({
+    const runtimeWithTelemetry = new AiSdkKtxLlmRuntime({
       llmProvider: llmProvider as any,
       telemetry: {
         createTelemetry: (tags) => ({
@@ -217,7 +218,7 @@ describe('AgentRunnerService.runLoop', () => {
         }),
       },
     });
-    await runnerWithTelemetry.runLoop({
+    await runtimeWithTelemetry.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: '',
       userPrompt: '',
@@ -241,7 +242,7 @@ describe('AgentRunnerService.runLoop', () => {
         config: { instance: { name: 'test-instance' } },
       },
     } as any;
-    const runnerWithTelemetry = new AgentRunnerService({
+    const runtimeWithTelemetry = new AiSdkKtxLlmRuntime({
       llmProvider: llmProvider as any,
       telemetry: {
         createTelemetry: (tags) => ({
@@ -254,7 +255,7 @@ describe('AgentRunnerService.runLoop', () => {
         }),
       },
     });
-    await runnerWithTelemetry.runLoop({
+    await runtimeWithTelemetry.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: '',
       userPrompt: '',
@@ -286,12 +287,12 @@ describe('AgentRunnerService.runLoop', () => {
         vertexFallbackTo5m: false,
       })),
     };
-    const runnerWithDebug = new AgentRunnerService({
+    const runtimeWithDebug = new AiSdkKtxLlmRuntime({
       llmProvider: provider as any,
       debugRequestRecorder: { record },
     });
 
-    await runnerWithDebug.runLoop({
+    await runtimeWithDebug.runAgentLoop({
       modelRole: 'candidateExtraction',
       systemPrompt: 'SECRET SYSTEM PROMPT',
       userPrompt: 'SECRET USER PROMPT',

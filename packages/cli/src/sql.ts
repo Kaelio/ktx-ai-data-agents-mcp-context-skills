@@ -2,13 +2,14 @@ import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
 import type { KtxQueryResult, KtxScanConnector } from '@ktx/context/scan';
 import type { SqlAnalysisDialect, SqlAnalysisPort } from '@ktx/context/sql-analysis';
 import type { KtxCliIo } from './cli-runtime.js';
+import { type KtxOutputMode, resolveOutputMode } from './io/mode.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { createManagedDaemonSqlAnalysisPort } from './managed-python-http.js';
 import { profileMark } from './startup-profile.js';
 
 profileMark('module:sql');
 
-type KtxSqlOutputMode = 'pretty' | 'plain' | 'json';
+type KtxSqlOutputMode = KtxOutputMode;
 
 export type KtxSqlArgs = {
   command: 'execute';
@@ -51,11 +52,6 @@ function sqlAnalysisDialectForDriver(driver: string | undefined): SqlAnalysisDia
     redshift: 'redshift',
   };
   return map[normalized] ?? 'postgres';
-}
-
-function resolveOutputMode(args: KtxSqlArgs): KtxSqlOutputMode {
-  if (args.json === true) return 'json';
-  return args.output ?? 'pretty';
 }
 
 function formatValue(value: unknown): string {
@@ -159,7 +155,8 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
         },
         { runId: 'cli-sql' },
       );
-      printSqlResult(resultOutput(args.connectionId, result), resolveOutputMode(args), io);
+      const mode = resolveOutputMode({ explicit: args.output, json: args.json, io });
+      printSqlResult(resultOutput(args.connectionId, result), mode, io);
       return 0;
     } finally {
       await cleanupConnector(connector);

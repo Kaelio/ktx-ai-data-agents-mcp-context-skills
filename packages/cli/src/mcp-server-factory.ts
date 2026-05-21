@@ -47,7 +47,7 @@ export async function createKtxMcpServerFactory(input: {
   try {
     memoryIngest = createLocalProjectMemoryIngest(input.project, { semanticLayerCompute, queryExecutor });
   } catch (error) {
-    input.io?.stderr.write(`KTX MCP memory_ingest disabled: ${error instanceof Error ? error.message : String(error)}\n`);
+    io.stderr.write(`KTX MCP memory_ingest disabled: ${error instanceof Error ? error.message : String(error)}\n`);
   }
 
   return () =>
