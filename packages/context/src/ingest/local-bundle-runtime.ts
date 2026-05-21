@@ -671,6 +671,15 @@ export function createLocalBundleIngestRuntime(
   const store = new SqliteBundleIngestStore({ dbPath });
   const contextStore = new SqliteContextEvidenceStore({ dbPath });
   const embeddingProvider = options.embeddingProvider ?? null;
+  if (!embeddingProvider && options.project.config.ingest.embeddings.backend !== 'none') {
+    // Embedding-dependent stages (CandidateDedup clustering, ContextEvidenceIndex
+    // chunk indexing) silently produce zero-vector data with NoopEmbeddingPort.
+    // Surface that fact so the caller knows ingest will not be running its
+    // configured backend.
+    logger.warn(
+      `[local-bundle-runtime] embeddings backend "${options.project.config.ingest.embeddings.backend}" is configured but no embedding provider was passed; embedding-dependent stages will run against a no-op embedding port.`,
+    );
+  }
   const embedding = embeddingProvider ? new KtxIngestEmbeddingPortAdapter(embeddingProvider) : new NoopEmbeddingPort();
   const connections = new LocalConnectionCatalog(options.project, options.queryExecutor);
   const rootFileStore = options.project.fileStore;

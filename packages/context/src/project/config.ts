@@ -30,13 +30,13 @@ const apiCredentialsSchema = z
 const vertexProviderSchema = z
   .strictObject({
     project: z.string().min(1).optional().describe('Google Cloud project ID hosting the Vertex AI endpoint.'),
-    location: z.string().default('').describe('Vertex AI region (e.g. "us-east5"). Empty string falls back to the SDK default.'),
+    location: z.string().min(1).describe('Vertex AI region (e.g. "us-east5"). Required whenever the vertex provider block is present.'),
   })
   .describe('Google Vertex AI provider configuration.');
 
 const sentenceTransformersSchema = z
   .strictObject({
-    base_url: z.string().default('').describe('Base URL of the sentence-transformers HTTP server. Leave empty (or omit) to use the project-managed local daemon.'),
+    base_url: z.string().default('').describe('Base URL of the sentence-transformers HTTP server. Leave empty (or omit) when the `ktx` CLI is expected to start and manage a local daemon for this project; programmatic consumers must populate it explicitly.'),
     pathPrefix: z.string().optional().describe('Optional URL path prefix prepended to embedding requests.'),
   })
   .describe('Sentence-transformers embedding server configuration.');
@@ -83,7 +83,15 @@ const embeddingSchema = z
       .default('none')
       .describe('Embedding backend. "openai" and "sentence-transformers" call out to those providers; "none" disables embeddings.'),
     model: z.string().min(1).optional().describe('Provider-specific embedding model identifier (e.g. "text-embedding-3-small").'),
-    dimensions: z.int().positive().default(8).describe('Embedding vector dimensionality. Must match the chosen model when using a real provider.'),
+    dimensions: z
+      .int()
+      .positive()
+      .default(8)
+      .describe(
+        'Embedding vector dimensionality. The default value 8 is a placeholder that is only valid alongside backend: none; ' +
+          'before switching backend to openai/sentence-transformers, set this explicitly to match the chosen model ' +
+          '(e.g. 384 for all-MiniLM-L6-v2, 1536 for text-embedding-3-small).',
+      ),
     openai: apiCredentialsSchema.optional().describe('OpenAI credentials, used when backend is "openai".'),
     sentenceTransformers: sentenceTransformersSchema.optional().describe('Sentence-transformers server config, used when backend is "sentence-transformers".'),
     batchSize: z.int().positive().optional().describe('Number of texts per embedding API call. Omit to use the backend default.'),

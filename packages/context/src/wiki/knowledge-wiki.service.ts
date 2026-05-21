@@ -98,11 +98,23 @@ export class KnowledgeWikiService {
 
   async readPage(scope: string, scopeId: string | null | undefined, pageKey: string): Promise<WikiPage | null> {
     const path = this.pagePath(scope, scopeId, pageKey);
+    let raw: string;
     try {
       const result = await this.configService.readFile(path);
-      const { frontmatter, content } = this.parsePage(result.content);
-      return { pageKey, frontmatter, content };
+      raw = result.content;
     } catch {
+      return null;
+    }
+    try {
+      const { frontmatter, content } = this.parsePage(raw);
+      return { pageKey, frontmatter, content };
+    } catch (error) {
+      // The file exists but parsing failed. Returning null without surfacing the
+      // parse error would let callers (and the memory agent) treat it as "page
+      // doesn't exist" and clobber the broken page on the next write.
+      this.logger.warn(
+        `[readPage] ${path}: parse failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
@@ -133,19 +145,23 @@ export class KnowledgeWikiService {
 
   async listPageKeys(scope: string, scopeId?: string | null): Promise<string[]> {
     const dir = this.scopeDir(scope, scopeId);
+    let files: string[];
     try {
       const result = await this.configService.listFiles(dir);
-      return result.files
-        .filter((f) => f.endsWith('.md'))
-        .map((f) => {
-          // Strip the directory prefix and .md extension
-          const name = f.replace(`${dir}/`, '').replace(/\.md$/, '');
-          return name;
-        })
-        .filter(isFlatWikiKey);
-    } catch {
+      files = result.files;
+    } catch (error) {
+      // listFiles returns [] for missing directories; reaching this catch means
+      // an IO-level failure that should at least be surfaced before we report
+      // "no pages" the same as a freshly-initialised store would.
+      this.logger.warn(
+        `[listPageKeys] ${dir}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
+    return files
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => f.replace(`${dir}/`, '').replace(/\.md$/, ''))
+      .filter(isFlatWikiKey);
   }
 
   async getPageHistory(scope: string, scopeId: string | null | undefined, pageKey: string) {

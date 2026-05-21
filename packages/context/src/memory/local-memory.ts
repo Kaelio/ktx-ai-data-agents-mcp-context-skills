@@ -5,8 +5,10 @@ import { localConnectionInfoFromConfig } from '../connections/index.js';
 import type { KtxEmbeddingPort, KtxFileStorePort, KtxFileWriteResult } from '../core/index.js';
 import { type KtxLogger, noopLogger, SessionWorktreeService } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
+import type { KtxEmbeddingProvider } from '@ktx/llm';
 import {
   createLocalKtxLlmRuntimeFromConfig,
+  KtxIngestEmbeddingPortAdapter,
   RuntimeAgentRunner,
   type AgentRunnerPort,
   type KtxLlmRuntimePort,
@@ -74,6 +76,7 @@ export interface CreateLocalProjectMemoryIngestOptions {
   queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
   runIdFactory?: () => string;
   logger?: KtxLogger;
+  embeddingProvider?: KtxEmbeddingProvider | null;
 }
 
 export function createLocalProjectMemoryIngest(
@@ -82,7 +85,18 @@ export function createLocalProjectMemoryIngest(
 ): MemoryIngestService {
   const logger = options.logger ?? noopLogger;
   const rootFileStore = new LocalMemoryFileStore(project.fileStore);
-  const embedding = new NoopEmbeddingPort();
+  const embedding = options.embeddingProvider
+    ? new KtxIngestEmbeddingPortAdapter(options.embeddingProvider)
+    : new NoopEmbeddingPort();
+  if (!options.embeddingProvider && project.config.ingest.embeddings.backend !== 'none') {
+    // Memory-agent search (SlSearch, wiki) embeds against this port. With Noop the
+    // configured backend is silently inert — the agent will see empty vectors and
+    // rank results against zeros. Surface that so the caller knows to plumb the
+    // resolved embedding provider through.
+    logger.warn(
+      `[memory-ingest] embeddings backend "${project.config.ingest.embeddings.backend}" is configured but no embedding provider was passed; semantic search will fall back to a no-op embedding port.`,
+    );
+  }
   const knowledgeIndex = new LocalKnowledgeIndex(project);
   const knowledgeEvents = new NoopKnowledgeEventPort();
   const knowledgeSlRefs = new NoopKnowledgeSlRefsPort();
