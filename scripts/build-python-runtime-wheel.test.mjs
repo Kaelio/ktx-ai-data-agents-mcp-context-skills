@@ -52,7 +52,10 @@ describe('runtimeWheelPyproject', () => {
     const pyproject = runtimeWheelPyproject();
 
     assert.match(pyproject, /name = "kaelio-ktx"/);
-    assert.match(pyproject, new RegExp(`version = "${RUNTIME_WHEEL_PACKAGE_VERSION.replace(/\./g, '\\.')}"`));
+    assert.match(
+      pyproject,
+      new RegExp(`version = "${RUNTIME_WHEEL_PACKAGE_VERSION.replace(/[.+]/g, (char) => `\\${char}`)}"`),
+    );
     assert.match(pyproject, /ktx-daemon = "ktx_daemon\.__main__:main"/);
     assert.match(pyproject, /packages = \["semantic_layer", "ktx_daemon"\]/);
     assert.match(pyproject, /\[project\.optional-dependencies\]/);

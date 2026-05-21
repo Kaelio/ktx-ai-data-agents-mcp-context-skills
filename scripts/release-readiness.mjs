@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { packageArtifactLayout, packageReleaseMetadata, verifyArtifactManifest } from './package-artifacts.mjs';
-import { assertPublicNpmPackageVersion, publicNpmPackageVersion } from './public-npm-release-metadata.mjs';
+import { publicNpmPackageVersion } from './public-npm-release-metadata.mjs';
 import { readPublishedPackageSmokeConfig } from './published-package-smoke-config.mjs';
 
 function scriptRootDir() {
@@ -138,8 +138,6 @@ export function validateReleasePolicy(policy) {
     throw new Error(`Unsupported release policy schemaVersion: ${policy.schemaVersion}`);
   }
   assertSupportedReleaseMode(policy.releaseMode);
-  assertString(policy.publicNpmPackageVersion, 'Release policy publicNpmPackageVersion');
-  assertPublicNpmPackageVersion(policy.publicNpmPackageVersion);
   assertPlainObject(policy.npm, 'Release policy npm');
   assertPlainObject(policy.python, 'Release policy python');
   assertPlainObject(policy.publishedPackageSmoke, 'Release policy publishedPackageSmoke');

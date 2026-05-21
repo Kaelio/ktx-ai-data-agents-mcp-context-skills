@@ -1,6 +1,5 @@
 {
   "schemaVersion": 1,
-  "publicNpmPackageVersion": "0.4.1",
   "releaseMode": "npm-public-release-ready",
   "npm": {
     "publish": true,

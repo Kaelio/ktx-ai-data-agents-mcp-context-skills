@@ -88,7 +88,13 @@ describe('semantic-release config', () => {
       const config = createReleaseConfig({ KTX_RELEASE_KIND: kind, GITHUB_REF_NAME: 'main' });
       const git = gitPluginOptions(config);
       assert.ok(git, `${kind}: @semantic-release/git plugin must be configured`);
-      assert.deepEqual(git.assets, ['package.json', 'release-policy.json', 'packages/cli/package.json']);
+      assert.deepEqual(git.assets, [
+        'package.json',
+        'release-policy.json',
+        'packages/cli/package.json',
+        'python/ktx-daemon/pyproject.toml',
+        'python/ktx-sl/pyproject.toml',
+      ]);
       assert.match(git.message, /^chore\(release\): \$\{nextRelease\.version\} \[skip ci\]/);
     }
   });

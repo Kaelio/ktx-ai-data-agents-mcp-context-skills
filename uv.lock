@@ -440,7 +440,7 @@ wheels = [
 
 [[package]]
 name = "ktx-daemon"
-version = "0.0.0+private"
+version = "0.4.1"
 source = { editable = "python/ktx-daemon" }
 dependencies = [
     { name = "fastapi" },
@@ -495,7 +495,7 @@ dev = [
 
 [[package]]
 name = "ktx-sl"
-version = "0.0.0+private"
+version = "0.4.1"
 source = { editable = "python/ktx-sl" }
 dependencies = [
     { name = "pydantic" },

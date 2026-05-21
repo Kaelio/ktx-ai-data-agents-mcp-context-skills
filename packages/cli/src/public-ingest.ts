@@ -1,3 +1,4 @@
+import { getKtxCliPackageInfo } from './cli-runtime.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import type { KtxProjectConnectionConfig } from './context/project/config.js';
 import type { KtxProgressPort } from './context/scan/types.js';
@@ -878,7 +879,7 @@ export async function runKtxPublicIngest(
     for (const feature of requirements.features) {
       try {
         await ensureRuntime({
-          cliVersion: args.cliVersion ?? '0.0.0-private',
+          cliVersion: args.cliVersion ?? getKtxCliPackageInfo().version,
           installPolicy: args.runtimeInstallPolicy ?? 'prompt',
           io,
           feature,

@@ -8,6 +8,7 @@ import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/me
 import { renderMemoryFlowReplay } from './context/ingest/memory-flow/render.js';
 import type { KtxSqlQueryExecutorPort } from './context/connections/query-executor.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
+import { getKtxCliPackageInfo } from './cli-runtime.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
@@ -677,7 +678,7 @@ export async function runKtxIngest(
       const resolution = await resolveProjectEmbeddingProvider(project, {
         mode: 'ensure',
         installPolicy: args.runtimeInstallPolicy ?? 'never',
-        cliVersion: args.cliVersion ?? '0.0.0-private',
+        cliVersion: args.cliVersion ?? getKtxCliPackageInfo().version,
         io,
       });
       const embeddingProvider =

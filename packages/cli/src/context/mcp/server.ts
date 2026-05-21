@@ -16,11 +16,11 @@ export function createKtxMcpServer(deps: KtxMcpServerDeps): KtxMcpServerDeps['se
 }
 
 export function createDefaultKtxMcpServer(
-  deps: Omit<KtxMcpServerDeps, 'server'> & { name?: string; version?: string },
+  deps: Omit<KtxMcpServerDeps, 'server'> & { name?: string; version: string },
 ): McpServer {
   const server = new McpServer({
     name: deps.name ?? 'ktx',
-    version: deps.version ?? '0.0.0-private',
+    version: deps.version,
   });
   createKtxMcpServer({
     server: server as KtxMcpServerLike,

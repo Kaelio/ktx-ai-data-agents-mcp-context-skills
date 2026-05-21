@@ -25,6 +25,10 @@ export function releasePolicyPath(rootDir = scriptRootDir()) {
   return join(rootDir, 'release-policy.json');
 }
 
+export function cliPackageJsonPath(rootDir = scriptRootDir()) {
+  return join(rootDir, 'packages', 'cli', 'package.json');
+}
+
 function readJsonSync(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
@@ -70,20 +74,24 @@ export function assertPublicNpmReleaseTag(tag) {
   throw new Error(`Invalid public npm release tag: ${tag}`);
 }
 
+function readCliPackageVersion(rootDir = scriptRootDir()) {
+  const packageJson = readJsonSync(cliPackageJsonPath(rootDir));
+  return assertPublicNpmPackageVersion(packageJson.version);
+}
+
 export function readPublicNpmReleaseMetadata(rootDir = scriptRootDir()) {
   const policy = readJsonSync(releasePolicyPath(rootDir));
-  const version = assertPublicNpmPackageVersion(policy.publicNpmPackageVersion);
   const tag = assertPublicNpmReleaseTag(policy.npm?.tag);
 
   return {
     packageName: PUBLIC_NPM_PACKAGE_NAME,
-    version,
+    version: readCliPackageVersion(rootDir),
     tag,
   };
 }
 
 export function publicNpmPackageVersion(rootDir = scriptRootDir()) {
-  return readPublicNpmReleaseMetadata(rootDir).version;
+  return readCliPackageVersion(rootDir);
 }
 
 export const PUBLIC_NPM_PACKAGE_VERSION = publicNpmPackageVersion();

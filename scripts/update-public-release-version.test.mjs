@@ -11,23 +11,51 @@ async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+async function writeText(path, value) {
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, value);
+}
+
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
 }
 
+async function readText(path) {
+  return readFile(path, 'utf8');
+}
+
+const DAEMON_PYPROJECT = `[project]
+name = "ktx-daemon"
+version = "0.4.0"
+description = "Portable compute package for KTX semantic-layer operations"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+`;
+
+const SL_PYPROJECT = `[project]
+name = "ktx-sl"
+version = "0.4.0"
+description = "Agent-first semantic layer engine with aggregate locality"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+`;
+
 async function writeReleaseFixture(root) {
   await writeJson(join(root, 'package.json'), {
     name: 'ktx-workspace',
-    version: '0.0.0-private',
+    version: '0.4.0',
     private: true,
   });
   await writeJson(join(root, 'packages', 'cli', 'package.json'), {
     name: '@kaelio/ktx',
-    version: '0.0.0-private',
+    version: '0.4.0',
   });
   await writeJson(join(root, 'release-policy.json'), {
     schemaVersion: 1,
-    publicNpmPackageVersion: '0.1.0-rc.1',
     releaseMode: 'ci-artifact-only',
     npm: {
       publish: false,
@@ -43,7 +71,7 @@ async function writeReleaseFixture(root) {
     },
     publishedPackageSmoke: {
       packageName: '@kaelio/ktx',
-      version: '0.1.0-rc.1',
+      version: 'latest',
       registry: null,
     },
     runtimeInstaller: {
@@ -53,6 +81,8 @@ async function writeReleaseFixture(root) {
     },
     requiredBeforePublishing: ['Choose public release version.'],
   });
+  await writeText(join(root, 'python', 'ktx-daemon', 'pyproject.toml'), DAEMON_PYPROJECT);
+  await writeText(join(root, 'python', 'ktx-sl', 'pyproject.toml'), SL_PYPROJECT);
 }
 
 describe('updatePublicReleaseVersion', () => {
@@ -65,9 +95,10 @@ describe('updatePublicReleaseVersion', () => {
 
       assert.equal((await readJson(join(root, 'package.json'))).version, '0.1.0-rc.2');
       assert.equal((await readJson(join(root, 'packages', 'cli', 'package.json'))).version, '0.1.0-rc.2');
+      assert.match(await readText(join(root, 'python', 'ktx-daemon', 'pyproject.toml')), /^version = "0\.1\.0rc2"$/m);
+      assert.match(await readText(join(root, 'python', 'ktx-sl', 'pyproject.toml')), /^version = "0\.1\.0rc2"$/m);
       assert.deepEqual(await readJson(join(root, 'release-policy.json')), {
         schemaVersion: 1,
-        publicNpmPackageVersion: '0.1.0-rc.2',
         releaseMode: 'npm-public-release-ready',
         npm: {
           publish: true,
@@ -110,8 +141,17 @@ describe('updatePublicReleaseVersion', () => {
         (await readJson(join(root, 'packages', 'cli', 'package.json'))).version,
         '0.1.0-feature-foo.0',
       );
+      assert.match(
+        await readText(join(root, 'python', 'ktx-daemon', 'pyproject.toml')),
+        /^version = "0\.4\.0"$/m,
+      );
+      assert.match(
+        await readText(join(root, 'python', 'ktx-sl', 'pyproject.toml')),
+        /^version = "0\.4\.0"$/m,
+      );
       const policy = await readJson(join(root, 'release-policy.json'));
-      assert.equal(policy.publicNpmPackageVersion, '0.1.0-feature-foo.0');
+      assert.equal(policy.publicNpmPackageVersion, undefined);
+      assert.equal(policy.publishedPackageSmoke.version, '0.1.0-feature-foo.0');
       assert.equal(policy.npm.tag, 'branch-feature-foo');
     } finally {
       await rm(root, { recursive: true, force: true });

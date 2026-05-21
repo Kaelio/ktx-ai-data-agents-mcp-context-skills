@@ -1,6 +1,7 @@
 import type { KtxProgressPort, KtxScanMode, KtxScanReport, KtxScanWarning } from './context/scan/types.js';
 import { runLocalScan } from './context/scan/local-scan.js';
 import { loadKtxProject } from './context/project/project.js';
+import { getKtxCliPackageInfo } from './cli-runtime.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import type { KtxCliIo } from './index.js';
 import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
@@ -314,7 +315,7 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
     const resolution = await resolveProjectEmbeddingProvider(project, {
       mode: 'ensure',
       installPolicy: args.runtimeInstallPolicy ?? 'never',
-      cliVersion: args.cliVersion ?? '0.0.0-private',
+      cliVersion: args.cliVersion ?? getKtxCliPackageInfo().version,
       io,
     });
     const embeddingProvider =

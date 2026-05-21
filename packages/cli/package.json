@@ -1,7 +1,7 @@
 {
   "name": "@kaelio/ktx",
   "version": "0.4.1",
-  "description": "Standalone ktx context layer for database agents",
+  "description": "Standalone ktx context layer for data agents",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -30,7 +30,7 @@
   "scripts": {
     "assets:demo": "node scripts/build-demo-assets.mjs",
     "build": "tsc -p tsconfig.json && node scripts/copy-runtime-assets.mjs && node ../../scripts/prepare-cli-bin.mjs",
-    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true }); fs.rmSync('node_modules/.cache/tsc.tsbuildinfo', { force: true })\"",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "docs:commands": "pnpm run build && node dist/print-command-tree.js",
     "smoke": "vitest run src/standalone-smoke.test.ts src/example-smoke.test.ts --testTimeout 30000",
     "test": "vitest run --exclude src/standalone-smoke.test.ts --exclude src/example-smoke.test.ts --exclude src/setup-databases.test.ts --exclude src/scan.test.ts --exclude src/commands/connection-metabase-setup.test.ts --exclude src/setup-models.test.ts --exclude src/setup-sources.test.ts --exclude src/setup.test.ts --exclude src/connection.test.ts --exclude src/setup-embeddings.test.ts --exclude src/ingest.test.ts --exclude src/commands/connection-mapping.test.ts --exclude src/ingest-viz.test.ts --exclude src/demo.test.ts --exclude src/setup-project.test.ts --exclude src/sl.test.ts --exclude src/local-scan-connectors.test.ts --exclude src/commands/connection-notion.test.ts --exclude src/context/scan/local-scan.test.ts --exclude src/context/mcp/local-project-ports.test.ts --exclude src/context/ingest/local-stage-ingest.test.ts --exclude src/context/sl/pglite-sl-search-prototype.test.ts --exclude src/context/core/git.service.test.ts --exclude src/context/ingest/local-adapters.test.ts --exclude src/context/ingest/local-bundle-ingest.test.ts --exclude src/context/ingest/local-metabase-ingest.test.ts --exclude src/context/sl/local-sl.test.ts --exclude src/context/search/pglite-owner-process.test.ts --exclude src/context/scan/local-enrichment-artifacts.test.ts --exclude src/context/search/pglite-spike.test.ts --exclude src/context/wiki/local-knowledge.test.ts --exclude src/context/sl/local-query.test.ts --exclude src/context/scan/relationship-review-decisions.test.ts --exclude src/context/scan/relationship-profiling.test.ts",

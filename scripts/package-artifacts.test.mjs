@@ -34,7 +34,6 @@ async function writeJson(path, value) {
 async function writeReleaseMetadataInputs(root) {
   await writeJson(join(root, 'release-policy.json'), {
     schemaVersion: 1,
-    publicNpmPackageVersion: PUBLIC_NPM_PACKAGE_VERSION,
     releaseMode: 'ci-artifact-only',
     npm: {
       publish: false,

@@ -8,6 +8,7 @@ import {
   PUBLIC_NPM_PACKAGE_NAME,
   assertPublicNpmPackageVersion,
   assertPublicNpmReleaseTag,
+  publicNpmPackageVersionToPythonVersion,
   releasePolicyPath,
 } from './public-npm-release-metadata.mjs';
 
@@ -21,6 +22,42 @@ async function readJson(path) {
 
 async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function pyprojectWithProjectVersion(source, version) {
+  const lines = source.split('\n');
+  let inProject = false;
+  let replaced = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const sectionMatch = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (sectionMatch) {
+      inProject = sectionMatch[1] === 'project';
+      continue;
+    }
+    if (inProject && /^\s*version\s*=\s*"[^"]*"\s*$/.test(line)) {
+      lines[index] = `version = "${version}"`;
+      replaced = true;
+      break;
+    }
+  }
+  if (!replaced) {
+    throw new Error('No [project].version assignment found in pyproject.toml');
+  }
+  return lines.join('\n');
+}
+
+async function rewritePyprojectVersion(path, version) {
+  const source = await readFile(path, 'utf8');
+  await writeFile(path, pyprojectWithProjectVersion(source, version));
+}
+
+function safePythonVersionFor(version) {
+  try {
+    return publicNpmPackageVersionToPythonVersion(version);
+  } catch {
+    return null;
+  }
 }
 
 export async function updatePublicReleaseVersion(rootDir, version, tag) {
@@ -37,9 +74,15 @@ export async function updatePublicReleaseVersion(rootDir, version, tag) {
   cliPackageJson.version = safeVersion;
   await writeJson(cliPackageJsonPath, cliPackageJson);
 
+  const pythonVersion = safePythonVersionFor(safeVersion);
+  if (pythonVersion !== null) {
+    await rewritePyprojectVersion(join(rootDir, 'python', 'ktx-daemon', 'pyproject.toml'), pythonVersion);
+    await rewritePyprojectVersion(join(rootDir, 'python', 'ktx-sl', 'pyproject.toml'), pythonVersion);
+  }
+
   const policyPath = releasePolicyPath(rootDir);
   const policy = await readJson(policyPath);
-  policy.publicNpmPackageVersion = safeVersion;
+  delete policy.publicNpmPackageVersion;
   policy.releaseMode = 'npm-public-release-ready';
   policy.requiredBeforePublishing = [];
   policy.npm = {
@@ -60,6 +103,7 @@ export async function updatePublicReleaseVersion(rootDir, version, tag) {
   return {
     version: safeVersion,
     tag: safeTag,
+    pythonVersion,
   };
 }
 

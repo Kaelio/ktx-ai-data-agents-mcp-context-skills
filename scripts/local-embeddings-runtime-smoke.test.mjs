@@ -57,11 +57,11 @@ describe('publicKtxTarballName', () => {
 });
 
 describe('expectedPublicKtxVersionPattern', () => {
-  it('matches the public package version and rejects the private workspace version', () => {
+  it('matches the public package version and rejects other versions', () => {
     const pattern = expectedPublicKtxVersionPattern();
 
     assert.match(`@kaelio/ktx ${PUBLIC_NPM_PACKAGE_VERSION}\n`, pattern);
-    assert.doesNotMatch('@kaelio/ktx 0.0.0-private\n', pattern);
+    assert.doesNotMatch('@kaelio/ktx 9.9.9-other\n', pattern);
   });
 });
 

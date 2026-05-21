@@ -105,27 +105,36 @@ prior rc lineage is consumed cleanly.
 ## Release metadata
 
 semantic-release calls `scripts/update-public-release-version.mjs` during the
-prepare step before the exec publish command runs. That script updates the
-following files **inside the CI runner only**:
+prepare step before the exec publish command runs. That script rewrites the
+following files in lockstep:
 
-- `package.json` with the semantic-release version.
-- `release-policy.json` with `publicNpmPackageVersion`, npm publish settings,
-  and the published package smoke-test version.
+- `package.json` and `packages/cli/package.json` with the semantic-release
+  version.
+- `python/ktx-daemon/pyproject.toml` and `python/ktx-sl/pyproject.toml` with
+  the same version, normalized for PEP 440 (e.g. `0.1.0-rc.2` →
+  `0.1.0rc2`). Branch-prefixed npm releases skip this step because they are
+  not published to PyPI.
+- `release-policy.json` with the npm publish settings, release mode, and
+  published package smoke-test version. The package version itself is not
+  stored here; it is derived from `packages/cli/package.json.version` by
+  `scripts/public-npm-release-metadata.mjs`, so there is only one place that
+  owns the version.
 
-The artifact packaging, readiness, and smoke-test scripts read
-`publicNpmPackageVersion` from `release-policy.json` within the same CI run.
-Nothing reads these files at runtime — the daemon and CLI rely on the
-published `package.json` (for the installed `@kaelio/ktx` package) or
-`packages/cli/package.json` (for dev-tree runs from this repo, which always
-report `0.0.0-private`). Because the metadata mutation never has to survive
-the run, no commit is pushed back to `main`. The git tag plus the published
-npm artifact carry the version forward.
+The `@semantic-release/git` plugin then commits these files back to `main`
+with the release tag (see `scripts/semantic-release-config.cjs`). As a
+result, the dev tree always reflects the most recently published version —
+there is no sentinel pin. `ktx --version` and the bundled Python wheel both
+report whatever was last released.
 
-The bundled Python runtime wheel also derives its version from
-`publicNpmPackageVersion`. Stable npm versions are reused as-is, and rc
-versions are normalized to Python's version format. For example,
-`0.1.0-rc.2` becomes `0.1.0rc2` in the `kaelio-ktx` wheel filename and wheel
-metadata.
+At runtime the CLI reads its version from its own `package.json` via
+`getKtxCliPackageInfo()` (`packages/cli/src/cli-runtime.ts`); the Python
+daemon reads its version from installed-package metadata via
+`importlib.metadata.version()` (`python/ktx-daemon/src/ktx_daemon/__init__.py`).
+
+The bundled Python runtime wheel also derives its version from the same
+single source. Stable npm versions are reused as-is, and rc versions are
+normalized to Python's version format. For example, `0.1.0-rc.2` becomes
+`0.1.0rc2` in the `kaelio-ktx` wheel filename and wheel metadata.
 
 ## npm authentication
 

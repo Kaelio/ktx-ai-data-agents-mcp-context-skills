@@ -52,7 +52,6 @@ function releasePolicy(overrides = {}) {
 
   return {
     schemaVersion: 1,
-    publicNpmPackageVersion: PUBLIC_NPM_PACKAGE_VERSION,
     releaseMode: 'ci-artifact-only',
     npm: {
       publish: false,

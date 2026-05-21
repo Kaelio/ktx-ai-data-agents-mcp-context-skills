@@ -166,7 +166,13 @@ function createReleaseConfig(env = process.env) {
       [
         '@semantic-release/git',
         {
-          assets: ['package.json', 'release-policy.json', 'packages/cli/package.json'],
+          assets: [
+            'package.json',
+            'release-policy.json',
+            'packages/cli/package.json',
+            'python/ktx-daemon/pyproject.toml',
+            'python/ktx-sl/pyproject.toml',
+          ],
           message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
         },
       ],

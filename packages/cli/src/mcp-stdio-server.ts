@@ -3,7 +3,7 @@ import type { Readable, Writable } from 'node:stream';
 import { loadKtxProject } from './context/project/project.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { KtxCliIo } from './cli-runtime.js';
+import { getKtxCliPackageInfo, type KtxCliIo } from './cli-runtime.js';
 import { createKtxMcpServerFactory } from './mcp-server-factory.js';
 
 export interface RunKtxMcpStdioServerOptions {
@@ -30,7 +30,7 @@ export async function runKtxMcpStdioServer(options: RunKtxMcpStdioServerOptions)
     (await createKtxMcpServerFactory({
       project: project!,
       projectDir: options.projectDir,
-      cliVersion: options.cliVersion ?? '0.0.0-private',
+      cliVersion: options.cliVersion ?? getKtxCliPackageInfo().version,
       io: protocolIo,
     }));
   const stdin = options.stdin ?? process.stdin;
