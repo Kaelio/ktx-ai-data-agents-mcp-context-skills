@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => {
     isCancel: vi.fn((value: unknown): value is symbol => value === cancelSymbol),
     log: { info: vi.fn() },
     multiselect: vi.fn(),
+    autocomplete: vi.fn(),
+    autocompleteMultiselect: vi.fn(),
     note: vi.fn(),
     password: vi.fn(),
     select: vi.fn(),
@@ -29,6 +31,8 @@ vi.mock('@clack/prompts', () => ({
   isCancel: mocks.isCancel,
   log: mocks.log,
   multiselect: mocks.multiselect,
+  autocomplete: mocks.autocomplete,
+  autocompleteMultiselect: mocks.autocompleteMultiselect,
   note: mocks.note,
   password: mocks.password,
   select: mocks.select,
@@ -47,6 +51,8 @@ describe('setup prompt adapter', () => {
     mocks.isCancel.mockClear();
     mocks.log.info.mockReset();
     mocks.multiselect.mockReset();
+    mocks.autocomplete.mockReset();
+    mocks.autocompleteMultiselect.mockReset();
     mocks.note.mockReset();
     mocks.password.mockReset();
     mocks.select.mockReset();
@@ -158,6 +164,52 @@ describe('setup prompt adapter', () => {
     await expect(adapter.multiselect({ message: 'Which primary sources?', options: [] })).resolves.toEqual(['back']);
 
     expect(mocks.cancel).toHaveBeenCalledWith('Setup cancelled.');
+  });
+
+  it('returns autocomplete selections and maps cancel to back', async () => {
+    mocks.autocomplete.mockResolvedValueOnce('analytics');
+    const adapter = createKtxSetupPromptAdapter({ selectCancelValue: 'back' });
+
+    await expect(
+      adapter.autocomplete({
+        message: 'Dataset',
+        placeholder: 'Type to search',
+        options: [{ value: 'analytics', label: 'analytics' }],
+      }),
+    ).resolves.toBe('analytics');
+
+    mocks.autocomplete.mockResolvedValueOnce(mocks.cancelSymbol);
+    await expect(
+      adapter.autocomplete({
+        message: 'Dataset',
+        options: [{ value: 'analytics', label: 'analytics' }],
+      }),
+    ).resolves.toBe('back');
+  });
+
+  it('returns autocomplete multiselect selections and maps cancel to back', async () => {
+    mocks.autocompleteMultiselect.mockResolvedValueOnce(['analytics', 'mart']);
+    const adapter = createKtxSetupPromptAdapter({ selectCancelValue: 'back', multiselectCancelValue: 'back' });
+
+    await expect(
+      adapter.autocompleteMultiselect({
+        message: 'Datasets',
+        placeholder: 'Type to filter',
+        options: [
+          { value: 'analytics', label: 'analytics', hint: 'suggested' },
+          { value: 'mart', label: 'mart' },
+        ],
+        initialValues: ['analytics'],
+      }),
+    ).resolves.toEqual(['analytics', 'mart']);
+
+    mocks.autocompleteMultiselect.mockResolvedValueOnce(mocks.cancelSymbol);
+    await expect(
+      adapter.autocompleteMultiselect({
+        message: 'Datasets',
+        options: [{ value: 'analytics', label: 'analytics' }],
+      }),
+    ).resolves.toEqual(['back']);
   });
 
   it('keeps setup intro and note plain for non-stream output', async () => {
