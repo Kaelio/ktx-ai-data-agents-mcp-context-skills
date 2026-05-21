@@ -23,7 +23,7 @@ export async function runKtxMcpStdioServer(options: RunKtxMcpStdioServerOptions)
       : undefined;
   const protocolIo: KtxCliIo = {
     stdout: { write() {} },
-    stderr: options.io?.stderr ?? { write() {} },
+    stderr: options.io?.stderr ?? process.stderr,
   };
   const createMcpServer =
     options.createMcpServer ??

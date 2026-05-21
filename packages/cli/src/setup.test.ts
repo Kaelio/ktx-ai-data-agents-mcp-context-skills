@@ -331,7 +331,7 @@ describe('setup status', () => {
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-abc123'),
+      commands: contextBuildCommands(tempDir),
       failureReason: 'Previous foreground context build did not finish. Rerun setup or ktx ingest.',
     });
 
@@ -505,7 +505,7 @@ describe('setup status', () => {
               reportIds: [],
               artifactPaths: [],
               retryableFailedTargets: [],
-              commands: contextBuildCommands(tempDir, 'setup-context-local-test'),
+              commands: contextBuildCommands(tempDir),
             });
             await writeKtxSetupState(tempDir, { completed_steps: ['project', 'context'] });
             return { status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' };
@@ -2043,7 +2043,7 @@ describe('setup status', () => {
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-ready'),
+      commands: contextBuildCommands(tempDir),
     });
 
     const previousRuntimeRoot = process.env.KTX_RUNTIME_ROOT;
@@ -2148,7 +2148,7 @@ describe('setup status', () => {
       reportIds: [],
       artifactPaths: [],
       retryableFailedTargets: [],
-      commands: contextBuildCommands(tempDir, 'setup-context-local-ready'),
+      commands: contextBuildCommands(tempDir),
     });
 
     const readyMenuSelect = vi.fn();

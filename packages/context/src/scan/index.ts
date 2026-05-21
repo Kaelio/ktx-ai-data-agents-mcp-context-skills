@@ -125,14 +125,6 @@ export { filterSnapshotTables, getLocalScanReport, getLocalScanStatus, resolveEn
 export type { ReadLocalScanStructuralSnapshotInput } from './local-structural-artifacts.js';
 export { readLocalScanStructuralSnapshot } from './local-structural-artifacts.js';
 export type {
-  KtxEnrichmentScanPhaseResult,
-  KtxScanOrchestratorOptions,
-  KtxScanOrchestratorRunInput,
-  KtxScanOrchestratorRunResult,
-  KtxStructuralScanPhaseResult,
-} from './orchestrator.js';
-export { KtxScanOrchestrator } from './orchestrator.js';
-export type {
   KtxRelationshipArtifactStatus,
   ReadLocalScanRelationshipArtifactsResult,
 } from './relationship-artifacts.js';

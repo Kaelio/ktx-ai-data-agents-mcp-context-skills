@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { generateKtxObject, type KtxLlmRuntimePort } from '../llm/index.js';
+import type { KtxLlmRuntimePort } from '../llm/index.js';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
 import {
   normalizeKtxRelationshipName,
@@ -240,11 +240,10 @@ export async function proposeKtxRelationshipCandidatesWithLlm(
   const prompt = JSON.stringify(evidence);
 
   try {
-    const generated = await generateKtxObject<
+    const generated = await input.llmRuntime.generateObject<
       KtxRelationshipLlmProposalOutput,
       typeof relationshipLlmProposalSchema
     >({
-      runtime: input.llmRuntime,
       role: 'candidateExtraction',
       system,
       prompt,

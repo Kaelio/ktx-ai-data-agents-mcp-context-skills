@@ -290,8 +290,6 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
       const binds = Array.isArray(params) ? toSnowflakeBinds(params) : undefined;
       const result = await this.executeSnowflakeQuery(connection, sql, binds);
       return { ...result, totalRows: result.rows.length, rowCount: result.rows.length };
-    } catch {
-      return { headers: [], rows: [], totalRows: 0, rowCount: 0 };
     } finally {
       if (connection) {
         await this.destroyConnection(connection);

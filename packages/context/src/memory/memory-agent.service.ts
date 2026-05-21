@@ -225,8 +225,8 @@ export class MemoryAgentService {
           chatId,
         },
       });
-      if (runResult.stopReason === 'error' && runResult.error) {
-        this.logger.warn(`[memory-agent] chat=${chatId} loop failed: ${runResult.error.message}`);
+      if (runResult.stopReason === 'error') {
+        throw runResult.error ?? new Error(`[memory-agent] chat=${chatId} loop failed with no error detail`);
       }
 
       // Cross-ref + revert gate: still scoped to the session worktree (writes via

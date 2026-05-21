@@ -32,8 +32,39 @@ import type {
   KtxScanMode,
   KtxScanReport,
   KtxScanTrigger,
+  KtxScanWarning,
   KtxSchemaSnapshot,
 } from './types.js';
+
+function enrichmentResolutionWarning(
+  status: 'missing-embeddings-config' | 'missing-llm' | 'missing-embeddings-provider',
+): KtxScanWarning {
+  if (status === 'missing-llm') {
+    return {
+      code: 'llm_unavailable',
+      message:
+        'scan.enrichment.mode is "llm" but the LLM provider could not be resolved from llm.provider config; LLM-driven enrichment was skipped.',
+      recoverable: true,
+      metadata: { reason: status },
+    };
+  }
+  if (status === 'missing-embeddings-config') {
+    return {
+      code: 'embedding_unavailable',
+      message:
+        'scan.enrichment.mode is "llm" but scan.enrichment.embeddings is not configured; embedding enrichment was skipped.',
+      recoverable: true,
+      metadata: { reason: status },
+    };
+  }
+  return {
+    code: 'embedding_unavailable',
+    message:
+      'scan.enrichment.mode is "llm" but the embedding provider could not be resolved from scan.enrichment.embeddings config; embedding enrichment was skipped.',
+    recoverable: true,
+    metadata: { reason: status },
+  };
+}
 
 export interface RunLocalScanOptions {
   project: KtxLocalProject;
@@ -152,32 +183,56 @@ interface LocalScanEnrichmentProviderDeps {
   embeddingProvider?: KtxEmbeddingProvider | null;
 }
 
-export function createLocalScanEnrichmentProvidersFromConfig(
+type LocalScanEnrichmentProviderResolution =
+  | { status: 'ready'; providers: KtxLocalScanEnrichmentProviders }
+  | { status: 'disabled' }
+  | { status: 'missing-embeddings-config' }
+  | { status: 'missing-llm' }
+  | { status: 'missing-embeddings-provider' };
+
+function resolveLocalScanEnrichmentProviders(
   config: KtxScanEnrichmentConfig,
   llmConfig: KtxProjectLlmConfig,
   deps: LocalScanEnrichmentProviderDeps = {},
-): KtxLocalScanEnrichmentProviders | null {
+): LocalScanEnrichmentProviderResolution {
   if (config.mode === 'deterministic') {
-    return createDeterministicLocalScanEnrichmentProviders();
+    return { status: 'ready', providers: createDeterministicLocalScanEnrichmentProviders() };
   }
-
-  if (config.mode !== 'llm' || !config.embeddings) {
-    return null;
+  if (config.mode !== 'llm') {
+    return { status: 'disabled' };
+  }
+  if (!config.embeddings) {
+    return { status: 'missing-embeddings-config' };
   }
 
   const llmRuntime = createLocalKtxLlmRuntimeFromConfig(llmConfig, {
     ...deps,
     projectDir: deps.projectDir,
   });
+  if (!llmRuntime) {
+    return { status: 'missing-llm' };
+  }
   const embeddingProvider = deps.embeddingProvider ?? null;
-  if (!llmRuntime || !embeddingProvider) {
-    return null;
+  if (!embeddingProvider) {
+    return { status: 'missing-embeddings-provider' };
   }
 
   return {
-    llmRuntime,
-    embedding: new KtxScanEmbeddingPortAdapter(embeddingProvider),
+    status: 'ready',
+    providers: {
+      llmRuntime,
+      embedding: new KtxScanEmbeddingPortAdapter(embeddingProvider),
+    },
   };
+}
+
+export function createLocalScanEnrichmentProvidersFromConfig(
+  config: KtxScanEnrichmentConfig,
+  llmConfig: KtxProjectLlmConfig,
+  deps: LocalScanEnrichmentProviderDeps = {},
+): KtxLocalScanEnrichmentProviders | null {
+  const resolved = resolveLocalScanEnrichmentProviders(config, llmConfig, deps);
+  return resolved.status === 'ready' ? resolved.providers : null;
 }
 
 function createLocalScanEnrichmentStateStore(options: RunLocalScanOptions): SqliteLocalScanEnrichmentStateStore | null {
@@ -314,8 +369,13 @@ async function readScanReport(
   try {
     const raw = await project.fileStore.readFile(scanReportPath(connectionId, syncId));
     return JSON.parse(raw.content) as KtxScanReport;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw new Error(
+      `Failed to read scan report for ${connectionId}/${syncId}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -363,14 +423,22 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
   const adapters =
     options.adapters ??
     createDefaultLocalIngestAdapters(options.project, { databaseIntrospectionUrl: options.databaseIntrospectionUrl });
+  let enrichmentResolution: LocalScanEnrichmentProviderResolution | null = null;
   const enrichmentProviders =
     connector && (mode !== 'structural' || options.detectRelationships)
       ? options.enrichmentProviders !== undefined
         ? options.enrichmentProviders
-        : createLocalScanEnrichmentProvidersFromConfig(options.project.config.scan.enrichment, options.project.config.llm, {
-            projectDir: options.project.projectDir,
-            embeddingProvider: options.embeddingProvider ?? null,
-          })
+        : (() => {
+            enrichmentResolution = resolveLocalScanEnrichmentProviders(
+              options.project.config.scan.enrichment,
+              options.project.config.llm,
+              {
+                projectDir: options.project.projectDir,
+                embeddingProvider: options.embeddingProvider ?? null,
+              },
+            );
+            return enrichmentResolution.status === 'ready' ? enrichmentResolution.providers : null;
+          })()
       : null;
 
   await options.progress?.update(0.15, 'Inspecting database schema');
@@ -483,6 +551,9 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
       enrichmentState = enrichment.state;
       report.enrichmentState = enrichmentState;
       report.warnings.push(...enrichment.warnings);
+      if (enrichmentResolution && enrichmentResolution.status !== 'ready' && enrichmentResolution.status !== 'disabled') {
+        report.warnings.push(enrichmentResolutionWarning(enrichmentResolution.status));
+      }
       report.artifactPaths.enrichmentArtifacts = artifacts.enrichmentArtifacts;
       report.artifactPaths.manifestShards = artifacts.manifestShards;
       report.manifestShardsWritten = artifacts.manifestShardsWritten;

@@ -337,7 +337,7 @@ export async function validateKtxRelationshipDiscoveryCandidates(
   const budgeted = applyKtxRelationshipValidationBudget({
     candidates: input.candidates,
     tableCount: input.tableCount ?? 0,
-    budget: settings.validationBudget ?? (input.tableCount === undefined ? 'all' : undefined),
+    budget: settings.validationBudget,
     score: (candidate) => candidate.confidence,
   });
   const validated = await mapWithConcurrency(
