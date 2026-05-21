@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   pickDatabaseScope,
+  type DatabaseScopePromptAdapter,
   type DatabaseTreePickerRenderer,
   type PickDatabaseScopeArgs,
 } from './database-tree-picker.js';
@@ -12,8 +13,17 @@ function makeIo() {
   let stderr = '';
   return {
     io: {
-      stdout: { isTTY: true, write: (chunk: string) => { stdout += chunk; } },
-      stderr: { write: (chunk: string) => { stderr += chunk; } },
+      stdout: {
+        isTTY: true,
+        write: (chunk: string) => {
+          stdout += chunk;
+        },
+      },
+      stderr: {
+        write: (chunk: string) => {
+          stderr += chunk;
+        },
+      },
     },
     stdout: () => stdout,
     stderr: () => stderr,
@@ -48,23 +58,96 @@ const discovered = [
   { schema: 'public', name: 'sessions', kind: 'table' as const },
 ];
 
+function promptAdapter(overrides: Partial<DatabaseScopePromptAdapter> = {}): DatabaseScopePromptAdapter {
+  return {
+    autocompleteMultiselect: vi.fn(async () => ['analytics']),
+    select: vi.fn(async () => 'refine'),
+    ...overrides,
+  };
+}
+
 function baseArgs(overrides: Partial<PickDatabaseScopeArgs> = {}): PickDatabaseScopeArgs {
   return {
     connectionId: 'warehouse',
     schemaNoun: 'schema',
     schemaNounPlural: 'schemas',
-    discovered,
+    schemas: ['analytics', 'public'],
+    schemaSuggestion: { excluded: new Set(), suggested: new Set(['analytics']) },
     existing: { enabledTables: [] },
-    defaultSchemas: ['analytics'],
     supportsSchemaScope: true,
+    listTablesForSchemas: vi.fn(async () => discovered),
+    prompts: promptAdapter(),
     ...overrides,
   };
 }
 
 describe('pickDatabaseScope', () => {
+  it('starts Stage 1 with no checked schemas and does not enumerate tables before schema selection', async () => {
+    const prompts = promptAdapter({
+      autocompleteMultiselect: vi.fn(async () => ['analytics']),
+      select: vi.fn(async () => 'save'),
+    });
+    const listTablesForSchemas = vi.fn(async () => [
+      { schema: 'analytics', name: 'orders', kind: 'table' as const },
+    ]);
+
+    const result = await pickDatabaseScope(
+      baseArgs({
+        connectionId: 'warehouse',
+        schemaNoun: 'dataset',
+        schemaNounPlural: 'datasets',
+        schemas: ['analytics', 'raw'],
+        schemaSuggestion: { excluded: new Set(['raw']), suggested: new Set(['analytics']) },
+        listTablesForSchemas,
+        prompts,
+      }),
+      makeIo().io,
+      captureRenderer().renderer,
+    );
+
+    expect(listTablesForSchemas).toHaveBeenCalledTimes(1);
+    expect(listTablesForSchemas).toHaveBeenCalledWith(['analytics']);
+    expect(result).toEqual({
+      kind: 'selected',
+      activeSchemas: ['analytics'],
+      enabledTables: ['analytics.orders'],
+    });
+  });
+
+  it('routes partial existing allowlists through Stage 2 so save preserves table selections', async () => {
+    const { renderer, setResult } = captureRenderer();
+    setResult({ kind: 'save', selectedIds: ['analytics.customers'] });
+    const prompts = promptAdapter({
+      autocompleteMultiselect: vi.fn(async () => ['analytics']),
+      select: vi.fn(async () => 'save'),
+    });
+    const listTablesForSchemas = vi.fn(async () => [
+      { schema: 'analytics', name: 'customers', kind: 'table' as const },
+      { schema: 'analytics', name: 'orders', kind: 'table' as const },
+    ]);
+
+    const result = await pickDatabaseScope(
+      baseArgs({
+        schemas: ['analytics'],
+        schemaSuggestion: { excluded: new Set(), suggested: new Set(['analytics']) },
+        existing: { enabledTables: ['analytics.customers'] },
+        listTablesForSchemas,
+        prompts,
+      }),
+      makeIo().io,
+      renderer,
+    );
+
+    expect(result).toEqual({
+      kind: 'selected',
+      activeSchemas: ['analytics'],
+      enabledTables: ['analytics.customers'],
+    });
+  });
+
   it('builds a 2-level tree (schemas as parents, tables as children) and uses save-empty action', async () => {
     const { renderer, capture, setResult } = captureRenderer();
-    setResult({ kind: 'quit' });
+    setResult({ kind: 'save', selectedIds: ['analytics'] });
 
     await pickDatabaseScope(baseArgs(), makeIo().io, renderer);
 
@@ -81,18 +164,18 @@ describe('pickDatabaseScope', () => {
     expect(capture.state?.byId.get('public.events')?.title).toBe('events (view)');
   });
 
-  it('pre-checks default schemas at the parent level when no existing selection', async () => {
+  it('pre-checks selected schemas at the parent level when no existing selection reaches Stage 2', async () => {
     const { renderer, capture, setResult } = captureRenderer();
-    setResult({ kind: 'quit' });
+    setResult({ kind: 'save', selectedIds: ['analytics'] });
 
-    await pickDatabaseScope(baseArgs({ defaultSchemas: ['analytics'] }), makeIo().io, renderer);
+    await pickDatabaseScope(baseArgs(), makeIo().io, renderer);
 
     expect([...(capture.state?.checked ?? [])]).toEqual(['analytics']);
   });
 
   it('collapses an existing full-schema selection back into the parent check', async () => {
     const { renderer, capture, setResult } = captureRenderer();
-    setResult({ kind: 'quit' });
+    setResult({ kind: 'save', selectedIds: ['analytics'] });
 
     await pickDatabaseScope(
       baseArgs({ existing: { enabledTables: ['analytics.customers', 'analytics.orders'] } }),
@@ -105,7 +188,7 @@ describe('pickDatabaseScope', () => {
 
   it('keeps a partial existing selection at the leaf level', async () => {
     const { renderer, capture, setResult } = captureRenderer();
-    setResult({ kind: 'quit' });
+    setResult({ kind: 'save', selectedIds: ['analytics.customers'] });
 
     await pickDatabaseScope(
       baseArgs({ existing: { enabledTables: ['analytics.customers'] } }),
@@ -142,24 +225,6 @@ describe('pickDatabaseScope', () => {
     });
   });
 
-  it('treats empty save as enable-all', async () => {
-    const { renderer, setResult } = captureRenderer();
-    setResult({ kind: 'save', selectedIds: [] });
-
-    const result = await pickDatabaseScope(baseArgs(), makeIo().io, renderer);
-
-    expect(result).toEqual({
-      kind: 'selected',
-      activeSchemas: ['analytics', 'public'],
-      enabledTables: [
-        'analytics.customers',
-        'analytics.orders',
-        'public.events',
-        'public.sessions',
-      ],
-    });
-  });
-
   it('omits activeSchemas when the driver does not support a schema scope', async () => {
     const { renderer, setResult } = captureRenderer();
     setResult({ kind: 'save', selectedIds: ['analytics'] });
@@ -177,11 +242,12 @@ describe('pickDatabaseScope', () => {
     });
   });
 
-  it('returns back when the picker quits', async () => {
-    const { renderer, setResult } = captureRenderer();
-    setResult({ kind: 'quit' });
+  it('returns back when Stage 1 is cancelled', async () => {
+    const prompts = promptAdapter({
+      autocompleteMultiselect: vi.fn(async () => ['back']),
+    });
 
-    const result = await pickDatabaseScope(baseArgs(), makeIo().io, renderer);
+    const result = await pickDatabaseScope(baseArgs({ prompts }), makeIo().io, captureRenderer().renderer);
 
     expect(result).toEqual({ kind: 'back' });
   });

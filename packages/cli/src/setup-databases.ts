@@ -69,6 +69,14 @@ export interface KtxSetupDatabasesPromptAdapter {
     initialValues?: string[];
   }): Promise<string[]>;
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
+  autocompleteMultiselect(options: {
+    message: string;
+    options: KtxSetupPromptOption[];
+    placeholder?: string;
+    required?: boolean;
+    maxItems?: number;
+    initialValues?: string[];
+  }): Promise<string[]>;
   text(options: { message: string; placeholder?: string; initialValue?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -154,19 +162,6 @@ function defaultSuggest(values: string[]): ScopeSuggestion {
     values.filter((value) => !excluded.has(value) && SUGGESTED_SCOPE_PATTERN.test(value)),
   );
   return { excluded, suggested };
-}
-
-function legacyDefaultSchemasForPicker(
-  schemas: string[],
-  suggestion: ScopeSuggestion,
-): string[] {
-  const suggested = schemas.filter((schema) => suggestion.suggested.has(schema));
-  if (suggested.length > 0) {
-    return suggested;
-  }
-  const visible = schemas.filter((schema) => !suggestion.excluded.has(schema));
-  const nonPublic = visible.filter((schema) => schema !== 'public' && schema !== 'PUBLIC');
-  return nonPublic.length > 0 ? nonPublic : visible;
 }
 
 const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscoverySpec>> = {
@@ -1413,6 +1408,7 @@ async function maybeConfigureDatabaseScope(input: {
   args: KtxSetupDatabasesArgs;
   deps: KtxSetupDatabasesDeps;
   io: KtxCliIo;
+  prompts: KtxSetupDatabasesPromptAdapter;
   forcePrompt?: boolean;
 }): Promise<ConnectionSetupStatus> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
@@ -1473,32 +1469,53 @@ async function maybeConfigureDatabaseScope(input: {
     });
   }
 
-  writeSetupSection(input.io, 'Discovering tables', [
-    `Connecting to ${input.connectionId}…`,
-  ]);
+  writeSetupSection(input.io, 'Discovering tables', [`Connecting to ${input.connectionId}…`]);
 
-  const schemasFilter = await (async (): Promise<string[]> => {
-    if (cliSchemas.length > 0) return cliSchemas;
-    if (!spec) return [];
-    try {
-      return unique(
-        await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId),
-      );
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      input.io.stderr.write(
-        `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; ${detail}\n`,
-      );
-      return [];
-    }
-  })();
+  const schemas = unique(
+    cliSchemas.length > 0
+      ? cliSchemas
+      : await (async (): Promise<string[]> => {
+          if (!spec) return [];
+          try {
+            return await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId);
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            input.io.stderr.write(
+              `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; ${detail}\n`,
+            );
+            return [];
+          }
+        })(),
+  );
+  if (spec && schemas.length === 0) {
+    return 'ready';
+  }
+  const schemaSuggestion =
+    cliSchemas.length > 0
+      ? { excluded: new Set<string>(), suggested: new Set(cliSchemas) }
+      : spec?.suggest(schemas) ?? { excluded: new Set<string>(), suggested: new Set<string>() };
+  const existingEnabled =
+    hasExistingTables && input.forcePrompt === true
+      ? (existingTables ?? []).filter((table): table is string => typeof table === 'string')
+      : [];
 
-  let discovered: KtxTableListEntry[];
+  let pickResult: DatabaseScopePickResult;
   try {
-    discovered = await (input.deps.listTables ?? defaultListTables)(
-      input.projectDir,
-      input.connectionId,
-      schemasFilter.length > 0 ? schemasFilter : undefined,
+    pickResult = await (input.deps.pickDatabaseScope ?? defaultPickDatabaseScope)(
+      {
+        connectionId: input.connectionId,
+        schemaNoun: spec?.noun ?? 'schema',
+        schemaNounPlural: spec?.nounPlural ?? 'schemas',
+        schemas,
+        schemaSuggestion,
+        existing: { enabledTables: existingEnabled },
+        supportsSchemaScope: spec !== undefined,
+        initialSchemas: cliSchemas.length > 0 ? cliSchemas : undefined,
+        prompts: input.prompts,
+        listTablesForSchemas: (selectedSchemas) =>
+          (input.deps.listTables ?? defaultListTables)(input.projectDir, input.connectionId, selectedSchemas),
+      },
+      input.io,
     );
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -1509,60 +1526,11 @@ async function maybeConfigureDatabaseScope(input: {
     );
     return input.forcePrompt === true ? 'failed' : 'ready';
   }
-
-  if (discovered.length === 0) {
-    if (input.forcePrompt === true) {
-      input.io.stderr.write(`No tables discovered for ${input.connectionId}; edit was not saved.\n`);
-    }
-    return input.forcePrompt === true ? 'failed' : 'ready';
+  if (pickResult.kind === 'back') {
+    return 'back';
   }
-
-  const allQualified = discovered.map((t) => `${t.schema}.${t.name}`);
-  const schemasInDiscovery = unique(discovered.map((t) => t.schema));
-
-  const defaultSchemas = (() => {
-    if (cliSchemas.length > 0) return cliSchemas;
-    if (!spec) return schemasInDiscovery;
-    const suggestion = spec.suggest(schemasInDiscovery);
-    return legacyDefaultSchemasForPicker(schemasInDiscovery, suggestion);
-  })();
-  const schemaSuggestion = cliSchemas.length > 0
-    ? { excluded: new Set<string>(), suggested: new Set(cliSchemas) }
-    : spec?.suggest(schemasInDiscovery);
-
-  const existingEnabled =
-    hasExistingTables && input.forcePrompt === true
-      ? (existingTables ?? []).filter(
-          (table): table is string => typeof table === 'string' && allQualified.includes(table),
-        )
-      : [];
-
-  let activeSchemas: string[];
-  let enabledTables: string[];
-
-  if (discovered.length === 1) {
-    enabledTables = allQualified;
-    activeSchemas = spec ? schemasInDiscovery : [];
-  } else {
-    const pickResult = await (input.deps.pickDatabaseScope ?? defaultPickDatabaseScope)(
-      {
-        connectionId: input.connectionId,
-        schemaNoun: spec?.noun ?? 'schema',
-        schemaNounPlural: spec?.nounPlural ?? 'schemas',
-        discovered,
-        existing: { enabledTables: existingEnabled },
-        defaultSchemas,
-        ...(schemaSuggestion ? { schemaSuggestion } : {}),
-        supportsSchemaScope: spec !== undefined,
-      },
-      input.io,
-    );
-    if (pickResult.kind === 'back') {
-      return 'back';
-    }
-    enabledTables = pickResult.enabledTables;
-    activeSchemas = pickResult.activeSchemas;
-  }
+  const enabledTables = pickResult.enabledTables;
+  const activeSchemas = pickResult.activeSchemas;
 
   if (spec) {
     await writeScopeConfig({
@@ -1588,7 +1556,7 @@ async function maybeConfigureDatabaseScope(input: {
     ]);
   }
   writeSetupSection(input.io, `Tables enabled for ${input.connectionId}`, [
-    `✓ ${enabledTables.length}/${discovered.length} tables enabled`,
+    `✓ ${enabledTables.length} tables enabled`,
   ]);
   return 'ready';
 }
