@@ -256,14 +256,10 @@ const ktxProjectConfigSchema = z
 
 export type KtxProjectConfig = z.infer<typeof ktxProjectConfigSchema>;
 export type KtxProjectLlmConfig = z.infer<typeof llmSchema>;
-export type KtxProjectLlmProviderConfig = z.infer<typeof llmProviderSchema>;
 export type KtxProjectEmbeddingConfig = z.infer<typeof embeddingSchema>;
 export type KtxScanEnrichmentConfig = z.infer<typeof scanEnrichmentSchema>;
-export type KtxIngestWorkUnitsConfig = z.infer<typeof workUnitsSchema>;
 export type KtxScanRelationshipConfig = z.infer<typeof scanRelationshipsSchema>;
-export type KtxProjectScanConfig = z.infer<typeof scanSchema>;
 export type KtxProjectConnectionConfig = z.infer<typeof connectionSchema>;
-export type KtxProjectSetupConfig = z.infer<typeof setupSchema>;
 export type KtxStorageState = z.infer<typeof storageSchema>['state'];
 export type KtxSearchBackend = z.infer<typeof storageSchema>['search'];
 

@@ -14,7 +14,7 @@ export type KtxSetupReadyAction =
   | 'agents'
   | 'exit';
 
-export interface KtxSetupReadyMenuPromptAdapter {
+interface KtxSetupReadyMenuPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   cancel(message: string): void;
 }

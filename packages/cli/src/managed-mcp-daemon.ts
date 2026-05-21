@@ -17,6 +17,7 @@ export interface KtxMcpDaemonState {
   logPath: string;
 }
 
+/** @internal */
 export interface KtxMcpDaemonChild {
   pid?: number;
   unref(): void;

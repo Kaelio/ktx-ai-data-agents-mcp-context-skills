@@ -51,7 +51,7 @@ export interface ManagedPythonDaemonProcessInfo {
   command: string;
 }
 
-export type ManagedPythonDaemonStopAllSource = 'state' | 'process';
+type ManagedPythonDaemonStopAllSource = 'state' | 'process';
 
 export interface ManagedPythonDaemonStopAllEntry {
   pid: number;
@@ -74,11 +74,13 @@ export interface ManagedPythonDaemonStopAllResult {
   scanErrors: string[];
 }
 
+/** @internal */
 export interface ManagedPythonDaemonChild {
   pid?: number;
   unref(): void;
 }
 
+/** @internal */
 export type ManagedPythonDaemonSpawn = (
   command: string,
   args: string[],
@@ -89,6 +91,7 @@ export type ManagedPythonDaemonSpawn = (
   },
 ) => ManagedPythonDaemonChild;
 
+/** @internal */
 export type ManagedPythonDaemonFetch = (
   url: string,
 ) => Promise<{
@@ -98,7 +101,7 @@ export type ManagedPythonDaemonFetch = (
   text(): Promise<string>;
 }>;
 
-export type ManagedPythonDaemonKillProcess = (pid: number, signal?: NodeJS.Signals) => void;
+type ManagedPythonDaemonKillProcess = (pid: number, signal?: NodeJS.Signals) => void;
 
 export interface ManagedPythonDaemonStartOptions extends ManagedPythonDaemonLayoutOptions {
   features: KtxRuntimeFeature[];

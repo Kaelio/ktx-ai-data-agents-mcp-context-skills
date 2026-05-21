@@ -1,3 +1,4 @@
+/** @internal */
 export const KTX_CONTEXT_BUILD_COMMANDS = [
   {
     command: 'ktx ingest',
@@ -24,9 +25,10 @@ export const KTX_NEXT_STEP_DIRECT_COMMANDS = [
   },
 ] as const;
 
+/** @internal */
 export const KTX_NEXT_STEP_COMMANDS = [...KTX_NEXT_STEP_DIRECT_COMMANDS] as const;
 
-export const KTX_NEXT_STEP_COMMAND_WIDTH = Math.max(
+const KTX_NEXT_STEP_COMMAND_WIDTH = Math.max(
   ...[...KTX_CONTEXT_BUILD_COMMANDS, ...KTX_NEXT_STEP_COMMANDS].map((step) => step.command.length),
 );
 

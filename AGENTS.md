@@ -166,7 +166,16 @@ pnpm run test 2>&1 | tee /tmp/ktx-test-output.log
 analysis. These checks are intentionally part of CI and pre-commit because the
 normal development workflow is agent-based.
 
-- Run `pnpm run dead-code` after TypeScript changes.
+- `pnpm run dead-code` runs three checks: Biome (`dead-code:biome`), Knip
+  default-mode (`dead-code:knip`), and Knip production-mode
+  (`dead-code:knip:production`). All three must pass.
+- Default-mode Knip catches dead code reachable from no entry at all (broken
+  graph). Production-mode Knip catches code reachable only via tests —
+  i.e. code that's tested but doesn't ship.
+- Pre-commit runs `knip --fix` (auto-removes the `export` keyword from
+  symbols that are exported but unused) plus `knip --production` (alerts on
+  test-only paths). CI runs the same checks without `--fix` and fails on any
+  finding.
 - Treat Knip findings as investigation prompts, not automatic deletion orders.
 - Remove private dead code when you confirm there are no imports, dynamic
   references, generated references, or tests that still need it.
@@ -176,6 +185,26 @@ normal development workflow is agent-based.
   Do not add broad package-level ignores to silence unrelated findings.
 - Update `knip.json` when adding dynamic entrypoints, generated files, package
   exports, CLI bins, or framework files that Knip cannot infer.
+
+#### Internal exports for testability
+
+When a function, type, or constant must be exported solely so a unit test can
+import it (i.e. it has no production cross-file consumer), annotate the
+declaration with `/** @internal */` JSDoc. Knip's production-mode check
+ignores `@internal` exports, so the convention keeps the gate clean without
+silencing the rest of the file.
+
+```typescript
+/** @internal */
+export function reindexHasErrors(result: ReindexResult): boolean { ... }
+```
+
+Do NOT use Vitest in-source testing (`if (import.meta.vitest)` blocks). Keep
+tests in separate `*.test.ts(x)` files.
+
+If the only consumer of an export is its own test and the underlying behavior
+isn't used in production, delete both the export AND the test — testing dead
+code is still dead code.
 
 ### CLI Standards
 

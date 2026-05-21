@@ -1,11 +1,6 @@
+import type { ParsedTargetTable } from '../../parsed-target-table.js';
 import type { LookerWarehouseConnectionInfo } from './client.js';
-import type {
-  LookerPullConfig,
-  LookerRuntimeCursors,
-  ParsedTargetTable,
-  StagedExploreFile,
-  StagedLookmlModelsFile,
-} from './types.js';
+import type { LookerPullConfig, LookerRuntimeCursors, StagedExploreFile, StagedLookmlModelsFile } from './types.js';
 
 export const LOOKER_DIALECT_TO_CONNECTION_TYPE = {
   bigquery: 'BIGQUERY',

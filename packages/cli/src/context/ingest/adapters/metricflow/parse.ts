@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
-export interface ParsedMetricFlowSemanticModel {
+interface ParsedMetricFlowSemanticModel {
   /** Path relative to stagedDir, e.g. "models/orders.yml". */
   path: string;
   /** `name:` on the semantic_model. */
@@ -24,9 +24,9 @@ export interface ParsedMetricFlowSemanticModel {
   defaultTimeDimension: string | null;
 }
 
-export type MetricFlowMetricType = 'simple' | 'derived' | 'cumulative' | 'ratio' | 'conversion';
+type MetricFlowMetricType = 'simple' | 'derived' | 'cumulative' | 'ratio' | 'conversion';
 
-export interface ParsedMetricFlowMetric {
+interface ParsedMetricFlowMetric {
   path: string;
   name: string;
   type: MetricFlowMetricType;

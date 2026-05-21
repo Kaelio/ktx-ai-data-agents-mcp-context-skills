@@ -21,6 +21,7 @@ import { readKtxMcpDaemonStatus } from './managed-mcp-daemon.js';
 
 export type KtxAgentTarget = 'claude-code' | 'claude-desktop' | 'codex' | 'cursor' | 'opencode' | 'universal';
 export type KtxAgentScope = 'project' | 'global' | 'local';
+/** @internal */
 export type KtxAgentInstallMode = 'mcp' | 'mcp-cli';
 
 export interface KtxSetupAgentsArgs {
@@ -118,6 +119,7 @@ function writeSetupOutro(io: KtxCliIo, message: string): void {
 const STEP_HEADING_RE = /^(\d+)\. (.+)$/;
 const ACTION_MARKER_RE = /^(RUN|PASTE|USE|OPEN):$/;
 
+/** @internal */
 export function createAgentNextActionsLineFormatter(
   stdout: KtxCliIo['stdout'],
 ): (line: string) => string {
@@ -301,7 +303,7 @@ function claudeDesktopConfigPath(): { path: string; jsonPath: string[] } {
 
 const CLAUDE_DESKTOP_FORWARDED_ENV_KEYS = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] as const;
 
-export function collectClaudeDesktopForwardedEnv(source: NodeJS.ProcessEnv): Record<string, string> {
+function collectClaudeDesktopForwardedEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const captured: Record<string, string> = {};
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined || value === '') continue;
@@ -394,7 +396,7 @@ function plannedMcpJsonEntries(input: {
   return [];
 }
 
-export function agentInstallManifestPath(projectDir: string): string {
+function agentInstallManifestPath(projectDir: string): string {
   return join(resolve(projectDir), '.ktx/agents/install-manifest.json');
 }
 
@@ -410,6 +412,7 @@ function claudeDesktopLauncherPath(projectDir: string): string {
   return join(resolve(projectDir), '.ktx/agents/claude/ktx-plugin-runner.sh');
 }
 
+/** @internal */
 export function plannedKtxAgentFiles(input: {
   projectDir: string;
   target: KtxAgentTarget;
@@ -750,6 +753,7 @@ function mergeManifest(
   };
 }
 
+/** @internal */
 export async function removeKtxAgentInstall(projectDir: string, io: KtxCliIo): Promise<number> {
   const manifest = await readKtxAgentInstallManifest(projectDir);
   if (!manifest) {
@@ -765,7 +769,7 @@ export async function removeKtxAgentInstall(projectDir: string, io: KtxCliIo): P
   return 0;
 }
 
-export interface KtxSetupAgentsPromptAdapter {
+interface KtxSetupAgentsPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   multiselect(options: {
     message: string;
@@ -853,6 +857,7 @@ function hasAdminCliEntries(entries: InstallEntry[]): boolean {
   );
 }
 
+/** @internal */
 export interface InstallSummaryEntry {
   title: string;
   lines: string[];
@@ -869,6 +874,7 @@ function formatInlinePath(path: string): string {
   return path;
 }
 
+/** @internal */
 export function formatInstallSummaryLines(
   installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>,
   entries: InstallEntry[],

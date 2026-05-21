@@ -77,12 +77,14 @@ interface TreePickerAppProps extends TreePickerRenderInput {
   onExit(result: TreePickerResult): void;
 }
 
+/** @internal */
 export interface TreePickerInkInstance {
   rerender(tree: ReactNode): void;
   unmount(): void;
   waitUntilExit(): Promise<void>;
 }
 
+/** @internal */
 export interface TreePickerInkRenderOptions {
   stdin?: TreePickerTuiIo['stdin'];
   stdout: TreePickerTuiIo['stdout'];
@@ -97,6 +99,7 @@ function resolveTheme(env: NodeJS.ProcessEnv = process.env): TreePickerTheme {
   return env.NO_COLOR || env.TERM === 'dumb' ? NO_COLOR_THEME : COLOR_THEME;
 }
 
+/** @internal */
 export function resolveTreePickerWidth(columns: number | undefined): number {
   const resolvedColumns = columns ?? 100;
   return Math.max(60, Math.min(120, resolvedColumns - 4));
@@ -114,6 +117,7 @@ function rowMatchesSearch(state: PickerState, nodeId: string): boolean {
   return node.title.toLocaleLowerCase().includes(query) || node.path.toLocaleLowerCase().includes(query);
 }
 
+/** @internal */
 export function sanitizeTreePickerTuiError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message
@@ -121,11 +125,13 @@ export function sanitizeTreePickerTuiError(error: unknown): string {
     .replace(/\b(api[_-]?key|password|token|secret)=\S+/gi, '[redacted]');
 }
 
+/** @internal */
 export function windowOffset(count: number, selected: number, visible: number): number {
   if (count <= visible) return 0;
   return Math.max(0, Math.min(count - visible, selected - Math.floor(visible / 2)));
 }
 
+/** @internal */
 export function windowItems<T>(items: T[], selected: number, visible: number): { items: T[]; offset: number } {
   const offset = windowOffset(items.length, selected, visible);
   return { items: items.slice(offset, offset + visible), offset };
@@ -137,6 +143,7 @@ function truncateText(value: string, width: number): string {
   return `${value.slice(0, width - 3)}...`;
 }
 
+/** @internal */
 export function treePickerCommandForInkInput(
   input: string,
   key: InkKey,
@@ -205,6 +212,7 @@ function PickerRow(props: { state: PickerState; nodeId: string; width: number; t
   );
 }
 
+/** @internal */
 export function TreePickerApp(props: TreePickerAppProps): ReactNode {
   const app = useApp();
   const [state, setState] = useState(props.initialState);

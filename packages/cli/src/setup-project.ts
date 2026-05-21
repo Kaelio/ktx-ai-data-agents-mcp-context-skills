@@ -18,8 +18,8 @@ import {
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 
-export type KtxSetupProjectMode = 'auto' | 'prompt-new';
-export type KtxSetupInputMode = 'auto' | 'disabled';
+type KtxSetupProjectMode = 'auto' | 'prompt-new';
+type KtxSetupInputMode = 'auto' | 'disabled';
 
 export interface KtxSetupProjectArgs {
   projectDir: string;
@@ -45,6 +45,7 @@ export type KtxSetupProjectResult =
   | { status: 'cancelled'; projectDir: string }
   | { status: 'missing-input'; projectDir: string };
 
+/** @internal */
 export interface KtxSetupProjectPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string }): Promise<string | undefined>;

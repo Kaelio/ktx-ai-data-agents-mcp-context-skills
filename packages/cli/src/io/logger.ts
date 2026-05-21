@@ -14,6 +14,7 @@ function writeLine(io: KtxCliIo, message: string): void {
   io.stderr.write(message.endsWith('\n') ? message : `${message}\n`);
 }
 
+/** @internal */
 export function createNoopOperationalLogger(): KtxOperationalLogger {
   return {
     log: () => undefined,

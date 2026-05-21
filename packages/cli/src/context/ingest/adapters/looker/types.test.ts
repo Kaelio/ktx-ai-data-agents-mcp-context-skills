@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { parsedTargetTableSchema } from '../../parsed-target-table.js';
 import {
   lookerPullConfigSchema,
   parseLookerPullConfig,
-  parsedTargetTableSchema,
   stagedDashboardFileSchema,
   stagedExploreFileSchema,
   stagedLookerFetchIssueSchema,

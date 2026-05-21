@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 
 const YAML_EXT_RE = /\.(ya?ml)$/i;
 
+/** @internal */
 export function normalizeDbtPath(path: string): string {
   return path.replaceAll('\\', '/');
 }

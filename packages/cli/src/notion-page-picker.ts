@@ -24,6 +24,7 @@ export interface PickNotionRootPagesArgs {
   connection: KtxProjectConnectionConfig;
 }
 
+/** @internal */
 export type NotionPickerApi = Pick<NotionApi, 'search' | 'retrieveBotUser'>;
 export type NotionRootPagePickResult =
   | { kind: 'selected'; rootPageIds: string[] }
@@ -50,6 +51,7 @@ function assertSafeNotionPickerConnectionId(connectionId: string): void {
   }
 }
 
+/** @internal */
 export function normalizeNotionPageId(value: string): string {
   const trimmed = value.trim();
   const compact = trimmed.includes('-') ? trimmed.replace(/-/g, '') : trimmed;
@@ -106,6 +108,7 @@ function extractParentPageId(page: Record<string, unknown>): string | null {
   return normalizeNotionPageId(parent.page_id);
 }
 
+/** @internal */
 export function notionPickerPageFromSearchResult(result: Record<string, unknown>): TreePickerNodeInput {
   const id = typeof result.id === 'string' ? normalizeNotionPageId(result.id) : '';
   if (!id) {
@@ -119,6 +122,7 @@ export function notionPickerPageFromSearchResult(result: Record<string, unknown>
   };
 }
 
+/** @internal */
 export async function discoverNotionPickerPages(
   api: NotionPickerApi,
   options: { cap?: number } = {},
@@ -161,6 +165,7 @@ export async function discoverNotionPickerPages(
   return { pages, cappedAtCount: cap, warnings };
 }
 
+/** @internal */
 export async function resolveNotionWorkspaceLabel(api: NotionPickerApi, connectionId: string): Promise<string> {
   try {
     const bot = (await api.retrieveBotUser()) as NotionBotInfo;

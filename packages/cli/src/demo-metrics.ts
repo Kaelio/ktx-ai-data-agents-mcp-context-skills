@@ -140,6 +140,7 @@ export function formatDuration(ms: number): string {
   return `${hr}h${(min % 60).toString().padStart(2, '0')}m`;
 }
 
+/** @internal */
 export function formatEta(ms: number | null, status: MemoryFlowReplayInput['status']): string {
   if (status !== 'running') return 'done';
   if (ms === null) return 'estimating...';
@@ -153,6 +154,7 @@ export function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+/** @internal */
 export function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0';
   if (n < 1000) return `${Math.round(n)}`;
@@ -160,6 +162,7 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(2)}M`;
 }
 
+/** @internal */
 export function formatTokensPerSec(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0/s';
   if (n < 1000) return `${Math.round(n)}/s`;
@@ -167,6 +170,7 @@ export function formatTokensPerSec(n: number): string {
 }
 
 const PROGRESS_BAR_WIDTH = 12;
+/** @internal */
 export function progressBar(ratio: number, width: number = PROGRESS_BAR_WIDTH): string {
   const clamped = Math.max(0, Math.min(1, ratio));
   const filled = Math.round(clamped * width);

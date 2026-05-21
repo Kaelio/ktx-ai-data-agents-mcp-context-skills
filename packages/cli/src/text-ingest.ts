@@ -17,6 +17,7 @@ export interface KtxTextIngestArgs {
   failFast: boolean;
 }
 
+/** @internal */
 export interface TextMemoryIngestPort {
   ingest(input: MemoryAgentInput): Promise<{ runId: string }>;
   waitForRun(runId: string): Promise<void>;

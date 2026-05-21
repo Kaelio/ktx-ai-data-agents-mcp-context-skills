@@ -21,12 +21,13 @@ import {
 } from './managed-python-command.js';
 import { startManagedPythonDaemon, type ManagedPythonDaemonStartResult } from './managed-python-daemon.js';
 
+/** @internal */
 export type ManagedPythonHttpJsonRunner = (
   path: string,
   payload: Record<string, unknown>,
 ) => Promise<Record<string, unknown>>;
 
-export type ManagedPythonHttpPostJson = (
+type ManagedPythonHttpPostJson = (
   baseUrl: string,
   path: string,
   payload: Record<string, unknown>,
@@ -75,7 +76,7 @@ function parseJsonObject(raw: string, path: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-export async function postManagedDaemonJson(
+async function postManagedDaemonJson(
   baseUrl: string,
   path: string,
   payload: Record<string, unknown>,
@@ -117,6 +118,7 @@ export async function postManagedDaemonJson(
   });
 }
 
+/** @internal */
 export function createManagedPythonDaemonBaseUrlResolver(
   options: ManagedPythonCoreDaemonOptions,
 ): () => Promise<string> {
@@ -158,6 +160,7 @@ function isResolveBaseUrlOnly(
   return 'resolveBaseUrl' in options;
 }
 
+/** @internal */
 export function createManagedDaemonHttpJsonRunner(
   options: ManagedPythonDaemonHttpOptions,
 ): ManagedPythonHttpJsonRunner {

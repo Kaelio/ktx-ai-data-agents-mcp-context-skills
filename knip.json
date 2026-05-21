@@ -14,33 +14,25 @@
     },
     "packages/cli": {
       "entry": [
-        "src/index.ts",
-        "src/bin.ts",
-        "src/llm/index.ts",
-        "src/context/index.ts",
-        "src/context/**/index.ts",
-        "src/connectors/*/index.ts",
-        "src/**/*.test.ts",
-        "src/**/*.test.tsx",
-        "scripts/**/*.mjs"
+        "src/llm/index.ts!",
+        "src/context/**/index.ts!",
+        "src/connectors/*/index.ts!",
+        "src/print-command-tree.ts!",
+        "src/**/*.test-utils.ts",
+        "src/**/acceptance-fixtures.ts"
       ],
-      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs", "vitest.config.ts"]
+      "project": ["src/**/*.{ts,tsx}!", "scripts/**/*.mjs", "vitest.config.ts"]
     },
     "docs-site": {
       "entry": [
-        "app/**/*.{ts,tsx}",
-        "components/**/*.{ts,tsx}",
-        "lib/**/*.{ts,tsx}",
-        "middleware.ts",
-        "next.config.mjs",
-        "source.config.ts",
-        "tests/**/*.mjs"
+        "components/**/*.{ts,tsx}!",
+        "source.config.ts!"
       ],
       "project": [
-        "app/**/*.{ts,tsx}",
-        "components/**/*.{ts,tsx}",
-        "lib/**/*.{ts,tsx}",
-        "*.ts",
+        "app/**/*.{ts,tsx}!",
+        "components/**/*.{ts,tsx}!",
+        "lib/**/*.{ts,tsx}!",
+        "*.ts!",
         "*.mjs",
         "tests/**/*.mjs"
       ],
@@ -51,41 +43,7 @@
     "**/dist/**",
     "**/coverage/**",
     "**/.next/**",
-    "**/node_modules/**",
-    "**/*.gen.ts",
-    "**/*.generated.ts"
+    "**/node_modules/**"
   ],
-  "ignoreBinaries": ["uv", "lsof"],
-  "ignoreIssues": {
-    "packages/cli/src/clack.ts": ["exports"],
-    "packages/cli/src/commands/connection-metabase-setup.ts": ["exports", "types"],
-    "packages/cli/src/ingest.test-utils.ts": ["exports"],
-    "packages/cli/src/io/symbols.ts": ["exports"],
-    "packages/cli/src/managed-python-command.ts": ["types"],
-    "packages/cli/src/managed-python-daemon.ts": ["types"],
-    "packages/cli/src/managed-python-http.ts": ["exports", "types"],
-    "packages/cli/src/managed-python-runtime.ts": ["types"],
-    "packages/cli/src/memory-flow-tui.tsx": ["types"],
-    "packages/cli/src/next-steps.ts": ["exports"],
-    "packages/cli/src/print-command-tree.ts": ["exports"],
-    "packages/cli/src/setup-agents.ts": ["exports", "types"],
-    "packages/cli/src/setup-context.ts": ["types"],
-    "packages/cli/src/setup-demo-tour.ts": ["exports"],
-    "packages/cli/src/setup-models.ts": ["exports"],
-    "packages/cli/src/setup-project.ts": ["types"],
-    "packages/cli/src/setup-ready-menu.ts": ["types"],
-    "packages/cli/src/setup-sources.ts": ["types"],
-    "packages/cli/src/context/ingest/adapters/historic-sql/pattern-inputs.ts": ["exports", "types"],
-    "packages/cli/src/context/ingest/adapters/lookml/pull-config.ts": ["exports"],
-    "packages/cli/src/context/ingest/adapters/metabase/serialize-card.ts": ["types"],
-    "packages/cli/src/context/ingest/adapters/metabase/types.ts": ["exports"],
-    "packages/cli/src/context/ingest/adapters/metricflow/parse.ts": ["types"],
-    "packages/cli/src/context/ingest/ports.ts": ["types"],
-    "packages/cli/src/context/ingest/stages/stage-3-work-units.ts": ["types"],
-    "packages/cli/src/context/ingest/stages/stage-index.types.ts": ["types"],
-    "packages/cli/src/context/project/config.ts": ["types"],
-    "packages/cli/src/context/scan/relationship-candidates.ts": ["types"],
-    "packages/cli/src/context/scan/relationship-diagnostics.ts": ["types"],
-    "packages/cli/src/context/tools/context-evidence-tool-store.ts": ["types"]
-  }
+  "ignoreBinaries": ["uv", "lsof"]
 }

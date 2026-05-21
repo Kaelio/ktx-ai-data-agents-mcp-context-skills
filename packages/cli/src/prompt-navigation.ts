@@ -38,6 +38,7 @@ function withTextInputBodySpacing(message: string): string {
   return `${title}\n\n${bodyLines.join('\n')}`;
 }
 
+/** @internal */
 export function withMenuOptionSpacing(message: string): string {
   if (!message.includes('\n') || message.endsWith('\n')) {
     return message;

@@ -25,8 +25,11 @@ export interface LoadAllSourcesResult {
   loadErrors: string[];
 }
 
+/** @internal */
 export class UnknownColumnOverrideError extends Error {}
+/** @internal */
 export class ColumnNameCollisionError extends Error {}
+/** @internal */
 export class ConflictingExcludeAndOverrideError extends Error {}
 class ComposeContractError extends Error {}
 

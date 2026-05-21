@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { assertSearchBackendCapabilities, assertSearchBackendConformanceCase } from './index.js';
-import { KtxPGliteOwnerProcess, PGLITE_OWNER_PROCESS_BACKEND_CAPABILITIES } from './pglite-owner-process.js';
+import { assertSearchBackendConformanceCase } from './index.js';
+import { KtxPGliteOwnerProcess } from './pglite-owner-process.js';
 
 async function allocatePort(): Promise<number> {
   const server = createServer();
@@ -105,20 +105,6 @@ describe('KtxPGliteOwnerProcess', () => {
 
   afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true });
-  });
-
-  it('declares the advanced PGlite search capabilities observed by the spike', () => {
-    assertSearchBackendCapabilities({
-      backendName: 'pglite-owner-process',
-      capabilities: PGLITE_OWNER_PROCESS_BACKEND_CAPABILITIES,
-      expected: {
-        fts: true,
-        vector: true,
-        fuzzy: true,
-        jsonSearch: true,
-        arraySearch: false,
-      },
-    });
   });
 
   it('starts a socket owner process and serves PostgreSQL clients', async () => {

@@ -1,7 +1,7 @@
 import * as z from 'zod';
 import { parsedTargetTableSchema } from '../../parsed-target-table.js';
 
-export const lookmlPullConfigSchema = z.object({
+const lookmlPullConfigSchema = z.object({
   repoUrl: z.string().url(),
   branch: z.string().default('main'),
   path: z.string().nullable().default(null),

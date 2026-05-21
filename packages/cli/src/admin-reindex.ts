@@ -55,10 +55,12 @@ function quotePlainValue(value: string): string {
   return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
+/** @internal */
 export function reindexHasErrors(summary: ReindexSummary): boolean {
   return summary.scopes.some((scope) => scope.error);
 }
 
+/** @internal */
 export function renderReindexPlain(summary: ReindexSummary, io: KtxCliIo): void {
   const updateKey = summary.force ? 'rebuilt' : 'updated';
   for (const scope of summary.scopes) {
@@ -88,6 +90,7 @@ export function renderReindexPlain(summary: ReindexSummary, io: KtxCliIo): void 
   );
 }
 
+/** @internal */
 export function renderReindexJson(summary: ReindexSummary, io: KtxCliIo): void {
   io.stdout.write(`${JSON.stringify({ kind: 'reindex', data: summary, meta: { command: 'admin reindex' } }, null, 2)}\n`);
 }

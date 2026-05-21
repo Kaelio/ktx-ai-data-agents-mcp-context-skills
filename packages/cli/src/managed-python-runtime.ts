@@ -25,7 +25,7 @@ const runtimeAssetManifestSchema = z.object({
   }),
 });
 
-export type KtxRuntimeAssetManifest = z.infer<typeof runtimeAssetManifestSchema>;
+type KtxRuntimeAssetManifest = z.infer<typeof runtimeAssetManifestSchema>;
 
 const installedRuntimeManifestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -76,6 +76,7 @@ export interface ManagedPythonDaemonLayout extends ManagedPythonRuntimeLayout {
   daemonStderrPath: string;
 }
 
+/** @internal */
 export interface ManagedRuntimeAsset {
   manifest: KtxRuntimeAssetManifest;
   wheelPath: string;
@@ -104,7 +105,7 @@ export interface ManagedPythonRuntimeInstallResult {
   manifest: InstalledKtxRuntimeManifest;
 }
 
-export type ManagedPythonRuntimeStatusKind = 'missing' | 'ready' | 'mismatched' | 'broken';
+type ManagedPythonRuntimeStatusKind = 'missing' | 'ready' | 'mismatched' | 'broken';
 
 export interface ManagedPythonRuntimeStatus {
   kind: ManagedPythonRuntimeStatusKind;
@@ -121,6 +122,7 @@ export interface ManagedPythonRuntimeDoctorCheck {
   fix?: string;
 }
 
+/** @internal */
 export const MISSING_UV_RUNTIME_INSTALL_MESSAGE =
   'uv is required to install the KTX Python runtime. KTX does not download uv automatically. Install uv, make sure it is on PATH, and retry: ktx admin runtime install --yes';
 
@@ -142,6 +144,7 @@ function executablePath(venvDir: string, platform: NodeJS.Platform, name: string
   return join(venvDir, 'bin', name);
 }
 
+/** @internal */
 export function managedPythonRuntimeLayout(options: ManagedPythonRuntimeLayoutOptions): ManagedPythonRuntimeLayout {
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
@@ -235,6 +238,7 @@ function parseRequiresPythonFromWheel(input: { wheelPath: string; contents: Buff
   };
 }
 
+/** @internal */
 export async function verifyRuntimeAsset(input: { assetDir: string }): Promise<ManagedRuntimeAsset> {
   const manifestPath = join(input.assetDir, 'manifest.json');
   let manifestData: unknown;

@@ -33,6 +33,7 @@ function tableSortKey(table: KtxTableRef): string {
   return `${table.catalog ?? ''}\u0000${table.db ?? ''}\u0000${table.name}`;
 }
 
+/** @internal */
 export function liveDatabaseTablePath(table: KtxTableRef): string {
   return `${LIVE_DATABASE_TABLES_DIR}/${encodePathPart(table.catalog)}.${encodePathPart(table.db)}.${encodePathPart(
     table.name,

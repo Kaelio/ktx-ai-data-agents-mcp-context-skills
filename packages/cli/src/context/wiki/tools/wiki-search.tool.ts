@@ -23,6 +23,7 @@ interface WikiSearchStructured {
   totalFound: number;
 }
 
+/** @internal */
 export interface WikiSearchAdapterPort {
   search(input: { userId: string; query: string; limit: number }): Promise<{
     results: Array<{

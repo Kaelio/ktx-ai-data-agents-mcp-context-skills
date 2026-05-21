@@ -3,6 +3,7 @@ export interface SemanticLayerTargetPolicyInput {
   allowedConnectionIds: ReadonlySet<string>;
 }
 
+/** @internal */
 export interface SemanticLayerTargetPolicyViolation {
   path: string;
   connectionId: string;

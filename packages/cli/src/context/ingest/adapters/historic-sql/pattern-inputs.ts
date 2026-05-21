@@ -1,13 +1,14 @@
 import { Buffer } from 'node:buffer';
 import type { StagedPatternsInput } from './types.js';
 
-export const HISTORIC_SQL_PATTERN_WORKUNIT_DIR = 'patterns-input';
+const HISTORIC_SQL_PATTERN_WORKUNIT_DIR = 'patterns-input';
+/** @internal */
 export const HISTORIC_SQL_PATTERN_WORKUNIT_MAX_BYTES = 110_000;
-export const HISTORIC_SQL_PATTERN_WORKUNIT_PATH_RE = /^patterns-input\/part-\d{4}\.json$/;
+const HISTORIC_SQL_PATTERN_WORKUNIT_PATH_RE = /^patterns-input\/part-\d{4}\.json$/;
 
 type PatternTemplate = StagedPatternsInput['templates'][number];
 
-export interface HistoricSqlPatternInputShard {
+interface HistoricSqlPatternInputShard {
   path: string;
   input: StagedPatternsInput;
   byteLength: number;
@@ -27,10 +28,11 @@ export function isHistoricSqlPatternInputShardPath(path: string): boolean {
   return HISTORIC_SQL_PATTERN_WORKUNIT_PATH_RE.test(path);
 }
 
-export function serializeStagedPatternsInput(input: StagedPatternsInput): string {
+function serializeStagedPatternsInput(input: StagedPatternsInput): string {
   return `${JSON.stringify(input, null, 2)}\n`;
 }
 
+/** @internal */
 export function serializedStagedPatternsInputByteLength(input: StagedPatternsInput): number {
   return Buffer.byteLength(serializeStagedPatternsInput(input), 'utf-8');
 }

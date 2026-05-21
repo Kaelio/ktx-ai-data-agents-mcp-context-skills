@@ -25,6 +25,7 @@ export interface McpSecurityConfig {
   allowedOrigins: string[];
 }
 
+/** @internal */
 export type McpAuthorizationResult =
   | { ok: true }
   | { ok: false; status: 401 | 403; message: string };
@@ -34,6 +35,7 @@ function isLoopbackHost(host: string): boolean {
   return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
 }
 
+/** @internal */
 export function normalizeHostHeader(value: string): string {
   const trimmed = value.trim().toLowerCase();
   if (trimmed.startsWith('[')) {
@@ -85,6 +87,7 @@ function headerValue(headers: IncomingHttpHeaders | Record<string, string | unde
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** @internal */
 export function isMcpRequestAuthorized(
   request: { path: string; headers: IncomingHttpHeaders | Record<string, string | undefined> },
   config: McpSecurityConfig,

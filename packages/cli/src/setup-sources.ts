@@ -89,7 +89,7 @@ export interface KtxSetupSourcesPromptAdapter {
   log?(message: string): void;
 }
 
-export type SourceValidationResult = { ok: true; detail?: string } | { ok: false; message: string };
+type SourceValidationResult = { ok: true; detail?: string } | { ok: false; message: string };
 
 export interface KtxSetupSourcesDeps {
   prompts?: KtxSetupSourcesPromptAdapter;

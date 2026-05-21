@@ -7,8 +7,6 @@ const nullableLookerIdSchema = z.union([lookerIdSchema, z.null()]).default(null)
 
 export const lookerConnectionIdSchema = z.string().min(1).regex(/^[A-Za-z0-9_-]+$/);
 
-export { parsedTargetTableSchema, type ParsedTargetTable } from '../../parsed-target-table.js';
-
 export const lookerRuntimeCursorsSchema = z.object({
   dashboardsLastSyncedAt: z.iso.datetime().nullable().default(null),
   looksLastSyncedAt: z.iso.datetime().nullable().default(null),
@@ -16,6 +14,7 @@ export const lookerRuntimeCursorsSchema = z.object({
 
 export type LookerRuntimeCursors = z.infer<typeof lookerRuntimeCursorsSchema>;
 
+/** @internal */
 export const lookerPullConfigSchema = z.object({
   lookerConnectionId: lookerConnectionIdSchema.optional(),
   instanceBaseUrl: z.url().optional(),

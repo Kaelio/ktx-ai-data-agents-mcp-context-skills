@@ -1,7 +1,7 @@
 import type { MemoryAction } from '../../memory/index.js';
 import type { TouchedSlSource } from '../../tools/index.js';
 
-export interface StageIndexWorkUnit {
+interface StageIndexWorkUnit {
   unitKey: string;
   rawFiles: string[];
   status: 'success' | 'failed';

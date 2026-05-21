@@ -9,6 +9,7 @@ export class KtxSetupExitError extends Error {
   }
 }
 
+/** @internal */
 export interface SetupInterruptTracker {
   track<T>(run: () => Promise<T>): Promise<T>;
   wasCtrlC(): boolean;

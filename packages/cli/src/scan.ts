@@ -274,6 +274,7 @@ interface KtxCliScanProgress extends Omit<KtxProgressPort, 'update'> {
   flush(): void;
 }
 
+/** @internal */
 export function createCliScanProgress(
   io: KtxCliIo,
   state: KtxCliScanProgressState = { progress: 0, hasPendingTransient: false },

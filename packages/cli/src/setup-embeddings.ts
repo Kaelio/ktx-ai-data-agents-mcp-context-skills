@@ -46,6 +46,7 @@ export type KtxSetupEmbeddingsResult =
   | { status: 'missing-input'; projectDir: string }
   | { status: 'failed'; projectDir: string };
 
+/** @internal */
 export interface KtxSetupEmbeddingsPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   password(options: { message: string }): Promise<string | undefined>;

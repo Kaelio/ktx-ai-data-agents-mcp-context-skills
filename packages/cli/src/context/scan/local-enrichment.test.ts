@@ -12,7 +12,6 @@ import {
   runLocalScanEnrichment,
   snapshotToKtxEnrichedSchema,
 } from './local-enrichment.js';
-import { createLocalScanEnrichmentProvidersFromConfig } from './local-scan.js';
 import {
   createKtxConnectorCapabilities,
   type KtxQueryResult,
@@ -813,46 +812,4 @@ describe('local scan enrichment', () => {
     }
   });
 
-  it('resolves gateway LLM providers and passes injected embedding provider through to scan enrichment', () => {
-    const createKtxLlmProvider = vi.fn(() => ({
-      getModel: vi.fn().mockReturnValue({ modelId: 'provider/language-model', provider: 'gateway' }),
-    }));
-    const embeddingProvider = {
-      dimensions: 1536,
-      maxBatchSize: 8,
-      embed: vi.fn(),
-      [['embed', 'Many'].join('')]: vi.fn(),
-    };
-
-    const providers = createLocalScanEnrichmentProvidersFromConfig(
-      {
-        mode: 'llm',
-        embeddings: {
-          backend: 'openai',
-          model: 'provider/embedding-model',
-          dimensions: 1536,
-          batchSize: 8,
-          openai: { api_key: 'env:OPENAI_API_KEY' }, // pragma: allowlist secret
-        },
-      },
-      {
-        provider: {
-          backend: 'gateway',
-          gateway: {},
-        },
-        models: { default: 'provider/language-model' },
-      },
-      {
-        createKtxLlmProvider: createKtxLlmProvider as any,
-        env: { OPENAI_API_KEY: 'openai-key' }, // pragma: allowlist secret
-        embeddingProvider: embeddingProvider as any,
-      },
-    );
-
-    expect(providers?.embedding?.dimensions).toBe(1536);
-    expect(providers?.embedding?.maxBatchSize).toBe(8);
-    expect(createKtxLlmProvider).toHaveBeenCalledWith(
-      expect.objectContaining({ backend: 'gateway', modelSlots: { default: 'provider/language-model' } }),
-    );
-  });
 });

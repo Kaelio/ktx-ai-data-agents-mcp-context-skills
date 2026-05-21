@@ -66,7 +66,7 @@ export interface KtxRelationshipDiagnosticsThresholds {
   reviewThreshold: number;
 }
 
-export interface KtxRelationshipDiagnosticsPolicy {
+interface KtxRelationshipDiagnosticsPolicy {
   validationRequiredForManifest: boolean;
   maxCandidatesPerColumn: number;
   profileSampleRows: number;

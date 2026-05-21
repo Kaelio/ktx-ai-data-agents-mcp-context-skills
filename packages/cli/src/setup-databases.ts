@@ -64,6 +64,7 @@ export type KtxSetupDatabasesResult =
   | { status: 'missing-input'; projectDir: string }
   | { status: 'failed'; projectDir: string };
 
+/** @internal */
 export interface KtxSetupDatabasesPromptAdapter {
   multiselect(options: {
     message: string;

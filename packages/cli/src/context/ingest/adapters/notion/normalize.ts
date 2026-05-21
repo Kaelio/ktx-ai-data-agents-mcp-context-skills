@@ -14,6 +14,7 @@ function richTextToMarkdown(value: unknown): string {
     .trim();
 }
 
+/** @internal */
 export function propertyValueToText(value: unknown): string {
   if (!value || typeof value !== 'object' || !('type' in value)) {
     return '';

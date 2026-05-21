@@ -93,6 +93,7 @@ function transientHint(text: string, now: number): PickerState['transientHint'] 
   return { text, expiresAt: now + TRANSIENT_HINT_DURATION_MS };
 }
 
+/** @internal */
 export function clearExpiredTransientHint(state: PickerState, now = Date.now()): PickerState {
   if (!state.transientHint || state.transientHint.expiresAt > now) {
     return state;
@@ -249,6 +250,7 @@ function checkedAncestor(nodeId: string, state: PickerState): TreePickerNode | n
   return null;
 }
 
+/** @internal */
 export function canToggle(nodeId: string, state: PickerState): { ok: true } | { ok: false; reason: string } {
   if (!state.byId.has(nodeId)) {
     return { ok: false, reason: 'Node not found' };
@@ -260,6 +262,7 @@ export function canToggle(nodeId: string, state: PickerState): { ok: true } | { 
   return { ok: true };
 }
 
+/** @internal */
 export function toggleChecked(state: PickerState, nodeId: string, now = Date.now()): PickerState {
   const toggle = canToggle(nodeId, state);
   if (!toggle.ok) {
@@ -335,6 +338,7 @@ export function visibleNodeIds(state: PickerState): string[] {
   return result;
 }
 
+/** @internal */
 export function selectAllVisible(state: PickerState): PickerState {
   const candidates = state.search.query.trim().length > 0 ? matchingIds(state) : new Set(visibleNodeIds(state));
   const checked = new Set(state.checked);
@@ -358,6 +362,7 @@ export function selectAllVisible(state: PickerState): PickerState {
   });
 }
 
+/** @internal */
 export function selectNone(state: PickerState): PickerState {
   return cloneState(state, { checked: new Set(), transientHint: null });
 }
@@ -383,6 +388,7 @@ function setExpanded(state: PickerState, nodeId: string, value: boolean | 'toggl
   return cloneState(state, { expanded });
 }
 
+/** @internal */
 export function moveCursor(state: PickerState, dir: 'up' | 'down' | 'left' | 'right'): PickerState {
   const node = state.byId.get(state.cursorId);
   if (!node) {

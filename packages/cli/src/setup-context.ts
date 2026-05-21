@@ -25,12 +25,13 @@ import {
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 
-export type KtxSetupContextBuildStatus =
+type KtxSetupContextBuildStatus =
   | 'not_started'
   | 'completed'
   | 'failed'
   | 'stale';
 
+/** @internal */
 export interface KtxSetupContextCommands {
   build: string;
   status: string;
@@ -61,7 +62,7 @@ export interface KtxSetupContextStatusSummary {
   detail?: string;
 }
 
-export interface KtxSetupContextReadiness {
+interface KtxSetupContextReadiness {
   ready: boolean;
   agentContextReady: boolean;
   semanticSearchReady: boolean;
@@ -86,7 +87,7 @@ export interface KtxSetupContextStepArgs {
   runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
 }
 
-export interface KtxSetupContextPromptAdapter {
+interface KtxSetupContextPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   cancel(message: string): void;
 }
@@ -125,6 +126,7 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+/** @internal */
 export function contextBuildCommands(projectDir: string): KtxSetupContextCommands {
   const resolvedProjectDir = resolve(projectDir);
   return {
@@ -236,6 +238,7 @@ export async function readKtxSetupContextState(projectDir: string): Promise<KtxS
   return normalizeState(projectDir, JSON.parse(await readFile(filePath, 'utf-8')) as unknown);
 }
 
+/** @internal */
 export async function writeKtxSetupContextState(projectDir: string, state: KtxSetupContextState): Promise<void> {
   const resolvedProjectDir = resolve(projectDir);
   await mkdir(join(resolvedProjectDir, '.ktx', 'setup'), { recursive: true });

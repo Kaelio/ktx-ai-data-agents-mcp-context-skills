@@ -6,7 +6,7 @@ import type { WorkUnit } from '../types.js';
 
 const MAX_WORK_UNIT_PROMPT_CHARS = 240_000;
 
-export interface TouchedValidationResult {
+interface TouchedValidationResult {
   invalidSources: string[];
   validSources: string[];
 }

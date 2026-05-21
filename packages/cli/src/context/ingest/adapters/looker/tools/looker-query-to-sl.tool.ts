@@ -1,7 +1,8 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { ToolOutput } from '../../../../tools/index.js';
-import { type ParsedTargetTable, stagedLookerQuerySchema } from '../types.js';
+import type { ParsedTargetTable } from '../../../parsed-target-table.js';
+import { stagedLookerQuerySchema } from '../types.js';
 
 const lookerUsageInputSchema = z.object({
   queryCount30d: z.number().int().nonnegative().default(0),

@@ -1,11 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import type { ParsedTargetTable } from '../../parsed-target-table.js';
 import type { FetchContext } from '../../types.js';
 import { writeLookerEvidenceDocuments } from './evidence-documents.js';
 import { writeLookerFetchReport } from './fetch-report.js';
 import {
   type LookerPullConfig,
-  type ParsedTargetTable,
   parseLookerPullConfig,
   STAGED_FILES,
   type StagedDashboardFile,

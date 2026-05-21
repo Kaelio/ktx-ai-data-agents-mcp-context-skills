@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const metabaseSyncModeSchema = z.enum(['ALL', 'ONLY', 'EXCEPT']);
+const metabaseSyncModeSchema = z.enum(['ALL', 'ONLY', 'EXCEPT']);
 export type MetabaseSyncMode = z.infer<typeof metabaseSyncModeSchema>;
 
 export const metabaseLocalConnectionIdSchema = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
@@ -25,7 +25,7 @@ export function parseMetabasePullConfig(raw: unknown): MetabasePullConfig {
 }
 
 /** A Metabase column from `card.result_metadata`. Mirrors what the LLM consumes today. */
-export const stagedResultColumnSchema = z.object({
+const stagedResultColumnSchema = z.object({
   name: z.string(),
   display_name: z.string().optional().nullable(),
   base_type: z.string(),
@@ -37,7 +37,7 @@ export const stagedResultColumnSchema = z.object({
 
 export type StagedResultColumn = z.infer<typeof stagedResultColumnSchema>;
 
-export const stagedParameterSchema = z.object({
+const stagedParameterSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string(),
@@ -49,7 +49,7 @@ export const stagedParameterSchema = z.object({
 export type StagedParameter = z.infer<typeof stagedParameterSchema>;
 
 /** A template tag pulled from an MBQL card's `dataset_query.stages[0].template-tags`. */
-export const stagedTemplateTagSchema = z.object({
+const stagedTemplateTagSchema = z.object({
   name: z.string(),
   type: z.string(),
   defaultValue: z.string().optional().nullable(),
@@ -87,7 +87,7 @@ export const stagedCardFileSchema = z.object({
 export type StagedCardFile = z.infer<typeof stagedCardFileSchema>;
 
 /** A serialized collection file, `collections/<id>.json`. Minimal — path lives on the card. */
-export const stagedCollectionFileSchema = z.object({
+const stagedCollectionFileSchema = z.object({
   metabaseId: z.union([z.number().int(), z.literal('root')]),
   name: z.string(),
   parentId: z.union([z.number().int(), z.literal('root')]).nullable(),
@@ -96,7 +96,7 @@ export const stagedCollectionFileSchema = z.object({
 export type StagedCollectionFile = z.infer<typeof stagedCollectionFileSchema>;
 
 /** A serialized database-mapping snapshot, `databases/<id>.json`. */
-export const stagedDatabaseFileSchema = z.object({
+const stagedDatabaseFileSchema = z.object({
   metabaseDatabaseId: z.number().int().positive(),
   metabaseDatabaseName: z.string(),
   metabaseEngine: z.string().nullable(),

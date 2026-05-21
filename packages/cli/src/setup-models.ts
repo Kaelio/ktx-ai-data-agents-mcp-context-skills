@@ -51,6 +51,7 @@ export type KtxSetupModelResult =
   | { status: 'missing-input'; projectDir: string }
   | { status: 'failed'; projectDir: string };
 
+/** @internal */
 export interface AnthropicModelChoice {
   id: string;
   label: string;
@@ -59,6 +60,7 @@ export interface AnthropicModelChoice {
 
 export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code';
 
+/** @internal */
 export interface KtxSetupModelPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
   text(options: { message: string; placeholder?: string }): Promise<string | undefined>;
@@ -82,8 +84,7 @@ export interface KtxSetupModelDeps {
   spinner?: () => KtxCliSpinner;
 }
 
-export const BUNDLED_ANTHROPIC_MODEL_REGISTRY_VERSION = '2026-05-07';
-
+/** @internal */
 export const BUNDLED_ANTHROPIC_MODELS: AnthropicModelChoice[] = [
   { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true },
   { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', recommended: false },
@@ -131,7 +132,7 @@ const execFileAsync = promisify(execFile);
 
 type AnthropicModelDiscoveryErrorReason = 'authentication' | 'http' | 'empty-response';
 
-export class AnthropicModelDiscoveryError extends Error {
+class AnthropicModelDiscoveryError extends Error {
   constructor(
     message: string,
     public readonly reason: AnthropicModelDiscoveryErrorReason,
@@ -212,6 +213,7 @@ async function defaultListGcloudProjects(): Promise<GcloudProjectChoice[]> {
     .filter((project): project is GcloudProjectChoice => Boolean(project));
 }
 
+/** @internal */
 export async function fetchAnthropicModels(
   apiKey: string,
   fetchFn: typeof fetch = fetch,

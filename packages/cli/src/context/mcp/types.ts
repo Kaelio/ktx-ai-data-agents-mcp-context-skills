@@ -141,6 +141,7 @@ export interface KtxSqlExecutionResponse {
   rowCount: number;
 }
 
+/** @internal */
 export interface KtxSqlExecutionMcpPort {
   execute(
     input: { connectionId: string; sql: string; maxRows: number },

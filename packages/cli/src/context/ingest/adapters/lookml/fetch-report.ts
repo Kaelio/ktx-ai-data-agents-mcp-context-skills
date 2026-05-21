@@ -4,7 +4,9 @@ import * as z from 'zod';
 import type { SourceFetchReport } from '../../types.js';
 import type { ParsedLookmlProject } from './parse.js';
 
+/** @internal */
 export const LOOKML_FETCH_REPORT_FILE = 'lookml-fetch-report.json';
+/** @internal */
 export const LOOKML_MISMATCHED_MODELS_FILE = 'lookml-mismatched-models.json';
 
 const fetchIssueKindSchema = z.enum([

@@ -3,15 +3,6 @@ import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 import { vector } from '@electric-sql/pglite/vector';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { Client, type ClientConfig, type QueryResult, type QueryResultRow } from 'pg';
-import type { SearchBackendCapabilities } from './types.js';
-
-export const PGLITE_OWNER_PROCESS_BACKEND_CAPABILITIES = {
-  fts: true,
-  vector: true,
-  fuzzy: true,
-  jsonSearch: true,
-  arraySearch: false,
-} satisfies SearchBackendCapabilities;
 
 export interface KtxPGliteOwnerProcessOptions {
   dataDir: string;

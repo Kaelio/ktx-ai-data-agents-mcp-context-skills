@@ -5,6 +5,7 @@ import { kmeans, pickK } from '../../clustering/kmeans.js';
 import type { WorkUnit } from '../../types.js';
 import { notionMetadataSchema } from './types.js';
 
+/** @internal */
 export const MIN_PAGES_TO_CLUSTER = 5;
 const CLUSTER_TEXT_BODY_CHARS = 1024;
 const CLUSTER_SEED = 42;

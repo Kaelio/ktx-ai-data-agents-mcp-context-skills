@@ -2,7 +2,7 @@ import type { KtxModelRole } from '../../llm/index.js';
 import type { KtxEmbeddingPort } from '../core/embedding.js';
 import type { GitService, KtxFileStorePort, KtxLogger, SessionOutcome } from '../core/index.js';
 import type { AgentRunnerPort, KtxLlmRuntimePort, KtxRuntimeToolSet } from '../llm/index.js';
-import type { CaptureSession, MemoryAction, MemoryKnowledgeSlRefsPort } from '../memory/index.js';
+import type { MemoryAction, MemoryKnowledgeSlRefsPort } from '../memory/index.js';
 import type { PromptService } from '../prompts/index.js';
 import type { SkillsRegistryService } from '../skills/index.js';
 import type {
@@ -34,7 +34,7 @@ import type {
   SourceAdapter,
 } from './types.js';
 
-export type JsonPrimitive = string | number | boolean | null;
+type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue | undefined };
 
 export interface IngestRunRecord {
@@ -357,11 +357,6 @@ export interface IngestBundleRunnerDeps {
   contextCandidateCarryforward?: ContextCandidateCarryforwardPort;
   curatorPagination?: CuratorPaginationPort;
   logger?: KtxLogger;
-}
-
-export interface IngestCaptureState {
-  session: CaptureSession;
-  actions: MemoryAction[];
 }
 
 export type IngestRunnerJob = IngestBundleJob;

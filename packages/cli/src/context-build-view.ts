@@ -444,17 +444,20 @@ export function renderContextBuildView(
 const ESC_K_RE = new RegExp(`${ESC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\[K`, 'g');
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
+/** @internal */
 export function extractProgressMessage(chunk: string): string | null {
   const cleaned = chunk.replace(/^\r/, '').replace(ESC_K_RE, '').replace(/\n$/, '').trim();
   const match = cleaned.match(/^\[(\d+)%\]\s*(.+)$/);
   return match ? `[${match[1]}%] ${match[2]}` : null;
 }
 
+/** @internal */
 export function parseScanSummary(output: string): string | null {
   const match = output.match(/(\d+) changes? across (\d+) tables?/);
   return match ? `${match[2]} tables` : null;
 }
 
+/** @internal */
 export function parseIngestSummary(output: string): string | null {
   const savedMemory = output.match(/Saved memory: (.+)/);
   if (savedMemory) return savedMemory[1];
@@ -560,6 +563,7 @@ function collectSourceProgress(targets: ContextBuildTargetState[]): ContextBuild
   });
 }
 
+/** @internal */
 export function viewStateFromSourceProgress(
   sources: ContextBuildSourceProgressUpdate[],
   now: number,

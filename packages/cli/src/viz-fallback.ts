@@ -88,6 +88,7 @@ export function warnVizFallbackOnce(io: KtxVizFallbackIo, decision: KtxVizFallba
   io.stderr.write(`Visualization requested but ${decision.message}; printing plain output.\n`);
 }
 
+/** @internal */
 export function resetVizFallbackWarningsForTest(): void {
   warnedFallbackReasons.clear();
 }

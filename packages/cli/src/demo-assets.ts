@@ -17,8 +17,11 @@ interface EnsureDemoProjectOptions {
   force: boolean;
 }
 
+/** @internal */
 export const DEMO_CONNECTION_ID = 'orbit_demo';
+/** @internal */
 export const DEMO_ADAPTER = 'live-database';
+/** @internal */
 export const DEMO_REPLAY_FILE = 'replay.memory-flow.v1.json';
 
 const REQUIRED_PACKAGED_BASE_ASSET_PATHS = ['demo.db', 'manifest.json', DEMO_REPLAY_FILE] as const;
@@ -115,6 +118,7 @@ async function assertPackagedSeededAssetsPresent(): Promise<void> {
   }
 }
 
+/** @internal */
 export async function ensureDemoProject(options: EnsureDemoProjectOptions): Promise<DemoProjectResult> {
   const projectDir = resolve(options.projectDir);
   const configPath = join(projectDir, 'ktx.yaml');

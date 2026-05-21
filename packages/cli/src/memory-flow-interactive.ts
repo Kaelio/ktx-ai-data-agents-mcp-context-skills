@@ -42,6 +42,7 @@ function defaultPrepareKeypressEvents(stdin: KtxMemoryFlowStdin): void {
   emitKeypressEvents(stdin as Parameters<typeof emitKeypressEvents>[0]);
 }
 
+/** @internal */
 export function memoryFlowCommandForKey(
   chunk: string,
   search: MemoryFlowInteractionState['search'],

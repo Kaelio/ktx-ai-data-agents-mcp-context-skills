@@ -66,6 +66,7 @@ export interface MemoryFlowTuiLiveSession {
   isClosed(): boolean;
 }
 
+/** @internal */
 export interface MemoryFlowInkInstance {
   rerender(tree: ReactNode): void;
   unmount(): void;
@@ -73,7 +74,7 @@ export interface MemoryFlowInkInstance {
   clear?(): void;
 }
 
-export interface MemoryFlowInkRenderOptions {
+interface MemoryFlowInkRenderOptions {
   stdin?: KtxMemoryFlowTuiIo['stdin'];
   stdout: KtxMemoryFlowTuiIo['stdout'];
   stderr: KtxMemoryFlowTuiIo['stderr'];
@@ -157,6 +158,7 @@ export function sanitizeMemoryFlowTuiError(error: unknown): string {
     .replace(/\b(api[_-]?key|password|token|secret)=\S+/gi, '[redacted]');
 }
 
+/** @internal */
 export function memoryFlowCommandForInkInput(
   input: string,
   key: InkKey,
@@ -285,6 +287,7 @@ function TrustIssues(props: { view: MemoryFlowViewModel; theme: MemoryFlowTuiThe
   );
 }
 
+/** @internal */
 export function MemoryFlowTuiApp(props: MemoryFlowTuiAppProps): ReactNode {
   const app = useApp();
   const totalEvents = props.input.events.length;

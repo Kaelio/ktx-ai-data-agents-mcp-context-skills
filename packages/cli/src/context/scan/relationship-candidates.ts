@@ -12,7 +12,7 @@ import {
   pluralizeKtxRelationshipToken,
   singularizeKtxRelationshipToken,
 } from './relationship-name-similarity.js';
-export type { KtxRelationshipNormalizedName } from './relationship-name-similarity.js';
+;
 export { normalizeKtxRelationshipName } from './relationship-name-similarity.js';
 import type { KtxRelationshipProfileArtifact } from './relationship-profiling.js';
 import {

@@ -89,6 +89,7 @@ function shouldRetryNotionError(error: unknown): boolean {
   return code === 'rate_limited' || transientErrorCodes.has(code ?? '') || transientStatusCodes.has(status ?? 0);
 }
 
+/** @internal */
 export async function retryNotionRequest<T>(operation: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const maxAttempts = options.maxAttempts ?? 4;
   const sleep = options.sleep ?? defaultSleep;

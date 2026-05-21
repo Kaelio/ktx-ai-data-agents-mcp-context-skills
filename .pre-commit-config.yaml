@@ -41,8 +41,13 @@ repos:
         language: system
         pass_filenames: false
       - id: knip-dead-code
-        name: knip dead-code check
-        entry: pnpm exec knip --reporter compact
+        name: knip dead-code (auto-fix)
+        entry: pnpm exec knip --fix --reporter compact
+        language: system
+        pass_filenames: false
+      - id: knip-dead-code-production
+        name: knip dead-code (production mode)
+        entry: pnpm exec knip --production --reporter compact
         language: system
         pass_filenames: false
 

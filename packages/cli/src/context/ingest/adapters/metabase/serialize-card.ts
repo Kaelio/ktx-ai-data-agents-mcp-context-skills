@@ -6,6 +6,7 @@ const CARD_REF_RE = /\{\{#(\d+)\}\}/g;
  * Input TemplateTag shape mirrors `MetabaseClient.getTemplateTags` output. We keep the
  * shape loose — only `name`, `type`, and optional `cardReference`/`default` are needed here.
  */
+/** @internal */
 export interface InputTemplateTag {
   name: string;
   type: string;
@@ -13,6 +14,7 @@ export interface InputTemplateTag {
   defaultValue?: string | null;
 }
 
+/** @internal */
 export function extractReferencedCardIds(templateTags: InputTemplateTag[], sql: string): number[] {
   const ids = new Set<number>();
   for (const tag of templateTags) {
@@ -34,7 +36,7 @@ export function extractReferencedCardIds(templateTags: InputTemplateTag[], sql: 
  * care about. The adapter reads whatever the client returns; this helper stays
  * duck-typed so the client's type can evolve without churn here.
  */
-export interface InputCard {
+interface InputCard {
   id: number;
   name: string;
   description?: string | null;

@@ -13,7 +13,7 @@ export interface ContextEvidenceSearchArgs {
 
 export type ContextEvidenceSearchMatchReason = 'lexical' | 'semantic' | 'token' | (string & {});
 
-export interface ContextEvidenceSearchLaneSummary {
+interface ContextEvidenceSearchLaneSummary {
   lane: string;
   status: 'available' | 'skipped' | 'failed';
   requestedCandidatePoolLimit: number;

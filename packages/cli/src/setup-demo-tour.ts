@@ -64,6 +64,7 @@ function createTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTarge
 // Pure rendering functions
 // ---------------------------------------------------------------------------
 
+/** @internal */
 export function renderDemoBanner(projectDir?: string): string {
   const lines = [
     '',
@@ -76,6 +77,7 @@ export function renderDemoBanner(projectDir?: string): string {
   return lines.join('\n');
 }
 
+/** @internal */
 export function renderDemoCardContent(title: string, selections: string[]): string {
   const lines = [
     `┌  ${title}`,
@@ -88,6 +90,7 @@ export function renderDemoCardContent(title: string, selections: string[]): stri
   return lines.join('\n');
 }
 
+/** @internal */
 export function renderDemoAgentTransition(): string {
   const lines = [
     '┌  Demo project is ready — let\'s connect your agent',
@@ -99,6 +102,7 @@ export function renderDemoAgentTransition(): string {
   return lines.join('\n');
 }
 
+/** @internal */
 export function renderDemoCompletionSummary(projectDir: string, agentInstalled: boolean): string {
   const lines: string[] = [
     '',
@@ -129,7 +133,7 @@ export function renderDemoCompletionSummary(projectDir: string, agentInstalled: 
 // Keypress navigation
 // ---------------------------------------------------------------------------
 
-export async function waitForDemoNavigation(
+async function waitForDemoNavigation(
   stdin?: NodeJS.ReadStream,
 ): Promise<'forward' | 'back'> {
   const input = stdin ?? process.stdin;
@@ -169,7 +173,7 @@ export async function waitForDemoNavigation(
 // Interactive card
 // ---------------------------------------------------------------------------
 
-export async function renderDemoCard(
+async function renderDemoCard(
   title: string,
   selections: string[],
   io: KtxCliIo,
@@ -186,6 +190,7 @@ export async function renderDemoCard(
 // Context build replay
 // ---------------------------------------------------------------------------
 
+/** @internal */
 export interface DemoReplayEvent {
   delayMs: number;
   connectionId: string;
@@ -194,6 +199,7 @@ export interface DemoReplayEvent {
   summaryText: string | null;
 }
 
+/** @internal */
 export const DEMO_REPLAY_TARGETS = {
   primarySources: [
     createDemoTarget('postgres-warehouse', 'database-ingest', 'postgres'),
@@ -205,6 +211,7 @@ export const DEMO_REPLAY_TARGETS = {
   ],
 } as const;
 
+/** @internal */
 export function buildDemoReplayTimeline(): DemoReplayEvent[] {
   return [
     // postgres-warehouse: database schema context
@@ -239,7 +246,7 @@ function renderDemoContextCompletionSummary(): string {
   return lines.join('\n');
 }
 
-export async function runDemoContextReplay(
+async function runDemoContextReplay(
   io: KtxCliIo,
   stdin?: NodeJS.ReadStream,
 ): Promise<'forward' | 'back'> {

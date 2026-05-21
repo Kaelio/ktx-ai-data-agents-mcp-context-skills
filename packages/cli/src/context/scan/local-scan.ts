@@ -226,15 +226,6 @@ function resolveLocalScanEnrichmentProviders(
   };
 }
 
-export function createLocalScanEnrichmentProvidersFromConfig(
-  config: KtxScanEnrichmentConfig,
-  llmConfig: KtxProjectLlmConfig,
-  deps: LocalScanEnrichmentProviderDeps = {},
-): KtxLocalScanEnrichmentProviders | null {
-  const resolved = resolveLocalScanEnrichmentProviders(config, llmConfig, deps);
-  return resolved.status === 'ready' ? resolved.providers : null;
-}
-
 function createLocalScanEnrichmentStateStore(options: RunLocalScanOptions): SqliteLocalScanEnrichmentStateStore | null {
   if (options.dryRun) {
     return null;
