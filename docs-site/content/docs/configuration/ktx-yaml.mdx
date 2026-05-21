@@ -109,9 +109,9 @@ context-source drivers share the map.
 | `mysql` | Warehouse | `driver` | `url`, `enabled_tables` |
 | `sqlite` | Warehouse | `driver` | `url` or `path`, `enabled_tables` |
 | `sqlserver` | Warehouse | `driver` | `url`, `enabled_tables` |
-| `bigquery` | Warehouse | `driver` | `url`, `enabled_tables`, `historicSql` |
-| `snowflake` | Warehouse | `driver` | `url`, `enabled_tables`, `historicSql` |
-| `clickhouse` | Warehouse | `driver` | `url`, `enabled_tables` |
+| `bigquery` | Warehouse | `driver` | `credentials_json`, `dataset_ids`, `enabled_tables`, `historicSql` |
+| `snowflake` | Warehouse | `driver` | `schema_names`, `enabled_tables`, `historicSql` |
+| `clickhouse` | Warehouse | `driver` | `url`, `database`, `databases`, `enabled_tables` |
 | `metabase` | Context source | `driver`, `api_url` | `api_key_ref`, `mappings` |
 | `looker` | Context source | `driver`, `base_url`, `client_id` | `client_secret_ref`, `mappings` |
 | `lookml` | Context source | `driver`, `repoUrl` | `branch`, `path`, `auth_token_ref`, `mappings` |
@@ -134,6 +134,27 @@ connections:
     enabled_tables:
       - public.orders
       - public.customers
+```
+
+Connector-specific scope fields let setup and scan use the same warehouse
+boundary:
+
+```yaml
+connections:
+  mysql-warehouse:
+    driver: mysql
+    url: env:MYSQL_URL
+    schemas: [analytics, mart]
+  clickhouse-warehouse:
+    driver: clickhouse
+    url: env:CLICKHOUSE_URL
+    database: analytics
+    databases: [analytics, mart]
+  bigquery-warehouse:
+    driver: bigquery
+    credentials_json: file:./service-account.json
+    location: US
+    dataset_ids: [analytics, mart]
 ```
 
 For Postgres, BigQuery, and Snowflake, `historicSql` and `context.queryHistory`

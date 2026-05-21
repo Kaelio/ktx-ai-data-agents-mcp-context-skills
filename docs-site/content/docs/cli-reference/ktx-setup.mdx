@@ -103,7 +103,7 @@ runtime features are missing.
 
 | Flag | Description |
 |------|-------------|
-| `--database <driver>` | Database driver to configure; repeatable. Choices: `sqlite`, `postgres`, `mysql`, `sqlserver`, `bigquery`, `snowflake` |
+| `--database <driver>` | Database driver to configure; repeatable. Choices: `sqlite`, `postgres`, `mysql`, `clickhouse`, `sqlserver`, `bigquery`, `snowflake` |
 | `--database-connection-id <id>` | Existing selected connection id; repeatable. With `--database` or `--database-url`, connection id for the new connection. |
 | `--database-url <url>` | URL, `env:NAME`, or `file:/path` for one new URL-style database connection; also used as the SQLite path |
 | `--database-schema <schema>` | Database schema or dataset to include; repeatable |
@@ -112,6 +112,10 @@ runtime features are missing.
 **ktx** needs at least one database connection before it can build database
 context. Use `--skip-databases` only when intentionally leaving the project
 incomplete.
+
+`--database-schema` maps to the driver's scope field: `schemas` for PostgreSQL,
+MySQL, and SQL Server; `schema_names` for Snowflake; `dataset_ids` for
+BigQuery; and `databases` for ClickHouse.
 
 ### Query History
 
