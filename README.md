@@ -25,8 +25,8 @@ business knowledge it builds and maintains for you.
 Works with PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
 SQLite. Integrates with dbt, MetricFlow, LookML, Looker, Metabase, and Notion.
 
-Runs with your own LLM API keys or a Claude
-Pro/Max subscription - no extra usage billing from **ktx**.
+Runs with your own LLM API keys or a **Claude
+Pro/Max subscription - no extra usage billing from** **ktx**.
 
 ## Why ktx
 
