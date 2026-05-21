@@ -84,6 +84,27 @@ describe('resolveProjectEmbeddingProvider', () => {
     expect(ensureManaged).not.toHaveBeenCalled();
   });
 
+  it('passes pathPrefix="" to the embedding provider when targeting the managed daemon', async () => {
+    const project = projectWithConfig(withManagedEmbedding(buildDefaultKtxProjectConfig(), undefined));
+    const tryUseManaged = vi.fn(async () => fakeDaemon);
+    const createKtxEmbeddingProvider = vi.fn(() => ({ id: 'fake' }) as never);
+    await resolveProjectEmbeddingProvider(project, {
+      mode: 'use-if-running',
+      cliVersion: '0.5.0',
+      io: noopIo,
+      createKtxEmbeddingProvider,
+      tryUseManagedDaemon: tryUseManaged,
+    });
+    expect(createKtxEmbeddingProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sentenceTransformers: expect.objectContaining({
+          baseURL: fakeDaemon.baseUrl,
+          pathPrefix: '',
+        }),
+      }),
+    );
+  });
+
   it('returns managed-unavailable when no daemon is running and mode is use-if-running', async () => {
     const project = projectWithConfig(withManagedEmbedding(buildDefaultKtxProjectConfig(), ''));
     const tryUseManaged = vi.fn(async () => null);

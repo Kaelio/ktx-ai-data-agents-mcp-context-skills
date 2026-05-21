@@ -99,6 +99,7 @@ function buildManagedProvider(
     sentenceTransformers: {
       ...embeddings.sentenceTransformers,
       base_url: baseUrl,
+      pathPrefix: '',
     },
   };
   const resolved = resolveLocalKtxEmbeddingConfig(merged, process.env);
