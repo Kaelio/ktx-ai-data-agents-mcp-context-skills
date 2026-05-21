@@ -2,17 +2,14 @@
 
 import { useCallback, useState } from "react";
 import {
-  Background,
-  BackgroundVariant,
   Handle,
   MarkerType,
   type Node,
   type NodeProps,
-  type OnInit,
   Position,
-  ReactFlow,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+
+import { FlowCanvas } from "./flow-canvas";
 
 type LaneVariant = "manual" | "ktx";
 
@@ -471,8 +468,6 @@ const edges = [
     markerEnd: arrowMarker(ktxStroke),
   },
 ];
-
-type FlowEdge = (typeof edges)[number];
 
 function AgentNodeView({ data }: NodeProps<AgentNode>) {
   return (
@@ -980,15 +975,6 @@ const nodeTypes = {
 };
 
 export function SemanticLayerFlow() {
-  const [minZoom, setMinZoom] = useState(0.2);
-  const handleFlowInit = useCallback<OnInit<FlowNode, FlowEdge>>((instance) => {
-    requestAnimationFrame(() => {
-      void instance.fitView(FIT_VIEW_OPTIONS).then(() => {
-        setMinZoom(instance.getZoom());
-      });
-    });
-  }, []);
-
   return (
     <section
       id="imperative-vs-declarative"
@@ -1027,85 +1013,20 @@ export function SemanticLayerFlow() {
           </p>
         </div>
 
-        <div
-          className="sl-flow-canvas relative bg-fd-background"
-          style={{
+        <FlowCanvas
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          canvasStyle={{
             height: "min(2340px, 290vw)",
             minHeight: 1780,
           }}
-        >
-          <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-fd-border/50 bg-white/30 px-1.5 py-px font-mono text-[9.5px] font-medium uppercase tracking-[0.06em] text-fd-muted-foreground shadow-sm backdrop-blur-sm dark:bg-white/10">
-            Drag to pan • ⌘/Ctrl + scroll to zoom
-          </div>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onInit={handleFlowInit}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            nodesFocusable={false}
-            edgesFocusable={false}
-            elementsSelectable={false}
-            panOnDrag
-            panOnScroll={false}
-            zoomOnScroll={false}
-            zoomOnPinch
-            zoomOnDoubleClick
-            preventScrolling={false}
-            minZoom={minZoom}
-            maxZoom={1.5}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={18}
-              size={1}
-              color="var(--color-fd-border)"
-            />
-          </ReactFlow>
-        </div>
+          className="sl-flow-canvas"
+          fitViewOptions={FIT_VIEW_OPTIONS}
+          ariaLabel="Semantic query to SQL flow diagram"
+        />
       </article>
       <style>{`
-        .sl-flow-canvas .react-flow__node {
-          background: transparent;
-          border: 0;
-          box-shadow: none;
-          padding: 0;
-          border-radius: 0;
-          width: auto;
-          text-align: left;
-          user-select: text;
-          -webkit-user-select: text;
-          cursor: auto;
-          pointer-events: all !important;
-        }
-        .sl-flow-canvas .react-flow__node > * {
-          pointer-events: auto;
-          user-select: text;
-          -webkit-user-select: text;
-        }
-        .sl-flow-canvas .react-flow__node.selected,
-        .sl-flow-canvas .react-flow__node:focus,
-        .sl-flow-canvas .react-flow__node:focus-visible {
-          outline: none;
-          box-shadow: none;
-        }
-        .sl-flow-canvas .react-flow__pane {
-          cursor: grab;
-        }
-        .sl-flow-canvas .react-flow__pane:active {
-          cursor: grabbing;
-        }
-        .sl-flow-canvas .react-flow__handle {
-          width: 1px;
-          height: 1px;
-          min-width: 0;
-          min-height: 0;
-          background: transparent;
-          border: 0;
-          pointer-events: none;
-        }
         .sl-flow-canvas pre {
           font-size: 11.5px !important;
           line-height: 17.5px !important;

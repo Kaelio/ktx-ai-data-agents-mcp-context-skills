@@ -1,5 +1,5 @@
 {
   "title": "Concepts",
   "defaultOpen": true,
-  "pages": ["the-context-layer", "semantic-layer-internals", "wiki-retrieval", "context-as-code"]
+  "pages": ["the-context-layer", "semantic-layer-internals", "wiki-retrieval"]
 }

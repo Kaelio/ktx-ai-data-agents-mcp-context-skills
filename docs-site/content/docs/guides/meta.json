@@ -1,5 +1,5 @@
 {
   "title": "Guides",
   "defaultOpen": true,
-  "pages": ["building-context", "writing-context", "serving-agents", "llm-configuration"]
+  "pages": ["building-context", "writing-context", "reviewing-context", "serving-agents", "llm-configuration"]
 }

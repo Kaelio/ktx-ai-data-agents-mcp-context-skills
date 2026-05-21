@@ -1,0 +1,164 @@
+---
+title: Reviewing Context
+description: Treat ktx changes like code - review what each ingest writes, fix what's wrong, and merge the rest.
+---
+
+import { ContextReviewLoop } from "@/components/context-review-loop";
+
+When dbt put analytics transformations into git, it gave teams a way to argue
+about SQL before it ran in production. **ktx** does the same thing for the layer
+above transformations: metric definitions, joins, business rules, wiki pages,
+and the decisions an ingest agent makes all land as files you can read, diff,
+and merge.
+
+This page covers the workflow:
+
+- What `ktx ingest` writes to disk, and what it leaves alone.
+- The branch-and-PR loop you use to ship those changes.
+- The kinds of decisions you'll see in a diff.
+- How analyst fixes flow back into the next ingest.
+- How replay and provenance keep changes traceable.
+
+## Why context belongs in git
+
+A context layer that hides in a hosted UI is hard to audit. Agents write
+plausible YAML; analysts write quiet overrides; nobody can tell what changed
+between Tuesday and Wednesday. The fix is to put context where engineering
+teams already argue about code.
+
+| Without context as code | With **ktx** |
+|--------|----------|
+| Context lives in BI tools, chats, docs, and analyst memory | Context lives in YAML and Markdown next to the warehouse code |
+| Agent changes appear without explanation | Agent changes appear as git diffs with provenance |
+| Imports overwrite analyst judgment | Ingest reconciles new evidence with accepted files |
+| History depends on tool logs | History lives in commits and ingest transcripts |
+
+<ContextReviewLoop />
+
+The loop closes on itself: every accepted edit becomes evidence the next ingest
+must respect. That's what makes **ktx** different from a one-way sync - it
+reads the layer before it writes to it.
+
+## What's committed, what stays local
+
+A **ktx** project keeps two surfaces under version control and one on disk for
+runtime use. The split matters at review time: only the first two belong in a
+PR, and the third is what you reach for when something looks off.
+
+| Path | In git? | Purpose |
+|------|---------|---------|
+| `semantic-layer/<connection-id>/*.yaml` | Yes | Sources, joins, grain, measures, dimensions, and segments the compiler reads |
+| `wiki/global/*.md` | Yes | Definitions, policies, caveats, and metric provenance agents search |
+| `wiki/user/<user-id>/*.md` | Yes | Per-user scratch context that shadows global pages |
+| `.ktx/ingest-transcripts/<job>/` | No - local | Tool calls, LLM responses, and write decisions for one run |
+| `.ktx/ingest-evidence/<source>/<run>/` | No - local | Raw evidence snapshots used during reconciliation |
+| `.ktx/ingest-report.json` | No - local | Per-run summary with work units, diff stats, and the head commit |
+
+Commit only the YAML and Markdown. The `.ktx/` runtime state is for debugging
+and replay; it belongs in `.gitignore`. If your team wants a record of *why* a
+change happened, link the transcript path in the PR description rather than
+committing the file.
+
+## A typical review session
+
+The loop above describes the shape. In practice, one review session looks like
+this:
+
+```bash
+# 1. Run ingest on a branch
+git checkout -b ingest/2026-05-21
+ktx ingest --all
+
+# 2. See what changed
+git status --short
+git diff -- semantic-layer wiki
+
+# 3. Validate the semantic-layer changes against the warehouse
+ktx sl validate orders --connection-id warehouse
+
+# 4. Compile a representative query before agents do
+ktx sl query \
+  --connection-id warehouse \
+  --measure orders.net_revenue \
+  --dimension orders.month \
+  --format sql
+
+# 5. Open a PR, request review, merge when approved
+```
+
+Teams typically run interactive ingest during setup, then schedule
+`ktx ingest --all --no-input` on a dedicated ingest branch once the
+sources are stable. The PR template tends to mirror what you actually
+look at in a diff:
+
+- New sources match the warehouse, and their grain looks right.
+- Joins have the correct relationship direction.
+- Generated measures match business definitions.
+- Wiki pages cite evidence and don't duplicate YAML.
+- Nothing in `.ktx/` snuck into the commit.
+
+## What changes ktx makes in a diff
+
+Every line in a ktx diff is one of seven actions. The action is recorded in
+`.ktx/ingest-report.json` and shows up in the agent's reasoning, so you can
+trace any change back to the decision that produced it.
+
+| Action | What it means | Where you see it in the diff |
+|--------|---------------|------------------------------|
+| `source_created` | A new table got a semantic source | New YAML file under `semantic-layer/<connection>/` |
+| `measure_added` | A new measure on an existing source | New entry under `measures:` in an existing YAML |
+| `join_added` | A new relationship between two sources | New entry under `joins:` |
+| `merged` | Multiple candidates were reconciled into one | Updated YAML or wiki page with combined fields |
+| `subsumed` | A duplicate was absorbed into an existing definition | One file removed; another updated |
+| `wiki_written` | Business context got captured | New or updated `.md` file under `wiki/` |
+| `skipped` | The candidate was already covered or out of scope | No file change; appears only in the report |
+
+If a diff line surprises you, the action label is the fastest way to figure
+out what the ingest agent thought it was doing.
+
+## Feedback loops
+
+The accepted state of `semantic-layer/` and `wiki/` is input to the next
+ingest, not output. That makes corrections compound: a fix you ship today
+becomes the baseline tomorrow.
+
+| Signal | Example | Where it lands |
+|--------|---------|----------------|
+| Analyst correction | "Net revenue excludes test accounts" | `semantic-layer/**/*.yaml` |
+| Business clarification | "ARR definition changed this quarter" | `wiki/**/*.md` |
+| Agent query issue | A filter returns no rows unexpectedly | Wiki caveat or tighter source filter |
+| Join problem | A path duplicates order-level measures | Updated `relationship` or `grain` metadata |
+| Mid-stream note | "Onboarding fees don't count toward ARR" | `ktx ingest --text "..."` writes to `wiki/global/` |
+
+Capture context as soon as it's said. The next ingest will treat it as
+accepted truth.
+
+## Replay and provenance
+
+Every ingest writes a transcript next to the report. Together, they let you
+walk back through any decision after the fact - useful both for debugging a
+bad measure and for showing a stakeholder where a definition came from.
+
+| Use case | What replay gives you |
+|----------|-----------------------|
+| Debugging | Trace a wrong source, join, or measure back to the evidence and tool calls that produced it |
+| Trust | Show which YAML and Markdown lines came from which dbt model, dashboard, or query history sample |
+| Reproducibility | Re-run the same evidence against a new model or config and compare diffs |
+
+The artifacts live under `.ktx/ingest-transcripts/<jobId>/` and
+`.ktx/ingest-evidence/<source>/<runId>/`. Don't commit them - link to them
+from a PR or copy a span into a review comment when it explains a change.
+
+## Agent usage notes
+
+Use this page when an agent needs to explain review workflows, ingestion
+diffs, how corrections feed back into the layer, or why **ktx** writes YAML and
+Markdown instead of hiding context in a hosted service.
+
+| Agent task | Relevant section | Next page |
+|------------|------------------|-----------|
+| Explain how generated context should be reviewed | A typical review session | [Building Context](/docs/guides/building-context) |
+| Explain what a specific diff line means | What changes ktx makes in a diff | [Writing Context](/docs/guides/writing-context) |
+| Diagnose why ingestion changed a semantic source | Replay and provenance | [ktx ingest](/docs/cli-reference/ktx-ingest) |
+| Describe how context improves over time | Feedback loops | [Building Context](/docs/guides/building-context) |
+| Tell a user what to commit | What's committed, what stays local | [Writing Context](/docs/guides/writing-context) |

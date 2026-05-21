@@ -1036,6 +1036,49 @@ body::after {
 }
 
 /* ═══════════════════════════════════════════
+   Flow canvas (shared ReactFlow diagram styles)
+   ═══════════════════════════════════════════ */
+.flow-canvas .react-flow__node {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+  width: auto;
+  text-align: left;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: default;
+  pointer-events: all !important;
+}
+.flow-canvas .react-flow__node > * {
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.flow-canvas .react-flow__node.selected,
+.flow-canvas .react-flow__node:focus,
+.flow-canvas .react-flow__node:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.flow-canvas .react-flow__pane {
+  cursor: grab;
+}
+.flow-canvas .react-flow__pane:active {
+  cursor: grabbing;
+}
+.flow-canvas .react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════
    Reduced motion
    ═══════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {

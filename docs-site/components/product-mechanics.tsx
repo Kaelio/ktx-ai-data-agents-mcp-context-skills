@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Background,
-  BackgroundVariant,
   type Edge,
   type EdgeProps,
   getSmoothStepPath,
@@ -11,10 +9,10 @@ import {
   type Node,
   type NodeProps,
   Position,
-  ReactFlow,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo, useState } from "react";
+
+import { FlowCanvas } from "./flow-canvas";
 
 type SourceNodeData = {
   accent: string;
@@ -538,81 +536,21 @@ export function ProductMechanics() {
           </p>
         </div>
 
-        <div
-          className="mechanics-canvas bg-fd-background"
-          style={{
+        <FlowCanvas
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          canvasStyle={{
             height: "min(1240px, 170vw)",
             minHeight: 720,
           }}
-        >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.04 }}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            nodesFocusable={false}
-            edgesFocusable={false}
-            elementsSelectable={false}
-            panOnDrag={false}
-            panOnScroll={false}
-            zoomOnScroll={false}
-            zoomOnPinch={false}
-            zoomOnDoubleClick={false}
-            preventScrolling={false}
-            minZoom={0.2}
-            maxZoom={1.5}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={18}
-              size={1}
-              color="var(--color-fd-border)"
-            />
-          </ReactFlow>
-        </div>
+          className="mechanics-canvas"
+          fitViewOptions={{ padding: 0.04 }}
+          ariaLabel="ktx ingestion flow diagram"
+        />
       </article>
       <style>{`
-        .mechanics-canvas .react-flow__node {
-          background: transparent;
-          border: 0;
-          box-shadow: none;
-          padding: 0;
-          border-radius: 0;
-          width: auto;
-          text-align: left;
-          user-select: text;
-          -webkit-user-select: text;
-          cursor: auto;
-          pointer-events: all !important;
-        }
-        .mechanics-canvas .react-flow__node > * {
-          pointer-events: auto;
-          user-select: text;
-          -webkit-user-select: text;
-        }
-        .mechanics-canvas .react-flow__node.selected,
-        .mechanics-canvas .react-flow__node:focus,
-        .mechanics-canvas .react-flow__node:focus-visible {
-          outline: none;
-          box-shadow: none;
-        }
-        .mechanics-canvas .react-flow__pane {
-          cursor: default;
-        }
-        .mechanics-canvas .react-flow__handle {
-          width: 1px;
-          height: 1px;
-          min-width: 0;
-          min-height: 0;
-          background: transparent;
-          border: 0;
-          pointer-events: none;
-        }
         .mechanics-canvas .mechanics-particle {
           pointer-events: none;
           filter: drop-shadow(0 0 6px currentColor);
