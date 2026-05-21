@@ -245,7 +245,7 @@ describe('standalone example docs', () => {
     const setupReference = await readText('docs-site/content/docs/cli-reference/ktx-setup.mdx');
     const buildingContext = await readText('docs-site/content/docs/guides/building-context.mdx');
     const contextSources = await readText('docs-site/content/docs/integrations/context-sources.mdx');
-    const contextAsCode = await readText('docs-site/content/docs/concepts/context-as-code.mdx');
+    const reviewingContext = await readText('docs-site/content/docs/guides/reviewing-context.mdx');
     const quickstart = await readText('docs-site/content/docs/getting-started/quickstart.mdx');
     const primarySources = await readText('docs-site/content/docs/integrations/primary-sources.mdx');
     const examplesIndex = await readText('examples/README.md');
@@ -257,7 +257,7 @@ describe('standalone example docs', () => {
     assert.match(buildingContext, /ktx ingest <connectionId>/);
     assert.match(buildingContext, /ktx ingest --all/);
     assert.match(contextSources, /ktx ingest <connectionId>/);
-    assert.match(contextAsCode, /ktx ingest --all --no-input/);
+    assert.match(reviewingContext, /ktx ingest --all --no-input/);
     assert.match(quickstart, /schema context/);
     assert.match(primarySources, /context:\n      queryHistory:/);
     assert.match(rootReadme, /`ktx ingest <id>` \| Build context for one connection/);
@@ -283,7 +283,7 @@ describe('standalone example docs', () => {
     assert.doesNotMatch(buildingContext, /live-database/);
     assert.doesNotMatch(contextSources, /ktx ingest run --connection-id/);
     assert.doesNotMatch(contextSources, /--adapter <adapter>/);
-    assert.doesNotMatch(contextAsCode, /ktx ingest run --connection-id/);
+    assert.doesNotMatch(reviewingContext, /ktx ingest run --connection-id/);
     assert.doesNotMatch(quickstart, /Historic SQL/);
     assert.doesNotMatch(quickstart, /--enable-historic-sql/);
     assert.doesNotMatch(quickstart, /press <kbd>d<\/kbd> to detach/);
