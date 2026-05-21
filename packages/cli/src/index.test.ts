@@ -1064,7 +1064,7 @@ describe('runKtxCli', () => {
 
     expect(setup).not.toHaveBeenCalled();
     expect(doctor).toHaveBeenCalledWith(
-      { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled', verbose: false },
+      { command: 'project', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled', verbose: false, fast: false },
       statusIo.io,
     );
     expect(statusIo.stderr()).toBe('');

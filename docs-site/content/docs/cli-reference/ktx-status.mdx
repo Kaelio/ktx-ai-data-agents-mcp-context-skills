@@ -21,6 +21,7 @@ ktx status [options]
 | `--json` | Print JSON output | `false` |
 | `-v`, `--verbose` | Show every check, including passing ones | `false` |
 | `--validate` | Only validate the `ktx.yaml` schema; skip readiness checks | `false` |
+| `--fast` | Skip checks that require external communication (Postgres query-history probe, Claude Code auth probe) | `false` |
 | `--no-input` | Disable interactive terminal input | - |
 
 ## Examples
@@ -38,6 +39,9 @@ ktx status --verbose
 # Validate ktx.yaml without running readiness checks
 ktx status --validate
 
+# Skip slow probes (Postgres pg_stat_statements, Claude Code auth)
+ktx status --fast
+
 # Check a project from another directory
 ktx status --project-dir ./analytics
 ```
@@ -49,7 +53,16 @@ ktx status --project-dir ./analytics
 
 For `llm.provider.backend: claude-code`, `ktx status` checks that the local
 Claude Code session is usable. If auth fails, run the Claude Code CLI login
-flow, then rerun `ktx status`.
+flow, then rerun `ktx status`. Use `--fast` to skip this probe (useful in CI
+or offline contexts); skipped checks render as `-` and carry
+`"status": "skipped"` in JSON output.
+
+A `Local data` section summarises what the project has accumulated locally:
+ingest run counts, last completed timestamp per connection, knowledge page
+counts by scope, semantic-layer source and dictionary value counts, and the
+on-disk size of `.ktx/db.sqlite`, `.ktx/cache/`, `raw-sources/`, `wiki/global/`,
+and `semantic-layer/`. These are read from `.ktx/db.sqlite` and local file
+stats, and are always shown (they do not require external communication).
 
 ```json
 {

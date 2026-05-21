@@ -42,6 +42,7 @@ export type KtxDoctorArgs =
       outputMode: KtxDoctorOutputMode;
       inputMode?: KtxDoctorInputMode;
       verbose?: boolean;
+      fast?: boolean;
     }
   | {
       command: 'validate';
@@ -619,7 +620,15 @@ export async function runKtxDoctor(
         return 1;
       }
       const project = await loadKtxProject({ projectDir: args.projectDir });
-      const projectStatus = await buildProjectStatus(project, { ...deps, configIssues: validation.issues });
+      const fast = args.fast ?? false;
+      const useSpinner =
+        !fast && args.outputMode === 'plain' && io.stdout.isTTY === true;
+      const projectStatus = await buildProjectStatus(project, {
+        ...deps,
+        configIssues: validation.issues,
+        fast,
+        useSpinner,
+      });
       const verbose = args.verbose ?? false;
       const toolchainChecks = verbose ? await runSetupChecks() : undefined;
       if (args.outputMode === 'json') {
