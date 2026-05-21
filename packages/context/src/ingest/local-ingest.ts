@@ -34,7 +34,7 @@ export interface RunLocalIngestOptions {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
-  embeddingProvider?: import('@ktx/llm').KtxEmbeddingProvider | null;
+  embeddingProvider?: import('../../../cli/src/llm/index.js').KtxEmbeddingProvider | null;
 }
 
 export interface LocalIngestMcpOptions
@@ -173,7 +173,7 @@ async function runScheduledPullJob(options: {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
-  embeddingProvider?: import('@ktx/llm').KtxEmbeddingProvider | null;
+  embeddingProvider?: import('../../../cli/src/llm/index.js').KtxEmbeddingProvider | null;
 }): Promise<LocalIngestResult> {
   const runtime = createLocalBundleIngestRuntime(options);
   const jobId = options.jobId ?? runtime.nextJobId();

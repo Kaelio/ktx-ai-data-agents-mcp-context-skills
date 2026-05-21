@@ -1,7 +1,7 @@
 import {
   type KtxEmbeddingProvider,
   createKtxEmbeddingProvider as defaultCreateKtxEmbeddingProvider,
-} from '@ktx/llm';
+} from './llm/index.js';
 import type { KtxLocalProject, KtxProjectEmbeddingConfig } from '@ktx/context/project';
 import { resolveLocalKtxEmbeddingConfig } from '@ktx/context';
 import type { KtxCliIo } from './cli-runtime.js';

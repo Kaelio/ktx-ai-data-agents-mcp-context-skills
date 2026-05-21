@@ -1,4 +1,4 @@
-import type { createKtxEmbeddingProvider, createKtxLlmProvider, KtxEmbeddingProvider } from '@ktx/llm';
+import type { createKtxEmbeddingProvider, createKtxLlmProvider, KtxEmbeddingProvider } from '../../../cli/src/llm/index.js';
 import {
   createDefaultLocalIngestAdapters,
   getLocalStageOnlyIngestStatus,

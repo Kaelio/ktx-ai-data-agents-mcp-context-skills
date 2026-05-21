@@ -1,4 +1,4 @@
-import type { KtxModelRole } from '@ktx/llm';
+import type { KtxModelRole } from '../../../cli/src/llm/index.js';
 import type { KtxEmbeddingPort } from '../core/embedding.js';
 import type { GitService, KtxFileStorePort, KtxLogger, SessionOutcome } from '../core/index.js';
 import type { AgentRunnerPort, KtxLlmRuntimePort, KtxRuntimeToolSet } from '../llm/index.js';

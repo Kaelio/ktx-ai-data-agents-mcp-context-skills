@@ -1,4 +1,4 @@
-import { KTX_MODEL_ROLES } from '@ktx/llm';
+import { KTX_MODEL_ROLES } from '../../../cli/src/llm/index.js';
 import YAML from 'yaml';
 import * as z from 'zod';
 import { connectionConfigSchema } from './driver-schemas.js';

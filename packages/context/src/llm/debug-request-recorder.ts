@@ -1,7 +1,7 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ModelMessage } from 'ai';
-import type { KtxModelRole } from '@ktx/llm';
+import type { KtxModelRole } from '../../../cli/src/llm/index.js';
 
 type ProviderOptionsCarrier = { providerOptions?: unknown; [key: string]: unknown };
 type ToolMap = Record<string, ProviderOptionsCarrier>;

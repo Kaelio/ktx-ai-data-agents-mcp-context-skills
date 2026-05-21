@@ -6,7 +6,7 @@ import {
   type KtxLlmConfig,
   type KtxLlmProvider,
   type KtxModelRole,
-} from '@ktx/llm';
+} from '../../../cli/src/llm/index.js';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
 import type { KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from '../project/config.js';
 import { AiSdkKtxLlmRuntime } from './ai-sdk-runtime.js';

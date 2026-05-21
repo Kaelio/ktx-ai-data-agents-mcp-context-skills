@@ -1,4 +1,4 @@
-import type { KtxModelRole } from '@ktx/llm';
+import type { KtxModelRole } from '../../../../cli/src/llm/index.js';
 import { type KtxLogger, noopLogger } from '../../core/index.js';
 import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../llm/index.js';
 import type { MemoryAction } from '../../memory/index.js';

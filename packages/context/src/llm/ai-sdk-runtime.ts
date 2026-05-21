@@ -1,4 +1,4 @@
-import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider } from '@ktx/llm';
+import { KtxMessageBuilder, splitKtxSystemMessages, type KtxLlmProvider } from '../../../cli/src/llm/index.js';
 import { generateText, Output, stepCountIs, type FlexibleSchema, type TelemetrySettings, type ToolSet } from 'ai';
 import type { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../core/index.js';

@@ -8,7 +8,7 @@ import {
   readKtxSetupState,
   serializeKtxProjectConfig,
 } from '@ktx/context/project';
-import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from '@ktx/llm';
+import { type KtxEmbeddingConfig, type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from './llm/index.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
 import {

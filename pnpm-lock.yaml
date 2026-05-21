@@ -107,6 +107,15 @@ importers:
 
   packages/cli:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: 3.0.77
+        version: 3.0.77(zod@4.4.3)
+      '@ai-sdk/devtools':
+        specifier: 0.0.17
+        version: 0.0.17
+      '@ai-sdk/google-vertex':
+        specifier: ^4.0.128
+        version: 4.0.128(zod@4.4.3)
       '@clack/prompts':
         specifier: 1.4.0
         version: 1.4.0
@@ -143,6 +152,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
+      ai:
+        specifier: ^6.0.180
+        version: 6.0.180(zod@4.4.3)
       commander:
         specifier: 14.0.3
         version: 14.0.3
@@ -152,6 +164,9 @@ importers:
       ink:
         specifier: ^7.0.2
         version: 7.0.2(@types/react@19.2.14)(react@19.2.6)
+      openai:
+        specifier: ^6.37.0
+        version: 6.37.0(ws@8.20.1)(zod@4.4.3)
       react:
         specifier: ^19.2.6
         version: 19.2.6

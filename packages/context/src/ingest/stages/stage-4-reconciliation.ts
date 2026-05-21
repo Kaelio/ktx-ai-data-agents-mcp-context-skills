@@ -1,5 +1,5 @@
 import type { AgentRunnerPort, KtxRuntimeToolSet } from '@ktx/context';
-import type { KtxModelRole } from '@ktx/llm';
+import type { KtxModelRole } from '../../../../cli/src/llm/index.js';
 import type { EvictionUnit } from '../types.js';
 import type { StageIndex } from './stage-index.types.js';
 

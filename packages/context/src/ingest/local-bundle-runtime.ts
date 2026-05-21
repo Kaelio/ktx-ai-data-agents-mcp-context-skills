@@ -15,7 +15,7 @@ import {
   type KtxLlmRuntimePort,
   type KtxRuntimeToolSet,
 } from '../llm/index.js';
-import type { KtxEmbeddingProvider } from '@ktx/llm';
+import type { KtxEmbeddingProvider } from '../../../cli/src/llm/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/index.js';
 import { PromptService } from '../prompts/index.js';

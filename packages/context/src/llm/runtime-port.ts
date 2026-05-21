@@ -1,4 +1,4 @@
-import type { KtxModelRole } from '@ktx/llm';
+import type { KtxModelRole } from '../../../cli/src/llm/index.js';
 import type { z } from 'zod';
 
 export interface KtxRuntimeToolOutput<TOutput = unknown> {

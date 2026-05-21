@@ -1,4 +1,4 @@
-import type { KtxModelRole } from '@ktx/llm';
+import type { KtxModelRole } from '../../../../cli/src/llm/index.js';
 import type { AgentRunnerPort, KtxRuntimeToolSet } from '@ktx/context';
 import type { CaptureSession, MemoryAction } from '../../memory/index.js';
 import { listTouchedSlSources, type TouchedSlSource } from '../../tools/index.js';

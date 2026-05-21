@@ -10,7 +10,7 @@ import {
   markKtxSetupStateStepComplete,
   serializeKtxProjectConfig,
 } from '@ktx/context/project';
-import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from '@ktx/llm';
+import { type KtxLlmConfig, type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from './llm/index.js';
 import {
   formatClaudeCodePromptCachingWarning,
   ignoredClaudeCodePromptCachingFields,

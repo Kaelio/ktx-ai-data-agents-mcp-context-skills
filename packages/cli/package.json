@@ -35,6 +35,9 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "3.0.77",
+    "@ai-sdk/devtools": "0.0.17",
+    "@ai-sdk/google-vertex": "^4.0.128",
     "@clack/prompts": "1.4.0",
     "@commander-js/extra-typings": "14.0.0",
     "@ktx/connector-bigquery": "workspace:*",
@@ -47,9 +50,11 @@
     "@ktx/context": "workspace:*",
     "@ktx/llm": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "ai": "^6.0.180",
     "commander": "14.0.3",
     "fflate": "^0.8.2",
     "ink": "^7.0.2",
+    "openai": "^6.37.0",
     "react": "^19.2.6",
     "zod": "^4.4.3"
   },
