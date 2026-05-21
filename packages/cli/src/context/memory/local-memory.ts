@@ -7,8 +7,10 @@ import type { KtxFileStorePort, KtxFileWriteResult } from '../../context/core/fi
 import { type KtxLogger, noopLogger } from '../../context/core/config.js';
 import { SessionWorktreeService } from '../../context/core/session-worktree.service.js';
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
+import { KtxIngestEmbeddingPortAdapter } from '../../context/llm/embedding-port.js';
 import { createLocalKtxLlmRuntimeFromConfig } from '../../context/llm/local-config.js';
 import { RuntimeAgentRunner, type AgentRunnerPort, type KtxLlmRuntimePort, type KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import type { KtxEmbeddingProvider } from '../../llm/types.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
 import { PromptService } from '../../context/prompts/prompt.service.js';
 import { SkillsRegistryService } from '../../context/skills/skills-registry.service.js';
@@ -61,6 +63,7 @@ export interface CreateLocalProjectMemoryIngestOptions {
   queryExecutor?: { execute(input: { connectionId: string; sql: string; maxRows?: number }): Promise<KtxQueryResult> };
   runIdFactory?: () => string;
   logger?: KtxLogger;
+  embeddingProvider?: KtxEmbeddingProvider | null;
 }
 
 export function createLocalProjectMemoryIngest(
@@ -69,7 +72,18 @@ export function createLocalProjectMemoryIngest(
 ): MemoryIngestService {
   const logger = options.logger ?? noopLogger;
   const rootFileStore = new LocalMemoryFileStore(project.fileStore);
-  const embedding = new NoopEmbeddingPort();
+  const embedding = options.embeddingProvider
+    ? new KtxIngestEmbeddingPortAdapter(options.embeddingProvider)
+    : new NoopEmbeddingPort();
+  if (!options.embeddingProvider && project.config.ingest.embeddings.backend !== 'none') {
+    // Memory-agent search (SlSearch, wiki) embeds against this port. With Noop the
+    // configured backend is silently inert — the agent will see empty vectors and
+    // rank results against zeros. Surface that so the caller knows to plumb the
+    // resolved embedding provider through.
+    logger.warn(
+      `[memory-ingest] embeddings backend "${project.config.ingest.embeddings.backend}" is configured but no embedding provider was passed; semantic search will fall back to a no-op embedding port.`,
+    );
+  }
   const knowledgeIndex = new LocalKnowledgeIndex(project);
   const knowledgeEvents = new NoopKnowledgeEventPort();
   const knowledgeSlRefs = new NoopKnowledgeSlRefsPort();

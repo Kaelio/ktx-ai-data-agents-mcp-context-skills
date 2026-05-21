@@ -176,6 +176,28 @@ llm:
     });
   });
 
+  it('requires a non-empty Vertex location when the Vertex provider block is present', () => {
+    const yaml = `
+llm:
+  provider:
+    backend: vertex
+    vertex:
+      project: local-gcp-project
+`;
+
+    expect(() => parseKtxProjectConfig(yaml)).toThrow(/llm\.provider\.vertex\.location/);
+
+    const validation = validateKtxProjectConfig(yaml);
+    expect(validation.ok).toBe(false);
+    expect(validation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'llm.provider.vertex.location',
+        }),
+      ]),
+    );
+  });
+
   it('parses Claude Code as a first-class LLM backend', () => {
     const config = parseKtxProjectConfig(`
 llm:

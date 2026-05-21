@@ -42,10 +42,11 @@ export async function createKtxMcpServerFactory(input: {
     cliVersion: input.cliVersion,
     io,
   });
-  const embeddingService =
+  const embeddingProvider =
     resolution.kind === 'configured' || resolution.kind === 'managed-running' || resolution.kind === 'managed-started'
-      ? new KtxIngestEmbeddingPortAdapter(resolution.provider)
+      ? resolution.provider
       : null;
+  const embeddingService = embeddingProvider ? new KtxIngestEmbeddingPortAdapter(embeddingProvider) : null;
   const contextTools = createLocalProjectMcpContextPorts(input.project, {
     semanticLayerCompute,
     queryExecutor,
@@ -58,7 +59,11 @@ export async function createKtxMcpServerFactory(input: {
 
   let memoryIngest: ReturnType<typeof createLocalProjectMemoryIngest> | undefined;
   try {
-    memoryIngest = createLocalProjectMemoryIngest(input.project, { semanticLayerCompute, queryExecutor });
+    memoryIngest = createLocalProjectMemoryIngest(input.project, {
+      semanticLayerCompute,
+      queryExecutor,
+      embeddingProvider,
+    });
   } catch (error) {
     io.stderr.write(`KTX MCP memory_ingest disabled: ${error instanceof Error ? error.message : String(error)}\n`);
   }

@@ -202,10 +202,23 @@ export class SemanticLayerService {
   }
 
   async loadSource(connectionId: string, sourceName: string): Promise<SemanticLayerSource | null> {
+    let content: string;
     try {
-      const { content } = await this.readSourceFile(connectionId, sourceName);
-      return YAML.parse(content) as SemanticLayerSource;
+      const result = await this.readSourceFile(connectionId, sourceName);
+      content = result.content;
     } catch {
+      return null;
+    }
+    try {
+      return YAML.parse(content) as SemanticLayerSource;
+    } catch (error) {
+      // Distinguish a YAML parse failure from a missing file. The file exists but
+      // its contents are unparseable — callers that treat null as "does not exist"
+      // could otherwise overwrite the broken file. Surface the parse failure via
+      // the service logger so the broken source is at least visible.
+      this.logger.warn(
+        `[loadSource] ${connectionId}/${sourceName}.yaml: YAML parse failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
@@ -219,7 +232,10 @@ export class SemanticLayerService {
     try {
       const result = await this.configService.listFiles(dir);
       allFiles = result.files.filter((f) => f.endsWith('.yaml'));
-    } catch {
+    } catch (e) {
+      const message = `Failed to list semantic-layer files under ${dir}: ${e instanceof Error ? e.message : String(e)}`;
+      loadErrors.push(message);
+      this.logger.warn(message);
       return { sources: [], loadErrors };
     }
 

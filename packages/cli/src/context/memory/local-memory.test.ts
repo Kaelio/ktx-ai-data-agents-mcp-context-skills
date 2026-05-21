@@ -88,6 +88,25 @@ describe('createLocalProjectMemoryIngest', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  it('warns when embeddings are configured but memory ingest is created without an embedding provider', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    project.config.ingest.embeddings = {
+      backend: 'openai',
+      model: 'text-embedding-3-small',
+      dimensions: 1536,
+    };
+    const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+    createLocalProjectMemoryIngest(project, {
+      agentRunner: { runLoop: vi.fn() } as never,
+      logger: logger as never,
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[memory-ingest] embeddings backend "openai" is configured but no embedding provider was passed; semantic search will fall back to a no-op embedding port.',
+    );
+  });
+
   it('captures a wiki page through the local memory agent and persists pollable status', async () => {
     const project = await initKtxProject({ projectDir: tempDir });
     const agentRunner = {

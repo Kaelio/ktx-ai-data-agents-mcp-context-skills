@@ -111,6 +111,26 @@ describe('createLocalBundleIngestRuntime', () => {
     );
   });
 
+  it('warns when embeddings are configured but no embedding provider is supplied', () => {
+    const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    project.config.ingest.embeddings = {
+      backend: 'openai',
+      model: 'text-embedding-3-small',
+      dimensions: 1536,
+    };
+
+    createLocalBundleIngestRuntime({
+      project,
+      adapters: [new FakeSourceAdapter()],
+      agentRunner: testAgentRunner(),
+      logger: logger as never,
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[local-bundle-runtime] embeddings backend "openai" is configured but no embedding provider was passed; embedding-dependent stages will run against a no-op embedding port.',
+    );
+  });
+
   it('builds runner deps with local SQLite stores and context tools enabled', async () => {
     const agentRunner = testAgentRunner();
 
