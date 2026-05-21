@@ -268,9 +268,9 @@ describe('buildLocalStatsStatus', () => {
         embedding_json TEXT
       );
       INSERT INTO knowledge_pages VALUES
-        ('a.md', 'a', 'GLOBAL', NULL, '', '', '[]', '', NULL),
+        ('a.md', 'a', 'GLOBAL', NULL, '', '', '[]', '', '[0.1,0.2]'),
         ('b.md', 'b', 'GLOBAL', NULL, '', '', '[]', '', NULL),
-        ('c.md', 'c', 'PROJECT', NULL, '', '', '[]', '', NULL);
+        ('c.md', 'c', 'PROJECT', NULL, '', '', '[]', '', '[0.3,0.4]');
 
       CREATE TABLE local_sl_sources (
         connection_id TEXT NOT NULL,
@@ -282,7 +282,7 @@ describe('buildLocalStatsStatus', () => {
         PRIMARY KEY (connection_id, source_name)
       );
       INSERT INTO local_sl_sources VALUES
-        ('analytics', 'orders', '', NULL, NULL, '2026-05-10T10:00:00Z'),
+        ('analytics', 'orders', '', '[0.1,0.2]', NULL, '2026-05-10T10:00:00Z'),
         ('analytics', 'users', '', NULL, NULL, '2026-05-10T10:00:00Z');
 
       CREATE TABLE local_sl_dictionary_values (
@@ -308,18 +308,21 @@ describe('buildLocalStatsStatus', () => {
       { connectionId: 'analytics', adapter: 'live-database', lastCompletedAt: '2026-05-10T10:00:00Z' },
       { connectionId: 'docs', adapter: 'notion', lastCompletedAt: '2026-05-01T10:00:00Z' },
     ]);
-    expect(stats.knowledgePages).toEqual([
-      { scope: 'GLOBAL', count: 2 },
-      { scope: 'PROJECT', count: 1 },
+    expect(stats.wikiPages).toEqual([
+      { scope: 'GLOBAL', count: 2, embeddedCount: 1 },
+      { scope: 'PROJECT', count: 1, embeddedCount: 1 },
     ]);
     expect(stats.semanticLayer).toEqual([
-      { connectionId: 'analytics', sourceCount: 2, dictionaryValueCount: 2 },
+      {
+        connectionId: 'analytics',
+        sourceCount: 2,
+        embeddedSourceCount: 1,
+        dictionaryValueCount: 2,
+      },
     ]);
     expect(stats.projectDir.dbSqliteBytes).toBeGreaterThan(0);
     expect(stats.projectDir.ktxCacheBytes).toBe(2048);
     expect(stats.projectDir.rawSources).toEqual({ fileCount: 2, bytes: 612 });
-    expect(stats.projectDir.wikiGlobalMarkdownCount).toBe(2);
-    expect(stats.projectDir.semanticLayerYamlCount).toBe(2);
   });
 
   it('tolerates a SQLite DB missing some tables', async () => {
@@ -344,7 +347,7 @@ describe('buildLocalStatsStatus', () => {
     const stats = await buildLocalStatsStatus(projectIn(tempDir));
     expect(stats.unavailable).toBeUndefined();
     expect(stats.ingest.totalCompletedRuns).toBe(1);
-    expect(stats.knowledgePages).toEqual([]);
+    expect(stats.wikiPages).toEqual([]);
     expect(stats.semanticLayer).toEqual([]);
   });
 });
@@ -360,31 +363,36 @@ describe('renderProjectStatus Local data', () => {
           { connectionId: 'analytics', adapter: 'live-database', lastCompletedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString() },
         ],
       },
-      knowledgePages: [
-        { scope: 'GLOBAL', count: 2 },
-        { scope: 'PROJECT', count: 1 },
+      wikiPages: [
+        { scope: 'GLOBAL', count: 2, embeddedCount: 2 },
+        { scope: 'PROJECT', count: 1, embeddedCount: 0 },
       ],
       semanticLayer: [
-        { connectionId: 'analytics', sourceCount: 12, dictionaryValueCount: 200 },
+        {
+          connectionId: 'analytics',
+          sourceCount: 12,
+          embeddedSourceCount: 10,
+          dictionaryValueCount: 200,
+        },
       ],
       projectDir: {
         dbSqliteBytes: 4096,
         ktxCacheBytes: 1_048_576,
         rawSources: { fileCount: 5, bytes: 200 },
-        wikiGlobalMarkdownCount: 7,
-        semanticLayerYamlCount: 3,
       },
     };
     const rendered = renderProjectStatus(status, { useColor: false });
     expect(rendered).toContain('Local data');
+    expect(rendered).toContain('Wiki');
+    expect(rendered).not.toContain('Knowledge');
     expect(rendered).toContain('3 completed runs');
-    expect(rendered).toContain('GLOBAL=2');
-    expect(rendered).toContain('PROJECT=1');
-    expect(rendered).toContain('12 sources · 200 dictionary values');
+    expect(rendered).toContain('GLOBAL=2 (2 embedded)');
+    expect(rendered).toContain('PROJECT=1 (0 embedded)');
+    expect(rendered).toContain('12 sources (10 embedded) · 200 dictionary values');
     expect(rendered).toContain('db=4.00 KiB');
     expect(rendered).toContain('cache=1.00 MiB');
-    expect(rendered).toContain('wiki=7 md');
-    expect(rendered).toContain('semantic-layer=3 yaml');
+    expect(rendered).not.toMatch(/wiki=\d+ md/);
+    expect(rendered).not.toMatch(/semantic-layer=\d+ yaml/);
   });
 
   it('renders unavailable note when DB is missing', async () => {
@@ -392,14 +400,12 @@ describe('renderProjectStatus Local data', () => {
     const status = await buildProjectStatus(project, { claudeCodeAuthProbe: stubClaudeCodeAuthProbe });
     status.localStats = {
       ingest: { totalCompletedRuns: 0, perConnection: [] },
-      knowledgePages: [],
+      wikiPages: [],
       semanticLayer: [],
       projectDir: {
         dbSqliteBytes: null,
         ktxCacheBytes: 0,
         rawSources: { fileCount: 0, bytes: 0 },
-        wikiGlobalMarkdownCount: 0,
-        semanticLayerYamlCount: 0,
       },
       unavailable: 'no .ktx/db.sqlite yet',
     };
