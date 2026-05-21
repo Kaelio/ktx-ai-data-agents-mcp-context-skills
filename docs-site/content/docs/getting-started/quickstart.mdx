@@ -13,33 +13,82 @@ If you're a coding assistant choosing a docs route, start with the
 [Agent Quickstart](/docs/ai-resources/agent-quickstart) instead.
 
 <div
-  className="not-prose my-8 rounded-xl border p-5 sm:p-6"
+  className="not-prose my-8 overflow-hidden rounded-2xl border"
   style={{
-    borderColor: 'color-mix(in oklch, #ff8a4d 35%, transparent)',
-    background: 'color-mix(in oklch, #ff8a4d 8%, transparent)',
+    borderColor: 'color-mix(in oklch, #ff8a4d 32%, transparent)',
+    background:
+      'linear-gradient(135deg, color-mix(in oklch, #ff8a4d 10%, transparent) 0%, color-mix(in oklch, #ff8a4d 3%, transparent) 100%)',
   }}
 >
-  <div
-    className="text-xs font-semibold uppercase tracking-wider"
-    style={{ color: '#ff8a4d' }}
-  >
-    Need a warehouse to play with?
+  <div className="flex flex-col gap-6 p-5 sm:p-7 md:flex-row md:items-center md:gap-10">
+    <div className="min-w-0 flex-1">
+      <div
+        className="text-[11px] font-black uppercase tracking-[0.16em]"
+        style={{ color: '#ff8a4d' }}
+      >
+        Need a warehouse to play with?
+      </div>
+      <div className="mt-2.5 text-base leading-relaxed text-fd-foreground">
+        Try **ktx** against a real data stack - Postgres, dbt, Metabase, and Notion
+        pre-loaded with the Orbit demo corpus. The page lists demo credentials
+        you can paste straight into `ktx setup`.
+      </div>
+      <a
+        href="https://kaelio.com/start"
+        className="group mt-5 inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_2px_4px_rgba(255,138,77,0.2),0_10px_24px_-8px_rgba(255,138,77,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_3px_6px_rgba(255,138,77,0.28),0_16px_30px_-8px_rgba(255,138,77,0.65)]"
+        style={{
+          background: 'linear-gradient(180deg, #ff9d63 0%, #f97316 100%)',
+        }}
+      >
+        Get demo credentials at kaelio.com/start
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="transition-transform duration-200 group-hover:translate-x-0.5"
+          aria-hidden="true"
+        >
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </a>
+    </div>
+    <div
+      className="relative grid h-[152px] w-[152px] shrink-0 grid-cols-2 grid-rows-2 gap-2.5 self-center md:h-[168px] md:w-[168px]"
+      aria-hidden="true"
+    >
+      {[
+        { src: '/ktx/icons/postgresql.svg', tint: '#e9eef5', rotate: -7, name: 'Postgres' },
+        { src: '/ktx/icons/metabase.svg', tint: '#e8f1fc', rotate: 6, name: 'Metabase' },
+        { src: '/ktx/icons/dbt.svg', tint: '#fde6dc', rotate: -4, name: 'dbt' },
+        { src: '/ktx/icons/notion.svg', tint: '#f0eee8', rotate: 8, name: 'Notion' },
+      ].map((sticker) => (
+        <div
+          key={sticker.name}
+          className="flex items-center justify-center rounded-2xl border border-fd-border bg-fd-card shadow-[0_2px_4px_rgba(20,18,12,0.04),0_14px_28px_-12px_rgba(20,18,12,0.22)]"
+          style={{ transform: `rotate(${sticker.rotate}deg)` }}
+        >
+          <span
+            className="flex h-full w-full items-center justify-center rounded-2xl"
+            style={{ background: sticker.tint }}
+          >
+            <img
+              src={sticker.src}
+              alt=""
+              width="38"
+              height="38"
+              style={{ objectFit: 'contain' }}
+            />
+          </span>
+        </div>
+      ))}
+    </div>
   </div>
-  <div className="mt-2 text-base leading-relaxed text-fd-foreground">
-    Try **ktx** against a real data stack - Postgres, dbt, Metabase, and Notion
-    pre-loaded with the Orbit demo corpus. The page lists demo credentials
-    you can paste straight into `ktx setup`.
-  </div>
-  <a
-    href="https://kaelio.com/start"
-    className="mt-4 inline-flex items-center gap-1 text-base font-semibold no-underline hover:underline"
-    style={{
-      color: '#ff8a4d',
-      textDecorationColor: '#ff8a4d',
-    }}
-  >
-    Get demo credentials at kaelio.com/start →
-  </a>
 </div>
 
 <div
