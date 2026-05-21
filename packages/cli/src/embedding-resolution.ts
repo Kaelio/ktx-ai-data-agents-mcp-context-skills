@@ -11,7 +11,7 @@ import {
 } from './managed-local-embeddings.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 
-export type EmbeddingResolutionMode = 'ensure' | 'use-if-running';
+type EmbeddingResolutionMode = 'ensure' | 'use-if-running';
 
 export type EmbeddingProviderResolution =
   | { kind: 'disabled' }
