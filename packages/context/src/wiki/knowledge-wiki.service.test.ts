@@ -50,6 +50,27 @@ function makeService() {
 
 const fm: WikiFrontmatter = { summary: 'sum', usage_mode: 'auto' };
 
+describe('KnowledgeWikiService file reads', () => {
+  it('warns and returns null when an existing page cannot be parsed', async () => {
+    const { service, configService, logger } = makeService();
+    configService.readFile.mockResolvedValue({ content: '---\nsummary: [\n---\nBody' });
+
+    await expect(service.readPage('GLOBAL', null, 'revenue')).resolves.toBeNull();
+
+    expect(configService.readFile).toHaveBeenCalledWith('wiki/global/revenue.md');
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('[readPage] wiki/global/revenue.md: parse failed:'));
+  });
+
+  it('warns and returns an empty page list when directory listing fails', async () => {
+    const { service, configService, logger } = makeService();
+    configService.listFiles.mockRejectedValue(new Error('filesystem unavailable'));
+
+    await expect(service.listPageKeys('GLOBAL', null)).resolves.toEqual([]);
+
+    expect(logger.warn).toHaveBeenCalledWith('[listPageKeys] wiki/global: filesystem unavailable');
+  });
+});
+
 describe('KnowledgeWikiService.syncIndex result stats', () => {
   it('reports scanned, updated, deleted, and embedding counts', async () => {
     const { service, pagesRepository, embeddingService, configService } = makeService();

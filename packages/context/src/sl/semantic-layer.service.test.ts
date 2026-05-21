@@ -67,6 +67,23 @@ describe('listConnectionIdsWithNames', () => {
   });
 });
 
+describe('loadSource', () => {
+  it('warns and returns null when an existing source file has invalid YAML', async () => {
+    const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const configService = {
+      readFile: vi.fn().mockResolvedValue({ content: 'name: [' }),
+    };
+    const service = new SemanticLayerService(configService as never, connectionCatalog(), pythonPort, logger as never);
+
+    await expect(service.loadSource('warehouse', 'orders')).resolves.toBeNull();
+
+    expect(configService.readFile).toHaveBeenCalledWith('semantic-layer/warehouse/orders.yaml');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('[loadSource] warehouse/orders.yaml: YAML parse failed:'),
+    );
+  });
+});
+
 describe('composeOverlay', () => {
   it('carries top-level segments from overlay into the composed source', () => {
     const overlay = {
@@ -855,6 +872,22 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
 
     expect(loadErrors.join('\n')).toContain(overlayPath);
     expect(loadErrors.join('\n')).toContain("move it to 'column_overrides:'");
+  });
+
+  it('reports and logs directory listing failures instead of treating them as empty sources', async () => {
+    const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    configService.listFiles.mockRejectedValue(new Error('permission denied'));
+    service = new SemanticLayerService(configService as never, connectionCatalog(), pythonPort, logger as never);
+
+    const { sources, loadErrors } = await service.loadAllSources('conn-1');
+
+    expect(sources).toEqual([]);
+    expect(loadErrors).toEqual([
+      'Failed to list semantic-layer files under semantic-layer/conn-1: permission denied',
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Failed to list semantic-layer files under semantic-layer/conn-1: permission denied',
+    );
   });
 });
 
