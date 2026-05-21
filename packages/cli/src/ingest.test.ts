@@ -1415,6 +1415,52 @@ describe('runKtxIngest', () => {
     );
   });
 
+  it('uses runtime IO when resolving managed embedding runtime', async () => {
+    const projectDir = join(tempDir, 'managed-embedding-ingest-project');
+    await initKtxProject({ projectDir });
+    await writeWarehouseConfig(projectDir);
+    const createdAdapters: SourceAdapter[] = [
+      { source: 'fake', skillNames: [], detect: async () => true, chunk: async () => ({ workUnits: [] }) },
+    ];
+    const createAdapters = vi.fn(() => createdAdapters as never);
+    const runLocal = vi.fn(async (input: RunLocalIngestOptions) =>
+      completedLocalBundleRun(input, input.jobId ?? 'local-job-1'),
+    );
+    const resolveEmbeddingProvider = vi.fn(async () => ({ kind: 'disabled' as const }));
+    const io = makeIo();
+    const runtimeIo = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'warehouse',
+          adapter: 'fake',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+          outputMode: 'plain',
+        } satisfies KtxIngestArgs,
+        io.io,
+        {
+          createAdapters,
+          runLocalIngest: runLocal,
+          jobIdFactory: () => 'local-job-1',
+          runtimeIo: runtimeIo.io,
+          resolveEmbeddingProvider,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(resolveEmbeddingProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        installPolicy: 'auto',
+        io: runtimeIo.io,
+      }),
+    );
+  });
+
   it('passes the target connection id when constructing local historic-sql adapters', async () => {
     const projectDir = join(tempDir, 'historic-sql-project');
     await writeWarehouseConfig(projectDir);

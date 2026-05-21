@@ -108,4 +108,3 @@ export interface SlSearchLaneSummary {
   weight: number;
   reason?: string;
 }
-

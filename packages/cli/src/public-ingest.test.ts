@@ -801,6 +801,63 @@ describe('runKtxPublicIngest', () => {
     );
   });
 
+  it('preflights foreground managed embeddings runtime before starting the context-build view', async () => {
+    const io = makeIo({ isTTY: true, interactive: true });
+    const config = buildDefaultKtxProjectConfig();
+    const project: KtxPublicIngestProject = {
+      projectDir: '/tmp/project',
+      config: {
+        ...config,
+        connections: {
+          warehouse: { driver: 'postgres' },
+        },
+        ingest: {
+          ...config.ingest,
+          embeddings: {
+            backend: 'sentence-transformers',
+            model: 'all-MiniLM-L6-v2',
+            dimensions: 384,
+          },
+        },
+      },
+    };
+    const ensureRuntime = vi.fn(async (): Promise<ManagedPythonCommandRuntime> => {
+      return {} as ManagedPythonCommandRuntime;
+    });
+    const runContextBuild = vi.fn(async () => ({ exitCode: 0 }));
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'auto',
+          queryHistory: 'default',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'prompt',
+        },
+        io.io,
+        {
+          loadProject: vi.fn(async () => project),
+          ensureRuntime,
+          runContextBuild,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(ensureRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cliVersion: '0.2.0',
+        installPolicy: 'prompt',
+        feature: 'local-embeddings',
+      }),
+    );
+    expect(runContextBuild).toHaveBeenCalled();
+  });
+
   it('runs all independent targets and reports partial failures', async () => {
     const io = makeIo();
     const project = projectWithConnections({

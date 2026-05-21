@@ -359,4 +359,3 @@ export interface IngestBundleRunnerDeps {
   curatorPagination?: CuratorPaginationPort;
   logger?: KtxLogger;
 }
-

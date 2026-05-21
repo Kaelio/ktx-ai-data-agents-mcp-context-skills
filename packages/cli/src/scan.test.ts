@@ -428,6 +428,55 @@ describe('runKtxScan', () => {
     });
   });
 
+  it('uses runtime IO when resolving managed embedding runtime', async () => {
+    await initKtxProject({ projectDir: tempDir });
+    const runLocalScan = vi.fn(
+      async (_input: RunLocalScanOptions): Promise<LocalScanRunResult> => ({
+        runId: 'scan-run-1',
+        status: 'done',
+        done: true,
+        connectionId: 'warehouse',
+        mode: 'structural',
+        dryRun: false,
+        syncId: 'sync-1',
+        report,
+      }),
+    );
+    const resolveEmbeddingProvider = vi.fn(async () => ({ kind: 'disabled' as const }));
+    const io = makeIo();
+    const runtimeIo = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxScan(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          connectionId: 'warehouse',
+          mode: 'structural',
+          detectRelationships: false,
+          dryRun: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        io.io,
+        {
+          runLocalScan,
+          createLocalIngestAdapters: noLocalIngestAdapters,
+          runtimeIo: runtimeIo.io,
+          resolveEmbeddingProvider,
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(resolveEmbeddingProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        installPolicy: 'auto',
+        io: runtimeIo.io,
+      }),
+    );
+  });
+
   it('explains warnings, capability gaps, and relationships in human scan summaries', async () => {
     await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(

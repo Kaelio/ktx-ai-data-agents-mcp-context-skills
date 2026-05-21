@@ -83,4 +83,3 @@ export function createRuntimeToolDescriptorFromAiTool(name: string, aiSdkTool: T
     },
   };
 }
-

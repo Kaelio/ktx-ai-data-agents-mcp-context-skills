@@ -60,21 +60,36 @@ describe('runtime requirement detection', () => {
   });
 
   it('detects foreground ingest runtime needs from selected query-history targets', () => {
+    const config: KtxProjectConfig = {
+      ...buildDefaultKtxProjectConfig(),
+      ingest: {
+        ...buildDefaultKtxProjectConfig().ingest,
+        embeddings: {
+          backend: 'sentence-transformers' as const,
+          model: 'all-MiniLM-L6-v2',
+          dimensions: 384,
+        },
+      },
+    };
+
     expect(
-      resolvePublicIngestRuntimeRequirements({
-        projectDir: '/tmp/project',
-        warnings: [],
-        targets: [
-          {
-            connectionId: 'warehouse',
-            driver: 'postgres',
-            operation: 'database-ingest',
-            debugCommand: 'ktx ingest warehouse --debug',
-            steps: ['database-schema', 'query-history'],
-            queryHistory: { enabled: true },
-          },
-        ],
-      }).features,
-    ).toEqual(['core']);
+      resolvePublicIngestRuntimeRequirements(
+        {
+          projectDir: '/tmp/project',
+          warnings: [],
+          targets: [
+            {
+              connectionId: 'warehouse',
+              driver: 'postgres',
+              operation: 'database-ingest',
+              debugCommand: 'ktx ingest warehouse --debug',
+              steps: ['database-schema', 'query-history'],
+              queryHistory: { enabled: true },
+            },
+          ],
+        },
+        { config },
+      ).features,
+    ).toEqual(['core', 'local-embeddings']);
   });
 });

@@ -70,4 +70,3 @@ export interface KnowledgeGitDiffPort {
   ): Promise<Array<{ status: string; path: string }>>;
   getFileAtCommit(path: string, sha: string): Promise<string>;
 }
-

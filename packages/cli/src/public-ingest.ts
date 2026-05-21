@@ -874,7 +874,10 @@ export async function runKtxPublicIngest(
   const project = await loadProject({ projectDir: args.projectDir });
   if (shouldUseForegroundContextBuildView(args, io)) {
     const plan = buildPublicIngestPlan(project, args);
-    const requirements = resolvePublicIngestRuntimeRequirements(plan, { env: deps.env ?? process.env });
+    const requirements = resolvePublicIngestRuntimeRequirements(plan, {
+      config: project.config,
+      env: deps.env ?? process.env,
+    });
     const ensureRuntime = deps.ensureRuntime ?? ensureManagedPythonCommandRuntime;
     for (const feature of requirements.features) {
       try {

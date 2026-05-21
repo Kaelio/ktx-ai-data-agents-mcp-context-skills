@@ -72,6 +72,7 @@ export interface KtxIngestDeps {
   now?: () => Date;
   createAdapters?: typeof createKtxCliLocalIngestAdapters;
   createQueryExecutor?: (project: KtxLocalProject) => KtxSqlQueryExecutorPort;
+  resolveEmbeddingProvider?: typeof resolveProjectEmbeddingProvider;
   runLocalIngest?: typeof runLocalIngest;
   runLocalMetabaseIngest?: typeof runLocalMetabaseIngest;
   readReportFile?: typeof readIngestReportSnapshotFile;
@@ -675,11 +676,12 @@ export async function runKtxIngest(
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
-      const resolution = await resolveProjectEmbeddingProvider(project, {
+      const resolveEmbeddingProvider = deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider;
+      const resolution = await resolveEmbeddingProvider(project, {
         mode: 'ensure',
         installPolicy: args.runtimeInstallPolicy ?? 'never',
         cliVersion: args.cliVersion ?? getKtxCliPackageInfo().version,
-        io,
+        io: deps.runtimeIo ?? io,
       });
       const embeddingProvider =
         resolution.kind === 'disabled' || resolution.kind === 'managed-unavailable' ? null : resolution.provider;

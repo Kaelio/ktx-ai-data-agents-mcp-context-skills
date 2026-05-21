@@ -207,4 +207,3 @@ export const connectionConfigSchema = z.discriminatedUnion('driver', [
   dbtConnectionSchema,
   metricflowConnectionSchema,
 ]);
-

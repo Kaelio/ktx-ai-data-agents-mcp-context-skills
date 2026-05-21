@@ -49,4 +49,3 @@ export interface WikiSearchLaneSummary {
   weight: number;
   reason?: string;
 }
-

@@ -26,6 +26,7 @@ export interface KtxScanArgs {
 export interface KtxScanDeps {
   runLocalScan?: typeof runLocalScan;
   createLocalIngestAdapters?: typeof createKtxCliLocalIngestAdapters;
+  resolveEmbeddingProvider?: typeof resolveProjectEmbeddingProvider;
   progress?: KtxProgressPort;
   runtimeIo?: KtxCliIo;
 }
@@ -312,11 +313,12 @@ export function createCliScanProgress(
 export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps: KtxScanDeps = {}): Promise<number> {
   try {
     const project = await loadKtxProject({ projectDir: args.projectDir });
-    const resolution = await resolveProjectEmbeddingProvider(project, {
+    const resolveEmbeddingProvider = deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider;
+    const resolution = await resolveEmbeddingProvider(project, {
       mode: 'ensure',
       installPolicy: args.runtimeInstallPolicy ?? 'never',
       cliVersion: args.cliVersion ?? getKtxCliPackageInfo().version,
-      io,
+      io: deps.runtimeIo ?? io,
     });
     const embeddingProvider =
       resolution.kind === 'disabled' || resolution.kind === 'managed-unavailable' ? null : resolution.provider;
