@@ -1,5 +1,3 @@
-import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
-import type { KtxProjectEmbeddingConfig } from '@ktx/context/project';
 import type { KtxEmbeddingConfig } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
@@ -7,7 +5,12 @@ import {
   type KtxManagedPythonInstallPolicy,
   type ManagedPythonCommandRuntime,
 } from './managed-python-command.js';
-import { startManagedPythonDaemon, type ManagedPythonDaemonStartResult } from './managed-python-daemon.js';
+import {
+  readManagedPythonDaemonStatus,
+  startManagedPythonDaemon,
+  type ManagedPythonDaemonStartResult,
+  type ManagedPythonDaemonStatus,
+} from './managed-python-daemon.js';
 
 export interface ManagedLocalEmbeddingsDaemon {
   baseUrl: string;
@@ -32,21 +35,6 @@ export interface ManagedLocalEmbeddingsOptions {
     features: ['local-embeddings'];
     force: boolean;
   }) => Promise<ManagedPythonDaemonStartResult>;
-}
-
-export function managedLocalEmbeddingProjectConfig(input: {
-  model: string;
-  dimensions: number;
-}): KtxProjectEmbeddingConfig {
-  return {
-    backend: 'sentence-transformers',
-    model: input.model,
-    dimensions: input.dimensions,
-    sentenceTransformers: {
-      base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
-      pathPrefix: '',
-    },
-  };
 }
 
 export function managedLocalEmbeddingHealthConfig(input: {
@@ -91,5 +79,32 @@ export async function ensureManagedLocalEmbeddingsDaemon(
     baseUrl: daemon.baseUrl,
     stdoutLog: daemon.state.stdoutLog,
     stderrLog: daemon.state.stderrLog,
+  };
+}
+
+export interface TryUseManagedLocalEmbeddingsOptions {
+  cliVersion: string;
+  projectDir: string;
+  readStatus?: typeof readManagedPythonDaemonStatus;
+}
+
+export async function tryUseManagedLocalEmbeddingsDaemon(
+  options: TryUseManagedLocalEmbeddingsOptions,
+): Promise<ManagedLocalEmbeddingsDaemon | null> {
+  const readStatus = options.readStatus ?? readManagedPythonDaemonStatus;
+  const status: ManagedPythonDaemonStatus = await readStatus({
+    cliVersion: options.cliVersion,
+    projectDir: options.projectDir,
+  });
+  if (status.kind !== 'running') {
+    return null;
+  }
+  if (!status.state.features.includes('local-embeddings')) {
+    return null;
+  }
+  return {
+    baseUrl: status.baseUrl,
+    stdoutLog: status.state.stdoutLog,
+    stderrLog: status.state.stderrLog,
   };
 }

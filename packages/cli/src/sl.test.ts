@@ -77,12 +77,24 @@ describe('runKtxSl', () => {
     expect(validateIo.stdout()).toContain('Valid semantic-layer source: warehouse/orders');
 
     const listIo = makeIo();
-    await expect(runKtxSl({ command: 'list', projectDir, connectionId: 'warehouse' }, listIo.io)).resolves.toBe(0);
+    await expect(
+      runKtxSl({ command: 'list', projectDir, connectionId: 'warehouse', cliVersion: '0.0.0-test' }, listIo.io),
+    ).resolves.toBe(0);
     expect(listIo.stdout()).toContain('warehouse\torders\tcolumns=1\tmeasures=0\tjoins=0');
 
     const searchIo = makeIo();
     await expect(
-      runKtxSl({ command: 'search', projectDir, connectionId: 'warehouse', query: 'order', json: true }, searchIo.io),
+      runKtxSl(
+        {
+          command: 'search',
+          projectDir,
+          connectionId: 'warehouse',
+          query: 'order',
+          json: true,
+          cliVersion: '0.0.0-test',
+        },
+        searchIo.io,
+      ),
     ).resolves.toBe(0);
     expect(JSON.parse(searchIo.stdout())).toMatchObject({
       kind: 'list',
@@ -106,7 +118,14 @@ describe('runKtxSl', () => {
     const searchIo = makeIo();
     await expect(
       runKtxSl(
-        { command: 'search', projectDir, connectionId: 'warehouse', query: 'order', output: 'pretty' },
+        {
+          command: 'search',
+          projectDir,
+          connectionId: 'warehouse',
+          query: 'order',
+          output: 'pretty',
+          cliVersion: '0.0.0-test',
+        },
         searchIo.io,
       ),
     ).resolves.toBe(0);
@@ -136,7 +155,14 @@ describe('runKtxSl', () => {
     const listIo = makeIo();
     await expect(
       runKtxSl(
-        { command: 'search', projectDir, connectionId: 'warehouse', query: 'paid', json: true },
+        {
+          command: 'search',
+          projectDir,
+          connectionId: 'warehouse',
+          query: 'paid',
+          json: true,
+          cliVersion: '0.0.0-test',
+        },
         listIo.io,
       ),
     ).resolves.toBe(0);
@@ -575,7 +601,7 @@ joins: []
 
     const listIo = makeIo();
     const code = await runKtxSl(
-      { command: 'list', projectDir, connectionId: 'warehouse', output: 'json' },
+      { command: 'list', projectDir, connectionId: 'warehouse', output: 'json', cliVersion: '0.0.0-test' },
       listIo.io,
     );
     expect(code).toBe(0);
@@ -601,13 +627,80 @@ joins: []
     });
   });
 
+  it('search prints embeddings status when results are empty', async () => {
+    const stderr: string[] = [];
+    const io = {
+      stdout: { write: (_chunk: string) => {} },
+      stderr: {
+        write: (chunk: string) => {
+          stderr.push(chunk);
+        },
+      },
+    };
+    const projectDir = join(tempDir, 'empty-status');
+    const project = await initKtxProject({ projectDir });
+    await expect(
+      runKtxSl(
+        {
+          command: 'search',
+          projectDir: project.projectDir,
+          query: 'nope',
+          cliVersion: '0.5.0',
+        },
+        io,
+        {
+          loadProject: async () => project,
+          resolveEmbeddingProvider: async () => ({
+            kind: 'managed-unavailable',
+            reason: 'managed embeddings daemon is not running',
+          }),
+          searchLocalSlSources: async () => [],
+        },
+      ),
+    ).resolves.toBe(0);
+    expect(stderr.join('')).toMatch(/embeddings: unavailable/);
+    expect(stderr.join('')).toMatch(/managed embeddings daemon is not running/);
+  });
+
+  it('passes a managed-daemon-backed embedding service into the search', async () => {
+    const projectDir = join(tempDir, 'resolver-project');
+    const project = await initKtxProject({ projectDir });
+    const search = vi.fn(async () => []);
+    const searchIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'search',
+          projectDir: project.projectDir,
+          query: 'income',
+          cliVersion: '0.5.0',
+          json: true,
+        },
+        searchIo.io,
+        {
+          loadProject: async () => project,
+          resolveEmbeddingProvider: async () => ({
+            kind: 'managed-running',
+            provider: { id: 'fake' } as never,
+            baseUrl: 'http://127.0.0.1:51234',
+          }),
+          searchLocalSlSources: search,
+        },
+      ),
+    ).resolves.toBe(0);
+    expect(search).toHaveBeenCalledWith(
+      project,
+      expect.objectContaining({ embeddingService: expect.any(Object) }),
+    );
+  });
+
   it('emits sl list with grouping and Clack-style framing when output=pretty', async () => {
     const projectDir = join(tempDir, 'project');
     await seedSlSource({ projectDir });
 
     const listIo = makeIo();
     const code = await runKtxSl(
-      { command: 'list', projectDir, connectionId: 'warehouse', output: 'pretty' },
+      { command: 'list', projectDir, connectionId: 'warehouse', output: 'pretty', cliVersion: '0.0.0-test' },
       listIo.io,
     );
     expect(code).toBe(0);

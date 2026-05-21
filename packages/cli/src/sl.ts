@@ -1,22 +1,22 @@
 import { readFile } from 'node:fs/promises';
 import { createDefaultLocalQueryExecutor, type KtxSqlQueryExecutorPort } from '@ktx/context/connections';
-import {
-  createLocalKtxEmbeddingProviderFromConfig,
-  KtxIngestEmbeddingPortAdapter,
-  type KtxEmbeddingPort,
-} from '@ktx/context';
+import { KtxIngestEmbeddingPortAdapter, type KtxEmbeddingPort } from '@ktx/context';
 import type { KtxSemanticLayerComputePort } from '@ktx/context/daemon';
 import { loadKtxProject, type KtxLocalProject } from '@ktx/context/project';
 import {
   compileLocalSlQuery,
   listLocalSlSources,
   readLocalSlSource,
-  searchLocalSlSources,
+  searchLocalSlSources as defaultSearchLocalSlSources,
   validateLocalSlSource,
   type LocalSlSourceSearchResult,
   type LocalSlSourceSummary,
   type SemanticLayerQueryInput,
 } from '@ktx/context/sl';
+import {
+  resolveProjectEmbeddingProvider,
+  type EmbeddingProviderResolution,
+} from './embedding-resolution.js';
 import type { PrintListColumn } from './io/print-list.js';
 import {
   createManagedPythonSemanticLayerComputePort,
@@ -29,7 +29,14 @@ profileMark('module:sl');
 type SlQueryFormat = 'json' | 'sql';
 
 export type KtxSlArgs =
-  | { command: 'list'; projectDir: string; connectionId?: string; output?: string; json?: boolean }
+  | {
+      command: 'list';
+      projectDir: string;
+      connectionId?: string;
+      output?: string;
+      json?: boolean;
+      cliVersion: string;
+    }
   | {
       command: 'search';
       projectDir: string;
@@ -38,6 +45,7 @@ export type KtxSlArgs =
       limit?: number;
       output?: string;
       json?: boolean;
+      cliVersion: string;
     }
   | { command: 'validate'; projectDir: string; connectionId: string; sourceName: string }
   | {
@@ -60,8 +68,8 @@ interface KtxSlIo {
 
 interface KtxSlDeps {
   loadProject?: typeof loadKtxProject;
-  embeddingService?: KtxEmbeddingPort | null;
-  createEmbeddingProvider?: typeof createLocalKtxEmbeddingProviderFromConfig;
+  resolveEmbeddingProvider?: typeof resolveProjectEmbeddingProvider;
+  searchLocalSlSources?: typeof defaultSearchLocalSlSources;
   createSemanticLayerCompute?: () => KtxSemanticLayerComputePort;
   createManagedSemanticLayerCompute?: (options: {
     cliVersion: string;
@@ -71,14 +79,15 @@ interface KtxSlDeps {
   createQueryExecutor?: () => KtxSqlQueryExecutorPort;
 }
 
-function slSearchEmbeddingService(project: KtxLocalProject, deps: KtxSlDeps): KtxEmbeddingPort | null {
-  if ('embeddingService' in deps) {
-    return deps.embeddingService ?? null;
+function resolutionToEmbeddingPort(resolution: EmbeddingProviderResolution): KtxEmbeddingPort | null {
+  if (
+    resolution.kind === 'configured' ||
+    resolution.kind === 'managed-running' ||
+    resolution.kind === 'managed-started'
+  ) {
+    return new KtxIngestEmbeddingPortAdapter(resolution.provider);
   }
-  const provider = (deps.createEmbeddingProvider ?? createLocalKtxEmbeddingProviderFromConfig)(
-    project.config.ingest.embeddings,
-  );
-  return provider ? new KtxIngestEmbeddingPortAdapter(provider) : null;
+  return null;
 }
 
 async function printSlSources(input: {
@@ -188,12 +197,24 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       return 0;
     }
     if (args.command === 'search') {
-      const sources = await searchLocalSlSources(project, {
+      const resolver = deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider;
+      const resolution = await resolver(project, {
+        mode: 'use-if-running',
+        cliVersion: args.cliVersion,
+        io,
+      });
+      const embeddingService = resolutionToEmbeddingPort(resolution);
+      const search = deps.searchLocalSlSources ?? defaultSearchLocalSlSources;
+      const sources = await search(project, {
         connectionId: args.connectionId,
         query: args.query,
-        embeddingService: slSearchEmbeddingService(project, deps),
+        embeddingService,
         limit: args.limit,
       });
+      if (sources.length === 0 && resolution.kind === 'managed-unavailable' && !args.json) {
+        const { SYMBOLS } = await import('./io/symbols.js');
+        io.stderr.write(`embeddings: unavailable ${SYMBOLS.emDash} ${resolution.reason}\n`);
+      }
       await printSlSources({
         rows: sources,
         emptyMessage: `No semantic-layer sources matched "${args.query}" in ${project.projectDir}`,

@@ -77,6 +77,7 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
             connectionId: options.connectionId,
             output: options.output,
             json: options.json,
+            cliVersion: context.packageInfo.version,
           });
           return;
         }
@@ -88,6 +89,7 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
           ...(options.limit !== undefined ? { limit: options.limit } : {}),
           output: options.output,
           json: options.json,
+          cliVersion: context.packageInfo.version,
         });
       },
     );

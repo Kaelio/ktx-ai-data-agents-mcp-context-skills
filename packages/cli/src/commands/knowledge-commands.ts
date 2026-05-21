@@ -59,6 +59,7 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
             userId: options.userId,
             output: options.output,
             json: options.json,
+            cliVersion: context.packageInfo.version,
           });
           return;
         }
@@ -71,6 +72,7 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
           json: options.json,
           ...(isDebugEnabled(command) ? { debug: true } : {}),
           ...(options.limit !== undefined ? { limit: options.limit } : {}),
+          cliVersion: context.packageInfo.version,
         });
       },
     );

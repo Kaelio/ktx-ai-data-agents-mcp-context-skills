@@ -1,5 +1,4 @@
-import { type KtxLocalProject, type KtxProjectConnectionConfig } from '@ktx/context/project';
-import { loadKtxCliProject } from './cli-project.js';
+import { loadKtxProject, type KtxLocalProject, type KtxProjectConnectionConfig } from '@ktx/context/project';
 import type { KtxProgressPort } from '@ktx/context/scan';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
@@ -869,14 +868,7 @@ export async function runKtxPublicIngest(
   deps: KtxPublicIngestDeps = {},
 ): Promise<number> {
   const loadProject =
-    deps.loadProject ??
-    ((options: { projectDir: string }) =>
-      loadKtxCliProject({
-        projectDir: options.projectDir,
-        cliVersion: args.cliVersion ?? '0.0.0-private',
-        installPolicy: args.runtimeInstallPolicy ?? 'never',
-        io,
-      }));
+    deps.loadProject ?? ((options: { projectDir: string }) => loadKtxProject({ projectDir: options.projectDir }));
   const project = await loadProject({ projectDir: args.projectDir });
   if (shouldUseForegroundContextBuildView(args, io)) {
     const plan = buildPublicIngestPlan(project, args);

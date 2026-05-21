@@ -54,7 +54,6 @@ export type {
 export {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
-  managedLocalEmbeddingProjectConfig,
   type ManagedLocalEmbeddingsDaemon,
   type ManagedLocalEmbeddingsOptions,
 } from './managed-local-embeddings.js';

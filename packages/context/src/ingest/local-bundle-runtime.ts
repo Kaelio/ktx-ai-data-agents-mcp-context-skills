@@ -8,7 +8,6 @@ import { noopLogger, SessionWorktreeService } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
 import {
   createRuntimeToolDescriptorFromAiTool,
-  createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmRuntimeFromConfig,
   KtxIngestEmbeddingPortAdapter,
   RuntimeAgentRunner,
@@ -16,6 +15,7 @@ import {
   type KtxLlmRuntimePort,
   type KtxRuntimeToolSet,
 } from '../llm/index.js';
+import type { KtxEmbeddingProvider } from '@ktx/llm';
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/index.js';
 import { PromptService } from '../prompts/index.js';
@@ -114,6 +114,7 @@ export interface CreateLocalBundleIngestRuntimeOptions {
   queryExecutor?: KtxSqlQueryExecutorPort;
   jobIdFactory?: () => string;
   logger?: KtxLogger;
+  embeddingProvider?: KtxEmbeddingProvider | null;
 }
 
 export interface LocalBundleIngestRuntime {
@@ -669,7 +670,7 @@ export function createLocalBundleIngestRuntime(
   mkdirSync(join(options.project.projectDir, '.ktx/cache/local-ingest'), { recursive: true });
   const store = new SqliteBundleIngestStore({ dbPath });
   const contextStore = new SqliteContextEvidenceStore({ dbPath });
-  const embeddingProvider = createLocalKtxEmbeddingProviderFromConfig(options.project.config.ingest.embeddings);
+  const embeddingProvider = options.embeddingProvider ?? null;
   const embedding = embeddingProvider ? new KtxIngestEmbeddingPortAdapter(embeddingProvider) : new NoopEmbeddingPort();
   const connections = new LocalConnectionCatalog(options.project, options.queryExecutor);
   const rootFileStore = options.project.fileStore;

@@ -34,6 +34,7 @@ export interface RunLocalIngestOptions {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
+  embeddingProvider?: import('@ktx/llm').KtxEmbeddingProvider | null;
 }
 
 export interface LocalIngestMcpOptions
@@ -172,6 +173,7 @@ async function runScheduledPullJob(options: {
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
+  embeddingProvider?: import('@ktx/llm').KtxEmbeddingProvider | null;
 }): Promise<LocalIngestResult> {
   const runtime = createLocalBundleIngestRuntime(options);
   const jobId = options.jobId ?? runtime.nextJobId();
@@ -225,6 +227,7 @@ export async function runLocalIngest(options: RunLocalIngestOptions): Promise<Lo
       semanticLayerCompute: options.semanticLayerCompute,
       queryExecutor: options.queryExecutor,
       logger: options.logger,
+      embeddingProvider: options.embeddingProvider,
     });
   }
 
@@ -403,6 +406,7 @@ export async function runLocalMetabaseIngest(
         semanticLayerCompute: options.semanticLayerCompute,
         queryExecutor: options.queryExecutor,
         logger: options.logger,
+        embeddingProvider: options.embeddingProvider,
       });
     } catch (error) {
       child = await recordLocalMetabaseChildFailure({

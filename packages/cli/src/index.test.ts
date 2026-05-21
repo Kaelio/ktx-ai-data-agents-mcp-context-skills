@@ -152,12 +152,12 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['--project-dir', tempDir, 'wiki', '--json'], listIo.io, { knowledge }))
       .resolves.toBe(0);
     expect(knowledge).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         command: 'list',
         projectDir: tempDir,
         userId: 'local',
         json: true,
-      },
+      }),
       listIo.io,
     );
 
@@ -166,14 +166,14 @@ describe('runKtxCli', () => {
       runKtxCli(['--project-dir', tempDir, 'wiki', 'revenue', '--limit', '5'], searchIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
-      {
+      expect.objectContaining({
         command: 'search',
         projectDir: tempDir,
         query: 'revenue',
         userId: 'local',
         json: false,
         limit: 5,
-      },
+      }),
       searchIo.io,
     );
 
@@ -182,14 +182,14 @@ describe('runKtxCli', () => {
       runKtxCli(['--project-dir', tempDir, '--debug', 'wiki', 'revenue'], debugSearchIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
-      {
+      expect.objectContaining({
         command: 'search',
         projectDir: tempDir,
         query: 'revenue',
         userId: 'local',
         json: false,
         debug: true,
-      },
+      }),
       debugSearchIo.io,
     );
 
@@ -198,13 +198,13 @@ describe('runKtxCli', () => {
       runKtxCli(['--project-dir', tempDir, 'wiki', 'revenue', 'policy'], multiWordIo.io, { knowledge }),
     ).resolves.toBe(0);
     expect(knowledge).toHaveBeenLastCalledWith(
-      {
+      expect.objectContaining({
         command: 'search',
         projectDir: tempDir,
         query: 'revenue policy',
         userId: 'local',
         json: false,
-      },
+      }),
       multiWordIo.io,
     );
   });
@@ -248,7 +248,7 @@ describe('runKtxCli', () => {
       ),
     ).resolves.toBe(0);
     expect(sl).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         command: 'search',
         projectDir: tempDir,
         connectionId: 'warehouse',
@@ -256,7 +256,7 @@ describe('runKtxCli', () => {
         limit: 5,
         json: true,
         output: undefined,
-      },
+      }),
       searchIo.io,
     );
 
@@ -265,13 +265,13 @@ describe('runKtxCli', () => {
       runKtxCli(['--project-dir', tempDir, 'sl', '--connection-id', 'warehouse', '--json'], bareIo.io, { sl }),
     ).resolves.toBe(0);
     expect(sl).toHaveBeenLastCalledWith(
-      {
+      expect.objectContaining({
         command: 'list',
         projectDir: tempDir,
         connectionId: 'warehouse',
         json: true,
         output: undefined,
-      },
+      }),
       bareIo.io,
     );
 

@@ -1,4 +1,4 @@
-import type { createKtxEmbeddingProvider, createKtxLlmProvider } from '@ktx/llm';
+import type { createKtxEmbeddingProvider, createKtxLlmProvider, KtxEmbeddingProvider } from '@ktx/llm';
 import {
   createDefaultLocalIngestAdapters,
   getLocalStageOnlyIngestStatus,
@@ -6,11 +6,7 @@ import {
   runLocalStageOnlyIngest,
   type SourceAdapter,
 } from '../ingest/index.js';
-import {
-  createLocalKtxEmbeddingProviderFromConfig,
-  createLocalKtxLlmRuntimeFromConfig,
-  KtxScanEmbeddingPortAdapter,
-} from '../llm/index.js';
+import { createLocalKtxLlmRuntimeFromConfig, KtxScanEmbeddingPortAdapter } from '../llm/index.js';
 import type { KtxProjectLlmConfig, KtxScanEnrichmentConfig, KtxScanRelationshipConfig } from '../project/config.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { ktxLocalStateDbPath } from '../project/local-state-db.js';
@@ -86,6 +82,7 @@ export interface RunLocalScanOptions {
   enrichmentProviders?: KtxLocalScanEnrichmentProviders | null;
   enrichmentStateStore?: SqliteLocalScanEnrichmentStateStore | null;
   progress?: KtxProgressPort;
+  embeddingProvider?: KtxEmbeddingProvider | null;
 }
 
 export interface LocalScanRunResult {
@@ -183,6 +180,7 @@ interface LocalScanEnrichmentProviderDeps {
   createKtxEmbeddingProvider?: typeof createKtxEmbeddingProvider;
   env?: NodeJS.ProcessEnv;
   projectDir?: string;
+  embeddingProvider?: KtxEmbeddingProvider | null;
 }
 
 type LocalScanEnrichmentProviderResolution =
@@ -214,7 +212,7 @@ function resolveLocalScanEnrichmentProviders(
   if (!llmRuntime) {
     return { status: 'missing-llm' };
   }
-  const embeddingProvider = createLocalKtxEmbeddingProviderFromConfig(config.embeddings, deps);
+  const embeddingProvider = deps.embeddingProvider ?? null;
   if (!embeddingProvider) {
     return { status: 'missing-embeddings-provider' };
   }
@@ -434,7 +432,10 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
             enrichmentResolution = resolveLocalScanEnrichmentProviders(
               options.project.config.scan.enrichment,
               options.project.config.llm,
-              { projectDir: options.project.projectDir },
+              {
+                projectDir: options.project.projectDir,
+                embeddingProvider: options.embeddingProvider ?? null,
+              },
             );
             return enrichmentResolution.status === 'ready' ? enrichmentResolution.providers : null;
           })()

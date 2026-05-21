@@ -1,7 +1,6 @@
 import { type KtxSqlQueryExecutorPort, localConnectionInfoFromConfig } from '../connections/index.js';
 import type { KtxEmbeddingPort } from '../core/index.js';
 import type { KtxSemanticLayerComputePort } from '../daemon/index.js';
-import { createLocalKtxEmbeddingProviderFromConfig, KtxIngestEmbeddingPortAdapter } from '../llm/index.js';
 import type { KtxLocalProject } from '../project/index.js';
 import { createKtxEntityDetailsService, type KtxScanConnector, type LocalScanMcpOptions } from '../scan/index.js';
 import { createKtxDiscoverDataService } from '../search/index.js';
@@ -15,7 +14,7 @@ interface CreateLocalProjectMcpContextPortsOptions {
   queryExecutor?: KtxSqlQueryExecutorPort;
   sqlAnalysis?: SqlAnalysisPort;
   localScan?: LocalScanMcpOptions;
-  embeddingService?: KtxEmbeddingPort | null;
+  embeddingService: KtxEmbeddingPort | null;
 }
 
 function dialectForDriver(driver: string | undefined): string {
@@ -133,12 +132,9 @@ async function executeValidatedReadOnlySql(
 
 export function createLocalProjectMcpContextPorts(
   project: KtxLocalProject,
-  options: CreateLocalProjectMcpContextPortsOptions = {},
+  options: CreateLocalProjectMcpContextPortsOptions,
 ): KtxMcpContextPorts {
-  const configuredEmbeddingProvider = createLocalKtxEmbeddingProviderFromConfig(project.config.ingest.embeddings);
-  const embeddingService =
-    options.embeddingService ??
-    (configuredEmbeddingProvider ? new KtxIngestEmbeddingPortAdapter(configuredEmbeddingProvider) : null);
+  const embeddingService = options.embeddingService;
   const ports: KtxMcpContextPorts = {
     connections: {
       async list() {

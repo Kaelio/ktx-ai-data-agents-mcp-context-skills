@@ -14,7 +14,6 @@ import { createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
-  managedLocalEmbeddingProjectConfig,
   type ManagedLocalEmbeddingsDaemon,
 } from './managed-local-embeddings.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
@@ -455,7 +454,11 @@ export async function runKtxSetupEmbeddingsStep(
       await persistEmbeddingConfig(
         args.projectDir,
         selectedBackend === LOCAL_EMBEDDING_BACKEND
-          ? managedLocalEmbeddingProjectConfig({ model, dimensions })
+          ? {
+              backend: 'sentence-transformers' as const,
+              model,
+              dimensions,
+            }
           : buildProjectEmbeddingConfig({
               backend: selectedBackend,
               model,

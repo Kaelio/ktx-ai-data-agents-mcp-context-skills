@@ -1,4 +1,3 @@
-import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
 import type {
   KtxProjectConfig,
   KtxProjectConnectionConfig,
@@ -63,7 +62,7 @@ function requiresManagedLocalEmbeddings(embeddings: KtxProjectEmbeddingConfig): 
     return false;
   }
   const baseUrl = embeddings.sentenceTransformers?.base_url;
-  return baseUrl === undefined || baseUrl === '' || baseUrl === MANAGED_SENTENCE_TRANSFORMERS_BASE_URL;
+  return baseUrl === undefined || baseUrl === '';
 }
 
 function uniqueRequirements(requirements: KtxRuntimeRequirement[]): KtxRuntimeRequirements {
