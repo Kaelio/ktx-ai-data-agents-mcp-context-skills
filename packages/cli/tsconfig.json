@@ -4,7 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "jsx": "react-jsx",
-    "tsBuildInfoFile": "./node_modules/.cache/tsc.tsbuildinfo"
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["dist", "node_modules"]

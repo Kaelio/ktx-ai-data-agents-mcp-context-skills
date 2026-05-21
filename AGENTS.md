@@ -1,6 +1,6 @@
 # ktx Development Notes
 
-**ktx** is a standalone open-source context layer for database agents. These
+**ktx** is a standalone open-source context layer for data agents. These
 instructions apply to all agents working in this repository (Codex, Claude,
 Gemini, and similar tools). Do not assume an external app server, frontend,
 database migrations, ORPC contracts, or `python-service/` layout exist here.

@@ -124,7 +124,7 @@ const agent: AgentNode = {
   position: { x: AGENT_X, y: AGENT_Y },
   data: {
     variant: "single",
-    title: "Analytics agent",
+    title: "Data agent",
     subtitle:
       "Asks: monthly net revenue and open tickets per segment, high-value orders only, no test customers",
   },

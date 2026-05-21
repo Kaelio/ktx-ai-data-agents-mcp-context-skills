@@ -153,7 +153,7 @@ ktx wiki "refund policy" --json
 ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 ```
 
-During setup, choose **Ask data questions with ktx MCP** for client agents.
+During setup, choose **Ask data questions with ktx MCP** for agent clients.
 Choose **Ask data questions + manage ktx with CLI commands** when an operator
 agent also needs pinned `ktx` admin commands.
 

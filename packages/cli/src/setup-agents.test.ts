@@ -380,7 +380,7 @@ describe('setup agents', () => {
     });
   });
 
-  it('prompts for MCP-first client agent connection mode in interactive setup', async () => {
+  it('prompts for MCP-first agent client connection mode in interactive setup', async () => {
     const io = makeIo();
     const prompts = {
       select: vi.fn(async ({ message }: { message: string }) => (message.startsWith('Where') ? 'project' : 'mcp')),

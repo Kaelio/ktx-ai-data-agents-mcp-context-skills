@@ -156,22 +156,22 @@ uv run pytest -q
 
 ## Adding a connector
 
-Database connectors live in `packages/cli/src/connectors/<name>/`. Each
+Database connectors live in `packages/cli/src/connectors/<driver>/`. Each
 connector implements the `KtxScanConnector` interface from the internal context
 modules.
 
 ### Step 1: Scaffold the connector
 
-Create a new directory at `packages/cli/src/connectors/<name>/` with:
+Create a new directory at `packages/cli/src/connectors/<driver>/` with:
 
 ```text
-packages/cli/src/connectors/<name>/
+packages/cli/src/connectors/<driver>/
   index.ts          # Internal connector exports
   connector.ts      # KtxScanConnector implementation
   dialect.ts        # SQL dialect handling
 ```
 
-Add any driver-specific npm dependency to `packages/cli/package.json`.
+Add any connector-specific npm dependency to `packages/cli/package.json`.
 
 ### Step 2: Implement the connector
 
@@ -199,7 +199,7 @@ and statistics.
 
 Register the new connector in `packages/cli/src/local-scan-connectors.ts` and
 `packages/cli/src/local-adapters.ts` so the CLI and scan engine can instantiate
-it. Keep runtime loading dynamic when the driver is optional.
+it. Keep runtime loading dynamic when the connector is optional.
 
 ### Step 5: Test
 
