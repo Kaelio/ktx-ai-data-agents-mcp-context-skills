@@ -18,10 +18,11 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
     .option('--json', 'Print JSON output', false)
     .option('-v, --verbose', 'Show every check, including passing ones', false)
     .option('--validate', 'Only validate the ktx.yaml schema; skip readiness checks', false)
+    .option('--fast', 'Skip checks that require external communication (DB probes, auth probes)', false)
     .option('--no-input', 'Disable interactive terminal input')
     .action(
       async (
-        options: { json?: boolean; verbose?: boolean; validate?: boolean; input?: boolean },
+        options: { json?: boolean; verbose?: boolean; validate?: boolean; fast?: boolean; input?: boolean },
         command,
       ) => {
         const runner = context.deps.doctor ?? (await import('../doctor.js')).runKtxDoctor;
@@ -64,6 +65,7 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
               projectDir: resolveCommandProjectDir(command),
               outputMode: outputMode(options),
               verbose: options.verbose === true,
+              fast: options.fast === true,
               ...inputMode(options),
             },
             context.io,

@@ -1,4 +1,6 @@
-import { basename } from 'node:path';
+import type { Dirent } from 'node:fs';
+import { stat as statAsync, readdir as readdirAsync } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { runClaudeCodeAuthProbe } from '@ktx/context';
 import type {
   KtxConfigIssue,
@@ -8,6 +10,7 @@ import type {
   KtxProjectEmbeddingConfig,
   KtxProjectLlmConfig,
 } from '@ktx/context/project';
+import { ktxLocalStateDbPath } from '@ktx/context/project';
 import type { PostgresPgssProbeResult } from '@ktx/context/ingest';
 import {
   formatClaudeCodePromptCachingFix,
@@ -24,7 +27,7 @@ import {
 } from './io/symbols.js';
 import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 
-type ProjectStatusLevel = 'ok' | 'warn' | 'fail';
+type ProjectStatusLevel = 'ok' | 'warn' | 'fail' | 'skipped';
 type ProjectVerdict = 'ready' | 'partial' | 'blocked';
 
 interface ProjectStatusLine {
@@ -99,6 +102,42 @@ function hasOwnField(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
+interface LocalStatsIngestPerConnection {
+  connectionId: string;
+  adapter: string;
+  lastCompletedAt: string;
+}
+
+interface LocalStatsSemanticLayerEntry {
+  connectionId: string;
+  sourceCount: number;
+  dictionaryValueCount: number;
+}
+
+interface LocalStatsKnowledgeEntry {
+  scope: string;
+  count: number;
+}
+
+interface LocalStatsProjectDir {
+  dbSqliteBytes: number | null;
+  ktxCacheBytes: number;
+  rawSources: { fileCount: number; bytes: number };
+  wikiGlobalMarkdownCount: number;
+  semanticLayerYamlCount: number;
+}
+
+export interface LocalStatsStatus {
+  ingest: {
+    totalCompletedRuns: number;
+    perConnection: LocalStatsIngestPerConnection[];
+  };
+  knowledgePages: LocalStatsKnowledgeEntry[];
+  semanticLayer: LocalStatsSemanticLayerEntry[];
+  projectDir: LocalStatsProjectDir;
+  unavailable?: string;
+}
+
 export interface ProjectStatus {
   projectName: string;
   projectDir: string;
@@ -110,6 +149,7 @@ export interface ProjectStatus {
   queryHistory: QueryHistoryStatus[];
   pipeline: PipelineStatus;
   warnings: WarningItem[];
+  localStats: LocalStatsStatus;
   verdict: ProjectVerdict;
   verdictReason: string;
   nextActions: string[];
@@ -152,6 +192,8 @@ async function buildLlmStatus(
     projectDir: string;
     env: NodeJS.ProcessEnv;
     claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
+    fast?: boolean;
+    useSpinner?: boolean;
   },
 ): Promise<LlmStatus> {
   const env = options.env;
@@ -208,8 +250,18 @@ async function buildLlmStatus(
   }
   if (backend === 'claude-code') {
     const modelName = model ?? 'sonnet';
+    if (options.fast === true) {
+      return {
+        backend,
+        model: modelName,
+        status: 'skipped',
+        detail: 'auth probe skipped (--fast)',
+      };
+    }
     const probe = options.claudeCodeAuthProbe ?? runClaudeCodeAuthProbe;
-    const auth = await probe({ projectDir: options.projectDir, model: modelName, env });
+    const auth = await withSpinner(options.useSpinner === true, 'Probing Claude Code authentication', () =>
+      probe({ projectDir: options.projectDir, model: modelName, env }),
+    );
     if (auth.ok) {
       return {
         backend,
@@ -461,8 +513,22 @@ async function buildQueryHistoryStatus(
       continue;
     }
 
+    if (options.fast === true) {
+      statuses.push({
+        connection: connectionId,
+        dialect: 'postgres',
+        status: 'skipped',
+        detail: 'pg_stat_statements probe skipped (--fast)',
+      });
+      continue;
+    }
+
     try {
-      const result = await probe({ projectDir: project.projectDir, connectionId, connection, env });
+      const result = await withSpinner(
+        options.useSpinner === true,
+        `Probing pg_stat_statements on ${connectionId}`,
+        () => probe({ projectDir: project.projectDir, connectionId, connection, env }),
+      );
       statuses.push({
         connection: connectionId,
         dialect: 'postgres',
@@ -641,7 +707,7 @@ function buildVerdict(
       reasons.push('embedding credentials missing');
     }
   }
-  const missing = connections.filter((c) => c.status !== 'ok').length;
+  const missing = connections.filter((c) => c.status !== 'ok' && c.status !== 'skipped').length;
   if (missing > 0) reasons.push(`${missing} connection${missing === 1 ? '' : 's'} need configuration`);
   const queryHistoryWarnings = queryHistory.filter((entry) => entry.status === 'warn').length;
   if (queryHistoryWarnings > 0) {
@@ -669,6 +735,27 @@ export interface BuildProjectStatusOptions {
   postgresQueryHistoryProbe?: PostgresQueryHistoryProbe;
   claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
   configIssues?: KtxConfigIssue[];
+  fast?: boolean;
+  useSpinner?: boolean;
+}
+
+async function withSpinner<T>(
+  useSpinner: boolean,
+  label: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  if (!useSpinner) return run();
+  const { spinner } = await import('@clack/prompts');
+  const s = spinner();
+  s.start(label);
+  try {
+    const result = await run();
+    s.stop(label);
+    return result;
+  } catch (error) {
+    s.stop(`${label} — failed`);
+    throw error;
+  }
 }
 
 function buildConfigStatus(issues: KtxConfigIssue[] | undefined): ConfigStatus {
@@ -683,6 +770,219 @@ function buildConfigStatus(issues: KtxConfigIssue[] | undefined): ConfigStatus {
   };
 }
 
+interface DirSummary {
+  fileCount: number;
+  bytes: number;
+}
+
+async function summarizeDir(
+  dir: string,
+  filter?: (entry: Dirent, fullPath: string) => boolean,
+  maxDepth = 10,
+): Promise<DirSummary> {
+  let fileCount = 0;
+  let bytes = 0;
+  const walk = async (current: string, depth: number): Promise<void> => {
+    if (depth > maxDepth) return;
+    let entries: Dirent[];
+    try {
+      entries = await readdirAsync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (filter && !filter(entry, full)) continue;
+      try {
+        const s = await statAsync(full);
+        fileCount += 1;
+        bytes += s.size;
+      } catch {
+        // skip individual stat failures
+      }
+    }
+  };
+  await walk(dir, 0);
+  return { fileCount, bytes };
+}
+
+function isMarkdownEntry(entry: Dirent): boolean {
+  return entry.isFile() && /\.mdx?$/i.test(entry.name);
+}
+
+function isYamlEntry(entry: Dirent): boolean {
+  return entry.isFile() && /\.ya?ml$/i.test(entry.name);
+}
+
+async function fileSizeOrNull(filePath: string): Promise<number | null> {
+  try {
+    const s = await statAsync(filePath);
+    return s.isFile() ? s.size : null;
+  } catch {
+    return null;
+  }
+}
+
+function tryQuery<T>(run: () => T, fallback: T): T {
+  try {
+    return run();
+  } catch {
+    return fallback;
+  }
+}
+
+export async function buildLocalStatsStatus(project: KtxLocalProject): Promise<LocalStatsStatus> {
+  const dbPath = ktxLocalStateDbPath(project);
+  const dbSqliteBytes = await fileSizeOrNull(dbPath);
+
+  const projectDirSummary: LocalStatsProjectDir = {
+    dbSqliteBytes,
+    ktxCacheBytes: (await summarizeDir(join(project.projectDir, '.ktx', 'cache'))).bytes,
+    rawSources: await summarizeDir(join(project.projectDir, 'raw-sources')),
+    wikiGlobalMarkdownCount: (
+      await summarizeDir(join(project.projectDir, 'wiki', 'global'), isMarkdownEntry)
+    ).fileCount,
+    semanticLayerYamlCount: (
+      await summarizeDir(join(project.projectDir, 'semantic-layer'), isYamlEntry)
+    ).fileCount,
+  };
+
+  if (dbSqliteBytes === null) {
+    return {
+      ingest: { totalCompletedRuns: 0, perConnection: [] },
+      knowledgePages: [],
+      semanticLayer: [],
+      projectDir: projectDirSummary,
+      unavailable: 'no .ktx/db.sqlite yet',
+    };
+  }
+
+  let database: import('better-sqlite3').Database | null = null;
+  try {
+    const { default: Database } = await import('better-sqlite3');
+    database = new Database(dbPath, { readonly: true, fileMustExist: true });
+    const db = database;
+
+    const totalCompletedRuns = tryQuery(
+      () =>
+        (
+          db
+            .prepare(`SELECT COUNT(*) AS n FROM local_ingest_reports WHERE status = 'done'`)
+            .get() as { n: number } | undefined
+        )?.n ?? 0,
+      0,
+    );
+
+    const ingestRows = tryQuery(
+      () =>
+        db
+          .prepare(
+            `SELECT connection_id, adapter, MAX(completed_at) AS last_completed_at
+             FROM local_ingest_reports
+             WHERE status = 'done'
+             GROUP BY connection_id, adapter`,
+          )
+          .all() as Array<{ connection_id: string; adapter: string; last_completed_at: string }>,
+      [] as Array<{ connection_id: string; adapter: string; last_completed_at: string }>,
+    );
+    const perConnectionMap = new Map<string, LocalStatsIngestPerConnection>();
+    for (const row of ingestRows) {
+      const existing = perConnectionMap.get(row.connection_id);
+      if (!existing || row.last_completed_at > existing.lastCompletedAt) {
+        perConnectionMap.set(row.connection_id, {
+          connectionId: row.connection_id,
+          adapter: row.adapter,
+          lastCompletedAt: row.last_completed_at,
+        });
+      }
+    }
+    const perConnection = [...perConnectionMap.values()].sort((left, right) =>
+      left.connectionId.localeCompare(right.connectionId),
+    );
+
+    const knowledgeRows = tryQuery(
+      () =>
+        db
+          .prepare(
+            `SELECT scope, COUNT(*) AS n FROM knowledge_pages GROUP BY scope ORDER BY scope`,
+          )
+          .all() as Array<{ scope: string; n: number }>,
+      [] as Array<{ scope: string; n: number }>,
+    );
+    const knowledgePages: LocalStatsKnowledgeEntry[] = knowledgeRows.map((row) => ({
+      scope: row.scope,
+      count: row.n,
+    }));
+
+    const sourceRows = tryQuery(
+      () =>
+        db
+          .prepare(
+            `SELECT connection_id, COUNT(*) AS n FROM local_sl_sources GROUP BY connection_id`,
+          )
+          .all() as Array<{ connection_id: string; n: number }>,
+      [] as Array<{ connection_id: string; n: number }>,
+    );
+    const dictionaryRows = tryQuery(
+      () =>
+        db
+          .prepare(
+            `SELECT connection_id, COUNT(*) AS n FROM local_sl_dictionary_values GROUP BY connection_id`,
+          )
+          .all() as Array<{ connection_id: string; n: number }>,
+      [] as Array<{ connection_id: string; n: number }>,
+    );
+    const slMap = new Map<string, LocalStatsSemanticLayerEntry>();
+    for (const row of sourceRows) {
+      slMap.set(row.connection_id, {
+        connectionId: row.connection_id,
+        sourceCount: row.n,
+        dictionaryValueCount: 0,
+      });
+    }
+    for (const row of dictionaryRows) {
+      const existing = slMap.get(row.connection_id) ?? {
+        connectionId: row.connection_id,
+        sourceCount: 0,
+        dictionaryValueCount: 0,
+      };
+      existing.dictionaryValueCount = row.n;
+      slMap.set(row.connection_id, existing);
+    }
+    const semanticLayer = [...slMap.values()].sort((left, right) =>
+      left.connectionId.localeCompare(right.connectionId),
+    );
+
+    return {
+      ingest: { totalCompletedRuns, perConnection },
+      knowledgePages,
+      semanticLayer,
+      projectDir: projectDirSummary,
+    };
+  } catch (error) {
+    return {
+      ingest: { totalCompletedRuns: 0, perConnection: [] },
+      knowledgePages: [],
+      semanticLayer: [],
+      projectDir: projectDirSummary,
+      unavailable: failureDetail(error),
+    };
+  } finally {
+    if (database) {
+      try {
+        database.close();
+      } catch {
+        // ignore close failures
+      }
+    }
+  }
+}
+
 export async function buildProjectStatus(project: KtxLocalProject, options: BuildProjectStatusOptions = {}): Promise<ProjectStatus> {
   const env = options.env ?? process.env;
   const config = project.config;
@@ -692,6 +992,8 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
     projectDir: project.projectDir,
     env,
     claudeCodeAuthProbe: options.claudeCodeAuthProbe,
+    fast: options.fast,
+    useSpinner: options.useSpinner,
   });
   const embeddings = buildEmbeddingsStatus(config.ingest.embeddings, env);
   const storage = buildStorageStatus(config);
@@ -701,6 +1003,7 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
   const queryHistory = await buildQueryHistoryStatus(project, options);
   const pipeline = buildPipelineStatus(config);
   const warnings = buildWarnings(config, connections, llm, embeddings);
+  const localStats = await buildLocalStatsStatus(project);
   const { verdict, reason, nextActions } = buildVerdict(llm, embeddings, connections, queryHistory, warnings);
 
   return {
@@ -714,6 +1017,7 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
     queryHistory,
     pipeline,
     warnings,
+    localStats,
     verdict,
     verdictReason: reason,
     nextActions,
@@ -742,11 +1046,51 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
-const SYMBOL: Record<ProjectStatusLevel, string> = { ok: '✓', warn: '⚠', fail: '✗' };
+const SYMBOL: Record<ProjectStatusLevel, string> = { ok: '✓', warn: '⚠', fail: '✗', skipped: '-' };
 
 function colorForLevel(useColor: boolean, level: ProjectStatusLevel, text: string): string {
   if (!useColor) return text;
-  return level === 'ok' ? green(text) : level === 'warn' ? yellow(text) : red(text);
+  if (level === 'ok') return green(text);
+  if (level === 'warn') return yellow(text);
+  if (level === 'fail') return red(text);
+  return _dim(text);
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+const RELATIVE_TIME_DIVISIONS: Array<{ amount: number; name: Intl.RelativeTimeFormatUnit }> = [
+  { amount: 60, name: 'second' },
+  { amount: 60, name: 'minute' },
+  { amount: 24, name: 'hour' },
+  { amount: 7, name: 'day' },
+  { amount: 4.34524, name: 'week' },
+  { amount: 12, name: 'month' },
+  { amount: Number.POSITIVE_INFINITY, name: 'year' },
+];
+
+function formatRelativeFromNow(iso: string): string {
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return iso;
+  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  let duration = (parsed - Date.now()) / 1000;
+  for (const division of RELATIVE_TIME_DIVISIONS) {
+    if (Math.abs(duration) < division.amount) {
+      return formatter.format(Math.round(duration), division.name);
+    }
+    duration /= division.amount;
+  }
+  return iso;
 }
 
 
@@ -756,6 +1100,79 @@ function abbreviateHome(filePath: string, env: NodeJS.ProcessEnv): string {
     return filePath === home ? '~' : `~${filePath.slice(home.length)}`;
   }
   return filePath;
+}
+
+function renderLocalStats(
+  lines: string[],
+  stats: LocalStatsStatus,
+  dim: (text: string) => string,
+  bold: (text: string) => string,
+): void {
+  lines.push(`  ${bold('Local data')}`);
+  if (stats.unavailable) {
+    lines.push(`    ${dim(`(—) ${stats.unavailable}`)}`);
+    lines.push('');
+    return;
+  }
+
+  const localLabelWidth = Math.max(
+    'Ingest'.length,
+    'Knowledge'.length,
+    'Semantic layer'.length,
+    'Disk'.length,
+  );
+  const lLabel = (text: string) => text.padEnd(localLabelWidth);
+
+  const ingest = stats.ingest;
+  const ingestSummary =
+    ingest.totalCompletedRuns === 0
+      ? dim('no completed runs yet')
+      : `${ingest.totalCompletedRuns} completed run${ingest.totalCompletedRuns === 1 ? '' : 's'}`;
+  lines.push(`    ${lLabel('Ingest')}   ${ingestSummary}`);
+  if (ingest.perConnection.length > 0) {
+    const nameWidth = Math.max(...ingest.perConnection.map((entry) => entry.connectionId.length));
+    const adapterWidth = Math.max(...ingest.perConnection.map((entry) => entry.adapter.length));
+    for (const entry of ingest.perConnection) {
+      lines.push(
+        `      ${entry.connectionId.padEnd(nameWidth)}   ${dim(entry.adapter.padEnd(adapterWidth))}   ${dim(`last ${formatRelativeFromNow(entry.lastCompletedAt)}`)}`,
+      );
+    }
+  }
+
+  if (stats.knowledgePages.length === 0) {
+    lines.push(`    ${lLabel('Knowledge')}   ${dim('no pages yet')}`);
+  } else {
+    const knowledgeText = stats.knowledgePages
+      .map((entry) => `${entry.scope}=${entry.count}`)
+      .join(` ${dim('·')} `);
+    lines.push(`    ${lLabel('Knowledge')}   ${knowledgeText}`);
+  }
+
+  if (stats.semanticLayer.length === 0) {
+    lines.push(`    ${lLabel('Semantic layer')}   ${dim('no indexed sources yet')}`);
+  } else {
+    const nameWidth = Math.max(...stats.semanticLayer.map((entry) => entry.connectionId.length));
+    let firstLine = true;
+    for (const entry of stats.semanticLayer) {
+      const prefix = firstLine ? lLabel('Semantic layer') : ' '.repeat(localLabelWidth);
+      lines.push(
+        `    ${prefix}   ${entry.connectionId.padEnd(nameWidth)}   ${dim(`${entry.sourceCount} source${entry.sourceCount === 1 ? '' : 's'} · ${entry.dictionaryValueCount} dictionary value${entry.dictionaryValueCount === 1 ? '' : 's'}`)}`,
+      );
+      firstLine = false;
+    }
+  }
+
+  const disk = stats.projectDir;
+  const diskBits: string[] = [];
+  diskBits.push(`db=${disk.dbSqliteBytes === null ? '–' : formatBytes(disk.dbSqliteBytes)}`);
+  diskBits.push(`cache=${formatBytes(disk.ktxCacheBytes)}`);
+  diskBits.push(
+    `raw-sources=${disk.rawSources.fileCount} file${disk.rawSources.fileCount === 1 ? '' : 's'} (${formatBytes(disk.rawSources.bytes)})`,
+  );
+  diskBits.push(`wiki=${disk.wikiGlobalMarkdownCount} md`);
+  diskBits.push(`semantic-layer=${disk.semanticLayerYamlCount} yaml`);
+  lines.push(`    ${lLabel('Disk')}   ${dim(diskBits.join(`  ${dim('·')}  `))}`);
+  lines.push('');
 }
 
 export interface RenderProjectStatusOptions {
@@ -858,6 +1275,9 @@ export function renderProjectStatus(status: ProjectStatus, options: RenderProjec
     : dim('disabled');
   lines.push(`    ${pLabel('Research agent')}   ${agentDetail}`);
   lines.push('');
+
+  // Local data
+  renderLocalStats(lines, status.localStats, dim, bold);
 
   // Warnings
   if (status.warnings.length > 0) {
