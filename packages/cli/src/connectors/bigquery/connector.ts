@@ -1,4 +1,5 @@
 import { BigQuery, type TableField } from '@google-cloud/bigquery';
+import { normalizeBigQueryProjectId, normalizeBigQueryRegion } from '../../context/connections/bigquery-identifiers.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { readFileSync } from 'node:fs';
@@ -230,9 +231,6 @@ export function bigQueryConnectionConfigFromConfig(input: {
     throw new Error(`Native BigQuery connector requires credentials_json.project_id for connections.${input.connectionId}`);
   }
   const resolvedDatasetIds = datasetIds(input.connection, env);
-  if (resolvedDatasetIds.length === 0) {
-    throw new Error(`Native BigQuery connector requires connections.${input.connectionId}.dataset_id or dataset_ids`);
-  }
   const location = stringConfigValue(input.connection, 'location', env);
   return { projectId, credentials, datasetIds: resolvedDatasetIds, ...(location ? { location } : {}) };
 }
@@ -289,17 +287,18 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
     const tables: KtxSchemaTable[] = [];
-    for (const datasetId of this.resolved.datasetIds) {
+    const datasetIds = this.requireDatasetIdsForScan();
+    for (const datasetId of datasetIds) {
       tables.push(...(await this.introspectDataset(datasetId)));
     }
     return {
       connectionId: this.connectionId,
       driver: 'bigquery',
       extractedAt: this.now().toISOString(),
-      scope: { catalogs: [this.resolved.projectId], datasets: this.resolved.datasetIds },
+      scope: { catalogs: [this.resolved.projectId], datasets: datasetIds },
       metadata: {
         project_id: this.resolved.projectId,
-        datasets: this.resolved.datasetIds,
+        datasets: datasetIds,
         table_count: tables.length,
         total_columns: tables.reduce((sum, table) => sum + table.columns.length, 0),
       },
@@ -381,22 +380,33 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
   }
 
   async listTables(datasetIds?: string[]): Promise<KtxTableListEntry[]> {
-    const filterDatasets = datasetIds ?? (await this.listDatasets());
-    const entries: KtxTableListEntry[] = [];
-    for (const datasetId of filterDatasets) {
-      const dataset = this.getClient().dataset(datasetId);
-      const [tables] = await dataset.getTables();
-      for (const table of tables) {
-        if (!table.id) continue;
-        entries.push({
-          schema: datasetId,
-          name: table.id,
-          kind: table.metadata?.type === 'VIEW' ? 'view' : 'table',
-        });
-      }
+    const projectId = normalizeBigQueryProjectId(this.resolved.projectId, 'table discovery');
+    const region = normalizeBigQueryRegion(this.resolved.location ?? 'US', 'table discovery');
+    const params: Record<string, unknown> = {};
+    const filter = datasetIds && datasetIds.length > 0 ? 'AND table_schema IN UNNEST(@dataset_ids)' : '';
+    if (datasetIds && datasetIds.length > 0) {
+      params.dataset_ids = datasetIds;
     }
-    entries.sort((a, b) => a.schema.localeCompare(b.schema) || a.name.localeCompare(b.name));
-    return entries;
+    const rows = await this.queryRaw<{ table_schema: string; table_name: string; table_type: string }>(
+      `
+    SELECT table_schema, table_name, table_type
+    FROM \`${projectId}\`.\`region-${region}\`.INFORMATION_SCHEMA.TABLES
+    WHERE table_type IN (
+      'BASE TABLE', 'VIEW', 'MATERIALIZED VIEW', 'EXTERNAL', 'CLONE', 'SNAPSHOT'
+    )
+      ${filter}
+    ORDER BY table_schema, table_name
+    `,
+      params,
+    );
+    return rows.map((row) => ({
+      schema: row.table_schema,
+      name: row.table_name,
+      kind:
+        row.table_type === 'VIEW' || row.table_type === 'MATERIALIZED VIEW'
+          ? ('view' as const)
+          : ('table' as const),
+    }));
   }
 
   async cleanup(): Promise<void> {
@@ -411,6 +421,13 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
       });
     }
     return this.client;
+  }
+
+  private requireDatasetIdsForScan(): string[] {
+    if (this.resolved.datasetIds.length === 0) {
+      throw new Error(`Native BigQuery scan requires connections.${this.connectionId}.dataset_ids or dataset_id`);
+    }
+    return this.resolved.datasetIds;
   }
 
   private async query(sql: string, params?: Record<string, unknown>): Promise<KtxQueryResult> {

@@ -5,6 +5,7 @@ import {
   type HistoricSqlTimeWindow,
   type HistoricSqlUnifiedPullConfig,
 } from './types.js';
+import { normalizeBigQueryProjectId, normalizeBigQueryRegion } from '../../../connections/bigquery-identifiers.js';
 
 interface QueryResultLike {
   headers: string[];
@@ -50,21 +51,6 @@ function grantsError(cause: unknown): HistoricSqlGrantsMissingError {
     remediation: BIGQUERY_GRANTS_REMEDIATION,
     cause,
   });
-}
-
-function normalizeProjectId(value: string): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(value)) {
-    throw new Error(`Invalid BigQuery project id for historic-SQL ingest: ${value}`);
-  }
-  return value;
-}
-
-function normalizeRegion(value: string): string {
-  const region = value.trim().toLowerCase().replace(/^region-/, '');
-  if (!/^[a-z0-9-]+$/.test(region)) {
-    throw new Error(`Invalid BigQuery region for historic-SQL ingest: ${value}`);
-  }
-  return region;
 }
 
 function timestampExpression(value: Date | string): string {
@@ -190,8 +176,8 @@ export class BigQueryHistoricSqlQueryHistoryReader {
   private readonly viewPath: string;
 
   constructor(options: BigQueryHistoricSqlQueryHistoryReaderOptions) {
-    const projectId = normalizeProjectId(options.projectId);
-    const region = normalizeRegion(options.region);
+    const projectId = normalizeBigQueryProjectId(options.projectId);
+    const region = normalizeBigQueryRegion(options.region);
     this.viewPath = `\`${projectId}.region-${region}.INFORMATION_SCHEMA.JOBS_BY_PROJECT\``;
   }
 
