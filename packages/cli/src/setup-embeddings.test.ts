@@ -176,8 +176,8 @@ describe('setup embeddings step', () => {
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
+    expect(config.ingest.embeddings.sentenceTransformers).toBeUndefined();
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');
@@ -275,8 +275,8 @@ describe('setup embeddings step', () => {
       backend: 'sentence-transformers',
       model: 'all-MiniLM-L6-v2',
       dimensions: 384,
-      sentenceTransformers: { base_url: 'managed:local-embeddings', pathPrefix: '' },
     });
+    expect(config.ingest.embeddings.sentenceTransformers).toBeUndefined();
     expect(config.scan.enrichment.embeddings).toMatchObject(config.ingest.embeddings);
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('embeddings');

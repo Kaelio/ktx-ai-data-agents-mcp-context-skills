@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
 import {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
-  managedLocalEmbeddingProjectConfig,
   tryUseManagedLocalEmbeddingsDaemon,
 } from './managed-local-embeddings.js';
 import type { ManagedPythonCommandRuntime } from './managed-python-command.js';
@@ -95,25 +93,6 @@ function daemonResult(status: 'started' | 'reused' = 'reused'): ManagedPythonDae
     },
   };
 }
-
-describe('managedLocalEmbeddingProjectConfig', () => {
-  it('uses a stable managed runtime marker instead of a random daemon port', () => {
-    expect(
-      managedLocalEmbeddingProjectConfig({
-        model: 'all-MiniLM-L6-v2',
-        dimensions: 384,
-      }),
-    ).toEqual({
-      backend: 'sentence-transformers',
-      model: 'all-MiniLM-L6-v2',
-      dimensions: 384,
-      sentenceTransformers: {
-        base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
-        pathPrefix: '',
-      },
-    });
-  });
-});
 
 describe('managedLocalEmbeddingHealthConfig', () => {
   it('uses the active KTX daemon URL for the immediate health check', () => {

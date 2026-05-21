@@ -1,4 +1,3 @@
-import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
 import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '@ktx/context/project';
 import { describe, expect, it } from 'vitest';
 import {
@@ -51,7 +50,7 @@ describe('runtime requirement detection', () => {
           model: 'all-MiniLM-L6-v2',
           dimensions: 384,
           sentenceTransformers: {
-            base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
+            base_url: '',
           },
         },
       },

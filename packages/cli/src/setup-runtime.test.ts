@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
 import { buildDefaultKtxProjectConfig, readKtxSetupState, type KtxProjectConfig } from '@ktx/context/project';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxSetupRuntimeStep } from './setup-runtime.js';
@@ -113,7 +112,7 @@ describe('runKtxSetupRuntimeStep', () => {
           backend: 'sentence-transformers',
           model: 'all-MiniLM-L6-v2',
           dimensions: 384,
-          sentenceTransformers: { base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL },
+          sentenceTransformers: { base_url: '' },
         },
       },
     };

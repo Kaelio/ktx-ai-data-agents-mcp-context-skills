@@ -1,5 +1,3 @@
-import { MANAGED_SENTENCE_TRANSFORMERS_BASE_URL } from '@ktx/context';
-import type { KtxProjectEmbeddingConfig } from '@ktx/context/project';
 import type { KtxEmbeddingConfig } from '@ktx/llm';
 import type { KtxCliIo } from './cli-runtime.js';
 import {
@@ -37,21 +35,6 @@ export interface ManagedLocalEmbeddingsOptions {
     features: ['local-embeddings'];
     force: boolean;
   }) => Promise<ManagedPythonDaemonStartResult>;
-}
-
-export function managedLocalEmbeddingProjectConfig(input: {
-  model: string;
-  dimensions: number;
-}): KtxProjectEmbeddingConfig {
-  return {
-    backend: 'sentence-transformers',
-    model: input.model,
-    dimensions: input.dimensions,
-    sentenceTransformers: {
-      base_url: MANAGED_SENTENCE_TRANSFORMERS_BASE_URL,
-      pathPrefix: '',
-    },
-  };
 }
 
 export function managedLocalEmbeddingHealthConfig(input: {
