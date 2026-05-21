@@ -663,6 +663,12 @@ function normalizeFileReference(value: string): string {
   return `file:${normalized}`;
 }
 
+function displayFileReference(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  if (value.startsWith('file:')) return value.slice('file:'.length);
+  return value;
+}
+
 function scriptedScopeConfigForDriver(
   driver: KtxSetupDatabaseDriver,
   databaseSchemas: string[],
@@ -910,7 +916,7 @@ async function buildConnectionConfig(input: {
     const credentialsPath = await promptText(
       prompts,
       'Path to service account JSON file',
-      stringConfigField(input.existingConnection, 'credentials_json'),
+      displayFileReference(stringConfigField(input.existingConnection, 'credentials_json')),
     );
     if (credentialsPath === undefined) return 'back';
     const location = await promptText(
@@ -1358,6 +1364,9 @@ function withExistingPrimaryEditPromptDefaults(input: {
   }
   if (!Object.hasOwn(input.next, 'enabled_tables') && Array.isArray(input.previous.enabled_tables)) {
     merged.enabled_tables = input.previous.enabled_tables;
+  }
+  if (!Object.hasOwn(input.next, 'context') && input.previous.context !== undefined) {
+    merged.context = input.previous.context;
   }
   return merged;
 }

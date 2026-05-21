@@ -106,7 +106,7 @@ function makePromptAdapter(options: {
         : ['back'];
     }),
     select: vi.fn(async ({ message }) => {
-      if (message.startsWith('Save ') && message.includes(' or refine tables?')) {
+      if (message.startsWith('Enable all tables in ') && message.includes(', or refine tables?')) {
         return 'save';
       }
       if (message.includes('How much database context should KTX build?')) {
@@ -258,6 +258,48 @@ describe('setup databases step', () => {
     expect(result.status).toBe('back');
     expect(prompts.multiselect).not.toHaveBeenCalled();
     expect(prompts.select).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves context.depth when editing an existing database connection', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: sqlite',
+        '    path: ./warehouse.sqlite',
+        '    context:',
+        '      depth: deep',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const prompts = makePromptAdapter({
+      selectValues: ['edit', 'warehouse', 'continue'],
+      textValues: ['./warehouse.sqlite'],
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const io = makeIo();
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
+      io.io,
+      { prompts, testConnection, scanConnection },
+    );
+
+    expect(result.status, io.stderr()).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      driver: 'sqlite',
+      path: './warehouse.sqlite',
+      context: { depth: 'deep' },
+    });
   });
 
   it('labels existing database connections with the database type', async () => {

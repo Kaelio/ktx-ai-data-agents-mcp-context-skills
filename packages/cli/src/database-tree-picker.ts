@@ -283,10 +283,12 @@ export async function pickDatabaseScope(
       continue;
     }
 
+    const selectedNoun =
+      selectedSchemas.length === 1 ? args.schemaNoun : args.schemaNounPlural;
     const action = await args.prompts.select({
-      message: `Save ${selectedSchemas.length} ${selectedSchemas.length === 1 ? args.schemaNoun : args.schemaNounPlural} or refine tables?`,
+      message: `Enable all tables in ${selectedSchemas.length} ${selectedNoun}, or refine tables?`,
       options: [
-        { value: 'save', label: 'Save selection' },
+        { value: 'save', label: `Enable all tables in selected ${selectedNoun}` },
         { value: 'refine', label: 'Refine: choose individual tables' },
         { value: 'back', label: 'Back' },
       ],

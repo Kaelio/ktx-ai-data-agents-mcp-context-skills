@@ -167,6 +167,40 @@ describe('CLI local ingest adapters', () => {
     ]);
   });
 
+  it('resolves BigQuery credentials_json from a file: reference for query history ingest', async () => {
+    const credentialsPath = join(tempDir, 'credentials.json');
+    await writeFile(credentialsPath, JSON.stringify({ project_id: 'demo-project' }), 'utf-8');
+    await writeProject(
+      tempDir,
+      [
+        'connections:',
+        '  bq:',
+        '    driver: bigquery',
+        '    dataset_id: analytics',
+        '    location: us',
+        `    credentials_json: 'file:${credentialsPath}'`,
+        '    historicSql:',
+        '      enabled: true',
+        '      dialect: bigquery',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+
+    const adapters = createKtxCliLocalIngestAdapters(project, {
+      historicSqlConnectionId: 'bq',
+      sqlAnalysis: sqlAnalysisStub(),
+    });
+
+    expect(adapters.find((adapter) => adapter.source === 'historic-sql')?.skillNames).toEqual([
+      'historic_sql_table_digest',
+      'historic_sql_patterns',
+    ]);
+  });
+
   it('uses query-history wording for public BigQuery capability errors', async () => {
     await writeProject(
       tempDir,
