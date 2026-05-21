@@ -145,6 +145,17 @@ file instead of rerunning to apply different filters:
 pnpm run test 2>&1 | tee /tmp/ktx-test-output.log
 ```
 
+## Avoiding Overengineering
+
+For the code-design principles agents must apply when writing or changing
+behavior — one way to say one thing, behavior follows from inputs (not
+from which path the caller took), failures must reach a decision-maker,
+don't build seams without a second piece on the other side, specification
+and behavior are one artifact, verify the path you claim to have fixed,
+and naming asymmetries are bugs in waiting — see
+[`docs/code-design.md`](docs/code-design.md). Treat the `MUST` / `MUST NOT`
+rules there with the same weight as the ones in this file.
+
 ## TypeScript Standards
 
 - Use Node 22+ and pnpm workspace commands.
