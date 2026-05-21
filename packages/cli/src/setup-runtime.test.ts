@@ -102,7 +102,6 @@ describe('runKtxSetupRuntimeStep', () => {
       baseUrl: 'http://127.0.0.1:61234',
       stdoutLog: join(tempDir, '.ktx', 'runtime', 'daemon.stdout.log'),
       stderrLog: join(tempDir, '.ktx', 'runtime', 'daemon.stderr.log'),
-      env: { KTX_MANAGED_SENTENCE_TRANSFORMERS_BASE_URL: 'http://127.0.0.1:61234' },
     }));
     const config: KtxProjectConfig = {
       ...buildDefaultKtxProjectConfig(),

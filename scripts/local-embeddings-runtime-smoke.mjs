@@ -357,10 +357,13 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
     requireOutput(commands[5].label, setup, /Embeddings ready: yes \(all-MiniLM-L6-v2\)/);
 
     const config = await readFile(join(projectDir, 'ktx.yaml'), 'utf8');
-    if (!config.includes('base_url: managed:local-embeddings')) {
-      throw new Error(`ktx.yaml did not contain managed local embeddings marker:\n${config}`);
+    if (!/backend:\s*sentence-transformers/.test(config)) {
+      throw new Error(`ktx.yaml did not declare sentence-transformers embedding backend:\n${config}`);
     }
-    process.stdout.write('KTX setup persisted managed local embeddings marker\n');
+    if (/base_url:/.test(config)) {
+      throw new Error(`ktx.yaml should omit base_url for managed local embeddings:\n${config}`);
+    }
+    process.stdout.write('KTX setup persisted managed local embeddings (no base_url)\n');
 
     const stop = await run(commands[6].command, commands[6].args, {
       cwd: installDir,

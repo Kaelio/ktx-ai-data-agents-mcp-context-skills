@@ -54,9 +54,6 @@ function managedDaemon(
     baseUrl,
     stdoutLog: logs.stdoutLog ?? '/tmp/ktx-daemon.stdout.log',
     stderrLog: logs.stderrLog ?? '/tmp/ktx-daemon.stderr.log',
-    env: {
-      KTX_MANAGED_SENTENCE_TRANSFORMERS_BASE_URL: baseUrl,
-    },
   };
 }
 
