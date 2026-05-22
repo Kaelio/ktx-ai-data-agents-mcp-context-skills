@@ -16,7 +16,6 @@ type PostHogClient = {
     properties: Record<string, unknown>;
     groups?: Record<string, string>;
   }): void;
-  groupIdentify(event: { groupType: string; groupKey: string; distinctId?: string }): void;
   shutdown(): Promise<void> | void;
 };
 
@@ -26,7 +25,6 @@ const POSTHOG_HOST = 'https://us.i.posthog.com';
 const SHUTDOWN_TIMEOUT_MS = 1500;
 
 let clientPromise: Promise<PostHogClient | null> | undefined;
-const identifiedProjects = new Set<string>();
 
 function telemetryHost(env: TelemetryEmitterEnv, explicitHost?: string): string {
   return explicitHost ?? env.KTX_TELEMETRY_ENDPOINT ?? POSTHOG_HOST;
@@ -72,40 +70,6 @@ function writeDebugPayload(input: {
   );
 }
 
-/** @internal */
-export async function groupIdentifyProject(input: {
-  distinctId: string;
-  projectId: string;
-  env?: TelemetryEmitterEnv;
-  projectApiKey?: string;
-  host?: string;
-}): Promise<void> {
-  const env = input.env ?? process.env;
-  const projectApiKey = telemetryProjectApiKey(input.projectApiKey);
-  const host = telemetryHost(env, input.host);
-  const projectKey = `${host}:${input.projectId}`;
-
-  if (identifiedProjects.has(projectKey)) {
-    return;
-  }
-  identifiedProjects.add(projectKey);
-
-  const client = await getPostHogClient(projectApiKey, host);
-  if (!client) {
-    return;
-  }
-
-  try {
-    client.groupIdentify({
-      groupType: 'project',
-      groupKey: input.projectId,
-      distinctId: input.distinctId,
-    });
-  } catch {
-    return;
-  }
-}
-
 export async function trackTelemetryEvent(input: {
   event: BuiltTelemetryEvent;
   distinctId: string;
@@ -130,16 +94,6 @@ export async function trackTelemetryEvent(input: {
   }
 
   try {
-    if (input.projectId) {
-      await groupIdentifyProject({
-        distinctId: input.distinctId,
-        projectId: input.projectId,
-        env,
-        projectApiKey,
-        host,
-      });
-    }
-
     client.capture({
       distinctId: input.distinctId,
       event: input.event.name,
@@ -168,5 +122,4 @@ export async function shutdownTelemetryEmitter(): Promise<void> {
 /** @internal */
 export function __resetTelemetryEmitterForTests(): void {
   clientPromise = undefined;
-  identifiedProjects.clear();
 }

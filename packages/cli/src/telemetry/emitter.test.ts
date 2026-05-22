@@ -2,14 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   __resetTelemetryEmitterForTests,
-  groupIdentifyProject,
   shutdownTelemetryEmitter,
   trackTelemetryEvent,
 } from './emitter.js';
 import type { BuiltTelemetryEvent } from './events.js';
 
 const captures: unknown[] = [];
-const groupIdentifies: unknown[] = [];
 const shutdown = vi.fn(async () => {});
 
 function liveConfigId(): string {
@@ -20,7 +18,6 @@ vi.mock('posthog-node', () => ({
   PostHog: vi.fn().mockImplementation(function () {
     return {
       capture: (event: unknown) => captures.push(event),
-      groupIdentify: (event: unknown) => groupIdentifies.push(event),
       shutdown,
     };
   }),
@@ -50,7 +47,6 @@ function commandEvent(): BuiltTelemetryEvent<'command'> {
 describe('telemetry emitter', () => {
   beforeEach(() => {
     captures.length = 0;
-    groupIdentifies.length = 0;
     shutdown.mockClear();
     __resetTelemetryEmitterForTests();
   });
@@ -86,29 +82,6 @@ describe('telemetry emitter', () => {
       event: 'command',
       groups: { project: 'project-1' },
     });
-  });
-
-  it('group-identifies once per project when live config is supplied', async () => {
-    await groupIdentifyProject({
-      distinctId: 'install-1',
-      projectId: 'project-1',
-      projectApiKey: liveConfigId(),
-      host: 'https://us.i.posthog.com',
-    });
-    await groupIdentifyProject({
-      distinctId: 'install-1',
-      projectId: 'project-1',
-      projectApiKey: liveConfigId(),
-      host: 'https://us.i.posthog.com',
-    });
-
-    expect(groupIdentifies).toEqual([
-      {
-        groupType: 'project',
-        groupKey: 'project-1',
-        distinctId: 'install-1',
-      },
-    ]);
   });
 
   it('captures with distinctId, properties, and groups when live config is supplied', async () => {
