@@ -53,6 +53,7 @@ export interface KtxLocalScanEnrichmentInput {
   mode: KtxScanMode;
   detectRelationships?: boolean;
   connector: KtxScanConnector;
+  snapshot?: KtxSchemaSnapshot;
   context: KtxScanContext;
   providers: KtxLocalScanEnrichmentProviders | null;
   stateStore?: KtxScanEnrichmentStateStore | null;
@@ -472,15 +473,17 @@ export async function runLocalScanEnrichment(
 ): Promise<KtxLocalScanEnrichmentResult> {
   const progress = input.context.progress;
   await progress?.update(0, 'Loading enrichment schema snapshot');
-  const snapshot = await input.connector.introspect(
-    {
-      connectionId: input.connectionId,
-      driver: input.connector.driver,
-      mode: input.mode,
-      detectRelationships: input.detectRelationships,
-    },
-    input.context,
-  );
+  const snapshot =
+    input.snapshot ??
+    (await input.connector.introspect(
+      {
+        connectionId: input.connectionId,
+        driver: input.connector.driver,
+        mode: input.mode,
+        detectRelationships: input.detectRelationships,
+      },
+      input.context,
+    ));
   await progress?.update(0.05, `Loaded schema snapshot with ${snapshot.tables.length} tables`);
 
   const now = input.now ?? (() => new Date());

@@ -350,6 +350,7 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
       writeRunSummary(result.report, args.projectDir, io);
     } finally {
       cliProgress?.flush();
+      await connector?.cleanup?.();
     }
     return 0;
   } catch (error) {

@@ -402,6 +402,9 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
   assertSupportedMode(mode);
   await options.progress?.update(0.05, 'Preparing scan');
   const rawConnector = await resolveScanConnector(options, mode);
+  const ownsConnector = !!rawConnector && !options.connector;
+
+  try {
 
   const connection = options.project.config.connections[options.connectionId];
   if (!connection) {
@@ -467,6 +470,7 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
   }
   const enrichmentStateStore = connector ? createLocalScanEnrichmentStateStore(options) : null;
   let enrichmentState: KtxScanEnrichmentStateSummary = completedKtxScanEnrichmentStateSummary();
+  let enrichmentSnapshot: KtxSchemaSnapshot | null = null;
   if (!reusedExistingScanArtifacts && !report.dryRun && report.artifactPaths.rawSourcesDir) {
     await options.progress?.update(0.7, 'Writing schema artifacts');
     const rawSnapshot = await readLocalScanStructuralSnapshot({
@@ -491,6 +495,7 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
       subFrom('tablesModified');
       await options.progress?.update(0.6, scanChangeSummary(report.diffSummary));
     }
+    enrichmentSnapshot = structuralSnapshot;
     const manifestArtifacts = await writeLocalScanManifestShards({
       project: options.project,
       connectionId: options.connectionId,
@@ -515,6 +520,7 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
         mode,
         detectRelationships: options.detectRelationships,
         connector,
+        ...(enrichmentSnapshot ? { snapshot: enrichmentSnapshot } : {}),
         context: { runId: record.runId, progress: options.progress?.startPhase(0.18) },
         providers: enrichmentProviders,
         stateStore: enrichmentStateStore,
@@ -585,6 +591,11 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
     syncId: record.syncId,
     report,
   };
+  } finally {
+    if (ownsConnector) {
+      await rawConnector?.cleanup?.();
+    }
+  }
 }
 
 /** @internal */

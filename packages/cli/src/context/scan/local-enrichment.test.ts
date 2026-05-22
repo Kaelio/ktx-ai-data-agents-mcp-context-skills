@@ -299,6 +299,38 @@ describe('local scan enrichment', () => {
     ]);
   });
 
+  it('uses the supplied snapshot without calling connector.introspect', async () => {
+    const scanConnector = connector();
+    const introspect = vi.mocked(scanConnector.introspect);
+
+    const result = await runLocalScanEnrichment({
+      connectionId: 'warehouse',
+      mode: 'structural',
+      connector: scanConnector,
+      snapshot,
+      context: { runId: 'scan-run-snapshot' },
+      providers: null,
+    });
+
+    expect(result.snapshot).toEqual(snapshot);
+    expect(introspect).not.toHaveBeenCalled();
+  });
+
+  it('falls back to connector.introspect when no snapshot is supplied', async () => {
+    const scanConnector = connector();
+
+    const result = await runLocalScanEnrichment({
+      connectionId: 'warehouse',
+      mode: 'structural',
+      connector: scanConnector,
+      context: { runId: 'scan-run-introspect' },
+      providers: null,
+    });
+
+    expect(result.snapshot).toEqual(snapshot);
+    expect(scanConnector.introspect).toHaveBeenCalledTimes(1);
+  });
+
   it('runs deterministic relationship detection for relationship scans', async () => {
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
