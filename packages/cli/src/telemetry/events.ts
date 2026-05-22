@@ -27,10 +27,155 @@ const commandSchema = telemetryCommonEnvelopeSchema
   })
   .strict();
 
+const outcomeSchema = z.enum(['ok', 'error']);
+
+const setupStepSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    step: z.enum([
+      'project',
+      'runtime',
+      'models',
+      'embeddings',
+      'secrets',
+      'databases',
+      'database-context-depth',
+      'sources',
+      'context',
+      'agents',
+      'demo-tour',
+    ]),
+    outcome: z.enum(['completed', 'skipped', 'abandoned']),
+    durationMs: z.number().nonnegative(),
+  })
+  .strict();
+
+const connectionAddedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    driver: z.string(),
+    isDemoConnection: z.boolean(),
+  })
+  .strict();
+
+const connectionTestSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    driver: z.string(),
+    isDemoConnection: z.boolean(),
+    outcome: outcomeSchema,
+    errorClass: z.string().optional(),
+    durationMs: z.number().nonnegative(),
+    serverVersion: z.string().optional(),
+  })
+  .strict();
+
+const projectStackSnapshotSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    connectors: z.array(z.object({ driver: z.string(), isDemo: z.boolean() }).strict()),
+    connectionCount: z.number().int().nonnegative(),
+    hasSl: z.boolean(),
+    hasWiki: z.boolean(),
+    hasMcp: z.boolean(),
+    hasManagedRuntime: z.boolean(),
+  })
+  .strict();
+
+const rowsBucketSchema = z.enum(['<10k', '<100k', '<1M', '<10M', '>=10M']);
+
+const ingestCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    driver: z.string(),
+    isDemoConnection: z.boolean(),
+    schemaCount: z.number().int().nonnegative(),
+    tableCount: z.number().int().nonnegative(),
+    columnCount: z.number().int().nonnegative(),
+    rowsBucket: rowsBucketSchema,
+    durationMs: z.number().nonnegative(),
+    outcome: outcomeSchema,
+    errorClass: z.string().optional(),
+  })
+  .strict();
+
+const scanCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    driver: z.string(),
+    tableCount: z.number().int().nonnegative(),
+    columnCount: z.number().int().nonnegative(),
+    inferredFkCount: z.number().int().nonnegative(),
+    declaredFkCount: z.number().int().nonnegative(),
+    durationMs: z.number().nonnegative(),
+    outcome: outcomeSchema,
+    errorClass: z.string().optional(),
+  })
+  .strict();
+
+const slValidateCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    sourceCount: z.number().int().nonnegative(),
+    modelCount: z.number().int().nonnegative(),
+    validationErrorCount: z.number().int().nonnegative(),
+    outcome: outcomeSchema,
+    errorClass: z.string().optional(),
+    durationMs: z.number().nonnegative(),
+  })
+  .strict();
+
+const slQueryCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    mode: z.enum(['compile', 'execute']),
+    referencedSourceCount: z.number().int().nonnegative(),
+    referencedDimensionCount: z.number().int().nonnegative(),
+    referencedMeasureCount: z.number().int().nonnegative(),
+    durationMs: z.number().nonnegative(),
+    outcome: outcomeSchema,
+    errorClass: z.string().optional(),
+  })
+  .strict();
+
+const sqlCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    driver: z.string(),
+    isDemoConnection: z.boolean(),
+    queryVerb: z.enum(['select', 'explain', 'show', 'with', 'other']),
+    referencedTableCount: z.number().int().nonnegative(),
+    durationMs: z.number().nonnegative(),
+    outcome: outcomeSchema,
+    errorClass: z.string().optional(),
+  })
+  .strict();
+
+const wikiQueryCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    queryLength: z.number().int().nonnegative(),
+    resultCount: z.number().int().nonnegative(),
+    durationMs: z.number().nonnegative(),
+    outcome: outcomeSchema,
+  })
+  .strict();
+
+const mcpRequestCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    toolName: z.string(),
+    outcome: outcomeSchema,
+    durationMs: z.number().nonnegative(),
+    errorClass: z.string().optional(),
+    sampleRate: z.literal(0.1),
+  })
+  .strict();
+
 /** @internal */
 export const telemetryEventSchemas = {
   install_first_run: installFirstRunSchema,
   command: commandSchema,
+  setup_step: setupStepSchema,
+  connection_added: connectionAddedSchema,
+  connection_test: connectionTestSchema,
+  project_stack_snapshot: projectStackSnapshotSchema,
+  ingest_completed: ingestCompletedSchema,
+  scan_completed: scanCompletedSchema,
+  sl_validate_completed: slValidateCompletedSchema,
+  sl_query_completed: slQueryCompletedSchema,
+  sql_completed: sqlCompletedSchema,
+  wiki_query_completed: wikiQueryCompletedSchema,
+  mcp_request_completed: mcpRequestCompletedSchema,
 } as const;
 
 /** @internal */
@@ -52,6 +197,96 @@ export const telemetryEventCatalog = [
       'hasProject',
       'projectGroupAttached',
     ],
+  },
+  {
+    name: 'setup_step',
+    description: 'Emitted after an interactive setup step completes, skips, or aborts.',
+    fields: ['step', 'outcome', 'durationMs'],
+  },
+  {
+    name: 'connection_added',
+    description: 'Emitted when setup writes a database, source, or demo connection.',
+    fields: ['driver', 'isDemoConnection'],
+  },
+  {
+    name: 'connection_test',
+    description: 'Emitted after ktx connection test completes.',
+    fields: ['driver', 'isDemoConnection', 'outcome', 'errorClass', 'durationMs', 'serverVersion'],
+  },
+  {
+    name: 'project_stack_snapshot',
+    description: 'Emitted after commands that can summarize the local project stack.',
+    fields: ['connectors', 'connectionCount', 'hasSl', 'hasWiki', 'hasMcp', 'hasManagedRuntime'],
+  },
+  {
+    name: 'ingest_completed',
+    description: 'Emitted after a public ingest target completes.',
+    fields: [
+      'driver',
+      'isDemoConnection',
+      'schemaCount',
+      'tableCount',
+      'columnCount',
+      'rowsBucket',
+      'durationMs',
+      'outcome',
+      'errorClass',
+    ],
+  },
+  {
+    name: 'scan_completed',
+    description: 'Emitted after schema scan or relationship inference completes.',
+    fields: [
+      'driver',
+      'tableCount',
+      'columnCount',
+      'inferredFkCount',
+      'declaredFkCount',
+      'durationMs',
+      'outcome',
+      'errorClass',
+    ],
+  },
+  {
+    name: 'sl_validate_completed',
+    description: 'Emitted after ktx sl validate completes.',
+    fields: ['sourceCount', 'modelCount', 'validationErrorCount', 'outcome', 'errorClass', 'durationMs'],
+  },
+  {
+    name: 'sl_query_completed',
+    description: 'Emitted after ktx sl query compiles or executes.',
+    fields: [
+      'mode',
+      'referencedSourceCount',
+      'referencedDimensionCount',
+      'referencedMeasureCount',
+      'durationMs',
+      'outcome',
+      'errorClass',
+    ],
+  },
+  {
+    name: 'sql_completed',
+    description: 'Emitted after ktx sql completes validation and execution.',
+    fields: [
+      'driver',
+      'isDemoConnection',
+      'queryVerb',
+      'referencedTableCount',
+      'durationMs',
+      'outcome',
+      'errorClass',
+    ],
+  },
+  {
+    name: 'wiki_query_completed',
+    description: 'Emitted after a wiki query completes.',
+    fields: ['queryLength', 'resultCount', 'durationMs', 'outcome'],
+  },
+  {
+    name: 'mcp_request_completed',
+    description: 'Emitted for sampled MCP tool requests.',
+    fields: ['toolName', 'outcome', 'durationMs', 'errorClass', 'sampleRate'],
   },
 ] as const;
 

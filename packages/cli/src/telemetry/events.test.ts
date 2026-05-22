@@ -18,8 +18,22 @@ const envelope: TelemetryCommonEnvelope = {
 };
 
 describe('telemetry event schemas', () => {
-  it('catalogs only phase 1 events', () => {
-    expect(telemetryEventCatalog.map((event) => event.name)).toEqual(['install_first_run', 'command']);
+  it('catalogs all Node v1 telemetry events', () => {
+    expect(telemetryEventCatalog.map((event) => event.name)).toEqual([
+      'install_first_run',
+      'command',
+      'setup_step',
+      'connection_added',
+      'connection_test',
+      'project_stack_snapshot',
+      'ingest_completed',
+      'scan_completed',
+      'sl_validate_completed',
+      'sl_query_completed',
+      'sql_completed',
+      'wiki_query_completed',
+      'mcp_request_completed',
+    ]);
   });
 
   it('builds a strict install_first_run event', () => {
@@ -68,9 +82,43 @@ describe('telemetry event schemas', () => {
     ).toThrow();
   });
 
-  it('rejects raw string fields that are not in the phase 1 schema', () => {
+  it('builds strict Phase 2 events without private names or text', () => {
+    expect(
+      buildTelemetryEvent('connection_test', envelope, {
+        driver: 'postgres',
+        isDemoConnection: false,
+        outcome: 'ok',
+        durationMs: 34,
+        serverVersion: '16',
+      }),
+    ).toMatchObject({
+      name: 'connection_test',
+      properties: {
+        driver: 'postgres',
+        isDemoConnection: false,
+        outcome: 'ok',
+        durationMs: 34,
+        serverVersion: '16',
+      },
+    });
+
+    expect(() =>
+      telemetryEventSchemas.sql_completed.parse({
+        ...envelope,
+        driver: 'postgres',
+        isDemoConnection: false,
+        queryVerb: 'select',
+        referencedTableCount: 1,
+        durationMs: 10,
+        outcome: 'ok',
+        sql: 'select * from private_table',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects raw private field names that are not in the telemetry schemas', () => {
     expect(JSON.stringify(telemetryEventSchemas)).not.toContain('tableName');
-    expect(JSON.stringify(telemetryEventSchemas)).not.toContain('sql');
+    expect(Object.keys(telemetryEventSchemas.sql_completed.shape)).not.toContain('sql');
     expect(JSON.stringify(telemetryEventSchemas)).not.toContain('path');
   });
 });
