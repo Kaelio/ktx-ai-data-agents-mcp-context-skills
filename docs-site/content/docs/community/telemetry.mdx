@@ -3,80 +3,33 @@ title: Telemetry
 description: Understand what anonymous usage telemetry ktx collects and how to opt out.
 ---
 
-**ktx** collects anonymous product-usage telemetry from interactive CLI runs so
-maintainers can understand which commands work, where setup fails, and which
-parts of the data-agent workflow need improvement.
+**ktx** collects anonymous, aggregated usage telemetry from interactive CLI
+runs so maintainers can see which commands work, where setup fails, and which
+parts of the data-agent workflow need improvement. Telemetry is opt-out and
+disabled automatically in CI and non-interactive runs.
 
 ## Opt out
 
-Telemetry is opt-out and is disabled automatically in CI and non-interactive
-CLI runs. Use any of these mechanisms to disable it:
+Use any of these mechanisms to disable telemetry:
 
 | Mechanism | Effect |
 |-----------|--------|
 | `export KTX_TELEMETRY_DISABLED=1` | Disables telemetry for the shell and child processes |
-| `export DO_NOT_TRACK=1` | Disables telemetry using the standard do-not-track environment variable |
-| `CI=1` | Disables telemetry automatically in CI |
-| Non-TTY output | Disables telemetry automatically for pipes and scripts |
-| Edit `~/.ktx/telemetry.json` and set `"enabled": false` | Disables telemetry persistently for the machine |
+| `export DO_NOT_TRACK=1` | Standard do-not-track environment variable |
+| `CI=1` | Automatic in CI |
+| Non-TTY output | Automatic for pipes and scripts |
+| Edit `~/.ktx/telemetry.json` and set `"enabled": false` | Persistent for the machine |
 
-There is no `ktx telemetry` command. The first interactive run that can emit
-telemetry prints this one-line notice to stderr:
+## What we collect
 
-```text
-ktx collects anonymous usage data to improve the product. Opt out: set KTX_TELEMETRY_DISABLED=1.
-```
+High-level signals only: which commands run, how long they take, whether they
+succeed or fail, and basic environment metadata (CLI version, Node version, OS
+platform). For project-level analysis, **ktx** sends a salted hash of the
+project directory — never the raw path.
 
-## Identity and grouping
+## What we never collect
 
-**ktx** stores a random install ID in `~/.ktx/telemetry.json`. This ID is the
-PostHog `distinctId` and is not tied to your name, email, Git identity, or
-account.
-
-For project-level analysis, **ktx** sends a salted SHA-256 project ID derived
-from the install ID and absolute project directory. The raw project path is not
-sent.
-
-## Events
-
-**ktx** emits these events:
-
-| Event | When it fires | Fields |
-|-------|---------------|--------|
-| `install_first_run` | Once when `~/.ktx/telemetry.json` is created | Common envelope only |
-| `command` | Once for a registered Commander action that reaches the action hook | `commandPath`, `durationMs`, `outcome`, `errorClass`, `flagsPresent`, `hasProject`, `projectGroupAttached` |
-| `setup_step` | At the end of each setup step | `step`, `outcome`, `durationMs` |
-| `connection_added` | When setup writes a database, source, or demo connection | `driver`, `isDemoConnection` |
-| `connection_test` | Every `ktx connection test` run | `driver`, `isDemoConnection`, `outcome`, `errorClass`, `durationMs`, `serverVersion` |
-| `project_stack_snapshot` | Once per process after `setup`, `ingest`, or project `status` | `connectors`, `connectionCount`, `hasSl`, `hasWiki`, `hasMcp`, `hasManagedRuntime` |
-| `ingest_completed` | End of each public ingest target | `driver`, `isDemoConnection`, `schemaCount`, `tableCount`, `columnCount`, `rowsBucket`, `durationMs`, `outcome`, `errorClass` |
-| `scan_completed` | End of schema scan or relationship inference | `driver`, `tableCount`, `columnCount`, `inferredFkCount`, `declaredFkCount`, `durationMs`, `outcome`, `errorClass` |
-| `sl_validate_completed` | `ktx sl validate` | `sourceCount`, `modelCount`, `validationErrorCount`, `outcome`, `errorClass`, `durationMs` |
-| `sl_query_completed` | `ktx sl query` | `mode`, `referencedSourceCount`, `referencedDimensionCount`, `referencedMeasureCount`, `durationMs`, `outcome`, `errorClass` |
-| `sql_completed` | `ktx sql` | `driver`, `isDemoConnection`, `queryVerb`, `referencedTableCount`, `durationMs`, `outcome`, `errorClass` |
-| `wiki_query_completed` | `ktx wiki <query>` | `queryLength`, `resultCount`, `durationMs`, `outcome` |
-| `mcp_request_completed` | Sampled MCP tool invocations | `toolName`, `outcome`, `durationMs`, `errorClass`, `sampleRate` |
-| `daemon_started` | The long-lived `ktx-daemon serve-http` server starts | `daemonVersion`, `pythonVersion`, `runtimeVersion`, `startupDurationMs` |
-| `daemon_stopped` | The long-lived `ktx-daemon serve-http` server shuts down | `reason`, `uptimeMs` |
-| `sl_plan_completed` | A daemon semantic-layer planning pass completes | `outcome`, `stage`, `errorClass`, `durationMs`, `sourceCount`, `joinCount` |
-| `sql_gen_completed` | A daemon SQL generation pass completes | `outcome`, `dialect`, `errorClass`, `durationMs` |
-
-Common envelope fields are `cliVersion`, `nodeVersion`, `osPlatform`,
-`osRelease`, `arch`, `runtime`, and `isCi`.
-
-Daemon events use `runtime: "daemon-py"`. The Python daemon reads the same
-install ID file as the Node CLI and receives only the already-hashed project ID
-for semantic-layer query events.
-
-`mcp_request_completed` is sampled at 10% with a sticky per-process sampling
-decision. If a process is sampled in, every MCP tool invocation in that process
-emits the event; if it is sampled out, none do.
-
-## Never collected
-
-**ktx** telemetry never collects:
-
-- Argv values, file paths, hostnames, or environment variable values
+- File paths, hostnames, environment variable values, or command arguments
 - `ktx.yaml` contents, connection passwords, API keys, or tokens
 - Schema names, table names, column names, SQL text, or query results
 - Error messages or stack traces
