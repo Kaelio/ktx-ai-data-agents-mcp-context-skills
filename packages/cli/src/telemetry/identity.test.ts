@@ -54,7 +54,7 @@ describe('telemetry identity', () => {
     expect(identity.installId).toMatch(/^[0-9a-f-]{36}$/);
     expect(identity.createdFile).toBe(true);
     expect(identity.noticeShown).toBe(true);
-    expect(testIo.stderr()).toBe(`${TELEMETRY_NOTICE}\n`);
+    expect(testIo.stderr()).toBe(`[2m${TELEMETRY_NOTICE}[22m\n`);
 
     const stored = JSON.parse(await readFile(join(homeDir, '.ktx', 'telemetry.json'), 'utf-8')) as {
       enabled: boolean;
@@ -62,6 +62,20 @@ describe('telemetry identity', () => {
     };
     expect(stored.enabled).toBe(true);
     expect(stored.noticeShownVersion).toBe(1);
+  });
+
+  it('emits the notice without ANSI when NO_COLOR is set', async () => {
+    const testIo = makeIo(true);
+
+    await loadTelemetryIdentity({
+      homeDir,
+      env: { NO_COLOR: '1' },
+      stdoutIsTTY: true,
+      stderr: testIo.io.stderr,
+      now: () => new Date('2026-05-22T14:33:02.000Z'),
+    });
+
+    expect(testIo.stderr()).toBe(`${TELEMETRY_NOTICE}\n`);
   });
 
   it('does not create a file when env disables telemetry', async () => {

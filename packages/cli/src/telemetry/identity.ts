@@ -25,6 +25,13 @@ export interface TelemetryIdentityEnv {
   KTX_TELEMETRY_DISABLED?: string;
   DO_NOT_TRACK?: string;
   CI?: string;
+  NO_COLOR?: string;
+  TERM?: string;
+}
+
+function styleNotice(notice: string, env: TelemetryIdentityEnv): string {
+  if (env.NO_COLOR || env.TERM === 'dumb') return notice;
+  return `[2m${notice}[22m`;
 }
 
 export interface LoadTelemetryIdentityOptions {
@@ -110,7 +117,7 @@ export async function loadTelemetryIdentity(options: LoadTelemetryIdentityOption
     };
   }
 
-  options.stderr.write(`${TELEMETRY_NOTICE}\n`);
+  options.stderr.write(`${styleNotice(TELEMETRY_NOTICE, env)}\n`);
 
   return {
     installId: next.installId,
