@@ -79,6 +79,7 @@ describe('setup sources step', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -167,6 +168,34 @@ describe('setup sources step', () => {
     });
     expect((await readKtxSetupState(projectDir)).completed_steps).toContain('sources');
     expect(runInitialIngest).toHaveBeenCalledWith(projectDir, 'analytics_dbt', io.io, { inputMode: 'disabled' });
+  });
+
+  it('emits debug telemetry when setup writes a source connection', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    await addPrimarySource();
+    const io = makeIo();
+
+    const result = await runKtxSetupSourcesStep(
+      {
+        projectDir,
+        inputMode: 'disabled',
+        source: 'dbt',
+        sourceConnectionId: 'analytics_dbt',
+        sourcePath: '/repo/dbt',
+        sourceProjectName: 'analytics',
+        runInitialSourceIngest: false,
+        skipSources: false,
+      },
+      io.io,
+      { validateDbt: vi.fn(async () => ({ ok: true as const, detail: 'project=analytics schemas=2' })) },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('"event":"connection_added"');
+    expect(io.stderr()).toContain('"driver":"dbt"');
+    expect(io.stderr()).toContain('"isDemoConnection":false');
+    expect(io.stderr()).not.toContain(projectDir);
   });
 
   it('writes Metabase config and validates mapping through existing mapping path', async () => {

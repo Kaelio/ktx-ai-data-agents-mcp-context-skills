@@ -23,6 +23,7 @@ function makeIo() {
   return {
     io: {
       stdout: {
+        isTTY: false,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -91,6 +92,7 @@ describe('setup status', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -526,6 +528,43 @@ describe('setup status', () => {
     expect(output).toContain('Run this command before using Claude Code:');
     expect(output).toContain(`ktx mcp start --project-dir ${tempDir}`);
     expect(output).not.toContain('Finish agent setup');
+  });
+
+  it('emits debug telemetry for setup steps without project paths', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const testIo = makeIo();
+    testIo.io.stdout.isTTY = true;
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          skipSources: true,
+          databaseSchemas: [],
+        },
+        testIo.io,
+        {
+          runtime: async () => runtimeReady(tempDir),
+          context: async () => ({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-test' }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(testIo.stderr()).toContain('"event":"setup_step"');
+    expect(testIo.stderr()).toContain('"step":"project"');
+    expect(testIo.stderr()).toContain('"step":"models"');
+    expect(testIo.stderr()).not.toContain(tempDir);
   });
 
   it('prints the setup shell intro for auto-created run mode', async () => {
@@ -1047,7 +1086,7 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(runDemoTour).toHaveBeenCalledWith(
-      { inputMode: 'auto' },
+      { inputMode: 'auto', cliVersion: '0.2.0' },
       testIo.io,
       expect.objectContaining({}),
     );

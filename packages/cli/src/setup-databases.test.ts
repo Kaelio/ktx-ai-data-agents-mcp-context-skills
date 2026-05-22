@@ -125,6 +125,7 @@ describe('setup databases step', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -314,6 +315,34 @@ describe('setup databases step', () => {
       url: 'env:DATABASE_URL',
       context: { depth: 'fast' },
     });
+  });
+
+  it('emits debug telemetry when setup writes a database connection', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['url'],
+      textValues: ['', 'env:DATABASE_URL'],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseDrivers: ['postgres'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { prompts, testConnection: vi.fn(async () => 0), scanConnection: vi.fn(async () => 0) },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('"event":"connection_added"');
+    expect(io.stderr()).toContain('"driver":"postgres"');
+    expect(io.stderr()).toContain('"isDemoConnection":false');
+    expect(io.stderr()).not.toContain(tempDir);
   });
 
   it('tells users Escape goes back in free-text connection prompts', async () => {

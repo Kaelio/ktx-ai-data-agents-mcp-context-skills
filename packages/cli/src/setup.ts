@@ -6,7 +6,7 @@ import { savedMemoryCountsForReport } from './context/ingest/reports.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { readKtxSetupState } from './context/project/setup-config.js';
-import type { KtxCliIo } from './cli-runtime.js';
+import { getKtxCliPackageInfo, type KtxCliIo } from './cli-runtime.js';
 import { formatSetupNextStepLines } from './next-steps.js';
 import { runtimeInstallPolicyFromFlags } from './managed-python-command.js';
 import { readManagedPythonRuntimeStatus } from './managed-python-runtime.js';
@@ -179,6 +179,16 @@ type KtxSetupFlowStatus =
   | 'back'
   | 'missing-input'
   | 'failed';
+type TelemetrySetupStep =
+  | 'project'
+  | 'runtime'
+  | 'models'
+  | 'embeddings'
+  | 'databases'
+  | 'sources'
+  | 'context'
+  | 'agents'
+  | 'demo-tour';
 
 export interface KtxSetupEntryMenuPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
@@ -193,6 +203,36 @@ function createEntryMenuPromptAdapter(): KtxSetupEntryMenuPromptAdapter {
   return createKtxSetupPromptAdapter({
     selectCancelValue: 'exit',
     cancelOnSelectCancel: false,
+  });
+}
+
+function setupTelemetryOutcome(
+  status: KtxSetupFlowStatus | Extract<Awaited<ReturnType<typeof runKtxSetupProjectStep>>, { status: string }>['status'],
+): 'completed' | 'skipped' | 'abandoned' {
+  if (status === 'ready') return 'completed';
+  if (status === 'skipped') return 'skipped';
+  return 'abandoned';
+}
+
+async function recordSetupStep(input: {
+  projectDir: string;
+  step: TelemetrySetupStep;
+  status: KtxSetupFlowStatus | Extract<Awaited<ReturnType<typeof runKtxSetupProjectStep>>, { status: string }>['status'];
+  startedAt: number;
+  io: KtxCliIo;
+  cliVersion?: string;
+}): Promise<void> {
+  const { emitTelemetryEvent } = await import('./telemetry/index.js');
+  await emitTelemetryEvent({
+    name: 'setup_step',
+    projectDir: input.projectDir,
+    io: input.io,
+    packageInfo: { name: '@kaelio/ktx', version: input.cliVersion ?? getKtxCliPackageInfo().version },
+    fields: {
+      step: input.step,
+      outcome: setupTelemetryOutcome(input.status),
+      durationMs: Math.max(0, performance.now() - input.startedAt),
+    },
   });
 }
 
@@ -229,11 +269,21 @@ async function runKtxSetupDemoFromEntryMenu(
   deps: KtxSetupDeps,
 ): Promise<number> {
   const { runDemoTour } = await import('./setup-demo-tour.js');
-  return await runDemoTour(
-    { inputMode: args.inputMode },
+  const startedAt = performance.now();
+  const result = await runDemoTour(
+    { inputMode: args.inputMode, cliVersion: args.cliVersion },
     io,
     { agents: deps.agents },
   );
+  await recordSetupStep({
+    projectDir: args.projectDir,
+    step: 'demo-tour',
+    status: result === 0 ? 'ready' : 'failed',
+    startedAt,
+    io,
+    cliVersion: args.cliVersion,
+  });
+  return result;
 }
 
 function embeddingsReady(status: KtxSetupStatus['embeddings']): boolean {
@@ -564,6 +614,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     }
 
     const projectMode = entryAction === 'new-project' ? 'prompt-new' : args.mode;
+    const projectStepStartedAt = performance.now();
     projectResult = await runKtxSetupProjectStep(
       {
         projectDir: args.projectDir,
@@ -575,6 +626,14 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       io,
       deps.project,
     );
+    await recordSetupStep({
+      projectDir: projectResult.projectDir,
+      step: 'project',
+      status: projectResult.status,
+      startedAt: projectStepStartedAt,
+      io,
+      cliVersion: args.cliVersion,
+    });
 
     if (projectResult.status === 'back') {
       continue;
@@ -640,6 +699,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       const step = setupSteps[stepIndex];
       if (!step) break;
 
+      const stepStartedAt = performance.now();
       let stepResult: { status: KtxSetupFlowStatus };
       if (step === 'models') {
         const modelRunner =
@@ -791,6 +851,15 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
           agentNextActions = agentResult.nextActions;
         }
       }
+
+      await recordSetupStep({
+        projectDir: projectResult.projectDir,
+        step,
+        status: stepResult.status,
+        startedAt: stepStartedAt,
+        io,
+        cliVersion: args.cliVersion,
+      });
 
       if (stepResult.status === 'failed') {
         await cleanupCreatedProjectScaffold(projectResult.createdProjectCleanup);

@@ -22,6 +22,8 @@ import { runKtxSourceMapping } from './source-mapping.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxPublicIngest } from './public-ingest.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
+import { isDemoConnection } from './telemetry/demo-detect.js';
+import { emitTelemetryEvent } from './telemetry/index.js';
 import {
   createKtxSetupPromptAdapter,
   type KtxSetupPromptOption,
@@ -320,6 +322,7 @@ async function writeSourceConnection(
   connectionId: string,
   connection: KtxProjectConnectionConfig,
   adapter: string,
+  io?: KtxCliIo,
 ): Promise<() => Promise<void>> {
   assertSafeConnectionId(connectionId);
   const project = await loadKtxProject({ projectDir });
@@ -340,6 +343,17 @@ async function writeSourceConnection(
     },
   };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  if (io) {
+    await emitTelemetryEvent({
+      name: 'connection_added',
+      projectDir,
+      io,
+      fields: {
+        driver: String(connection.driver ?? adapter).toLowerCase(),
+        isDemoConnection: isDemoConnection(connectionId, connection),
+      },
+    });
+  }
   return async () => {
     const latest = await loadKtxProject({ projectDir });
     const connections = { ...latest.config.connections };
@@ -1730,6 +1744,7 @@ async function saveValidateAndMaybeBuildSource(input: {
           connectionId,
           connection,
           sourceAdapter(input.source),
+          input.io,
         );
 
   if (input.sourceChoice.kind === 'existing') {

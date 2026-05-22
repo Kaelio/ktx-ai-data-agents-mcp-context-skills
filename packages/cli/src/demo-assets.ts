@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
+import type { KtxCliIo } from './cli-runtime.js';
 
 interface DemoProjectResult {
   projectDir: string;
@@ -15,6 +16,8 @@ interface DemoProjectResult {
 interface EnsureDemoProjectOptions {
   projectDir: string;
   force: boolean;
+  io?: KtxCliIo;
+  cliVersion?: string;
 }
 
 /** @internal */
@@ -143,6 +146,19 @@ export async function ensureDemoProject(options: EnsureDemoProjectOptions): Prom
   await copyFile(join(assetDir(), 'manifest.json'), join(projectDir, 'manifest.json'));
   const replayPath = await copyPackagedReplay(projectDir);
   await writeFile(configPath, demoConfig(databasePath), 'utf-8');
+  if (options.io) {
+    const { emitTelemetryEvent } = await import('./telemetry/index.js');
+    await emitTelemetryEvent({
+      name: 'connection_added',
+      projectDir,
+      io: options.io,
+      packageInfo: { name: '@kaelio/ktx', version: options.cliVersion ?? '0.0.0' },
+      fields: {
+        driver: 'sqlite',
+        isDemoConnection: true,
+      },
+    });
+  }
 
   return { projectDir, configPath, databasePath, replayPath };
 }
