@@ -1,5 +1,9 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from './context/project/config.js';
-import { describe, expect, it, vi } from 'vitest';
+import { initKtxProject } from './context/project/project.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPublicIngestPlan,
   type KtxPublicIngestDeps,
@@ -395,6 +399,10 @@ describe('buildPublicIngestPlan', () => {
 });
 
 describe('runKtxPublicIngest', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('maps fast and deep database targets to scan internals', async () => {
     const io = makeIo();
     const project = deepReadyProject({
@@ -421,6 +429,32 @@ describe('runKtxPublicIngest', () => {
       expect.objectContaining({ connectionId: 'fast', mode: 'structural', detectRelationships: false }),
       expect.anything(),
     );
+  });
+
+  it('emits debug telemetry for ingest targets and project snapshots without project paths', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-public-ingest-telemetry-'));
+    try {
+      await initKtxProject({ projectDir });
+      const io = makeIo({ isTTY: true });
+      const project = projectWithConnections({
+        warehouse: { driver: 'sqlite', path: join(projectDir, 'warehouse.sqlite') },
+      });
+
+      const code = await runKtxPublicIngest(
+        { command: 'run', projectDir, targetConnectionId: 'warehouse', all: false, json: false, inputMode: 'disabled' },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan: vi.fn(async () => 0) },
+      );
+
+      expect(code).toBe(0);
+      expect(io.stderr()).toContain('"event":"ingest_completed"');
+      expect(io.stderr()).toContain('"event":"project_stack_snapshot"');
+      expect(io.stderr()).not.toContain(projectDir);
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
   });
 
   it('runs query history after schema ingest with current-run window override', async () => {

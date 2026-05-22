@@ -317,6 +317,7 @@ describe('runKtxScan', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -379,6 +380,44 @@ describe('runKtxScan', () => {
     expect(io.stdout()).not.toContain('✓');
     expect(io.stdout()).not.toContain('+1');
     expect(io.stdout()).not.toContain('/~');
+  });
+
+  it('emits debug telemetry for completed scans without project paths', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    await initKtxProject({ projectDir: tempDir });
+    const runLocalScan = vi.fn(
+      async (): Promise<LocalScanRunResult> => ({
+        runId: 'scan-run-1',
+        status: 'done',
+        done: true,
+        connectionId: 'warehouse',
+        mode: 'structural',
+        dryRun: false,
+        syncId: 'sync-1',
+        report,
+      }),
+    );
+    const io = makeIo({ isTTY: true });
+
+    const code = await runKtxScan(
+      {
+        command: 'run',
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        mode: 'structural',
+        detectRelationships: false,
+        dryRun: false,
+        databaseIntrospectionUrl: 'http://127.0.0.1:8765',
+      },
+      io.io,
+      { runLocalScan, createLocalIngestAdapters: noLocalIngestAdapters },
+    );
+
+    expect(code).toBe(0);
+    expect(io.stderr()).toContain('"event":"scan_completed"');
+    expect(io.stderr()).toContain('"tableCount"');
+    expect(io.stderr()).not.toContain(tempDir);
   });
 
   it('passes KTX daemon options to local ingest adapters when no explicit daemon URL is set', async () => {

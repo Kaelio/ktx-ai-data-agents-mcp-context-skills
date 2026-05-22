@@ -101,7 +101,12 @@ export async function emitProjectStackSnapshot(input: {
   }
   emittedProjectSnapshots.add(input.projectDir);
 
-  const project = await loadKtxProject({ projectDir: input.projectDir });
+  let project: Awaited<ReturnType<typeof loadKtxProject>>;
+  try {
+    project = await loadKtxProject({ projectDir: input.projectDir });
+  } catch {
+    return;
+  }
   await emitTelemetryEvent({
     name: 'project_stack_snapshot',
     fields: await buildProjectStackSnapshotFields(project),
