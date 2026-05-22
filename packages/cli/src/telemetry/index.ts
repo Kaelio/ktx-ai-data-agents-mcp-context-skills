@@ -1,4 +1,5 @@
 import type { KtxCliIo, KtxCliPackageInfo } from '../cli-runtime.js';
+import { loadKtxProject } from '../context/project/project.js';
 import {
   beginCommandSpan,
   completeCommandSpan,
@@ -6,11 +7,25 @@ import {
   type CompletedCommandSpan,
 } from './command-hook.js';
 import { shutdownTelemetryEmitter, trackTelemetryEvent } from './emitter.js';
-import { buildCommonEnvelope, buildTelemetryEvent } from './events.js';
+import {
+  buildCommonEnvelope,
+  buildTelemetryEvent,
+  type TelemetryCommonEnvelope,
+  type TelemetryEventName,
+  type TelemetryEventProperties,
+} from './events.js';
 import { computeTelemetryProjectId, loadTelemetryIdentity } from './identity.js';
+import { buildProjectStackSnapshotFields } from './project-snapshot.js';
 
 export { beginCommandSpan, completeCommandSpan, shutdownTelemetryEmitter };
 export type { CommandOutcome, CompletedCommandSpan };
+
+type TelemetryEventFields<Name extends TelemetryEventName> = Omit<
+  TelemetryEventProperties<Name>,
+  keyof TelemetryCommonEnvelope
+>;
+
+const emittedProjectSnapshots = new Set<string>();
 
 async function emitInstallFirstRunIfNeeded(input: {
   identity: Awaited<ReturnType<typeof loadTelemetryIdentity>>;
@@ -36,15 +51,13 @@ async function emitInstallFirstRunIfNeeded(input: {
   });
 }
 
-export async function emitCompletedCommand(input: {
-  completed: CompletedCommandSpan | undefined;
-  packageInfo: KtxCliPackageInfo;
+export async function emitTelemetryEvent<Name extends TelemetryEventName>(input: {
+  name: Name;
+  fields: TelemetryEventFields<Name>;
   io: KtxCliIo;
+  packageInfo?: KtxCliPackageInfo;
+  projectDir?: string;
 }): Promise<void> {
-  if (!input.completed) {
-    return;
-  }
-
   const identity = await loadTelemetryIdentity({
     stdoutIsTTY: input.io.stdout.isTTY === true,
     stderr: input.io.stderr,
@@ -55,26 +68,65 @@ export async function emitCompletedCommand(input: {
     return;
   }
 
-  await emitInstallFirstRunIfNeeded({ identity, packageInfo: input.packageInfo, io: input.io });
+  const packageInfo = input.packageInfo ?? {
+    name: '@kaelio/ktx',
+    version: process.env.npm_package_version ?? '0.0.0',
+  };
+  await emitInstallFirstRunIfNeeded({ identity, packageInfo, io: input.io });
 
-  const projectId =
-    input.completed.projectGroupAttached && input.completed.projectDir
-      ? computeTelemetryProjectId(identity.installId, input.completed.projectDir)
-      : undefined;
-
-  const { projectDir: _projectDir, ...eventFields } = input.completed;
+  const projectId = input.projectDir ? computeTelemetryProjectId(identity.installId, input.projectDir) : undefined;
   await trackTelemetryEvent({
     event: buildTelemetryEvent(
-      'command',
+      input.name,
       buildCommonEnvelope({
-        cliVersion: input.packageInfo.version,
+        cliVersion: packageInfo.version,
         isCi: Boolean(process.env.CI),
       }),
-      eventFields,
+      input.fields,
     ),
     distinctId: identity.installId,
     projectId,
     env: process.env,
     stderr: input.io.stderr,
+  });
+}
+
+export async function emitProjectStackSnapshot(input: {
+  projectDir: string;
+  io: KtxCliIo;
+  packageInfo?: KtxCliPackageInfo;
+}): Promise<void> {
+  if (emittedProjectSnapshots.has(input.projectDir)) {
+    return;
+  }
+  emittedProjectSnapshots.add(input.projectDir);
+
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  await emitTelemetryEvent({
+    name: 'project_stack_snapshot',
+    fields: await buildProjectStackSnapshotFields(project),
+    projectDir: input.projectDir,
+    io: input.io,
+    packageInfo: input.packageInfo,
+  });
+}
+
+export async function emitCompletedCommand(input: {
+  completed: CompletedCommandSpan | undefined;
+  packageInfo: KtxCliPackageInfo;
+  io: KtxCliIo;
+}): Promise<void> {
+  if (!input.completed) {
+    return;
+  }
+
+  const projectDir = input.completed.projectGroupAttached ? input.completed.projectDir : undefined;
+  const { projectDir: _projectDir, ...eventFields } = input.completed;
+  await emitTelemetryEvent({
+    name: 'command',
+    fields: eventFields,
+    projectDir,
+    io: input.io,
+    packageInfo: input.packageInfo,
   });
 }
