@@ -8,7 +8,14 @@ import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../../context/project/project.js';
 import { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
 import { getLocalScanReport, getLocalScanStatus, runLocalScan } from './local-scan.js';
-import type { KtxQueryResult, KtxReadOnlyQueryInput, KtxSchemaSnapshot, KtxSchemaTable } from './types.js';
+import { tableRefKey, tableRefSet } from './table-ref.js';
+import type {
+  KtxQueryResult,
+  KtxReadOnlyQueryInput,
+  KtxScanConnector,
+  KtxSchemaSnapshot,
+  KtxSchemaTable,
+} from './types.js';
 
 function relationshipSqlResult(
   input: KtxReadOnlyQueryInput,
@@ -548,6 +555,142 @@ describe('local scan', () => {
 
     expect(result.report.enrichment.statisticalValidation).toBe('completed');
     expect(result.report.relationships).toEqual({ accepted: 1, review: 0, rejected: 0, skipped: 0 });
+    expect(result.report.warnings).toEqual([]);
+  });
+
+  it('keeps prototype connector methods when enabled_tables is configured', async () => {
+    project.config.connections.warehouse = {
+      ...project.config.connections.warehouse,
+      enabled_tables: ['public.customers', 'public.orders'],
+    };
+    const scopedAdapter: SourceAdapter = {
+      source: 'live-database',
+      skillNames: ['live_database_ingest'],
+      async fetch(_pullConfig, stagedDir) {
+        await mkdir(join(stagedDir, 'tables'), { recursive: true });
+        await writeFile(
+          join(stagedDir, 'connection.json'),
+          '{"connectionId":"warehouse","driver":"postgres","scope":{"schemas":["public"]},"metadata":{}}\n',
+          'utf-8',
+        );
+        await writeFile(join(stagedDir, 'foreign-keys.json'), '{"foreignKeys":[]}\n', 'utf-8');
+        await writeFile(
+          join(stagedDir, 'tables', 'customers.json'),
+          '{"name":"customers","catalog":null,"db":"public","kind":"table","comment":null,"estimatedRows":100,"columns":[{"name":"id","nativeType":"integer","normalizedType":"integer","dimensionType":"number","nullable":false,"primaryKey":true,"comment":null}],"foreignKeys":[]}\n',
+          'utf-8',
+        );
+        await writeFile(
+          join(stagedDir, 'tables', 'orders.json'),
+          '{"name":"orders","catalog":null,"db":"public","kind":"table","comment":null,"estimatedRows":1000,"columns":[{"name":"customer_id","nativeType":"integer","normalizedType":"integer","dimensionType":"number","nullable":false,"primaryKey":false,"comment":null}],"foreignKeys":[]}\n',
+          'utf-8',
+        );
+      },
+      async detect() {
+        return true;
+      },
+      async chunk() {
+        return {
+          workUnits: [
+            {
+              unitKey: 'live-database-public-customers',
+              rawFiles: ['tables/customers.json'],
+              dependencyPaths: ['connection.json', 'foreign-keys.json'],
+              peerFileIndex: [],
+            },
+            {
+              unitKey: 'live-database-public-orders',
+              rawFiles: ['tables/orders.json'],
+              dependencyPaths: ['connection.json', 'foreign-keys.json'],
+              peerFileIndex: [],
+            },
+          ],
+        };
+      },
+    };
+    class FakeClassConnector implements KtxScanConnector {
+      readonly id = 'test:warehouse';
+      readonly driver = 'postgres' as const;
+      readonly capabilities = {
+        structuralIntrospection: true as const,
+        tableSampling: false,
+        columnSampling: false,
+        columnStats: true,
+        readOnlySql: true,
+        nestedAnalysis: false,
+        eventStreamDiscovery: false,
+        formalForeignKeys: false,
+        estimatedRowCounts: true,
+      };
+
+      async introspect(): Promise<KtxSchemaSnapshot> {
+        return {
+          connectionId: 'warehouse',
+          driver: 'postgres',
+          extractedAt: '2026-05-22T00:00:00.000Z',
+          scope: { schemas: ['public'] },
+          metadata: {},
+          tables: [
+            {
+              catalog: null,
+              db: 'public',
+              name: 'customers',
+              kind: 'table',
+              comment: null,
+              estimatedRows: 100,
+              foreignKeys: [],
+              columns: [
+                {
+                  name: 'id',
+                  nativeType: 'integer',
+                  normalizedType: 'integer',
+                  dimensionType: 'number',
+                  nullable: false,
+                  primaryKey: true,
+                  comment: null,
+                },
+              ],
+            },
+            {
+              catalog: null,
+              db: 'public',
+              name: 'orders',
+              kind: 'table',
+              comment: null,
+              estimatedRows: 1000,
+              foreignKeys: [],
+              columns: [
+                {
+                  name: 'customer_id',
+                  nativeType: 'integer',
+                  normalizedType: 'integer',
+                  dimensionType: 'number',
+                  nullable: false,
+                  primaryKey: false,
+                  comment: null,
+                },
+              ],
+            },
+          ],
+        };
+      }
+
+      async executeReadOnly(input: KtxReadOnlyQueryInput): Promise<KtxQueryResult> {
+        return relationshipSqlResult(input);
+      }
+    }
+
+    const result = await runLocalScan({
+      project,
+      adapters: [scopedAdapter],
+      connectionId: 'warehouse',
+      mode: 'relationships',
+      detectRelationships: true,
+      connector: new FakeClassConnector(),
+      jobId: 'scan-prototype-connector-scope',
+      now: () => new Date('2026-05-22T00:00:00.000Z'),
+    });
+
+    expect(result.report.relationships.accepted).toBe(1);
     expect(result.report.warnings).toEqual([]);
   });
 
@@ -1512,15 +1655,15 @@ describe('resolveEnabledTables', () => {
     expect(resolveEnabledTables({ driver: 'postgres', enabled_tables: [] })).toBeNull();
   });
 
-  it('returns Set of enabled table names', () => {
+  it('returns a canonical set of enabled table refs', () => {
     const result = resolveEnabledTables({
       driver: 'postgres',
       enabled_tables: ['public.users', 'public.orders'],
     });
     expect(result).toBeInstanceOf(Set);
     expect(result!.size).toBe(2);
-    expect(result!.has('public.users')).toBe(true);
-    expect(result!.has('public.orders')).toBe(true);
+    expect(result!.has(tableRefKey({ catalog: null, db: 'public', name: 'users' }))).toBe(true);
+    expect(result!.has(tableRefKey({ catalog: null, db: 'public', name: 'orders' }))).toBe(true);
   });
 
   it('returns null for undefined connection', () => {
@@ -1557,7 +1700,10 @@ describe('filterSnapshotTables', () => {
       { db: 'public', name: 'orders' },
       { db: 'public', name: 'logs' },
     ]);
-    const enabled = new Set(['public.users', 'public.orders']);
+    const enabled = tableRefSet([
+      { catalog: null, db: 'public', name: 'users' },
+      { catalog: null, db: 'public', name: 'orders' },
+    ]);
     const filtered = filterSnapshotTables(snapshot, enabled);
     expect(filtered.tables).toHaveLength(2);
     expect(filtered.tables.map((t) => t.name)).toEqual(['users', 'orders']);
@@ -1565,14 +1711,14 @@ describe('filterSnapshotTables', () => {
 
   it('returns empty tables when none match', () => {
     const snapshot = makeSnapshot([{ db: 'public', name: 'users' }]);
-    const enabled = new Set(['public.orders']);
+    const enabled = tableRefSet([{ catalog: null, db: 'public', name: 'orders' }]);
     const filtered = filterSnapshotTables(snapshot, enabled);
     expect(filtered.tables).toHaveLength(0);
   });
 
   it('preserves other snapshot fields', () => {
     const snapshot = makeSnapshot([{ db: 'public', name: 'users' }]);
-    const enabled = new Set(['public.users']);
+    const enabled = tableRefSet([{ catalog: null, db: 'public', name: 'users' }]);
     const filtered = filterSnapshotTables(snapshot, enabled);
     expect(filtered.connectionId).toBe('test');
     expect(filtered.driver).toBe('postgres');

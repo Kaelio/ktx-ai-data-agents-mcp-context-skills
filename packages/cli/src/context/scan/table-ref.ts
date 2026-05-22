@@ -12,10 +12,12 @@ export type KtxTableRefKey = string & { readonly __brand: 'KtxTableRefKey' };
 
 const SEPARATOR = '\x1f';
 
+/** @internal */
 export function tableRefKey(ref: KtxTableRef): KtxTableRefKey {
   return `${ref.catalog ?? ''}${SEPARATOR}${ref.db ?? ''}${SEPARATOR}${ref.name}` as KtxTableRefKey;
 }
 
+/** @internal */
 export function tableRefFromKey(key: KtxTableRefKey): KtxTableRef {
   const [catalog = '', db = '', name = ''] = key.split(SEPARATOR);
   return {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FieldPacket, RowDataPacket } from 'mysql2/promise';
 import { createMysqlLiveDatabaseIntrospection } from '../../connectors/mysql/live-database-introspection.js';
 import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
+import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function mysqlResult(rows: Record<string, unknown>[], fields: Array<{ name: string; type?: number }>): [RowDataPacket[], FieldPacket[]] {
   return [rows as RowDataPacket[], fields as FieldPacket[]];
@@ -273,6 +274,71 @@ describe('KtxMysqlScanConnector', () => {
       'analytics.customers',
       'mart.orders',
     ]);
+  });
+
+  it('limits introspection to tables in tableScope', async () => {
+    const queries: Array<{ sql: string; params?: unknown }> = [];
+    const poolFactory: KtxMysqlPoolFactory = {
+      createPool: vi.fn(() => ({
+        getConnection: vi.fn(async () => ({
+          query: vi.fn(async (sql: string, params?: unknown): Promise<[RowDataPacket[], FieldPacket[]]> => {
+            queries.push({ sql, params });
+            if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
+              return mysqlResult(
+                [
+                  {
+                    TABLE_SCHEMA: 'analytics',
+                    TABLE_NAME: 'orders',
+                    TABLE_TYPE: 'BASE TABLE',
+                    TABLE_COMMENT: '',
+                    TABLE_ROWS: 2,
+                  },
+                ],
+                [],
+              );
+            }
+            if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) {
+              return mysqlResult(
+                [
+                  {
+                    TABLE_SCHEMA: 'analytics',
+                    TABLE_NAME: 'orders',
+                    COLUMN_NAME: 'id',
+                    DATA_TYPE: 'int',
+                    IS_NULLABLE: 'NO',
+                    COLUMN_COMMENT: '',
+                  },
+                ],
+                [],
+              );
+            }
+            return mysqlResult([], []);
+          }),
+          release: vi.fn(),
+        })),
+        end: vi.fn(async () => undefined),
+      })),
+    };
+    const connector = new KtxMysqlScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'mysql',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        password: 'secret', // pragma: allowlist secret
+      },
+      poolFactory,
+    });
+    const scope = tableRefSet([{ catalog: null, db: 'analytics', name: 'orders' }]);
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'mysql', tableScope: scope },
+      { runId: 'scope-test' },
+    );
+    expect(snapshot.tables.map((table) => table.name)).toEqual(['orders']);
+    const tablesQuery = queries.find((query) => query.sql.includes('INFORMATION_SCHEMA.TABLES'));
+    expect(tablesQuery?.sql).toMatch(/TABLE_NAME IN \(\?\)/);
+    expect(tablesQuery?.params).toEqual(['analytics', 'orders']);
   });
 
   it('runs samples, distinct values, read-only SQL, row count, schema list, and cleanup', async () => {

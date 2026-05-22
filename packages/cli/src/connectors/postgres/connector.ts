@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { scopedTableNames } from '../../context/scan/table-ref.js';
 import { Pool } from 'pg';
 import { KtxPostgresDialect } from './dialect.js';
 
@@ -379,7 +380,9 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
     const schemas = schemasFromConnection(this.connection);
     const allTables: KtxSchemaTable[] = [];
     for (const schema of schemas) {
-      const tables = await this.loadSchemaTables(schema);
+      const scopedNames = input.tableScope ? scopedTableNames(input.tableScope, { catalog: null, db: schema }) : null;
+      if (scopedNames && scopedNames.length === 0) continue;
+      const tables = await this.loadSchemaTables(schema, scopedNames);
       allTables.push(...tables);
     }
     return {
@@ -543,7 +546,11 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
     }
   }
 
-  private async loadSchemaTables(schema: string): Promise<KtxSchemaTable[]> {
+  private async loadSchemaTables(schema: string, scopedNames: readonly string[] | null): Promise<KtxSchemaTable[]> {
+    if (scopedNames && scopedNames.length === 0) return [];
+    const pgCatalogScopeClause = scopedNames ? 'AND c.relname = ANY($2)' : '';
+    const tableConstraintScopeClause = scopedNames ? 'AND tc.table_name = ANY($2)' : '';
+    const scopeValues = scopedNames ? [scopedNames] : [];
     const tables = await this.queryRaw<PostgresTableRow>(
       `
       SELECT
@@ -557,9 +564,10 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         ON d.objoid = c.oid AND d.objsubid = 0
       WHERE n.nspname = $1
         AND c.relkind IN ('r', 'v')
+        ${pgCatalogScopeClause}
       ORDER BY c.relname
       `,
-      [schema],
+      [schema, ...scopeValues],
     );
     const columns = await this.queryRaw<PostgresColumnRow>(
       `
@@ -578,9 +586,10 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         AND c.relkind IN ('r', 'v')
         AND a.attnum > 0
         AND NOT a.attisdropped
+        ${pgCatalogScopeClause}
       ORDER BY c.relname, a.attnum
       `,
-      [schema],
+      [schema, ...scopeValues],
     );
     const primaryKeys = await this.queryRaw<PostgresPrimaryKeyRow>(
       `
@@ -591,9 +600,10 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         AND tc.table_schema = kcu.table_schema
       WHERE tc.constraint_type = 'PRIMARY KEY'
         AND tc.table_schema = $1
+        ${tableConstraintScopeClause}
       ORDER BY tc.table_name, kcu.ordinal_position
       `,
-      [schema],
+      [schema, ...scopeValues],
     );
     const foreignKeys = await this.queryRaw<PostgresForeignKeyRow>(
       `
@@ -613,9 +623,10 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         AND ccu.table_schema = tc.table_schema
       WHERE tc.constraint_type = 'FOREIGN KEY'
         AND tc.table_schema = $1
+        ${tableConstraintScopeClause}
       ORDER BY tc.table_name, kcu.column_name
       `,
-      [schema],
+      [schema, ...scopeValues],
     );
 
     const columnsByTable = groupByTable(columns);

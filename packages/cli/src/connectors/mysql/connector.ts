@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxTableListEntry, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { scopedTableNames } from '../../context/scan/table-ref.js';
 import { KtxMysqlDialect } from './dialect.js';
 
 export interface KtxMysqlConnectionConfig {
@@ -335,23 +336,37 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
     this.assertConnection(input.connectionId);
     const databases = configuredMysqlSchemas(this.connection, this.poolConfig.database);
     const placeholders = databases.map(() => '?').join(', ');
+    let allScopedTables: string[] | null = null;
+    if (input.tableScope) {
+      allScopedTables = [];
+      for (const database of databases) {
+        allScopedTables.push(...scopedTableNames(input.tableScope, { catalog: null, db: database }));
+      }
+      if (allScopedTables.length === 0) {
+        return this.emptySnapshot(databases);
+      }
+    }
+    const tableNameClause = allScopedTables
+      ? `AND TABLE_NAME IN (${allScopedTables.map(() => '?').join(', ')})`
+      : '';
+    const tableNameParams = allScopedTables ?? [];
     const tables = await this.queryRaw<MysqlTableRow>(
       `
       SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, TABLE_ROWS
       FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_SCHEMA IN (${placeholders}) AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+      WHERE TABLE_SCHEMA IN (${placeholders}) AND TABLE_TYPE IN ('BASE TABLE', 'VIEW') ${tableNameClause}
       ORDER BY TABLE_SCHEMA, TABLE_NAME
       `,
-      databases,
+      [...databases, ...tableNameParams],
     );
     const columns = await this.queryRaw<MysqlColumnRow>(
       `
       SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_COMMENT
       FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA IN (${placeholders})
+      WHERE TABLE_SCHEMA IN (${placeholders}) ${tableNameClause}
       ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
       `,
-      databases,
+      [...databases, ...tableNameParams],
     );
     const primaryKeys = await this.queryRaw<MysqlPrimaryKeyRow>(
       `
@@ -359,9 +374,10 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
       WHERE TABLE_SCHEMA IN (${placeholders})
         AND CONSTRAINT_NAME = 'PRIMARY'
+        ${tableNameClause}
       ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
       `,
-      databases,
+      [...databases, ...tableNameParams],
     );
     const foreignKeys = await this.queryRaw<MysqlForeignKeyRow>(
       `
@@ -369,9 +385,10 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
       WHERE TABLE_SCHEMA IN (${placeholders})
         AND REFERENCED_TABLE_NAME IS NOT NULL
+        ${tableNameClause}
       ORDER BY TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       `,
-      databases,
+      [...databases, ...tableNameParams],
     );
 
     const columnsByTable = groupByTable(columns, this.poolConfig.database);
@@ -400,6 +417,23 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
         total_columns: schemaTables.reduce((sum, table) => sum + table.columns.length, 0),
       },
       tables: schemaTables,
+    };
+  }
+
+  private emptySnapshot(databases: string[]): KtxSchemaSnapshot {
+    return {
+      connectionId: this.connectionId,
+      driver: 'mysql',
+      extractedAt: this.now().toISOString(),
+      scope: { schemas: databases },
+      metadata: {
+        database: this.poolConfig.database,
+        schemas: databases,
+        host: this.poolConfig.host,
+        table_count: 0,
+        total_columns: 0,
+      },
+      tables: [],
     };
   }
 

@@ -2,6 +2,7 @@ import { BigQuery, type TableField } from '@google-cloud/bigquery';
 import { normalizeBigQueryProjectId, normalizeBigQueryRegion } from '../../context/connections/bigquery-identifiers.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { scopedTableNames } from '../../context/scan/table-ref.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -289,7 +290,10 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     const tables: KtxSchemaTable[] = [];
     const datasetIds = this.requireDatasetIdsForScan();
     for (const datasetId of datasetIds) {
-      tables.push(...(await this.introspectDataset(datasetId)));
+      const scopedNames = input.tableScope
+        ? scopedTableNames(input.tableScope, { catalog: this.resolved.projectId, db: datasetId })
+        : null;
+      tables.push(...(await this.introspectDataset(datasetId, scopedNames)));
     }
     return {
       connectionId: this.connectionId,
@@ -362,7 +366,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     if (!datasetId) {
       return 0;
     }
-    const tables = await this.introspectDataset(datasetId);
+    const tables = await this.introspectDataset(datasetId, null);
     return tables.find((table) => table.name === tableName)?.estimatedRows ?? 0;
   }
 
@@ -463,12 +467,15 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     return firstNumber(rows[0]?.[header]);
   }
 
-  private async introspectDataset(datasetId: string): Promise<KtxSchemaTable[]> {
+  private async introspectDataset(datasetId: string, scopedNames: readonly string[] | null): Promise<KtxSchemaTable[]> {
+    if (scopedNames && scopedNames.length === 0) return [];
     const dataset = this.getClient().dataset(datasetId);
     const [tableRefs] = await dataset.getTables();
+    const scopeSet = scopedNames ? new Set(scopedNames) : null;
+    const filteredTableRefs = scopeSet ? tableRefs.filter((tableRef) => scopeSet.has(tableRef.id ?? '')) : tableRefs;
     const primaryKeys = await this.primaryKeys(datasetId);
     const tables: KtxSchemaTable[] = [];
-    for (const tableRef of tableRefs) {
+    for (const tableRef of filteredTableRefs) {
       const tableName = tableRef.id || '';
       const [table] = await tableRef.get();
       const fields = table.metadata.schema?.fields ?? [];

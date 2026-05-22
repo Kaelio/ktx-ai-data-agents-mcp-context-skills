@@ -319,7 +319,8 @@ function renderPhaseRow(phase: PhaseState, frame: number, styled: boolean): stri
   } else if (phase.status === 'skipped') {
     trailing = styled ? dim('skipped') : 'skipped';
   } else if (phase.status === 'failed') {
-    trailing = styled ? red('failed') : 'failed';
+    const label = styled ? red('failed') : 'failed';
+    trailing = phase.summary ? `${label}  ${phase.summary}` : label;
   }
   const bar = `${segments.join(' ')}  ${trailing}`.trimEnd();
   return `        ${icon} ${name} ${bar}`;

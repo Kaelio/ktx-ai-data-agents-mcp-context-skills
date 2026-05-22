@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { normalizeQueryRows } from '../../context/connections/query-executor.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { scopedTableNames } from '../../context/scan/table-ref.js';
 import { KtxSqliteDialect } from './dialect.js';
 
 export interface KtxSqliteConnectionConfig {
@@ -181,11 +182,16 @@ export class KtxSqliteScanConnector implements KtxScanConnector {
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
     const database = this.database();
-    const rawTables = database
-      .prepare(
-        `SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name`,
-      )
-      .all() as SqliteMasterRow[];
+    const scopedNames = input.tableScope ? scopedTableNames(input.tableScope, { catalog: null, db: null }) : null;
+    const scopeClause = scopedNames ? `AND name IN (${scopedNames.map(() => '?').join(', ')})` : '';
+    const rawTables =
+      scopedNames && scopedNames.length === 0
+        ? []
+        : (database
+            .prepare(
+              `SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ${scopeClause} ORDER BY name`,
+            )
+            .all(...(scopedNames ?? [])) as SqliteMasterRow[]);
     const tables = rawTables.map((table) => this.readTable(database, table));
     const fileStats = existsSync(this.dbPath) ? statSync(this.dbPath) : null;
     return {

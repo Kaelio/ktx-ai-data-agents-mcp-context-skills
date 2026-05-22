@@ -1,4 +1,7 @@
-import type { LiveDatabaseIntrospectionPort } from '../../context/ingest/adapters/live-database/types.js';
+import type {
+  LiveDatabaseIntrospectionOptions,
+  LiveDatabaseIntrospectionPort,
+} from '../../context/ingest/adapters/live-database/types.js';
 import type { KtxProjectConnectionConfig } from '../../context/project/config.js';
 import {
   KtxMysqlScanConnector,
@@ -18,7 +21,7 @@ export function createMysqlLiveDatabaseIntrospection(
   options: CreateMysqlLiveDatabaseIntrospectionOptions,
 ): LiveDatabaseIntrospectionPort {
   return {
-    async extractSchema(connectionId: string) {
+    async extractSchema(connectionId: string, introspectionOptions?: LiveDatabaseIntrospectionOptions) {
       const connection = options.connections[connectionId] as KtxMysqlConnectionConfig | undefined;
       const connector = new KtxMysqlScanConnector({
         connectionId,
@@ -28,7 +31,14 @@ export function createMysqlLiveDatabaseIntrospection(
         now: options.now,
       });
       try {
-        return await connector.introspect({ connectionId, driver: 'mysql' }, { runId: `mysql-${connectionId}` });
+        return await connector.introspect(
+          {
+            connectionId,
+            driver: 'mysql',
+            ...(introspectionOptions?.tableScope ? { tableScope: introspectionOptions.tableScope } : {}),
+          },
+          { runId: `mysql-${connectionId}` },
+        );
       } finally {
         await connector.cleanup();
       }

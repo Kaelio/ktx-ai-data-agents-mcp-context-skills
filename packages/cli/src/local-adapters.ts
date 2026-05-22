@@ -123,22 +123,22 @@ function createKtxCliLiveDatabaseIntrospection(
     async extractSchema(connectionId: string, options?: LiveDatabaseIntrospectionOptions) {
       const connection = project.config.connections[connectionId];
       if (isKtxPostgresConnectionConfig(connection)) {
-        return postgres.extractSchema(connectionId);
+        return postgres.extractSchema(connectionId, options);
       }
       if (isKtxSqliteConnectionConfig(connection)) {
-        return sqlite.extractSchema(connectionId);
+        return sqlite.extractSchema(connectionId, options);
       }
       if (isKtxMysqlConnectionConfig(connection)) {
-        return mysql.extractSchema(connectionId);
+        return mysql.extractSchema(connectionId, options);
       }
       if (isKtxClickHouseConnectionConfig(connection)) {
-        return clickhouse.extractSchema(connectionId);
+        return clickhouse.extractSchema(connectionId, options);
       }
       if (isKtxSqlServerConnectionConfig(connection)) {
-        return sqlserver.extractSchema(connectionId);
+        return sqlserver.extractSchema(connectionId, options);
       }
       if (isKtxBigQueryConnectionConfig(connection)) {
-        return bigquery.extractSchema(connectionId);
+        return bigquery.extractSchema(connectionId, options);
       }
       if (hasSnowflakeDriver(connection)) {
         const { createSnowflakeLiveDatabaseIntrospection } = await import('./connectors/snowflake/live-database-introspection.js');
@@ -150,7 +150,7 @@ function createKtxCliLiveDatabaseIntrospection(
           connections: project.config.connections,
           projectDir: project.projectDir,
         });
-        return snowflake.extractSchema(connectionId);
+        return snowflake.extractSchema(connectionId, options);
       }
       return daemon.extractSchema(connectionId, options);
     },

@@ -908,7 +908,7 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('Debug:');
   });
 
-  it('prints query-history retry guidance for query-history facet failures', async () => {
+  it('skips the query-history facet but keeps the target green when query-history fails', async () => {
     const io = makeIo();
     const project = deepReadyProject({
       warehouse: { driver: 'postgres', context: { depth: 'deep' } },
@@ -935,11 +935,13 @@ describe('runKtxPublicIngest', () => {
         io.io,
         { loadProject: vi.fn(async () => project), runScan, runIngest },
       ),
-    ).resolves.toBe(1);
+    ).resolves.toBe(0);
 
-    expect(io.stdout()).toMatch(/warehouse\s+done\s+failed\s+skipped\s+skipped/);
+    expect(io.stdout()).toContain('Ingest finished with skipped query history');
+    expect(io.stdout()).toMatch(/warehouse\s+done\s+skipped\s+skipped\s+skipped/);
+    expect(io.stdout()).toContain('Skipped query history:');
     expect(io.stdout()).toContain(
-      'warehouse failed: Query history failed for 60 tasks. First failure: Google Cloud authentication failed while analyzing query history',
+      'Query history failed for 60 tasks. First failure: Google Cloud authentication failed while analyzing query history',
     );
     expect(io.stdout()).not.toContain('warehouse failed: Error:');
     expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
@@ -973,8 +975,9 @@ describe('runKtxPublicIngest', () => {
         io.io,
         { loadProject: vi.fn(async () => project), runScan, runIngest },
       ),
-    ).resolves.toBe(1);
+    ).resolves.toBe(0);
 
+    expect(io.stdout()).toContain('Ingest finished with skipped query history');
     expect(io.stdout()).toContain('Missing bundled Python runtime manifest');
     expect(io.stdout()).toContain(
       'In a source checkout, build the local runtime assets with: pnpm run artifacts:build',

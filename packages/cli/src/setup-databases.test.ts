@@ -2041,6 +2041,7 @@ describe('setup databases step', () => {
 
   it('writes query history config for supported Snowflake databases after validation succeeds', async () => {
     const io = makeIo();
+    const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
     const result = await runKtxSetupDatabasesStep(
       {
         projectDir: tempDir,
@@ -2058,11 +2059,19 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
+        historicSqlProbe,
         prompts: makePromptAdapter({
           textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
           passwordValues: ['env:SNOWFLAKE_PASSWORD'],
         }),
       },
+    );
+    expect(historicSqlProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        connectionId: 'snowflake',
+        dialect: 'snowflake',
+      }),
     );
 
     expect(result.status).toBe('ready');
@@ -2453,7 +2462,53 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('Query history probe...');
     expect(io.stdout()).not.toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements extension is not installed');
-    expect(io.stdout()).toContain('Setup written; first ingest run will fail until fixed.');
+    expect(io.stdout()).toContain('Setup written; query history will be skipped until fixed.');
+  });
+
+  it('prints a non-blocking Snowflake query history probe failure with the grants remediation', async () => {
+    const io = makeIo();
+    const historicSqlProbe = vi.fn(async () => ({
+      ok: false,
+      lines: [
+        '  FAIL Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+        '  Fix: Run (as ACCOUNTADMIN): GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE <connection role>;',
+      ],
+    }));
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['snowflake'],
+        databaseConnectionId: 'warehouse',
+        databaseSchemas: [],
+        enableQueryHistory: true,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlProbe,
+        prompts: makePromptAdapter({
+          textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
+          passwordValues: ['env:SNOWFLAKE_PASSWORD'],
+        }),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(historicSqlProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        dialect: 'snowflake',
+      }),
+    );
+    expect(io.stdout()).toContain('Query history probe...');
+    expect(io.stdout()).toContain('Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY');
+    expect(io.stdout()).toContain('GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE');
+    expect(io.stdout()).toContain('Setup written; query history will be skipped until fixed.');
   });
 
   it('does not run the query history probe when the regular connection test fails', async () => {

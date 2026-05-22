@@ -25,14 +25,11 @@ import type {
   KtxConnectionDriver,
   KtxProgressPort,
   KtxScanConnector,
-  KtxScanContext,
   KtxScanEnrichmentStateSummary,
-  KtxScanInput,
   KtxScanMode,
   KtxScanReport,
   KtxScanTrigger,
   KtxScanWarning,
-  KtxSchemaSnapshot,
 } from './types.js';
 
 function enrichmentResolutionWarning(
@@ -370,17 +367,6 @@ async function readScanReport(
   }
 }
 
-function createFilteredConnector(connector: KtxScanConnector, enabledTables: Set<string>): KtxScanConnector {
-  return {
-    ...connector,
-    async introspect(input: KtxScanInput, ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
-      const snapshot = await connector.introspect(input, ctx);
-      return filterSnapshotTables(snapshot, enabledTables);
-    },
-  };
-}
-
-
 function withInternalLiveDatabaseAdapter(project: KtxLocalProject): KtxLocalProject {
   if (project.config.ingest.adapters.includes(LIVE_DATABASE_ADAPTER)) {
     return project;
@@ -408,8 +394,8 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
     throw new Error(`Connection "${options.connectionId}" is not configured in ktx.yaml`);
   }
   const driver = normalizeDriver(connection.driver);
-  const enabledTables = resolveEnabledTables(connection);
-  const connector = rawConnector && enabledTables ? createFilteredConnector(rawConnector, enabledTables) : rawConnector;
+  const tableScope = resolveEnabledTables(connection) ?? undefined;
+  const connector = rawConnector;
   const adapters =
     options.adapters ??
     createDefaultLocalIngestAdapters(options.project, { databaseIntrospectionUrl: options.databaseIntrospectionUrl });
@@ -476,8 +462,8 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
       rawSourcesDir: report.artifactPaths.rawSourcesDir,
       extractedAtFallback: report.createdAt,
     });
-    const structuralSnapshot = enabledTables ? filterSnapshotTables(rawSnapshot, enabledTables) : rawSnapshot;
-    if (enabledTables && structuralSnapshot.tables.length < rawSnapshot.tables.length) {
+    const structuralSnapshot = tableScope ? filterSnapshotTables(rawSnapshot, tableScope) : rawSnapshot;
+    if (tableScope && structuralSnapshot.tables.length < rawSnapshot.tables.length) {
       const excluded = rawSnapshot.tables.length - structuralSnapshot.tables.length;
       let remaining = excluded;
       const ds = report.diffSummary;

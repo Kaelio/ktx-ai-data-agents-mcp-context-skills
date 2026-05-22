@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { bigQueryConnectionConfigFromConfig, isKtxBigQueryConnectionConfig, type KtxBigQueryClient, KtxBigQueryScanConnector, type KtxBigQueryClientFactory, type KtxBigQueryDataset, type KtxBigQueryQueryJob, type KtxBigQueryTableRef } from '../../connectors/bigquery/connector.js';
 import { createBigQueryLiveDatabaseIntrospection } from '../../connectors/bigquery/live-database-introspection.js';
+import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function fakeClientFactory(): KtxBigQueryClientFactory {
   const queryResults = vi.fn(async (): ReturnType<KtxBigQueryQueryJob['getQueryResults']> => [
@@ -232,6 +233,59 @@ describe('KtxBigQueryScanConnector', () => {
       ),
     ).resolves.toBeNull();
     await connector.cleanup();
+  });
+
+  it('limits introspection to tables in tableScope', async () => {
+    const ordersGet = vi.fn(async (): ReturnType<KtxBigQueryTableRef['get']> => [
+      {
+        metadata: {
+          type: 'TABLE',
+          numRows: '12',
+          schema: { fields: [{ name: 'id', type: 'INT64', mode: 'REQUIRED' }] },
+        },
+      },
+    ]);
+    const skippedGet = vi.fn(async (): ReturnType<KtxBigQueryTableRef['get']> => [
+      { metadata: { type: 'TABLE', numRows: '1', schema: { fields: [] } } },
+    ]);
+    const clientFactory: KtxBigQueryClientFactory = {
+      createClient: vi.fn(() => ({
+        getDatasets: vi.fn(async (): ReturnType<KtxBigQueryClient['getDatasets']> => [[{ id: 'analytics' }]]),
+        dataset: vi.fn(
+          (): KtxBigQueryDataset => ({
+            get: vi.fn(async () => [{ id: 'analytics' }]),
+            getTables: vi.fn(async (): ReturnType<KtxBigQueryDataset['getTables']> => [
+              [
+                { id: 'orders', get: ordersGet },
+                { id: 'customers', get: skippedGet },
+              ],
+            ]),
+          }),
+        ),
+        createQueryJob: vi.fn(async (): ReturnType<KtxBigQueryClient['createQueryJob']> => [
+          {
+            getQueryResults: async (): ReturnType<KtxBigQueryQueryJob['getQueryResults']> => [
+              [],
+              undefined,
+              { schema: { fields: [{ name: 'table_name', type: 'STRING' }, { name: 'column_name', type: 'STRING' }] } },
+            ],
+          },
+        ]),
+      })),
+    };
+    const connector = new KtxBigQueryScanConnector({
+      connectionId: 'warehouse',
+      connection,
+      clientFactory,
+    });
+    const scope = tableRefSet([{ catalog: 'project-1', db: 'analytics', name: 'orders' }]);
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'bigquery', tableScope: scope },
+      { runId: 'scope-test' },
+    );
+    expect(snapshot.tables.map((table) => table.name)).toEqual(['orders']);
+    expect(ordersGet).toHaveBeenCalledTimes(1);
+    expect(skippedGet).not.toHaveBeenCalled();
   });
 
   it('constructs for discovery without dataset scope and lists tables through one region information schema query', async () => {

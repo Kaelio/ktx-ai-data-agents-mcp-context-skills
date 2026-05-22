@@ -341,6 +341,13 @@ function historicSqlProbeFailureLines(error: unknown): string[] {
     ];
   }
   if (error instanceof Error && error.name === 'HistoricSqlGrantsMissingError') {
+    const dialect = (error as { dialect?: unknown }).dialect;
+    if (dialect === 'snowflake') {
+      return [
+        '  FAIL Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+        '  Fix: Run (as ACCOUNTADMIN): GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE <connection role>;',
+      ];
+    }
     return [
       '  FAIL Postgres connection role lacks pg_read_all_stats',
       '  Fix: Run: GRANT pg_read_all_stats TO <connection role>;',
@@ -353,10 +360,18 @@ function historicSqlProbeFailureLines(error: unknown): string[] {
 }
 
 async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Promise<KtxSetupHistoricSqlProbeResult> {
-  if (input.dialect !== 'postgres') {
-    return { ok: true, lines: [] };
+  if (input.dialect === 'postgres') {
+    return probePostgresHistoricSql(input);
   }
+  if (input.dialect === 'snowflake') {
+    return probeSnowflakeHistoricSql(input);
+  }
+  return { ok: true, lines: [] };
+}
 
+async function probePostgresHistoricSql(
+  input: KtxSetupHistoricSqlProbeInput,
+): Promise<KtxSetupHistoricSqlProbeResult> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
   const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient }, { isKtxPostgresConnectionConfig }] =
@@ -384,6 +399,46 @@ async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Pr
       ok: true,
       lines: [
         `  OK pg_stat_statements ready (${result.pgServerVersion})`,
+        ...result.warnings.map((warning: string) => `  ! ${warning}`),
+      ],
+    };
+  } catch (error) {
+    return { ok: false, lines: historicSqlProbeFailureLines(error) };
+  } finally {
+    await client.cleanup();
+  }
+}
+
+async function probeSnowflakeHistoricSql(
+  input: KtxSetupHistoricSqlProbeInput,
+): Promise<KtxSetupHistoricSqlProbeResult> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const connection = project.config.connections[input.connectionId];
+  const [{ SnowflakeHistoricSqlQueryHistoryReader }, { KtxSnowflakeHistoricSqlQueryClient }, { isKtxSnowflakeConnectionConfig }] =
+    await Promise.all([
+      import('./context/ingest/adapters/historic-sql/snowflake-query-history-reader.js'),
+      import('./connectors/snowflake/historic-sql-query-client.js'),
+      import('./connectors/snowflake/connector.js'),
+    ]);
+
+  if (!isKtxSnowflakeConnectionConfig(connection)) {
+    return {
+      ok: false,
+      lines: [`  FAIL Connection ${input.connectionId} is not a native Snowflake connection.`],
+    };
+  }
+
+  const client = new KtxSnowflakeHistoricSqlQueryClient({
+    connectionId: input.connectionId,
+    connection,
+    projectDir: input.projectDir,
+  });
+  try {
+    const result = await new SnowflakeHistoricSqlQueryHistoryReader().probe(client);
+    return {
+      ok: true,
+      lines: [
+        '  OK SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY accessible',
         ...result.warnings.map((warning: string) => `  ! ${warning}`),
       ],
     };
@@ -457,7 +512,7 @@ async function defaultListSchemas(projectDir: string, connectionId: string): Pro
   if (driver === 'snowflake') {
     const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('./connectors/snowflake/connector.js');;
     if (!isKtxSnowflakeConnectionConfig(connection)) return [];
-    const connector = new KtxSnowflakeScanConnector({ connectionId, connection });
+    const connector = new KtxSnowflakeScanConnector({ connectionId, connection, projectDir });
     try {
       return await connector.listSchemas();
     } finally {
@@ -533,7 +588,7 @@ async function defaultListTables(
   if (driver === 'snowflake') {
     const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('./connectors/snowflake/connector.js');;
     if (!isKtxSnowflakeConnectionConfig(connection)) return [];
-    const connector = new KtxSnowflakeScanConnector({ connectionId, connection });
+    const connector = new KtxSnowflakeScanConnector({ connectionId, connection, projectDir });
     try {
       return await connector.listTables(schemas);
     } finally {
@@ -1651,7 +1706,12 @@ async function maybeRunHistoricSqlSetupProbe(input: {
   const connection = project.config.connections[input.connectionId];
   const queryHistory = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection);
   const driver = normalizeDriver(connection?.driver);
-  if (queryHistory?.enabled !== true || driver !== 'postgres') {
+  if (queryHistory?.enabled !== true) {
+    return;
+  }
+  const dialect: 'postgres' | 'snowflake' | null =
+    driver === 'postgres' ? 'postgres' : driver === 'snowflake' ? 'snowflake' : null;
+  if (!dialect) {
     return;
   }
 
@@ -1660,13 +1720,13 @@ async function maybeRunHistoricSqlSetupProbe(input: {
   const result = await probe({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
-    dialect: 'postgres',
+    dialect,
   });
   for (const line of result.lines) {
     input.io.stdout.write(`│${line}\n`);
   }
   if (!result.ok) {
-    input.io.stdout.write('│  Setup written; first ingest run will fail until fixed.\n');
+    input.io.stdout.write('│  Setup written; query history will be skipped until fixed.\n');
   }
 }
 

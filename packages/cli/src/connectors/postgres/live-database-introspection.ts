@@ -1,4 +1,7 @@
-import type { LiveDatabaseIntrospectionPort } from '../../context/ingest/adapters/live-database/types.js';
+import type {
+  LiveDatabaseIntrospectionOptions,
+  LiveDatabaseIntrospectionPort,
+} from '../../context/ingest/adapters/live-database/types.js';
 import type { KtxProjectConnectionConfig } from '../../context/project/config.js';
 import {
   KtxPostgresScanConnector,
@@ -18,7 +21,7 @@ export function createPostgresLiveDatabaseIntrospection(
   options: CreatePostgresLiveDatabaseIntrospectionOptions,
 ): LiveDatabaseIntrospectionPort {
   return {
-    async extractSchema(connectionId: string) {
+    async extractSchema(connectionId: string, introspectionOptions?: LiveDatabaseIntrospectionOptions) {
       const connection = options.connections[connectionId] as KtxPostgresConnectionConfig | undefined;
       const connector = new KtxPostgresScanConnector({
         connectionId,
@@ -28,7 +31,14 @@ export function createPostgresLiveDatabaseIntrospection(
         now: options.now,
       });
       try {
-        return await connector.introspect({ connectionId, driver: 'postgres' }, { runId: `postgres-${connectionId}` });
+        return await connector.introspect(
+          {
+            connectionId,
+            driver: 'postgres',
+            ...(introspectionOptions?.tableScope ? { tableScope: introspectionOptions.tableScope } : {}),
+          },
+          { runId: `postgres-${connectionId}` },
+        );
       } finally {
         await connector.cleanup();
       }

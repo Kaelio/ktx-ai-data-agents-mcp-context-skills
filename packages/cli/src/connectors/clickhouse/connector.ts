@@ -1,6 +1,7 @@
 import { createClient } from '@clickhouse/client';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableListEntry, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { scopedTableNames } from '../../context/scan/table-ref.js';
 import { readFileSync } from 'node:fs';
 import { Agent as HttpsAgent } from 'node:https';
 import { homedir } from 'node:os';
@@ -285,24 +286,42 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
     const databases = configuredClickHouseDatabases(this.connection, this.clientConfig.database);
+    let allScopedTables: string[] | null = null;
+    if (input.tableScope) {
+      allScopedTables = [];
+      for (const database of databases) {
+        allScopedTables.push(...scopedTableNames(input.tableScope, { catalog: null, db: database }));
+      }
+      if (allScopedTables.length === 0) {
+        return this.emptySnapshot(databases);
+      }
+    }
+    const queryParams: Record<string, unknown> = { databases };
+    const tableNameClause = allScopedTables ? 'AND name IN {table_names:Array(String)}' : '';
+    const columnTableNameClause = allScopedTables ? 'AND table IN {table_names:Array(String)}' : '';
+    if (allScopedTables) {
+      queryParams.table_names = allScopedTables;
+    }
     const tables = await this.queryEachRow<ClickHouseTableRow>(
       `
       SELECT database, name, engine, comment
       FROM system.tables
       WHERE database IN {databases:Array(String)}
         AND engine NOT IN ('Dictionary')
+        ${tableNameClause}
       ORDER BY database, name
       `,
-      { databases },
+      queryParams,
     );
     const columns = await this.queryEachRow<ClickHouseColumnRow>(
       `
       SELECT database, table, name, type, comment, is_in_primary_key
       FROM system.columns
       WHERE database IN {databases:Array(String)}
+        ${columnTableNameClause}
       ORDER BY database, table, position
       `,
-      { databases },
+      queryParams,
     );
     const rowCounts = await this.queryEachRow<ClickHouseRowCountRow>(
       `
@@ -310,9 +329,10 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
       FROM system.parts
       WHERE database IN {databases:Array(String)}
         AND active = 1
+        ${columnTableNameClause}
       GROUP BY database, table
       `,
-      { databases },
+      queryParams,
     );
     const columnsByTable = new Map<string, ClickHouseColumnRow[]>();
     for (const column of columns) {
@@ -344,6 +364,23 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
         total_columns: schemaTables.reduce((sum, table) => sum + table.columns.length, 0),
       },
       tables: schemaTables,
+    };
+  }
+
+  private emptySnapshot(databases: string[]): KtxSchemaSnapshot {
+    return {
+      connectionId: this.connectionId,
+      driver: 'clickhouse',
+      extractedAt: this.now().toISOString(),
+      scope: { schemas: databases },
+      metadata: {
+        database: this.clientConfig.database,
+        databases,
+        host: this.clientConfig.host,
+        table_count: 0,
+        total_columns: 0,
+      },
+      tables: [],
     };
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { clickHouseClientConfigFromConfig, isKtxClickHouseConnectionConfig, KtxClickHouseScanConnector, type KtxClickHouseClientFactory } from '../../connectors/clickhouse/connector.js';
 import { createClickHouseLiveDatabaseIntrospection } from '../../connectors/clickhouse/live-database-introspection.js';
+import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function result<T>(payload: T) {
   return {
@@ -236,6 +237,57 @@ describe('KtxClickHouseScanConnector', () => {
       'analytics.events',
       'mart.order_events',
     ]);
+  });
+
+  it('limits introspection to tables in tableScope', async () => {
+    const queries: Array<{ query: string; query_params?: Record<string, unknown> }> = [];
+    const clientFactory: KtxClickHouseClientFactory = {
+      createClient: vi.fn(() => ({
+        query: vi.fn(async (input: { query: string; format: string; query_params?: Record<string, unknown> }) => {
+          queries.push({ query: input.query, query_params: input.query_params });
+          if (input.query.includes('FROM system.tables')) {
+            return result([{ database: 'analytics', name: 'events', engine: 'MergeTree', comment: '' }]);
+          }
+          if (input.query.includes('FROM system.columns')) {
+            return result([
+              {
+                database: 'analytics',
+                table: 'events',
+                name: 'id',
+                type: 'UInt64',
+                comment: '',
+                is_in_primary_key: 1,
+              },
+            ]);
+          }
+          if (input.query.includes('FROM system.parts')) {
+            return result([{ database: 'analytics', table: 'events', row_count: '2' }]);
+          }
+          throw new Error(`Unexpected SQL: ${input.query}`);
+        }),
+        close: vi.fn(async () => undefined),
+      })),
+    };
+    const connector = new KtxClickHouseScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'clickhouse',
+        host: 'ch.example.test',
+        database: 'analytics',
+        username: 'reader',
+        password: 'test-pass', // pragma: allowlist secret
+      },
+      clientFactory,
+    });
+    const scope = tableRefSet([{ catalog: null, db: 'analytics', name: 'events' }]);
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'clickhouse', tableScope: scope },
+      { runId: 'scope-test' },
+    );
+    expect(snapshot.tables.map((table) => table.name)).toEqual(['events']);
+    const tablesQuery = queries.find((query) => query.query.includes('FROM system.tables'));
+    expect(tablesQuery?.query).toContain('AND name IN {table_names:Array(String)}');
+    expect(tablesQuery?.query_params).toEqual({ databases: ['analytics'], table_names: ['events'] });
   });
 
   it('runs samples, distinct values, read-only SQL, row count, schema list, and cleanup', async () => {
