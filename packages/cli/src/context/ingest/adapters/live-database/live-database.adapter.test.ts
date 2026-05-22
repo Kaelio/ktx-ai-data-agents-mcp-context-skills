@@ -1,7 +1,8 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { tableRefSet, type KtxTableRefKey } from '../../../scan/table-ref.js';
 import { LiveDatabaseSourceAdapter } from './live-database.adapter.js';
 
 describe('LiveDatabaseSourceAdapter', () => {
@@ -43,7 +44,7 @@ describe('LiveDatabaseSourceAdapter', () => {
 
     await adapter.fetch(undefined, dir, { connectionId: 'conn-1', sourceKey: 'live-database' });
 
-    expect(extractSchema).toHaveBeenCalledWith('conn-1');
+    expect(extractSchema).toHaveBeenCalledWith('conn-1', { tableScope: undefined });
     await expect(adapter.detect(dir)).resolves.toBe(true);
     const chunked = await adapter.chunk(dir);
     expect(chunked.workUnits.map((wu) => wu.unitKey)).toEqual(['live-database-public-orders']);
@@ -55,5 +56,58 @@ describe('LiveDatabaseSourceAdapter', () => {
     });
     expect(adapter.source).toBe('live-database');
     expect(adapter.skillNames).toEqual(['live_database_ingest']);
+  });
+
+  it('threads tableScope into the introspection port and applies a defensive final filter', async () => {
+    const extractSchema = vi.fn(
+      async (_connectionId: string, _options?: { tableScope?: ReadonlySet<KtxTableRefKey> }) => ({
+        connectionId: 'warehouse',
+        driver: 'snowflake' as const,
+        extractedAt: '2026-05-22T00:00:00.000Z',
+        scope: {},
+        metadata: {},
+        tables: [
+          {
+            catalog: 'A',
+            db: 'MARTS',
+            name: 'IN_SCOPE',
+            kind: 'table' as const,
+            comment: null,
+            estimatedRows: 0,
+            columns: [],
+            foreignKeys: [],
+          },
+          {
+            catalog: 'A',
+            db: 'MARTS',
+            name: 'OUT_OF_SCOPE',
+            kind: 'table' as const,
+            comment: null,
+            estimatedRows: 0,
+            columns: [],
+            foreignKeys: [],
+          },
+        ],
+      }),
+    );
+    const scope = tableRefSet([{ catalog: 'A', db: 'MARTS', name: 'IN_SCOPE' }]);
+    const adapter = new LiveDatabaseSourceAdapter({
+      introspection: { extractSchema },
+      resolveTableScope: (connectionId) => (connectionId === 'warehouse' ? scope : undefined),
+    });
+    const stagedDir = await mkdtemp(join(tmpdir(), 'ktx-livedb-scope-'));
+    try {
+      await adapter.fetch(undefined, stagedDir, {
+        connectionId: 'warehouse',
+        sourceKey: 'live-database',
+      } as never);
+      expect(extractSchema).toHaveBeenCalledWith('warehouse', { tableScope: scope });
+      const tables = await readdir(join(stagedDir, 'tables'));
+      expect(tables).toHaveLength(1);
+      const table = JSON.parse(await readFile(join(stagedDir, 'tables', tables[0]!), 'utf8')) as { name?: string };
+      expect(table.name).toBe('IN_SCOPE');
+    } finally {
+      await rm(stagedDir, { recursive: true, force: true });
+    }
   });
 });

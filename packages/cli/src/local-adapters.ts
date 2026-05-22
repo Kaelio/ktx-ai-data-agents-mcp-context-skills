@@ -15,12 +15,16 @@ import { BigQueryHistoricSqlQueryHistoryReader } from './context/ingest/adapters
 import { createDaemonLiveDatabaseIntrospection } from './context/ingest/adapters/live-database/daemon-introspection.js';
 import { createDefaultLocalIngestAdapters, type DefaultLocalIngestAdaptersOptions } from './context/ingest/local-adapters.js';
 import type { HistoricSqlReader } from './context/ingest/adapters/historic-sql/types.js';
-import type { LiveDatabaseIntrospectionPort } from './context/ingest/adapters/live-database/types.js';
+import type {
+  LiveDatabaseIntrospectionOptions,
+  LiveDatabaseIntrospectionPort,
+} from './context/ingest/adapters/live-database/types.js';
 import { LiveDatabaseSourceAdapter } from './context/ingest/adapters/live-database/live-database.adapter.js';
 import { PostgresPgssReader } from './context/ingest/adapters/historic-sql/postgres-pgss-reader.js';
 import { SnowflakeHistoricSqlQueryHistoryReader } from './context/ingest/adapters/historic-sql/snowflake-query-history-reader.js';
 import type { SourceAdapter } from './context/ingest/types.js';
 import type { KtxLocalProject } from './context/project/project.js';
+import { resolveEnabledTables } from './context/scan/enabled-tables.js';
 import { createHttpSqlAnalysisPort } from './context/sql-analysis/http-sql-analysis-port.js';
 import type { SqlAnalysisPort } from './context/sql-analysis/ports.js';
 import {
@@ -116,7 +120,7 @@ function createKtxCliLiveDatabaseIntrospection(
     connections: project.config.connections,
   });
   return {
-    async extractSchema(connectionId: string) {
+    async extractSchema(connectionId: string, options?: LiveDatabaseIntrospectionOptions) {
       const connection = project.config.connections[connectionId];
       if (isKtxPostgresConnectionConfig(connection)) {
         return postgres.extractSchema(connectionId);
@@ -140,14 +144,15 @@ function createKtxCliLiveDatabaseIntrospection(
         const { createSnowflakeLiveDatabaseIntrospection } = await import('./connectors/snowflake/live-database-introspection.js');
         const { isKtxSnowflakeConnectionConfig } = await import('./connectors/snowflake/connector.js');;
         if (!isKtxSnowflakeConnectionConfig(connection)) {
-          return daemon.extractSchema(connectionId);
+          return daemon.extractSchema(connectionId, options);
         }
         const snowflake = createSnowflakeLiveDatabaseIntrospection({
           connections: project.config.connections,
+          projectDir: project.projectDir,
         });
         return snowflake.extractSchema(connectionId);
       }
-      return daemon.extractSchema(connectionId);
+      return daemon.extractSchema(connectionId, options);
     },
   };
 }
@@ -263,6 +268,7 @@ async function createEphemeralSnowflakeHistoricSqlClient(
       const connector = new connectorModule.KtxSnowflakeScanConnector({
         connectionId,
         connection,
+        projectDir: project.projectDir,
       });
       try {
         const result = await connector.executeReadOnly({ connectionId, sql: query }, {} as never);
@@ -361,6 +367,10 @@ export function createKtxCliLocalIngestAdapters(
   });
   const liveDatabase = new LiveDatabaseSourceAdapter({
     introspection: createKtxCliLiveDatabaseIntrospection(project, options),
+    resolveTableScope: (connectionId) => {
+      const connection = project.config.connections[connectionId];
+      return connection ? resolveEnabledTables(connection) ?? undefined : undefined;
+    },
   });
   return base.map((adapter) => (adapter.source === 'live-database' ? liveDatabase : adapter));
 }

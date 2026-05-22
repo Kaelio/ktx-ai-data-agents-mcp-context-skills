@@ -1,4 +1,5 @@
 import type { ChunkResult, DiffSet, FetchContext, SourceAdapter } from '../../types.js';
+import { filterSnapshotTables } from '../../../scan/enabled-tables.js';
 import { chunkLiveDatabaseStagedDir } from './chunk.js';
 import { detectLiveDatabaseStagedDir, writeLiveDatabaseSnapshot } from './stage.js';
 import type { LiveDatabaseSourceAdapterDeps } from './types.js';
@@ -14,11 +15,13 @@ export class LiveDatabaseSourceAdapter implements SourceAdapter {
   }
 
   async fetch(_pullConfig: unknown, stagedDir: string, ctx: FetchContext): Promise<void> {
-    const snapshot = await this.deps.introspection.extractSchema(ctx.connectionId);
+    const tableScope = this.deps.resolveTableScope?.(ctx.connectionId);
+    const snapshot = await this.deps.introspection.extractSchema(ctx.connectionId, { tableScope });
+    const filtered = tableScope ? filterSnapshotTables(snapshot, tableScope) : snapshot;
     await writeLiveDatabaseSnapshot(stagedDir, {
-      ...snapshot,
+      ...filtered,
       connectionId: ctx.connectionId,
-      extractedAt: snapshot.extractedAt ?? (this.deps.now ?? (() => new Date()))().toISOString(),
+      extractedAt: filtered.extractedAt ?? (this.deps.now ?? (() => new Date()))().toISOString(),
     });
   }
 

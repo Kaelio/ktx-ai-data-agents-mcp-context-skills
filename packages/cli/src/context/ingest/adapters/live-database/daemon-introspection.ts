@@ -6,7 +6,7 @@ import type { KtxProjectConnectionConfig } from '../../../project/config.js';
 import { filterSnapshotTables, resolveEnabledTables } from '../../../scan/enabled-tables.js';
 import type { KtxSchemaColumn, KtxSchemaForeignKey, KtxSchemaSnapshot, KtxSchemaTable } from '../../../scan/types.js';
 import { inferKtxDimensionType, normalizeKtxNativeType } from '../../../scan/type-normalization.js';
-import type { LiveDatabaseIntrospectionPort } from './types.js';
+import type { LiveDatabaseIntrospectionOptions, LiveDatabaseIntrospectionPort } from './types.js';
 
 type KtxDaemonDatabaseIntrospectionCommand = 'database-introspect';
 
@@ -231,7 +231,7 @@ export function createDaemonLiveDatabaseIntrospection(
   const now = options.now ?? (() => new Date());
 
   return {
-    async extractSchema(connectionId: string): Promise<KtxSchemaSnapshot> {
+    async extractSchema(connectionId: string, _options?: LiveDatabaseIntrospectionOptions): Promise<KtxSchemaSnapshot> {
       const connection = requirePostgresConnection(options.connections, connectionId);
       const payload = {
         connection_id: connectionId,
