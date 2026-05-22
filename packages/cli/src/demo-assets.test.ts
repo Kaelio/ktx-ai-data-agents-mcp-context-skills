@@ -2,7 +2,7 @@ import { access, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEMO_ADAPTER,
   DEMO_CONNECTION_ID,
@@ -22,10 +22,27 @@ async function readPackagedJson<T>(relativePath: string): Promise<T> {
   return JSON.parse(await readFile(packagedDemoAssetPath(relativePath), 'utf-8')) as T;
 }
 
+function makeIo() {
+  let stderr = '';
+  return {
+    stdout: {
+      isTTY: true,
+      write() {},
+    },
+    stderr: {
+      write(chunk: string) {
+        stderr += chunk;
+      },
+    },
+    stderrText: () => stderr,
+  };
+}
+
 describe('demo assets', () => {
   const projectDir = join(tmpdir(), `ktx-demo-assets-${process.pid}`);
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(projectDir, { recursive: true, force: true });
   });
 
@@ -123,6 +140,19 @@ describe('demo assets', () => {
     await ensureDemoProject({ projectDir, force: false });
     await expect(ensureDemoProject({ projectDir, force: false })).rejects.toThrow('Demo project already exists');
     await expect(ensureDemoProject({ projectDir, force: true })).resolves.toMatchObject({ projectDir });
+  });
+
+  it('emits debug telemetry when the demo connection is created', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const io = makeIo();
+
+    await ensureDemoProject({ projectDir, force: false, io, cliVersion: '0.2.0' });
+
+    expect(io.stderrText()).toContain('"event":"connection_added"');
+    expect(io.stderrText()).toContain('"driver":"sqlite"');
+    expect(io.stderrText()).toContain('"isDemoConnection":true');
+    expect(io.stderrText()).not.toContain(projectDir);
   });
 
   it('copies the seeded project assets used by the setup wizard tour', async () => {

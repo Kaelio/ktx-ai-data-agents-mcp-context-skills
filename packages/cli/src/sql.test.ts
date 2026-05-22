@@ -8,12 +8,13 @@ import type { SqlAnalysisPort } from './context/sql-analysis/ports.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxSql } from './sql.js';
 
-function makeIo() {
+function makeIo(options: { isTTY?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
   return {
     io: {
       stdout: {
+        isTTY: options.isTTY,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -32,7 +33,7 @@ function makeIo() {
 function makeSqlAnalysis(result: Awaited<ReturnType<SqlAnalysisPort['validateReadOnly']>>): SqlAnalysisPort {
   return {
     analyzeForFingerprint: vi.fn(),
-    analyzeBatch: vi.fn(),
+    analyzeBatch: vi.fn(async () => new Map([['cli-sql', { tablesTouched: ['orders'], columnsByClause: {} }]])),
     validateReadOnly: vi.fn(async () => result),
   };
 }
@@ -76,6 +77,7 @@ describe('runKtxSql', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -128,6 +130,39 @@ describe('runKtxSql', () => {
     expect(io.stdout()).toContain('2   open');
     expect(io.stdout()).toContain('2 rows');
     expect(io.stderr()).toBe('');
+  });
+
+  it('emits debug telemetry for SQL without raw query text', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, { warehouse: { driver: 'sqlite', path: 'warehouse.db' } });
+    const io = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxSql(
+        {
+          command: 'execute',
+          projectDir,
+          connectionId: 'warehouse',
+          sql: 'select count(*) from orders',
+          maxRows: 10,
+          output: 'json',
+          json: true,
+          cliVersion: '0.0.0-test',
+        },
+        io.io,
+        {
+          createSqlAnalysis: () => makeSqlAnalysis({ ok: true, error: null }),
+          createScanConnector: vi.fn(async () => makeConnector()),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stderr()).toContain('"event":"sql_completed"');
+    expect(io.stderr()).toContain('"queryVerb":"select"');
+    expect(io.stderr()).not.toContain('select count(*)');
   });
 
   it('prints JSON output', async () => {

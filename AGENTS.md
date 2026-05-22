@@ -271,6 +271,25 @@ use `PascalCase` without the suffix.
 - Regex may be used for non-structural sanitization, but not to interpret SQL
   structure.
 
+## Telemetry
+
+**ktx** ships anonymous PostHog telemetry. When adding commands or events:
+
+- **MUST NOT**: Add fields that carry user data — file paths, hostnames,
+  environment values, SQL text, schema/table/column names, error messages,
+  argv, or secrets. Schemas use Zod `.strict()`, so unknown fields throw at
+  runtime; the privacy rule is enforced by the schema, not by goodwill.
+- **MUST**: Add new event types in `packages/cli/src/telemetry/events.ts`.
+  `pnpm run build` mirrors the catalog into the Python daemon schema; a
+  pytest checks Node ↔ Python parity.
+- **SHOULD**: Let Commander's `preAction` hook auto-emit the `command` event
+  for any new CLI command — do not call `trackTelemetryEvent` manually for
+  command-level success/failure.
+- **MUST**: Update the public overview at
+  `docs-site/content/docs/community/telemetry.mdx` only when the *category*
+  of collected data changes. Adding another event with no new field types
+  needs no docs change.
+
 ## Documentation and Specs
 
 - Keep public documentation in `README.md`, package READMEs, example READMEs,

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+import time
+from contextlib import asynccontextmanager
 from collections.abc import Callable
 from typing import Any
 
@@ -62,6 +65,7 @@ from ktx_daemon.table_identifier import (
     ParseTableIdentifierBatchResponse,
     parse_table_identifier_response,
 )
+from ktx_daemon.telemetry import track_telemetry_event
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +85,38 @@ def create_app(
     ]
     | None = None,
     enable_code_execution: bool = False,
+    telemetry_started_at: float | None = None,
+    clock: Callable[[], float] = time.perf_counter,
 ) -> FastAPI:
+    started_at = telemetry_started_at or clock()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        track_telemetry_event(
+            "daemon_started",
+            {
+                "daemonVersion": os.environ.get("KTX_DAEMON_VERSION", VERSION),
+                "pythonVersion": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                "runtimeVersion": VERSION,
+                "startupDurationMs": max(0, (clock() - started_at) * 1000),
+            },
+        )
+        try:
+            yield
+        finally:
+            track_telemetry_event(
+                "daemon_stopped",
+                {
+                    "reason": "request",
+                    "uptimeMs": max(0, (clock() - started_at) * 1000),
+                },
+            )
+
     app = FastAPI(
         title="KTX Daemon",
         description="Stateless portable compute server for KTX.",
         version=VERSION,
+        lifespan=lifespan,
     )
 
     @app.get("/health")

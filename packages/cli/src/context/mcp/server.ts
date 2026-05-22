@@ -9,6 +9,8 @@ export function createKtxMcpServer(deps: KtxMcpServerDeps): KtxMcpServerDeps['se
       server: deps.server,
       ports: deps.contextTools,
       userContext: deps.userContext,
+      projectDir: deps.projectDir,
+      io: deps.io,
     });
   }
 
@@ -26,6 +28,8 @@ export function createDefaultKtxMcpServer(
     server: server as KtxMcpServerLike,
     userContext: deps.userContext,
     contextTools: deps.contextTools,
+    projectDir: deps.projectDir,
+    io: deps.io,
   });
   return server;
 }

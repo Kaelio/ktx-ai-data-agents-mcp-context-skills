@@ -21,6 +21,8 @@ import { publicIngestOutputLine } from './public-ingest-copy.js';
 import { resolvePublicIngestRuntimeRequirements } from './runtime-requirements.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
+import { isDemoConnection } from './telemetry/demo-detect.js';
+import { emitProjectStackSnapshot, emitTelemetryEvent } from './telemetry/index.js';
 
 profileMark('module:public-ingest');
 
@@ -603,6 +605,39 @@ function resultFailed(result: KtxPublicIngestTargetResult): boolean {
   return result.steps.some((step) => step.status === 'failed');
 }
 
+function rowsBucket(): '<10k' | '<100k' | '<1M' | '<10M' | '>=10M' {
+  return '<10k';
+}
+
+async function emitIngestCompleted(input: {
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>;
+  project: KtxPublicIngestProject;
+  target: KtxPublicIngestPlanTarget;
+  result: KtxPublicIngestTargetResult;
+  startedAt: number;
+  io: KtxCliIo;
+}): Promise<void> {
+  const failed = resultFailed(input.result);
+  await emitTelemetryEvent({
+    name: 'ingest_completed',
+    projectDir: input.args.projectDir,
+    io: input.io,
+    fields: {
+      driver: input.target.driver,
+      isDemoConnection: isDemoConnection(
+        input.target.connectionId,
+        input.project.config.connections[input.target.connectionId],
+      ),
+      schemaCount: 0,
+      tableCount: 0,
+      columnCount: 0,
+      rowsBucket: rowsBucket(),
+      durationMs: Math.max(0, performance.now() - input.startedAt),
+      outcome: failed ? 'error' : 'ok',
+    },
+  });
+}
+
 function stepStatus(result: KtxPublicIngestTargetResult, operation: KtxPublicIngestStepName): string {
   return result.steps.find((step) => step.operation === operation)?.status ?? 'not-run';
 }
@@ -928,7 +963,10 @@ export async function runKtxPublicIngest(
   }
 
   for (const target of plan.targets) {
-    results.push(await executePublicIngestTarget(target, args, io, deps));
+    const startedAt = performance.now();
+    const result = await executePublicIngestTarget(target, args, io, deps);
+    results.push(result);
+    await emitIngestCompleted({ args, project, target, result, startedAt, io });
   }
 
   if (args.json) {
@@ -936,6 +974,8 @@ export async function runKtxPublicIngest(
   } else {
     renderPlainResults(results, io);
   }
+
+  await emitProjectStackSnapshot({ projectDir: args.projectDir, io });
 
   return results.some(resultFailed) ? 1 : 0;
 }

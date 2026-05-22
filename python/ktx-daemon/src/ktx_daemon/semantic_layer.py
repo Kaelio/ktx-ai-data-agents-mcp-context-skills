@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
-from pydantic import BaseModel, Field
+from ktx_daemon.telemetry import error_class, track_telemetry_event
+from pydantic import BaseModel, ConfigDict, Field
 from semantic_layer.duplicate_check import validate_measure_duplicates
 from semantic_layer.engine import SemanticEngine
 from semantic_layer.models import QueryResult, SourceDefinition
 
 
 class SemanticLayerQueryRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     sources: list[dict[str, Any]]
     query: dict[str, Any]
     dialect: str = "postgres"
+    project_id: str | None = Field(default=None, alias="projectId")
 
 
 class SemanticLayerQueryResponse(BaseModel):
@@ -79,15 +84,73 @@ def _response_columns(result: QueryResult) -> list[dict[str, Any]]:
 def query_semantic_layer(
     request: SemanticLayerQueryRequest,
 ) -> SemanticLayerQueryResponse:
-    sources = _load_sources(request.sources)
-    engine = SemanticEngine.from_sources(sources, dialect=request.dialect)
-    result = engine.query(request.query)
-    return SemanticLayerQueryResponse(
-        sql=result.sql,
-        dialect=result.dialect,
-        columns=_response_columns(result),
-        plan=result.resolved_plan.model_dump(mode="json"),
-    )
+    started = time.perf_counter()
+    stage = "parse"
+    source_count = 0
+    join_count = 0
+    sql_started = started
+    try:
+        sources = _load_sources(request.sources)
+        source_count = len(sources)
+        join_count = sum(len(source.joins) for source in sources.values())
+        stage = "resolve"
+        engine = SemanticEngine.from_sources(sources, dialect=request.dialect)
+        stage = "compile"
+        sql_started = time.perf_counter()
+        result = engine.query(request.query)
+        stage = "transpile"
+        track_telemetry_event(
+            "sl_plan_completed",
+            {
+                "outcome": "ok",
+                "stage": stage,
+                "durationMs": max(0, (time.perf_counter() - started) * 1000),
+                "sourceCount": source_count,
+                "joinCount": join_count,
+            },
+            project_id=request.project_id,
+        )
+        track_telemetry_event(
+            "sql_gen_completed",
+            {
+                "outcome": "ok",
+                "dialect": result.dialect,
+                "durationMs": max(0, (time.perf_counter() - sql_started) * 1000),
+            },
+            project_id=request.project_id,
+        )
+        return SemanticLayerQueryResponse(
+            sql=result.sql,
+            dialect=result.dialect,
+            columns=_response_columns(result),
+            plan=result.resolved_plan.model_dump(mode="json"),
+        )
+    except Exception as error:
+        klass = error_class(error)
+        fields: dict[str, Any] = {
+            "outcome": "error",
+            "stage": stage,
+            "durationMs": max(0, (time.perf_counter() - started) * 1000),
+            "sourceCount": source_count,
+            "joinCount": join_count,
+        }
+        if klass:
+            fields["errorClass"] = klass
+        track_telemetry_event(
+            "sl_plan_completed", fields, project_id=request.project_id
+        )
+        if stage in {"compile", "transpile"}:
+            sql_fields: dict[str, Any] = {
+                "outcome": "error",
+                "dialect": request.dialect,
+                "durationMs": max(0, (time.perf_counter() - sql_started) * 1000),
+            }
+            if klass:
+                sql_fields["errorClass"] = klass
+            track_telemetry_event(
+                "sql_gen_completed", sql_fields, project_id=request.project_id
+            )
+        raise
 
 
 def validate_semantic_layer(request: ValidateSourcesRequest) -> ValidateSourcesResponse:

@@ -8,12 +8,13 @@ import { writeLocalKnowledgePage } from './context/wiki/local-knowledge.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxKnowledge } from './knowledge.js';
 
-function makeIo() {
+function makeIo(options: { isTTY?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
   return {
     io: {
       stdout: {
+        isTTY: options.isTTY,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -72,6 +73,7 @@ describe('runKtxKnowledge', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -94,6 +96,26 @@ describe('runKtxKnowledge', () => {
       ),
     ).resolves.toBe(0);
     expect(searchIo.stdout()).toContain('metrics-revenue');
+  });
+
+  it('emits debug telemetry for wiki search without query text', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await seedWikiPage(projectDir);
+    const searchIo = makeIo({ isTTY: true });
+
+    await expect(
+      runKtxKnowledge(
+        { command: 'search', projectDir, query: 'revenue recognition', userId: 'local', cliVersion: '0.0.0-test' },
+        searchIo.io,
+      ),
+    ).resolves.toBe(0);
+
+    expect(searchIo.stderr()).toContain('"event":"wiki_query_completed"');
+    expect(searchIo.stderr()).toContain('"queryLength"');
+    expect(searchIo.stderr()).not.toContain('revenue recognition');
   });
 
   it('prints wiki search rank badges in pretty output', async () => {

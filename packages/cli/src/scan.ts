@@ -8,6 +8,8 @@ import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
+import { emitTelemetryEvent } from './telemetry/index.js';
+import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:scan');
 
@@ -60,6 +62,14 @@ function tableChangeCount(report: KtxScanReport): number {
 
 function totalTableCount(report: KtxScanReport): number {
   return tableChangeCount(report) + report.diffSummary.tablesUnchanged;
+}
+
+function scanColumnCount(report: KtxScanReport): number {
+  return report.structuralSyncStats.columnsCreated + report.structuralSyncStats.columnsUpdated;
+}
+
+function inferredFkCount(report: KtxScanReport): number {
+  return report.relationships.accepted + report.relationships.review + report.relationships.rejected;
 }
 
 function writeScanIdentity(report: KtxScanReport, io: KtxCliIo): void {
@@ -311,6 +321,7 @@ export function createCliScanProgress(
 }
 
 export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps: KtxScanDeps = {}): Promise<number> {
+  const startedAt = performance.now();
   try {
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const resolveEmbeddingProvider = deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider;
@@ -347,12 +358,42 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
         ...(progress ? { progress } : {}),
       });
       cliProgress?.flush();
+      await emitTelemetryEvent({
+        name: 'scan_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          driver: result.report.driver,
+          tableCount: totalTableCount(result.report),
+          columnCount: scanColumnCount(result.report),
+          inferredFkCount: inferredFkCount(result.report),
+          declaredFkCount: 0,
+          durationMs: Math.max(0, performance.now() - startedAt),
+          outcome: 'ok',
+        },
+      });
       writeRunSummary(result.report, args.projectDir, io);
     } finally {
       cliProgress?.flush();
     }
     return 0;
   } catch (error) {
+    const errorClass = scrubErrorClass(error);
+    await emitTelemetryEvent({
+      name: 'scan_completed',
+      projectDir: args.projectDir,
+      io,
+      fields: {
+        driver: 'unknown',
+        tableCount: 0,
+        columnCount: 0,
+        inferredFkCount: 0,
+        declaredFkCount: 0,
+        durationMs: Math.max(0, performance.now() - startedAt),
+        outcome: 'error',
+        ...(errorClass ? { errorClass } : {}),
+      },
+    });
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
   }
