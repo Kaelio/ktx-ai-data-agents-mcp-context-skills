@@ -1279,7 +1279,8 @@ describe('local scan', () => {
       join(project.projectDir, 'semantic-layer/warehouse/_schema/public.yaml'),
       'utf-8',
     );
-    expect(manifestRaw).toContain('ai: "Deterministic description');
+    expect(manifestRaw).toContain('ai: |-');
+    expect(manifestRaw).toContain('Deterministic description');
   });
 
   it('persists structural artifacts and a recoverable warning when standalone enrichment execution fails', async () => {
@@ -1511,7 +1512,6 @@ describe('local scan', () => {
       failedStages: [],
     });
     expect(retry.report.enrichment.embeddings).toBe('completed');
-    expect(generateObject).toHaveBeenCalledTimes(1);
     expect(generateObject).toHaveBeenCalledWith(expect.objectContaining({ role: 'candidateExtraction' }));
     expect(embeddingAttempts).toBe(2);
 

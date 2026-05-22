@@ -307,7 +307,7 @@ async function generateDescriptions(input: {
             columns: table.columns.map((column) => ({
               name: column.name,
               type: column.nativeType,
-              rawDescriptions: column.comment ? { db: column.comment } : {},
+              ...(column.comment ? { rawDescriptions: { db: column.comment } } : {}),
             })),
           },
         });
