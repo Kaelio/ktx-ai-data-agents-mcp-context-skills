@@ -626,32 +626,39 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
   }
 
   private async primaryKeys(tableNames: string[], schemaName: string): Promise<Map<string, Set<string>>> {
-    if (tableNames.length === 0) {
-      return new Map();
-    }
-    const result = await this.getDriver().query(
-      `
-        SELECT tc.TABLE_NAME, kcu.COLUMN_NAME
-        FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-        JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-          ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-          AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
-          AND tc.TABLE_CATALOG = kcu.TABLE_CATALOG
-        WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-          AND tc.TABLE_SCHEMA = ?
-          AND tc.TABLE_CATALOG = ?
-        ORDER BY tc.TABLE_NAME, kcu.ORDINAL_POSITION
-      `,
-      [schemaName, this.resolved.database],
-    );
     const grouped = new Map<string, Set<string>>();
     for (const tableName of tableNames) {
       grouped.set(tableName, new Set());
     }
-    for (const row of result.rows) {
-      const tableName = String(row[0]);
-      const columnName = String(row[1]);
-      grouped.get(tableName)?.add(columnName);
+    if (tableNames.length === 0) {
+      return grouped;
+    }
+    try {
+      const result = await this.getDriver().query(
+        `
+          SELECT tc.TABLE_NAME, kcu.COLUMN_NAME
+          FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+          JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+            ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+            AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+            AND tc.TABLE_CATALOG = kcu.TABLE_CATALOG
+          WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+            AND tc.TABLE_SCHEMA = ?
+            AND tc.TABLE_CATALOG = ?
+          ORDER BY tc.TABLE_NAME, kcu.ORDINAL_POSITION
+        `,
+        [schemaName, this.resolved.database],
+      );
+      for (const row of result.rows) {
+        const tableName = String(row[0]);
+        const columnName = String(row[1]);
+        grouped.get(tableName)?.add(columnName);
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `Snowflake primary-key discovery skipped for ${this.resolved.database}.${schemaName}: ${detail.replace(/\s+/g, ' ').trim()}`,
+      );
     }
     return grouped;
   }

@@ -157,6 +157,55 @@ describe('KtxSnowflakeScanConnector', () => {
     ]);
   });
 
+  it('continues introspection when primary-key discovery is not authorized', async () => {
+    const driverFactory = fakeDriverFactory();
+    const driver = (driverFactory.createDriver as ReturnType<typeof vi.fn>).getMockImplementation() as
+      | (() => KtxSnowflakeDriver)
+      | undefined;
+    if (!driver) throw new Error('driver mock missing');
+    const built = driver();
+    (built.query as ReturnType<typeof vi.fn>).mockImplementation(async (sql: string) => {
+      if (sql.includes('TABLE_CONSTRAINTS')) {
+        throw new Error(
+          "SQL compilation error: Object 'ANALYTICS.INFORMATION_SCHEMA.KEY_COLUMN_USAGE' does not exist or not authorized.",
+        );
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    (driverFactory.createDriver as ReturnType<typeof vi.fn>).mockReturnValue(built);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const connector = new KtxSnowflakeScanConnector({
+        connectionId: 'warehouse',
+        connection: {
+          driver: 'snowflake',
+          authMethod: 'password',
+          account: 'acct',
+          warehouse: 'WH',
+          database: 'ANALYTICS',
+          schema_name: 'PUBLIC',
+          username: 'reader',
+          password: 'fixture-pass', // pragma: allowlist secret
+        },
+        driverFactory,
+      });
+
+      const snapshot = await connector.introspect(
+        { connectionId: 'warehouse', driver: 'snowflake' },
+        { runId: 'scan-run-pk-skip' },
+      );
+
+      expect(snapshot.tables.map((table) => table.name).sort()).toEqual(['ORDERS', 'ORDER_SUMMARY']);
+      expect(snapshot.tables.every((table) => table.columns.every((column) => column.primaryKey === false))).toBe(true);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Snowflake primary-key discovery skipped for ANALYTICS.PUBLIC'),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('supports read-only query, sampling, distinct values, row counts, schema listing, and cleanup', async () => {
     const driverFactory = fakeDriverFactory();
     const connector = new KtxSnowflakeScanConnector({
