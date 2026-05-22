@@ -8,7 +8,7 @@ const telemetryCommonEnvelopeSchema = z
     osPlatform: z.string(),
     osRelease: z.string(),
     arch: z.string(),
-    runtime: z.literal('node'),
+    runtime: z.enum(['node', 'daemon-py']),
     isCi: z.boolean(),
   })
   .strict();
@@ -161,6 +161,42 @@ const mcpRequestCompletedSchema = telemetryCommonEnvelopeSchema
   })
   .strict();
 
+const daemonStartedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    daemonVersion: z.string(),
+    pythonVersion: z.string(),
+    runtimeVersion: z.string(),
+    startupDurationMs: z.number().nonnegative(),
+  })
+  .strict();
+
+const daemonStoppedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    reason: z.enum(['signal', 'request', 'crash']),
+    uptimeMs: z.number().nonnegative(),
+  })
+  .strict();
+
+const slPlanCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    outcome: z.enum(['ok', 'error']),
+    stage: z.enum(['parse', 'resolve', 'compile', 'transpile']),
+    errorClass: z.string().optional(),
+    durationMs: z.number().nonnegative(),
+    sourceCount: z.number().int().nonnegative(),
+    joinCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const sqlGenCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    outcome: z.enum(['ok', 'error']),
+    dialect: z.string(),
+    errorClass: z.string().optional(),
+    durationMs: z.number().nonnegative(),
+  })
+  .strict();
+
 /** @internal */
 export const telemetryEventSchemas = {
   install_first_run: installFirstRunSchema,
@@ -176,6 +212,10 @@ export const telemetryEventSchemas = {
   sql_completed: sqlCompletedSchema,
   wiki_query_completed: wikiQueryCompletedSchema,
   mcp_request_completed: mcpRequestCompletedSchema,
+  daemon_started: daemonStartedSchema,
+  daemon_stopped: daemonStoppedSchema,
+  sl_plan_completed: slPlanCompletedSchema,
+  sql_gen_completed: sqlGenCompletedSchema,
 } as const;
 
 /** @internal */
@@ -287,6 +327,26 @@ export const telemetryEventCatalog = [
     name: 'mcp_request_completed',
     description: 'Emitted for sampled MCP tool requests.',
     fields: ['toolName', 'outcome', 'durationMs', 'errorClass', 'sampleRate'],
+  },
+  {
+    name: 'daemon_started',
+    description: 'Emitted when the long-lived ktx-daemon HTTP server starts.',
+    fields: ['daemonVersion', 'pythonVersion', 'runtimeVersion', 'startupDurationMs'],
+  },
+  {
+    name: 'daemon_stopped',
+    description: 'Emitted when the long-lived ktx-daemon HTTP server shuts down.',
+    fields: ['reason', 'uptimeMs'],
+  },
+  {
+    name: 'sl_plan_completed',
+    description: 'Emitted after a daemon semantic-layer planning pass completes.',
+    fields: ['outcome', 'stage', 'errorClass', 'durationMs', 'sourceCount', 'joinCount'],
+  },
+  {
+    name: 'sql_gen_completed',
+    description: 'Emitted after daemon SQL generation completes.',
+    fields: ['outcome', 'dialect', 'errorClass', 'durationMs'],
   },
 ] as const;
 

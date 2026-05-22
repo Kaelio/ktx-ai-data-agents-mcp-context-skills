@@ -11,6 +11,7 @@
     "packages/cli": {
       "entry": [
         "src/print-command-tree.ts!",
+        "src/telemetry/schema-writer.ts!",
         "src/telemetry/index.ts!",
         "scripts/**/*.mjs",
         "src/**/*.test-utils.ts",
