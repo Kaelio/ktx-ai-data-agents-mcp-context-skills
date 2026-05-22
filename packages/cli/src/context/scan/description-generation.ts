@@ -755,6 +755,7 @@ export class KtxDescriptionGenerator {
     const sampleValues = sampleValuesByColumn(input.table.columns, sampleData);
     const descriptions = new Map<string, string | null>();
     let tableDescription: string | null = null;
+    let structuredGenerationSucceeded = false;
 
     try {
       const prompt = batchedPrompt({
@@ -774,6 +775,7 @@ export class KtxDescriptionGenerator {
         schema: batchedTableDescriptionSchema,
         temperature: this.settings.temperature,
       });
+      structuredGenerationSucceeded = true;
       tableDescription = generated.tableDescription.trim() || null;
       const generatedColumns = new Map(
         generated.columns.map((column) => [column.name.toLowerCase(), column.description.trim() || null]),
@@ -803,6 +805,13 @@ export class KtxDescriptionGenerator {
         recoverable: true,
         metadata: { connectorId: input.connector.id },
       });
+    }
+
+    if (!structuredGenerationSucceeded) {
+      for (const column of input.table.columns) {
+        descriptions.set(column.name, null);
+      }
+      return { tableDescription, columnDescriptions: descriptions };
     }
 
     const tableContext = `Table: ${input.table.name} | Columns: ${input.table.columns.map((column) => column.name).join(', ')} | Data source: ${input.dataSourceType}`;

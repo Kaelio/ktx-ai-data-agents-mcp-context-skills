@@ -461,7 +461,7 @@ describe('KtxDescriptionGenerator', () => {
     expect(llmRuntime.generateText).toHaveBeenCalledTimes(1);
   });
 
-  it('tolerates structured object failures and falls back to prepared column values', async () => {
+  it('does not run per-column fallback when structured object generation throws', async () => {
     const llmRuntime = createLlmProvider('Fallback description');
     llmRuntime.generateObject = vi.fn(async () => {
       throw new Error('object output unavailable');
@@ -488,9 +488,10 @@ describe('KtxDescriptionGenerator', () => {
     });
 
     expect(result.tableDescription).toBeNull();
-    expect(Object.fromEntries(result.columnDescriptions)).toEqual({ status: 'Fallback description' });
+    expect(Object.fromEntries(result.columnDescriptions)).toEqual({ status: null });
     expect(warnings).toContain('enrichment_failed');
-    expect(llmRuntime.generateText).toHaveBeenCalledTimes(1);
+    expect(llmRuntime.generateObject).toHaveBeenCalledTimes(1);
+    expect(llmRuntime.generateText).not.toHaveBeenCalled();
   });
 });
 
