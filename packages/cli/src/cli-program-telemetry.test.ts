@@ -80,6 +80,11 @@ describe('runCommanderKtxCli telemetry', () => {
     expect(statusIo.stderr()).toContain('"event":"project_stack_snapshot"');
     expect(statusIo.stderr()).toContain('"connectionCount"');
     expect(statusIo.stderr()).not.toContain(tempDir);
+
+    const noticeIndex = statusIo.stderr().indexOf('ktx collects anonymous usage data');
+    const firstTelemetryIndex = statusIo.stderr().indexOf('[telemetry]');
+    expect(noticeIndex).toBeGreaterThanOrEqual(0);
+    expect(firstTelemetryIndex).toBeGreaterThan(noticeIndex);
   });
 
   it('emits aborted telemetry when project validation aborts after preAction starts', async () => {

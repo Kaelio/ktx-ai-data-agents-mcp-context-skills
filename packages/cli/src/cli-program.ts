@@ -417,6 +417,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   program.hook('preAction', async (_thisCommand, actionCommand) => {
     const telemetry = await import('./telemetry/index.js');
     options.setTelemetryModule?.(telemetry);
+    await telemetry.showTelemetryNoticeIfNeeded(options.io);
     const commandNode = actionCommand as CommandPathNode;
     const path = commandPath(commandNode);
     const projectDir = resolveCommandProjectDir(commandNode);

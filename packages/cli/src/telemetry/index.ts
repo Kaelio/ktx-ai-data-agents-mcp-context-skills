@@ -20,6 +20,14 @@ import { buildProjectStackSnapshotFields } from './project-snapshot.js';
 export { beginCommandSpan, completeCommandSpan, shutdownTelemetryEmitter };
 export type { CommandOutcome, CompletedCommandSpan };
 
+export async function showTelemetryNoticeIfNeeded(io: KtxCliIo): Promise<void> {
+  await loadTelemetryIdentity({
+    stdoutIsTTY: io.stdout.isTTY === true,
+    stderr: io.stderr,
+    env: process.env,
+  });
+}
+
 type TelemetryEventFields<Name extends TelemetryEventName> = Omit<
   TelemetryEventProperties<Name>,
   keyof TelemetryCommonEnvelope
