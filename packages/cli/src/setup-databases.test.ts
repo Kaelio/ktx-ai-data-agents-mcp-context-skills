@@ -458,7 +458,7 @@ describe('setup databases step', () => {
       {
         driver: 'snowflake',
         selectValues: ['no'],
-        textValues: ['', 'env:SNOWFLAKE_ACCOUNT', 'ANALYTICS_WH', 'ANALYTICS', '', 'env:SNOWFLAKE_USER', ''],
+        textValues: ['', 'env:SNOWFLAKE_ACCOUNT', 'ANALYTICS_WH', 'ANALYTICS', 'env:SNOWFLAKE_USER', ''],
         passwordValues: ['env:SNOWFLAKE_PASSWORD'],
         expectedTextPrompts: [
           {
@@ -474,11 +474,6 @@ describe('setup databases step', () => {
           },
           {
             message: 'Snowflake database name',
-          },
-          {
-            message: 'Snowflake schema\nPress Enter for PUBLIC, or enter a schema name.',
-            placeholder: 'PUBLIC',
-            initialValue: 'PUBLIC',
           },
           {
             message: 'Snowflake username',
@@ -514,6 +509,8 @@ describe('setup databases step', () => {
           prompts,
           testConnection: vi.fn(async () => 0),
           scanConnection: vi.fn(async () => 0),
+          listSchemas: vi.fn(async () => []),
+          listTables: vi.fn(async () => []),
         },
       );
 
@@ -687,6 +684,8 @@ describe('setup databases step', () => {
     });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => []);
+    const listTables = vi.fn(async () => []);
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -697,7 +696,7 @@ describe('setup databases step', () => {
         disableQueryHistory: true,
       },
       makeIo().io,
-      { prompts, testConnection, scanConnection },
+      { prompts, testConnection, scanConnection, listSchemas, listTables },
     );
 
     expect(result).toEqual({
@@ -1521,6 +1520,65 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('✓ orbit_analytics, orbit_raw');
   });
 
+  it('falls back to comma-separated free-text when listSchemas fails interactively', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['url'],
+      textValues: ['', 'env:DATABASE_URL', 'orbit_analytics, orbit_raw'],
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => {
+      throw new Error('permission denied to list schemas');
+    });
+    const listTables = vi.fn(async () => [
+      { schema: 'orbit_analytics', name: 'events', kind: 'table' as const },
+      { schema: 'orbit_raw', name: 'inputs', kind: 'table' as const },
+    ]);
+    const pickers = makePickerStubs({
+      scopes: [
+        {
+          schemas: ['orbit_analytics', 'orbit_raw'],
+          tables: ['orbit_analytics.events', 'orbit_raw.inputs'],
+        },
+      ],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseDrivers: ['postgres'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('Could not discover postgresql schemas');
+    expect(vi.mocked(prompts.text).mock.calls.map(([options]) => options.message)).toContain(
+      textInputPrompt(
+        'Enter schemas for postgres-warehouse as a comma-separated list (e.g. SALES, MARKETING).',
+      ),
+    );
+    expect(listTables).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', [
+      'orbit_analytics',
+      'orbit_raw',
+    ]);
+    expect(pickers.scopeCalls[0]).toMatchObject({
+      defaultSchemas: ['orbit_analytics', 'orbit_raw'],
+    });
+  });
+
   it('auto-selects all discovered Postgres schemas in non-interactive setup', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({});
@@ -1827,7 +1885,7 @@ describe('setup databases step', () => {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
         prompts: makePromptAdapter({
-          textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'PUBLIC', 'reader', ''],
+          textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
           passwordValues: ['env:SNOWFLAKE_PASSWORD'],
         }),
       },

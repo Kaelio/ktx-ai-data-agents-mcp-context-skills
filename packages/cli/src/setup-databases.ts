@@ -867,12 +867,6 @@ async function buildConnectionConfig(input: {
       stringConfigField(input.existingConnection, 'database'),
     );
     if (database === undefined) return 'back';
-    const schemaName = await promptText(
-      prompts,
-      'Snowflake schema\nPress Enter for PUBLIC, or enter a schema name.',
-      stringConfigField(input.existingConnection, 'schema_name') ?? 'PUBLIC',
-    );
-    if (schemaName === undefined) return 'back';
     const username = await promptText(
       prompts,
       'Snowflake username',
@@ -894,14 +888,13 @@ async function buildConnectionConfig(input: {
     );
     if (role === undefined) return 'back';
     const resolvedPasswordRef = passwordRef ?? stringConfigField(input.existingConnection, 'password');
-    if (!account || !warehouse || !database || !schemaName || !username || !resolvedPasswordRef) return null;
+    if (!account || !warehouse || !database || !username || !resolvedPasswordRef) return null;
     return {
       driver: 'snowflake',
       authMethod: 'password',
       account,
       warehouse,
       database,
-      schema_name: schemaName,
       username,
       password: resolvedPasswordRef,
       ...(role ? { role } : {}),
@@ -1312,6 +1305,21 @@ async function writeScopeConfig(input: {
   });
 }
 
+async function promptCommaSeparatedScope(input: {
+  prompts: KtxSetupDatabasesPromptAdapter;
+  connectionId: string;
+  spec: ScopeDiscoverySpec;
+}): Promise<string[] | undefined> {
+  const example =
+    input.spec.nounPlural === 'datasets' ? 'sales, marketing' : 'SALES, MARKETING';
+  const value = await promptText(
+    input.prompts,
+    `Enter ${input.spec.nounPlural} for ${input.connectionId} as a comma-separated list (e.g. ${example}).`,
+  );
+  if (value === undefined) return undefined;
+  return unique(value.split(',').map((part) => part.trim()));
+}
+
 async function maybeConfigureDatabaseScope(input: {
   projectDir: string;
   connectionId: string;
@@ -1382,11 +1390,15 @@ async function maybeConfigureDatabaseScope(input: {
     `Connecting to ${input.connectionId}…`,
   ]);
 
-  const schemasFilter = await (async (): Promise<string[]> => {
-    if (cliSchemas.length > 0) return cliSchemas;
-    if (!spec) return [];
+  let effectiveCliSchemas = cliSchemas;
+  let schemasFilter: string[];
+  if (effectiveCliSchemas.length > 0) {
+    schemasFilter = effectiveCliSchemas;
+  } else if (!spec) {
+    schemasFilter = [];
+  } else {
     try {
-      return unique(
+      schemasFilter = unique(
         await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId),
       );
     } catch (error) {
@@ -1394,9 +1406,21 @@ async function maybeConfigureDatabaseScope(input: {
       input.io.stderr.write(
         `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; ${detail}\n`,
       );
-      return [];
+      const prompts = input.deps.prompts ?? createPromptAdapter();
+      const typed = await promptCommaSeparatedScope({ prompts, connectionId: input.connectionId, spec });
+      if (typed === undefined) return 'back';
+      effectiveCliSchemas = typed;
+      schemasFilter = typed;
+      if (typed.length > 0) {
+        await writeScopeConfig({
+          projectDir: input.projectDir,
+          connectionId: input.connectionId,
+          values: typed,
+          spec,
+        });
+      }
     }
-  })();
+  }
 
   let discovered: KtxTableListEntry[];
   try {
@@ -1426,7 +1450,7 @@ async function maybeConfigureDatabaseScope(input: {
   const schemasInDiscovery = unique(discovered.map((t) => t.schema));
 
   const defaultSchemas = (() => {
-    if (cliSchemas.length > 0) return cliSchemas;
+    if (effectiveCliSchemas.length > 0) return effectiveCliSchemas;
     if (!spec) return schemasInDiscovery;
     return spec.defaultSelection(schemasInDiscovery);
   })();

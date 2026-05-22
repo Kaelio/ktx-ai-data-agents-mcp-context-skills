@@ -129,20 +129,18 @@ connections:
     account: xy12345
     warehouse: ANALYTICS_WH
     database: PROD
-    schema_name: PUBLIC
+    schema_names:
+      - PUBLIC
+      - SALES
+      - MARKETING
     username: KTX_SERVICE
     password: env:SNOWFLAKE_PASSWORD
     role: ANALYST
 ```
 
-For multiple schemas:
-
-```yaml
-    schema_names:
-      - PUBLIC
-      - ANALYTICS
-      - STAGING
-```
+`ktx setup` discovers schemas after the connection is verified and writes the
+selected list to `schema_names`. You can also set this field manually. For a
+single schema, `schema_name: PUBLIC` is accepted as an equivalent shorthand.
 
 ### Authentication
 

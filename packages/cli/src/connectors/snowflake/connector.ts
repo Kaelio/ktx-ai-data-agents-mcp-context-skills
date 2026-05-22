@@ -4,7 +4,8 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableListEntry, type KtxTableSampleResult } from '../../context/scan/types.js';
-import * as snowflake from 'snowflake-sdk';
+import snowflake from 'snowflake-sdk';
+import type { Bind, Binds, Connection, ConnectionOptions } from 'snowflake-sdk';
 import { KtxSnowflakeDialect } from './dialect.js';
 
 export interface KtxSnowflakeConnectionConfig {
@@ -128,7 +129,8 @@ function schemaNames(connection: KtxSnowflakeConnectionConfig, env: NodeJS.Proce
       .filter((schema) => schema.trim().length > 0)
       .map((schema) => resolveStringReference(schema, env));
   }
-  return [stringConfigValue(connection, 'schema_name', env) ?? 'PUBLIC'];
+  const single = stringConfigValue(connection, 'schema_name', env);
+  return single ? [single] : [];
 }
 
 function firstNumber(value: unknown): number | null {
@@ -158,7 +160,7 @@ function normalizeSnowflakeValue(value: unknown, columnType?: string): unknown {
   return value;
 }
 
-function toSnowflakeBind(value: unknown): snowflake.Bind {
+function toSnowflakeBind(value: unknown): Bind {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value;
   }
@@ -168,7 +170,7 @@ function toSnowflakeBind(value: unknown): snowflake.Bind {
   return String(value);
 }
 
-function toSnowflakeBinds(params: unknown[] | undefined): snowflake.Binds | undefined {
+function toSnowflakeBinds(params: unknown[] | undefined): Binds | undefined {
   return params?.map((value) => toSnowflakeBind(value));
 }
 
@@ -267,7 +269,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   }
 
   async query(sql: string, params?: unknown): Promise<KtxQueryResult> {
-    let connection: snowflake.Connection | null = null;
+    let connection: Connection | null = null;
     try {
       connection = await this.createConnection();
       const binds = Array.isArray(params) ? toSnowflakeBinds(params) : undefined;
@@ -358,7 +360,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   }
 
   private async runTest(): Promise<{ success: boolean; error?: string }> {
-    let connection: snowflake.Connection | null = null;
+    let connection: Connection | null = null;
     try {
       connection = await this.createConnection();
       await this.executeSnowflakeQuery(connection, 'SELECT 1');
@@ -372,7 +374,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
     }
   }
 
-  private async createConnection(): Promise<snowflake.Connection> {
+  private async createConnection(): Promise<Connection> {
     const patch = await this.sdkOptionsProvider?.resolve({
       account: this.resolved.account,
       connection: { ...this.resolved, driver: 'snowflake' },
@@ -380,16 +382,17 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
     if (patch?.close) {
       this.closeSdkOptions.push(patch.close);
     }
-    const baseConfig: snowflake.ConnectionOptions = {
+    const sessionSchema = this.resolved.schemas[0];
+    const baseConfig: ConnectionOptions = {
       account: this.resolved.account,
       username: this.resolved.username,
       warehouse: this.resolved.warehouse,
       database: this.resolved.database,
-      schema: this.resolved.schemas[0] ?? 'PUBLIC',
+      ...(sessionSchema ? { schema: sessionSchema } : {}),
       role: this.resolved.role,
       ...patch?.sdkOptions,
     };
-    const connectionConfig: snowflake.ConnectionOptions =
+    const connectionConfig: ConnectionOptions =
       this.resolved.authMethod === 'rsa'
         ? { ...baseConfig, authenticator: 'SNOWFLAKE_JWT', privateKey: this.decryptPrivateKey() }
         : { ...baseConfig, password: this.resolved.password };
@@ -412,7 +415,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
     });
   }
 
-  private async setConnectionContext(connection: snowflake.Connection): Promise<void> {
+  private async setConnectionContext(connection: Connection): Promise<void> {
     if (this.resolved.role) {
       await this.executeSnowflakeQuery(connection, `USE ROLE "${this.resolved.role}"`);
     }
@@ -422,9 +425,9 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   }
 
   private async executeSnowflakeQuery(
-    connection: snowflake.Connection,
+    connection: Connection,
     sqlText: string,
-    binds?: snowflake.Binds,
+    binds?: Binds,
   ): Promise<{ headers: string[]; headerTypes?: string[]; rows: unknown[][] }> {
     return new Promise((resolveQuery, rejectQuery) => {
       connection.execute({
@@ -447,7 +450,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
     });
   }
 
-  private destroyConnection(connection: snowflake.Connection): Promise<void> {
+  private destroyConnection(connection: Connection): Promise<void> {
     return new Promise((resolveDestroy, rejectDestroy) => {
       connection.destroy((error) => {
         if (error) {
