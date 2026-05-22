@@ -1,4 +1,5 @@
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
+import { mapWithConcurrency } from './relationship-validation.js';
 import type {
   KtxConnectionDriver,
   KtxQueryResult,
@@ -60,6 +61,7 @@ export interface ProfileKtxRelationshipSchemaInput {
   ctx: KtxScanContext;
   sampleValuesPerColumn?: number;
   profileSampleRows?: number;
+  profileConcurrency?: number;
   cache?: KtxRelationshipProfileCache;
 }
 
@@ -406,7 +408,8 @@ export async function profileKtxRelationshipSchema(
   const columns: Record<string, KtxRelationshipColumnProfile> = {};
   const warnings: string[] = [];
 
-  for (const table of input.schema.tables.filter((candidate) => candidate.enabled)) {
+  const enabledTables = input.schema.tables.filter((candidate) => candidate.enabled);
+  const tableResults = await mapWithConcurrency(enabledTables, input.profileConcurrency ?? 4, async (table) => {
     const sampleValuesPerColumn = input.sampleValuesPerColumn ?? 5;
     const profileSampleRows = input.profileSampleRows ?? 10000;
     const cacheKey = tableProfileCacheKey({
@@ -419,12 +422,7 @@ export async function profileKtxRelationshipSchema(
     });
     const cached = input.cache?.tableProfiles.get(cacheKey);
     if (cached) {
-      tables.push(cached.table);
-      Object.assign(columns, cached.columns);
-      for (const warning of cached.warnings) {
-        warnings.push(warning);
-      }
-      continue;
+      return { cached, queryCount: 0 };
     }
 
     try {
@@ -437,22 +435,35 @@ export async function profileKtxRelationshipSchema(
         sampleValuesPerColumn,
         profileSampleRows,
       });
-      queryTotal += tableProfile.queryCount;
-      tables.push(tableProfile.table);
-      Object.assign(columns, tableProfile.columns);
       input.cache?.tableProfiles.set(cacheKey, {
         table: tableProfile.table,
         columns: tableProfile.columns,
         warnings: [],
       });
+      return { tableProfile };
     } catch (error) {
       const failureWarning = `profile_failed:${table.ref.name}:${error instanceof Error ? error.message : String(error)}`;
-      warnings.push(failureWarning);
-      input.cache?.tableProfiles.set(cacheKey, {
+      const cachedFailure = {
         table: { table: table.ref, rowCount: 0 },
         columns: {},
         warnings: [failureWarning],
-      });
+      };
+      input.cache?.tableProfiles.set(cacheKey, cachedFailure);
+      return { cached: cachedFailure, queryCount: 0 };
+    }
+  });
+
+  for (const result of tableResults) {
+    if ('tableProfile' in result) {
+      queryTotal += result.tableProfile.queryCount;
+      tables.push(result.tableProfile.table);
+      Object.assign(columns, result.tableProfile.columns);
+      continue;
+    }
+    tables.push(result.cached.table);
+    Object.assign(columns, result.cached.columns);
+    for (const warning of result.cached.warnings) {
+      warnings.push(warning);
     }
   }
 

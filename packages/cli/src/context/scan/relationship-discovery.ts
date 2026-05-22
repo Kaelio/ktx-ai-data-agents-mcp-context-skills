@@ -228,6 +228,7 @@ export async function discoverKtxRelationships(
     executor,
     ctx: input.context,
     profileSampleRows: input.settings.profileSampleRows,
+    profileConcurrency: input.settings.profileConcurrency,
     cache: profileCache,
   });
   const deterministicCandidates: KtxRelationshipDiscoveryCandidate[] = generateKtxRelationshipDiscoveryCandidates(
