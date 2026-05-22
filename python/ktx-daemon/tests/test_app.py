@@ -106,6 +106,9 @@ def test_app_lifespan_emits_daemon_lifecycle_debug_events(
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("KTX_TELEMETRY_DEBUG", "1")
     monkeypatch.setenv("KTX_DAEMON_VERSION", "0.4.1")
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("KTX_TELEMETRY_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
 
     with TestClient(
         create_app(telemetry_started_at=100.0, clock=lambda: 100.125)

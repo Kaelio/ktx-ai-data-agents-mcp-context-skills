@@ -26,7 +26,7 @@ def _telemetry_path(home_dir: Path | None = None) -> Path:
 
 
 def _env_disables(env: Mapping[str, str] | None = None) -> bool:
-    source = env or os.environ
+    source = os.environ if env is None else env
     return bool(
         source.get("KTX_TELEMETRY_DISABLED")
         or source.get("DO_NOT_TRACK")

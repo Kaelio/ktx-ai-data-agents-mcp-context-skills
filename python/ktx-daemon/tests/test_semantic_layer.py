@@ -72,6 +72,9 @@ def test_query_semantic_layer_emits_plan_and_sql_debug_events(
     )
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("KTX_TELEMETRY_DEBUG", "1")
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("KTX_TELEMETRY_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
 
     query_semantic_layer(
         SemanticLayerQueryRequest(

@@ -31,15 +31,15 @@ def test_identity_reads_file_with_ttl_cache(tmp_path: Path) -> None:
     reset_identity_cache()
     write_identity(tmp_path)
 
-    first = load_telemetry_identity(home_dir=tmp_path, now=lambda: 100.0)
+    first = load_telemetry_identity(home_dir=tmp_path, env={}, now=lambda: 100.0)
     assert first.enabled is True
     assert first.install_id == "00000000-0000-4000-8000-000000000000"
 
     write_identity(tmp_path, enabled=False)
-    cached = load_telemetry_identity(home_dir=tmp_path, now=lambda: 120.0)
+    cached = load_telemetry_identity(home_dir=tmp_path, env={}, now=lambda: 120.0)
     assert cached.enabled is True
 
-    refreshed = load_telemetry_identity(home_dir=tmp_path, now=lambda: 161.0)
+    refreshed = load_telemetry_identity(home_dir=tmp_path, env={}, now=lambda: 161.0)
     assert refreshed.enabled is False
 
 
