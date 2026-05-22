@@ -26,6 +26,17 @@ type TelemetryEventFields<Name extends TelemetryEventName> = Omit<
 >;
 
 const emittedProjectSnapshots = new Set<string>();
+const MCP_SAMPLE_RATE = 0.1 as const;
+let mcpSampled: boolean | undefined;
+
+export function shouldEmitMcpTelemetry(): boolean {
+  mcpSampled ??= Math.random() < MCP_SAMPLE_RATE;
+  return mcpSampled;
+}
+
+export function mcpTelemetrySampleRate(): 0.1 {
+  return MCP_SAMPLE_RATE;
+}
 
 async function emitInstallFirstRunIfNeeded(input: {
   identity: Awaited<ReturnType<typeof loadTelemetryIdentity>>;

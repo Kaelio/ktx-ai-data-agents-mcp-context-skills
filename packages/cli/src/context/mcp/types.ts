@@ -1,4 +1,5 @@
 import type { MemoryIngestService } from '../../context/memory/memory-runs.js';
+import type { KtxCliIo } from '../../cli-runtime.js';
 import type { KtxEntityDetailsInput, KtxEntityDetailsResponse } from '../scan/entity-details.js';
 import type { KtxDiscoverDataInput, KtxDiscoverDataResponse } from '../../context/search/discover.js';
 import type { KtxDictionarySearchInput, KtxDictionarySearchResponse } from '../../context/sl/dictionary-search.js';
@@ -171,4 +172,6 @@ export interface KtxMcpServerDeps {
   server: KtxMcpServerLike;
   userContext: KtxMcpUserContext;
   contextTools?: KtxMcpContextPorts;
+  projectDir?: string;
+  io?: KtxCliIo;
 }

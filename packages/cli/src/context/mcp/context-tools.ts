@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import type { KtxCliIo } from '../../cli-runtime.js';
 import type { MemoryAgentInput } from '../../context/memory/types.js';
+import { emitTelemetryEvent, mcpTelemetrySampleRate, shouldEmitMcpTelemetry } from '../../telemetry/index.js';
+import { scrubErrorClass } from '../../telemetry/scrubber.js';
 import type {
   KtxMcpContextPorts,
   KtxMcpProgressCallback,
@@ -16,6 +19,8 @@ export interface RegisterKtxContextToolsDeps {
   server: KtxMcpServerLike;
   ports: KtxMcpContextPorts;
   userContext: KtxMcpUserContext;
+  projectDir?: string;
+  io?: KtxCliIo;
 }
 
 const connectionIdSchema = z.string().min(1);
@@ -509,8 +514,58 @@ function registerParsedTool<TSchema extends z.ZodType>(
   });
 }
 
+function instrumentMcpServer(
+  server: KtxMcpServerLike,
+  telemetry: { projectDir?: string; io?: KtxCliIo },
+): KtxMcpServerLike {
+  return {
+    registerTool(name, config, handler) {
+      server.registerTool(name, config, async (input, context) => {
+        const startedAt = performance.now();
+        try {
+          const result = await handler(input, context);
+          if (telemetry.io && telemetry.projectDir && shouldEmitMcpTelemetry()) {
+            const isError =
+              typeof result === 'object' && result !== null && 'isError' in result && result.isError === true;
+            await emitTelemetryEvent({
+              name: 'mcp_request_completed',
+              projectDir: telemetry.projectDir,
+              io: telemetry.io,
+              fields: {
+                toolName: name,
+                outcome: isError ? 'error' : 'ok',
+                durationMs: Math.max(0, performance.now() - startedAt),
+                sampleRate: mcpTelemetrySampleRate(),
+              },
+            });
+          }
+          return result;
+        } catch (error) {
+          if (telemetry.io && telemetry.projectDir && shouldEmitMcpTelemetry()) {
+            const errorClass = scrubErrorClass(error);
+            await emitTelemetryEvent({
+              name: 'mcp_request_completed',
+              projectDir: telemetry.projectDir,
+              io: telemetry.io,
+              fields: {
+                toolName: name,
+                outcome: 'error',
+                ...(errorClass ? { errorClass } : {}),
+                durationMs: Math.max(0, performance.now() - startedAt),
+                sampleRate: mcpTelemetrySampleRate(),
+              },
+            });
+          }
+          throw error;
+        }
+      });
+    },
+  };
+}
+
 export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void {
-  const { ports, server, userContext } = deps;
+  const { ports, userContext } = deps;
+  const server = instrumentMcpServer(deps.server, { projectDir: deps.projectDir, io: deps.io });
 
   if (ports.connections) {
     const connections = ports.connections;
