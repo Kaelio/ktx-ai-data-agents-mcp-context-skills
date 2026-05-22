@@ -20,6 +20,7 @@ function makeIo() {
   return {
     io: {
       stdout: {
+        isTTY: true,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -72,6 +73,7 @@ describe('runKtxConnection', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -135,6 +137,27 @@ describe('runKtxConnection', () => {
     expect(io.stdout()).toContain('Connection test passed: warehouse');
     expect(io.stdout()).toContain('Driver: sqlite');
     expect(io.stdout()).toContain('Status: ok');
+  });
+
+  it('emits debug telemetry for connection tests without project paths', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, {
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
+    });
+    const { connector } = nativeConnector('postgres');
+    const io = makeIo();
+
+    const code = await runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
+      createScanConnector: vi.fn(async () => connector),
+    });
+
+    expect(code).toBe(0);
+    expect(io.stderr()).toContain('"event":"connection_test"');
+    expect(io.stderr()).toContain('"driver":"postgres"');
+    expect(io.stderr()).not.toContain(projectDir);
   });
 
   it('reports the connector error and still cleans up when native testConnection fails', async () => {

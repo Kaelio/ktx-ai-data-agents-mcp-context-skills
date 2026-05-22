@@ -14,6 +14,9 @@ import type { KtxCliIo } from './index.js';
 import { bold, dim, green, red, SYMBOLS } from './io/symbols.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { profileMark } from './startup-profile.js';
+import { isDemoConnection } from './telemetry/demo-detect.js';
+import { emitTelemetryEvent } from './telemetry/index.js';
+import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:connection');
 
@@ -300,6 +303,30 @@ interface ConnectionTestRow {
   detail: string;
 }
 
+async function emitConnectionTest(input: {
+  project: KtxLocalProject;
+  connectionId: string;
+  driver: string;
+  outcome: 'ok' | 'error';
+  durationMs: number;
+  error?: unknown;
+  io: KtxCliIo;
+}): Promise<void> {
+  const errorClass = input.error ? scrubErrorClass(input.error) : undefined;
+  await emitTelemetryEvent({
+    name: 'connection_test',
+    projectDir: input.project.projectDir,
+    io: input.io,
+    fields: {
+      driver: input.driver,
+      isDemoConnection: isDemoConnection(input.connectionId, input.project.config.connections[input.connectionId]),
+      outcome: input.outcome,
+      durationMs: input.durationMs,
+      ...(errorClass ? { errorClass } : {}),
+    },
+  });
+}
+
 function visualWidth(text: string): number {
   // styleText wraps content in ANSI escape sequences; strip them before measuring.
   return text.replace(/\[[0-9;]*m/g, '').length;
@@ -352,8 +379,17 @@ async function runTestAll(
   const rows = await Promise.all(
     entries.map(async ([connectionId, connection]): Promise<ConnectionTestRow> => {
       const declaredDriver = String(connection.driver ?? '').trim().toLowerCase() || 'unknown';
+      const startedAt = performance.now();
       try {
         const outcome = await testConnectionByDriver(project, connectionId, deps);
+        await emitConnectionTest({
+          project,
+          connectionId,
+          driver: outcome.driver || declaredDriver,
+          outcome: 'ok',
+          durationMs: Math.max(0, performance.now() - startedAt),
+          io,
+        });
         return {
           connectionId,
           driver: outcome.driver || declaredDriver,
@@ -361,6 +397,15 @@ async function runTestAll(
           detail: `${outcome.detailKey}: ${outcome.detailValue}`,
         };
       } catch (error) {
+        await emitConnectionTest({
+          project,
+          connectionId,
+          driver: declaredDriver,
+          outcome: 'error',
+          durationMs: Math.max(0, performance.now() - startedAt),
+          error,
+          io,
+        });
         return {
           connectionId,
           driver: declaredDriver,
@@ -403,7 +448,35 @@ export async function runKtxConnection(
       return await runTestAll(project, io, deps);
     }
 
-    const { driver, detailKey, detailValue } = await testConnectionByDriver(project, args.connectionId, deps);
+    const startedAt = performance.now();
+    let driver = normalizedConnectionDriver(project, args.connectionId) || 'unknown';
+    let detailKey: string;
+    let detailValue: string;
+    try {
+      const outcome = await testConnectionByDriver(project, args.connectionId, deps);
+      driver = outcome.driver;
+      detailKey = outcome.detailKey;
+      detailValue = outcome.detailValue;
+      await emitConnectionTest({
+        project,
+        connectionId: args.connectionId,
+        driver,
+        outcome: 'ok',
+        durationMs: Math.max(0, performance.now() - startedAt),
+        io,
+      });
+    } catch (error) {
+      await emitConnectionTest({
+        project,
+        connectionId: args.connectionId,
+        driver,
+        outcome: 'error',
+        durationMs: Math.max(0, performance.now() - startedAt),
+        error,
+        io,
+      });
+      throw error;
+    }
     io.stdout.write(`Connection test passed: ${args.connectionId}\n`);
     io.stdout.write(`Driver: ${driver}\n`);
     io.stdout.write(`${detailKey}: ${detailValue}\n`);

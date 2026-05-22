@@ -2,6 +2,7 @@ import type { Command } from '@commander-js/extra-typings';
 import type { KtxCliCommandContext } from '../cli-program.js';
 import { resolveCommandProjectDir, resolveCommandProjectDirOverride } from '../cli-program.js';
 import { findNearestKtxProjectDir } from '../project-resolver.js';
+import { emitProjectStackSnapshot } from '../telemetry/index.js';
 
 function outputMode(options: { json?: boolean }): 'plain' | 'json' {
   return options.json === true ? 'json' : 'plain';
@@ -58,11 +59,12 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
           );
           return;
         }
+        const projectDir = resolveCommandProjectDir(command);
         context.setExitCode(
           await runner(
             {
               command: 'project',
-              projectDir: resolveCommandProjectDir(command),
+              projectDir,
               outputMode: outputMode(options),
               verbose: options.verbose === true,
               fast: options.fast === true,
@@ -71,6 +73,11 @@ export function registerStatusCommands(program: Command, context: KtxCliCommandC
             context.io,
           ),
         );
+        await emitProjectStackSnapshot({
+          projectDir,
+          io: context.io,
+          packageInfo: context.packageInfo,
+        });
       },
     );
 }

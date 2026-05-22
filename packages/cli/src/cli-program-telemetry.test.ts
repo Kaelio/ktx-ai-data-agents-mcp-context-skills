@@ -77,6 +77,8 @@ describe('runCommanderKtxCli telemetry', () => {
     expect(statusIo.stderr()).toContain('[telemetry]');
     expect(statusIo.stderr()).toContain('"event":"command"');
     expect(statusIo.stderr()).toContain('"commandPath":["ktx","status"]');
+    expect(statusIo.stderr()).toContain('"event":"project_stack_snapshot"');
+    expect(statusIo.stderr()).toContain('"connectionCount"');
     expect(statusIo.stderr()).not.toContain(tempDir);
   });
 
