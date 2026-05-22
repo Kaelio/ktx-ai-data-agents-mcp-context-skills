@@ -27,7 +27,11 @@ def _telemetry_path(home_dir: Path | None = None) -> Path:
 
 def _env_disables(env: Mapping[str, str] | None = None) -> bool:
     source = env or os.environ
-    return bool(source.get("KTX_TELEMETRY_DISABLED") or source.get("DO_NOT_TRACK"))
+    return bool(
+        source.get("KTX_TELEMETRY_DISABLED")
+        or source.get("DO_NOT_TRACK")
+        or source.get("CI")
+    )
 
 
 def _read_identity(path: Path) -> TelemetryIdentity:

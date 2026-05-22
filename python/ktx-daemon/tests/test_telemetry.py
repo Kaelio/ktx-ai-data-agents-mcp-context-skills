@@ -44,17 +44,18 @@ def test_identity_reads_file_with_ttl_cache(tmp_path: Path) -> None:
 
 
 def test_identity_honors_python_env_kill_switches(tmp_path: Path) -> None:
-    reset_identity_cache()
-    write_identity(tmp_path)
+    for kill_switch in ("KTX_TELEMETRY_DISABLED", "DO_NOT_TRACK", "CI"):
+        reset_identity_cache()
+        write_identity(tmp_path)
 
-    disabled = load_telemetry_identity(
-        home_dir=tmp_path,
-        env={"KTX_TELEMETRY_DISABLED": "1"},
-        now=lambda: time.monotonic(),
-    )
+        disabled = load_telemetry_identity(
+            home_dir=tmp_path,
+            env={kill_switch: "1"},
+            now=lambda: time.monotonic(),
+        )
 
-    assert disabled.enabled is False
-    assert disabled.install_id == "00000000-0000-4000-8000-000000000000"
+        assert disabled.enabled is False, f"{kill_switch} should disable telemetry"
+        assert disabled.install_id == "00000000-0000-4000-8000-000000000000"
 
 
 def test_event_builder_rejects_unknown_fields() -> None:
