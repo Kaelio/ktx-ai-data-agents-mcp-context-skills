@@ -39,15 +39,30 @@ sent.
 
 ## Events
 
-Phase 1 telemetry emits these events:
+Node telemetry emits these events:
 
 | Event | When it fires | Fields |
 |-------|---------------|--------|
 | `install_first_run` | Once when `~/.ktx/telemetry.json` is created | Common envelope only |
 | `command` | Once for a registered Commander action that reaches the action hook | `commandPath`, `durationMs`, `outcome`, `errorClass`, `flagsPresent`, `hasProject`, `projectGroupAttached` |
+| `setup_step` | At the end of each setup step | `step`, `outcome`, `durationMs` |
+| `connection_added` | When setup writes a database, source, or demo connection | `driver`, `isDemoConnection` |
+| `connection_test` | Every `ktx connection test` run | `driver`, `isDemoConnection`, `outcome`, `errorClass`, `durationMs`, `serverVersion` |
+| `project_stack_snapshot` | Once per process after `setup`, `ingest`, or project `status` | `connectors`, `connectionCount`, `hasSl`, `hasWiki`, `hasMcp`, `hasManagedRuntime` |
+| `ingest_completed` | End of each public ingest target | `driver`, `isDemoConnection`, `schemaCount`, `tableCount`, `columnCount`, `rowsBucket`, `durationMs`, `outcome`, `errorClass` |
+| `scan_completed` | End of schema scan or relationship inference | `driver`, `tableCount`, `columnCount`, `inferredFkCount`, `declaredFkCount`, `durationMs`, `outcome`, `errorClass` |
+| `sl_validate_completed` | `ktx sl validate` | `sourceCount`, `modelCount`, `validationErrorCount`, `outcome`, `errorClass`, `durationMs` |
+| `sl_query_completed` | `ktx sl query` | `mode`, `referencedSourceCount`, `referencedDimensionCount`, `referencedMeasureCount`, `durationMs`, `outcome`, `errorClass` |
+| `sql_completed` | `ktx sql` | `driver`, `isDemoConnection`, `queryVerb`, `referencedTableCount`, `durationMs`, `outcome`, `errorClass` |
+| `wiki_query_completed` | `ktx wiki <query>` | `queryLength`, `resultCount`, `durationMs`, `outcome` |
+| `mcp_request_completed` | Sampled MCP tool invocations | `toolName`, `outcome`, `durationMs`, `errorClass`, `sampleRate` |
 
 Common envelope fields are `cliVersion`, `nodeVersion`, `osPlatform`,
 `osRelease`, `arch`, `runtime`, and `isCi`.
+
+`mcp_request_completed` is sampled at 10% with a sticky per-process sampling
+decision. If a process is sampled in, every MCP tool invocation in that process
+emits the event; if it is sampled out, none do.
 
 ## Never collected
 
