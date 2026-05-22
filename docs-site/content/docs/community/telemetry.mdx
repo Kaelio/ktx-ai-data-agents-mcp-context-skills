@@ -39,7 +39,7 @@ sent.
 
 ## Events
 
-Node telemetry emits these events:
+**ktx** emits these events:
 
 | Event | When it fires | Fields |
 |-------|---------------|--------|
@@ -56,9 +56,17 @@ Node telemetry emits these events:
 | `sql_completed` | `ktx sql` | `driver`, `isDemoConnection`, `queryVerb`, `referencedTableCount`, `durationMs`, `outcome`, `errorClass` |
 | `wiki_query_completed` | `ktx wiki <query>` | `queryLength`, `resultCount`, `durationMs`, `outcome` |
 | `mcp_request_completed` | Sampled MCP tool invocations | `toolName`, `outcome`, `durationMs`, `errorClass`, `sampleRate` |
+| `daemon_started` | The long-lived `ktx-daemon serve-http` server starts | `daemonVersion`, `pythonVersion`, `runtimeVersion`, `startupDurationMs` |
+| `daemon_stopped` | The long-lived `ktx-daemon serve-http` server shuts down | `reason`, `uptimeMs` |
+| `sl_plan_completed` | A daemon semantic-layer planning pass completes | `outcome`, `stage`, `errorClass`, `durationMs`, `sourceCount`, `joinCount` |
+| `sql_gen_completed` | A daemon SQL generation pass completes | `outcome`, `dialect`, `errorClass`, `durationMs` |
 
 Common envelope fields are `cliVersion`, `nodeVersion`, `osPlatform`,
 `osRelease`, `arch`, `runtime`, and `isCi`.
+
+Daemon events use `runtime: "daemon-py"`. The Python daemon reads the same
+install ID file as the Node CLI and receives only the already-hashed project ID
+for semantic-layer query events.
 
 `mcp_request_completed` is sampled at 10% with a sticky per-process sampling
 decision. If a process is sampled in, every MCP tool invocation in that process
