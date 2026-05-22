@@ -378,6 +378,120 @@ describe('KtxDescriptionGenerator', () => {
     expect(cache.set).toHaveBeenCalledWith('warehouse.public.orders', 'Commerce orders');
     expect(cache.set).toHaveBeenCalledWith('__connection:Warehouse', 'Commerce orders');
   });
+
+  it('generates one structured table description and reuses table samples for all columns', async () => {
+    const llmRuntime = createLlmProvider('unused');
+    llmRuntime.generateObject = vi.fn(async () => ({
+      tableDescription: 'Commerce orders',
+      columns: [
+        { name: 'status', description: 'Current order state' },
+        { name: 'amount', description: 'Order amount in dollars' },
+      ],
+    }));
+    const connector = createConnector();
+    const generator = new KtxDescriptionGenerator({
+      llmRuntime,
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const result = await generator.generateBatchedTableDescriptions({
+      connectionId: 'conn-1',
+      connector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      supportsNestedAnalysis: false,
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        rawDescriptions: { db: 'Orders fact table' },
+        columns: [
+          { name: 'status', type: 'text' },
+          { name: 'amount', type: 'numeric' },
+        ],
+      },
+    });
+
+    expect(result.tableDescription).toBe('Commerce orders');
+    expect(Object.fromEntries(result.columnDescriptions)).toEqual({
+      status: 'Current order state',
+      amount: 'Order amount in dollars',
+    });
+    expect(connector.sampleTable).toHaveBeenCalledTimes(1);
+    expect(connector.sampleColumn).not.toHaveBeenCalled();
+    expect(llmRuntime.generateObject).toHaveBeenCalledTimes(1);
+    expect(llmRuntime.generateText).not.toHaveBeenCalled();
+  });
+
+  it('falls back to one column generateText call for each missing structured column', async () => {
+    const llmRuntime = createLlmProvider('Fallback status');
+    llmRuntime.generateObject = vi.fn(async () => ({
+      tableDescription: 'Commerce orders',
+      columns: [{ name: 'amount', description: 'Order amount in dollars' }],
+    }));
+    const connector = createConnector();
+    const generator = new KtxDescriptionGenerator({
+      llmRuntime,
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const result = await generator.generateBatchedTableDescriptions({
+      connectionId: 'conn-1',
+      connector,
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      supportsNestedAnalysis: false,
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        columns: [
+          { name: 'status', type: 'text' },
+          { name: 'amount', type: 'numeric' },
+        ],
+      },
+    });
+
+    expect(Object.fromEntries(result.columnDescriptions)).toEqual({
+      status: 'Fallback status',
+      amount: 'Order amount in dollars',
+    });
+    expect(connector.sampleColumn).not.toHaveBeenCalled();
+    expect(llmRuntime.generateObject).toHaveBeenCalledTimes(1);
+    expect(llmRuntime.generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it('tolerates structured object failures and falls back to prepared column values', async () => {
+    const llmRuntime = createLlmProvider('Fallback description');
+    llmRuntime.generateObject = vi.fn(async () => {
+      throw new Error('object output unavailable');
+    });
+    const warnings: string[] = [];
+    const generator = new KtxDescriptionGenerator({
+      llmRuntime,
+      onWarning: (warning) => warnings.push(warning.code),
+      settings: { columnMaxWords: 12, tableMaxWords: 18, dataSourceMaxWords: 24 },
+    });
+
+    const result = await generator.generateBatchedTableDescriptions({
+      connectionId: 'conn-1',
+      connector: createConnector(),
+      context: { runId: 'run-1' },
+      dataSourceType: 'POSTGRESQL',
+      supportsNestedAnalysis: false,
+      table: {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        columns: [{ name: 'status', type: 'text' }],
+      },
+    });
+
+    expect(result.tableDescription).toBeNull();
+    expect(Object.fromEntries(result.columnDescriptions)).toEqual({ status: 'Fallback description' });
+    expect(warnings).toContain('enrichment_failed');
+    expect(llmRuntime.generateText).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('KtxDescriptionGenerator resilience', () => {
