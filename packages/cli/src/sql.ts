@@ -65,6 +65,19 @@ function queryVerb(sql: string): 'select' | 'explain' | 'show' | 'with' | 'other
   return 'other';
 }
 
+async function safeReferencedTableCount(
+  port: SqlAnalysisPort,
+  sql: string,
+  dialect: SqlAnalysisDialect,
+): Promise<number> {
+  try {
+    const results = await port.analyzeBatch([{ id: 'cli-sql', sql }], dialect);
+    return results.get('cli-sql')?.tablesTouched.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
@@ -157,7 +170,7 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
     if (!validation.ok) {
       throw new Error(validation.error ?? 'SQL is not read-only.');
     }
-    const analysis = await analysisPort.analyzeForFingerprint(args.sql, dialect);
+    const referencedTableCount = await safeReferencedTableCount(analysisPort, args.sql, dialect);
 
     const createScanConnector = deps.createScanConnector ?? createKtxCliScanConnector;
     let connector: KtxScanConnector | null = null;
@@ -184,7 +197,7 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
           driver,
           isDemoConnection: demoConnection,
           queryVerb: queryVerb(args.sql),
-          referencedTableCount: analysis.tablesTouched.length,
+          referencedTableCount,
           durationMs: Math.max(0, performance.now() - startedAt),
           outcome: 'ok',
         },

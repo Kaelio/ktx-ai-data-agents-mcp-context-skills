@@ -32,13 +32,8 @@ function makeIo(options: { isTTY?: boolean } = {}) {
 
 function makeSqlAnalysis(result: Awaited<ReturnType<SqlAnalysisPort['validateReadOnly']>>): SqlAnalysisPort {
   return {
-    analyzeForFingerprint: vi.fn(async () => ({
-      fingerprint: 'select-from-orders',
-      normalizedSql: 'select id, status from orders',
-      tablesTouched: ['orders'],
-      literalSlots: [],
-    })),
-    analyzeBatch: vi.fn(),
+    analyzeForFingerprint: vi.fn(),
+    analyzeBatch: vi.fn(async () => new Map([['cli-sql', { tablesTouched: ['orders'], columnsByClause: {} }]])),
     validateReadOnly: vi.fn(async () => result),
   };
 }
