@@ -1,0 +1,65 @@
+---
+title: Telemetry
+description: Understand what anonymous usage telemetry ktx collects and how to opt out.
+---
+
+**ktx** collects anonymous product-usage telemetry from interactive CLI runs so
+maintainers can understand which commands work, where setup fails, and which
+parts of the data-agent workflow need improvement.
+
+## Opt out
+
+Telemetry is opt-out and is disabled automatically in CI and non-interactive
+CLI runs. Use any of these mechanisms to disable it:
+
+| Mechanism | Effect |
+|-----------|--------|
+| `export KTX_TELEMETRY_DISABLED=1` | Disables telemetry for the shell and child processes |
+| `export DO_NOT_TRACK=1` | Disables telemetry using the standard do-not-track environment variable |
+| `CI=1` | Disables telemetry automatically in CI |
+| Non-TTY output | Disables telemetry automatically for pipes and scripts |
+| Edit `~/.ktx/telemetry.json` and set `"enabled": false` | Disables telemetry persistently for the machine |
+
+There is no `ktx telemetry` command. The first interactive run that can emit
+telemetry prints this one-line notice to stderr:
+
+```text
+ktx collects anonymous usage data to improve the product. Opt out: set KTX_TELEMETRY_DISABLED=1.
+```
+
+## Identity and grouping
+
+**ktx** stores a random install ID in `~/.ktx/telemetry.json`. This ID is the
+PostHog `distinctId` and is not tied to your name, email, Git identity, or
+account.
+
+For project-level analysis, **ktx** sends a salted SHA-256 project ID derived
+from the install ID and absolute project directory. The raw project path is not
+sent.
+
+## Events
+
+Phase 1 telemetry emits these events:
+
+| Event | When it fires | Fields |
+|-------|---------------|--------|
+| `install_first_run` | Once when `~/.ktx/telemetry.json` is created | Common envelope only |
+| `command` | Once for a registered Commander action that reaches the action hook | `commandPath`, `durationMs`, `outcome`, `errorClass`, `flagsPresent`, `hasProject`, `projectGroupAttached` |
+
+Common envelope fields are `cliVersion`, `nodeVersion`, `osPlatform`,
+`osRelease`, `arch`, `runtime`, and `isCi`.
+
+## Never collected
+
+**ktx** telemetry never collects:
+
+- Argv values, file paths, hostnames, or environment variable values
+- `ktx.yaml` contents, connection passwords, API keys, or tokens
+- Schema names, table names, column names, SQL text, or query results
+- Error messages or stack traces
+- Git remote URLs, Git user email, OS user, or hostname
+
+## Storage and retention
+
+Telemetry is sent to the GTX PostHog project. Raw event data is retained for
+90 days in PostHog. Aggregated counts may be retained indefinitely.

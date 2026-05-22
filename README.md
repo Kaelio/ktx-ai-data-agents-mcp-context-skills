@@ -93,6 +93,13 @@ ktx context built: yes
 Agent integration ready: yes (codex:project)
 ```
 
+## Telemetry
+
+**ktx** collects anonymous usage telemetry from interactive CLI runs to improve
+setup, command reliability, and data-agent workflows. See
+[Telemetry](https://docs.kaelio.com/ktx/docs/community/telemetry) for the event
+catalog, privacy details, and opt-out options.
+
 ## Common Commands
 
 | Command | Purpose |
