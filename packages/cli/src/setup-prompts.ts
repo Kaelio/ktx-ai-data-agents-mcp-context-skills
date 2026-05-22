@@ -1,5 +1,7 @@
 import type { Writable } from 'node:stream';
 import {
+  autocomplete,
+  autocompleteMultiselect,
   cancel,
   confirm,
   intro,
@@ -38,6 +40,22 @@ interface KtxSetupMultiselectOptions<Value extends string = string> {
   cursorAt?: Value;
 }
 
+interface KtxSetupAutocompleteOptions<Value extends string = string> {
+  message: string;
+  options: Array<KtxSetupPromptOption<Value>>;
+  placeholder?: string;
+  maxItems?: number;
+}
+
+interface KtxSetupAutocompleteMultiselectOptions<Value extends string = string> {
+  message: string;
+  options: Array<KtxSetupPromptOption<Value>>;
+  placeholder?: string;
+  required?: boolean;
+  maxItems?: number;
+  initialValues?: Value[];
+}
+
 interface KtxSetupTextOptions {
   message: string;
   placeholder?: string;
@@ -53,6 +71,8 @@ interface KtxSetupPasswordOptions {
 export interface KtxSetupPromptAdapter {
   select(options: KtxSetupSelectOptions): Promise<string>;
   multiselect(options: KtxSetupMultiselectOptions): Promise<string[]>;
+  autocomplete(options: KtxSetupAutocompleteOptions): Promise<string>;
+  autocompleteMultiselect(options: KtxSetupAutocompleteMultiselectOptions): Promise<string[]>;
   text(options: KtxSetupTextOptions): Promise<string | undefined>;
   password(options: KtxSetupPasswordOptions): Promise<string | undefined>;
   cancel(message: string): void;
@@ -90,6 +110,50 @@ export function createKtxSetupPromptAdapter(options: KtxSetupPromptAdapterOption
     async multiselect(promptOptions) {
       while (true) {
         const value = await withSetupInterruptConfirmation(() => multiselect(withMenuOptionsSpacing(promptOptions)));
+        if (isCancel(value)) {
+          if (cancelOnMultiselectCancel) {
+            cancel(cancelMessage);
+          }
+          return [multiselectCancelValue];
+        }
+        const selected = [...value].map(String);
+        if (
+          selected.length === 0 &&
+          !promptOptions.required &&
+          options.confirmEmptyOptionalMultiselect === true
+        ) {
+          const skipConfirmed = await confirm({
+            message: 'Nothing selected. Skip this step?',
+            initialValue: false,
+          });
+          if (isCancel(skipConfirmed)) {
+            cancel(cancelMessage);
+            return [multiselectCancelValue];
+          }
+          if (!skipConfirmed) {
+            continue;
+          }
+        }
+        return selected;
+      }
+    },
+    async autocomplete(promptOptions) {
+      const value = await withSetupInterruptConfirmation(() =>
+        autocomplete(withMenuOptionsSpacing(promptOptions)),
+      );
+      if (isCancel(value)) {
+        if (cancelOnSelectCancel) {
+          cancel(cancelMessage);
+        }
+        return options.selectCancelValue;
+      }
+      return String(value);
+    },
+    async autocompleteMultiselect(promptOptions) {
+      while (true) {
+        const value = await withSetupInterruptConfirmation(() =>
+          autocompleteMultiselect(withMenuOptionsSpacing(promptOptions)),
+        );
         if (isCancel(value)) {
           if (cancelOnMultiselectCancel) {
             cancel(cancelMessage);

@@ -1410,6 +1410,7 @@ describe('setup status', () => {
     const embeddings = vi.fn(async () => embeddingResults.shift() ?? { status: 'back' as const, projectDir: tempDir });
     const databasePrompts = {
       multiselect: vi.fn(async () => ['back']),
+      autocompleteMultiselect: vi.fn(async () => ['back']),
       select: vi.fn(async () => 'back'),
       text: vi.fn(),
       password: vi.fn(),

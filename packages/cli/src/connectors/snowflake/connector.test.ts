@@ -264,6 +264,75 @@ describe('KtxSnowflakeScanConnector', () => {
     expect(driver.cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it('lists tables across schemas with one information schema query', async () => {
+    const queries: Array<{ sql: string; params?: unknown }> = [];
+    const driverFactory: KtxSnowflakeDriverFactory = {
+      createDriver: vi.fn(() => ({
+        test: vi.fn(async () => ({ success: true })),
+        query: vi.fn(async (sql: string, params?: unknown) => {
+          queries.push({ sql, params });
+          return {
+            headers: ['TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_TYPE'],
+            rows: [
+              ['MART', 'ORDERS', 'BASE TABLE'],
+              ['PUBLIC', 'ORDER_SUMMARY', 'VIEW'],
+            ],
+            totalRows: 2,
+            rowCount: 2,
+          };
+        }),
+        getSchemaMetadata: vi.fn(async () => []),
+        listSchemas: vi.fn(async () => []),
+        listTables: vi.fn(async () => []),
+        cleanup: vi.fn(async () => undefined),
+      })),
+    };
+    const connector = new KtxSnowflakeScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'snowflake',
+        authMethod: 'password',
+        account: 'acct',
+        warehouse: 'WH',
+        database: 'ANALYTICS',
+        schema_name: 'PUBLIC',
+        username: 'reader',
+        password: 'fixture-pass', // pragma: allowlist secret
+      },
+      driverFactory,
+    });
+
+    await expect(connector.listTables(['MART', 'PUBLIC'])).resolves.toEqual([
+      { schema: 'MART', name: 'ORDERS', kind: 'table' },
+      { schema: 'PUBLIC', name: 'ORDER_SUMMARY', kind: 'view' },
+    ]);
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.sql).toContain('FROM "ANALYTICS".INFORMATION_SCHEMA.TABLES');
+    expect(queries[0]?.sql).toContain('AND TABLE_SCHEMA IN (?, ?)');
+    expect(queries[0]?.params).toEqual(['ANALYTICS', 'MART', 'PUBLIC']);
+  });
+
+  it('rejects unsafe Snowflake identifiers before driver creation', () => {
+    expect(
+      () =>
+        new KtxSnowflakeScanConnector({
+          connectionId: 'warehouse',
+          connection: {
+            driver: 'snowflake',
+            authMethod: 'password',
+            account: 'acct',
+            warehouse: 'WH;DROP',
+            database: 'ANALYTICS',
+            schema_name: 'PUBLIC',
+            username: 'reader',
+            password: 'fixture-pass', // pragma: allowlist secret
+          },
+          driverFactory: fakeDriverFactory(),
+        }),
+    ).toThrow('Invalid Snowflake warehouse identifier "WH;DROP"');
+  });
+
   it('converts a native snapshot into a live-database introspection snapshot', async () => {
     const introspection = createSnowflakeLiveDatabaseIntrospection({
       connections: {

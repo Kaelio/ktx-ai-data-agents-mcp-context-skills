@@ -30,6 +30,7 @@ import {
   type ManagedPythonCoreDaemonOptions,
 } from './managed-python-http.js';
 import type { KtxOperationalLogger } from './io/logger.js';
+import { resolveKtxConfigReference } from './context/core/config-reference.js';
 
 function hasSnowflakeDriver(connection: unknown): boolean {
   return (
@@ -279,7 +280,10 @@ async function createEphemeralSnowflakeHistoricSqlClient(
 
 function bigQueryProjectId(connection: KtxBigQueryConnectionConfig, env: NodeJS.ProcessEnv): string {
   const raw = typeof connection.credentials_json === 'string' ? connection.credentials_json : '';
-  const resolved = raw.startsWith('env:') ? env[raw.slice('env:'.length)] ?? '' : raw;
+  const resolved = resolveKtxConfigReference(raw, env);
+  if (!resolved) {
+    throw new Error('Query history BigQuery connection requires credentials_json');
+  }
   const parsed = JSON.parse(resolved) as { project_id?: unknown };
   if (typeof parsed.project_id !== 'string' || parsed.project_id.trim().length === 0) {
     throw new Error('Query history BigQuery connection requires credentials_json.project_id');

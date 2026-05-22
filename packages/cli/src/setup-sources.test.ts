@@ -48,6 +48,7 @@ function prompts(values: {
   return {
     multiselect: vi.fn(async () => multiselectValues.shift() ?? []),
     select: vi.fn(async () => selectValues.shift() ?? 'skip'),
+    autocomplete: vi.fn(async () => selectValues.shift() ?? 'skip'),
     text: vi.fn(async () => (textValues.length > 0 ? textValues.shift() : '')),
     password: vi.fn(async () => (passwordValues.length > 0 ? passwordValues.shift() : undefined)),
     cancel: vi.fn(),
@@ -548,8 +549,9 @@ describe('setup sources step', () => {
         ],
       });
       if (testCase.source === 'metabase') {
-        expect(testPrompts.select).toHaveBeenCalledWith({
+        expect(testPrompts.autocomplete).toHaveBeenCalledWith({
           message: 'Metabase database',
+          placeholder: 'Type to search databases',
           options: [
             { value: '1', label: '1: Finance (postgres)' },
             { value: '2', label: '2: Analytics (postgres)' },

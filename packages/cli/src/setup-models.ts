@@ -61,6 +61,11 @@ export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code';
 /** @internal */
 export interface KtxSetupModelPromptAdapter {
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
+  autocomplete(options: {
+    message: string;
+    placeholder?: string;
+    options: KtxSetupPromptOption[];
+  }): Promise<string>;
   text(options: { message: string; placeholder?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -617,13 +622,14 @@ async function chooseInteractiveVertexProject(
       io.stdout.write('│  gcloud did not return any visible Google Cloud projects. Enter a project ID manually or choose Back.\n');
     }
 
-    const choice = await prompts.select({
+    const choice = await prompts.autocomplete({
       message: `Which Google Cloud project should KTX use for Vertex AI?\n\n${[
         VERTEX_PROJECT_PROMPT_CONTEXT,
         listFailureMessage,
       ]
         .filter((value): value is string => Boolean(value))
         .join('\n\n')}`,
+      placeholder: 'Type to search projects',
       options: [
         ...orderedProjects.map((project) => ({
           value: project.projectId,
@@ -778,8 +784,9 @@ async function chooseModel(
     { value: 'manual', label: 'Enter a model ID manually' },
     { value: 'back', label: 'Back' },
   ];
-  const choice = await prompts.select({
+  const choice = await prompts.autocomplete({
     message: `Which Anthropic model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
+    placeholder: 'Type to search models',
     options: modelOptions,
   });
   if (choice === 'back') {
@@ -810,8 +817,9 @@ async function chooseVertexModel(args: KtxSetupModelArgs, io: KtxCliIo, deps: Kt
 
   const selectableModels = VERTEX_ANTHROPIC_MODELS.filter(isSelectableAnthropicModel);
   const prompts = deps.prompts ?? createPromptAdapter();
-  const choice = await prompts.select({
+  const choice = await prompts.autocomplete({
     message: `Which Anthropic model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
+    placeholder: 'Type to search models',
     options: [
       ...selectableModels.map((model) => ({
         value: model.id,

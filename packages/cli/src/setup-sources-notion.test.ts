@@ -57,6 +57,7 @@ function prompts(values: { multiselect?: string[][]; select?: string[] }): KtxSe
   return {
     multiselect: vi.fn(async () => multiselectValues.shift() ?? []),
     select: vi.fn(async () => selectValues.shift() ?? 'back'),
+    autocomplete: vi.fn(async () => selectValues.shift() ?? 'back'),
     text: vi.fn(async () => ''),
     password: vi.fn(async () => undefined),
     cancel: vi.fn(),

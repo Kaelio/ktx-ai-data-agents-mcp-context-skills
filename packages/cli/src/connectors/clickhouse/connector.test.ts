@@ -25,7 +25,7 @@ function fakeClientFactory(): KtxClickHouseClientFactory {
         { table: 'event_summary', name: 'event_name', type: 'String', comment: '', is_in_primary_key: 0 },
       ]);
     }
-    if (input.query.includes('FROM system.parts') && input.query.includes('GROUP BY table')) {
+    if (input.query.includes('FROM system.parts') && input.query.includes('GROUP BY')) {
       return result([{ table: 'events', row_count: '2' }]);
     }
     if (input.query.includes('SELECT `id`, `event_name` FROM `analytics`.`events` LIMIT 1')) {
@@ -87,6 +87,50 @@ function fakeClientFactory(): KtxClickHouseClientFactory {
   const close = vi.fn(async () => undefined);
   return {
     createClient: vi.fn(() => ({ query, close })),
+  };
+}
+
+function multiDatabaseClickHouseClientFactory(): KtxClickHouseClientFactory {
+  const query = vi.fn(async (input: { query: string; format: string; query_params?: Record<string, unknown> }) => {
+    if (input.query.includes('FROM system.tables')) {
+      expect(input.query_params).toEqual({ databases: ['analytics', 'mart'] });
+      return result([
+        { database: 'analytics', name: 'events', engine: 'MergeTree', comment: 'Event stream' },
+        { database: 'mart', name: 'order_events', engine: 'MergeTree', comment: '' },
+      ]);
+    }
+    if (input.query.includes('FROM system.columns')) {
+      expect(input.query_params).toEqual({ databases: ['analytics', 'mart'] });
+      return result([
+        {
+          database: 'analytics',
+          table: 'events',
+          name: 'id',
+          type: 'UInt64',
+          comment: '',
+          is_in_primary_key: 1,
+        },
+        {
+          database: 'mart',
+          table: 'order_events',
+          name: 'id',
+          type: 'UInt64',
+          comment: '',
+          is_in_primary_key: 1,
+        },
+      ]);
+    }
+    if (input.query.includes('FROM system.parts') && input.query.includes('GROUP BY')) {
+      expect(input.query_params).toEqual({ databases: ['analytics', 'mart'] });
+      return result([
+        { database: 'analytics', table: 'events', row_count: '2' },
+        { database: 'mart', table: 'order_events', row_count: '5' },
+      ]);
+    }
+    throw new Error(`Unexpected SQL: ${input.query}`);
+  });
+  return {
+    createClient: vi.fn(() => ({ query, close: vi.fn(async () => undefined) })),
   };
 }
 
@@ -164,6 +208,34 @@ describe('KtxClickHouseScanConnector', () => {
       comment: 'PK',
     });
     expect(snapshot.tables.find((table) => table.name === 'events')?.foreignKeys).toEqual([]);
+  });
+
+  it('introspects every configured ClickHouse database scope while preserving the default database', async () => {
+    const connector = new KtxClickHouseScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'clickhouse',
+        host: 'ch.example.test',
+        database: 'analytics',
+        databases: ['analytics', 'mart'],
+        username: 'reader',
+        password: 'test-pass', // pragma: allowlist secret
+      },
+      clientFactory: multiDatabaseClickHouseClientFactory(),
+      now: () => new Date('2026-05-21T10:00:00.000Z'),
+    });
+
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'clickhouse' },
+      { runId: 'scan-run-1' },
+    );
+
+    expect(snapshot.scope).toEqual({ schemas: ['analytics', 'mart'] });
+    expect(snapshot.metadata).toMatchObject({ database: 'analytics', databases: ['analytics', 'mart'] });
+    expect(snapshot.tables.map((table) => `${table.db}.${table.name}`)).toEqual([
+      'analytics.events',
+      'mart.order_events',
+    ]);
   });
 
   it('runs samples, distinct values, read-only SQL, row count, schema list, and cleanup', async () => {

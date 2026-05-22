@@ -234,6 +234,89 @@ describe('KtxBigQueryScanConnector', () => {
     await connector.cleanup();
   });
 
+  it('constructs for discovery without dataset scope and lists tables through one region information schema query', async () => {
+    const createQueryJob = vi.fn(
+      async (
+        input: { query: string; params?: Record<string, unknown>; location?: string },
+      ): ReturnType<KtxBigQueryClient['createQueryJob']> => [
+        {
+          getQueryResults: async (): ReturnType<KtxBigQueryQueryJob['getQueryResults']> => [
+            [
+              { table_schema: 'analytics', table_name: 'orders', table_type: 'BASE TABLE' },
+              { table_schema: 'analytics', table_name: 'order_clone', table_type: 'CLONE' },
+              { table_schema: 'mart', table_name: 'orders_mv', table_type: 'MATERIALIZED VIEW' },
+            ],
+            undefined,
+            {
+              schema: {
+                fields: [
+                  { name: 'table_schema', type: 'STRING' },
+                  { name: 'table_name', type: 'STRING' },
+                  { name: 'table_type', type: 'STRING' },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    );
+    const clientFactory: KtxBigQueryClientFactory = {
+      createClient: vi.fn(() => ({
+        getDatasets: vi.fn(async () => [[{ id: 'analytics' }, { id: 'mart' }]] as [{ id: string }[]]),
+        dataset: vi.fn((datasetId: string) => ({
+          get: vi.fn(async () => [{ id: datasetId }]),
+          getTables: vi.fn(async () => [[]] as [never[]]),
+        })),
+        createQueryJob,
+      })),
+    };
+    const connector = new KtxBigQueryScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'bigquery',
+        credentials_json: JSON.stringify({ project_id: 'project-1' }),
+        location: 'US',
+      },
+      clientFactory,
+    });
+
+    await expect(connector.listTables(['analytics', 'mart'])).resolves.toEqual([
+      { schema: 'analytics', name: 'orders', kind: 'table' },
+      { schema: 'analytics', name: 'order_clone', kind: 'table' },
+      { schema: 'mart', name: 'orders_mv', kind: 'view' },
+    ]);
+
+    expect(createQueryJob).toHaveBeenCalledTimes(1);
+    expect(createQueryJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location: 'US',
+        params: { dataset_ids: ['analytics', 'mart'] },
+      }),
+    );
+    expect(createQueryJob.mock.calls[0]?.[0].query).toContain('`project-1`.`region-us`.INFORMATION_SCHEMA.TABLES');
+    expect(createQueryJob.mock.calls[0]?.[0].query).toContain("'CLONE'");
+    expect(createQueryJob.mock.calls[0]?.[0].query).toContain("'SNAPSHOT'");
+  });
+
+  it('keeps scan paths requiring dataset scope', async () => {
+    const connector = new KtxBigQueryScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'bigquery',
+        credentials_json: JSON.stringify({ project_id: 'project-1' }),
+        location: 'US',
+      },
+      clientFactory: fakeClientFactory(),
+    });
+
+    await expect(
+      connector.introspect(
+        { connectionId: 'warehouse', driver: 'bigquery' },
+        { runId: 'scan-run-1' },
+      ),
+    ).rejects.toThrow('Native BigQuery scan requires connections.warehouse.dataset_ids or dataset_id');
+  });
+
   it('applies maximumBytesBilled to read-only queries when configured', async () => {
     const clientFactory = fakeClientFactory();
     const connector = new KtxBigQueryScanConnector({

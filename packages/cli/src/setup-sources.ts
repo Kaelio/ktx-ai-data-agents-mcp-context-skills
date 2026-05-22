@@ -71,6 +71,11 @@ export interface KtxSetupSourcesPromptAdapter {
     required?: boolean;
   }): Promise<string[]>;
   select(options: { message: string; options: KtxSetupPromptOption[] }): Promise<string>;
+  autocomplete(options: {
+    message: string;
+    placeholder?: string;
+    options: KtxSetupPromptOption[];
+  }): Promise<string>;
   text(options: { message: string; placeholder?: string; initialValue?: string }): Promise<string | undefined>;
   password(options: { message: string }): Promise<string | undefined>;
   cancel(message: string): void;
@@ -931,8 +936,9 @@ async function chooseMetabaseDatabaseId(input: {
         return discovered[0].id;
       }
       if (discovered.length > 1) {
-        const selected = await input.prompts.select({
+        const selected = await input.prompts.autocomplete({
           message: 'Metabase database',
+          placeholder: 'Type to search databases',
           options: [
             ...discovered
               .slice()

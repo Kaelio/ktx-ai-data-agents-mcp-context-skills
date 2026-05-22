@@ -58,33 +58,35 @@ function makePromptAdapter(options: {
   const textValues = [...(options.textValues ?? [])];
   const passwordValues = [...(options.passwordValues ?? [])];
   let providerPromptCount = 0;
+  const choose = async ({ message }: { message: string }) => {
+    if (message.includes('LLM provider')) {
+      providerPromptCount += 1;
+      const nextProviderChoice = selectValues[0];
+      if (
+        nextProviderChoice === 'anthropic' ||
+        nextProviderChoice === 'vertex' ||
+        nextProviderChoice === 'claude-code' ||
+        nextProviderChoice === 'back'
+      ) {
+        return selectValues.shift() ?? nextProviderChoice;
+      }
+      if (options.credentialChoice === 'back' && providerPromptCount > 1) {
+        return 'back';
+      }
+      return options.providerChoice ?? 'anthropic';
+    }
+    const nextValue = selectValues.shift();
+    if (nextValue) {
+      return nextValue;
+    }
+    if (message.includes('Anthropic API key')) {
+      return options.credentialChoice ?? 'env';
+    }
+    return options.modelChoice ?? 'claude-sonnet-4-6';
+  };
   return {
-    select: vi.fn(async ({ message }) => {
-      if (message.includes('LLM provider')) {
-        providerPromptCount += 1;
-        const nextProviderChoice = selectValues[0];
-        if (
-          nextProviderChoice === 'anthropic' ||
-          nextProviderChoice === 'vertex' ||
-          nextProviderChoice === 'claude-code' ||
-          nextProviderChoice === 'back'
-        ) {
-          return selectValues.shift() ?? nextProviderChoice;
-        }
-        if (options.credentialChoice === 'back' && providerPromptCount > 1) {
-          return 'back';
-        }
-        return options.providerChoice ?? 'anthropic';
-      }
-      const nextValue = selectValues.shift();
-      if (nextValue) {
-        return nextValue;
-      }
-      if (message.includes('Anthropic API key')) {
-        return options.credentialChoice ?? 'env';
-      }
-      return options.modelChoice ?? 'claude-sonnet-4-6';
-    }),
+    select: vi.fn(choose),
+    autocomplete: vi.fn(choose),
     text: vi.fn(async () => textValues.shift() ?? ''),
     password: vi.fn(
       async () =>
@@ -152,7 +154,7 @@ describe('setup Anthropic model step', () => {
       },
     );
 
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which Anthropic model should KTX use?'),
         options: [
@@ -417,7 +419,7 @@ describe('setup Anthropic model step', () => {
     expect(readGcloudProject).toHaveBeenCalled();
     expect(listGcloudProjects).toHaveBeenCalled();
     expect(prompts.text).not.toHaveBeenCalled();
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
         options: [
@@ -428,7 +430,7 @@ describe('setup Anthropic model step', () => {
         ],
       }),
     );
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which Anthropic model should KTX use?'),
         options: [
@@ -480,7 +482,7 @@ describe('setup Anthropic model step', () => {
         message: expect.stringContaining('How should KTX authenticate with Google Vertex AI?'),
       }),
     );
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
       }),
@@ -548,7 +550,7 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
         options: [
@@ -595,25 +597,25 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('ready');
     expect(listGcloudProjects).toHaveBeenCalledTimes(2);
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Could not list Google Cloud projects with gcloud'),
         options: expect.arrayContaining([{ value: 'retry', label: 'Retry loading Google Cloud projects' }]),
       }),
     );
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining(
           `${String.fromCharCode(0x1b)}[33mCould not list Google Cloud projects with gcloud`,
         ),
       }),
     );
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('gcloud auth login --update-adc'),
       }),
     );
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining(
           `${String.fromCharCode(0x1b)}[33mRun \`gcloud auth login --update-adc\``,
@@ -643,7 +645,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('back');
     expect(prompts.select).toHaveBeenNthCalledWith(
-      3,
+      2,
       expect.objectContaining({
         message: expect.stringContaining('Which LLM provider should KTX use?'),
       }),
@@ -887,7 +889,7 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('back');
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which Anthropic model should KTX use?'),
         options: expect.not.arrayContaining([expect.objectContaining({ value: 'skip' })]),
@@ -919,7 +921,7 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expectedPromptMessage,
       }),
@@ -965,7 +967,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('missing-input');
     expect(BUNDLED_ANTHROPIC_MODELS.length).toBeGreaterThan(0);
-    expect(prompts.select).toHaveBeenCalledWith(
+    expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Which Anthropic model should KTX use?'),
         options: expect.arrayContaining([
@@ -1058,7 +1060,8 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('ready');
     expect(healthCheck).toHaveBeenCalledTimes(2);
-    expect(prompts.select).toHaveBeenCalledTimes(5);
+    expect(prompts.select).toHaveBeenCalledTimes(3);
+    expect(prompts.autocomplete).toHaveBeenCalledTimes(2);
     expect(io.stderr()).toContain('Anthropic model health check failed: model not found');
     expect(io.stderr()).toContain('Choose a different credential source or model, or Back.');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -1110,7 +1113,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('back');
     expect(prompts.select).toHaveBeenNthCalledWith(
-      4,
+      3,
       expect.objectContaining({
         message: expect.stringContaining('How should KTX find your Anthropic API key?'),
       }),

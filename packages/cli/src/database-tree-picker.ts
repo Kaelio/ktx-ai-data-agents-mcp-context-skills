@@ -38,14 +38,38 @@ export type DatabaseScopePickResult =
   | { kind: 'selected'; activeSchemas: string[]; enabledTables: string[] }
   | { kind: 'back' };
 
+interface ScopeSuggestion {
+  excluded: Set<string>;
+  suggested: Set<string>;
+}
+
+/** @internal */
+export interface DatabaseScopePromptAdapter {
+  autocompleteMultiselect(options: {
+    message: string;
+    options: Array<{ value: string; label: string; hint?: string; disabled?: boolean }>;
+    placeholder?: string;
+    required?: boolean;
+    maxItems?: number;
+    initialValues?: string[];
+  }): Promise<string[]>;
+  select(options: {
+    message: string;
+    options: Array<{ value: string; label: string; hint?: string; disabled?: boolean }>;
+  }): Promise<string>;
+}
+
 export interface PickDatabaseScopeArgs {
   connectionId: string;
   schemaNoun: string;
   schemaNounPlural: string;
-  discovered: readonly KtxTableListEntry[];
+  schemas: readonly string[];
+  schemaSuggestion: ScopeSuggestion;
   existing: { enabledTables: readonly string[] };
-  defaultSchemas: readonly string[];
   supportsSchemaScope: boolean;
+  listTablesForSchemas: (schemas: string[]) => Promise<KtxTableListEntry[]>;
+  initialSchemas?: readonly string[];
+  prompts: DatabaseScopePromptAdapter;
 }
 
 function qualifiedTableId(entry: KtxTableListEntry): string {
@@ -161,12 +185,39 @@ function schemasFromEnabledTables(enabledTables: readonly string[]): string[] {
   return result;
 }
 
-export async function pickDatabaseScope(
-  args: PickDatabaseScopeArgs,
-  io: KtxCliIo,
-  render: DatabaseTreePickerRenderer = defaultRenderer,
-): Promise<DatabaseScopePickResult> {
-  const { inputs, schemaIds, allTables } = buildTreeInputs(args.discovered);
+function schemaOptions(args: PickDatabaseScopeArgs): Array<{ value: string; label: string; hint?: string }> {
+  return args.schemas
+    .filter((schema) => !args.schemaSuggestion.excluded.has(schema))
+    .slice()
+    .sort((left, right) => {
+      const leftSuggested = args.schemaSuggestion.suggested.has(left);
+      const rightSuggested = args.schemaSuggestion.suggested.has(right);
+      if (leftSuggested !== rightSuggested) return leftSuggested ? -1 : 1;
+      return left.localeCompare(right);
+    })
+    .map((schema) => ({
+      value: schema,
+      label: schema,
+      ...(args.schemaSuggestion.suggested.has(schema) ? { hint: 'suggested' } : {}),
+    }));
+}
+
+function initialStageOneSchemas(args: PickDatabaseScopeArgs): string[] {
+  if (args.existing.enabledTables.length > 0) {
+    return schemasFromEnabledTables(args.existing.enabledTables);
+  }
+  return [...(args.initialSchemas ?? [])];
+}
+
+async function runStageTwoTreePicker(input: {
+  args: PickDatabaseScopeArgs;
+  discovered: readonly KtxTableListEntry[];
+  selectedSchemas: readonly string[];
+  io: KtxCliIo;
+  render: DatabaseTreePickerRenderer;
+}): Promise<DatabaseScopePickResult> {
+  const { args, discovered, selectedSchemas, io, render } = input;
+  const { inputs, schemaIds, allTables } = buildTreeInputs(discovered);
   const tree = buildPickerTree(inputs);
   const byId = new Map(tree.map((node) => [node.id, node]));
   const tableCount = allTables.length;
@@ -175,7 +226,7 @@ export async function pickDatabaseScope(
   const initialSelection =
     args.existing.enabledTables.length > 0
       ? initialSelectionForExisting(args.existing.enabledTables, byId)
-      : initialSelectionFromDefaults(args.defaultSchemas, schemaIds);
+      : initialSelectionFromDefaults(selectedSchemas, schemaIds);
 
   const initialState = buildInitialState({
     tree,
@@ -207,4 +258,64 @@ export async function pickDatabaseScope(
   const activeSchemas = args.supportsSchemaScope ? schemasFromEnabledTables(enabledTables) : [];
 
   return { kind: 'selected', activeSchemas, enabledTables };
+}
+
+export async function pickDatabaseScope(
+  args: PickDatabaseScopeArgs,
+  io: KtxCliIo,
+  render: DatabaseTreePickerRenderer = defaultRenderer,
+): Promise<DatabaseScopePickResult> {
+  let selectedSchemas = initialStageOneSchemas(args);
+  while (true) {
+    const pickedSchemas = await args.prompts.autocompleteMultiselect({
+      message: `Choose ${args.schemaNounPlural} to enable for ${args.connectionId}\nType to filter. Space to select. Enter when done.`,
+      placeholder: `Search ${args.schemaNounPlural}`,
+      options: schemaOptions(args),
+      initialValues: selectedSchemas,
+      required: false,
+    });
+    if (pickedSchemas.includes('back')) {
+      return { kind: 'back' };
+    }
+    selectedSchemas = pickedSchemas;
+    if (selectedSchemas.length === 0) {
+      io.stderr.write(`Nothing selected - type to filter, or Escape to skip ${args.schemaNoun} scope.\n`);
+      continue;
+    }
+
+    const selectedNoun =
+      selectedSchemas.length === 1 ? args.schemaNoun : args.schemaNounPlural;
+    const action = await args.prompts.select({
+      message: `Enable all tables in ${selectedSchemas.length} ${selectedNoun}, or refine tables?`,
+      options: [
+        { value: 'save', label: `Enable all tables in selected ${selectedNoun}` },
+        { value: 'refine', label: 'Refine: choose individual tables' },
+        { value: 'back', label: 'Back' },
+      ],
+    });
+    if (action === 'back') {
+      continue;
+    }
+
+    const discovered = await args.listTablesForSchemas(selectedSchemas);
+    if (action === 'save' && args.existing.enabledTables.length === 0) {
+      return {
+        kind: 'selected',
+        activeSchemas: args.supportsSchemaScope ? selectedSchemas : [],
+        enabledTables: discovered.map(qualifiedTableId),
+      };
+    }
+
+    const refined = await runStageTwoTreePicker({
+      args,
+      discovered,
+      selectedSchemas,
+      io,
+      render,
+    });
+    if (refined.kind === 'back') {
+      continue;
+    }
+    return refined;
+  }
 }

@@ -7,6 +7,7 @@ import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColu
 import snowflake from 'snowflake-sdk';
 import type { Bind, Binds, Connection, ConnectionOptions } from 'snowflake-sdk';
 import { KtxSnowflakeDialect } from './dialect.js';
+import { assertSafeSnowflakeIdentifier, quoteSnowflakeIdentifier } from './identifiers.js';
 
 export interface KtxSnowflakeConnectionConfig {
   driver?: string;
@@ -208,16 +209,23 @@ export function snowflakeConnectionConfigFromConfig(input: {
   if (!username) {
     throw new Error(`Native Snowflake connector requires connections.${input.connectionId}.username`);
   }
+  assertSafeSnowflakeIdentifier(warehouse, 'warehouse');
+  assertSafeSnowflakeIdentifier(database, 'database');
+  const resolvedSchemas = schemaNames(input.connection!, env);
+  for (const schema of resolvedSchemas) {
+    assertSafeSnowflakeIdentifier(schema, 'schema');
+  }
   const resolved: KtxSnowflakeResolvedConnectionConfig = {
     authMethod,
     account,
     warehouse,
     database,
-    schemas: schemaNames(input.connection!, env),
+    schemas: resolvedSchemas,
     username,
   };
   const role = stringConfigValue(input.connection, 'role', env);
   if (role) {
+    assertSafeSnowflakeIdentifier(role, 'role');
     resolved.role = role;
   }
   if (authMethod === 'rsa') {
@@ -324,33 +332,30 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   }
 
   async listSchemas(): Promise<string[]> {
-    const result = await this.query(`SHOW SCHEMAS IN DATABASE "${this.resolved.database}"`);
+    const result = await this.query(
+      `SHOW SCHEMAS IN DATABASE ${quoteSnowflakeIdentifier(this.resolved.database, 'database')}`,
+    );
     return result.rows.map((row) => String(row[1])).filter((name) => name !== 'INFORMATION_SCHEMA');
   }
 
   async listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
-    const filterSchemas = schemas ?? (await this.listSchemas());
-    if (filterSchemas.length === 0) return [];
-    const entries: KtxTableListEntry[] = [];
-    for (const schemaName of filterSchemas) {
-      const result = await this.query(
-        `
-        SELECT TABLE_NAME, TABLE_TYPE
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = ? AND TABLE_CATALOG = ?
-        ORDER BY TABLE_NAME
-        `,
-        [schemaName, this.resolved.database],
-      );
-      for (const row of result.rows) {
-        entries.push({
-          schema: schemaName,
-          name: String(row[0]),
-          kind: String(row[1]) === 'VIEW' ? 'view' : 'table',
-        });
-      }
-    }
-    return entries;
+    const filters = schemas && schemas.length > 0 ? schemas.map(() => '?').join(', ') : null;
+    const result = await this.query(
+      `
+    SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE
+    FROM ${quoteSnowflakeIdentifier(this.resolved.database, 'database')}.INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_CATALOG = ?
+      AND TABLE_SCHEMA <> 'INFORMATION_SCHEMA'
+      ${filters ? `AND TABLE_SCHEMA IN (${filters})` : ''}
+    ORDER BY TABLE_SCHEMA, TABLE_NAME
+    `,
+      [this.resolved.database, ...(schemas ?? [])],
+    );
+    return result.rows.map((row) => ({
+      schema: String(row[0]),
+      name: String(row[1]),
+      kind: String(row[2]) === 'VIEW' ? ('view' as const) : ('table' as const),
+    }));
   }
 
   async cleanup(): Promise<void> {
@@ -417,11 +422,20 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
 
   private async setConnectionContext(connection: Connection): Promise<void> {
     if (this.resolved.role) {
-      await this.executeSnowflakeQuery(connection, `USE ROLE "${this.resolved.role}"`);
+      await this.executeSnowflakeQuery(connection, `USE ROLE ${quoteSnowflakeIdentifier(this.resolved.role, 'role')}`);
     }
-    await this.executeSnowflakeQuery(connection, `USE WAREHOUSE "${this.resolved.warehouse}"`);
-    await this.executeSnowflakeQuery(connection, `USE DATABASE "${this.resolved.database}"`);
-    await this.executeSnowflakeQuery(connection, `USE SCHEMA "${this.resolved.schemas[0] ?? 'PUBLIC'}"`);
+    await this.executeSnowflakeQuery(
+      connection,
+      `USE WAREHOUSE ${quoteSnowflakeIdentifier(this.resolved.warehouse, 'warehouse')}`,
+    );
+    await this.executeSnowflakeQuery(
+      connection,
+      `USE DATABASE ${quoteSnowflakeIdentifier(this.resolved.database, 'database')}`,
+    );
+    await this.executeSnowflakeQuery(
+      connection,
+      `USE SCHEMA ${quoteSnowflakeIdentifier(this.resolved.schemas[0] ?? 'PUBLIC', 'schema')}`,
+    );
   }
 
   private async executeSnowflakeQuery(
@@ -604,8 +618,24 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
     return this.getDriver().listSchemas();
   }
 
-  listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
-    return this.getDriver().listTables(schemas);
+  async listTables(schemas?: string[]): Promise<KtxTableListEntry[]> {
+    const filters = schemas && schemas.length > 0 ? schemas.map(() => '?').join(', ') : null;
+    const result = await this.getDriver().query(
+      `
+    SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE
+    FROM ${quoteSnowflakeIdentifier(this.resolved.database, 'database')}.INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_CATALOG = ?
+      AND TABLE_SCHEMA <> 'INFORMATION_SCHEMA'
+      ${filters ? `AND TABLE_SCHEMA IN (${filters})` : ''}
+    ORDER BY TABLE_SCHEMA, TABLE_NAME
+    `,
+      [this.resolved.database, ...(schemas ?? [])],
+    );
+    return result.rows.map((row) => ({
+      schema: String(row[0]),
+      name: String(row[1]),
+      kind: String(row[2]) === 'VIEW' ? ('view' as const) : ('table' as const),
+    }));
   }
 
   async cleanup(): Promise<void> {

@@ -1,6 +1,6 @@
 ---
 title: Primary Sources
-description: Connect ktx to PostgreSQL, Snowflake, BigQuery, MySQL, SQL Server, or SQLite.
+description: Connect ktx to PostgreSQL, Snowflake, BigQuery, MySQL, ClickHouse, SQL Server, or SQLite.
 ---
 
 **ktx** connects to your data warehouse or database to build schema context,
@@ -26,7 +26,7 @@ Agents should prefer environment or file references over literal secrets.
 
 | Field | Required | Applies to | Description |
 |-------|----------|------------|-------------|
-| `driver` | Yes | all connections | Connector driver such as `postgres`, `snowflake`, `bigquery`, `mysql`, `sqlserver`, or `sqlite` |
+| `driver` | Yes | all connections | Connector driver such as `postgres`, `snowflake`, `bigquery`, `mysql`, `clickhouse`, `sqlserver`, or `sqlite` |
 | `url` | One of the connection methods | URL-style connectors | Database URL, `env:NAME`, or `file:/path/to/secret` |
 | `host`, `port`, `database`, `username`, `password` | One of the connection methods | PostgreSQL, MySQL, SQL Server | Field-by-field connection values |
 | `schema` or `schemas` | No | schema-aware warehouses | Single schema or list of schemas to scan |
@@ -214,6 +214,10 @@ For multiple datasets:
       - finance
 ```
 
+BigQuery dataset scope is stored in `connections.<id>.dataset_ids`. Interactive
+setup discovers datasets from credentials plus location, then writes the chosen
+dataset ids as the scan scope.
+
 ### Authentication
 
 | Method | Config |
@@ -280,6 +284,10 @@ connections:
     url: env:MYSQL_DATABASE_URL
 ```
 
+MySQL supports selecting one or more databases during `ktx setup`. The selected
+database scope is stored in `connections.<id>.schemas`, and `ktx scan` reads
+exactly those databases.
+
 Or with individual fields:
 
 ```yaml title="ktx.yaml"
@@ -318,9 +326,63 @@ connections:
 
 - Parameter binding uses positional `?` placeholders
 - Uses `LIMIT X OFFSET Y` for pagination
-- Single database per connection (no multi-schema)
+- Multi-database scanning uses `schemas` as the selected database list
 - Supports 20+ MySQL types including `enum`, `json`, `datetime`, `decimal`
 - Table comments extracted with InnoDB metadata prefix stripping
+
+---
+
+## ClickHouse
+
+Connects to ClickHouse over HTTP. Supports table and column introspection across
+one or more selected databases.
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  my-clickhouse:
+    driver: clickhouse
+    url: env:CLICKHOUSE_DATABASE_URL
+    database: analytics
+```
+
+For multiple databases:
+
+```yaml
+    databases:
+      - analytics
+      - mart
+```
+
+ClickHouse supports selecting one or more databases during `ktx setup`. The
+selected scan scope is stored in `connections.<id>.databases`. The single
+`database` field remains the connection default for raw SQL and `ktx sql`.
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| URL | `url: env:CLICKHOUSE_DATABASE_URL` |
+| Password | `password: env:CLICKHOUSE_PASSWORD` or `password: file:/path/to/secret` |
+
+### Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Tables & views | Yes | Via `system.tables` |
+| Primary keys | No | Not exposed as relational constraints |
+| Foreign keys | No | Not available in ClickHouse |
+| Row count estimates | Yes | From ClickHouse metadata where available |
+| Column statistics | No | - |
+| Query history | No | - |
+| Table sampling | Yes | Uses ClickHouse sampling syntax when supported |
+
+### Dialect notes
+
+- Parameter binding uses named placeholders
+- The `database` field sets the default database for SQL execution
+- The `databases` array controls the scan scope
 
 ---
 
