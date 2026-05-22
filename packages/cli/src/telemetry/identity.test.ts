@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   computeTelemetryProjectId,
   loadTelemetryIdentity,
+  readExistingTelemetryProjectId,
   TELEMETRY_NOTICE,
   type TelemetryIdentityEnv,
 } from './identity.js';
@@ -155,5 +156,40 @@ describe('telemetry identity', () => {
     expect(projectId).not.toContain('acme');
     expect(computeTelemetryProjectId('00000000-0000-4000-8000-000000000000', projectDir)).toBe(projectId);
     expect(computeTelemetryProjectId('11111111-1111-4111-8111-111111111111', projectDir)).not.toBe(projectId);
+  });
+
+  it('reads an existing project id for Python telemetry without creating identity', async () => {
+    await mkdir(join(homeDir, '.ktx'), { recursive: true });
+    await writeFile(
+      join(homeDir, '.ktx', 'telemetry.json'),
+      JSON.stringify(
+        {
+          installId: '00000000-0000-4000-8000-000000000000',
+          enabled: true,
+          noticeShownAt: '2026-05-22T14:33:02.000Z',
+          noticeShownVersion: 1,
+          createdAt: '2026-05-22T14:33:02.000Z',
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf-8',
+    );
+
+    await expect(
+      readExistingTelemetryProjectId({
+        homeDir,
+        projectDir: '/tmp/acme-private-project',
+        env: {},
+      }),
+    ).resolves.toMatch(/^[a-f0-9]{64}$/);
+
+    await expect(
+      readExistingTelemetryProjectId({
+        homeDir,
+        projectDir: '/tmp/acme-private-project',
+        env: { KTX_TELEMETRY_DISABLED: '1' },
+      }),
+    ).resolves.toBeUndefined();
   });
 });

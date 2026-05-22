@@ -106,7 +106,10 @@ describe('createPythonSemanticLayerComputePort', () => {
       columns: [{ name: 'orders.order_count' }],
       plan: { sources_used: ['orders'] },
     }));
-    const port = createPythonSemanticLayerComputePort({ runJson });
+    const port = createPythonSemanticLayerComputePort({
+      runJson,
+      projectId: 'hashed-project-id',
+    });
 
     await expect(
       port.query({
@@ -125,6 +128,7 @@ describe('createPythonSemanticLayerComputePort', () => {
       sources: [source],
       dialect: 'postgres',
       query: { measures: ['orders.order_count'], dimensions: [] },
+      projectId: 'hashed-project-id',
     });
   });
 

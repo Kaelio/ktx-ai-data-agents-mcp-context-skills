@@ -124,3 +124,21 @@ export async function loadTelemetryIdentity(options: LoadTelemetryIdentityOption
 export function computeTelemetryProjectId(installId: string, projectDir: string): string {
   return createHash('sha256').update(`${installId}:${resolve(projectDir)}`).digest('hex');
 }
+
+export async function readExistingTelemetryProjectId(options: {
+  projectDir: string;
+  homeDir?: string;
+  env?: Pick<TelemetryIdentityEnv, 'KTX_TELEMETRY_DISABLED' | 'DO_NOT_TRACK'>;
+}): Promise<string | undefined> {
+  const env = options.env ?? process.env;
+  if (env.KTX_TELEMETRY_DISABLED || env.DO_NOT_TRACK) {
+    return undefined;
+  }
+
+  const existing = await readTelemetryFile(telemetryPath(options.homeDir ?? homedir()));
+  if (!existing?.enabled) {
+    return undefined;
+  }
+
+  return computeTelemetryProjectId(existing.installId, options.projectDir);
+}

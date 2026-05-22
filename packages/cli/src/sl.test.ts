@@ -452,6 +452,7 @@ joins: []
       cliVersion: '0.2.0',
       installPolicy: 'auto',
       io: { stdout, stderr },
+      projectDir,
     });
     expect(stdout.write).toHaveBeenCalledWith('select count(*) as order_count from public.orders\n');
   });

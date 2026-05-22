@@ -70,6 +70,7 @@ interface KtxSlDeps {
     cliVersion: string;
     installPolicy: KtxManagedPythonInstallPolicy;
     io: KtxSlIo;
+    projectDir?: string;
   }) => Promise<KtxSemanticLayerComputePort>;
   createQueryExecutor?: () => KtxSqlQueryExecutorPort;
 }
@@ -277,6 +278,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
             cliVersion: args.cliVersion,
             installPolicy: args.runtimeInstallPolicy,
             io,
+            projectDir: args.projectDir,
           });
       const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createDefaultLocalQueryExecutor)() : undefined;
       const result = await compileLocalSlQuery(project as KtxLocalProject, {
