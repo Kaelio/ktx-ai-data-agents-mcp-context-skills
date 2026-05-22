@@ -227,7 +227,7 @@ async function recordSetupStep(input: {
     name: 'setup_step',
     projectDir: input.projectDir,
     io: input.io,
-    packageInfo: { name: '@kaelio/ktx', version: input.cliVersion ?? getKtxCliPackageInfo().version },
+    packageInfo: { ...getKtxCliPackageInfo(), version: input.cliVersion ?? getKtxCliPackageInfo().version },
     fields: {
       step: input.step,
       outcome: setupTelemetryOutcome(input.status),

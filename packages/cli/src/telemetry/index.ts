@@ -1,4 +1,4 @@
-import type { KtxCliIo, KtxCliPackageInfo } from '../cli-runtime.js';
+import { getKtxCliPackageInfo, type KtxCliIo, type KtxCliPackageInfo } from '../cli-runtime.js';
 import { loadKtxProject } from '../context/project/project.js';
 import {
   beginCommandSpan,
@@ -81,10 +81,7 @@ export async function emitTelemetryEvent<Name extends TelemetryEventName>(input:
     return;
   }
 
-  const packageInfo = input.packageInfo ?? {
-    name: '@kaelio/ktx',
-    version: process.env.npm_package_version ?? '0.0.0',
-  };
+  const packageInfo = input.packageInfo ?? getKtxCliPackageInfo();
 
   const projectId = input.projectDir ? computeTelemetryProjectId(identity.installId, input.projectDir) : undefined;
   await trackTelemetryEvent({

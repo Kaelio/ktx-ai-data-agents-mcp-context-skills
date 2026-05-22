@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
-import type { KtxCliIo } from './cli-runtime.js';
+import { getKtxCliPackageInfo, type KtxCliIo } from './cli-runtime.js';
 
 interface DemoProjectResult {
   projectDir: string;
@@ -152,7 +152,7 @@ export async function ensureDemoProject(options: EnsureDemoProjectOptions): Prom
       name: 'connection_added',
       projectDir,
       io: options.io,
-      packageInfo: { name: '@kaelio/ktx', version: options.cliVersion ?? '0.0.0' },
+      packageInfo: { ...getKtxCliPackageInfo(), version: options.cliVersion ?? getKtxCliPackageInfo().version },
       fields: {
         driver: 'sqlite',
         isDemoConnection: true,
