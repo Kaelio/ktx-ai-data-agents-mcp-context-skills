@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -58,7 +58,7 @@ describe('LiveDatabaseSourceAdapter', () => {
     expect(adapter.skillNames).toEqual(['live_database_ingest']);
   });
 
-  it('threads tableScope into the introspection port and applies a defensive final filter', async () => {
+  it('threads tableScope from fetch context into the introspection port without post-filtering', async () => {
     const extractSchema = vi.fn(
       async (_connectionId: string, _options?: { tableScope?: ReadonlySet<KtxTableRefKey> }) => ({
         connectionId: 'warehouse',
@@ -93,19 +93,17 @@ describe('LiveDatabaseSourceAdapter', () => {
     const scope = tableRefSet([{ catalog: 'A', db: 'MARTS', name: 'IN_SCOPE' }]);
     const adapter = new LiveDatabaseSourceAdapter({
       introspection: { extractSchema },
-      resolveTableScope: (connectionId) => (connectionId === 'warehouse' ? scope : undefined),
     });
     const stagedDir = await mkdtemp(join(tmpdir(), 'ktx-livedb-scope-'));
     try {
       await adapter.fetch(undefined, stagedDir, {
         connectionId: 'warehouse',
         sourceKey: 'live-database',
-      } as never);
+        tableScope: scope,
+      });
       expect(extractSchema).toHaveBeenCalledWith('warehouse', { tableScope: scope });
       const tables = await readdir(join(stagedDir, 'tables'));
-      expect(tables).toHaveLength(1);
-      const table = JSON.parse(await readFile(join(stagedDir, 'tables', tables[0]!), 'utf8')) as { name?: string };
-      expect(table.name).toBe('IN_SCOPE');
+      expect(tables).toHaveLength(2);
     } finally {
       await rm(stagedDir, { recursive: true, force: true });
     }

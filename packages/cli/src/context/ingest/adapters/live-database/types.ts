@@ -12,5 +12,4 @@ export interface LiveDatabaseIntrospectionPort {
 export interface LiveDatabaseSourceAdapterDeps {
   introspection: LiveDatabaseIntrospectionPort;
   now?: () => Date;
-  resolveTableScope?: (connectionId: string) => ReadonlySet<KtxTableRefKey> | undefined;
 }

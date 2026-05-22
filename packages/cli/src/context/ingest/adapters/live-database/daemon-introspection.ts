@@ -3,7 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
 import type { KtxProjectConnectionConfig } from '../../../project/config.js';
-import { filterSnapshotTables, resolveEnabledTables } from '../../../scan/enabled-tables.js';
+import { tableRefFromKey } from '../../../scan/table-ref.js';
 import type { KtxSchemaColumn, KtxSchemaForeignKey, KtxSchemaSnapshot, KtxSchemaTable } from '../../../scan/types.js';
 import { inferKtxDimensionType, normalizeKtxNativeType } from '../../../scan/type-normalization.js';
 import type { LiveDatabaseIntrospectionOptions, LiveDatabaseIntrospectionPort } from './types.js';
@@ -220,6 +220,18 @@ function mapDaemonSnapshot(
   };
 }
 
+function serializeTableScope(options: LiveDatabaseIntrospectionOptions | undefined): Array<{
+  catalog: string | null;
+  db: string | null;
+  name: string;
+}> | undefined {
+  if (!options?.tableScope) return undefined;
+  return [...options.tableScope].map((key) => {
+    const ref = tableRefFromKey(key);
+    return { catalog: ref.catalog, db: ref.db, name: ref.name };
+  });
+}
+
 export function createDaemonLiveDatabaseIntrospection(
   options: DaemonLiveDatabaseIntrospectionOptions,
 ): LiveDatabaseIntrospectionPort {
@@ -231,8 +243,9 @@ export function createDaemonLiveDatabaseIntrospection(
   const now = options.now ?? (() => new Date());
 
   return {
-    async extractSchema(connectionId: string, _options?: LiveDatabaseIntrospectionOptions): Promise<KtxSchemaSnapshot> {
+    async extractSchema(connectionId: string, introspectionOptions?: LiveDatabaseIntrospectionOptions): Promise<KtxSchemaSnapshot> {
       const connection = requirePostgresConnection(options.connections, connectionId);
+      const tableScope = serializeTableScope(introspectionOptions);
       const payload = {
         connection_id: connectionId,
         driver: normalizeDriver(connection.driver),
@@ -240,17 +253,16 @@ export function createDaemonLiveDatabaseIntrospection(
         schemas,
         statement_timeout_ms: options.statementTimeoutMs ?? 30_000,
         connection_timeout_seconds: options.connectionTimeoutSeconds ?? 5,
+        ...(tableScope !== undefined ? { table_scope: tableScope } : {}),
       };
       const raw = requestJson
         ? await requestJson('/database/introspect', payload)
         : await runJson('database-introspect', payload);
-      const snapshot = mapDaemonSnapshot(raw, {
+      return mapDaemonSnapshot(raw, {
         connectionId,
         extractedAt: now().toISOString(),
         schemas,
       });
-      const enabledTables = resolveEnabledTables(connection);
-      return enabledTables ? filterSnapshotTables(snapshot, enabledTables) : snapshot;
     },
   };
 }

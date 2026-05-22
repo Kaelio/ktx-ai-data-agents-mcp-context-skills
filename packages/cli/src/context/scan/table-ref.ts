@@ -31,17 +31,6 @@ export function tableRefSet(refs: readonly KtxTableRef[]): ReadonlySet<KtxTableR
   return new Set(refs.map(tableRefKey));
 }
 
-export function hasTableRef(scope: ReadonlySet<KtxTableRefKey>, ref: KtxTableRef): boolean {
-  if (scope.has(tableRefKey(ref))) return true;
-  if (ref.catalog !== null) {
-    if (scope.has(tableRefKey({ ...ref, catalog: null }))) return true;
-  }
-  if (ref.db !== null) {
-    if (scope.has(tableRefKey({ ...ref, db: null }))) return true;
-  }
-  return false;
-}
-
 /**
  * Return the bare table names from a scope that fall within the given
  * (catalog, db) namespace. `catalog: null` is treated as a wildcard so that

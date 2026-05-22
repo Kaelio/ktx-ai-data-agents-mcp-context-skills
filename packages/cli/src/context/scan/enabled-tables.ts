@@ -1,5 +1,5 @@
-import { hasTableRef, tableRefSet, type KtxTableRefKey } from './table-ref.js';
-import type { KtxSchemaSnapshot, KtxTableRef } from './types.js';
+import { tableRefSet, type KtxTableRefKey } from './table-ref.js';
+import type { KtxTableRef } from './types.js';
 
 /**
  * Parses the `enabled_tables` field on a connection into a scope of
@@ -60,17 +60,4 @@ function parseDottedEntry(value: string): KtxTableRef | null {
     return { catalog: null, db: null, name: parts[0]! };
   }
   return null;
-}
-
-/** @internal — kept as a defensive backstop for the live-database adapter and tests. */
-export function filterSnapshotTables(
-  snapshot: KtxSchemaSnapshot,
-  enabledTables: ReadonlySet<KtxTableRefKey>,
-): KtxSchemaSnapshot {
-  return {
-    ...snapshot,
-    tables: snapshot.tables.filter((table) =>
-      hasTableRef(enabledTables, { catalog: table.catalog, db: table.db, name: table.name }),
-    ),
-  };
 }

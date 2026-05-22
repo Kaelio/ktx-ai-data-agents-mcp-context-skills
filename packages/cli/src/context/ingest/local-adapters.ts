@@ -4,7 +4,6 @@ import { notionConnectionToPullConfig, parseNotionConnectionConfig } from '../..
 import { resolveKtxConfigReference } from '../core/config-reference.js';
 import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
-import { resolveEnabledTables } from '../../context/scan/enabled-tables.js';
 import type { SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
 import { DbtSourceAdapter } from './adapters/dbt/dbt.adapter.js';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
@@ -91,10 +90,6 @@ export function createDefaultLocalIngestAdapters(
         ...options.databaseIntrospection,
         ...(options.databaseIntrospectionUrl ? { baseUrl: options.databaseIntrospectionUrl } : {}),
       }),
-      resolveTableScope: (connectionId) => {
-        const connection = project.config.connections[connectionId];
-        return connection ? resolveEnabledTables(connection) ?? undefined : undefined;
-      },
     }),
     new LookmlSourceAdapter({
       homeDir: join(project.projectDir, '.ktx/cache'),

@@ -9,6 +9,7 @@ import { sanitizeMemoryFlowError } from './memory-flow/live-buffer.js';
 import type { MemoryFlowEventSink, MemoryFlowPlannedWorkUnit } from './memory-flow/types.js';
 import { buildSyncId } from './raw-sources-paths.js';
 import { SqliteLocalIngestStore } from './sqlite-local-ingest-store.js';
+import type { KtxTableRefKey } from '../scan/table-ref.js';
 import type { IngestTrigger, SourceAdapter, WorkUnit } from './types.js';
 
 type LocalIngestStatus = 'running' | 'done' | 'error';
@@ -62,6 +63,7 @@ export interface RunLocalStageOnlyIngestOptions {
   now?: () => Date;
   dryRun?: boolean;
   memoryFlow?: MemoryFlowEventSink;
+  tableScope?: ReadonlySet<KtxTableRefKey>;
 }
 
 const LOCAL_AUTHOR = 'ktx';
@@ -225,6 +227,7 @@ async function prepareLocalStagedDir(
   stagedDir: string,
   sourceDir: string | undefined,
   connectionId: string,
+  tableScope: ReadonlySet<KtxTableRefKey> | undefined,
 ): Promise<string | null> {
   await rm(stagedDir, { recursive: true, force: true });
   await mkdir(stagedDir, { recursive: true });
@@ -242,7 +245,7 @@ async function prepareLocalStagedDir(
     );
   }
   const pullConfig = await localPullConfigForAdapter(project, adapter, connectionId);
-  await adapter.fetch(pullConfig, stagedDir, { connectionId, sourceKey: adapter.source });
+  await adapter.fetch(pullConfig, stagedDir, { connectionId, sourceKey: adapter.source, tableScope });
   return null;
 }
 
@@ -274,7 +277,14 @@ async function runLocalStageOnlyIngestInner(options: RunLocalStageOnlyIngestOpti
   assertCompatibleExistingRun(existingRun, runId, adapter.source, connectionId);
 
   const stagedDir = join(options.project.projectDir, '.ktx/cache/local-ingest', runId, 'staged');
-  const sourceDir = await prepareLocalStagedDir(options.project, adapter, stagedDir, options.sourceDir, connectionId);
+  const sourceDir = await prepareLocalStagedDir(
+    options.project,
+    adapter,
+    stagedDir,
+    options.sourceDir,
+    connectionId,
+    options.tableScope,
+  );
 
   const detected = await adapter.detect(stagedDir);
   if (!detected) {

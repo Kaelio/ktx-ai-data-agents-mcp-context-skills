@@ -10,7 +10,7 @@ import type { KtxProjectLlmConfig, KtxScanEnrichmentConfig, KtxScanRelationshipC
 import type { KtxLocalProject } from '../../context/project/project.js';
 import { ktxLocalStateDbPath } from '../project/local-state-db.js';
 import { redactKtxScanReport } from './credentials.js';
-import { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
+import { resolveEnabledTables } from './enabled-tables.js';
 import { completedKtxScanEnrichmentStateSummary } from './enrichment-state.js';
 import { failedKtxScanEnrichmentSummary, ktxScanErrorMessage } from './enrichment-summary.js';
 import {
@@ -427,6 +427,7 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
     jobId: options.jobId,
     now: options.now,
     dryRun: options.dryRun,
+    tableScope,
   });
   await options.progress?.update(0.55, scanChangeSummary(scanDiffSummaryFromRecord(record)));
   let report = reportFromIngest({
@@ -462,27 +463,12 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
       rawSourcesDir: report.artifactPaths.rawSourcesDir,
       extractedAtFallback: report.createdAt,
     });
-    const structuralSnapshot = tableScope ? filterSnapshotTables(rawSnapshot, tableScope) : rawSnapshot;
-    if (tableScope && structuralSnapshot.tables.length < rawSnapshot.tables.length) {
-      const excluded = rawSnapshot.tables.length - structuralSnapshot.tables.length;
-      let remaining = excluded;
-      const ds = report.diffSummary;
-      const subFrom = (field: 'tablesAdded' | 'tablesUnchanged' | 'tablesModified') => {
-        const take = Math.min(remaining, ds[field]);
-        ds[field] -= take;
-        remaining -= take;
-      };
-      subFrom('tablesAdded');
-      subFrom('tablesUnchanged');
-      subFrom('tablesModified');
-      await options.progress?.update(0.6, scanChangeSummary(report.diffSummary));
-    }
     const manifestArtifacts = await writeLocalScanManifestShards({
       project: options.project,
       connectionId: options.connectionId,
       syncId: record.syncId,
       driver,
-      snapshot: structuralSnapshot,
+      snapshot: rawSnapshot,
       dryRun: false,
     });
     report.artifactPaths.manifestShards = manifestArtifacts.manifestShards;

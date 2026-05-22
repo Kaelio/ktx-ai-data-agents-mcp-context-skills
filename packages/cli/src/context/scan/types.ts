@@ -142,10 +142,9 @@ export interface KtxScanInput {
   /**
    * Restricts introspection to a specific set of fully-qualified tables.
    * `undefined` means "all tables within {@link scope}". Connectors that honor
-   * this field should push the filter into their metadata queries; the
-   * live-database adapter also applies a final filter before writing, so a
-   * connector that ignores `tableScope` will over-fetch but produce correct
-   * output.
+   * this field should push the filter into their metadata queries. Callers do
+   * not post-filter, so a connector that ignores `tableScope` will over-fetch
+   * and surface the extra tables in output.
    */
   tableScope?: ReadonlySet<KtxTableRefKey>;
   mode?: KtxScanMode;

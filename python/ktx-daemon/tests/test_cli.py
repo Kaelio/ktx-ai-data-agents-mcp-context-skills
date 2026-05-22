@@ -311,6 +311,9 @@ def test_database_introspect_command_reads_stdin_and_writes_json(
         assert request.connection_id == "warehouse"
         assert request.driver == "postgres"
         assert request.schemas == ["public"]
+        assert request.table_scope is not None
+        assert request.table_scope[0].db == "public"
+        assert request.table_scope[0].name == "orders"
         return DatabaseIntrospectionResponse(
             connection_id="warehouse",
             extracted_at="2026-04-28T10:00:00+00:00",
@@ -337,7 +340,7 @@ def test_database_introspect_command_reads_stdin_and_writes_json(
         sys,
         "stdin",
         io.StringIO(
-            '{"connection_id":"warehouse","driver":"postgres","url":"postgresql://readonly@example.test/warehouse","schemas":["public"]}'
+            '{"connection_id":"warehouse","driver":"postgres","url":"postgresql://readonly@example.test/warehouse","schemas":["public"],"table_scope":[{"db":"public","name":"orders"}]}'
         ),
     )
 

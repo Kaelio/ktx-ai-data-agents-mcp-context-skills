@@ -6,15 +6,14 @@ import YAML from 'yaml';
 import type { SourceAdapter } from '../../context/ingest/types.js';
 import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from '../../context/project/project.js';
-import { filterSnapshotTables, resolveEnabledTables } from './enabled-tables.js';
+import { resolveEnabledTables } from './enabled-tables.js';
 import { getLocalScanReport, getLocalScanStatus, runLocalScan } from './local-scan.js';
-import { tableRefKey, tableRefSet } from './table-ref.js';
+import { tableRefKey, tableRefSet, type KtxTableRefKey } from './table-ref.js';
 import type {
   KtxQueryResult,
   KtxReadOnlyQueryInput,
   KtxScanConnector,
   KtxSchemaSnapshot,
-  KtxSchemaTable,
 } from './types.js';
 
 function relationshipSqlResult(
@@ -249,6 +248,73 @@ describe('local scan', () => {
       runId: 'scan-run-1',
       connectionId: 'warehouse',
     });
+  });
+
+  it('passes enabled_tables as fetch context tableScope and does not post-filter staged snapshots', async () => {
+    project.config.connections.warehouse = {
+      ...project.config.connections.warehouse,
+      enabled_tables: ['public.orders'],
+    };
+    let capturedTableScope: ReadonlySet<KtxTableRefKey> | undefined;
+    const adapter: SourceAdapter = {
+      source: 'live-database',
+      skillNames: ['live_database_ingest'],
+      async fetch(_pullConfig, stagedDir, ctx) {
+        capturedTableScope = ctx.tableScope;
+        await mkdir(join(stagedDir, 'tables'), { recursive: true });
+        await writeFile(
+          join(stagedDir, 'connection.json'),
+          '{"connectionId":"warehouse","driver":"postgres","scope":{"schemas":["public"]},"metadata":{}}\n',
+          'utf-8',
+        );
+        await writeFile(join(stagedDir, 'foreign-keys.json'), '{"foreignKeys":[]}\n', 'utf-8');
+        await writeFile(
+          join(stagedDir, 'tables', 'customers.json'),
+          '{"name":"customers","catalog":null,"db":"public","kind":"table","comment":null,"estimatedRows":100,"columns":[{"name":"id","nativeType":"integer","normalizedType":"integer","dimensionType":"number","nullable":false,"primaryKey":true,"comment":null}],"foreignKeys":[]}\n',
+          'utf-8',
+        );
+        await writeFile(
+          join(stagedDir, 'tables', 'orders.json'),
+          '{"name":"orders","catalog":null,"db":"public","kind":"table","comment":null,"estimatedRows":1000,"columns":[{"name":"id","nativeType":"integer","normalizedType":"integer","dimensionType":"number","nullable":false,"primaryKey":true,"comment":null}],"foreignKeys":[]}\n',
+          'utf-8',
+        );
+      },
+      async detect() {
+        return true;
+      },
+      async chunk() {
+        return {
+          workUnits: [
+            {
+              unitKey: 'live-database-public-customers',
+              rawFiles: ['tables/customers.json'],
+              dependencyPaths: ['connection.json', 'foreign-keys.json'],
+              peerFileIndex: [],
+            },
+            {
+              unitKey: 'live-database-public-orders',
+              rawFiles: ['tables/orders.json'],
+              dependencyPaths: ['connection.json', 'foreign-keys.json'],
+              peerFileIndex: [],
+            },
+          ],
+        };
+      },
+    };
+
+    const result = await runLocalScan({
+      project,
+      adapters: [adapter],
+      connectionId: 'warehouse',
+      jobId: 'scan-strict-scope-fetch',
+      now: () => new Date('2026-05-22T00:00:00.000Z'),
+    });
+
+    expect([...(capturedTableScope ?? [])]).toEqual([...tableRefSet([{ catalog: null, db: 'public', name: 'orders' }])]);
+    expect(result.report.diffSummary.tablesAdded).toBe(2);
+    const structuralManifest = await readFile(join(project.projectDir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8');
+    expect(structuralManifest).toContain('customers:');
+    expect(structuralManifest).toContain('orders:');
   });
 
   it('runs a structural database scan when live-database is not listed in ktx.yaml', async () => {
@@ -1668,59 +1734,5 @@ describe('resolveEnabledTables', () => {
 
   it('returns null for undefined connection', () => {
     expect(resolveEnabledTables(undefined)).toBeNull();
-  });
-});
-
-describe('filterSnapshotTables', () => {
-  function makeSnapshot(tables: Array<{ db: string; name: string }>): KtxSchemaSnapshot {
-    return {
-      connectionId: 'test',
-      driver: 'postgres',
-      extractedAt: '2026-01-01T00:00:00Z',
-      scope: {},
-      metadata: {},
-      tables: tables.map(
-        (t): KtxSchemaTable => ({
-          catalog: null,
-          db: t.db,
-          name: t.name,
-          kind: 'table',
-          comment: null,
-          estimatedRows: null,
-          columns: [],
-          foreignKeys: [],
-        }),
-      ),
-    };
-  }
-
-  it('keeps only enabled tables', () => {
-    const snapshot = makeSnapshot([
-      { db: 'public', name: 'users' },
-      { db: 'public', name: 'orders' },
-      { db: 'public', name: 'logs' },
-    ]);
-    const enabled = tableRefSet([
-      { catalog: null, db: 'public', name: 'users' },
-      { catalog: null, db: 'public', name: 'orders' },
-    ]);
-    const filtered = filterSnapshotTables(snapshot, enabled);
-    expect(filtered.tables).toHaveLength(2);
-    expect(filtered.tables.map((t) => t.name)).toEqual(['users', 'orders']);
-  });
-
-  it('returns empty tables when none match', () => {
-    const snapshot = makeSnapshot([{ db: 'public', name: 'users' }]);
-    const enabled = tableRefSet([{ catalog: null, db: 'public', name: 'orders' }]);
-    const filtered = filterSnapshotTables(snapshot, enabled);
-    expect(filtered.tables).toHaveLength(0);
-  });
-
-  it('preserves other snapshot fields', () => {
-    const snapshot = makeSnapshot([{ db: 'public', name: 'users' }]);
-    const enabled = tableRefSet([{ catalog: null, db: 'public', name: 'users' }]);
-    const filtered = filterSnapshotTables(snapshot, enabled);
-    expect(filtered.connectionId).toBe('test');
-    expect(filtered.driver).toBe('postgres');
   });
 });

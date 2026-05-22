@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  hasTableRef,
   scopedTableNames,
   tableRefFromKey,
   tableRefKey,
@@ -34,26 +33,6 @@ describe('tableRefSet', () => {
     expect(scope.size).toBe(2);
     expect(scope.has(tableRefKey({ catalog: 'ANALYTICS', db: 'MARTS', name: 'LISTINGS' }))).toBe(true);
     expect(scope.has(tableRefKey({ catalog: 'ANALYTICS', db: 'MARTS', name: 'OTHER' }))).toBe(false);
-  });
-});
-
-describe('hasTableRef', () => {
-  const scope = tableRefSet([
-    { catalog: 'ANALYTICS', db: 'MARTS', name: 'LISTINGS' },
-    { catalog: null, db: 'public', name: 'users' },
-  ]);
-
-  it('matches fully qualified entries exactly', () => {
-    expect(hasTableRef(scope, { catalog: 'ANALYTICS', db: 'MARTS', name: 'LISTINGS' })).toBe(true);
-  });
-
-  it('matches when the scope omits catalog (legacy 2-part entry)', () => {
-    expect(hasTableRef(scope, { catalog: 'PRODUCTION_DB', db: 'public', name: 'users' })).toBe(true);
-  });
-
-  it('rejects refs not in the scope', () => {
-    expect(hasTableRef(scope, { catalog: 'ANALYTICS', db: 'STAGING', name: 'LISTINGS' })).toBe(false);
-    expect(hasTableRef(scope, { catalog: null, db: 'public', name: 'orders' })).toBe(false);
   });
 });
 

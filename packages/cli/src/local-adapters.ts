@@ -24,7 +24,6 @@ import { PostgresPgssReader } from './context/ingest/adapters/historic-sql/postg
 import { SnowflakeHistoricSqlQueryHistoryReader } from './context/ingest/adapters/historic-sql/snowflake-query-history-reader.js';
 import type { SourceAdapter } from './context/ingest/types.js';
 import type { KtxLocalProject } from './context/project/project.js';
-import { resolveEnabledTables } from './context/scan/enabled-tables.js';
 import { createHttpSqlAnalysisPort } from './context/sql-analysis/http-sql-analysis-port.js';
 import type { SqlAnalysisPort } from './context/sql-analysis/ports.js';
 import {
@@ -367,10 +366,6 @@ export function createKtxCliLocalIngestAdapters(
   });
   const liveDatabase = new LiveDatabaseSourceAdapter({
     introspection: createKtxCliLiveDatabaseIntrospection(project, options),
-    resolveTableScope: (connectionId) => {
-      const connection = project.config.connections[connectionId];
-      return connection ? resolveEnabledTables(connection) ?? undefined : undefined;
-    },
   });
   return base.map((adapter) => (adapter.source === 'live-database' ? liveDatabase : adapter));
 }

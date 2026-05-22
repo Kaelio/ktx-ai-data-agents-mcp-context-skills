@@ -5,7 +5,9 @@ import pytest
 from ktx_daemon.database_introspection import (
     DatabaseIntrospectionRequest,
     DatabaseIntrospectionRows,
+    LiveDatabaseTableScopeRef,
     _statement_timeout_config,
+    _table_scope_json,
     introspect_database_response,
 )
 
@@ -144,6 +146,22 @@ def test_database_introspection_request_rejects_empty_schema_list() -> None:
             url="postgresql://readonly@example.test/warehouse",
             schemas=[],
         )
+
+
+def test_table_scope_json_serializes_null_wildcards() -> None:
+    assert _table_scope_json(
+        [
+            LiveDatabaseTableScopeRef(catalog=None, db="public", name="orders"),
+            LiveDatabaseTableScopeRef(
+                catalog="warehouse",
+                db="marts",
+                name="customers",
+            ),
+        ]
+    ) == (
+        '[{"catalog": null, "db": "public", "name": "orders"}, '
+        '{"catalog": "warehouse", "db": "marts", "name": "customers"}]'
+    )
 
 
 def test_statement_timeout_config_uses_parameterized_set_config() -> None:
