@@ -39,6 +39,9 @@ describe('runCommanderKtxCli telemetry', () => {
     await writeFile(join(tempDir, 'ktx.yaml'), '{}\n', 'utf-8');
     vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
     vi.stubEnv('HOME', tempDir);
+    vi.stubEnv('CI', '');
+    vi.stubEnv('KTX_TELEMETRY_DISABLED', '');
+    vi.stubEnv('DO_NOT_TRACK', '');
   });
 
   afterEach(async () => {
