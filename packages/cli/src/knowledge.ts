@@ -8,6 +8,7 @@ import {
 } from './embedding-resolution.js';
 import { resolveOutputMode } from './io/mode.js';
 import { createRankBadgeFormatter, printList, type PrintListColumn } from './io/print-list.js';
+import { emitTelemetryEvent } from './telemetry/index.js';
 
 export type KtxKnowledgeArgs =
   | { command: 'list'; projectDir: string; userId: string; output?: string; json?: boolean; cliVersion: string }
@@ -108,6 +109,7 @@ export async function runKtxKnowledge(
   io: KtxKnowledgeIo = process,
   deps: KtxKnowledgeDeps = {},
 ): Promise<number> {
+  const startedAt = performance.now();
   try {
     const project = await loadKtxProject({ projectDir: args.projectDir });
     if (args.command === 'list') {
@@ -134,6 +136,17 @@ export async function runKtxKnowledge(
         userId: args.userId,
         embeddingService,
         limit: args.limit,
+      });
+      await emitTelemetryEvent({
+        name: 'wiki_query_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          queryLength: args.query.length,
+          resultCount: results.length,
+          durationMs: Math.max(0, performance.now() - startedAt),
+          outcome: 'ok',
+        },
       });
       if (args.debug) {
         writeWikiSearchDebug(io, {
@@ -167,6 +180,19 @@ export async function runKtxKnowledge(
     }
     return 0;
   } catch (error) {
+    if (args.command === 'search') {
+      await emitTelemetryEvent({
+        name: 'wiki_query_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          queryLength: args.query.length,
+          resultCount: 0,
+          durationMs: Math.max(0, performance.now() - startedAt),
+          outcome: 'error',
+        },
+      });
+    }
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
   }

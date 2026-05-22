@@ -6,6 +6,9 @@ import { type KtxOutputMode, resolveOutputMode } from './io/mode.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { createManagedDaemonSqlAnalysisPort } from './managed-python-http.js';
 import { profileMark } from './startup-profile.js';
+import { isDemoConnection } from './telemetry/demo-detect.js';
+import { emitTelemetryEvent } from './telemetry/index.js';
+import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:sql');
 
@@ -52,6 +55,14 @@ function sqlAnalysisDialectForDriver(driver: string | undefined): SqlAnalysisDia
     redshift: 'redshift',
   };
   return map[normalized] ?? 'postgres';
+}
+
+function queryVerb(sql: string): 'select' | 'explain' | 'show' | 'with' | 'other' {
+  const first = sql.trim().split(/\s+/, 1)[0]?.toLowerCase();
+  if (first === 'select' || first === 'explain' || first === 'show' || first === 'with') {
+    return first;
+  }
+  return 'other';
 }
 
 function formatValue(value: unknown): string {
@@ -119,14 +130,19 @@ function resultOutput(connectionId: string, result: KtxQueryResult): SqlExecutio
 }
 
 export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: KtxSqlDeps = {}): Promise<number> {
+  const startedAt = performance.now();
+  let driver = 'unknown';
+  let demoConnection = false;
   try {
     const project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
     const connection = project.config.connections[args.connectionId];
     if (!connection) {
       throw new Error(`Connection "${args.connectionId}" is not configured in ktx.yaml`);
     }
+    driver = String(connection.driver ?? 'unknown').toLowerCase();
+    demoConnection = isDemoConnection(args.connectionId, connection);
 
-    const sqlAnalysis =
+    const createSqlAnalysis =
       deps.createSqlAnalysis ??
       (() =>
         createManagedDaemonSqlAnalysisPort({
@@ -135,10 +151,13 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
           installPolicy: 'auto',
           io,
         }));
-    const validation = await sqlAnalysis().validateReadOnly(args.sql, sqlAnalysisDialectForDriver(connection.driver));
+    const analysisPort = createSqlAnalysis();
+    const dialect = sqlAnalysisDialectForDriver(connection.driver);
+    const validation = await analysisPort.validateReadOnly(args.sql, dialect);
     if (!validation.ok) {
       throw new Error(validation.error ?? 'SQL is not read-only.');
     }
+    const analysis = await analysisPort.analyzeForFingerprint(args.sql, dialect);
 
     const createScanConnector = deps.createScanConnector ?? createKtxCliScanConnector;
     let connector: KtxScanConnector | null = null;
@@ -157,11 +176,39 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
       );
       const mode = resolveOutputMode({ explicit: args.output, json: args.json, io });
       printSqlResult(resultOutput(args.connectionId, result), mode, io);
+      await emitTelemetryEvent({
+        name: 'sql_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          driver,
+          isDemoConnection: demoConnection,
+          queryVerb: queryVerb(args.sql),
+          referencedTableCount: analysis.tablesTouched.length,
+          durationMs: Math.max(0, performance.now() - startedAt),
+          outcome: 'ok',
+        },
+      });
       return 0;
     } finally {
       await cleanupConnector(connector);
     }
   } catch (error) {
+    const errorClass = scrubErrorClass(error);
+    await emitTelemetryEvent({
+      name: 'sql_completed',
+      projectDir: args.projectDir,
+      io,
+      fields: {
+        driver,
+        isDemoConnection: demoConnection,
+        queryVerb: queryVerb(args.sql),
+        referencedTableCount: 0,
+        durationMs: Math.max(0, performance.now() - startedAt),
+        outcome: 'error',
+        ...(errorClass ? { errorClass } : {}),
+      },
+    });
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
   }

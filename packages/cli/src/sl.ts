@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import type { KtxCliIo } from './cli-runtime.js';
 import { createDefaultLocalQueryExecutor } from './context/connections/local-query-executor.js';
 import type { KtxSqlQueryExecutorPort } from './context/connections/query-executor.js';
 import { KtxIngestEmbeddingPortAdapter } from './context/llm/embedding-port.js';
@@ -18,6 +19,8 @@ import {
   type KtxManagedPythonInstallPolicy,
 } from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
+import { emitTelemetryEvent } from './telemetry/index.js';
+import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:sl');
 
@@ -56,10 +59,7 @@ export type KtxSlArgs =
       runtimeInstallPolicy: KtxManagedPythonInstallPolicy;
     };
 
-interface KtxSlIo {
-  stdout: { write(chunk: string): void };
-  stderr: { write(chunk: string): void };
-}
+type KtxSlIo = KtxCliIo;
 
 interface KtxSlDeps {
   loadProject?: typeof loadKtxProject;
@@ -83,6 +83,14 @@ function resolutionToEmbeddingPort(resolution: EmbeddingProviderResolution): Ktx
     return new KtxIngestEmbeddingPortAdapter(resolution.provider);
   }
   return null;
+}
+
+function queryMeasureCount(query: SemanticLayerQueryInput): number {
+  return Array.isArray(query.measures) ? query.measures.length : 0;
+}
+
+function queryDimensionCount(query: SemanticLayerQueryInput): number {
+  return Array.isArray(query.dimensions) ? query.dimensions.length : 0;
 }
 
 async function printSlSources(input: {
@@ -177,6 +185,8 @@ async function readSlQueryFile(path: string): Promise<SemanticLayerQueryInput> {
 }
 
 export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: KtxSlDeps = {}): Promise<number> {
+  const startedAt = performance.now();
+  let queryForTelemetry: SemanticLayerQueryInput | undefined;
   try {
     const project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
     if (args.command === 'list') {
@@ -234,6 +244,18 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
         connectionId: args.connectionId,
         sourceName: args.sourceName,
       });
+      await emitTelemetryEvent({
+        name: 'sl_validate_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          sourceCount: source ? 1 : 0,
+          modelCount: 0,
+          validationErrorCount: result.valid ? 0 : result.errors.length,
+          outcome: result.valid ? 'ok' : 'error',
+          durationMs: Math.max(0, performance.now() - startedAt),
+        },
+      });
       if (!result.valid) {
         for (const error of result.errors) {
           io.stderr.write(`${error}\n`);
@@ -248,6 +270,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       if (!query) {
         throw new Error('sl query requires query input from --query-file or at least one --measure');
       }
+      queryForTelemetry = query;
       const compute = deps.createSemanticLayerCompute
         ? deps.createSemanticLayerCompute()
         : await (deps.createManagedSemanticLayerCompute ?? createManagedPythonSemanticLayerComputePort)({
@@ -264,6 +287,19 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
         maxRows: args.maxRows,
         queryExecutor,
       });
+      await emitTelemetryEvent({
+        name: 'sl_query_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          mode: args.execute ? 'execute' : 'compile',
+          referencedSourceCount: result.plan && typeof result.plan === 'object' ? 1 : 0,
+          referencedDimensionCount: queryDimensionCount(query),
+          referencedMeasureCount: queryMeasureCount(query),
+          durationMs: Math.max(0, performance.now() - startedAt),
+          outcome: 'ok',
+        },
+      });
       if (args.format === 'sql') {
         io.stdout.write(`${result.sql}\n`);
         return 0;
@@ -274,6 +310,39 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
     const _exhaustive: never = args;
     throw new Error(`Unsupported sl command: ${JSON.stringify(_exhaustive)}`);
   } catch (error) {
+    if (args.command === 'validate') {
+      const errorClass = scrubErrorClass(error);
+      await emitTelemetryEvent({
+        name: 'sl_validate_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          sourceCount: 0,
+          modelCount: 0,
+          validationErrorCount: 0,
+          outcome: 'error',
+          ...(errorClass ? { errorClass } : {}),
+          durationMs: Math.max(0, performance.now() - startedAt),
+        },
+      });
+    }
+    if (args.command === 'query') {
+      const errorClass = scrubErrorClass(error);
+      await emitTelemetryEvent({
+        name: 'sl_query_completed',
+        projectDir: args.projectDir,
+        io,
+        fields: {
+          mode: args.execute ? 'execute' : 'compile',
+          referencedSourceCount: 0,
+          referencedDimensionCount: queryForTelemetry ? queryDimensionCount(queryForTelemetry) : 0,
+          referencedMeasureCount: queryForTelemetry ? queryMeasureCount(queryForTelemetry) : 0,
+          durationMs: Math.max(0, performance.now() - startedAt),
+          outcome: 'error',
+          ...(errorClass ? { errorClass } : {}),
+        },
+      });
+    }
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
   }
