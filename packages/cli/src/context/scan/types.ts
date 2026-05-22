@@ -1,3 +1,5 @@
+import type { KtxTableRefKey } from './table-ref.js';
+
 export type KtxConnectionDriver =
   | 'sqlite'
   | 'postgres'
@@ -137,6 +139,15 @@ export interface KtxScanInput {
   connectionId: string;
   driver: KtxConnectionDriver;
   scope?: KtxSchemaScope;
+  /**
+   * Restricts introspection to a specific set of fully-qualified tables.
+   * `undefined` means "all tables within {@link scope}". Connectors that honor
+   * this field should push the filter into their metadata queries; the
+   * live-database adapter also applies a final filter before writing, so a
+   * connector that ignores `tableScope` will over-fetch but produce correct
+   * output.
+   */
+  tableScope?: ReadonlySet<KtxTableRefKey>;
   mode?: KtxScanMode;
   dryRun?: boolean;
   detectRelationships?: boolean;
