@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { Command, InvalidArgumentError } from '@commander-js/extra-typings';
+import { Command, type CommandUnknownOpts, InvalidArgumentError } from '@commander-js/extra-typings';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerIngestCommands } from './commands/ingest-commands.js';
@@ -412,12 +412,28 @@ async function runBareInteractiveCommand(
   return 0;
 }
 
+/** @internal */
+export function collectCommandFlagsPresent(command: CommandUnknownOpts): Record<string, boolean> {
+  const flags: Record<string, boolean> = {};
+  let current: CommandUnknownOpts | null = command;
+  while (current) {
+    for (const option of current.options) {
+      const key = option.attributeName();
+      if (current.getOptionValueSource(key) === 'cli') {
+        flags[key] = true;
+      }
+    }
+    current = current.parent;
+  }
+  return flags;
+}
+
 export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   const program = createBaseProgram(options.packageInfo, options.io);
   program.hook('preAction', async (_thisCommand, actionCommand) => {
     const telemetry = await import('./telemetry/index.js');
     options.setTelemetryModule?.(telemetry);
-    await telemetry.showTelemetryNoticeIfNeeded(options.io);
+    await telemetry.showTelemetryNoticeIfNeeded(options.io, options.packageInfo);
     const commandNode = actionCommand as CommandPathNode;
     const path = commandPath(commandNode);
     const projectDir = resolveCommandProjectDir(commandNode);
@@ -425,7 +441,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
     const attachProjectGroup = shouldAttachCommandProjectGroup(path, hasProject);
     telemetry.beginCommandSpan({
       commandPath: path,
-      argv: options.argv ?? [],
+      flagsPresent: collectCommandFlagsPresent(commandNode as unknown as CommandUnknownOpts),
       projectDir: attachProjectGroup ? projectDir : undefined,
       hasProject,
       attachProjectGroup,

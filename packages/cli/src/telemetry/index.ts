@@ -20,11 +20,29 @@ import { buildProjectStackSnapshotFields } from './project-snapshot.js';
 export { beginCommandSpan, completeCommandSpan, shutdownTelemetryEmitter };
 export type { CommandOutcome, CompletedCommandSpan };
 
-export async function showTelemetryNoticeIfNeeded(io: KtxCliIo): Promise<void> {
-  await loadTelemetryIdentity({
+export async function showTelemetryNoticeIfNeeded(io: KtxCliIo, packageInfo: KtxCliPackageInfo): Promise<void> {
+  const identity = await loadTelemetryIdentity({
     stdoutIsTTY: io.stdout.isTTY === true,
     stderr: io.stderr,
     env: process.env,
+  });
+
+  if (!identity.enabled || !identity.createdFile || !identity.installId) {
+    return;
+  }
+
+  await trackTelemetryEvent({
+    event: buildTelemetryEvent(
+      'install_first_run',
+      buildCommonEnvelope({
+        cliVersion: packageInfo.version,
+        isCi: Boolean(process.env.CI),
+      }),
+      {},
+    ),
+    distinctId: identity.installId,
+    env: process.env,
+    stderr: io.stderr,
   });
 }
 
@@ -44,30 +62,6 @@ export function shouldEmitMcpTelemetry(): boolean {
 
 export function mcpTelemetrySampleRate(): 0.1 {
   return MCP_SAMPLE_RATE;
-}
-
-async function emitInstallFirstRunIfNeeded(input: {
-  identity: Awaited<ReturnType<typeof loadTelemetryIdentity>>;
-  packageInfo: KtxCliPackageInfo;
-  io: KtxCliIo;
-}): Promise<void> {
-  if (!input.identity.enabled || !input.identity.createdFile || !input.identity.installId) {
-    return;
-  }
-
-  await trackTelemetryEvent({
-    event: buildTelemetryEvent(
-      'install_first_run',
-      buildCommonEnvelope({
-        cliVersion: input.packageInfo.version,
-        isCi: Boolean(process.env.CI),
-      }),
-      {},
-    ),
-    distinctId: input.identity.installId,
-    env: process.env,
-    stderr: input.io.stderr,
-  });
 }
 
 export async function emitTelemetryEvent<Name extends TelemetryEventName>(input: {
@@ -91,7 +85,6 @@ export async function emitTelemetryEvent<Name extends TelemetryEventName>(input:
     name: '@kaelio/ktx',
     version: process.env.npm_package_version ?? '0.0.0',
   };
-  await emitInstallFirstRunIfNeeded({ identity, packageInfo, io: input.io });
 
   const projectId = input.projectDir ? computeTelemetryProjectId(identity.installId, input.projectDir) : undefined;
   await trackTelemetryEvent({

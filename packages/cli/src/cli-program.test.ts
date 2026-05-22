@@ -1,6 +1,6 @@
-import type { Command } from '@commander-js/extra-typings';
+import { Command, type CommandUnknownOpts } from '@commander-js/extra-typings';
 import { describe, expect, it } from 'vitest';
-import { buildKtxProgram } from './cli-program.js';
+import { buildKtxProgram, collectCommandFlagsPresent } from './cli-program.js';
 import type { KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 
 function stubIo(): KtxCliIo {
@@ -53,5 +53,33 @@ describe('buildKtxProgram', () => {
     buildKtxProgram({ io, deps: {}, packageInfo: stubPackageInfo(), runInit: async () => 0 });
 
     expect(wrote).toBe('');
+  });
+});
+
+describe('collectCommandFlagsPresent', () => {
+  it('records only CLI-sourced flags and ignores positional content that looks like a flag', async () => {
+    let captured: Record<string, boolean> | undefined;
+    const program = new Command()
+      .name('ktx')
+      .option('--project-dir <dir>', 'project directory')
+      .option('--json', 'json output', false);
+    program
+      .command('sql')
+      .argument('<sql...>')
+      .requiredOption('-c, --connection <id>', 'connection id')
+      .option('--max-rows <n>', 'cap rows')
+      .action(function () {
+        captured = collectCommandFlagsPresent(this as unknown as CommandUnknownOpts);
+      });
+
+    await program.parseAsync(
+      ['--project-dir', '/tmp/p', 'sql', '-c', 'warehouse', '--', '--customer_table', 'SELECT', '1'],
+      { from: 'user' },
+    );
+
+    expect(captured).toEqual({ projectDir: true, connection: true });
+    expect(captured).not.toHaveProperty('customer_table');
+    expect(captured).not.toHaveProperty('json');
+    expect(captured).not.toHaveProperty('maxRows');
   });
 });

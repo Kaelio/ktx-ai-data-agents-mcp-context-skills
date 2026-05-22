@@ -4,7 +4,7 @@ export type CommandOutcome = 'ok' | 'error' | 'aborted';
 
 interface CommandSpan {
   commandPath: string[];
-  argv: string[];
+  flagsPresent: Record<string, boolean>;
   projectDir?: string;
   hasProject: boolean;
   attachProjectGroup: boolean;
@@ -23,29 +23,6 @@ export interface CompletedCommandSpan {
 }
 
 let activeCommandSpan: CommandSpan | undefined;
-
-/** @internal */
-export function extractFlagsPresent(argv: string[]): Record<string, boolean> {
-  const flags: Record<string, boolean> = {};
-
-  for (const arg of argv) {
-    if (arg.startsWith('--') && arg.length > 2) {
-      const [name] = arg.slice(2).split('=', 1);
-      if (name) {
-        flags[name] = true;
-      }
-      continue;
-    }
-
-    if (arg.startsWith('-') && arg.length > 1) {
-      for (const shortFlag of arg.slice(1)) {
-        flags[shortFlag] = true;
-      }
-    }
-  }
-
-  return flags;
-}
 
 export function beginCommandSpan(input: CommandSpan): void {
   activeCommandSpan = input;
@@ -69,7 +46,7 @@ export function completeCommandSpan(input: {
     durationMs: Math.max(0, input.completedAt - span.startedAt),
     outcome: input.outcome,
     ...(errorClass ? { errorClass } : {}),
-    flagsPresent: extractFlagsPresent(span.argv),
+    flagsPresent: span.flagsPresent,
     hasProject: span.hasProject,
     projectDir: span.projectDir,
     projectGroupAttached: span.attachProjectGroup,

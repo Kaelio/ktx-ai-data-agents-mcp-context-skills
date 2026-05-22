@@ -75,6 +75,7 @@ describe('runCommanderKtxCli telemetry', () => {
     ).resolves.toBe(0);
 
     expect(statusIo.stderr()).toContain('[telemetry]');
+    expect(statusIo.stderr()).toContain('"event":"install_first_run"');
     expect(statusIo.stderr()).toContain('"event":"command"');
     expect(statusIo.stderr()).toContain('"commandPath":["ktx","status"]');
     expect(statusIo.stderr()).toContain('"event":"project_stack_snapshot"');
