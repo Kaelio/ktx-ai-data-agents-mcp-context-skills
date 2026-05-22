@@ -10,8 +10,11 @@ from collections.abc import Mapping
 from ktx_daemon.telemetry.events import build_telemetry_event
 from ktx_daemon.telemetry.identity import load_telemetry_identity
 
-POSTHOG_PROJECT_API_KEY = ""
-POSTHOG_HOST = ""
+# PostHog public project ingestion key - safe to embed; capture-only, no read access.
+POSTHOG_PROJECT_API_KEY = (
+    "phc_xbvZpbu8ZNLnogTbY7MEMWhCF2rzzApYsDndjKaRBXXx"  # pragma: allowlist secret
+)
+POSTHOG_HOST = "https://us.i.posthog.com"
 
 
 def _host(env: Mapping[str, str]) -> str:

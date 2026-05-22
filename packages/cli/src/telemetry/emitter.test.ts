@@ -71,7 +71,7 @@ describe('telemetry emitter', () => {
     expect(captures).toEqual([]);
   });
 
-  it('does not send when config constants are blank', async () => {
+  it('sends to PostHog by default once config constants are populated', async () => {
     await trackTelemetryEvent({
       event: commandEvent(),
       distinctId: 'install-1',
@@ -80,7 +80,12 @@ describe('telemetry emitter', () => {
       stderr: { write: () => {} },
     });
 
-    expect(captures).toEqual([]);
+    expect(captures).toHaveLength(1);
+    expect(captures[0]).toMatchObject({
+      distinctId: 'install-1',
+      event: 'command',
+      groups: { project: 'project-1' },
+    });
   });
 
   it('group-identifies once per project when live config is supplied', async () => {

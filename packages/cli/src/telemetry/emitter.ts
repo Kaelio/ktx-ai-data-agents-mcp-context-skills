@@ -21,8 +21,9 @@ type PostHogClient = {
   shutdown(): Promise<void> | void;
 };
 
-const POSTHOG_PROJECT_API_KEY = '';
-const POSTHOG_HOST = '';
+// PostHog public project ingestion key — safe to embed; capture-only, no read access.
+const POSTHOG_PROJECT_API_KEY = 'phc_xbvZpbu8ZNLnogTbY7MEMWhCF2rzzApYsDndjKaRBXXx'; // pragma: allowlist secret
+const POSTHOG_HOST = 'https://us.i.posthog.com';
 const SHUTDOWN_TIMEOUT_MS = 1500;
 
 let clientPromise: Promise<PostHogClient | null> | undefined;
