@@ -227,6 +227,9 @@ function sampleAggregateSql(driver: KtxConnectionDriver, innerSql: string): stri
   if (driver === 'clickhouse') {
     return `(SELECT arrayStringConcat(groupArray(toString(value)), '\\x1F') FROM (${innerSql}) AS relationship_profile_values)`;
   }
+  if (driver === 'snowflake') {
+    return `(SELECT LISTAGG(CAST(value AS VARCHAR), '\\x1f') FROM (${innerSql}) AS relationship_profile_values)`;
+  }
   return `(SELECT GROUP_CONCAT(CAST(value AS TEXT), char(31)) FROM (${innerSql}) AS relationship_profile_values)`;
 }
 

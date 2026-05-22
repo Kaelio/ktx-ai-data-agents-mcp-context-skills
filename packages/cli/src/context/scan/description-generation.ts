@@ -463,11 +463,11 @@ export class KtxDescriptionGenerator {
       }
     }
 
-    const sampleTable = input.connector.sampleTable;
+    const connector = input.connector;
     let sampleData: KtxTableSampleResult | null = null;
     let fallbackReason: 'capability_missing' | 'sampling_failed' | 'empty_sample' | null = null;
 
-    if (!sampleTable) {
+    if (!connector.sampleTable) {
       fallbackReason = 'capability_missing';
       this.logger?.warn('KTX scan connector does not support table sampling; falling back to metadata-only prompt', {
         connectorId: input.connector.id,
@@ -484,7 +484,7 @@ export class KtxDescriptionGenerator {
       try {
         sampleData = await retryAsync(
           () =>
-            sampleTable(
+            connector.sampleTable!(
               {
                 connectionId: input.connectionId,
                 table: tableRef,
@@ -684,11 +684,11 @@ export class KtxDescriptionGenerator {
           });
           columnValues = [];
         } else {
-          const sampleColumn = input.connector.sampleColumn;
+          const connector = input.connector;
           try {
             const sample = await retryAsync(
               () =>
-                sampleColumn(
+                connector.sampleColumn!(
                   {
                     connectionId: input.connectionId,
                     table: tableRef,
