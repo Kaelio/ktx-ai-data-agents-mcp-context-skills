@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLocalProjectMemoryIngest } from '../../context/memory/local-memory.js';
 import { detectCaptureSignals } from '../../context/memory/capture-signals.js';
 import type { MemoryAgentInput } from '../../context/memory/types.js';
@@ -44,6 +44,19 @@ function makeFakeServer() {
         tools.push({ name, config, handler });
       },
     },
+  };
+}
+
+function makeIo() {
+  let stderr = '';
+  return {
+    stdout: { isTTY: true, write() {} },
+    stderr: {
+      write(chunk: string) {
+        stderr += chunk;
+      },
+    },
+    stderrText: () => stderr,
   };
 }
 
@@ -153,6 +166,11 @@ async function listToolsThroughSdk(contextTools: KtxMcpContextPorts) {
 }
 
 describe('createKtxMcpServer', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
   it('registers annotations and output schemas for every retained tool', async () => {
     const fake = makeFakeServer();
     createKtxMcpServer({
@@ -225,6 +243,37 @@ describe('createKtxMcpServer', () => {
         connections: [{ id: 'warehouse', name: 'warehouse', connectionType: 'postgres' }],
       },
     });
+  });
+
+  it('emits sampled debug telemetry for MCP tool requests', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const fake = makeFakeServer();
+    const io = makeIo();
+    const projectDir = '/tmp/ktx-mcp-telemetry';
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      projectDir,
+      io,
+      contextTools: {
+        knowledge: {
+          search: vi.fn<KtxKnowledgeMcpPort['search']>().mockResolvedValue({ results: [], totalFound: 0 }),
+          read: vi.fn<KtxKnowledgeMcpPort['read']>().mockResolvedValue(null),
+        },
+      },
+    });
+
+    await expect(getTool(fake.tools, 'wiki_search').handler({ query: 'revenue recognition', limit: 5 })).resolves.toMatchObject({
+      structuredContent: { results: [], totalFound: 0 },
+    });
+
+    expect(io.stderrText()).toContain('"event":"mcp_request_completed"');
+    expect(io.stderrText()).toContain('"toolName":"wiki_search"');
+    expect(io.stderrText()).toContain('"sampleRate":0.1');
+    expect(io.stderrText()).not.toContain(projectDir);
   });
 
   it('registers parser-gated sql_execution when the host provides a SQL execution port', async () => {

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from ktx_daemon.app import create_app
@@ -77,6 +80,44 @@ def test_health_endpoint_returns_managed_runtime_version(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "healthy", "version": "0.2.0"}
+
+
+def test_app_lifespan_emits_daemon_lifecycle_debug_events(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    from ktx_daemon.telemetry.identity import reset_identity_cache
+
+    reset_identity_cache()
+    identity_path = tmp_path / ".ktx" / "telemetry.json"
+    identity_path.parent.mkdir(parents=True)
+    identity_path.write_text(
+        json.dumps(
+            {
+                "installId": "00000000-0000-4000-8000-000000000000",
+                "enabled": True,
+                "createdAt": "2026-05-22T14:33:02.000Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("KTX_TELEMETRY_DEBUG", "1")
+    monkeypatch.setenv("KTX_DAEMON_VERSION", "0.4.1")
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("KTX_TELEMETRY_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+
+    with TestClient(
+        create_app(telemetry_started_at=100.0, clock=lambda: 100.125)
+    ) as client:
+        assert client.get("/health").status_code == 200
+
+    captured = capsys.readouterr()
+    assert '"event": "daemon_started"' in captured.err
+    assert '"event": "daemon_stopped"' in captured.err
 
 
 def test_database_introspect_endpoint_returns_snapshot() -> None:

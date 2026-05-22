@@ -1,0 +1,42 @@
+---
+title: Telemetry
+description: Understand what anonymous usage telemetry ktx collects and how to opt out.
+---
+
+**ktx** collects anonymous, aggregated usage telemetry from interactive CLI
+runs so maintainers can see which commands work, where setup fails, and which
+parts of the data-agent workflow need improvement. Telemetry is opt-out and
+disabled automatically in CI and non-interactive runs.
+
+## Opt out
+
+Use any of these mechanisms to disable telemetry:
+
+| Mechanism | Effect |
+|-----------|--------|
+| `export KTX_TELEMETRY_DISABLED=1` | Disables telemetry for the shell and child processes |
+| `export DO_NOT_TRACK=1` | Standard do-not-track environment variable |
+| `CI=1` | Automatic in CI |
+| Non-TTY output | Automatic for pipes and scripts |
+| Edit `~/.ktx/telemetry.json` and set `"enabled": false` | Persistent for the machine |
+
+## What we collect
+
+High-level signals only: which commands run, how long they take, whether they
+succeed or fail, and basic environment metadata (CLI version, Node version, OS
+platform). For project-level analysis, **ktx** sends a salted hash of the
+project directory — never the raw path.
+
+## What we never collect
+
+- File paths, hostnames, environment variable values, or command arguments
+- `ktx.yaml` contents, connection passwords, API keys, or tokens
+- Schema names, table names, column names, SQL text, or query results
+- Error messages or stack traces
+- Git remote URLs, Git user email, OS user, or hostname
+
+## Storage and retention
+
+Telemetry is sent to PostHog, a third-party product-analytics service used by
+the **ktx** maintainers. Raw event data is retained for 90 days. Aggregated
+counts may be retained indefinitely.

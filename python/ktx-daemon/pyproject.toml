@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.2.6",
     "orjson>=3.11.4",
     "pandas>=2.2.3",
+    "posthog>=7.0.0",
     "psycopg[binary]>=3.2.0",
     "pydantic>=2.9.0",
     "requests>=2.32.0",

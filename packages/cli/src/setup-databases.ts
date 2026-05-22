@@ -19,6 +19,8 @@ import { withMultiselectNavigation, withTextInputNavigation } from './prompt-nav
 import { runKtxScan } from './scan.js';
 import { applySetupDatabaseContextDepth } from './setup-database-context-depth.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
+import { isDemoConnection } from './telemetry/demo-detect.js';
+import { emitTelemetryEvent } from './telemetry/index.js';
 import {
   createKtxSetupPromptAdapter,
   type KtxSetupPromptOption,
@@ -1331,6 +1333,7 @@ async function writeConnectionConfig(input: {
   projectDir: string;
   connectionId: string;
   connection: KtxProjectConnectionConfig;
+  io?: KtxCliIo;
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const migratedConnections = Object.fromEntries(
@@ -1348,6 +1351,17 @@ async function writeConnectionConfig(input: {
     },
   };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
+  if (input.io) {
+    await emitTelemetryEvent({
+      name: 'connection_added',
+      projectDir: input.projectDir,
+      io: input.io,
+      fields: {
+        driver: String(nextConnection.driver ?? 'unknown').toLowerCase(),
+        isDemoConnection: isDemoConnection(input.connectionId, nextConnection),
+      },
+    });
+  }
 
   const queryHistory = queryHistoryConfigRecord(nextConnection);
   if (queryHistory?.enabled === true) {
@@ -1639,6 +1653,7 @@ async function maybeConfigureDatabaseScope(input: {
     projectDir: input.projectDir,
     connectionId: input.connectionId,
     connection: { ...currentConnection, enabled_tables: enabledTables },
+    io: input.io,
   });
 
   if (spec && activeSchemas.length > 0) {
@@ -2076,6 +2091,7 @@ async function runPrimarySourceFullEdit(input: {
       },
       driver,
     }),
+    io: input.io,
   });
 
   const validated = await validateAndScanConnection({
@@ -2311,6 +2327,7 @@ export async function runKtxSetupDatabasesStep(
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
           connection: withContextDepth,
+          io,
         });
       } else {
         const existing = project.config.connections[connectionChoice.connectionId];
@@ -2336,6 +2353,7 @@ export async function runKtxSetupDatabasesStep(
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
           connection: withContextDepth,
+          io,
         });
       }
 
@@ -2419,6 +2437,7 @@ export async function runKtxSetupDatabasesStep(
             projectDir: args.projectDir,
             connectionId: connectionChoice.connectionId,
             connection: withContextDepth,
+            io,
           });
           setupStatus = await validateAndScanConnection({
             projectDir: args.projectDir,

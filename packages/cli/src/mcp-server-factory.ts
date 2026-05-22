@@ -73,6 +73,8 @@ export async function createKtxMcpServerFactory(input: {
       name: 'ktx',
       version: input.cliVersion,
       userContext: { userId: 'local' },
+      projectDir: input.projectDir,
+      io,
       contextTools: {
         ...contextTools,
         ...(memoryIngest ? { memoryIngest } : {}),

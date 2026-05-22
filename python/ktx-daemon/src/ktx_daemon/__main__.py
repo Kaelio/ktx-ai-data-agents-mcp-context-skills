@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from typing import Any
 
 from pydantic import ValidationError
@@ -100,8 +101,12 @@ def run_http_server(
 
     from ktx_daemon.app import create_app
 
+    started_at = time.perf_counter()
     uvicorn.run(
-        create_app(enable_code_execution=enable_code_execution),
+        create_app(
+            enable_code_execution=enable_code_execution,
+            telemetry_started_at=started_at,
+        ),
         host=host,
         port=port,
         log_level=log_level,

@@ -12,6 +12,7 @@ import {
   type ManagedPythonRuntimeLayoutOptions,
   type ManagedPythonRuntimeStatus,
 } from './managed-python-runtime.js';
+import { readExistingTelemetryProjectId } from './telemetry/identity.js';
 
 export type KtxManagedPythonInstallPolicy = 'prompt' | 'auto' | 'never';
 
@@ -49,6 +50,7 @@ export interface ManagedPythonCommandOptions extends ManagedPythonCommandDeps {
 
 export interface ManagedPythonSemanticLayerComputeOptions extends ManagedPythonCommandOptions {
   createPythonCompute?: typeof createPythonSemanticLayerComputePort;
+  projectDir?: string;
 }
 
 /** @internal */
@@ -133,8 +135,12 @@ export async function createManagedPythonSemanticLayerComputePort(
     ...(options.spinner ? { spinner: options.spinner } : {}),
   });
   const createPythonCompute = options.createPythonCompute ?? createPythonSemanticLayerComputePort;
+  const projectId = options.projectDir
+    ? await readExistingTelemetryProjectId({ projectDir: options.projectDir })
+    : undefined;
   return createPythonCompute({
     command: runtime.manifest.python.daemonExecutable,
     args: [],
+    ...(projectId ? { projectId } : {}),
   });
 }
