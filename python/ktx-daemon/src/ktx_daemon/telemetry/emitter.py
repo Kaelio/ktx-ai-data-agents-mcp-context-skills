@@ -94,14 +94,12 @@ def track_telemetry_event(
             flush_interval=0,
             sync_mode=True,
             timeout=1,
-            disable_geoip=True,
         )
         client.capture(
             event=event["event"],
             distinct_id=identity.install_id,
             properties=event["properties"],
             groups=groups,
-            disable_geoip=True,
         )
         client.shutdown()
     except Exception:

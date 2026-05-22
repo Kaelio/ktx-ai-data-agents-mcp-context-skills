@@ -25,7 +25,8 @@ Use any of these mechanisms to disable telemetry:
 High-level signals only: which commands run, how long they take, whether they
 succeed or fail, and basic environment metadata (CLI version, Node version, OS
 platform). For project-level analysis, **ktx** sends a salted hash of the
-project directory — never the raw path.
+project directory — never the raw path. PostHog also derives an approximate
+location (country and region) from the IP address used to send events.
 
 ## What we never collect
 

@@ -15,7 +15,6 @@ type PostHogClient = {
     event: string;
     properties: Record<string, unknown>;
     groups?: Record<string, string>;
-    disableGeoip?: boolean;
   }): void;
   groupIdentify(event: { groupType: string; groupKey: string; distinctId?: string }): void;
   shutdown(): Promise<void> | void;
@@ -47,7 +46,7 @@ async function getPostHogClient(projectApiKey: string, host: string): Promise<Po
   }
 
   clientPromise ??= import('posthog-node')
-    .then(({ PostHog }) => new PostHog(projectApiKey, { host, flushAt: 1, flushInterval: 0, disableGeoip: true }))
+    .then(({ PostHog }) => new PostHog(projectApiKey, { host, flushAt: 1, flushInterval: 0 }))
     .catch(() => null);
 
   return await clientPromise;
@@ -146,7 +145,6 @@ export async function trackTelemetryEvent(input: {
       event: input.event.name,
       properties: input.event.properties,
       groups: input.projectId ? { project: input.projectId } : undefined,
-      disableGeoip: true,
     });
   } catch {
     return;
