@@ -19,6 +19,7 @@ export interface KtxSqlServerConnectionConfig {
   schema?: string;
   schemas?: string[];
   trustServerCertificate?: boolean;
+  maxConnections?: number;
   [key: string]: unknown;
 }
 
@@ -197,6 +198,23 @@ function maybeNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function positiveIntegerConfigValue(input: {
+  connection: KtxSqlServerConnectionConfig;
+  key: keyof KtxSqlServerConnectionConfig;
+  connectionId: string;
+  defaultValue: number;
+}): number {
+  const value = input.connection[input.key];
+  if (value === undefined) {
+    return input.defaultValue;
+  }
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    throw new Error(`connections.${input.connectionId}.${String(input.key)} must be a positive integer`);
+  }
+  return numberValue;
+}
+
 function schemaNames(connection: KtxSqlServerConnectionConfig, env: NodeJS.ProcessEnv): string[] {
   if (Array.isArray(connection.schemas) && connection.schemas.length > 0) {
     return connection.schemas.filter((schema) => schema.trim().length > 0).map((schema) => resolveStringReference(schema, env));
@@ -254,6 +272,12 @@ export function sqlServerConnectionPoolConfigFromConfig(input: {
   const server = stringConfigValue(merged, 'host', env);
   const database = stringConfigValue(merged, 'database', env);
   const user = stringConfigValue(merged, 'username', env) ?? stringConfigValue(merged, 'user', env);
+  const maxConnections = positiveIntegerConfigValue({
+    connection: merged,
+    key: 'maxConnections',
+    connectionId: input.connectionId,
+    defaultValue: 10,
+  });
 
   if (!server) {
     throw new Error(`Native SQL Server connector requires connections.${input.connectionId}.host or url`);
@@ -272,7 +296,7 @@ export function sqlServerConnectionPoolConfigFromConfig(input: {
     user,
     password: stringConfigValue(merged, 'password', env),
     options: { encrypt: true, trustServerCertificate: merged.trustServerCertificate ?? true },
-    pool: { max: 10, min: 0, idleTimeoutMillis: 30000 },
+    pool: { max: maxConnections, min: 0, idleTimeoutMillis: 30000 },
   };
 }
 

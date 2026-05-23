@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSqlServerLiveDatabaseIntrospection } from '../../connectors/sqlserver/live-database-introspection.js';
-import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
+import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerConnectionConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function recordset<T extends Record<string, unknown>>(
@@ -162,6 +162,45 @@ describe('KtxSqlServerScanConnector', () => {
       user: 'reader',
       options: { encrypt: true, trustServerCertificate: false },
     });
+  });
+
+  it('defaults and validates SQL Server maxConnections', () => {
+    const baseConnection: KtxSqlServerConnectionConfig = {
+      driver: 'sqlserver',
+      host: 'db.example.test',
+      database: 'analytics',
+      username: 'reader',
+    };
+
+    expect(
+      sqlServerConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: baseConnection,
+      }),
+    ).toMatchObject({ pool: { max: 10 } });
+
+    expect(
+      sqlServerConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: 15 },
+      }),
+    ).toMatchObject({ pool: { max: 15 } });
+
+    expect(
+      sqlServerConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: '12' as never },
+      }),
+    ).toMatchObject({ pool: { max: 12 } });
+
+    for (const maxConnections of [0, -1, 1.5, Number.NaN, 'abc' as never]) {
+      expect(() =>
+        sqlServerConnectionPoolConfigFromConfig({
+          connectionId: 'warehouse',
+          connection: { ...baseConnection, maxConnections },
+        }),
+      ).toThrow('connections.warehouse.maxConnections must be a positive integer');
+    }
   });
 
   it('introspects schema, primary keys, comments, row counts, views, and foreign keys', async () => {
