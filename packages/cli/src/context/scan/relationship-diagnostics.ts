@@ -70,6 +70,7 @@ interface KtxRelationshipDiagnosticsPolicy {
   validationRequiredForManifest: boolean;
   maxCandidatesPerColumn: number;
   profileSampleRows: number;
+  profileConcurrency: number;
   validationConcurrency: number;
 }
 
@@ -118,6 +119,7 @@ const DEFAULT_POLICY: KtxRelationshipDiagnosticsPolicy = {
   validationRequiredForManifest: true,
   maxCandidatesPerColumn: 25,
   profileSampleRows: 10000,
+  profileConcurrency: 4,
   validationConcurrency: 4,
 };
 

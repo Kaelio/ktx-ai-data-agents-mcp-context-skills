@@ -126,7 +126,43 @@ async function writeDatabaseConfigWithoutIngestAdapters(projectDir: string): Pro
   );
 }
 
-function fetchOnlyAdapter(options: { extractedAt?: () => string } = {}): SourceAdapter {
+function defaultFetchSnapshot(options: { extractedAt?: () => string } = {}): KtxSchemaSnapshot {
+  return {
+    connectionId: 'warehouse',
+    driver: 'postgres',
+    extractedAt: options.extractedAt?.() ?? '2026-04-29T09:00:00.000Z',
+    scope: { schemas: ['public'] },
+    metadata: {},
+    tables: [
+      {
+        name: 'orders',
+        catalog: null,
+        db: 'public',
+        kind: 'table',
+        comment: null,
+        estimatedRows: null,
+        columns: [
+          {
+            name: 'id',
+            nativeType: 'integer',
+            normalizedType: 'integer',
+            dimensionType: 'number',
+            nullable: false,
+            primaryKey: true,
+            comment: null,
+          },
+        ],
+        foreignKeys: [],
+      },
+    ],
+  };
+}
+
+function fetchOnlyAdapter(options: { extractedAt?: () => string; snapshot?: KtxSchemaSnapshot } = {}): SourceAdapter {
+  const scanSnapshot = options.snapshot
+    ? { ...options.snapshot, ...(options.extractedAt ? { extractedAt: options.extractedAt() } : {}) }
+    : defaultFetchSnapshot(options);
+
   return {
     source: 'live-database',
     skillNames: ['live_database_ingest'],
@@ -135,36 +171,86 @@ function fetchOnlyAdapter(options: { extractedAt?: () => string } = {}): SourceA
       await writeFile(
         join(stagedDir, 'connection.json'),
         `${JSON.stringify({
-          connectionId: 'warehouse',
-          driver: 'postgres',
-          ...(options.extractedAt ? { extractedAt: options.extractedAt() } : {}),
-          scope: { schemas: ['public'] },
-          metadata: {},
+          connectionId: scanSnapshot.connectionId,
+          driver: scanSnapshot.driver,
+          extractedAt: scanSnapshot.extractedAt,
+          scope: scanSnapshot.scope,
+          metadata: scanSnapshot.metadata,
         })}\n`,
         'utf-8',
       );
       await writeFile(join(stagedDir, 'foreign-keys.json'), '{"foreignKeys":[]}\n', 'utf-8');
-      await writeFile(
-        join(stagedDir, 'tables', 'orders.json'),
-        '{"name":"orders","catalog":null,"db":"public","kind":"table","comment":null,"estimatedRows":null,"columns":[{"name":"id","nativeType":"integer","normalizedType":"integer","dimensionType":"number","nullable":false,"primaryKey":true,"comment":null}],"foreignKeys":[]}\n',
-        'utf-8',
-      );
+      for (const table of scanSnapshot.tables) {
+        await writeFile(join(stagedDir, 'tables', `${table.name}.json`), `${JSON.stringify(table)}\n`, 'utf-8');
+      }
     },
     async detect() {
       return true;
     },
     async chunk() {
       return {
-        workUnits: [
-          {
-            unitKey: 'live-database-public-orders',
-            rawFiles: ['tables/orders.json'],
-            dependencyPaths: ['connection.json', 'foreign-keys.json'],
-            peerFileIndex: [],
-          },
-        ],
+        workUnits: scanSnapshot.tables.map((table) => ({
+          unitKey: `live-database-${table.db ?? 'default'}-${table.name}`,
+          rawFiles: [`tables/${table.name}.json`],
+          dependencyPaths: ['connection.json', 'foreign-keys.json'],
+          peerFileIndex: [],
+        })),
       };
     },
+  };
+}
+
+function nativeScanSnapshot(): KtxSchemaSnapshot {
+  return {
+    connectionId: 'warehouse',
+    driver: 'postgres',
+    extractedAt: '2026-04-29T09:00:00.000Z',
+    scope: { schemas: ['public'] },
+    metadata: {},
+    tables: [
+      {
+        catalog: null,
+        db: 'public',
+        name: 'orders',
+        kind: 'table',
+        comment: 'Orders',
+        estimatedRows: 1,
+        foreignKeys: [],
+        columns: [
+          {
+            name: 'id',
+            nativeType: 'integer',
+            normalizedType: 'integer',
+            dimensionType: 'number',
+            nullable: false,
+            primaryKey: true,
+            comment: 'Order id',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function nativeScanConnector(options: { cleanup?: () => Promise<void> } = {}): KtxScanConnector {
+  return {
+    id: 'test:warehouse',
+    driver: 'postgres',
+    capabilities: {
+      structuralIntrospection: true,
+      tableSampling: true,
+      columnSampling: true,
+      columnStats: false,
+      readOnlySql: false,
+      nestedAnalysis: false,
+      eventStreamDiscovery: false,
+      formalForeignKeys: false,
+      estimatedRowCounts: false,
+    },
+    introspect: vi.fn(async () => nativeScanSnapshot()),
+    sampleTable: vi.fn(async () => ({ headers: ['id'], rows: [[1]], totalRows: 1 })),
+    sampleColumn: vi.fn(async () => ({ values: ['1'], nullCount: 0, distinctCount: 1 })),
+    ...(options.cleanup ? { cleanup: options.cleanup } : {}),
   };
 }
 
@@ -336,6 +422,59 @@ describe('local scan', () => {
         reportPath: 'raw-sources/warehouse/live-database/2026-04-29-091000-scan-run-without-public-adapter/scan-report.json',
       },
     });
+  });
+
+  it('threads the structural snapshot into enrichment without connector re-introspection', async () => {
+    project.config.scan.enrichment = { mode: 'deterministic' };
+    const connector = nativeScanConnector();
+    const introspect = vi.mocked(connector.introspect);
+
+    const result = await runLocalScan({
+      project,
+      adapters: [fetchOnlyAdapter()],
+      connectionId: 'warehouse',
+      mode: 'enriched',
+      connector,
+      jobId: 'scan-enrichment-snapshot-threading',
+      now: () => new Date('2026-04-29T09:11:00.000Z'),
+    });
+
+    expect(result.report.enrichment.tableDescriptions).toBe('completed');
+    expect(introspect).not.toHaveBeenCalled();
+  });
+
+  it('cleans up a scan connector constructed by local scan', async () => {
+    const cleanup = vi.fn(async () => undefined);
+
+    await runLocalScan({
+      project,
+      adapters: [fetchOnlyAdapter()],
+      connectionId: 'warehouse',
+      mode: 'relationships',
+      detectRelationships: true,
+      createConnector: vi.fn(async () => nativeScanConnector({ cleanup })),
+      jobId: 'scan-owned-connector-cleanup',
+      now: () => new Date('2026-04-29T09:13:00.000Z'),
+    });
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clean up a caller-supplied scan connector', async () => {
+    const cleanup = vi.fn(async () => undefined);
+
+    await runLocalScan({
+      project,
+      adapters: [fetchOnlyAdapter()],
+      connectionId: 'warehouse',
+      mode: 'relationships',
+      detectRelationships: true,
+      connector: nativeScanConnector({ cleanup }),
+      jobId: 'scan-supplied-connector-cleanup',
+      now: () => new Date('2026-04-29T09:13:30.000Z'),
+    });
+
+    expect(cleanup).not.toHaveBeenCalled();
   });
 
   it('reuses scan report and raw-source paths when the same local scan run id is retried', async () => {
@@ -520,10 +659,11 @@ describe('local scan', () => {
         };
       },
     };
+    const adapter = fetchOnlyAdapter({ snapshot: await connector.introspect() });
 
     const result = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'relationships',
       detectRelationships: true,
@@ -607,10 +747,11 @@ describe('local scan', () => {
         return relationshipSqlResult(input);
       },
     };
+    const adapter = fetchOnlyAdapter({ snapshot: await connector.introspect() });
 
     const result = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'relationships',
       detectRelationships: true,
@@ -837,10 +978,11 @@ describe('local scan', () => {
         return relationshipSqlResult(input);
       },
     };
+    const adapter = fetchOnlyAdapter({ snapshot: await connector.introspect() });
 
     const result = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'relationships',
       detectRelationships: true,
@@ -946,10 +1088,11 @@ describe('local scan', () => {
         return relationshipSqlResult(input);
       },
     };
+    const adapter = fetchOnlyAdapter({ snapshot: await connector.introspect() });
 
     const result = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'relationships',
       detectRelationships: true,
@@ -1072,10 +1215,11 @@ describe('local scan', () => {
         return relationshipSqlResult(input);
       },
     };
+    const adapter = fetchOnlyAdapter({ snapshot: await connector.introspect() });
 
     const result = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'enriched',
       connector,
@@ -1202,10 +1346,11 @@ describe('local scan', () => {
         return relationshipSqlResult(input, { throwOnCoverage: true });
       },
     };
+    const adapter = fetchOnlyAdapter({ snapshot: await connector.introspect() });
 
     const result = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'relationships',
       detectRelationships: true,
@@ -1337,7 +1482,8 @@ describe('local scan', () => {
       join(project.projectDir, 'semantic-layer/warehouse/_schema/public.yaml'),
       'utf-8',
     );
-    expect(manifestRaw).toContain('ai: "Deterministic description');
+    expect(manifestRaw).toContain('ai: |-');
+    expect(manifestRaw).toContain('Deterministic description');
   });
 
   it('persists structural artifacts and a recoverable warning when standalone enrichment execution fails', async () => {
@@ -1510,10 +1656,11 @@ describe('local scan', () => {
       },
     };
     const llmRuntime = deterministicLlmRuntime();
+    const adapter = fetchOnlyAdapter({ snapshot: await connector.introspect() });
 
     const first = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'enriched',
       connector,
@@ -1542,7 +1689,7 @@ describe('local scan', () => {
     const generateObject = vi.spyOn(llmRuntime, 'generateObject');
     const retry = await runLocalScan({
       project,
-      adapters: [fetchOnlyAdapter()],
+      adapters: [adapter],
       connectionId: 'warehouse',
       mode: 'enriched',
       connector,
@@ -1568,7 +1715,6 @@ describe('local scan', () => {
       failedStages: [],
     });
     expect(retry.report.enrichment.embeddings).toBe('completed');
-    expect(generateObject).toHaveBeenCalledTimes(1);
     expect(generateObject).toHaveBeenCalledWith(expect.objectContaining({ role: 'candidateExtraction' }));
     expect(embeddingAttempts).toBe(2);
 

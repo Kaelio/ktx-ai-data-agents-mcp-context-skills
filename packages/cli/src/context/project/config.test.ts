@@ -74,6 +74,7 @@ connections:
           maxLlmTablesPerBatch: 40,
           maxCandidatesPerColumn: 25,
           profileSampleRows: 10000,
+          profileConcurrency: 4,
           validationConcurrency: 4,
         },
       },
@@ -278,6 +279,7 @@ scan:
     maxLlmTablesPerBatch: 12
     maxCandidatesPerColumn: 7
     profileSampleRows: 500
+    profileConcurrency: 3
     validationConcurrency: 2
     validationBudget: 0
 `);
@@ -291,6 +293,7 @@ scan:
       maxLlmTablesPerBatch: 12,
       maxCandidatesPerColumn: 7,
       profileSampleRows: 500,
+      profileConcurrency: 3,
       validationConcurrency: 2,
       validationBudget: 0,
     });
@@ -302,6 +305,7 @@ scan:
     expect(serializeKtxProjectConfig(config)).toContain('maxLlmTablesPerBatch: 12');
     expect(serializeKtxProjectConfig(config)).toContain('maxCandidatesPerColumn: 7');
     expect(serializeKtxProjectConfig(config)).toContain('profileSampleRows: 500');
+    expect(serializeKtxProjectConfig(config)).toContain('profileConcurrency: 3');
     expect(serializeKtxProjectConfig(config)).toContain('validationConcurrency: 2');
     expect(serializeKtxProjectConfig(config)).toContain('validationBudget: 0');
   });
@@ -326,6 +330,7 @@ scan:
     maxLlmTablesPerBatch: 0
     maxCandidatesPerColumn: -4
     profileSampleRows: 0
+    profileConcurrency: 0
     validationConcurrency: 0
     validationBudget: 1.5
 `;
@@ -341,6 +346,7 @@ scan:
         'scan.relationships.maxLlmTablesPerBatch',
         'scan.relationships.maxCandidatesPerColumn',
         'scan.relationships.profileSampleRows',
+        'scan.relationships.profileConcurrency',
         'scan.relationships.validationConcurrency',
         'scan.relationships.validationBudget',
       ]),

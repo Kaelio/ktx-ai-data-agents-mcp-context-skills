@@ -157,6 +157,12 @@ connections:
     dataset_ids: [analytics, mart]
 ```
 
+For Snowflake connections, set `maxSessions` when deep ingest needs more or
+fewer concurrent warehouse sessions. The default is `4`. This caps all
+concurrent Snowflake SQL work for that connector instance, including schema
+introspection, table sampling, relationship profiling, relationship
+validation, and read-only SQL execution.
+
 For Postgres, BigQuery, and Snowflake, `historicSql` and `context.queryHistory`
 toggle query-history ingest. The shape is connector-specific; the setup wizard
 writes these fields when you pass `--enable-query-history`.
@@ -483,6 +489,7 @@ scan:
     maxLlmTablesPerBatch: 40
     maxCandidatesPerColumn: 25
     profileSampleRows: 10000
+    profileConcurrency: 4
     validationConcurrency: 4
     validationBudget: all
 ```
@@ -510,6 +517,7 @@ the manifest.
 | `relationships.maxLlmTablesPerBatch` | `int > 0` | `40` | Max tables included in a single LLM relationship-proposal batch. |
 | `relationships.maxCandidatesPerColumn` | `int > 0` | `25` | Max join partners considered per column. |
 | `relationships.profileSampleRows` | `int > 0` | `10000` | Rows sampled per table when profiling values for relationship inference. |
+| `relationships.profileConcurrency` | `int > 0` | `4` | Parallel relationship-profile queries against the database. For Snowflake, effective database concurrency is also bounded by the connection's `maxSessions`. |
 | `relationships.validationConcurrency` | `int > 0` | `4` | Parallel relationship validation queries against the database. |
 | `relationships.validationBudget` | `all` \| `int ≥ 0` | runtime default | Cap on validation queries per scan. `all` means unlimited. |
 

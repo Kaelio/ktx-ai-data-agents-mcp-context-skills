@@ -24,6 +24,7 @@ export interface KtxSnowflakeConnectionConfig {
   privateKey?: string;
   passphrase?: string;
   role?: string;
+  maxSessions?: number;
   [key: string]: unknown;
 }
 
@@ -38,6 +39,7 @@ export interface KtxSnowflakeResolvedConnectionConfig {
   privateKey?: string;
   passphrase?: string;
   role?: string;
+  maxSessions: number;
 }
 
 export interface KtxSnowflakeRawColumnMetadata {
@@ -130,6 +132,23 @@ function stringConfigValue(
 ): string | undefined {
   const value = connection?.[key];
   return typeof value === 'string' && value.trim().length > 0 ? resolveStringReference(value.trim(), env) : undefined;
+}
+
+function positiveIntegerConfigValue(input: {
+  connection: KtxSnowflakeConnectionConfig;
+  key: keyof KtxSnowflakeConnectionConfig;
+  connectionId: string;
+  defaultValue: number;
+}): number {
+  const value = input.connection[input.key];
+  if (value === undefined) {
+    return input.defaultValue;
+  }
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    throw new Error(`connections.${input.connectionId}.${String(input.key)} must be a positive integer`);
+  }
+  return numberValue;
 }
 
 function schemaNames(connection: KtxSnowflakeConnectionConfig, env: NodeJS.ProcessEnv): string[] {
@@ -230,6 +249,12 @@ export function snowflakeConnectionConfigFromConfig(input: {
     database,
     schemas: resolvedSchemas,
     username,
+    maxSessions: positiveIntegerConfigValue({
+      connection: input.connection,
+      key: 'maxSessions',
+      connectionId: input.connectionId,
+      defaultValue: 4,
+    }),
   };
   const role = stringConfigValue(input.connection, 'role', env);
   if (role) {
@@ -265,6 +290,7 @@ class DefaultSnowflakeDriverFactory implements KtxSnowflakeDriverFactory {
 
 class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   private closeSdkOptions: Array<() => Promise<void>> = [];
+  private pool: ReturnType<typeof snowflake.createPool> | null = null;
 
   constructor(
     private readonly resolved: KtxSnowflakeResolvedConnectionConfig,
@@ -285,16 +311,21 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   }
 
   async query(sql: string, params?: unknown): Promise<KtxQueryResult> {
-    let connection: Connection | null = null;
+    const binds = Array.isArray(params) ? toSnowflakeBinds(params) : undefined;
     try {
-      connection = await this.createConnection();
-      const binds = Array.isArray(params) ? toSnowflakeBinds(params) : undefined;
-      const result = await this.executeSnowflakeQuery(connection, sql, binds);
+      const pool = await this.getPool();
+      const result = await pool.use(async (connection: snowflake.Connection) =>
+        this.executeSnowflakeQuery(connection, sql, binds),
+      );
       return { ...result, totalRows: result.rows.length, rowCount: result.rows.length };
-    } finally {
-      if (connection) {
-        await this.destroyConnection(connection);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/timeout/i.test(message) && /pool|acquire/i.test(message)) {
+        throw new Error(
+          "Snowflake session pool exhausted after 60s - consider lowering maxSessions or increasing your account's concurrent-statement limit.",
+        );
       }
+      throw error;
     }
   }
 
@@ -375,27 +406,41 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
   }
 
   async cleanup(): Promise<void> {
+    const pool = this.pool;
+    this.pool = null;
+    if (pool) {
+      // Drain before clear so in-flight Snowflake statements finish before idle
+      // sessions are closed.
+      await pool.drain();
+      await pool.clear();
+    }
     const closers = this.closeSdkOptions;
     this.closeSdkOptions = [];
-    await Promise.all(closers.map((close) => close()));
+    await Promise.all(closers.map((close) => Promise.resolve(close())));
   }
 
   private async runTest(): Promise<{ success: boolean; error?: string }> {
-    let connection: Connection | null = null;
     try {
-      connection = await this.createConnection();
-      await this.executeSnowflakeQuery(connection, 'SELECT 1');
+      await this.query('SELECT 1');
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
-    } finally {
-      if (connection) {
-        await this.destroyConnection(connection);
-      }
     }
   }
 
-  private async createConnection(): Promise<Connection> {
+  private async getPool(): Promise<ReturnType<typeof snowflake.createPool>> {
+    if (!this.pool) {
+      this.pool = snowflake.createPool(await this.resolveConnectionOptions(), {
+        min: 0,
+        max: this.resolved.maxSessions,
+        evictionRunIntervalMillis: 30_000,
+        acquireTimeoutMillis: 60_000,
+      });
+    }
+    return this.pool;
+  }
+
+  private async resolveConnectionOptions(): Promise<snowflake.ConnectionOptions> {
     const patch = await this.sdkOptionsProvider?.resolve({
       account: this.resolved.account,
       connection: { ...this.resolved, driver: 'snowflake' },
@@ -411,47 +456,13 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
       database: this.resolved.database,
       ...(sessionSchema ? { schema: sessionSchema } : {}),
       role: this.resolved.role,
+      clientSessionKeepAlive: true,
+      clientSessionKeepAliveHeartbeatFrequency: 900,
       ...patch?.sdkOptions,
     };
-    const connectionConfig: ConnectionOptions =
-      this.resolved.authMethod === 'rsa'
-        ? { ...baseConfig, authenticator: 'SNOWFLAKE_JWT', privateKey: this.decryptPrivateKey() }
-        : { ...baseConfig, password: this.resolved.password };
-    const connection = snowflake.createConnection(connectionConfig);
-    return new Promise((resolveConnection, rejectConnection) => {
-      connection.connect((error, connected) => {
-        if (error) {
-          rejectConnection(error);
-          return;
-        }
-        const resolvedConnection = connected ?? connection;
-        this.setConnectionContext(resolvedConnection).then(
-          () => resolveConnection(resolvedConnection),
-          (contextError) => {
-            resolvedConnection.destroy(() => undefined);
-            rejectConnection(contextError);
-          },
-        );
-      });
-    });
-  }
-
-  private async setConnectionContext(connection: Connection): Promise<void> {
-    if (this.resolved.role) {
-      await this.executeSnowflakeQuery(connection, `USE ROLE ${quoteSnowflakeIdentifier(this.resolved.role, 'role')}`);
-    }
-    await this.executeSnowflakeQuery(
-      connection,
-      `USE WAREHOUSE ${quoteSnowflakeIdentifier(this.resolved.warehouse, 'warehouse')}`,
-    );
-    await this.executeSnowflakeQuery(
-      connection,
-      `USE DATABASE ${quoteSnowflakeIdentifier(this.resolved.database, 'database')}`,
-    );
-    await this.executeSnowflakeQuery(
-      connection,
-      `USE SCHEMA ${quoteSnowflakeIdentifier(this.resolved.schemas[0] ?? 'PUBLIC', 'schema')}`,
-    );
+    return this.resolved.authMethod === 'rsa'
+      ? { ...baseConfig, authenticator: 'SNOWFLAKE_JWT', privateKey: this.decryptPrivateKey() }
+      : { ...baseConfig, password: this.resolved.password };
   }
 
   private async executeSnowflakeQuery(
@@ -476,18 +487,6 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
             : [];
           resolveQuery({ headers, headerTypes, rows: normalizedRows });
         },
-      });
-    });
-  }
-
-  private destroyConnection(connection: Connection): Promise<void> {
-    return new Promise((resolveDestroy, rejectDestroy) => {
-      connection.destroy((error) => {
-        if (error) {
-          rejectDestroy(error);
-          return;
-        }
-        resolveDestroy();
       });
     });
   }

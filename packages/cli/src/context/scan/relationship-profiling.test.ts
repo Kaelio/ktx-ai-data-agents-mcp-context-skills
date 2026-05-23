@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
 import { snapshotToKtxEnrichedSchema } from './local-enrichment.js';
 import { loadKtxRelationshipBenchmarkFixture, maskKtxRelationshipBenchmarkSnapshot } from './relationship-benchmarks.js';
@@ -351,4 +351,94 @@ describe('relationship profiling', () => {
       scaleExecutor.close();
     }
   });
+
+  it('profiles tables concurrently up to profileConcurrency', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const executor = {
+      executeReadOnly: vi.fn(async (input: KtxReadOnlyQueryInput) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        inFlight -= 1;
+        return {
+          headers: [
+            'column_name',
+            'table_row_count',
+            'row_count',
+            'null_count',
+            'distinct_count',
+            'min_text_length',
+            'max_text_length',
+            'sample_values',
+          ],
+          rows: [[input.sql.includes('accounts') ? 'id' : 'account_id', 2, 2, 0, 2, 1, 2, '1\u001f2']],
+          totalRows: 1,
+          rowCount: 1,
+        };
+      }),
+    };
+
+    await profileKtxRelationshipSchema({
+      connectionId: 'warehouse',
+      driver: 'sqlite',
+      schema: schemaWithTables(['accounts', 'orders', 'payments', 'refunds']),
+      executor,
+      ctx: { runId: 'profile-concurrency' },
+      profileConcurrency: 4,
+    });
+
+    expect(maxInFlight).toBe(4);
+  });
+
+  it('keeps profiling other tables when one table profile fails', async () => {
+    const executor = {
+      executeReadOnly: vi.fn(async (input: KtxReadOnlyQueryInput) => {
+        if (input.sql.includes('"orders"')) {
+          throw new Error('orders unavailable');
+        }
+        return {
+          headers: [
+            'column_name',
+            'table_row_count',
+            'row_count',
+            'null_count',
+            'distinct_count',
+            'min_text_length',
+            'max_text_length',
+            'sample_values',
+          ],
+          rows: [['id', 2, 2, 0, 2, 1, 2, '1\u001f2']],
+          totalRows: 1,
+          rowCount: 1,
+        };
+      }),
+    };
+
+    const result = await profileKtxRelationshipSchema({
+      connectionId: 'warehouse',
+      driver: 'sqlite',
+      schema: schemaWithTables(['accounts', 'orders']),
+      executor,
+      ctx: { runId: 'profile-error-isolated' },
+      profileConcurrency: 2,
+    });
+
+    expect(result.warnings).toContain('profile_failed:orders:orders unavailable');
+    expect(result.tables).toHaveLength(2);
+    expect(Object.keys(result.columns)).toContain('accounts.id');
+  });
 });
+
+function schemaWithTables(names: string[]): KtxEnrichedSchema {
+  return schema(
+    names.map((name) =>
+      table(name, [
+        column(name, name === 'orders' ? 'account_id' : 'id', {
+          nullable: false,
+          primaryKey: name !== 'orders',
+        }),
+      ]),
+    ),
+  );
+}

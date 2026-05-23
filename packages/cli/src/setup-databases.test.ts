@@ -545,7 +545,7 @@ describe('setup databases step', () => {
       },
       {
         driver: 'snowflake',
-        selectValues: ['no'],
+        selectValues: ['password', 'no'],
         textValues: ['', 'env:SNOWFLAKE_ACCOUNT', 'ANALYTICS_WH', 'ANALYTICS', 'env:SNOWFLAKE_USER', ''],
         passwordValues: ['env:SNOWFLAKE_PASSWORD'],
         expectedTextPrompts: [
@@ -2090,6 +2090,7 @@ describe('setup databases step', () => {
         scanConnection: vi.fn(async () => 0),
         historicSqlProbe,
         prompts: makePromptAdapter({
+          selectValues: ['password'],
           textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
           passwordValues: ['env:SNOWFLAKE_PASSWORD'],
         }),
@@ -2129,6 +2130,51 @@ describe('setup databases step', () => {
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);
     expect(config.ingest.adapters).toEqual([]);
+  });
+
+  it('configures Snowflake with RSA key-pair auth via setup wizard', async () => {
+    const io = makeIo();
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['snowflake'],
+        databaseConnectionId: 'snowflake',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        prompts: makePromptAdapter({
+          selectValues: ['rsa'],
+          textValues: [
+            'env:SNOWFLAKE_ACCOUNT',
+            'WH',
+            'ANALYTICS',
+            'reader',
+            '~/.ssh/snowflake_rsa_key.p8',
+            '',
+          ],
+          passwordValues: ['env:SNOWFLAKE_KEY_PASS'],
+        }),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.snowflake).toMatchObject({
+      driver: 'snowflake',
+      authMethod: 'rsa',
+      account: 'env:SNOWFLAKE_ACCOUNT',
+      warehouse: 'WH',
+      database: 'ANALYTICS',
+      username: 'reader',
+      privateKey: 'file:~/.ssh/snowflake_rsa_key.p8', // pragma: allowlist secret
+      passphrase: 'env:SNOWFLAKE_KEY_PASS', // pragma: allowlist secret
+    });
+    expect(config.connections.snowflake.password).toBeUndefined();
   });
 
   it('writes Postgres query history config with minExecutions and ignores window/redaction output', async () => {

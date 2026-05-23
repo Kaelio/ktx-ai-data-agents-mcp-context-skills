@@ -1,4 +1,5 @@
 import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
+import { z } from 'zod';
 import type {
   KtxColumnSampleInput,
   KtxColumnSampleResult,
@@ -53,7 +54,7 @@ export interface KtxDescriptionColumn {
   sampleValues?: unknown[];
 }
 
-export interface KtxDescriptionColumnTable extends KtxTableRef {
+interface KtxDescriptionColumnTable extends KtxTableRef {
   columns: KtxDescriptionColumn[];
 }
 
@@ -112,6 +113,23 @@ export interface KtxGenerateTableDescriptionInput {
   table: KtxDescriptionTableInput;
 }
 
+export interface KtxGenerateBatchedTableDescriptionsInput {
+  connectionId: string;
+  connector: KtxDescriptionSamplingPort;
+  context: KtxScanContext;
+  dataSourceType: string;
+  supportsNestedAnalysis: boolean;
+  table: KtxDescriptionColumnTable & {
+    rawDescriptions?: Record<string, string>;
+    columns: Array<KtxDescriptionColumn & { type?: string; comment?: string | null }>;
+  };
+}
+
+export interface KtxBatchedTableDescriptionsResult {
+  tableDescription: string | null;
+  columnDescriptions: Map<string, string | null>;
+}
+
 export interface KtxGenerateDataSourceDescriptionInput {
   connectionId: string;
   connector: KtxDescriptionSamplingPort;
@@ -135,6 +153,18 @@ interface ColumnTaskResult {
   processed: boolean;
   skipped: boolean;
 }
+
+const batchedTableDescriptionSchema = z.object({
+  tableDescription: z.string(),
+  columns: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
+});
+
+type BatchedTableDescriptionOutput = z.infer<typeof batchedTableDescriptionSchema>;
 
 function descriptionSources(rawDescriptions: Record<string, string> | undefined): Array<[string, string]> {
   if (!rawDescriptions) {
@@ -248,6 +278,76 @@ export interface KtxDescriptionPrompt {
 
 function wordLimitLine(maxWords: number): string {
   return `Please provide a concise description in ${maxWords} words or less.`;
+}
+
+function sampleValuesByColumn(
+  columns: readonly KtxDescriptionColumn[],
+  sampleData: KtxTableSampleResult | null,
+): Map<string, unknown[]> {
+  const values = new Map<string, unknown[]>();
+  for (const column of columns) {
+    const existingValues = column.sampleValues?.filter((value) => value !== null && value !== undefined) ?? [];
+    if (existingValues.length > 0) {
+      values.set(column.name, existingValues);
+    }
+  }
+  if (!sampleData) {
+    return values;
+  }
+  for (const column of columns) {
+    const index = sampleData.headers.findIndex((header) => header.toLowerCase() === column.name.toLowerCase());
+    if (index < 0) {
+      continue;
+    }
+    const sampledValues = sampleData.rows
+      .map((row) => row[index])
+      .filter((value) => value !== null && value !== undefined);
+    if (sampledValues.length > 0) {
+      values.set(column.name, sampledValues);
+    }
+  }
+  return values;
+}
+
+function batchedPrompt(input: {
+  table: KtxGenerateBatchedTableDescriptionsInput['table'];
+  sampleData: KtxTableSampleResult | null;
+  dataSourceType: string;
+  tableMaxWords: number;
+  columnMaxWords: number;
+}): KtxDescriptionPrompt {
+  const columnLines = input.table.columns
+    .map((column) => {
+      const typePart = column.type ? ` (${column.type})` : '';
+      const commentPart = column.rawDescriptions?.db ? ` - ${column.rawDescriptions.db}` : '';
+      return `- ${column.name}${typePart}${commentPart}`;
+    })
+    .join('\n');
+  const sampleLines =
+    input.sampleData && input.sampleData.rows.length > 0
+      ? input.sampleData.rows
+          .slice(0, 5)
+          .map((row) =>
+            input.sampleData!.headers.map((header, index) => `${header}=${String(row[index] ?? '')}`).join(', '),
+          )
+          .join('\n')
+      : 'unavailable';
+  return {
+    system: [
+      'Analyze one database table and return structured JSON matching the supplied schema.',
+      `The table description must be ${input.tableMaxWords} words or less.`,
+      `Each column description must be ${input.columnMaxWords} words or less.`,
+      'Describe business meaning directly. Do not repeat table or column names as filler.',
+    ].join('\n'),
+    user: [
+      `Table: ${input.table.name}`,
+      `Data source type: ${input.dataSourceType}`,
+      'Columns:',
+      columnLines,
+      'Sample rows:',
+      sampleLines,
+    ].join('\n'),
+  };
 }
 
 /** @internal */
@@ -582,6 +682,156 @@ export class KtxDescriptionGenerator {
     }
   }
 
+  async generateBatchedTableDescriptions(
+    input: KtxGenerateBatchedTableDescriptionsInput,
+  ): Promise<KtxBatchedTableDescriptionsResult> {
+    const tableRef = toTableRef(input.table);
+    let sampleData: KtxTableSampleResult | null = null;
+    let fallbackReason: 'capability_missing' | 'sampling_failed' | 'empty_sample' | null = null;
+    if (!input.connector.sampleTable) {
+      fallbackReason = 'capability_missing';
+      this.logger?.warn('KTX scan connector does not support table sampling; falling back to metadata-only prompt', {
+        connectorId: input.connector.id,
+        table: input.table.name,
+      });
+      this.onWarning?.({
+        code: 'connector_capability_missing',
+        message: `Connector ${input.connector.id} does not support sampleTable; using metadata-only description prompt`,
+        table: input.table.name,
+        recoverable: true,
+        metadata: { connectorId: input.connector.id, capability: 'sampleTable' },
+      });
+    } else {
+      try {
+        sampleData = await retryAsync(
+          () =>
+            input.connector.sampleTable!(
+              {
+                connectionId: input.connectionId,
+                table: tableRef,
+                limit: 20,
+              },
+              input.context,
+            ),
+          {
+            attempts: 3,
+            baseDelayMs: 200,
+            signal: input.context.signal,
+            onAttemptFailure: (error, attempt) => {
+              this.logger?.warn(`sampleTable attempt ${attempt} failed for ${input.table.name}: ${errorMessage(error)}`, {
+                connectorId: input.connector.id,
+                table: input.table.name,
+                attempt,
+              });
+            },
+          },
+        );
+        if (sampleData.rows.length === 0) {
+          fallbackReason = 'empty_sample';
+          this.logger?.warn('sampleTable returned no rows; using metadata-only prompt', {
+            connectorId: input.connector.id,
+            table: input.table.name,
+          });
+        }
+      } catch (error) {
+        if (error instanceof KtxAbortedError) {
+          throw error;
+        }
+        fallbackReason = 'sampling_failed';
+        this.logger?.error(`sampleTable exhausted retries for ${input.table.name}: ${errorMessage(error)}`, {
+          connectorId: input.connector.id,
+          table: input.table.name,
+        });
+        this.onWarning?.({
+          code: 'sampling_failed',
+          message: `Failed to sample table ${input.table.name} after retries: ${errorMessage(error)}`,
+          table: input.table.name,
+          recoverable: true,
+          metadata: { connectorId: input.connector.id, error: errorMessage(error) },
+        });
+      }
+    }
+
+    const sampleValues = sampleValuesByColumn(input.table.columns, sampleData);
+    const descriptions = new Map<string, string | null>();
+    let tableDescription: string | null = null;
+    let structuredGenerationSucceeded = false;
+
+    try {
+      const prompt = batchedPrompt({
+        table: input.table,
+        sampleData,
+        dataSourceType: input.dataSourceType,
+        tableMaxWords: this.settings.tableMaxWords,
+        columnMaxWords: this.settings.columnMaxWords,
+      });
+      const generated = await this.llmRuntime.generateObject<
+        BatchedTableDescriptionOutput,
+        typeof batchedTableDescriptionSchema
+      >({
+        role: 'candidateExtraction',
+        system: prompt.system,
+        prompt: prompt.user,
+        schema: batchedTableDescriptionSchema,
+        temperature: this.settings.temperature,
+      });
+      structuredGenerationSucceeded = true;
+      tableDescription = generated.tableDescription.trim() || null;
+      const generatedColumns = new Map(
+        generated.columns.map((column) => [column.name.toLowerCase(), column.description.trim() || null]),
+      );
+      for (const column of input.table.columns) {
+        const description = generatedColumns.get(column.name.toLowerCase()) ?? null;
+        descriptions.set(column.name, description);
+      }
+      if (tableDescription && fallbackReason !== null) {
+        this.onWarning?.({
+          code: 'description_fallback_used',
+          message: `Generated table description without sample rows for ${input.table.name} (reason: ${fallbackReason})`,
+          table: input.table.name,
+          recoverable: true,
+          metadata: { connectorId: input.connector.id, reason: fallbackReason },
+        });
+      }
+    } catch (error) {
+      this.logger?.warn(`Batched table description failed for ${input.table.name}: ${errorMessage(error)}`, {
+        connectorId: input.connector.id,
+        table: input.table.name,
+      });
+      this.onWarning?.({
+        code: 'enrichment_failed',
+        message: `Failed to generate batched description for table ${input.table.name}: ${errorMessage(error)}`,
+        table: input.table.name,
+        recoverable: true,
+        metadata: { connectorId: input.connector.id },
+      });
+    }
+
+    if (!structuredGenerationSucceeded) {
+      for (const column of input.table.columns) {
+        descriptions.set(column.name, null);
+      }
+      return { tableDescription, columnDescriptions: descriptions };
+    }
+
+    const tableContext = `Table: ${input.table.name} | Columns: ${input.table.columns.map((column) => column.name).join(', ')} | Data source: ${input.dataSourceType}`;
+    for (const column of input.table.columns) {
+      if (descriptions.get(column.name)) {
+        continue;
+      }
+      const fallback = await this.generateColumnDescriptionFromPreparedValues({
+        column,
+        columnValues: sampleValues.get(column.name) ?? [],
+        tableContext,
+        dataSourceType: input.dataSourceType,
+        supportsNestedAnalysis: input.supportsNestedAnalysis,
+      });
+      descriptions.set(column.name, fallback);
+    }
+
+    return { tableDescription, columnDescriptions: descriptions };
+  }
+
   async generateDataSourceDescription(input: KtxGenerateDataSourceDescriptionInput): Promise<string | null> {
     if (input.tables.length === 0) {
       return 'No tables found in database';
@@ -732,27 +982,13 @@ export class KtxDescriptionGenerator {
         }
       }
 
-      const nonNullValues = (columnValues ?? []).filter((value) => value !== null && value !== undefined);
-      const hasRawDescriptions = descriptionSources(column.rawDescriptions).length > 0;
-      if (nonNullValues.length === 0 && !hasRawDescriptions) {
-        return {
-          columnName: column.name,
-          description: null,
-          skipped: false,
-          processed: false,
-        };
-      }
-
-      const prompt = buildKtxColumnDescriptionPrompt({
-        columnName: column.name,
-        columnValues: nonNullValues,
+      const description = await this.generateColumnDescriptionFromPreparedValues({
+        column,
+        columnValues: columnValues ?? [],
         tableContext,
         dataSourceType: input.dataSourceType,
         supportsNestedAnalysis: input.supportsNestedAnalysis,
-        rawDescriptions: column.rawDescriptions,
-        maxWords: this.settings.columnMaxWords,
       });
-      const description = await this.generateAiDescription(prompt, 'ktx-column-description');
 
       if (cacheKey && description) {
         await this.cache?.set(cacheKey, description);
@@ -780,6 +1016,30 @@ export class KtxDescriptionGenerator {
         processed: false,
       };
     }
+  }
+
+  private async generateColumnDescriptionFromPreparedValues(input: {
+    column: KtxDescriptionColumn;
+    columnValues: unknown[];
+    tableContext: string;
+    dataSourceType: string;
+    supportsNestedAnalysis: boolean;
+  }): Promise<string | null> {
+    const nonNullValues = input.columnValues.filter((value) => value !== null && value !== undefined);
+    const hasRawDescriptions = descriptionSources(input.column.rawDescriptions).length > 0;
+    if (nonNullValues.length === 0 && !hasRawDescriptions) {
+      return null;
+    }
+    const prompt = buildKtxColumnDescriptionPrompt({
+      columnName: input.column.name,
+      columnValues: nonNullValues,
+      tableContext: input.tableContext,
+      dataSourceType: input.dataSourceType,
+      supportsNestedAnalysis: input.supportsNestedAnalysis,
+      rawDescriptions: input.column.rawDescriptions,
+      maxWords: this.settings.columnMaxWords,
+    });
+    return this.generateAiDescription(prompt, 'ktx-column-description');
   }
 
   private async generateAiDescription(prompt: KtxDescriptionPrompt, _operationName: string): Promise<string | null> {

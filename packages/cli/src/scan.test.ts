@@ -96,14 +96,17 @@ const createSnowflakeLiveDatabaseIntrospection = vi.hoisted(() =>
 const isKtxSnowflakeConnectionConfig = vi.hoisted(() =>
   vi.fn((connection: { driver?: string } | undefined) => connection?.driver === 'snowflake'),
 );
+const snowflakeConnectorInstances = vi.hoisted(() => [] as Array<{ cleanup: ReturnType<typeof vi.fn> }>);
 const KtxSnowflakeScanConnector = vi.hoisted(
   () =>
     class {
       readonly id: string;
       readonly driver = 'snowflake';
+      readonly cleanup = vi.fn(async () => undefined);
 
       constructor(options: { connectionId: string }) {
         this.id = `snowflake:${options.connectionId}`;
+        snowflakeConnectorInstances.push(this);
       }
     },
 );
@@ -1045,6 +1048,95 @@ describe('runKtxScan', () => {
       }),
     );
     await rm(tempProject, { recursive: true, force: true });
+  });
+
+  it('cleans up a constructed scan connector after an enriched scan succeeds', async () => {
+    await initKtxProject({ projectDir: tempDir });
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: snowflake',
+        '    account: acct',
+        '    warehouse: WH',
+        '    database: ANALYTICS',
+        '    schema_name: PUBLIC',
+        '    username: reader',
+        '    password: env:SNOWFLAKE_PASSWORD',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    snowflakeConnectorInstances.length = 0;
+    const runLocalScan = vi.fn(async (): Promise<LocalScanRunResult> => ({
+      runId: 'scan-run-cleanup',
+      status: 'done',
+      done: true,
+      connectionId: 'warehouse',
+      mode: 'enriched',
+      dryRun: false,
+      syncId: 'sync-1',
+      report: { ...report, mode: 'enriched' },
+    }));
+
+    await expect(
+      runKtxScan(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          connectionId: 'warehouse',
+          mode: 'enriched',
+          detectRelationships: false,
+          dryRun: false,
+        },
+        makeIo().io,
+        { runLocalScan, createLocalIngestAdapters: noLocalIngestAdapters },
+      ),
+    ).resolves.toBe(0);
+
+    expect(snowflakeConnectorInstances[0]?.cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up a constructed scan connector after runLocalScan throws', async () => {
+    await initKtxProject({ projectDir: tempDir });
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: snowflake',
+        '    account: acct',
+        '    warehouse: WH',
+        '    database: ANALYTICS',
+        '    schema_name: PUBLIC',
+        '    username: reader',
+        '    password: env:SNOWFLAKE_PASSWORD',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    snowflakeConnectorInstances.length = 0;
+    const runLocalScan = vi.fn(async () => {
+      throw new Error('scan failed');
+    });
+
+    await expect(
+      runKtxScan(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          connectionId: 'warehouse',
+          mode: 'relationships',
+          detectRelationships: true,
+          dryRun: false,
+        },
+        makeIo().io,
+        { runLocalScan, createLocalIngestAdapters: noLocalIngestAdapters },
+      ),
+    ).resolves.toBe(1);
+
+    expect(snowflakeConnectorInstances[0]?.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('routes standalone postgres scans through the native connector before daemon fallback', async () => {

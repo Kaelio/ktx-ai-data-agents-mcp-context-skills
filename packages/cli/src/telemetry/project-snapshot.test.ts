@@ -47,6 +47,7 @@ describe('buildProjectStackSnapshotFields', () => {
             maxLlmTablesPerBatch: 40,
             maxCandidatesPerColumn: 25,
             profileSampleRows: 10000,
+            profileConcurrency: 4,
             validationConcurrency: 4,
           },
         },

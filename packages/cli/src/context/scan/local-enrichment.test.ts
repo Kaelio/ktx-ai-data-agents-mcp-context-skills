@@ -299,6 +299,38 @@ describe('local scan enrichment', () => {
     ]);
   });
 
+  it('uses the supplied snapshot without calling connector.introspect', async () => {
+    const scanConnector = connector();
+    const introspect = vi.mocked(scanConnector.introspect);
+
+    const result = await runLocalScanEnrichment({
+      connectionId: 'warehouse',
+      mode: 'structural',
+      connector: scanConnector,
+      snapshot,
+      context: { runId: 'scan-run-snapshot' },
+      providers: null,
+    });
+
+    expect(result.snapshot).toEqual(snapshot);
+    expect(introspect).not.toHaveBeenCalled();
+  });
+
+  it('falls back to connector.introspect when no snapshot is supplied', async () => {
+    const scanConnector = connector();
+
+    const result = await runLocalScanEnrichment({
+      connectionId: 'warehouse',
+      mode: 'structural',
+      connector: scanConnector,
+      context: { runId: 'scan-run-introspect' },
+      providers: null,
+    });
+
+    expect(result.snapshot).toEqual(snapshot);
+    expect(scanConnector.introspect).toHaveBeenCalledTimes(1);
+  });
+
   it('runs deterministic relationship detection for relationship scans', async () => {
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
@@ -473,7 +505,7 @@ describe('local scan enrichment', () => {
     expect(result.relationships).toEqual({ accepted: 0, review: 1, rejected: 0, skipped: 0 });
   });
 
-  it('generates table descriptions with bounded table-level concurrency', async () => {
+  it('generates batched table descriptions with bounded table-level concurrency', async () => {
     const concurrentSnapshot: KtxSchemaSnapshot = {
       ...snapshot,
       tables: Array.from({ length: 8 }, (_, index) => ({
@@ -497,27 +529,27 @@ describe('local scan enrichment', () => {
         ],
       })),
     };
-    let activeColumnSamples = 0;
-    let maxActiveColumnSamples = 0;
+    let activeTableSamples = 0;
+    let maxActiveTableSamples = 0;
     const scanConnector = {
       ...connector(),
       introspect: vi.fn(async () => concurrentSnapshot),
-      sampleColumn: vi.fn(async () => {
-        activeColumnSamples += 1;
-        maxActiveColumnSamples = Math.max(maxActiveColumnSamples, activeColumnSamples);
+      sampleColumn: vi.fn(async () => ({
+        values: ['1'],
+        nullCount: 0,
+        distinctCount: 1,
+      })),
+      sampleTable: vi.fn(async () => {
+        activeTableSamples += 1;
+        maxActiveTableSamples = Math.max(maxActiveTableSamples, activeTableSamples);
         await new Promise((resolve) => setTimeout(resolve, 10));
-        activeColumnSamples -= 1;
+        activeTableSamples -= 1;
         return {
-          values: ['1'],
-          nullCount: 0,
-          distinctCount: 1,
+          headers: ['id'],
+          rows: [[1]],
+          totalRows: 1,
         };
       }),
-      sampleTable: vi.fn(async () => ({
-        headers: ['id'],
-        rows: [[1]],
-        totalRows: 1,
-      })),
     };
     const settings = {
       ...buildDefaultKtxProjectConfig().scan.relationships,
@@ -533,7 +565,8 @@ describe('local scan enrichment', () => {
       relationshipSettings: settings,
     });
 
-    expect(maxActiveColumnSamples).toBe(6);
+    expect(maxActiveTableSamples).toBe(4);
+    expect(scanConnector.sampleColumn).not.toHaveBeenCalled();
   });
 
   it('reports enrichment progress for countable stages', async () => {
@@ -675,7 +708,7 @@ describe('local scan enrichment', () => {
       providerIdentity: { provider: 'fake', embeddingDimensions: 6 },
     });
 
-    const generateText = vi.spyOn(providers.llmRuntime, 'generateText');
+    const generateObject = vi.spyOn(providers.llmRuntime, 'generateObject');
     const embedBatch = vi.spyOn(providers.embedding, 'embedBatch');
     const second = await runLocalScanEnrichment({
       connectionId: 'warehouse',
@@ -693,7 +726,7 @@ describe('local scan enrichment', () => {
     expect(first.state.resumedStages).toEqual([]);
     expect(second.state.resumedStages).toEqual(['descriptions', 'embeddings', 'relationships']);
     expect(second.state.completedStages).toEqual(['descriptions', 'embeddings', 'relationships']);
-    expect(generateText).not.toHaveBeenCalled();
+    expect(generateObject).not.toHaveBeenCalled();
     expect(embedBatch).not.toHaveBeenCalled();
     expect(second.descriptionUpdates).toEqual(first.descriptionUpdates);
     expect(second.embeddingUpdates).toEqual(first.embeddingUpdates);
@@ -731,7 +764,7 @@ describe('local scan enrichment', () => {
         tables: [{ ...firstTable, name: 'customers' }],
       })),
     };
-    const generateText = vi.spyOn(providers.llmRuntime, 'generateText');
+    const generateObject = vi.spyOn(providers.llmRuntime, 'generateObject');
 
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
@@ -747,7 +780,7 @@ describe('local scan enrichment', () => {
 
     expect(result.state.resumedStages).toEqual([]);
     expect(result.state.completedStages).toEqual(['descriptions', 'embeddings', 'relationships']);
-    expect(generateText).toHaveBeenCalled();
+    expect(generateObject).toHaveBeenCalled();
   });
 
   it('runs providerless enriched scans as relationship-only discovery enrichment', async () => {

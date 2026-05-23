@@ -163,6 +163,11 @@ const scanRelationshipsSchema = z
       .default(25)
       .describe('Maximum number of candidate join partners considered per column during relationship discovery.'),
     profileSampleRows: z.int().positive().default(10000).describe('Number of rows sampled per table when profiling values for relationship inference.'),
+    profileConcurrency: z
+      .int()
+      .positive()
+      .default(4)
+      .describe('Parallel relationship-profile queries run against the database during scan.'),
     validationConcurrency: z.int().positive().default(4).describe('Number of relationship validation queries run in parallel against the database.'),
     validationBudget: z
       .union([z.literal('all'), z.int().nonnegative()])

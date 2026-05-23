@@ -382,6 +382,7 @@ export async function writeLocalScanEnrichmentArtifacts(
           validationRequiredForManifest: input.relationshipSettings.validationRequiredForManifest,
           maxCandidatesPerColumn: input.relationshipSettings.maxCandidatesPerColumn,
           profileSampleRows: input.relationshipSettings.profileSampleRows,
+          profileConcurrency: input.relationshipSettings.profileConcurrency,
           validationConcurrency: input.relationshipSettings.validationConcurrency,
         }
       : undefined,

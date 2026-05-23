@@ -1015,30 +1015,80 @@ async function buildConnectionConfig(input: {
       stringConfigField(input.existingConnection, 'username'),
     );
     if (username === undefined) return 'back';
-    const passwordRef = await promptCredential({
-      prompts,
-      message: 'Snowflake password',
-      projectDir: args.projectDir,
-      connectionId: input.connectionId,
-      secretName: 'password', // pragma: allowlist secret
+    const authChoice = await prompts.select({
+      message: 'Snowflake authentication method',
+      options: [
+        { value: 'password', label: 'Password' },
+        { value: 'rsa', label: 'Key-pair (RSA / JWT)' },
+        { value: 'back', label: 'Back' },
+      ],
     });
-    if (passwordRef === 'back') return 'back'; // pragma: allowlist secret
+    if (authChoice === 'back') return 'back';
+    const authMethod: 'password' | 'rsa' = authChoice === 'rsa' ? 'rsa' : 'password';
+    let passwordRef: string | null = null;
+    let privateKeyInput: string | undefined;
+    let passphraseRef: string | null = null;
+    if (authMethod === 'password') {
+      const ref = await promptCredential({
+        prompts,
+        message: 'Snowflake password',
+        projectDir: args.projectDir,
+        connectionId: input.connectionId,
+        secretName: 'password', // pragma: allowlist secret
+      });
+      if (ref === 'back') return 'back'; // pragma: allowlist secret
+      passwordRef = ref;
+    } else {
+      privateKeyInput = await promptText(
+        prompts,
+        'Path to Snowflake private key (PEM)\nFor example ~/.ssh/snowflake_rsa_key.p8, or $ENV_VAR / env:NAME / file:/abs/path.',
+        displayFileReference(stringConfigField(input.existingConnection, 'privateKey')),
+      );
+      if (privateKeyInput === undefined) return 'back';
+      const phr = await promptCredential({
+        prompts,
+        message: 'Private key passphrase (optional)\nPress Enter to skip.',
+        projectDir: args.projectDir,
+        connectionId: input.connectionId,
+        secretName: 'snowflake-passphrase', // pragma: allowlist secret
+      });
+      if (phr === 'back') return 'back';
+      passphraseRef = phr;
+    }
     const role = await promptText(
       prompts,
       'Snowflake role (optional)\nPress Enter to skip.',
       stringConfigField(input.existingConnection, 'role'),
     );
     if (role === undefined) return 'back';
-    const resolvedPasswordRef = passwordRef ?? stringConfigField(input.existingConnection, 'password');
-    if (!account || !warehouse || !database || !username || !resolvedPasswordRef) return null;
+    if (authMethod === 'password') {
+      const resolvedPasswordRef = passwordRef ?? stringConfigField(input.existingConnection, 'password');
+      if (!account || !warehouse || !database || !username || !resolvedPasswordRef) return null;
+      return {
+        driver: 'snowflake',
+        authMethod: 'password',
+        account,
+        warehouse,
+        database,
+        username,
+        password: resolvedPasswordRef,
+        ...(role ? { role } : {}),
+      };
+    }
+    const resolvedPrivateKey = privateKeyInput
+      ? normalizeFileReference(privateKeyInput)
+      : stringConfigField(input.existingConnection, 'privateKey');
+    if (!account || !warehouse || !database || !username || !resolvedPrivateKey) return null;
+    const resolvedPassphrase = passphraseRef ?? stringConfigField(input.existingConnection, 'passphrase');
     return {
       driver: 'snowflake',
-      authMethod: 'password',
+      authMethod: 'rsa',
       account,
       warehouse,
       database,
       username,
-      password: resolvedPasswordRef,
+      privateKey: resolvedPrivateKey,
+      ...(resolvedPassphrase ? { passphrase: resolvedPassphrase } : {}),
       ...(role ? { role } : {}),
     };
   }

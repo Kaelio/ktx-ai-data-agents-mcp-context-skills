@@ -193,7 +193,7 @@ function statusFor(input: {
   return 'rejected';
 }
 
-async function mapWithConcurrency<TInput, TOutput>(
+export async function mapWithConcurrency<TInput, TOutput>(
   inputs: readonly TInput[],
   concurrency: number,
   mapOne: (input: TInput) => Promise<TOutput>,

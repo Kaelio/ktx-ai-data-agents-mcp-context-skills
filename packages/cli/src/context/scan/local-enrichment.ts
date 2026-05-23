@@ -1,7 +1,7 @@
 import pLimit from 'p-limit';
 import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import { buildDefaultKtxProjectConfig, type KtxScanRelationshipConfig } from '../project/config.js';
-import { type KtxDescriptionColumnTable, KtxDescriptionGenerator } from './description-generation.js';
+import { KtxDescriptionGenerator } from './description-generation.js';
 import { buildKtxColumnEmbeddingText } from './embedding-text.js';
 import {
   completedKtxScanEnrichmentStateSummary,
@@ -41,7 +41,7 @@ import type {
   KtxTableRef,
 } from './types.js';
 
-const DESCRIPTION_TABLE_CONCURRENCY = 6;
+const DESCRIPTION_TABLE_CONCURRENCY = 4;
 
 export interface KtxLocalScanEnrichmentProviders {
   llmRuntime: KtxLlmRuntimePort;
@@ -53,6 +53,7 @@ export interface KtxLocalScanEnrichmentInput {
   mode: KtxScanMode;
   detectRelationships?: boolean;
   connector: KtxScanConnector;
+  snapshot?: KtxSchemaSnapshot;
   context: KtxScanContext;
   providers: KtxLocalScanEnrichmentProviders | null;
   stateStore?: KtxScanEnrichmentStateStore | null;
@@ -179,7 +180,17 @@ function deterministicLlmRuntime(): KtxLlmRuntimePort {
     async generateText(input) {
       return `Deterministic description for ${input.prompt.slice(0, 64).trim() || 'data source'}`;
     },
-    async generateObject() {
+    async generateObject(input) {
+      if (input.prompt.includes('Sample rows:')) {
+        const columns = Array.from(input.prompt.matchAll(/^- ([^\s(]+)/gm), (match) => ({
+          name: match[1] ?? 'column',
+          description: `Deterministic description for ${match[1] ?? 'column'}`,
+        }));
+        return {
+          tableDescription: `Deterministic description for ${input.prompt.slice(0, 64).trim() || 'table'}`,
+          columns,
+        } as never;
+      }
       return { pkCandidates: [], fkCandidates: [] } as never;
     },
     async runAgentLoop() {
@@ -234,30 +245,6 @@ export function snapshotToKtxEnrichedSchema(
   };
 }
 
-function descriptionTable(table: KtxSchemaTable): KtxDescriptionColumnTable {
-  return {
-    catalog: table.catalog,
-    db: table.db,
-    name: table.name,
-    columns: table.columns.map((column) => ({
-      name: column.name,
-      ...(column.comment ? { sampleValues: [column.comment], rawDescriptions: { db: column.comment } } : {}),
-    })),
-  };
-}
-
-function tableMetadataColumns(table: KtxSchemaTable): Array<{
-  name: string;
-  nativeType?: string | null;
-  comment?: string | null;
-}> {
-  return table.columns.map((column) => ({
-    name: column.name,
-    nativeType: column.nativeType ?? null,
-    comment: column.comment ?? null,
-  }));
-}
-
 function embeddingBatchSize(maxBatchSize: number): number {
   return Number.isInteger(maxBatchSize) && maxBatchSize > 0 ? maxBatchSize : 100;
 }
@@ -306,32 +293,28 @@ async function generateDescriptions(input: {
             transient: true,
           },
         );
-        const tableInput = descriptionTable(table);
-        const columnResult = await generator.generateColumnDescriptions({
+        const batched = await generator.generateBatchedTableDescriptions({
           connectionId: input.snapshot.connectionId,
           connector: input.connector,
           context: input.context,
           dataSourceType: input.snapshot.driver,
           supportsNestedAnalysis: input.connector.capabilities.nestedAnalysis,
-          table: tableInput,
-        });
-        const tableDescription = await generator.generateTableDescription({
-          connectionId: input.snapshot.connectionId,
-          connector: input.connector,
-          context: input.context,
-          dataSourceType: input.snapshot.driver,
           table: {
             catalog: table.catalog,
             db: table.db,
             name: table.name,
             rawDescriptions: table.comment ? { db: table.comment } : {},
-            columns: tableMetadataColumns(table),
+            columns: table.columns.map((column) => ({
+              name: column.name,
+              type: column.nativeType,
+              ...(column.comment ? { rawDescriptions: { db: column.comment } } : {}),
+            })),
           },
         });
         return {
           table: tableRef(table),
-          tableDescription,
-          columnDescriptions: Object.fromEntries(columnResult.columnDescriptions),
+          tableDescription: batched.tableDescription,
+          columnDescriptions: Object.fromEntries(batched.columnDescriptions),
         };
       }),
     ),
@@ -472,15 +455,17 @@ export async function runLocalScanEnrichment(
 ): Promise<KtxLocalScanEnrichmentResult> {
   const progress = input.context.progress;
   await progress?.update(0, 'Loading enrichment schema snapshot');
-  const snapshot = await input.connector.introspect(
-    {
-      connectionId: input.connectionId,
-      driver: input.connector.driver,
-      mode: input.mode,
-      detectRelationships: input.detectRelationships,
-    },
-    input.context,
-  );
+  const snapshot =
+    input.snapshot ??
+    (await input.connector.introspect(
+      {
+        connectionId: input.connectionId,
+        driver: input.connector.driver,
+        mode: input.mode,
+        detectRelationships: input.detectRelationships,
+      },
+      input.context,
+    ));
   await progress?.update(0.05, `Loaded schema snapshot with ${snapshot.tables.length} tables`);
 
   const now = input.now ?? (() => new Date());
