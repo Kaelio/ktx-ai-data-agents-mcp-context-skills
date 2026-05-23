@@ -7,6 +7,7 @@ import type { KtxSchemaSnapshot, KtxSchemaTable, KtxTableRef } from '../../../sc
 
 export const LIVE_DATABASE_META_FILE = 'connection.json';
 export const LIVE_DATABASE_FOREIGN_KEYS_FILE = 'foreign-keys.json';
+export const LIVE_DATABASE_WARNINGS_FILE = 'warnings.json';
 const LIVE_DATABASE_TABLES_DIR = 'tables';
 
 interface LiveDatabaseTableFile {
@@ -89,6 +90,13 @@ function foreignKeyIndex(snapshot: KtxSchemaSnapshot): ForeignKeyIndexEntry[] {
   return entries;
 }
 
+function warningArtifact(snapshot: KtxSchemaSnapshot): { warnings: KtxSchemaSnapshot['warnings'] } {
+  const redacted = redactKtxSensitiveMetadata({ warnings: snapshot.warnings ?? [] });
+  return {
+    warnings: Array.isArray(redacted.warnings) ? (redacted.warnings as KtxSchemaSnapshot['warnings']) : [],
+  };
+}
+
 export async function writeLiveDatabaseSnapshot(stagedDir: string, snapshot: KtxSchemaSnapshot): Promise<void> {
   await mkdir(join(stagedDir, LIVE_DATABASE_TABLES_DIR), { recursive: true });
   const sortedTables = [...snapshot.tables].sort((a, b) => tableSortKey(a).localeCompare(tableSortKey(b)));
@@ -105,6 +113,7 @@ export async function writeLiveDatabaseSnapshot(stagedDir: string, snapshot: Ktx
     join(stagedDir, LIVE_DATABASE_FOREIGN_KEYS_FILE),
     stableJson({ foreignKeys: foreignKeyIndex(snapshot) }),
   );
+  await writeFile(join(stagedDir, LIVE_DATABASE_WARNINGS_FILE), stableJson(warningArtifact(snapshot)));
   for (const table of sortedTables) {
     await writeFile(join(stagedDir, liveDatabaseTablePath(table)), stableJson(table));
   }

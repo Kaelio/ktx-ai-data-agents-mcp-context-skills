@@ -469,6 +469,9 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
       extractedAtFallback: report.createdAt,
     });
     enrichmentSnapshot = rawSnapshot;
+    if (rawSnapshot.warnings?.length) {
+      report.warnings.push(...rawSnapshot.warnings);
+    }
     const manifestArtifacts = await writeLocalScanManifestShards({
       project: options.project,
       connectionId: options.connectionId,
