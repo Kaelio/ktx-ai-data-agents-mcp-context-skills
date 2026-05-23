@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPostgresLiveDatabaseIntrospection } from '../../connectors/postgres/live-database-introspection.js';
-import { isKtxPostgresConnectionConfig, KtxPostgresScanConnector, postgresPoolConfigFromConfig, type KtxPostgresPoolFactory } from '../../connectors/postgres/connector.js';
+import { isKtxPostgresConnectionConfig, KtxPostgresScanConnector, postgresPoolConfigFromConfig, type KtxPostgresConnectionConfig, type KtxPostgresPoolFactory } from '../../connectors/postgres/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 interface FakeQueryResult {
@@ -152,6 +152,46 @@ describe('KtxPostgresScanConnector', () => {
       database: 'analytics',
       user: 'reader',
     });
+  });
+
+  it('defaults and validates Postgres maxConnections', () => {
+    const baseConnection: KtxPostgresConnectionConfig = {
+      driver: 'postgres',
+      host: 'db.example.test',
+      database: 'analytics',
+      username: 'reader',
+      password: 'test-password', // pragma: allowlist secret
+    };
+
+    expect(
+      postgresPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: baseConnection,
+      }),
+    ).toMatchObject({ max: 10 });
+
+    expect(
+      postgresPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: 50 },
+      }),
+    ).toMatchObject({ max: 50 });
+
+    expect(
+      postgresPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: '12' as never },
+      }),
+    ).toMatchObject({ max: 12 });
+
+    for (const maxConnections of [0, -1, 1.5, Number.NaN, 'abc' as never]) {
+      expect(() =>
+        postgresPoolConfigFromConfig({
+          connectionId: 'warehouse',
+          connection: { ...baseConnection, maxConnections },
+        }),
+      ).toThrow('connections.warehouse.maxConnections must be a positive integer');
+    }
   });
 
   it('introspects schemas, tables, views, primary keys, comments, row counts, and foreign keys', async () => {

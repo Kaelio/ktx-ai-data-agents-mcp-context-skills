@@ -43,6 +43,7 @@ export interface KtxPostgresConnectionConfig {
   sslmode?: string;
   sslMode?: string;
   rejectUnauthorized?: boolean;
+  maxConnections?: number;
   [key: string]: unknown;
 }
 
@@ -242,6 +243,23 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function positiveIntegerConfigValue(input: {
+  connection: KtxPostgresConnectionConfig;
+  key: keyof KtxPostgresConnectionConfig;
+  connectionId: string;
+  defaultValue: number;
+}): number {
+  const value = input.connection[input.key];
+  if (value === undefined) {
+    return input.defaultValue;
+  }
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    throw new Error(`connections.${input.connectionId}.${String(input.key)} must be a positive integer`);
+  }
+  return numberValue;
+}
+
 function parsePostgresUrl(url: string): Partial<KtxPostgresConnectionConfig> {
   const parsed = new URL(url);
   const sslmode = parsed.searchParams.get('sslmode') ?? undefined;
@@ -299,6 +317,12 @@ export function postgresPoolConfigFromConfig(input: {
   const user = stringConfigValue(merged, 'username', env) ?? stringConfigValue(merged, 'user', env);
   const password = stringConfigValue(merged, 'password', env);
   const sslmode = normalizedSslMode(merged);
+  const maxConnections = positiveIntegerConfigValue({
+    connection: merged,
+    key: 'maxConnections',
+    connectionId: input.connectionId,
+    defaultValue: 10,
+  });
 
   if (!referencedUrl && !host) {
     throw new Error(`Native PostgreSQL connector requires connections.${input.connectionId}.host or url`);
@@ -311,7 +335,7 @@ export function postgresPoolConfigFromConfig(input: {
   }
 
   const config: KtxPostgresPoolConfig = {
-    max: 10,
+    max: maxConnections,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     ...(referencedUrl && sslmode !== 'prefer' && sslmode !== 'disable'
