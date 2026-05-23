@@ -2068,9 +2068,40 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('│  Changes: 0 changes across 56 tables');
   });
 
+  function fakeHistoricSqlRunner(
+    dialect: 'postgres' | 'snowflake' | 'bigquery',
+    catalogName: string,
+  ) {
+    return {
+      dialect,
+      catalogName,
+      async run() {
+        return { warnings: [], info: [] };
+      },
+      formatSuccessDetail() {
+        return { detail: `${catalogName} ready`, warnings: [] };
+      },
+      fixAdvice() {
+        return {
+          failHeadline: `${catalogName} unavailable`,
+          remediation: 'Fix query-history grants.',
+        };
+      },
+    };
+  }
+
   it('writes query history config for supported Snowflake databases after validation succeeds', async () => {
     const io = makeIo();
-    const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
+    const runner = fakeHistoricSqlRunner(
+      'snowflake',
+      'SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+    );
+    const historicSqlReadinessProbe = vi.fn(async () => ({
+      ok: true as const,
+      dialect: 'snowflake' as const,
+      runner,
+      result: { warnings: [], info: [] },
+    }));
     const result = await runKtxSetupDatabasesStep(
       {
         projectDir: tempDir,
@@ -2088,7 +2119,7 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
-        historicSqlProbe,
+        historicSqlReadinessProbe,
         prompts: makePromptAdapter({
           selectValues: ['password'],
           textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
@@ -2096,11 +2127,11 @@ describe('setup databases step', () => {
         }),
       },
     );
-    expect(historicSqlProbe).toHaveBeenCalledWith(
+    expect(historicSqlReadinessProbe).toHaveBeenCalledWith(
       expect.objectContaining({
         projectDir: tempDir,
         connectionId: 'snowflake',
-        dialect: 'snowflake',
+        connection: expect.objectContaining({ driver: 'snowflake' }),
       }),
     );
 
@@ -2198,7 +2229,15 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
-        historicSqlProbe: vi.fn(async () => ({ ok: true, lines: ['  OK pg_stat_statements ready (PostgreSQL 16.4)'] })),
+        historicSqlReadinessProbe: vi.fn(async () => {
+          const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+          return {
+            ok: true as const,
+            dialect: 'postgres' as const,
+            runner,
+            result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+          };
+        }),
       },
     );
 
@@ -2269,7 +2308,13 @@ describe('setup databases step', () => {
     );
     const io = makeIo();
     const prompts = makePromptAdapter({ selectValues: ['yes', 'deep'] });
-    const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
+    const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+    const historicSqlReadinessProbe = vi.fn(async () => ({
+      ok: true as const,
+      dialect: 'postgres' as const,
+      runner,
+      result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+    }));
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -2284,7 +2329,7 @@ describe('setup databases step', () => {
         prompts,
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
-        historicSqlProbe,
+        historicSqlReadinessProbe,
       },
     );
 
@@ -2303,11 +2348,13 @@ describe('setup databases step', () => {
         message: expect.stringContaining('How much database context should KTX build?'),
       }),
     );
-    expect(historicSqlProbe).toHaveBeenCalledWith({
-      projectDir: tempDir,
-      connectionId: 'warehouse',
-      dialect: 'postgres',
-    });
+    expect(historicSqlReadinessProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        connection: expect.objectContaining({ driver: 'postgres' }),
+      }),
+    );
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
       context: {
@@ -2335,6 +2382,13 @@ describe('setup databases step', () => {
       'utf-8',
     );
     const io = makeIo();
+    const runner = fakeHistoricSqlRunner('bigquery', 'INFORMATION_SCHEMA.JOBS_BY_PROJECT');
+    const historicSqlReadinessProbe = vi.fn(async () => ({
+      ok: true as const,
+      dialect: 'bigquery' as const,
+      runner,
+      result: { warnings: [], info: [] },
+    }));
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -2350,10 +2404,18 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
+        historicSqlReadinessProbe,
       },
     );
 
     expect(result.status).toBe('ready');
+    expect(historicSqlReadinessProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        connectionId: 'analytics',
+        connection: expect.objectContaining({ driver: 'bigquery' }),
+      }),
+    );
     const configText = await readFile(join(tempDir, 'ktx.yaml'), 'utf-8');
     const config = parseKtxProjectConfig(configText);
     expect(config.connections.analytics).toMatchObject({
@@ -2373,6 +2435,71 @@ describe('setup databases step', () => {
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);
     expect(config.ingest.adapters).toEqual([]);
+  });
+
+  it('prints a non-blocking BigQuery query history probe failure with the grants remediation', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  analytics:',
+        '    driver: bigquery',
+        '    dataset_id: analytics',
+        '    credentials_json: env:BIGQUERY_CREDENTIALS_JSON',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const runner = {
+      ...fakeHistoricSqlRunner('bigquery', 'INFORMATION_SCHEMA.JOBS_BY_PROJECT'),
+      fixAdvice: () => ({
+        failHeadline: 'BigQuery principal cannot read INFORMATION_SCHEMA.JOBS_BY_PROJECT',
+        remediation:
+          'Grant roles/bigquery.resourceViewer on the BigQuery project, or grant a custom role containing bigquery.jobs.listAll.',
+      }),
+    };
+    const error = new Error('access denied');
+    const historicSqlReadinessProbe = vi.fn(async () => ({
+      ok: false as const,
+      dialect: 'bigquery' as const,
+      runner,
+      error,
+    }));
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseConnectionIds: ['analytics'],
+        databaseSchemas: [],
+        enableQueryHistory: true,
+        queryHistoryWindowDays: 45,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlReadinessProbe,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(historicSqlReadinessProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        connectionId: 'analytics',
+        connection: expect.objectContaining({ driver: 'bigquery' }),
+      }),
+    );
+    expect(io.stdout()).toContain('Query history probe...');
+    expect(io.stdout()).toContain(
+      'BigQuery principal cannot read INFORMATION_SCHEMA.JOBS_BY_PROJECT',
+    );
+    expect(io.stdout()).toContain('roles/bigquery.resourceViewer');
+    expect(io.stdout()).toContain('bigquery.jobs.listAll');
+    expect(io.stdout()).toContain('Setup written; query history will be skipped until fixed.');
   });
 
   it('enables query history on an existing Postgres connection', async () => {
@@ -2403,7 +2530,15 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
-        historicSqlProbe: vi.fn(async () => ({ ok: true, lines: ['  OK pg_stat_statements ready (PostgreSQL 16.4)'] })),
+        historicSqlReadinessProbe: vi.fn(async () => {
+          const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+          return {
+            ok: true as const,
+            dialect: 'postgres' as const,
+            runner,
+            result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+          };
+        }),
       },
     );
 
@@ -2471,7 +2606,15 @@ describe('setup databases step', () => {
         {
           testConnection: vi.fn(async () => 0),
           scanConnection: vi.fn(async () => 0),
-          historicSqlProbe: vi.fn(async () => ({ ok: true, lines: [] })),
+          historicSqlReadinessProbe: vi.fn(async () => {
+            const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+            return {
+              ok: true as const,
+              dialect: 'postgres' as const,
+              runner,
+              result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+            };
+          }),
         },
       ),
     ).resolves.toMatchObject({ status: 'ready' });
@@ -2498,13 +2641,18 @@ describe('setup databases step', () => {
 
   it('prints a non-blocking Postgres query history probe failure after connection test succeeds', async () => {
     const io = makeIo();
-    const historicSqlProbe = vi.fn(async () => ({
-      ok: false,
-      lines: [
-        '  FAIL pg_stat_statements extension is not installed in the connection database',
-        '  Fix: Run (against this database): CREATE EXTENSION pg_stat_statements;',
-        "  Fix: Ensure shared_preload_libraries includes 'pg_stat_statements'.",
-      ],
+    const runner = {
+      ...fakeHistoricSqlRunner('postgres', 'pg_stat_statements'),
+      fixAdvice: () => ({
+        failHeadline: 'pg_stat_statements extension is not installed in the connection database',
+        remediation: 'Run (against this database): CREATE EXTENSION pg_stat_statements;',
+      }),
+    };
+    const historicSqlReadinessProbe = vi.fn(async () => ({
+      ok: false as const,
+      dialect: 'postgres' as const,
+      runner,
+      error: new Error('missing extension'),
     }));
 
     const result = await runKtxSetupDatabasesStep(
@@ -2522,16 +2670,16 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
-        historicSqlProbe,
+        historicSqlReadinessProbe,
       },
     );
 
     expect(result.status).toBe('ready');
-    expect(historicSqlProbe).toHaveBeenCalledWith(
+    expect(historicSqlReadinessProbe).toHaveBeenCalledWith(
       expect.objectContaining({
         projectDir: tempDir,
         connectionId: 'warehouse',
-        dialect: 'postgres',
+        connection: expect.objectContaining({ driver: 'postgres' }),
       }),
     );
     expect(io.stdout()).toContain('Query history probe...');
@@ -2542,12 +2690,19 @@ describe('setup databases step', () => {
 
   it('prints a non-blocking Snowflake query history probe failure with the grants remediation', async () => {
     const io = makeIo();
-    const historicSqlProbe = vi.fn(async () => ({
-      ok: false,
-      lines: [
-        '  FAIL Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
-        '  Fix: Run (as ACCOUNTADMIN): GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE <connection role>;',
-      ],
+    const runner = {
+      ...fakeHistoricSqlRunner('snowflake', 'SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY'),
+      fixAdvice: () => ({
+        failHeadline: 'Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+        remediation:
+          'Run (as ACCOUNTADMIN): GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE <connection role>;',
+      }),
+    };
+    const historicSqlReadinessProbe = vi.fn(async () => ({
+      ok: false as const,
+      dialect: 'snowflake' as const,
+      runner,
+      error: new Error('role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY'),
     }));
 
     const result = await runKtxSetupDatabasesStep(
@@ -2564,7 +2719,7 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
-        historicSqlProbe,
+        historicSqlReadinessProbe,
         prompts: makePromptAdapter({
           textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
           passwordValues: ['env:SNOWFLAKE_PASSWORD'],
@@ -2573,11 +2728,11 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(historicSqlProbe).toHaveBeenCalledWith(
+    expect(historicSqlReadinessProbe).toHaveBeenCalledWith(
       expect.objectContaining({
         projectDir: tempDir,
         connectionId: 'warehouse',
-        dialect: 'snowflake',
+        connection: expect.objectContaining({ driver: 'snowflake' }),
       }),
     );
     expect(io.stdout()).toContain('Query history probe...');
@@ -2588,7 +2743,15 @@ describe('setup databases step', () => {
 
   it('does not run the query history probe when the regular connection test fails', async () => {
     const io = makeIo();
-    const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
+    const historicSqlReadinessProbe = vi.fn(async () => {
+      const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+      return {
+        ok: true as const,
+        dialect: 'postgres' as const,
+        runner,
+        result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+      };
+    });
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -2605,12 +2768,12 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 1),
         scanConnection: vi.fn(async () => 0),
-        historicSqlProbe,
+        historicSqlReadinessProbe,
       },
     );
 
     expect(result.status).toBe('failed');
-    expect(historicSqlProbe).not.toHaveBeenCalled();
+    expect(historicSqlReadinessProbe).not.toHaveBeenCalled();
   });
 
   it('returns missing input when non-interactive database flags are incomplete', async () => {
