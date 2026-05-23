@@ -1,6 +1,6 @@
 ---
 title: Context Sources
-description: Ingest semantic context from dbt, MetricFlow, LookML, Metabase, Looker, and Notion.
+description: Ingest semantic context from dbt, MetricFlow, LookML, Metabase, Looker, Notion, and Slack.
 ---
 
 Context sources feed your existing analytics tooling into **ktx**. During ingestion, **ktx** extracts metadata from each source and uses a reconciliation agent to reconcile it with your existing semantic layer and knowledge base - preserving accepted edits rather than overwriting.
@@ -27,7 +27,7 @@ LookML uses top-level `repoUrl`, and MetricFlow uses nested
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `driver` | Yes | Source connector: `dbt`, `metricflow`, `lookml`, `metabase`, `looker`, or `notion` |
+| `driver` | Yes | Source connector: `dbt`, `metricflow`, `lookml`, `metabase`, `looker`, `notion`, or `slack` |
 | `source_dir` | For local file sources | Absolute or project-relative source directory |
 | `repo_url` | For Git-hosted dbt sources | Git repository URL |
 | `repoUrl` | For Git-hosted LookML sources | Git repository URL |
@@ -374,6 +374,47 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 - Incremental sync cursors are stored in `.ktx/db.sqlite`; don't add
   `last_successful_cursor` to `ktx.yaml`
 
+---
+
+## Slack
+
+Ingests messages from allowlisted Slack channels as wiki context. Slack is knowledge-only and does not produce semantic layer sources.
+
+### What it provides
+
+- Markdown pages for messages in configured channels
+- Channel allowlisting so ingest never scans full workspace history
+
+### Connection config
+
+```yaml title="ktx.yaml"
+connections:
+  team-slack:
+    driver: slack
+    bot_token_ref: env:SLACK_BOT_TOKEN
+    channel_ids:
+      - C0123456789
+    max_messages_per_channel: 1000
+```
+
+### Authentication
+
+| Method | Config |
+|--------|--------|
+| Bot token | `bot_token_ref: env:SLACK_BOT_TOKEN` |
+
+The Slack app needs `channels:history` for public channels and `groups:history` for private channels that the app is added to.
+
+### What gets ingested
+
+- `wiki/global/slack/<channel>/<message-ts>.md` for channel messages
+
+### Notes
+
+- `channel_ids` is required and must not be empty
+- Slack ingest reads only the configured `channel_ids`, never every workspace channel
+- `max_messages_per_channel` caps each channel fetch in one ingest run
+
 ## Common errors
 
 | Error or symptom | Likely cause | Recovery |
@@ -382,4 +423,5 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 | Private repo/API authentication fails | Token env var or secret file is missing | Export the env var or update `auth_token_ref` to a readable file |
 | Ingest creates duplicate context | Existing source names or wiki pages do not match imported terminology | Review the diff, rename duplicates, and add wiki pages with canonical names |
 | Notion ingest skips pages | Integration lacks access or root ids are missing | Share pages with the Notion integration and set `root_page_ids` or use `all_accessible` carefully |
+| Slack ingest reads no messages | The app is not in the channel or the channel has no readable messages | Invite the app to the configured channel and verify the token has the matching history scope |
 | Generated semantic sources fail validation | Tool metadata does not match the live warehouse schema | Map BI/source databases to primary warehouse connections and rerun validation |

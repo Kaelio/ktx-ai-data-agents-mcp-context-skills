@@ -115,6 +115,31 @@ describe('connectionConfigSchema - notion / dbt / metricflow', () => {
     ).toThrow();
   });
 
+  it('parses a slack connection with an allowlisted channel', () => {
+    const parsed = connectionConfigSchema.parse({
+      driver: 'slack',
+      bot_token_ref: 'env:SLACK_BOT_TOKEN',
+      channel_ids: ['C0123456789'],
+      max_messages_per_channel: 200,
+    });
+    expect(parsed).toMatchObject({
+      driver: 'slack',
+      bot_token_ref: 'env:SLACK_BOT_TOKEN',
+      channel_ids: ['C0123456789'],
+      max_messages_per_channel: 200,
+    });
+  });
+
+  it('rejects slack without channel allowlist', () => {
+    expect(() =>
+      connectionConfigSchema.parse({
+        driver: 'slack',
+        bot_token_ref: 'env:SLACK_BOT_TOKEN',
+        channel_ids: [],
+      }),
+    ).toThrow();
+  });
+
   it('parses a dbt connection from a local source_dir', () => {
     const parsed = connectionConfigSchema.parse({
       driver: 'dbt',
