@@ -47,6 +47,13 @@ const BUILTIN_TOOLS = [
 
 const KTX_MCP_SERVER_NAME = 'ktx';
 
+// SDK-internal pseudo-tool that the Claude Code CLI announces in its
+// system/init message whenever outputFormat: { type: 'json_schema' } is set.
+// Structured output is returned via result.structured_output (not through
+// canUseTool), so the tool only needs to be whitelisted for generateObject's
+// init isolation check; generateText / runAgentLoop never see it.
+const STRUCTURED_OUTPUT_TOOL_NAME = 'StructuredOutput';
+
 function isResult(message: SDKMessage): message is SDKResultMessage {
   return message.type === 'result';
 }
@@ -238,7 +245,12 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         projectDir: this.deps.projectDir,
         model: modelForRole(this.deps.modelSlots, input.role),
         env: this.deps.env,
-        maxTurns: 1,
+        // Structured output occasionally takes more than one assistant turn —
+        // the model may emit thinking/text before the StructuredOutput tool
+        // call, or the SDK may count assistant + tool-result as separate turns.
+        // 5 leaves headroom without enabling unbounded loops; the json_schema
+        // constraint still forces the final answer to be the schema.
+        maxTurns: 5,
         tools: input.tools,
       }),
       outputFormat: { type: 'json_schema' as const, schema: jsonSchema(input.schema as z.ZodType) },
@@ -247,7 +259,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
-      allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
+      allowedToolIds: new Set([...mcpToolIds(input.tools ?? {}), STRUCTURED_OUTPUT_TOOL_NAME]),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
     });
     const error = resultError(result);

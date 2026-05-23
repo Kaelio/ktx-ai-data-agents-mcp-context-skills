@@ -91,9 +91,14 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     });
   });
 
-  it('validates structured output with the caller schema', async () => {
+  it('validates structured output with the caller schema and whitelists the SDK StructuredOutput tool', async () => {
     const schema = z.object({ answer: z.string() });
-    const query = vi.fn((_input: any) => stream([initMessage(), resultMessage({ structured_output: { answer: 'yes' } })]));
+    const query = vi.fn((_input: any) =>
+      stream([
+        initMessage({ tools: ['StructuredOutput'] }),
+        resultMessage({ structured_output: { answer: 'yes' } }),
+      ]),
+    );
     const runtime = new ClaudeCodeKtxLlmRuntime({
       projectDir: '/tmp/project',
       modelSlots: { default: 'sonnet' },
@@ -341,7 +346,10 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
   it('passes scrubbed env to object generation and agent loops', async () => {
     const schema = z.object({ answer: z.string() });
     const objectQuery = vi.fn((_input: any) =>
-      stream([initMessage(), resultMessage({ structured_output: { answer: 'yes' } })]),
+      stream([
+        initMessage({ tools: ['StructuredOutput'] }),
+        resultMessage({ structured_output: { answer: 'yes' } }),
+      ]),
     );
     const objectRuntime = new ClaudeCodeKtxLlmRuntime({
       projectDir: '/tmp/project',
