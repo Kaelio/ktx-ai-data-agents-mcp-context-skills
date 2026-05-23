@@ -8,11 +8,16 @@ interface FakeQueryResult {
   fields?: Array<{ name: string; dataTypeID: number }>;
 }
 
-function fakePoolFactory(results: Map<string, FakeQueryResult>): KtxPostgresPoolFactory {
+type FakeQueryResponse = FakeQueryResult | Error;
+
+function fakePoolFactory(results: Map<string, FakeQueryResponse>): KtxPostgresPoolFactory {
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     const normalized = sql.replace(/\s+/g, ' ').trim();
     for (const [key, value] of results.entries()) {
       if (normalized.includes(key)) {
+        if (value instanceof Error) {
+          throw value;
+        }
         return value;
       }
     }
@@ -33,8 +38,8 @@ function fakePoolFactory(results: Map<string, FakeQueryResult>): KtxPostgresPool
   };
 }
 
-function metadataResults(): Map<string, FakeQueryResult> {
-  return new Map<string, FakeQueryResult>([
+function metadataResults(): Map<string, FakeQueryResponse> {
+  return new Map<string, FakeQueryResponse>([
     [
       'FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n',
       {
@@ -250,6 +255,75 @@ describe('KtxPostgresScanConnector', () => {
         constraintName: 'orders_customer_id_fkey',
       },
     ]);
+  });
+
+  it('soft-fails denied Postgres constraint discovery with scan warnings', async () => {
+    const results = metadataResults();
+    results.set(
+      "tc.constraint_type = 'PRIMARY KEY'",
+      Object.assign(new Error('permission denied for information_schema'), { code: '42501' }),
+    );
+    results.set(
+      "tc.constraint_type = 'FOREIGN KEY'",
+      Object.assign(new Error('relation information_schema.key_column_usage does not exist'), { code: '42P01' }),
+    );
+    const connector = new KtxPostgresScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'postgres',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        password: 'test-password', // pragma: allowlist secret
+        schema: 'public',
+      },
+      poolFactory: fakePoolFactory(results),
+      now: () => new Date('2026-04-29T10:00:00.000Z'),
+    });
+
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'postgres' },
+      { runId: 'scan-run-denied-constraints' },
+    );
+
+    expect(snapshot.warnings).toEqual([
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped primary-key discovery in public (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'public', kind: 'primary_key' },
+      },
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped foreign-key discovery in public (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'public', kind: 'foreign_key' },
+      },
+    ]);
+    expect(snapshot.tables.every((table) => table.columns.every((column) => column.primaryKey === false))).toBe(true);
+    expect(snapshot.tables.every((table) => table.foreignKeys.length === 0)).toBe(true);
+  });
+
+  it('propagates non-denial Postgres constraint discovery errors', async () => {
+    const results = metadataResults();
+    const resetError = Object.assign(new Error('connection reset'), { code: 'ECONNRESET' });
+    results.set("tc.constraint_type = 'PRIMARY KEY'", resetError);
+    const connector = new KtxPostgresScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'postgres',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        password: 'test-password', // pragma: allowlist secret
+        schema: 'public',
+      },
+      poolFactory: fakePoolFactory(results),
+    });
+
+    await expect(
+      connector.introspect({ connectionId: 'warehouse', driver: 'postgres' }, { runId: 'scan-run-network-error' }),
+    ).rejects.toBe(resetError);
   });
 
   it('runs samples, distinct values, statistics, read-only SQL, and schema listing', async () => {
