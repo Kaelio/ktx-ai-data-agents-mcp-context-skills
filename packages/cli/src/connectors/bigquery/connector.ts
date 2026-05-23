@@ -1,8 +1,28 @@
 import { BigQuery, type TableField } from '@google-cloud/bigquery';
 import { normalizeBigQueryProjectId, normalizeBigQueryRegion } from '../../context/connections/bigquery-identifiers.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
-import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
+import {
+  createKtxConnectorCapabilities,
+  type KtxColumnSampleInput,
+  type KtxColumnSampleResult,
+  type KtxColumnStatsInput,
+  type KtxColumnStatsResult,
+  type KtxQueryResult,
+  type KtxReadOnlyQueryInput,
+  type KtxScanConnector,
+  type KtxScanContext,
+  type KtxScanInput,
+  type KtxScanWarning,
+  type KtxSchemaColumn,
+  type KtxSchemaSnapshot,
+  type KtxSchemaTable,
+  type KtxTableListEntry,
+  type KtxTableRef,
+  type KtxTableSampleInput,
+  type KtxTableSampleResult,
+} from '../../context/scan/types.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -185,6 +205,17 @@ function firstNumber(value: unknown): number | null {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+function isDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const candidate = error as { code?: unknown; errors?: Array<{ reason?: unknown }> };
+  return (
+    candidate.code === 403 ||
+    candidate.errors?.some((item) => item.reason === 'accessDenied' || item.reason === 'notFound') === true
+  );
+}
+
 function normalizeValue(value: unknown): unknown {
   if (value === null || value === undefined) {
     return null;
@@ -289,11 +320,12 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     this.assertConnection(input.connectionId);
     const tables: KtxSchemaTable[] = [];
     const datasetIds = this.requireDatasetIdsForScan();
+    const snapshotWarnings: KtxScanWarning[] = [];
     for (const datasetId of datasetIds) {
       const scopedNames = input.tableScope
         ? scopedTableNames(input.tableScope, { catalog: this.resolved.projectId, db: datasetId })
         : null;
-      tables.push(...(await this.introspectDataset(datasetId, scopedNames)));
+      tables.push(...(await this.introspectDataset(datasetId, scopedNames, snapshotWarnings)));
     }
     return {
       connectionId: this.connectionId,
@@ -307,6 +339,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
         total_columns: tables.reduce((sum, table) => sum + table.columns.length, 0),
       },
       tables,
+      warnings: snapshotWarnings,
     };
   }
 
@@ -366,7 +399,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     if (!datasetId) {
       return 0;
     }
-    const tables = await this.introspectDataset(datasetId, null);
+    const tables = await this.introspectDataset(datasetId, null, []);
     return tables.find((table) => table.name === tableName)?.estimatedRows ?? 0;
   }
 
@@ -467,13 +500,24 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     return firstNumber(rows[0]?.[header]);
   }
 
-  private async introspectDataset(datasetId: string, scopedNames: readonly string[] | null): Promise<KtxSchemaTable[]> {
+  private async introspectDataset(
+    datasetId: string,
+    scopedNames: readonly string[] | null,
+    snapshotWarnings: KtxScanWarning[],
+  ): Promise<KtxSchemaTable[]> {
     if (scopedNames && scopedNames.length === 0) return [];
     const dataset = this.getClient().dataset(datasetId);
     const [tableRefs] = await dataset.getTables();
     const scopeSet = scopedNames ? new Set(scopedNames) : null;
     const filteredTableRefs = scopeSet ? tableRefs.filter((tableRef) => scopeSet.has(tableRef.id ?? '')) : tableRefs;
-    const primaryKeys = await this.primaryKeys(datasetId);
+    const primaryKeysResult = await tryConstraintQuery(
+      { schema: datasetId, kind: 'primary_key', isDeniedError },
+      () => this.primaryKeys(datasetId),
+    );
+    const primaryKeys = primaryKeysResult.ok ? primaryKeysResult.value : new Map<string, Set<string>>();
+    if (!primaryKeysResult.ok) {
+      snapshotWarnings.push(primaryKeysResult.warning);
+    }
     const tables: KtxSchemaTable[] = [];
     for (const tableRef of filteredTableRefs) {
       const tableName = tableRef.id || '';
