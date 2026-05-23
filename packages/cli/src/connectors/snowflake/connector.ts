@@ -24,7 +24,7 @@ export interface KtxSnowflakeConnectionConfig {
   privateKey?: string;
   passphrase?: string;
   role?: string;
-  maxSessions?: number;
+  maxConnections?: number;
   [key: string]: unknown;
 }
 
@@ -39,7 +39,7 @@ export interface KtxSnowflakeResolvedConnectionConfig {
   privateKey?: string;
   passphrase?: string;
   role?: string;
-  maxSessions: number;
+  maxConnections: number;
 }
 
 export interface KtxSnowflakeRawColumnMetadata {
@@ -218,6 +218,9 @@ export function snowflakeConnectionConfigFromConfig(input: {
   if (!isKtxSnowflakeConnectionConfig(input.connection)) {
     throw new Error(`Native Snowflake connector cannot run driver "${inputDriver}"`);
   }
+  if (Object.prototype.hasOwnProperty.call(input.connection, 'maxSessions')) {
+    throw new Error(`connections.${input.connectionId}.maxSessions has been renamed to maxConnections`);
+  }
   const env = input.env ?? process.env;
   const authMethod = input.connection?.authMethod ?? 'password';
   const account = stringConfigValue(input.connection, 'account', env);
@@ -249,9 +252,9 @@ export function snowflakeConnectionConfigFromConfig(input: {
     database,
     schemas: resolvedSchemas,
     username,
-    maxSessions: positiveIntegerConfigValue({
+    maxConnections: positiveIntegerConfigValue({
       connection: input.connection,
-      key: 'maxSessions',
+      key: 'maxConnections',
       connectionId: input.connectionId,
       defaultValue: 4,
     }),
@@ -322,7 +325,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
       const message = error instanceof Error ? error.message : String(error);
       if (/timeout/i.test(message) && /pool|acquire/i.test(message)) {
         throw new Error(
-          "Snowflake session pool exhausted after 60s - consider lowering maxSessions or increasing your account's concurrent-statement limit.",
+          "Snowflake session pool exhausted after 60s - consider lowering maxConnections or increasing your account's concurrent-statement limit.",
         );
       }
       throw error;
@@ -432,7 +435,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
     if (!this.pool) {
       this.pool = snowflake.createPool(await this.resolveConnectionOptions(), {
         min: 0,
-        max: this.resolved.maxSessions,
+        max: this.resolved.maxConnections,
         evictionRunIntervalMillis: 30_000,
         acquireTimeoutMillis: 60_000,
       });

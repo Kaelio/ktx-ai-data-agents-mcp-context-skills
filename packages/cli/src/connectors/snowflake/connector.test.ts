@@ -8,7 +8,7 @@ vi.mock('snowflake-sdk', () => ({
 }));
 
 import { createSnowflakeLiveDatabaseIntrospection } from '../../connectors/snowflake/live-database-introspection.js';
-import { isKtxSnowflakeConnectionConfig, KtxSnowflakeScanConnector, snowflakeConnectionConfigFromConfig, type KtxSnowflakeDriver, type KtxSnowflakeDriverFactory } from '../../connectors/snowflake/connector.js';
+import { isKtxSnowflakeConnectionConfig, KtxSnowflakeScanConnector, snowflakeConnectionConfigFromConfig, type KtxSnowflakeConnectionConfig, type KtxSnowflakeDriver, type KtxSnowflakeDriverFactory } from '../../connectors/snowflake/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function fakeDriverFactory(): KtxSnowflakeDriverFactory {
@@ -140,8 +140,8 @@ describe('KtxSnowflakeScanConnector', () => {
     });
   });
 
-  it('defaults and validates Snowflake maxSessions', () => {
-    const baseConnection = {
+  it('defaults and validates Snowflake maxConnections', () => {
+    const baseConnection: KtxSnowflakeConnectionConfig = {
       driver: 'snowflake',
       authMethod: 'password',
       account: 'acct',
@@ -150,30 +150,57 @@ describe('KtxSnowflakeScanConnector', () => {
       schema_name: 'PUBLIC',
       username: 'reader',
       password: 'fixture-pass', // pragma: allowlist secret
-    } as const;
+    };
 
     expect(
       snowflakeConnectionConfigFromConfig({
         connectionId: 'warehouse',
         connection: baseConnection,
       }),
-    ).toMatchObject({ maxSessions: 4 });
+    ).toMatchObject({ maxConnections: 4 });
 
     expect(
       snowflakeConnectionConfigFromConfig({
         connectionId: 'warehouse',
-        connection: { ...baseConnection, maxSessions: 8 },
+        connection: { ...baseConnection, maxConnections: 8 },
       }),
-    ).toMatchObject({ maxSessions: 8 });
+    ).toMatchObject({ maxConnections: 8 });
 
-    for (const maxSessions of [0, -1, 1.5, Number.NaN]) {
+    expect(
+      snowflakeConnectionConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: '12' as never },
+      }),
+    ).toMatchObject({ maxConnections: 12 });
+
+    for (const maxConnections of [0, -1, 1.5, Number.NaN, 'abc' as never]) {
       expect(() =>
         snowflakeConnectionConfigFromConfig({
           connectionId: 'warehouse',
-          connection: { ...baseConnection, maxSessions },
+          connection: { ...baseConnection, maxConnections },
         }),
-      ).toThrow('connections.warehouse.maxSessions must be a positive integer');
+      ).toThrow('connections.warehouse.maxConnections must be a positive integer');
     }
+  });
+
+  it('rejects stale Snowflake maxSessions config', () => {
+    const baseConnection: KtxSnowflakeConnectionConfig = {
+      driver: 'snowflake',
+      authMethod: 'password',
+      account: 'acct',
+      warehouse: 'WH',
+      database: 'ANALYTICS',
+      schema_name: 'PUBLIC',
+      username: 'reader',
+      password: 'fixture-pass', // pragma: allowlist secret
+    };
+
+    expect(() =>
+      snowflakeConnectionConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxSessions: 8 },
+      }),
+    ).toThrow('connections.warehouse.maxSessions has been renamed to maxConnections');
   });
 
   it('uses one lazy Snowflake pool and drains it during cleanup', async () => {
@@ -191,7 +218,7 @@ describe('KtxSnowflakeScanConnector', () => {
         username: 'reader',
         password: 'fixture-pass', // pragma: allowlist secret
         role: 'ANALYST',
-        maxSessions: 3,
+        maxConnections: 3,
       },
       sdkOptionsProvider: {
         resolve: vi.fn(async () => ({ sdkOptions: { application: 'ktx-test' }, close })),
