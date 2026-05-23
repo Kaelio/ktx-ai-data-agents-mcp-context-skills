@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FieldPacket, RowDataPacket } from 'mysql2/promise';
 import { createMysqlLiveDatabaseIntrospection } from '../../connectors/mysql/live-database-introspection.js';
-import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
+import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, type KtxMysqlConnectionConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function mysqlResult(rows: Record<string, unknown>[], fields: Array<{ name: string; type?: number }>): [RowDataPacket[], FieldPacket[]] {
@@ -189,6 +189,46 @@ describe('KtxMysqlScanConnector', () => {
       password: 'secret', // pragma: allowlist secret
       ssl: { rejectUnauthorized: false },
     });
+  });
+
+  it('defaults and validates MySQL maxConnections', () => {
+    const baseConnection: KtxMysqlConnectionConfig = {
+      driver: 'mysql',
+      host: 'db.example.test',
+      database: 'analytics',
+      username: 'reader',
+      password: 'secret', // pragma: allowlist secret
+    };
+
+    expect(
+      mysqlConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: baseConnection,
+      }),
+    ).toMatchObject({ connectionLimit: 10 });
+
+    expect(
+      mysqlConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: 25 },
+      }),
+    ).toMatchObject({ connectionLimit: 25 });
+
+    expect(
+      mysqlConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: '12' as never },
+      }),
+    ).toMatchObject({ connectionLimit: 12 });
+
+    for (const maxConnections of [0, -1, 1.5, Number.NaN, 'abc' as never]) {
+      expect(() =>
+        mysqlConnectionPoolConfigFromConfig({
+          connectionId: 'warehouse',
+          connection: { ...baseConnection, maxConnections },
+        }),
+      ).toThrow('connections.warehouse.maxConnections must be a positive integer');
+    }
   });
 
   it('introspects schema, primary keys, comments, row counts, views, and foreign keys', async () => {

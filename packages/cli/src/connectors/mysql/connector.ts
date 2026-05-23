@@ -18,6 +18,7 @@ export interface KtxMysqlConnectionConfig {
   password?: string;
   url?: string;
   ssl?: boolean | { rejectUnauthorized?: boolean };
+  maxConnections?: number;
   [key: string]: unknown;
 }
 
@@ -163,6 +164,23 @@ function maybeNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function positiveIntegerConfigValue(input: {
+  connection: KtxMysqlConnectionConfig;
+  key: keyof KtxMysqlConnectionConfig;
+  connectionId: string;
+  defaultValue: number;
+}): number {
+  const value = input.connection[input.key];
+  if (value === undefined) {
+    return input.defaultValue;
+  }
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    throw new Error(`connections.${input.connectionId}.${String(input.key)} must be a positive integer`);
+  }
+  return numberValue;
+}
+
 function parseMysqlUrl(url: string): Partial<KtxMysqlConnectionConfig> {
   const parsed = new URL(url);
   const sslParam = parsed.searchParams.get('ssl') ?? parsed.searchParams.get('sslmode');
@@ -262,6 +280,12 @@ export function mysqlConnectionPoolConfigFromConfig(input: {
   const host = stringConfigValue(merged, 'host', env);
   const database = stringConfigValue(merged, 'database', env);
   const user = stringConfigValue(merged, 'username', env) ?? stringConfigValue(merged, 'user', env);
+  const maxConnections = positiveIntegerConfigValue({
+    connection: merged,
+    key: 'maxConnections',
+    connectionId: input.connectionId,
+    defaultValue: 10,
+  });
 
   if (!host) {
     throw new Error(`Native MySQL connector requires connections.${input.connectionId}.host or url`);
@@ -280,7 +304,7 @@ export function mysqlConnectionPoolConfigFromConfig(input: {
     database,
     user,
     password: stringConfigValue(merged, 'password', env),
-    connectionLimit: 10,
+    connectionLimit: maxConnections,
     waitForConnections: true,
     ...(ssl ? { ssl: { rejectUnauthorized: ssl.rejectUnauthorized ?? false } } : {}),
   };
