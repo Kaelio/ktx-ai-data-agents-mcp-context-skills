@@ -7,6 +7,7 @@ import type { KtxSchemaSnapshot, KtxSchemaTable, KtxTableRef } from '../../../sc
 
 export const LIVE_DATABASE_META_FILE = 'connection.json';
 export const LIVE_DATABASE_FOREIGN_KEYS_FILE = 'foreign-keys.json';
+/** @internal */
 export const LIVE_DATABASE_WARNINGS_FILE = 'warnings.json';
 const LIVE_DATABASE_TABLES_DIR = 'tables';
 
