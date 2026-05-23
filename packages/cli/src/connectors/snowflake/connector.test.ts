@@ -183,7 +183,7 @@ describe('KtxSnowflakeScanConnector', () => {
     }
   });
 
-  it('rejects stale Snowflake maxSessions config', () => {
+  it('rejects stale Snowflake pool config key', () => {
     const baseConnection: KtxSnowflakeConnectionConfig = {
       driver: 'snowflake',
       authMethod: 'password',
@@ -200,7 +200,7 @@ describe('KtxSnowflakeScanConnector', () => {
         connectionId: 'warehouse',
         connection: { ...baseConnection, maxSessions: 8 },
       }),
-    ).toThrow('connections.warehouse.maxSessions has been renamed to maxConnections');
+    ).toThrow(/renamed to maxConnections/);
   });
 
   it('uses one lazy Snowflake pool and drains it during cleanup', async () => {

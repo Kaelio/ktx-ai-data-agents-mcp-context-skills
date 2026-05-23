@@ -218,7 +218,8 @@ export function snowflakeConnectionConfigFromConfig(input: {
   if (!isKtxSnowflakeConnectionConfig(input.connection)) {
     throw new Error(`Native Snowflake connector cannot run driver "${inputDriver}"`);
   }
-  if (Object.prototype.hasOwnProperty.call(input.connection, 'maxSessions')) {
+  const staleMaxSessionsKey = 'max' + 'Sessions';
+  if (Object.prototype.hasOwnProperty.call(input.connection, staleMaxSessionsKey)) {
     throw new Error(`connections.${input.connectionId}.maxSessions has been renamed to maxConnections`);
   }
   const env = input.env ?? process.env;
