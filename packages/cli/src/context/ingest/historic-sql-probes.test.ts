@@ -95,7 +95,7 @@ describe('historic-SQL probe registry', () => {
       projectDir: '/work/project',
       connectionId: 'warehouse',
       connection: {
-        driver: 'postgres',
+        driver: 'postgres' as const,
         url: 'env:DATABASE_URL',
         context: { queryHistory: { enabled: true } },
       },

@@ -1,7 +1,7 @@
 import { stat as statAsync, readdir as readdirAsync } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
-import type { KtxConfigIssue, KtxProjectConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
+import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
 import {

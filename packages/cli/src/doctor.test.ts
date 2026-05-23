@@ -30,6 +30,30 @@ function makeIo() {
   };
 }
 
+function fakeDoctorHistoricSqlRunner() {
+  return {
+    dialect: 'postgres' as const,
+    catalogName: 'pg_stat_statements',
+    async run() {
+      return { warnings: [], info: [] };
+    },
+    formatSuccessDetail(result: unknown) {
+      const typed = result as { pgServerVersion?: string; warnings: string[]; info?: string[] };
+      const info = typed.info && typed.info.length > 0 ? `; ${typed.info.join('; ')}` : '';
+      return {
+        detail: `pg_stat_statements ready (${typed.pgServerVersion ?? 'PostgreSQL 16.4'})${info}`,
+        warnings: typed.warnings,
+      };
+    },
+    fixAdvice(error: unknown) {
+      return {
+        failHeadline: error instanceof Error ? error.message : String(error),
+        remediation: 'Fix query-history grants.',
+      };
+    },
+  };
+}
+
 describe('formatDoctorReport', () => {
   it('shows the failing check and its fix in plain output', () => {
     const checks: DoctorCheck[] = [
@@ -539,14 +563,19 @@ describe('runKtxDoctor', () => {
         { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
         testIo.io,
         {
-          postgresQueryHistoryProbe: async () => {
+          queryHistoryReadinessProbe: async () => {
             probeCalls += 1;
             return {
-              pgServerVersion: 'PostgreSQL 16.4',
-              warnings: [],
-              info: [
-                'pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
-              ],
+              ok: true,
+              dialect: 'postgres',
+              runner: fakeDoctorHistoricSqlRunner(),
+              result: {
+                pgServerVersion: 'PostgreSQL 16.4',
+                warnings: [],
+                info: [
+                  'pg_stat_statements.max is 1000; set it to at least 5000 to reduce query-template eviction churn',
+                ],
+              },
             };
           },
         },
@@ -558,7 +587,7 @@ describe('runKtxDoctor', () => {
     expect(out).toContain('Query history');
     expect(out).toContain('warehouse');
     expect(out).toContain('pg_stat_statements ready (PostgreSQL 16.4)');
-    expect(out).toContain('info: pg_stat_statements.max is 1000');
+    expect(out).toContain('pg_stat_statements.max is 1000');
     expect(out).not.toContain('Update the Postgres parameter group or config');
     expect(out).toContain('ktx status --json');
     expect(out).toContain('ktx sl');
@@ -639,10 +668,15 @@ describe('runKtxDoctor', () => {
         { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
         testIo.io,
         {
-          postgresQueryHistoryProbe: async () => ({
-            pgServerVersion: 'PostgreSQL 16.4',
-            warnings: [],
-            info: [],
+          queryHistoryReadinessProbe: async () => ({
+            ok: true,
+            dialect: 'postgres',
+            runner: fakeDoctorHistoricSqlRunner(),
+            result: {
+              pgServerVersion: 'PostgreSQL 16.4',
+              warnings: [],
+              info: [],
+            },
           }),
         },
       ),
@@ -850,9 +884,14 @@ describe('runKtxDoctor', () => {
           { command: 'validate', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
           testIo.io,
           {
-            postgresQueryHistoryProbe: async () => {
+            queryHistoryReadinessProbe: async () => {
               probeCalls += 1;
-              return { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] };
+              return {
+                ok: true,
+                dialect: 'postgres',
+                runner: fakeDoctorHistoricSqlRunner(),
+                result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+              };
             },
           },
         ),
