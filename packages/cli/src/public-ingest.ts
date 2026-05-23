@@ -21,6 +21,8 @@ import { publicIngestOutputLine } from './public-ingest-copy.js';
 import { resolvePublicIngestRuntimeRequirements } from './runtime-requirements.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
+import { isDemoConnection } from './telemetry/demo-detect.js';
+import { emitProjectStackSnapshot, emitTelemetryEvent } from './telemetry/index.js';
 
 profileMark('module:public-ingest');
 
@@ -599,8 +601,78 @@ function markTargetResult(
   };
 }
 
+function markTargetWithSkippedQueryHistory(
+  target: KtxPublicIngestPlanTarget,
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
+  detail: string,
+): KtxPublicIngestTargetResult {
+  const baseline = markTargetResult(target, args, 'done');
+  return {
+    ...baseline,
+    steps: baseline.steps.map((step) =>
+      step.operation === 'query-history' ? { ...step, status: 'skipped', detail } : step,
+    ),
+  };
+}
+
+function queryHistoryFailureDetail(input: {
+  target: KtxPublicIngestPlanTarget;
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>;
+  capturedOutput?: string;
+}): string {
+  const captured = capturedFailureMessage(input.capturedOutput ?? '');
+  return failureDetailWithRetry({
+    target: input.target,
+    args: input.args,
+    failedOperation: 'query-history',
+    failureDetail: captured,
+  });
+}
+
 function resultFailed(result: KtxPublicIngestTargetResult): boolean {
   return result.steps.some((step) => step.status === 'failed');
+}
+
+function resultSkippedQueryHistory(
+  result: KtxPublicIngestTargetResult,
+): { connectionId: string; detail: string } | null {
+  const skipped = result.steps.find(
+    (step) => step.operation === 'query-history' && step.status === 'skipped' && step.detail !== undefined,
+  );
+  return skipped?.detail ? { connectionId: result.connectionId, detail: skipped.detail } : null;
+}
+
+function rowsBucket(): '<10k' | '<100k' | '<1M' | '<10M' | '>=10M' {
+  return '<10k';
+}
+
+async function emitIngestCompleted(input: {
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>;
+  project: KtxPublicIngestProject;
+  target: KtxPublicIngestPlanTarget;
+  result: KtxPublicIngestTargetResult;
+  startedAt: number;
+  io: KtxCliIo;
+}): Promise<void> {
+  const failed = resultFailed(input.result);
+  await emitTelemetryEvent({
+    name: 'ingest_completed',
+    projectDir: input.args.projectDir,
+    io: input.io,
+    fields: {
+      driver: input.target.driver,
+      isDemoConnection: isDemoConnection(
+        input.target.connectionId,
+        input.project.config.connections[input.target.connectionId],
+      ),
+      schemaCount: 0,
+      tableCount: 0,
+      columnCount: 0,
+      rowsBucket: rowsBucket(),
+      durationMs: Math.max(0, performance.now() - input.startedAt),
+      outcome: failed ? 'error' : 'ok',
+    },
+  });
 }
 
 function stepStatus(result: KtxPublicIngestTargetResult, operation: KtxPublicIngestStepName): string {
@@ -609,7 +681,17 @@ function stepStatus(result: KtxPublicIngestTargetResult, operation: KtxPublicIng
 
 function renderPlainResults(results: KtxPublicIngestTargetResult[], io: KtxCliIo): void {
   const failures = results.filter(resultFailed);
-  io.stdout.write(failures.length > 0 ? 'Ingest finished with partial failures\n' : 'Ingest finished\n');
+  const skippedQueryHistory = results.map(resultSkippedQueryHistory).filter((entry) => entry !== null) as Array<{
+    connectionId: string;
+    detail: string;
+  }>;
+  const headerSuffix =
+    failures.length > 0
+      ? ' with partial failures'
+      : skippedQueryHistory.length > 0
+        ? ' with skipped query history'
+        : '';
+  io.stdout.write(`Ingest finished${headerSuffix}\n`);
   io.stdout.write('\n');
   io.stdout.write('Source         Database schema  Query history  Source ingest  Memory update\n');
   for (const result of results) {
@@ -624,17 +706,22 @@ function renderPlainResults(results: KtxPublicIngestTargetResult[], io: KtxCliIo
     );
   }
 
-  if (failures.length === 0) {
-    return;
+  if (failures.length > 0) {
+    io.stdout.write('\nFailed sources:\n');
+    for (const result of failures) {
+      const failedStep = result.steps.find((step) => step.status === 'failed');
+      if (!failedStep) {
+        continue;
+      }
+      io.stdout.write(`  ${failedStep.detail ?? `${result.connectionId} failed.`}\n`);
+    }
   }
 
-  io.stdout.write('\nFailed sources:\n');
-  for (const result of failures) {
-    const failedStep = result.steps.find((step) => step.status === 'failed');
-    if (!failedStep) {
-      continue;
+  if (skippedQueryHistory.length > 0) {
+    io.stdout.write('\nSkipped query history:\n');
+    for (const { detail } of skippedQueryHistory) {
+      io.stdout.write(`  ${detail}\n`);
     }
-    io.stdout.write(`  ${failedStep.detail ?? `${result.connectionId} failed.`}\n`);
   }
 }
 
@@ -814,14 +901,13 @@ export async function executePublicIngestTarget(
           ? await runIngest(ingestArgs, ingestIo, ingestDeps)
           : await runIngest(ingestArgs, ingestIo);
       if (qhExitCode !== 0) {
-        deps.onPhaseEnd?.('query-history', 'failed');
-        return markTargetResult(
+        const detail = queryHistoryFailureDetail({
           target,
           args,
-          'failed',
-          'query-history',
-          capturedIngestIo ? capturedFailureMessage(capturedIngestIo.capturedOutput()) : undefined,
-        );
+          capturedOutput: capturedIngestIo ? capturedIngestIo.capturedOutput() : undefined,
+        });
+        deps.onPhaseEnd?.('query-history', 'failed', detail);
+        return markTargetWithSkippedQueryHistory(target, args, detail);
       }
       deps.onPhaseEnd?.('query-history', 'done');
     }
@@ -928,7 +1014,10 @@ export async function runKtxPublicIngest(
   }
 
   for (const target of plan.targets) {
-    results.push(await executePublicIngestTarget(target, args, io, deps));
+    const startedAt = performance.now();
+    const result = await executePublicIngestTarget(target, args, io, deps);
+    results.push(result);
+    await emitIngestCompleted({ args, project, target, result, startedAt, io });
   }
 
   if (args.json) {
@@ -936,6 +1025,8 @@ export async function runKtxPublicIngest(
   } else {
     renderPlainResults(results, io);
   }
+
+  await emitProjectStackSnapshot({ projectDir: args.projectDir, io });
 
   return results.some(resultFailed) ? 1 : 0;
 }

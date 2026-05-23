@@ -14,7 +14,8 @@ export class LiveDatabaseSourceAdapter implements SourceAdapter {
   }
 
   async fetch(_pullConfig: unknown, stagedDir: string, ctx: FetchContext): Promise<void> {
-    const snapshot = await this.deps.introspection.extractSchema(ctx.connectionId);
+    const tableScope = ctx.tableScope;
+    const snapshot = await this.deps.introspection.extractSchema(ctx.connectionId, { tableScope });
     await writeLiveDatabaseSnapshot(stagedDir, {
       ...snapshot,
       connectionId: ctx.connectionId,

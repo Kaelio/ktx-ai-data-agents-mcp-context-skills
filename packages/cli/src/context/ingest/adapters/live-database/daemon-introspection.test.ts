@@ -1,6 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { describe, expect, it, vi } from 'vitest';
+import { tableRefSet } from '../../../scan/table-ref.js';
 import { createDaemonLiveDatabaseIntrospection } from './daemon-introspection.js';
 
 const daemonResponse = {
@@ -161,7 +162,11 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
         baseUrl: `http://127.0.0.1:${address.port}`,
       });
 
-      await expect(introspection.extractSchema('warehouse')).resolves.toMatchObject({
+      await expect(
+        introspection.extractSchema('warehouse', {
+          tableScope: tableRefSet([{ catalog: 'warehouse', db: 'public', name: 'orders' }]),
+        }),
+      ).resolves.toMatchObject({
         connectionId: 'warehouse',
         tables: [{ name: 'customers' }, { name: 'orders' }],
       });
@@ -176,6 +181,7 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
             schemas: ['public'],
             statement_timeout_ms: 30_000,
             connection_timeout_seconds: 5,
+            table_scope: [{ catalog: 'warehouse', db: 'public', name: 'orders' }],
           },
         },
       ]);
@@ -217,7 +223,7 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
     expect(runJson).not.toHaveBeenCalled();
   });
 
-  it('filters out tables not on the enabled_tables allowlist', async () => {
+  it('does not use connection enabled_tables as a response filter', async () => {
     const runJson = vi.fn(async () => daemonResponse);
     const introspection = createDaemonLiveDatabaseIntrospection({
       connections: {
@@ -232,7 +238,8 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
     });
 
     const snapshot = await introspection.extractSchema('warehouse');
-    expect(snapshot.tables.map((table) => `${table.db}.${table.name}`)).toEqual(['public.orders']);
+    expect(snapshot.tables.map((table) => `${table.db}.${table.name}`)).toEqual(['public.customers', 'public.orders']);
+    expect(runJson).toHaveBeenCalledWith('database-introspect', expect.not.objectContaining({ table_scope: expect.anything() }));
   });
 
   it('passes through every table when enabled_tables is omitted or empty', async () => {

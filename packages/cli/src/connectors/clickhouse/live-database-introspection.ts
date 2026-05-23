@@ -1,4 +1,7 @@
-import type { LiveDatabaseIntrospectionPort } from '../../context/ingest/adapters/live-database/types.js';
+import type {
+  LiveDatabaseIntrospectionOptions,
+  LiveDatabaseIntrospectionPort,
+} from '../../context/ingest/adapters/live-database/types.js';
 import type { KtxProjectConnectionConfig } from '../../context/project/config.js';
 import {
   KtxClickHouseScanConnector,
@@ -18,7 +21,7 @@ export function createClickHouseLiveDatabaseIntrospection(
   options: CreateClickHouseLiveDatabaseIntrospectionOptions,
 ): LiveDatabaseIntrospectionPort {
   return {
-    async extractSchema(connectionId: string) {
+    async extractSchema(connectionId: string, introspectionOptions?: LiveDatabaseIntrospectionOptions) {
       const connection = options.connections[connectionId] as KtxClickHouseConnectionConfig | undefined;
       const connector = new KtxClickHouseScanConnector({
         connectionId,
@@ -29,7 +32,11 @@ export function createClickHouseLiveDatabaseIntrospection(
       });
       try {
         return await connector.introspect(
-          { connectionId, driver: 'clickhouse' },
+          {
+            connectionId,
+            driver: 'clickhouse',
+            ...(introspectionOptions?.tableScope ? { tableScope: introspectionOptions.tableScope } : {}),
+          },
           { runId: `clickhouse-${connectionId}` },
         );
       } finally {

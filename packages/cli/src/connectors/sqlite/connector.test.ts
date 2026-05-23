@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSqliteLiveDatabaseIntrospection } from '../../connectors/sqlite/live-database-introspection.js';
 import { isKtxSqliteConnectionConfig, KtxSqliteScanConnector, sqliteDatabasePathFromConfig } from '../../connectors/sqlite/connector.js';
+import { tableRefSet } from '../../context/scan/table-ref.js';
 
 describe('KtxSqliteScanConnector', () => {
   let tempDir: string;
@@ -194,6 +195,19 @@ describe('KtxSqliteScanConnector', () => {
         { runId: 'scan-run-1' },
       ),
     ).resolves.toBeNull();
+  });
+
+  it('limits introspection to tables in tableScope', async () => {
+    const connector = new KtxSqliteScanConnector({
+      connectionId: 'warehouse',
+      connection: { driver: 'sqlite', path: dbPath },
+    });
+    const scope = tableRefSet([{ catalog: null, db: null, name: 'orders' }]);
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'sqlite', tableScope: scope },
+      { runId: 'scope-test' },
+    );
+    expect(snapshot.tables.map((table) => table.name)).toEqual(['orders']);
   });
 
   it('adapts native SQLite snapshots to live-database introspection for local ingest', async () => {

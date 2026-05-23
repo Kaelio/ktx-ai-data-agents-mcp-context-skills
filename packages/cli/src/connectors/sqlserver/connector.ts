@@ -1,5 +1,6 @@
 import { assertReadOnlySql } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { scopedTableNames } from '../../context/scan/table-ref.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -119,6 +120,20 @@ function sqlRecordset(
     ]),
   );
   return recordset;
+}
+
+function tableScopeSql(
+  scopedNames: readonly string[] | null,
+  columnExpression: string,
+): { clause: string; params: Record<string, unknown> } {
+  if (!scopedNames) return { clause: '', params: {} };
+  const params: Record<string, unknown> = {};
+  const placeholders = scopedNames.map((name, index) => {
+    const key = `table_${index}`;
+    params[key] = name;
+    return `@${key}`;
+  });
+  return { clause: `AND ${columnExpression} IN (${placeholders.join(', ')})`, params };
 }
 
 class DefaultSqlServerPoolFactory implements KtxSqlServerPoolFactory {
@@ -314,7 +329,10 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
     this.assertConnection(input.connectionId);
     const tables: KtxSchemaTable[] = [];
     for (const schemaName of this.schemas) {
-      tables.push(...(await this.introspectSchema(schemaName)));
+      const scopedNames = input.tableScope
+        ? scopedTableNames(input.tableScope, { catalog: this.poolConfig.database, db: schemaName })
+        : null;
+      tables.push(...(await this.introspectSchema(schemaName, scopedNames)));
     }
     return {
       connectionId: this.connectionId,
@@ -461,16 +479,19 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
     }
   }
 
-  private async introspectSchema(schemaName: string): Promise<KtxSchemaTable[]> {
+  private async introspectSchema(schemaName: string, scopedNames: readonly string[] | null): Promise<KtxSchemaTable[]> {
+    if (scopedNames && scopedNames.length === 0) return [];
+    const tableScope = tableScopeSql(scopedNames, 'TABLE_NAME');
     const tables = await this.queryRaw<{ table_name: string; table_type: string }>(
       `
       SELECT TABLE_NAME AS table_name, TABLE_TYPE AS table_type
       FROM INFORMATION_SCHEMA.TABLES
       WHERE TABLE_SCHEMA = @schemaName
         AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+        ${tableScope.clause}
       ORDER BY TABLE_NAME
       `,
-      { schemaName },
+      { schemaName, ...tableScope.params },
     );
     const columns = await this.queryRaw<{
       table_name: string;
@@ -482,15 +503,16 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
       SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name, DATA_TYPE AS data_type, IS_NULLABLE AS is_nullable
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = @schemaName
+        ${tableScope.clause}
       ORDER BY TABLE_NAME, ORDINAL_POSITION
       `,
-      { schemaName },
+      { schemaName, ...tableScope.params },
     );
-    const tableComments = await this.tableComments(schemaName);
-    const columnComments = await this.columnComments(schemaName);
-    const primaryKeys = await this.primaryKeys(schemaName);
-    const foreignKeys = await this.foreignKeys(schemaName);
-    const rowCounts = await this.rowCounts(schemaName);
+    const tableComments = await this.tableComments(schemaName, scopedNames);
+    const columnComments = await this.columnComments(schemaName, scopedNames);
+    const primaryKeys = await this.primaryKeys(schemaName, scopedNames);
+    const foreignKeys = await this.foreignKeys(schemaName, scopedNames);
+    const rowCounts = await this.rowCounts(schemaName, scopedNames);
     const columnsByTable = groupByTable(columns);
     const foreignKeysByTable = groupByTable(foreignKeys);
 
@@ -508,7 +530,8 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
     }));
   }
 
-  private async tableComments(schemaName: string): Promise<Map<string, string>> {
+  private async tableComments(schemaName: string, scopedNames: readonly string[] | null): Promise<Map<string, string>> {
+    const tableScope = tableScopeSql(scopedNames, 'o.name');
     const rows = await this.queryRaw<{ table_name: string; table_comment: string }>(
       `
       SELECT o.name AS table_name, CAST(ep.value AS NVARCHAR(MAX)) AS table_comment
@@ -519,13 +542,15 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
         AND ep.name = 'MS_Description'
       WHERE s.name = @schemaName
         AND o.type IN ('U', 'V')
+        ${tableScope.clause}
       `,
-      { schemaName },
+      { schemaName, ...tableScope.params },
     );
     return new Map(rows.map((row) => [row.table_name, row.table_comment]));
   }
 
-  private async columnComments(schemaName: string): Promise<Map<string, string>> {
+  private async columnComments(schemaName: string, scopedNames: readonly string[] | null): Promise<Map<string, string>> {
+    const tableScope = tableScopeSql(scopedNames, 'o.name');
     const rows = await this.queryRaw<{ table_name: string; column_name: string; column_comment: string }>(
       `
       SELECT o.name AS table_name, c.name AS column_name, CAST(ep.value AS NVARCHAR(MAX)) AS column_comment
@@ -537,13 +562,18 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
         AND ep.name = 'MS_Description'
       WHERE s.name = @schemaName
         AND o.type IN ('U', 'V')
+        ${tableScope.clause}
       `,
-      { schemaName },
+      { schemaName, ...tableScope.params },
     );
     return new Map(rows.map((row) => [`${row.table_name}.${row.column_name}`, row.column_comment]));
   }
 
-  private async primaryKeys(schemaName: string): Promise<Map<string, Set<string>>> {
+  private async primaryKeys(
+    schemaName: string,
+    scopedNames: readonly string[] | null,
+  ): Promise<Map<string, Set<string>>> {
+    const tableScope = tableScopeSql(scopedNames, 'tc.TABLE_NAME');
     const rows = await this.queryRaw<{ table_name: string; column_name: string }>(
       `
       SELECT tc.TABLE_NAME AS table_name, kcu.COLUMN_NAME AS column_name
@@ -553,9 +583,10 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
         AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
       WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
         AND tc.TABLE_SCHEMA = @schemaName
+        ${tableScope.clause}
       ORDER BY tc.TABLE_NAME, kcu.ORDINAL_POSITION
       `,
-      { schemaName },
+      { schemaName, ...tableScope.params },
     );
     const grouped = new Map<string, Set<string>>();
     for (const row of rows) {
@@ -566,7 +597,10 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
     return grouped;
   }
 
-  private async foreignKeys(schemaName: string): Promise<
+  private async foreignKeys(
+    schemaName: string,
+    scopedNames: readonly string[] | null,
+  ): Promise<
     Array<{
       table_name: string;
       column_name: string;
@@ -576,6 +610,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
       constraint_name: string;
     }>
   > {
+    const tableScope = tableScopeSql(scopedNames, 'fk.TABLE_NAME');
     return this.queryRaw(
       `
       SELECT
@@ -596,13 +631,15 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
         AND pk.CONSTRAINT_NAME = rc.UNIQUE_CONSTRAINT_NAME
         AND pk.ORDINAL_POSITION = fk.ORDINAL_POSITION
       WHERE fk.TABLE_SCHEMA = @schemaName
+        ${tableScope.clause}
       ORDER BY fk.TABLE_NAME, fk.COLUMN_NAME
       `,
-      { schemaName },
+      { schemaName, ...tableScope.params },
     );
   }
 
-  private async rowCounts(schemaName: string): Promise<Map<string, number>> {
+  private async rowCounts(schemaName: string, scopedNames: readonly string[] | null): Promise<Map<string, number>> {
+    const tableScope = tableScopeSql(scopedNames, 't.name');
     const rows = await this.queryRaw<{ table_name: string; row_count: unknown }>(
       `
       SELECT t.name AS table_name, SUM(p.rows) AS row_count
@@ -611,9 +648,10 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
       INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
       WHERE s.name = @schemaName
         AND p.index_id IN (0, 1)
+        ${tableScope.clause}
       GROUP BY t.name
       `,
-      { schemaName },
+      { schemaName, ...tableScope.params },
     );
     return new Map(rows.map((row) => [row.table_name, firstNumber(row.row_count) ?? 0]));
   }

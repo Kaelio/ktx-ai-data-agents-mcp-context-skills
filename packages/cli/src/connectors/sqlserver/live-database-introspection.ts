@@ -1,4 +1,7 @@
-import type { LiveDatabaseIntrospectionPort } from '../../context/ingest/adapters/live-database/types.js';
+import type {
+  LiveDatabaseIntrospectionOptions,
+  LiveDatabaseIntrospectionPort,
+} from '../../context/ingest/adapters/live-database/types.js';
 import type { KtxProjectConnectionConfig } from '../../context/project/config.js';
 import {
   KtxSqlServerScanConnector,
@@ -18,7 +21,7 @@ export function createSqlServerLiveDatabaseIntrospection(
   options: CreateSqlServerLiveDatabaseIntrospectionOptions,
 ): LiveDatabaseIntrospectionPort {
   return {
-    async extractSchema(connectionId: string) {
+    async extractSchema(connectionId: string, introspectionOptions?: LiveDatabaseIntrospectionOptions) {
       const connection = options.connections[connectionId] as KtxSqlServerConnectionConfig | undefined;
       const connector = new KtxSqlServerScanConnector({
         connectionId,
@@ -29,7 +32,11 @@ export function createSqlServerLiveDatabaseIntrospection(
       });
       try {
         return await connector.introspect(
-          { connectionId, driver: 'sqlserver' },
+          {
+            connectionId,
+            driver: 'sqlserver',
+            ...(introspectionOptions?.tableScope ? { tableScope: introspectionOptions.tableScope } : {}),
+          },
           { runId: `sqlserver-${connectionId}` },
         );
       } finally {

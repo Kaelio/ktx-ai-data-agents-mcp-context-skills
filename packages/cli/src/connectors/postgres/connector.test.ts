@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPostgresLiveDatabaseIntrospection } from '../../connectors/postgres/live-database-introspection.js';
 import { isKtxPostgresConnectionConfig, KtxPostgresScanConnector, postgresPoolConfigFromConfig, type KtxPostgresPoolFactory } from '../../connectors/postgres/connector.js';
+import { tableRefSet } from '../../context/scan/table-ref.js';
 
 interface FakeQueryResult {
   rows: Record<string, unknown>[];
@@ -257,6 +258,63 @@ describe('KtxPostgresScanConnector', () => {
     await expect(
       connector.executeReadOnly({ connectionId: 'warehouse', sql: 'delete from orders' }, { runId: 'scan-run-1' }),
     ).rejects.toThrow('Only read-only SELECT/WITH queries can be executed locally');
+  });
+
+  it('limits introspection to tables in tableScope', async () => {
+    const queries: Array<{ sql: string; params?: unknown[] }> = [];
+    const poolFactory: KtxPostgresPoolFactory = {
+      createPool() {
+        return {
+          async connect() {
+            return {
+              query: vi.fn(async (sql: string, params?: unknown[]) => {
+                queries.push({ sql, params });
+                if (sql.includes('FROM pg_catalog.pg_class c')) {
+                  return { rows: [{ table_name: 'orders', table_kind: 'r', row_count: '3', table_comment: null }] };
+                }
+                if (sql.includes('FROM pg_catalog.pg_attribute a')) {
+                  return {
+                    rows: [
+                      {
+                        table_name: 'orders',
+                        column_name: 'id',
+                        data_type: 'integer',
+                        is_nullable: false,
+                        column_comment: null,
+                      },
+                    ],
+                  };
+                }
+                return { rows: [] };
+              }),
+              release: vi.fn(),
+            };
+          },
+          end: vi.fn(async () => undefined),
+        };
+      },
+    };
+    const connector = new KtxPostgresScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'postgres',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        password: 'test-password', // pragma: allowlist secret
+        schema: 'public',
+      },
+      poolFactory,
+    });
+    const scope = tableRefSet([{ catalog: null, db: 'public', name: 'orders' }]);
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'postgres', tableScope: scope },
+      { runId: 'scope-test' },
+    );
+    expect(snapshot.tables.map((table) => table.name)).toEqual(['orders']);
+    const tablesQuery = queries.find((query) => query.sql.includes('FROM pg_catalog.pg_class c'));
+    expect(tablesQuery?.sql).toMatch(/c\.relname = ANY\(\$2\)/);
+    expect(tablesQuery?.params).toEqual(['public', ['orders']]);
   });
 
   it('adapts native PostgreSQL snapshots to live-database introspection for local ingest', async () => {

@@ -29,7 +29,7 @@
   },
   "scripts": {
     "assets:demo": "node scripts/build-demo-assets.mjs",
-    "build": "tsc -p tsconfig.json && node scripts/copy-runtime-assets.mjs && node ../../scripts/prepare-cli-bin.mjs",
+    "build": "tsc -p tsconfig.json && node dist/telemetry/schema-writer.js src/telemetry/events.schema.json ../../python/ktx-daemon/src/ktx_daemon/telemetry/events.schema.json && node scripts/copy-runtime-assets.mjs && node ../../scripts/prepare-cli-bin.mjs",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "docs:commands": "pnpm run build && node dist/print-command-tree.js",
     "smoke": "vitest run src/standalone-smoke.test.ts src/example-smoke.test.ts --testTimeout 30000",
@@ -69,6 +69,7 @@
     "openai": "^6.37.0",
     "p-limit": "^7.3.0",
     "pg": "^8.20.0",
+    "posthog-node": "^5.0.0",
     "react": "^19.2.6",
     "simple-git": "3.36.0",
     "snowflake-sdk": "^2.4.1",

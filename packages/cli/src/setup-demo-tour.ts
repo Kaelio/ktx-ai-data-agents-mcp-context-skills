@@ -339,7 +339,7 @@ export interface DemoTourDeps {
 }
 
 export async function runDemoTour(
-  args: { inputMode: 'auto' | 'disabled' },
+  args: { inputMode: 'auto' | 'disabled'; cliVersion?: string },
   io: KtxCliIo,
   deps: DemoTourDeps = {},
 ): Promise<number> {
@@ -347,7 +347,7 @@ export async function runDemoTour(
   const ensureProject = deps.ensureProject ?? ensureSeededDemoProject;
 
   const projectDir = defaultDemoProjectDir();
-  await ensureProject({ projectDir, force: false });
+  await ensureProject({ projectDir, force: false, io, cliVersion: args.cliVersion });
 
   io.stdout.write(renderDemoBanner(projectDir) + '\n');
   io.stdout.write(`\n│  ${dim('Press Enter to continue, Escape to go back')}\n└\n`);

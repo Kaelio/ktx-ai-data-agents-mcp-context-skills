@@ -18,12 +18,13 @@ const ORDERS_YAML = [
   '',
 ].join('\n');
 
-function makeIo() {
+function makeIo(options: { isTTY?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
   return {
     io: {
       stdout: {
+        isTTY: options.isTTY,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -63,6 +64,7 @@ describe('runKtxSl', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -289,6 +291,43 @@ joins: []
     expect(stderr.write).not.toHaveBeenCalled();
   });
 
+  it('emits debug telemetry for sl query without project paths', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = join(tempDir, 'project');
+    await seedSlSource({ projectDir });
+    const io = makeIo({ isTTY: true });
+    const createSemanticLayerCompute = vi.fn(() => ({
+      query: vi.fn(async () => ({
+        sql: 'select count(*) as order_count from public.orders',
+        dialect: 'postgres',
+        columns: [{ name: 'orders.order_count' }],
+        plan: {},
+      })),
+      validateSources: vi.fn(),
+      generateSources: vi.fn(),
+    }));
+
+    const code = await runKtxSl(
+      {
+        command: 'query',
+        projectDir,
+        connectionId: 'warehouse',
+        query: { measures: ['orders.order_count'], dimensions: [] },
+        format: 'json',
+        execute: false,
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+      },
+      io.io,
+      { createSemanticLayerCompute },
+    );
+
+    expect(code).toBe(0);
+    expect(io.stderr()).toContain('"event":"sl_query_completed"');
+    expect(io.stderr()).not.toContain(projectDir);
+  });
+
   it('runs sl query from a JSON query file', async () => {
     const projectDir = join(tempDir, 'project');
     const project = await initKtxProject({ projectDir });
@@ -413,6 +452,7 @@ joins: []
       cliVersion: '0.2.0',
       installPolicy: 'auto',
       io: { stdout, stderr },
+      projectDir,
     });
     expect(stdout.write).toHaveBeenCalledWith('select count(*) as order_count from public.orders\n');
   });

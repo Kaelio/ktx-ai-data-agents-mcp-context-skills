@@ -1,4 +1,7 @@
-import type { LiveDatabaseIntrospectionPort } from '../../context/ingest/adapters/live-database/types.js';
+import type {
+  LiveDatabaseIntrospectionOptions,
+  LiveDatabaseIntrospectionPort,
+} from '../../context/ingest/adapters/live-database/types.js';
 import type { KtxProjectConnectionConfig } from '../../context/project/config.js';
 import {
   KtxBigQueryScanConnector,
@@ -16,7 +19,7 @@ export function createBigQueryLiveDatabaseIntrospection(
   options: CreateBigQueryLiveDatabaseIntrospectionOptions,
 ): LiveDatabaseIntrospectionPort {
   return {
-    async extractSchema(connectionId: string) {
+    async extractSchema(connectionId: string, introspectionOptions?: LiveDatabaseIntrospectionOptions) {
       const connection = options.connections[connectionId] as KtxBigQueryConnectionConfig | undefined;
       const connector = new KtxBigQueryScanConnector({
         connectionId,
@@ -25,7 +28,14 @@ export function createBigQueryLiveDatabaseIntrospection(
         now: options.now,
       });
       try {
-        return await connector.introspect({ connectionId, driver: 'bigquery' }, { runId: `bigquery-${connectionId}` });
+        return await connector.introspect(
+          {
+            connectionId,
+            driver: 'bigquery',
+            ...(introspectionOptions?.tableScope ? { tableScope: introspectionOptions.tableScope } : {}),
+          },
+          { runId: `bigquery-${connectionId}` },
+        );
       } finally {
         await connector.cleanup();
       }

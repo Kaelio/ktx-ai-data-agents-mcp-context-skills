@@ -64,7 +64,7 @@ export async function createKtxCliScanConnector(
     if (!isKtxSnowflakeConnectionConfig(connection)) {
       throw invalidConnectionConfigError(connectionId, driver);
     }
-    return new KtxSnowflakeScanConnector({ connectionId, connection });
+    return new KtxSnowflakeScanConnector({ connectionId, connection, projectDir: project.projectDir });
   }
   throw new Error(
     `Connection "${connectionId}" uses driver "${driver}", which has no native standalone KTX scan connector. Supported drivers: ${SUPPORTED_DRIVERS}.`,

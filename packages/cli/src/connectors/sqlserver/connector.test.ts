@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSqlServerLiveDatabaseIntrospection } from '../../connectors/sqlserver/live-database-introspection.js';
 import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
+import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function recordset<T extends Record<string, unknown>>(
   rows: T[],
@@ -288,6 +289,55 @@ describe('KtxSqlServerScanConnector', () => {
     ).resolves.toBeNull();
 
     await connector.cleanup();
+  });
+
+  it('limits introspection to tables in tableScope', async () => {
+    const queries: string[] = [];
+    const inputs: Array<{ name: string; value: unknown }> = [];
+    const request = {
+      input: vi.fn((name: string, value: unknown) => {
+        inputs.push({ name, value });
+        return request;
+      }),
+      query: vi.fn(async (sql: string): Promise<KtxSqlServerQueryResult> => {
+        queries.push(sql);
+        if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
+          return result([{ table_name: 'orders', table_type: 'BASE TABLE' }], ['table_name', 'table_type']);
+        }
+        if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) {
+          return result(
+            [{ table_name: 'orders', column_name: 'id', data_type: 'int', is_nullable: 'NO' }],
+            ['table_name', 'column_name', 'data_type', 'is_nullable'],
+          );
+        }
+        return result([], []);
+      }),
+    };
+    const poolFactory: KtxSqlServerPoolFactory = {
+      createPool: vi.fn(async () => ({
+        request: () => request,
+        close: vi.fn(async () => undefined),
+      })),
+    };
+    const connector = new KtxSqlServerScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'sqlserver',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        schema: 'dbo',
+      },
+      poolFactory,
+    });
+    const scope = tableRefSet([{ catalog: 'analytics', db: 'dbo', name: 'orders' }]);
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'sqlserver', tableScope: scope },
+      { runId: 'scope-test' },
+    );
+    expect(snapshot.tables.map((table) => table.name)).toEqual(['orders']);
+    expect(queries.find((query) => query.includes('INFORMATION_SCHEMA.TABLES'))).toMatch(/TABLE_NAME IN \(@table_0\)/);
+    expect(inputs).toEqual(expect.arrayContaining([{ name: 'table_0', value: 'orders' }]));
   });
 
   it('adapts native SQL Server snapshots to live-database introspection for local ingest', async () => {

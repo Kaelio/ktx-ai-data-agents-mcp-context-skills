@@ -145,6 +145,7 @@ describe('setup databases step', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -378,6 +379,34 @@ describe('setup databases step', () => {
     });
   });
 
+  it('emits debug telemetry when setup writes a database connection', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['url'],
+      textValues: ['', 'env:DATABASE_URL'],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseDrivers: ['postgres'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { prompts, testConnection: vi.fn(async () => 0), scanConnection: vi.fn(async () => 0) },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('"event":"connection_added"');
+    expect(io.stderr()).toContain('"driver":"postgres"');
+    expect(io.stderr()).toContain('"isDemoConnection":false');
+    expect(io.stderr()).not.toContain(tempDir);
+  });
+
   it('tells users Escape goes back in free-text connection prompts', async () => {
     const prompts = makePromptAdapter({
       selectValues: ['url'],
@@ -517,7 +546,7 @@ describe('setup databases step', () => {
       {
         driver: 'snowflake',
         selectValues: ['password', 'no'],
-        textValues: ['', 'env:SNOWFLAKE_ACCOUNT', 'ANALYTICS_WH', 'ANALYTICS', '', 'env:SNOWFLAKE_USER', ''],
+        textValues: ['', 'env:SNOWFLAKE_ACCOUNT', 'ANALYTICS_WH', 'ANALYTICS', 'env:SNOWFLAKE_USER', ''],
         passwordValues: ['env:SNOWFLAKE_PASSWORD'],
         expectedTextPrompts: [
           {
@@ -533,11 +562,6 @@ describe('setup databases step', () => {
           },
           {
             message: 'Snowflake database name',
-          },
-          {
-            message: 'Snowflake schema\nPress Enter for PUBLIC, or enter a schema name.',
-            placeholder: 'PUBLIC',
-            initialValue: 'PUBLIC',
           },
           {
             message: 'Snowflake username',
@@ -573,6 +597,8 @@ describe('setup databases step', () => {
           prompts,
           testConnection: vi.fn(async () => 0),
           scanConnection: vi.fn(async () => 0),
+          listSchemas: vi.fn(async () => []),
+          listTables: vi.fn(async () => []),
         },
       );
 
@@ -746,6 +772,8 @@ describe('setup databases step', () => {
     });
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => []);
+    const listTables = vi.fn(async () => []);
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -756,7 +784,7 @@ describe('setup databases step', () => {
         disableQueryHistory: true,
       },
       makeIo().io,
-      { prompts, testConnection, scanConnection },
+      { prompts, testConnection, scanConnection, listSchemas, listTables },
     );
 
     expect(result).toEqual({
@@ -1663,6 +1691,62 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('✓ orbit_analytics, orbit_raw');
   });
 
+  it('falls back to comma-separated free-text when listSchemas fails interactively', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['url'],
+      textValues: ['', 'env:DATABASE_URL', 'orbit_analytics, orbit_raw'],
+    });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => {
+      throw new Error('permission denied to list schemas');
+    });
+    const listTables = vi.fn(async (_projectDir: string, _connectionId: string, schemas?: string[]) =>
+      (schemas ?? []).map((schema) => ({ schema, name: 'events', kind: 'table' as const })),
+    );
+    const pickers = makePickerStubs({
+      scopes: [
+        {
+          schemas: ['orbit_analytics', 'orbit_raw'],
+          tables: ['orbit_analytics.events', 'orbit_raw.events'],
+        },
+      ],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseDrivers: ['postgres'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection,
+        scanConnection,
+        listSchemas,
+        listTables,
+        pickDatabaseScope: pickers.pickDatabaseScope,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('Could not discover postgresql schemas');
+    expect(vi.mocked(prompts.text).mock.calls.map(([options]) => options.message)).toContain(
+      textInputPrompt(
+        'Enter schemas for postgres-warehouse as a comma-separated list (e.g. SALES, MARKETING).',
+      ),
+    );
+    expect(pickers.scopeCalls[0]).toMatchObject({
+      schemas: ['orbit_analytics', 'orbit_raw'],
+      initialSchemas: ['orbit_analytics', 'orbit_raw'],
+      schemaSuggestion: { suggested: new Set(['orbit_analytics', 'orbit_raw']) },
+    });
+  });
+
   it('passes schemas and a lazy table callback to the scope picker instead of eager table discovery', async () => {
     const listSchemas = vi.fn(async () => ['analytics', 'raw']);
     const listTables = vi.fn(async (_projectDir: string, _connectionId: string, schemas?: string[]) =>
@@ -1986,6 +2070,7 @@ describe('setup databases step', () => {
 
   it('writes query history config for supported Snowflake databases after validation succeeds', async () => {
     const io = makeIo();
+    const historicSqlProbe = vi.fn(async () => ({ ok: true, lines: [] }));
     const result = await runKtxSetupDatabasesStep(
       {
         projectDir: tempDir,
@@ -2003,12 +2088,20 @@ describe('setup databases step', () => {
       {
         testConnection: vi.fn(async () => 0),
         scanConnection: vi.fn(async () => 0),
+        historicSqlProbe,
         prompts: makePromptAdapter({
           selectValues: ['password'],
-          textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'PUBLIC', 'reader', ''],
+          textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
           passwordValues: ['env:SNOWFLAKE_PASSWORD'],
         }),
       },
+    );
+    expect(historicSqlProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        connectionId: 'snowflake',
+        dialect: 'snowflake',
+      }),
     );
 
     expect(result.status).toBe('ready');
@@ -2060,7 +2153,6 @@ describe('setup databases step', () => {
             'env:SNOWFLAKE_ACCOUNT',
             'WH',
             'ANALYTICS',
-            'PUBLIC',
             'reader',
             '~/.ssh/snowflake_rsa_key.p8',
             '',
@@ -2078,7 +2170,6 @@ describe('setup databases step', () => {
       account: 'env:SNOWFLAKE_ACCOUNT',
       warehouse: 'WH',
       database: 'ANALYTICS',
-      schema_name: 'PUBLIC',
       username: 'reader',
       privateKey: 'file:~/.ssh/snowflake_rsa_key.p8', // pragma: allowlist secret
       passphrase: 'env:SNOWFLAKE_KEY_PASS', // pragma: allowlist secret
@@ -2446,7 +2537,53 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('Query history probe...');
     expect(io.stdout()).not.toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements extension is not installed');
-    expect(io.stdout()).toContain('Setup written; first ingest run will fail until fixed.');
+    expect(io.stdout()).toContain('Setup written; query history will be skipped until fixed.');
+  });
+
+  it('prints a non-blocking Snowflake query history probe failure with the grants remediation', async () => {
+    const io = makeIo();
+    const historicSqlProbe = vi.fn(async () => ({
+      ok: false,
+      lines: [
+        '  FAIL Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+        '  Fix: Run (as ACCOUNTADMIN): GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE <connection role>;',
+      ],
+    }));
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['snowflake'],
+        databaseConnectionId: 'warehouse',
+        databaseSchemas: [],
+        enableQueryHistory: true,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlProbe,
+        prompts: makePromptAdapter({
+          textValues: ['env:SNOWFLAKE_ACCOUNT', 'WH', 'ANALYTICS', 'reader', ''],
+          passwordValues: ['env:SNOWFLAKE_PASSWORD'],
+        }),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(historicSqlProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        dialect: 'snowflake',
+      }),
+    );
+    expect(io.stdout()).toContain('Query history probe...');
+    expect(io.stdout()).toContain('Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY');
+    expect(io.stdout()).toContain('GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE');
+    expect(io.stdout()).toContain('Setup written; query history will be skipped until fixed.');
   });
 
   it('does not run the query history probe when the regular connection test fails', async () => {

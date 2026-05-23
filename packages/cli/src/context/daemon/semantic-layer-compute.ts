@@ -90,6 +90,7 @@ export interface PythonSemanticLayerComputeOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   runJson?: KtxDaemonJsonRunner;
+  projectId?: string;
 }
 
 /** @internal */
@@ -238,6 +239,7 @@ export function createPythonSemanticLayerComputePort(
   const command = options.command ?? 'python';
   const args = options.args ?? ['-m', 'ktx_daemon'];
   const runJson = options.runJson ?? runProcessJson({ command, args, cwd: options.cwd, env: options.env });
+  const projectId = options.projectId;
 
   return {
     async query(input) {
@@ -245,6 +247,7 @@ export function createPythonSemanticLayerComputePort(
         sources: input.sources,
         dialect: input.dialect,
         query: input.query,
+        ...(projectId ? { projectId } : {}),
       });
       return {
         sql: typeof raw.sql === 'string' ? raw.sql : '',

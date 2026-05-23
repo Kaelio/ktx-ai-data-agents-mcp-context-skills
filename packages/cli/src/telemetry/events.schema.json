@@ -1,0 +1,1407 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ktx telemetry events",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ktx-common-fields": [
+    "cliVersion",
+    "nodeVersion",
+    "osPlatform",
+    "osRelease",
+    "arch",
+    "runtime",
+    "isCi"
+  ],
+  "x-ktx-catalog": [
+    {
+      "name": "install_first_run",
+      "description": "Emitted once when ~/.ktx/telemetry.json is created.",
+      "fields": []
+    },
+    {
+      "name": "command",
+      "description": "Emitted once for each Commander action that reaches preAction.",
+      "fields": [
+        "commandPath",
+        "durationMs",
+        "outcome",
+        "errorClass",
+        "flagsPresent",
+        "hasProject",
+        "projectGroupAttached"
+      ]
+    },
+    {
+      "name": "setup_step",
+      "description": "Emitted after an interactive setup step completes, skips, or aborts.",
+      "fields": [
+        "step",
+        "outcome",
+        "durationMs"
+      ]
+    },
+    {
+      "name": "connection_added",
+      "description": "Emitted when setup writes a database, source, or demo connection.",
+      "fields": [
+        "driver",
+        "isDemoConnection"
+      ]
+    },
+    {
+      "name": "connection_test",
+      "description": "Emitted after ktx connection test completes.",
+      "fields": [
+        "driver",
+        "isDemoConnection",
+        "outcome",
+        "errorClass",
+        "durationMs",
+        "serverVersion"
+      ]
+    },
+    {
+      "name": "project_stack_snapshot",
+      "description": "Emitted after commands that can summarize the local project stack.",
+      "fields": [
+        "connectors",
+        "connectionCount",
+        "hasSl",
+        "hasWiki",
+        "hasMcp",
+        "hasManagedRuntime"
+      ]
+    },
+    {
+      "name": "ingest_completed",
+      "description": "Emitted after a public ingest target completes.",
+      "fields": [
+        "driver",
+        "isDemoConnection",
+        "schemaCount",
+        "tableCount",
+        "columnCount",
+        "rowsBucket",
+        "durationMs",
+        "outcome",
+        "errorClass"
+      ]
+    },
+    {
+      "name": "scan_completed",
+      "description": "Emitted after schema scan or relationship inference completes.",
+      "fields": [
+        "driver",
+        "tableCount",
+        "columnCount",
+        "inferredFkCount",
+        "declaredFkCount",
+        "durationMs",
+        "outcome",
+        "errorClass"
+      ]
+    },
+    {
+      "name": "sl_validate_completed",
+      "description": "Emitted after ktx sl validate completes.",
+      "fields": [
+        "sourceCount",
+        "modelCount",
+        "validationErrorCount",
+        "outcome",
+        "errorClass",
+        "durationMs"
+      ]
+    },
+    {
+      "name": "sl_query_completed",
+      "description": "Emitted after ktx sl query compiles or executes.",
+      "fields": [
+        "mode",
+        "referencedSourceCount",
+        "referencedDimensionCount",
+        "referencedMeasureCount",
+        "durationMs",
+        "outcome",
+        "errorClass"
+      ]
+    },
+    {
+      "name": "sql_completed",
+      "description": "Emitted after ktx sql completes validation and execution.",
+      "fields": [
+        "driver",
+        "isDemoConnection",
+        "queryVerb",
+        "referencedTableCount",
+        "durationMs",
+        "outcome",
+        "errorClass"
+      ]
+    },
+    {
+      "name": "wiki_query_completed",
+      "description": "Emitted after a wiki query completes.",
+      "fields": [
+        "queryLength",
+        "resultCount",
+        "durationMs",
+        "outcome"
+      ]
+    },
+    {
+      "name": "mcp_request_completed",
+      "description": "Emitted for sampled MCP tool requests.",
+      "fields": [
+        "toolName",
+        "outcome",
+        "durationMs",
+        "errorClass",
+        "sampleRate"
+      ]
+    },
+    {
+      "name": "daemon_started",
+      "description": "Emitted when the long-lived ktx-daemon HTTP server starts.",
+      "fields": [
+        "daemonVersion",
+        "pythonVersion",
+        "runtimeVersion",
+        "startupDurationMs"
+      ]
+    },
+    {
+      "name": "daemon_stopped",
+      "description": "Emitted when the long-lived ktx-daemon HTTP server shuts down.",
+      "fields": [
+        "reason",
+        "uptimeMs"
+      ]
+    },
+    {
+      "name": "sl_plan_completed",
+      "description": "Emitted after a daemon semantic-layer planning pass completes.",
+      "fields": [
+        "outcome",
+        "stage",
+        "errorClass",
+        "durationMs",
+        "sourceCount",
+        "joinCount"
+      ]
+    },
+    {
+      "name": "sql_gen_completed",
+      "description": "Emitted after daemon SQL generation completes.",
+      "fields": [
+        "outcome",
+        "dialect",
+        "errorClass",
+        "durationMs"
+      ]
+    }
+  ],
+  "$defs": {
+    "install_first_run": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi"
+      ],
+      "additionalProperties": false
+    },
+    "command": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "commandPath": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error",
+            "aborted"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        },
+        "flagsPresent": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "hasProject": {
+          "type": "boolean"
+        },
+        "projectGroupAttached": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "commandPath",
+        "durationMs",
+        "outcome",
+        "flagsPresent",
+        "hasProject",
+        "projectGroupAttached"
+      ],
+      "additionalProperties": false
+    },
+    "setup_step": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "step": {
+          "type": "string",
+          "enum": [
+            "project",
+            "runtime",
+            "models",
+            "embeddings",
+            "secrets",
+            "databases",
+            "database-context-depth",
+            "sources",
+            "context",
+            "agents",
+            "demo-tour"
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "skipped",
+            "abandoned"
+          ]
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "step",
+        "outcome",
+        "durationMs"
+      ],
+      "additionalProperties": false
+    },
+    "connection_added": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "isDemoConnection": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "driver",
+        "isDemoConnection"
+      ],
+      "additionalProperties": false
+    },
+    "connection_test": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "isDemoConnection": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "serverVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "driver",
+        "isDemoConnection",
+        "outcome",
+        "durationMs"
+      ],
+      "additionalProperties": false
+    },
+    "project_stack_snapshot": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "driver": {
+                "type": "string"
+              },
+              "isDemo": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "driver",
+              "isDemo"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "connectionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "hasSl": {
+          "type": "boolean"
+        },
+        "hasWiki": {
+          "type": "boolean"
+        },
+        "hasMcp": {
+          "type": "boolean"
+        },
+        "hasManagedRuntime": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "connectors",
+        "connectionCount",
+        "hasSl",
+        "hasWiki",
+        "hasMcp",
+        "hasManagedRuntime"
+      ],
+      "additionalProperties": false
+    },
+    "ingest_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "isDemoConnection": {
+          "type": "boolean"
+        },
+        "schemaCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "tableCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "columnCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rowsBucket": {
+          "type": "string",
+          "enum": [
+            "<10k",
+            "<100k",
+            "<1M",
+            "<10M",
+            ">=10M"
+          ]
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "driver",
+        "isDemoConnection",
+        "schemaCount",
+        "tableCount",
+        "columnCount",
+        "rowsBucket",
+        "durationMs",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "scan_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "tableCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "columnCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "inferredFkCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "declaredFkCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "driver",
+        "tableCount",
+        "columnCount",
+        "inferredFkCount",
+        "declaredFkCount",
+        "durationMs",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "sl_validate_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "sourceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "modelCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "validationErrorCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "sourceCount",
+        "modelCount",
+        "validationErrorCount",
+        "outcome",
+        "durationMs"
+      ],
+      "additionalProperties": false
+    },
+    "sl_query_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "compile",
+            "execute"
+          ]
+        },
+        "referencedSourceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "referencedDimensionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "referencedMeasureCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "mode",
+        "referencedSourceCount",
+        "referencedDimensionCount",
+        "referencedMeasureCount",
+        "durationMs",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "sql_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "isDemoConnection": {
+          "type": "boolean"
+        },
+        "queryVerb": {
+          "type": "string",
+          "enum": [
+            "select",
+            "explain",
+            "show",
+            "with",
+            "other"
+          ]
+        },
+        "referencedTableCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "driver",
+        "isDemoConnection",
+        "queryVerb",
+        "referencedTableCount",
+        "durationMs",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "wiki_query_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "queryLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "resultCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "queryLength",
+        "resultCount",
+        "durationMs",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "mcp_request_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "toolName": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "errorClass": {
+          "type": "string"
+        },
+        "sampleRate": {
+          "type": "number",
+          "const": 0.1
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "toolName",
+        "outcome",
+        "durationMs",
+        "sampleRate"
+      ],
+      "additionalProperties": false
+    },
+    "daemon_started": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "daemonVersion": {
+          "type": "string"
+        },
+        "pythonVersion": {
+          "type": "string"
+        },
+        "runtimeVersion": {
+          "type": "string"
+        },
+        "startupDurationMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "daemonVersion",
+        "pythonVersion",
+        "runtimeVersion",
+        "startupDurationMs"
+      ],
+      "additionalProperties": false
+    },
+    "daemon_stopped": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "signal",
+            "request",
+            "crash"
+          ]
+        },
+        "uptimeMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "reason",
+        "uptimeMs"
+      ],
+      "additionalProperties": false
+    },
+    "sl_plan_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "parse",
+            "resolve",
+            "compile",
+            "transpile"
+          ]
+        },
+        "errorClass": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "joinCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "outcome",
+        "stage",
+        "durationMs",
+        "sourceCount",
+        "joinCount"
+      ],
+      "additionalProperties": false
+    },
+    "sql_gen_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        },
+        "dialect": {
+          "type": "string"
+        },
+        "errorClass": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "outcome",
+        "dialect",
+        "durationMs"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -2,6 +2,7 @@ import type { KtxEmbeddingPort } from '../core/embedding.js';
 import type { MemoryAction } from '../../context/memory/types.js';
 import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
 import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
+import type { KtxTableRefKey } from '../scan/table-ref.js';
 import type { MemoryFlowEventSink } from './memory-flow/types.js';
 import type { StageIndex } from './stages/stage-index.types.js';
 import type { WorkUnitOutcome } from './stages/stage-3-work-units.js';
@@ -52,6 +53,7 @@ export interface ChunkResult {
 export interface FetchContext {
   connectionId: string;
   sourceKey: string;
+  tableScope?: ReadonlySet<KtxTableRefKey>;
   memoryFlow?: MemoryFlowEventSink;
 }
 

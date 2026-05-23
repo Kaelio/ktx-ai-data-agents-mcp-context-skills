@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { Command, InvalidArgumentError } from '@commander-js/extra-typings';
+import { Command, type CommandUnknownOpts, InvalidArgumentError } from '@commander-js/extra-typings';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerIngestCommands } from './commands/ingest-commands.js';
@@ -14,6 +14,7 @@ import { registerAdminCommands } from './admin.js';
 import { renderMissingProjectMessage } from './doctor.js';
 import { findNearestKtxProjectDir, resolveKtxProjectDir } from './project-resolver.js';
 import { profileMark, profileSpan } from './startup-profile.js';
+import type { CommandOutcome } from './telemetry/index.js';
 
 profileMark('module:cli-program');
 
@@ -43,6 +44,8 @@ export interface BuildKtxProgramOptions {
   packageInfo: KtxCliPackageInfo;
   runInit: (args: { projectDir: string; force: boolean }, io: KtxCliIo) => Promise<number>;
   setExitCode?: (code: number) => void;
+  argv?: string[];
+  setTelemetryModule?: (telemetry: typeof import('./telemetry/index.js')) => void;
 }
 
 type CommanderExitLike = { exitCode: number; code: string; message: string };
@@ -327,6 +330,25 @@ function formatCliError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function commandOutcomeForParseResult(error: unknown, exitCode: number): CommandOutcome {
+  if (error) {
+    return isKtxProjectMissingAbortError(error) ? 'aborted' : 'error';
+  }
+  return exitCode === 0 ? 'ok' : 'error';
+}
+
+function shouldAttachCommandProjectGroup(path: string[], hasProject: boolean): boolean {
+  if (hasProject) {
+    return true;
+  }
+  const rootCommand = path[1];
+  const pathKey = path.join(' ');
+  return (
+    (rootCommand !== undefined && COMMANDS_THAT_CREATE_PROJECT.has(rootCommand)) ||
+    COMMANDS_THAT_CREATE_PROJECT.has(pathKey)
+  );
+}
+
 function firstTopLevelCommandToken(argv: string[]): string | null {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -390,11 +412,43 @@ async function runBareInteractiveCommand(
   return 0;
 }
 
+/** @internal */
+export function collectCommandFlagsPresent(command: CommandUnknownOpts): Record<string, boolean> {
+  const flags: Record<string, boolean> = {};
+  let current: CommandUnknownOpts | null = command;
+  while (current) {
+    for (const option of current.options) {
+      const key = option.attributeName();
+      if (current.getOptionValueSource(key) === 'cli') {
+        flags[key] = true;
+      }
+    }
+    current = current.parent;
+  }
+  return flags;
+}
+
 export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   const program = createBaseProgram(options.packageInfo, options.io);
-  program.hook('preAction', (_thisCommand, actionCommand) => {
-    writeProjectDir(options.io, actionCommand as CommandPathNode);
-    ensureProjectAvailable(options.io, actionCommand as CommandPathNode);
+  program.hook('preAction', async (_thisCommand, actionCommand) => {
+    const telemetry = await import('./telemetry/index.js');
+    options.setTelemetryModule?.(telemetry);
+    await telemetry.showTelemetryNoticeIfNeeded(options.io, options.packageInfo);
+    const commandNode = actionCommand as CommandPathNode;
+    const path = commandPath(commandNode);
+    const projectDir = resolveCommandProjectDir(commandNode);
+    const hasProject = ktxYamlExists(projectDir);
+    const attachProjectGroup = shouldAttachCommandProjectGroup(path, hasProject);
+    telemetry.beginCommandSpan({
+      commandPath: path,
+      flagsPresent: collectCommandFlagsPresent(commandNode as unknown as CommandUnknownOpts),
+      projectDir: attachProjectGroup ? projectDir : undefined,
+      hasProject,
+      attachProjectGroup,
+      startedAt: performance.now(),
+    });
+    writeProjectDir(options.io, commandNode);
+    ensureProjectAvailable(options.io, commandNode);
   });
 
   const context: KtxCliCommandContext = {
@@ -435,13 +489,18 @@ export async function runCommanderKtxCli(
 ): Promise<number> {
   profileMark('commander:entry');
   let exitCode = 0;
+  let telemetryModule: typeof import('./telemetry/index.js') | undefined;
   const program = buildKtxProgram({
     io,
     deps,
     packageInfo: info,
     runInit: options.runInit,
+    argv,
     setExitCode: (code: number) => {
       exitCode = code;
+    },
+    setTelemetryModule: (telemetry) => {
+      telemetryModule = telemetry;
     },
   });
   profileMark('commander:program-built');
@@ -477,17 +536,29 @@ export async function runCommanderKtxCli(
     return 1;
   }
 
+  let parseError: unknown;
   try {
     await profileSpan('commander:parseAsync', () => program.parseAsync(argv, { from: 'user' }));
   } catch (error) {
+    parseError = error;
     if (isKtxProjectMissingAbortError(error)) {
-      return 1;
+      exitCode = 1;
+    } else if (isCommanderExit(error)) {
+      exitCode = error.exitCode === 0 ? 0 : 1;
+    } else {
+      io.stderr.write(`${formatCliError(error)}\n`);
+      exitCode = 1;
     }
-    if (isCommanderExit(error)) {
-      return error.exitCode === 0 ? 0 : 1;
+  } finally {
+    if (telemetryModule) {
+      const completed = telemetryModule.completeCommandSpan({
+        completedAt: performance.now(),
+        outcome: commandOutcomeForParseResult(parseError, exitCode),
+        error: parseError,
+      });
+      await telemetryModule.emitCompletedCommand({ completed, packageInfo: info, io });
+      await telemetryModule.shutdownTelemetryEmitter();
     }
-    io.stderr.write(`${formatCliError(error)}\n`);
-    return 1;
   }
 
   return exitCode;

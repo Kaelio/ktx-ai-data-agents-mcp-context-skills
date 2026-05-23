@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -24,6 +25,16 @@ join pg_catalog.pg_class c
   and c.relname = t.table_name
 where t.table_schema = any(%s)
   and t.table_type = 'BASE TABLE'
+  and (
+    %s::jsonb is null
+    or exists (
+      select 1
+      from jsonb_to_recordset(%s::jsonb) as scope(catalog text, db text, name text)
+      where (scope.catalog is null or scope.catalog = current_database())
+        and (scope.db is null or scope.db = t.table_schema)
+        and scope.name = t.table_name
+    )
+  )
 order by t.table_schema, t.table_name
 """
 
@@ -52,6 +63,16 @@ where n.nspname = any(%s)
   and c.relkind in ('r', 'p')
   and a.attnum > 0
   and not a.attisdropped
+  and (
+    %s::jsonb is null
+    or exists (
+      select 1
+      from jsonb_to_recordset(%s::jsonb) as scope(catalog text, db text, name text)
+      where (scope.catalog is null or scope.catalog = current_database())
+        and (scope.db is null or scope.db = n.nspname)
+        and scope.name = c.relname
+    )
+  )
 order by n.nspname, c.relname, a.attnum
 """
 
@@ -80,6 +101,16 @@ join information_schema.key_column_usage target_key
   and target_key.ordinal_position = source_key.position_in_unique_constraint
 where source_constraint.constraint_type = 'FOREIGN KEY'
   and source_constraint.table_schema = any(%s)
+  and (
+    %s::jsonb is null
+    or exists (
+      select 1
+      from jsonb_to_recordset(%s::jsonb) as scope(catalog text, db text, name text)
+      where (scope.catalog is null or scope.catalog = current_database())
+        and (scope.db is null or scope.db = source_constraint.table_schema)
+        and scope.name = source_constraint.table_name
+    )
+  )
 order by source_constraint.table_schema, source_constraint.table_name, source_constraint.constraint_name, source_key.ordinal_position
 """
 
@@ -108,6 +139,12 @@ class LiveDatabaseTable(BaseModel):
     foreign_keys: list[LiveDatabaseForeignKey] = Field(default_factory=list)
 
 
+class LiveDatabaseTableScopeRef(BaseModel):
+    catalog: str | None = None
+    db: str | None = None
+    name: str
+
+
 class DatabaseIntrospectionRequest(BaseModel):
     connection_id: str
     driver: str = "postgres"
@@ -115,6 +152,7 @@ class DatabaseIntrospectionRequest(BaseModel):
     schemas: list[str] = Field(default_factory=lambda: ["public"])
     statement_timeout_ms: int = Field(default=30_000, ge=1)
     connection_timeout_seconds: int = Field(default=5, ge=1)
+    table_scope: list[LiveDatabaseTableScopeRef] | None = None
 
     @field_validator("schemas")
     @classmethod
@@ -169,6 +207,23 @@ def _statement_timeout_config(statement_timeout_ms: int) -> tuple[str, tuple[str
     )
 
 
+def _table_scope_json(
+    table_scope: Sequence[LiveDatabaseTableScopeRef] | None,
+) -> str | None:
+    if table_scope is None:
+        return None
+    return json.dumps(
+        [
+            {
+                "catalog": ref.catalog,
+                "db": ref.db,
+                "name": ref.name,
+            }
+            for ref in table_scope
+        ]
+    )
+
+
 def _load_postgres_rows(
     request: DatabaseIntrospectionRequest,
 ) -> DatabaseIntrospectionRows:
@@ -190,7 +245,8 @@ def _load_postgres_rows(
         connection.execute("BEGIN READ ONLY")
         try:
             connection.execute(*_statement_timeout_config(request.statement_timeout_ms))
-            params = (request.schemas,)
+            scope_json = _table_scope_json(request.table_scope)
+            params = (request.schemas, scope_json, scope_json)
             table_rows = list(connection.execute(TABLES_SQL, params))
             column_rows = list(connection.execute(COLUMNS_SQL, params))
             foreign_key_rows = list(connection.execute(FOREIGN_KEYS_SQL, params))
