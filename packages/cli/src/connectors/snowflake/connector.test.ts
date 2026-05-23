@@ -359,10 +359,54 @@ describe('KtxSnowflakeScanConnector', () => {
 
       expect(snapshot.tables.map((table) => table.name).sort()).toEqual(['ORDERS', 'ORDER_SUMMARY']);
       expect(snapshot.tables.every((table) => table.columns.every((column) => column.primaryKey === false))).toBe(true);
+      expect(snapshot.warnings).toEqual([
+        {
+          code: 'constraint_discovery_unauthorized',
+          message: 'Skipped primary-key discovery in PUBLIC (insufficient grants on system catalogs)',
+          recoverable: true,
+          metadata: { schema: 'PUBLIC', kind: 'primary_key' },
+        },
+      ]);
       expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('propagates non-denial Snowflake primary-key discovery errors', async () => {
+    const driverFactory = fakeDriverFactory();
+    const driver = (driverFactory.createDriver as ReturnType<typeof vi.fn>).getMockImplementation() as
+      | (() => KtxSnowflakeDriver)
+      | undefined;
+    if (!driver) throw new Error('driver mock missing');
+    const built = driver();
+    const networkError = new Error('network unavailable');
+    (built.query as ReturnType<typeof vi.fn>).mockImplementation(async (sql: string) => {
+      if (sql.includes('TABLE_CONSTRAINTS')) {
+        throw networkError;
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    (driverFactory.createDriver as ReturnType<typeof vi.fn>).mockReturnValue(built);
+
+    const connector = new KtxSnowflakeScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'snowflake',
+        authMethod: 'password',
+        account: 'acct',
+        warehouse: 'WH',
+        database: 'ANALYTICS',
+        schema_name: 'PUBLIC',
+        username: 'reader',
+        password: 'fixture-pass', // pragma: allowlist secret
+      },
+      driverFactory,
+    });
+
+    await expect(
+      connector.introspect({ connectionId: 'warehouse', driver: 'snowflake' }, { runId: 'scan-run-snowflake-network' }),
+    ).rejects.toBe(networkError);
   });
 
   it('limits introspection to tables in tableScope', async () => {

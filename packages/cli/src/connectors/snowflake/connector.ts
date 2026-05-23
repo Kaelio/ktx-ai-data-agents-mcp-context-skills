@@ -3,8 +3,28 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
-import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableListEntry, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
+import {
+  createKtxConnectorCapabilities,
+  type KtxColumnSampleInput,
+  type KtxColumnSampleResult,
+  type KtxColumnStatsInput,
+  type KtxColumnStatsResult,
+  type KtxQueryResult,
+  type KtxReadOnlyQueryInput,
+  type KtxScanConnector,
+  type KtxScanContext,
+  type KtxScanInput,
+  type KtxScanWarning,
+  type KtxSchemaColumn,
+  type KtxSchemaSnapshot,
+  type KtxSchemaTable,
+  type KtxTableListEntry,
+  type KtxTableRef,
+  type KtxTableSampleInput,
+  type KtxTableSampleResult,
+} from '../../context/scan/types.js';
 import snowflake from 'snowflake-sdk';
 import type { Bind, Binds, Connection, ConnectionOptions } from 'snowflake-sdk';
 import { KtxSnowflakeDialect } from './dialect.js';
@@ -164,6 +184,13 @@ function schemaNames(connection: KtxSnowflakeConnectionConfig, env: NodeJS.Proce
 function firstNumber(value: unknown): number | null {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function isDeniedError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return /insufficient privileges|does not exist or not authorized/i.test(error.message);
+  }
+  return false;
 }
 
 function normalizeSnowflakeValue(value: unknown, columnType?: string): unknown {
@@ -544,13 +571,23 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
     const tables: KtxSchemaTable[] = [];
+    const snapshotWarnings: KtxScanWarning[] = [];
     for (const schemaName of this.resolved.schemas) {
       const scopedNames = input.tableScope
         ? scopedTableNames(input.tableScope, { catalog: this.resolved.database, db: schemaName })
         : null;
       if (scopedNames && scopedNames.length === 0) continue;
       const rawTables = await this.getDriver().getSchemaMetadata(schemaName, scopedNames);
-      const primaryKeys = await this.primaryKeys(rawTables.map((table) => table.name), schemaName);
+      const primaryKeysResult = await tryConstraintQuery(
+        { schema: schemaName, kind: 'primary_key', isDeniedError },
+        () => this.primaryKeys(rawTables.map((table) => table.name), schemaName),
+      );
+      const primaryKeys = primaryKeysResult.ok
+        ? primaryKeysResult.value
+        : new Map(rawTables.map((table) => [table.name, new Set<string>()]));
+      if (!primaryKeysResult.ok) {
+        snapshotWarnings.push(primaryKeysResult.warning);
+      }
       tables.push(...rawTables.map((table) => this.toSchemaTable(table, primaryKeys)));
     }
     return {
@@ -567,6 +604,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
         total_columns: tables.reduce((sum, table) => sum + table.columns.length, 0),
       },
       tables,
+      warnings: snapshotWarnings,
     };
   }
 
@@ -690,9 +728,8 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
       return grouped;
     }
     const tableNamePlaceholders = tableNames.map(() => '?').join(', ');
-    try {
-      const result = await this.getDriver().query(
-        `
+    const result = await this.getDriver().query(
+      `
           SELECT tc.TABLE_NAME, kcu.COLUMN_NAME
           FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
           JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
@@ -705,16 +742,12 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
             AND tc.TABLE_NAME IN (${tableNamePlaceholders})
           ORDER BY tc.TABLE_NAME, kcu.ORDINAL_POSITION
         `,
-        [schemaName, this.resolved.database, ...tableNames],
-      );
-      for (const row of result.rows) {
-        const tableName = String(row[0]);
-        const columnName = String(row[1]);
-        grouped.get(tableName)?.add(columnName);
-      }
-    } catch {
-      // INFORMATION_SCHEMA.KEY_COLUMN_USAGE often isn't granted to read-only roles;
-      // continue with empty PK map and let FK inference + profiling carry the slack.
+      [schemaName, this.resolved.database, ...tableNames],
+    );
+    for (const row of result.rows) {
+      const tableName = String(row[0]);
+      const columnName = String(row[1]);
+      grouped.get(tableName)?.add(columnName);
     }
     return grouped;
   }
