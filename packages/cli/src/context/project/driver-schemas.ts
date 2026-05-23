@@ -35,7 +35,7 @@ function warehouseConnectionSchema<const Driver extends WarehouseDriver>(driver:
         ),
     })
     .describe(
-      `${driver} warehouse connection. Additional driver-tunable fields (e.g. historicSql, context.queryHistory) are accepted and passed through.`,
+      `${driver} warehouse connection. Additional driver-tunable fields (e.g. context.queryHistory) are accepted and passed through.`,
     );
 }
 

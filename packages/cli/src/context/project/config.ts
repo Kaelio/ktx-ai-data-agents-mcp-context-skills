@@ -11,15 +11,6 @@ const KTX_WORK_UNIT_FAILURE_MODES = ['abort', 'continue'] as const;
 const KTX_STORAGE_STATES = ['sqlite', 'postgres'] as const;
 const KTX_SEARCH_BACKENDS = ['sqlite-fts5', 'postgres-hybrid'] as const;
 
-const DEPRECATED_KEY_HINTS: Record<string, string> = {
-  'llm.provider.provider': 'use llm.provider.backend',
-  'ingest.llm': 'use top-level llm.provider, llm.models, and ingest.workUnits',
-  'ingest.embeddings.provider': 'use ingest.embeddings.backend',
-  'scan.enrichment.backend': 'use scan.enrichment.mode',
-  'scan.enrichment.llm': 'use top-level llm.provider and llm.models',
-  'scan.enrichment.embeddings.provider': 'use scan.enrichment.embeddings.backend',
-};
-
 const apiCredentialsSchema = z
   .strictObject({
     api_key: z.string().min(1).optional().describe('API key for the provider. Read from this value or the provider-specific environment variable.'),
@@ -189,12 +180,7 @@ const setupSchema = z
       .array(z.string().min(1))
       .default([])
       .describe('Connection IDs (keys of the top-level `connections` map) that the setup wizard treats as the project\'s primary databases.'),
-    completed_steps: z
-      .unknown()
-      .optional()
-      .describe('Deprecated. Accepted for backward compatibility but ignored; KTX no longer tracks setup progress here.'),
   })
-  .transform(({ database_connection_ids }) => ({ database_connection_ids }))
   .describe('Setup-wizard state captured during `ktx setup`.');
 
 const storageGitSchema = z
@@ -309,10 +295,6 @@ function formatIssue(issue: z.core.$ZodIssue, input: unknown): KtxConfigIssue[] 
     const keys = (issue as { keys?: readonly string[] }).keys ?? [];
     return keys.map((key) => {
       const fullPath = basePath.length > 0 ? `${basePath}.${key}` : key;
-      const hint = DEPRECATED_KEY_HINTS[fullPath];
-      if (hint !== undefined) {
-        return { path: fullPath, message: `Unsupported ${fullPath}: ${hint}`, fix: hint };
-      }
       return { path: fullPath, message: `Unsupported ${fullPath}: unknown field` };
     });
   }

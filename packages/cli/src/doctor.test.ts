@@ -356,7 +356,7 @@ describe('runKtxDoctor', () => {
     expect(out).toContain('KTX status');
     expect(out).toContain('Config');
     expect(out).toContain('Unsupported storrage: unknown field');
-    expect(out).toContain('Unsupported ingest.llm: use top-level llm.provider');
+    expect(out).toContain('Unsupported ingest.llm: unknown field');
     expect(out).toContain('ktx.yaml');
   });
 
@@ -609,11 +609,6 @@ describe('runKtxDoctor', () => {
         '    driver: postgres',
         '    url: env:WAREHOUSE_DATABASE_URL',
         '    readonly: true',
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: postgres',
-        '      windowDays: 30',
-        '      concurrency: 4',
         '  local:',
         '    driver: sqlite',
         '    file_path: ./warehouse.db',
@@ -651,8 +646,6 @@ describe('runKtxDoctor', () => {
     const out = testIo.stdout();
     expect(out).toContain('Warnings');
     expect(out).toContain('connections.warehouse.readonly is no longer used.');
-    expect(out).toContain('connections.warehouse.historicSql.concurrency is no longer used.');
-    expect(out).toContain('connections.warehouse.historicSql.windowDays does not constrain pg_stat_statements.');
     expect(out).toContain('connections.local.file_path was removed.');
     expect(out).toContain('connections.docs.last_successful_cursor is local sync state.');
     delete process.env.ANTHROPIC_API_KEY;
@@ -786,7 +779,7 @@ describe('runKtxDoctor', () => {
 
       const out = testIo.stdout();
       expect(out).toContain('Unsupported storrage: unknown field');
-      expect(out).toContain('Unsupported ingest.llm: use top-level llm.provider');
+      expect(out).toContain('Unsupported ingest.llm: unknown field');
     });
 
     it('emits structured JSON issues when validation fails', async () => {

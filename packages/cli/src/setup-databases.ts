@@ -285,13 +285,6 @@ function numberConfigField(connection: KtxProjectConnectionConfig | undefined, f
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-function historicSqlConfigRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> | null {
-  const historicSql = connection?.historicSql;
-  return historicSql && typeof historicSql === 'object' && !Array.isArray(historicSql)
-    ? (historicSql as Record<string, unknown>)
-    : null;
-}
-
 function contextRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> {
   const context = connection?.context;
   return context && typeof context === 'object' && !Array.isArray(context) ? (context as Record<string, unknown>) : {};
@@ -304,34 +297,17 @@ function queryHistoryConfigRecord(connection: KtxProjectConnectionConfig | undef
     : null;
 }
 
-function stripLegacyHistoricSql(connection: KtxProjectConnectionConfig): KtxProjectConnectionConfig {
-  const { historicSql: _historicSql, ...rest } = connection as KtxProjectConnectionConfig & {
-    historicSql?: unknown;
-  };
-  return rest;
-}
-
 function withQueryHistoryConfig(
   connection: KtxProjectConnectionConfig,
   queryHistory: Record<string, unknown>,
 ): KtxProjectConnectionConfig {
   return {
-    ...stripLegacyHistoricSql(connection),
+    ...connection,
     context: {
       ...contextRecord(connection),
       queryHistory,
     },
   };
-}
-
-function migrateLegacyHistoricSqlConnection(connection: KtxProjectConnectionConfig): KtxProjectConnectionConfig {
-  const existingQueryHistory = queryHistoryConfigRecord(connection);
-  const legacy = historicSqlConfigRecord(connection);
-  if (existingQueryHistory || !legacy) {
-    return existingQueryHistory ? stripLegacyHistoricSql(connection) : connection;
-  }
-  const { dialect: _dialect, ...queryHistory } = legacy;
-  return withQueryHistoryConfig(connection, queryHistory);
 }
 
 function historicSqlProbeFailureLines(error: unknown): string[] {
@@ -1133,8 +1109,7 @@ async function maybeApplyHistoricSqlConfig(input: {
     }
   }
 
-  const existingRecord = queryHistoryConfigRecord(input.connection) ?? historicSqlConfigRecord(input.connection) ?? {};
-  const { dialect: _dialect, ...existing } = existingRecord;
+  const { dialect: _dialect, ...existing } = queryHistoryConfigRecord(input.connection) ?? {};
 
   if (!enabled) {
     return withQueryHistoryConfig(input.connection, { ...existing, enabled: false });
@@ -1386,18 +1361,11 @@ async function writeConnectionConfig(input: {
   io?: KtxCliIo;
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
-  const migratedConnections = Object.fromEntries(
-    Object.entries(project.config.connections).map(([connectionId, connection]) => [
-      connectionId,
-      migrateLegacyHistoricSqlConnection(connection),
-    ]),
-  );
-  const nextConnection = migrateLegacyHistoricSqlConnection(input.connection);
   const config = {
     ...project.config,
     connections: {
-      ...migratedConnections,
-      [input.connectionId]: nextConnection,
+      ...project.config.connections,
+      [input.connectionId]: input.connection,
     },
   };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
@@ -1407,13 +1375,13 @@ async function writeConnectionConfig(input: {
       projectDir: input.projectDir,
       io: input.io,
       fields: {
-        driver: String(nextConnection.driver ?? 'unknown').toLowerCase(),
-        isDemoConnection: isDemoConnection(input.connectionId, nextConnection),
+        driver: String(input.connection.driver ?? 'unknown').toLowerCase(),
+        isDemoConnection: isDemoConnection(input.connectionId, input.connection),
       },
     });
   }
 
-  const queryHistory = queryHistoryConfigRecord(nextConnection);
+  const queryHistory = queryHistoryConfigRecord(input.connection);
   if (queryHistory?.enabled === true) {
     await ensureHistoricSqlIngestDefaults(input.projectDir);
   }
@@ -1745,18 +1713,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
 
 async function markDatabasesComplete(projectDir: string, connectionIds: string[]): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = setKtxSetupDatabaseConnectionIds(
-    {
-      ...project.config,
-      connections: Object.fromEntries(
-        Object.entries(project.config.connections).map(([connectionId, connection]) => [
-          connectionId,
-          migrateLegacyHistoricSqlConnection(connection),
-        ]),
-      ),
-    },
-    unique(connectionIds),
-  );
+  const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds));
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'databases');
 }
@@ -1769,7 +1726,7 @@ async function maybeRunHistoricSqlSetupProbe(input: {
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
-  const queryHistory = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection);
+  const queryHistory = queryHistoryConfigRecord(connection);
   const driver = normalizeDriver(connection?.driver);
   if (queryHistory?.enabled !== true) {
     return;
@@ -2133,12 +2090,7 @@ async function runPrimarySourceFullEdit(input: {
     connectionId: input.connectionId,
     connection: withExistingPrimaryEditPromptDefaults({
       previous: existing,
-      next: {
-        ...withHistoricSql,
-        ...(!Object.hasOwn(withHistoricSql, 'historicSql') && existing.historicSql !== undefined
-          ? { historicSql: existing.historicSql }
-          : {}),
-      },
+      next: withHistoricSql,
       driver,
     }),
     io: input.io,

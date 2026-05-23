@@ -462,7 +462,7 @@ export function parseScanSummary(output: string): string | null {
 export function parseIngestSummary(output: string): string | null {
   const savedMemory = output.match(/Saved memory: (.+)/);
   if (savedMemory) return savedMemory[1];
-  const tasks = output.match(/(?:Tasks|Work units): (\d+)/);
+  const tasks = output.match(/Tasks: (\d+)/);
   if (tasks) return `${tasks[1]} tasks`;
   return null;
 }

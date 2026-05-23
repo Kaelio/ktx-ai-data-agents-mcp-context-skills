@@ -92,10 +92,6 @@ type ClaudeCodeAuthProbe = (input: {
 
 const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function hasOwnField(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -764,27 +760,6 @@ function buildWarnings(
       warnings.push({
         message: `connections.${connectionId}.last_successful_cursor is local sync state.`,
         fix: 'Remove it from ktx.yaml. KTX stores the Notion cursor in .ktx/db.sqlite.',
-      });
-    }
-
-    const historicSql = isRecord(connection.historicSql) ? connection.historicSql : null;
-    if (!historicSql) {
-      continue;
-    }
-    if (hasOwnField(historicSql, 'concurrency')) {
-      warnings.push({
-        message: `connections.${connectionId}.historicSql.concurrency is no longer used.`,
-        fix: `Remove connections.${connectionId}.historicSql.concurrency from ktx.yaml.`,
-      });
-    }
-    const historicDialect = String(historicSql.dialect ?? driver).toLowerCase();
-    if (
-      (historicDialect === 'postgres' || historicDialect === 'postgresql') &&
-      hasOwnField(historicSql, 'windowDays')
-    ) {
-      warnings.push({
-        message: `connections.${connectionId}.historicSql.windowDays does not constrain pg_stat_statements.`,
-        fix: `Remove connections.${connectionId}.historicSql.windowDays from ktx.yaml.`,
       });
     }
   }

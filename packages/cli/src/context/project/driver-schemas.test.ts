@@ -19,12 +19,12 @@ describe('connectionConfigSchema (driver discriminated union)', () => {
     const parsed = connectionConfigSchema.parse({
       driver: 'postgres',
       url: 'postgres://x',
-      historicSql: { enabled: true },
+      customField: { enabled: true },
       context: { queryHistory: { enabled: false } },
     });
     expect(parsed).toMatchObject({
       driver: 'postgres',
-      historicSql: { enabled: true },
+      customField: { enabled: true },
       context: { queryHistory: { enabled: false } },
     });
   });
