@@ -3,8 +3,33 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
-import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxTableListEntry, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import {
+  constraintDiscoveryWarning,
+  tryConstraintQuery,
+  type ConstraintDiscoveryKind,
+} from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
+import {
+  createKtxConnectorCapabilities,
+  type KtxColumnSampleInput,
+  type KtxColumnSampleResult,
+  type KtxColumnStatsInput,
+  type KtxColumnStatsResult,
+  type KtxQueryResult,
+  type KtxReadOnlyQueryInput,
+  type KtxScanConnector,
+  type KtxScanContext,
+  type KtxScanInput,
+  type KtxScanWarning,
+  type KtxSchemaColumn,
+  type KtxSchemaForeignKey,
+  type KtxSchemaSnapshot,
+  type KtxSchemaTable,
+  type KtxTableListEntry,
+  type KtxTableRef,
+  type KtxTableSampleInput,
+  type KtxTableSampleResult,
+} from '../../context/scan/types.js';
 import { KtxMysqlDialect } from './dialect.js';
 
 export interface KtxMysqlConnectionConfig {
@@ -249,6 +274,28 @@ function primaryKeyMap(rows: MysqlPrimaryKeyRow[], fallbackDatabase: string): Ma
   return grouped;
 }
 
+function isDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  return (
+    code === 'ER_TABLEACCESS_DENIED_ERROR' ||
+    code === 'ER_SPECIFIC_ACCESS_DENIED_ERROR' ||
+    code === 'ER_DBACCESS_DENIED_ERROR'
+  );
+}
+
+function pushConstraintWarnings(
+  warnings: KtxScanWarning[],
+  schemas: readonly string[],
+  kind: ConstraintDiscoveryKind,
+): void {
+  for (const schema of schemas) {
+    warnings.push(constraintDiscoveryWarning({ schema, kind }));
+  }
+}
+
 function queryParams(params: Record<string, unknown> | unknown[] | undefined): unknown[] | undefined {
   if (!params) {
     return undefined;
@@ -359,6 +406,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
     const databases = configuredMysqlSchemas(this.connection, this.poolConfig.database);
+    const snapshotWarnings: KtxScanWarning[] = [];
     const placeholders = databases.map(() => '?').join(', ');
     let allScopedTables: string[] | null = null;
     if (input.tableScope) {
@@ -392,8 +440,11 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
       `,
       [...databases, ...tableNameParams],
     );
-    const primaryKeys = await this.queryRaw<MysqlPrimaryKeyRow>(
-      `
+    const primaryKeysResult = await tryConstraintQuery(
+      { schema: databases[0] ?? this.poolConfig.database, kind: 'primary_key', isDeniedError },
+      () =>
+        this.queryRaw<MysqlPrimaryKeyRow>(
+          `
       SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
       WHERE TABLE_SCHEMA IN (${placeholders})
@@ -401,10 +452,18 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
         ${tableNameClause}
       ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
       `,
-      [...databases, ...tableNameParams],
+          [...databases, ...tableNameParams],
+        ),
     );
-    const foreignKeys = await this.queryRaw<MysqlForeignKeyRow>(
-      `
+    const primaryKeys = primaryKeysResult.ok ? primaryKeysResult.value : [];
+    if (!primaryKeysResult.ok) {
+      pushConstraintWarnings(snapshotWarnings, databases, 'primary_key');
+    }
+    const foreignKeysResult = await tryConstraintQuery(
+      { schema: databases[0] ?? this.poolConfig.database, kind: 'foreign_key', isDeniedError },
+      () =>
+        this.queryRaw<MysqlForeignKeyRow>(
+          `
       SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME, CONSTRAINT_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
       WHERE TABLE_SCHEMA IN (${placeholders})
@@ -412,8 +471,13 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
         ${tableNameClause}
       ORDER BY TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       `,
-      [...databases, ...tableNameParams],
+          [...databases, ...tableNameParams],
+        ),
     );
+    const foreignKeys = foreignKeysResult.ok ? foreignKeysResult.value : [];
+    if (!foreignKeysResult.ok) {
+      pushConstraintWarnings(snapshotWarnings, databases, 'foreign_key');
+    }
 
     const columnsByTable = groupByTable(columns, this.poolConfig.database);
     const primaryKeysByTable = primaryKeyMap(primaryKeys, this.poolConfig.database);
@@ -441,6 +505,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
         total_columns: schemaTables.reduce((sum, table) => sum + table.columns.length, 0),
       },
       tables: schemaTables,
+      warnings: snapshotWarnings,
     };
   }
 
