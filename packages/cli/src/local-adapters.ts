@@ -12,6 +12,7 @@ import { isKtxSqliteConnectionConfig } from './connectors/sqlite/connector.js';
 import { createSqlServerLiveDatabaseIntrospection } from './connectors/sqlserver/live-database-introspection.js';
 import { isKtxSqlServerConnectionConfig } from './connectors/sqlserver/connector.js';
 import { BigQueryHistoricSqlQueryHistoryReader } from './context/ingest/adapters/historic-sql/bigquery-query-history-reader.js';
+import { queryHistoryDialectForConnection } from './context/ingest/adapters/historic-sql/connection-dialect.js';
 import { createDaemonLiveDatabaseIntrospection } from './context/ingest/adapters/live-database/daemon-introspection.js';
 import { createDefaultLocalIngestAdapters, type DefaultLocalIngestAdaptersOptions } from './context/ingest/local-adapters.js';
 import type { HistoricSqlReader } from './context/ingest/adapters/historic-sql/types.js';
@@ -164,47 +165,6 @@ export interface KtxCliLocalIngestAdaptersOptions extends DefaultLocalIngestAdap
   logger?: KtxOperationalLogger;
 }
 
-function historicSqlRecord(connection: unknown): Record<string, unknown> | null {
-  if (
-    connection &&
-    typeof connection === 'object' &&
-    'historicSql' in connection &&
-    typeof (connection as { historicSql?: unknown }).historicSql === 'object' &&
-    (connection as { historicSql?: unknown }).historicSql !== null &&
-    !Array.isArray((connection as { historicSql?: unknown }).historicSql)
-  ) {
-    return (connection as { historicSql: Record<string, unknown> }).historicSql;
-  }
-  return null;
-}
-
-function enabledHistoricSqlDialect(connection: unknown): 'postgres' | 'bigquery' | 'snowflake' | null {
-  const direct = historicSqlRecord(connection);
-  const context =
-    connection && typeof connection === 'object' && !Array.isArray(connection)
-      ? (connection as { context?: unknown }).context
-      : null;
-  const queryHistory =
-    context && typeof context === 'object' && !Array.isArray(context)
-      ? (context as { queryHistory?: unknown }).queryHistory
-      : null;
-  const enabled =
-    queryHistory && typeof queryHistory === 'object' && !Array.isArray(queryHistory)
-      ? (queryHistory as { enabled?: unknown }).enabled === true
-      : direct?.enabled === true;
-  if (!enabled) {
-    return null;
-  }
-  const driver = String((connection as { driver?: unknown })?.driver ?? '').toLowerCase();
-  if (driver === 'postgres' || driver === 'postgresql') return 'postgres';
-  if (driver === 'bigquery') return 'bigquery';
-  if (driver === 'snowflake') return 'snowflake';
-  const legacyDialect = String(direct?.dialect ?? '').toLowerCase();
-  return legacyDialect === 'postgres' || legacyDialect === 'bigquery' || legacyDialect === 'snowflake'
-    ? legacyDialect
-    : null;
-}
-
 function createEphemeralPostgresHistoricSqlClient(project: KtxLocalProject, connectionId: string) {
   const connection = project.config.connections[connectionId] as KtxPostgresConnectionConfig | undefined;
   const inputDriver = connection?.driver ?? 'unknown';
@@ -308,7 +268,7 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
     return undefined;
   }
   const connection = project.config.connections[connectionId];
-  const dialect = enabledHistoricSqlDialect(connection);
+  const dialect = queryHistoryDialectForConnection(connection);
   if (!dialect) {
     return undefined;
   }

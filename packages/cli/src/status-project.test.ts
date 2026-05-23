@@ -148,6 +148,161 @@ function withPostgresQueryHistory(config: KtxProjectConfig): KtxProjectConfig {
   };
 }
 
+function withSnowflakeQueryHistory(config: KtxProjectConfig): KtxProjectConfig {
+  return {
+    ...config,
+    connections: {
+      ...config.connections,
+      warehouse: {
+        driver: 'snowflake',
+        account: 'EMOVRJS-CZ07756',
+        warehouse: 'COMPUTE_WH',
+        database: 'ANALYTICS',
+        username: 'svc_ktx',
+        password: 'env:SNOWFLAKE_PASSWORD', // pragma: allowlist secret
+        context: { queryHistory: { enabled: true } },
+      } as KtxProjectConfig['connections'][string],
+    },
+  };
+}
+
+function withBigQueryQueryHistory(config: KtxProjectConfig): KtxProjectConfig {
+  return {
+    ...config,
+    connections: {
+      ...config.connections,
+      bq: {
+        driver: 'bigquery',
+        credentials_json: 'env:BQ_CREDENTIALS_JSON',
+        context: { queryHistory: { enabled: true } },
+      } as KtxProjectConfig['connections'][string],
+    },
+  };
+}
+
+function withMysqlQueryHistory(config: KtxProjectConfig): KtxProjectConfig {
+  return {
+    ...config,
+    connections: {
+      ...config.connections,
+      legacy: {
+        driver: 'mysql',
+        host: 'db.example.com',
+        database: 'analytics',
+        username: 'svc',
+        password: 'env:MYSQL_PASSWORD', // pragma: allowlist secret
+        context: { queryHistory: { enabled: true } },
+      } as KtxProjectConfig['connections'][string],
+    },
+  };
+}
+
+describe('buildProjectStatus query history dispatch', () => {
+  it('runs the snowflake probe for snowflake connections, not the postgres one', async () => {
+    let postgresCalls = 0;
+    let snowflakeCalls = 0;
+    const project = projectWithConfig(withSnowflakeQueryHistory(baseProjectConfig()));
+
+    const status = await buildProjectStatus(project, {
+      claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
+      postgresQueryHistoryProbe: async () => {
+        postgresCalls += 1;
+        throw new Error('postgres probe should not run for snowflake');
+      },
+      snowflakeQueryHistoryProbe: async () => {
+        snowflakeCalls += 1;
+        return { warnings: [], info: [] };
+      },
+    });
+
+    expect(postgresCalls).toBe(0);
+    expect(snowflakeCalls).toBe(1);
+    expect(status.queryHistory).toHaveLength(1);
+    expect(status.queryHistory[0]).toMatchObject({
+      connection: 'warehouse',
+      driver: 'snowflake',
+      dialect: 'snowflake',
+      status: 'ok',
+    });
+    expect(status.queryHistory[0].detail).toMatch(/SNOWFLAKE\.ACCOUNT_USAGE\.QUERY_HISTORY/);
+    expect(status.queryHistory[0].fix).toBeUndefined();
+    expect(status.verdict).not.toBe('blocked');
+  });
+
+  it('reports snowflake probe failures with the reader-provided remediation', async () => {
+    const project = projectWithConfig(withSnowflakeQueryHistory(baseProjectConfig()));
+    const { HistoricSqlGrantsMissingError } = await import(
+      './context/ingest/adapters/historic-sql/errors.js'
+    );
+
+    const status = await buildProjectStatus(project, {
+      claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
+      snowflakeQueryHistoryProbe: async () => {
+        throw new HistoricSqlGrantsMissingError({
+          dialect: 'snowflake',
+          message: 'role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+          remediation: 'GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE ktx;',
+        });
+      },
+    });
+
+    expect(status.queryHistory[0]).toMatchObject({
+      connection: 'warehouse',
+      driver: 'snowflake',
+      dialect: 'snowflake',
+      status: 'fail',
+      fix: 'GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE ktx;',
+    });
+    expect(status.queryHistory[0].detail).not.toMatch(/Set connections.*driver to postgres/);
+  });
+
+  it('runs the bigquery probe for bigquery connections', async () => {
+    let bigqueryCalls = 0;
+    const project = projectWithConfig(withBigQueryQueryHistory(baseProjectConfig()));
+
+    const status = await buildProjectStatus(project, {
+      claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
+      bigqueryQueryHistoryProbe: async () => {
+        bigqueryCalls += 1;
+        return { warnings: [], info: [] };
+      },
+    });
+
+    expect(bigqueryCalls).toBe(1);
+    expect(status.queryHistory[0]).toMatchObject({
+      connection: 'bq',
+      driver: 'bigquery',
+      dialect: 'bigquery',
+      status: 'ok',
+    });
+    expect(status.queryHistory[0].detail).toMatch(/INFORMATION_SCHEMA\.JOBS_BY_PROJECT/);
+  });
+
+  it('fails with an accurate message for drivers without a query history reader', async () => {
+    const project = projectWithConfig(withMysqlQueryHistory(baseProjectConfig()));
+
+    const status = await buildProjectStatus(project, {
+      claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
+      postgresQueryHistoryProbe: async () => {
+        throw new Error('postgres probe must not run for mysql');
+      },
+    });
+
+    expect(status.queryHistory).toHaveLength(1);
+    expect(status.queryHistory[0]).toMatchObject({
+      connection: 'legacy',
+      driver: 'mysql',
+      dialect: 'mysql',
+      status: 'fail',
+      detail: 'query history is not supported for driver "mysql"',
+    });
+    expect(status.queryHistory[0].fix).toMatch(
+      /Disable connections\.legacy\.context\.queryHistory/,
+    );
+    expect(status.queryHistory[0].fix).not.toMatch(/driver to postgres/);
+  });
+});
+
 describe('buildProjectStatus --fast', () => {
   it('skips claude-code probe and Postgres query-history probe', async () => {
     let claudeProbeCalls = 0;

@@ -332,9 +332,7 @@ describe('KtxSnowflakeScanConnector', () => {
 
       expect(snapshot.tables.map((table) => table.name).sort()).toEqual(['ORDERS', 'ORDER_SUMMARY']);
       expect(snapshot.tables.every((table) => table.columns.every((column) => column.primaryKey === false))).toBe(true);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('Snowflake primary-key discovery skipped for ANALYTICS.PUBLIC'),
-      );
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }

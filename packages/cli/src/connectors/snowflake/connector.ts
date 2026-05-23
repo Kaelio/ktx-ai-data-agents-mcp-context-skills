@@ -708,11 +708,9 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
         const columnName = String(row[1]);
         grouped.get(tableName)?.add(columnName);
       }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `Snowflake primary-key discovery skipped for ${this.resolved.database}.${schemaName}: ${detail.replace(/\s+/g, ' ').trim()}`,
-      );
+    } catch {
+      // INFORMATION_SCHEMA.KEY_COLUMN_USAGE often isn't granted to read-only roles;
+      // continue with empty PK map and let FK inference + profiling carry the slack.
     }
     return grouped;
   }
