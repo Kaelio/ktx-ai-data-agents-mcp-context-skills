@@ -1,6 +1,27 @@
 import { assertReadOnlySql } from '../../context/connections/read-only-sql.js';
-import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
+import {
+  createKtxConnectorCapabilities,
+  type KtxColumnSampleInput,
+  type KtxColumnSampleResult,
+  type KtxColumnStatsInput,
+  type KtxColumnStatsResult,
+  type KtxQueryResult,
+  type KtxReadOnlyQueryInput,
+  type KtxScanConnector,
+  type KtxScanContext,
+  type KtxScanInput,
+  type KtxScanWarning,
+  type KtxSchemaColumn,
+  type KtxSchemaForeignKey,
+  type KtxSchemaSnapshot,
+  type KtxSchemaTable,
+  type KtxTableListEntry,
+  type KtxTableRef,
+  type KtxTableSampleInput,
+  type KtxTableSampleResult,
+} from '../../context/scan/types.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -237,6 +258,14 @@ function firstNumber(value: unknown): number | null {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+function isDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const number = (error as { number?: unknown }).number;
+  return number === 229 || number === 230 || number === 297;
+}
+
 function limitSqlForSqlServerExecution(sqlText: string, maxRows: number | undefined): string {
   const trimmed = assertReadOnlySql(sqlText).replace(/;+\s*$/, '');
   if (!maxRows) {
@@ -352,11 +381,12 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
   async introspect(input: KtxScanInput, _ctx: KtxScanContext): Promise<KtxSchemaSnapshot> {
     this.assertConnection(input.connectionId);
     const tables: KtxSchemaTable[] = [];
+    const snapshotWarnings: KtxScanWarning[] = [];
     for (const schemaName of this.schemas) {
       const scopedNames = input.tableScope
         ? scopedTableNames(input.tableScope, { catalog: this.poolConfig.database, db: schemaName })
         : null;
-      tables.push(...(await this.introspectSchema(schemaName, scopedNames)));
+      tables.push(...(await this.introspectSchema(schemaName, scopedNames, snapshotWarnings)));
     }
     return {
       connectionId: this.connectionId,
@@ -371,6 +401,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
         total_columns: tables.reduce((sum, table) => sum + table.columns.length, 0),
       },
       tables,
+      warnings: snapshotWarnings,
     };
   }
 
@@ -503,7 +534,11 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
     }
   }
 
-  private async introspectSchema(schemaName: string, scopedNames: readonly string[] | null): Promise<KtxSchemaTable[]> {
+  private async introspectSchema(
+    schemaName: string,
+    scopedNames: readonly string[] | null,
+    snapshotWarnings: KtxScanWarning[],
+  ): Promise<KtxSchemaTable[]> {
     if (scopedNames && scopedNames.length === 0) return [];
     const tableScope = tableScopeSql(scopedNames, 'TABLE_NAME');
     const tables = await this.queryRaw<{ table_name: string; table_type: string }>(
@@ -534,8 +569,22 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
     );
     const tableComments = await this.tableComments(schemaName, scopedNames);
     const columnComments = await this.columnComments(schemaName, scopedNames);
-    const primaryKeys = await this.primaryKeys(schemaName, scopedNames);
-    const foreignKeys = await this.foreignKeys(schemaName, scopedNames);
+    const primaryKeysResult = await tryConstraintQuery(
+      { schema: schemaName, kind: 'primary_key', isDeniedError },
+      () => this.primaryKeys(schemaName, scopedNames),
+    );
+    const foreignKeysResult = await tryConstraintQuery(
+      { schema: schemaName, kind: 'foreign_key', isDeniedError },
+      () => this.foreignKeys(schemaName, scopedNames),
+    );
+    const primaryKeys = primaryKeysResult.ok ? primaryKeysResult.value : new Map<string, Set<string>>();
+    const foreignKeys = foreignKeysResult.ok ? foreignKeysResult.value : [];
+    if (!primaryKeysResult.ok) {
+      snapshotWarnings.push(primaryKeysResult.warning);
+    }
+    if (!foreignKeysResult.ok) {
+      snapshotWarnings.push(foreignKeysResult.warning);
+    }
     const rowCounts = await this.rowCounts(schemaName, scopedNames);
     const columnsByTable = groupByTable(columns);
     const foreignKeysByTable = groupByTable(foreignKeys);

@@ -16,7 +16,7 @@ function result<T extends Record<string, unknown>>(rows: T[], columnNames: strin
   return { recordset: recordset(rows, columnNames) };
 }
 
-function fakePoolFactory(): KtxSqlServerPoolFactory {
+function fakePoolFactory(options: { primaryKeyError?: Error; foreignKeyError?: Error } = {}): KtxSqlServerPoolFactory {
   const query = vi.fn(async (sql: string): Promise<KtxSqlServerQueryResult> => {
     if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
       return result(
@@ -55,6 +55,9 @@ function fakePoolFactory(): KtxSqlServerPoolFactory {
       );
     }
     if (sql.includes("CONSTRAINT_TYPE = 'PRIMARY KEY'")) {
+      if (options.primaryKeyError) {
+        throw options.primaryKeyError;
+      }
       return result(
         [
           { table_name: 'customers', column_name: 'id' },
@@ -64,6 +67,9 @@ function fakePoolFactory(): KtxSqlServerPoolFactory {
       );
     }
     if (sql.includes('REFERENTIAL_CONSTRAINTS')) {
+      if (options.foreignKeyError) {
+        throw options.foreignKeyError;
+      }
       return result(
         [
           {
@@ -259,6 +265,46 @@ describe('KtxSqlServerScanConnector', () => {
         constraintName: 'orders_customer_id_fk',
       },
     ]);
+  });
+
+  it('soft-fails denied SQL Server constraint discovery with scan warnings', async () => {
+    const connector = new KtxSqlServerScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'sqlserver',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        schema: 'dbo',
+      },
+      poolFactory: fakePoolFactory({
+        primaryKeyError: Object.assign(new Error('SELECT permission denied'), { number: 229 }),
+        foreignKeyError: Object.assign(new Error('EXECUTE permission denied'), { number: 230 }),
+      }),
+      now: () => new Date('2026-04-29T16:00:00.000Z'),
+    });
+
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'sqlserver' },
+      { runId: 'scan-run-sqlserver-denied-constraints' },
+    );
+
+    expect(snapshot.warnings).toEqual([
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped primary-key discovery in dbo (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'dbo', kind: 'primary_key' },
+      },
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped foreign-key discovery in dbo (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'dbo', kind: 'foreign_key' },
+      },
+    ]);
+    expect(snapshot.tables.every((table) => table.columns.every((column) => column.primaryKey === false))).toBe(true);
+    expect(snapshot.tables.every((table) => table.foreignKeys.length === 0)).toBe(true);
   });
 
   it('runs samples, distinct values, read-only SQL, row count, schema list, and cleanup', async () => {
