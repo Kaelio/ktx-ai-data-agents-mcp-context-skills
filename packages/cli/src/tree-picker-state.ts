@@ -25,7 +25,8 @@ export interface PickerState {
   expanded: Set<string>;
   checked: Set<string>;
   cursorId: string;
-  search: { editing: boolean; query: string };
+  search: { query: string };
+  isNavigating: boolean;
   pendingConfirm: PendingConfirmKind | null;
   preLoadWarnings: string[];
   transientHint: { text: string; expiresAt: number } | null;
@@ -47,9 +48,7 @@ export type PickerCommand =
   | 'toggle-select-all-visible'
   | 'select-none'
   | 'clear-transient-hint'
-  | 'search-start'
-  | 'search-cancel'
-  | 'search-submit'
+  | 'search-clear'
   | 'search-backspace'
   | { type: 'search-input'; value: string }
   | 'save-request'
@@ -464,13 +463,22 @@ export function buildInitialState(args: {
     expanded,
     checked: minimalChecked,
     cursorId: args.tree[0]?.id ?? '',
-    search: { editing: false, query: '' },
+    search: { query: '' },
+    isNavigating: false,
     pendingConfirm: null,
     preLoadWarnings,
     transientHint: null,
     requireConfirmOnSave: args.requireConfirmOnSave ?? false,
     skipEmptyAction: args.skipEmptyAction ?? 'quit',
   };
+}
+
+function refocusVisibleCursor(state: PickerState): PickerState {
+  const ids = visibleNodeIds(state);
+  if (ids.length === 0 || ids.includes(state.cursorId)) {
+    return state;
+  }
+  return cloneState(state, { cursorId: ids[0]! });
 }
 
 export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()): { next: PickerState; effect: PickerEffect } {
@@ -491,13 +499,13 @@ export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()
 
   switch (cmd) {
     case 'cursor-up':
-      return { next: moveCursor(state, 'up'), effect: null };
+      return { next: cloneState(moveCursor(state, 'up'), { isNavigating: true }), effect: null };
     case 'cursor-down':
-      return { next: moveCursor(state, 'down'), effect: null };
+      return { next: cloneState(moveCursor(state, 'down'), { isNavigating: true }), effect: null };
     case 'cursor-left':
-      return { next: moveCursor(state, 'left'), effect: null };
+      return { next: cloneState(moveCursor(state, 'left'), { isNavigating: true }), effect: null };
     case 'cursor-right':
-      return { next: moveCursor(state, 'right'), effect: null };
+      return { next: cloneState(moveCursor(state, 'right'), { isNavigating: true }), effect: null };
     case 'expand':
       return { next: setExpanded(state, state.cursorId, 'toggle'), effect: null };
     case 'collapse':
@@ -521,15 +529,19 @@ export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()
       return { next: selectNone(state), effect: null };
     case 'clear-transient-hint':
       return { next: clearExpiredTransientHint(state, now), effect: null };
-    case 'search-start':
-      return { next: cloneState(state, { search: { ...state.search, editing: true } }), effect: null };
-    case 'search-cancel':
-      return { next: cloneState(state, { search: { editing: false, query: '' } }), effect: null };
-    case 'search-submit':
-      return { next: cloneState(state, { search: { ...state.search, editing: false } }), effect: null };
+    case 'search-clear':
+      return {
+        next: cloneState(state, { search: { query: '' }, isNavigating: false }),
+        effect: null,
+      };
     case 'search-backspace':
       return {
-        next: cloneState(state, { search: { ...state.search, query: state.search.query.slice(0, -1) } }),
+        next: refocusVisibleCursor(
+          cloneState(state, {
+            search: { query: state.search.query.slice(0, -1) },
+            isNavigating: false,
+          }),
+        ),
         effect: null,
       };
     case 'save-request':
@@ -546,6 +558,14 @@ export function reducer(state: PickerState, cmd: PickerCommand, now = Date.now()
     case 'quit':
       return { next: state, effect: 'quit-without-save' };
     default:
-      return { next: cloneState(state, { search: { ...state.search, query: state.search.query + cmd.value } }), effect: null };
+      return {
+        next: refocusVisibleCursor(
+          cloneState(state, {
+            search: { query: state.search.query + cmd.value },
+            isNavigating: false,
+          }),
+        ),
+        effect: null,
+      };
   }
 }

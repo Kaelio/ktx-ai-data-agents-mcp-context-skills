@@ -83,38 +83,71 @@ function normalizeFrameWrap(frame: string | undefined): string {
 }
 
 describe('treePickerCommandForInkInput', () => {
-  it('maps browse, search, and confirm input to reducer commands', () => {
-    expect(treePickerCommandForInkInput('', { downArrow: true }, state().search, null)).toBe('cursor-down');
-    expect(treePickerCommandForInkInput('', { upArrow: true }, state().search, null)).toBe('cursor-up');
-    expect(treePickerCommandForInkInput('', { rightArrow: true }, state().search, null)).toBe('cursor-right');
-    expect(treePickerCommandForInkInput('', { leftArrow: true }, state().search, null)).toBe('cursor-left');
-    expect(treePickerCommandForInkInput(' ', {}, state().search, null)).toBe('toggle-check');
-    expect(treePickerCommandForInkInput('/', {}, state().search, null)).toBe('search-start');
-    expect(treePickerCommandForInkInput('a', {}, state().search, null)).toBe('toggle-select-all-visible');
-    expect(treePickerCommandForInkInput('n', {}, state().search, null)).toBe('select-none');
-    expect(treePickerCommandForInkInput('', { return: true }, state().search, null)).toBe('save-request');
-    expect(treePickerCommandForInkInput('', { escape: true }, state().search, null)).toBe('quit');
-    expect(treePickerCommandForInkInput('c', { ctrl: true }, state().search, null)).toBe('quit');
-    expect(treePickerCommandForInkInput('s', {}, state().search, null)).toBeNull();
-    expect(treePickerCommandForInkInput('q', {}, state().search, null)).toBeNull();
+  const browse = (overrides: Partial<{ search: { query: string }; isNavigating: boolean; pendingConfirm: null }> = {}) => ({
+    search: { query: '' },
+    isNavigating: false,
+    pendingConfirm: null,
+    ...overrides,
+  });
+  const confirming = { ...browse(), pendingConfirm: 'save-confirm' as const };
 
-    expect(treePickerCommandForInkInput('x', {}, { editing: true, query: '' }, null)).toEqual({
+  it('routes cursor and confirm keys when no query is typed', () => {
+    expect(treePickerCommandForInkInput('', { downArrow: true }, browse())).toBe('cursor-down');
+    expect(treePickerCommandForInkInput('', { upArrow: true }, browse())).toBe('cursor-up');
+    expect(treePickerCommandForInkInput('', { rightArrow: true }, browse())).toBe('cursor-right');
+    expect(treePickerCommandForInkInput('', { leftArrow: true }, browse())).toBe('cursor-left');
+    expect(treePickerCommandForInkInput('', { return: true }, browse())).toBe('save-request');
+    expect(treePickerCommandForInkInput('', { escape: true }, browse())).toBe('quit');
+    expect(treePickerCommandForInkInput('c', { ctrl: true }, browse())).toBe('quit');
+  });
+
+  it('Tab toggles selection regardless of search/navigation state', () => {
+    expect(treePickerCommandForInkInput('', { tab: true }, browse())).toBe('toggle-check');
+    expect(treePickerCommandForInkInput('', { tab: true }, browse({ search: { query: 'foo' }, isNavigating: false }))).toBe(
+      'toggle-check',
+    );
+    expect(treePickerCommandForInkInput('', { tab: true }, browse({ isNavigating: true }))).toBe('toggle-check');
+  });
+
+  it('Space toggles only when navigating; otherwise typed into the search query', () => {
+    expect(treePickerCommandForInkInput(' ', {}, browse({ isNavigating: true }))).toBe('toggle-check');
+    expect(treePickerCommandForInkInput(' ', {}, browse({ isNavigating: false }))).toEqual({
+      type: 'search-input',
+      value: ' ',
+    });
+  });
+
+  it('typed printable chars feed the search query — including a, n, and slash', () => {
+    expect(treePickerCommandForInkInput('a', {}, browse())).toEqual({ type: 'search-input', value: 'a' });
+    expect(treePickerCommandForInkInput('n', {}, browse())).toEqual({ type: 'search-input', value: 'n' });
+    expect(treePickerCommandForInkInput('/', {}, browse())).toEqual({ type: 'search-input', value: '/' });
+    expect(treePickerCommandForInkInput('x', {}, browse({ search: { query: 'foo' } }))).toEqual({
       type: 'search-input',
       value: 'x',
     });
-    expect(treePickerCommandForInkInput('', { backspace: true }, { editing: true, query: 'x' }, null)).toBe(
+  });
+
+  it('Ctrl+A and Ctrl+N drive the bulk toggle helpers', () => {
+    expect(treePickerCommandForInkInput('a', { ctrl: true }, browse())).toBe('toggle-select-all-visible');
+    expect(treePickerCommandForInkInput('n', { ctrl: true }, browse())).toBe('select-none');
+  });
+
+  it('Backspace deletes from the query at any time; Esc clears query first then quits', () => {
+    expect(treePickerCommandForInkInput('', { backspace: true }, browse({ search: { query: 'x' } }))).toBe(
       'search-backspace',
     );
-    expect(treePickerCommandForInkInput('', { return: true }, { editing: true, query: 'x' }, null)).toBe(
-      'search-submit',
+    expect(treePickerCommandForInkInput('', { delete: true }, browse({ search: { query: 'x' } }))).toBe(
+      'search-backspace',
     );
-    expect(treePickerCommandForInkInput('', { escape: true }, { editing: true, query: 'x' }, null)).toBe(
-      'search-cancel',
-    );
+    expect(treePickerCommandForInkInput('', { escape: true }, browse({ search: { query: 'x' } }))).toBe('search-clear');
+    expect(treePickerCommandForInkInput('', { escape: true }, browse())).toBe('quit');
+  });
 
-    expect(treePickerCommandForInkInput('y', {}, state().search, 'save-confirm')).toBe('save-confirm');
-    expect(treePickerCommandForInkInput('', { return: true }, state().search, 'save-confirm')).toBe('save-confirm');
-    expect(treePickerCommandForInkInput('n', {}, state().search, 'save-confirm')).toBe('save-cancel');
+  it('confirm prompts intercept y/n/Enter/Esc before search routing', () => {
+    expect(treePickerCommandForInkInput('y', {}, confirming)).toBe('save-confirm');
+    expect(treePickerCommandForInkInput('', { return: true }, confirming)).toBe('save-confirm');
+    expect(treePickerCommandForInkInput('n', {}, confirming)).toBe('save-cancel');
+    expect(treePickerCommandForInkInput('', { escape: true }, confirming)).toBe('save-cancel');
   });
 });
 
@@ -160,8 +193,9 @@ describe('TreePickerApp', () => {
     expect(frame).toContain('◻ Engineering Docs ▸ (1)');
     expect(frame).toContain('◻ Marketing');
     expect(normalizeFrameWrap(frame)).toContain(
-      'Right Arrow to expand, Up/Down to move, Space to select or unselect, Slash to filter, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
+      'Up/Down to move, Right/Left to expand or collapse, Tab to select, Type to search, Enter to confirm, Escape to clear search or go back, Ctrl+C to exit.',
     );
+    expect(frame).toContain('Search:');
   });
 
   it('renders custom help text when supplied', () => {
@@ -238,7 +272,7 @@ describe('TreePickerApp', () => {
       />,
     );
 
-    stdin.write(' ');
+    stdin.write('\t');
     await waitForInkInput();
     expect(lastFrame()).toContain('◼ Engineering Docs');
 
