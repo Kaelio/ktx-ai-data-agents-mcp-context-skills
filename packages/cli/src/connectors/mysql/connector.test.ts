@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FieldPacket, RowDataPacket } from 'mysql2/promise';
 import { createMysqlLiveDatabaseIntrospection } from '../../connectors/mysql/live-database-introspection.js';
-import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, type KtxMysqlConnectionConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
+import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, prepareMysqlReadOnlyQuery, type KtxMysqlConnectionConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function mysqlResult(rows: Record<string, unknown>[], fields: Array<{ name: string; type?: number }>): [RowDataPacket[], FieldPacket[]] {
@@ -173,6 +173,19 @@ function multiSchemaMysqlPoolFactory(
 }
 
 describe('KtxMysqlScanConnector', () => {
+  it('prepares read-only SQL parameters with MySQL positional placeholders', () => {
+    expect(
+      prepareMysqlReadOnlyQuery('select * from orders where id = :id and status = :status', {
+        status: 'paid',
+        id: 10,
+      }),
+    ).toEqual({
+      sql: 'select * from orders where id = ? and status = ?',
+      params: [10, 'paid'],
+    });
+    expect(prepareMysqlReadOnlyQuery('select 1')).toEqual({ sql: 'select 1', params: undefined });
+  });
+
   it('resolves MySQL connection configuration safely', () => {
     expect(isKtxMysqlConnectionConfig({ driver: 'mysql', host: 'localhost', database: 'analytics' })).toBe(true);
     expect(isKtxMysqlConnectionConfig({ driver: 'postgres', host: 'localhost', database: 'analytics' })).toBe(false);

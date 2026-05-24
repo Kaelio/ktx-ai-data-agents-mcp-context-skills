@@ -8,7 +8,7 @@ vi.mock('snowflake-sdk', () => ({
 }));
 
 import { createSnowflakeLiveDatabaseIntrospection } from '../../connectors/snowflake/live-database-introspection.js';
-import { isKtxSnowflakeConnectionConfig, KtxSnowflakeScanConnector, snowflakeConnectionConfigFromConfig, type KtxSnowflakeConnectionConfig, type KtxSnowflakeDriver, type KtxSnowflakeDriverFactory } from '../../connectors/snowflake/connector.js';
+import { isKtxSnowflakeConnectionConfig, KtxSnowflakeScanConnector, prepareSnowflakeReadOnlyQuery, snowflakeConnectionConfigFromConfig, type KtxSnowflakeConnectionConfig, type KtxSnowflakeDriver, type KtxSnowflakeDriverFactory } from '../../connectors/snowflake/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function fakeDriverFactory(): KtxSnowflakeDriverFactory {
@@ -105,6 +105,17 @@ function installSnowflakePoolMock() {
 }
 
 describe('KtxSnowflakeScanConnector', () => {
+  it('prepares read-only SQL parameters with Snowflake bind arrays', () => {
+    expect(prepareSnowflakeReadOnlyQuery('SELECT * FROM ORDERS WHERE ID = ? AND STATUS = ?', { id: 1, status: 'paid' })).toEqual({
+      sql: 'SELECT * FROM ORDERS WHERE ID = ? AND STATUS = ?',
+      params: [1, 'paid'],
+    });
+    expect(prepareSnowflakeReadOnlyQuery('SELECT * FROM ORDERS')).toEqual({
+      sql: 'SELECT * FROM ORDERS',
+      params: undefined,
+    });
+  });
+
   it('resolves Snowflake connection configuration safely', () => {
     expect(
       isKtxSnowflakeConnectionConfig({

@@ -303,6 +303,25 @@ function queryParams(params: Record<string, unknown> | unknown[] | undefined): u
   return Array.isArray(params) ? params : Object.values(params);
 }
 
+/** @internal */
+export function prepareMysqlReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: unknown[] } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  const values: unknown[] = [];
+  const parameterizedQuery = sql.replace(/:([A-Za-z_][A-Za-z0-9_]*)\b/g, (placeholder, key: string) => {
+    if (!(key in params)) {
+      return placeholder;
+    }
+    values.push(params[key]);
+    return '?';
+  });
+  return { sql: parameterizedQuery, params: values };
+}
+
 export function isKtxMysqlConnectionConfig(
   connection: KtxMysqlConnectionConfig | undefined,
 ): connection is KtxMysqlConnectionConfig {
@@ -550,7 +569,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
     const prepared = Array.isArray(input.params)
       ? { sql: limitedSql, params: input.params }
-      : this.dialect.prepareQuery(limitedSql, input.params);
+      : prepareMysqlReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }

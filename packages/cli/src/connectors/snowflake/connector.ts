@@ -229,6 +229,14 @@ function toSnowflakeBinds(params: unknown[] | undefined): Binds | undefined {
   return params?.map((value) => toSnowflakeBind(value));
 }
 
+/** @internal */
+export function prepareSnowflakeReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: unknown[] } {
+  return { sql, params: params ? Object.values(params) : undefined };
+}
+
 export function isKtxSnowflakeConnectionConfig(
   connection: KtxSnowflakeConnectionConfig | undefined,
 ): connection is KtxSnowflakeConnectionConfig {
@@ -635,7 +643,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
   async executeReadOnly(input: KtxSnowflakeReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
-    const prepared = this.dialect.prepareQuery(limitedSql, input.params);
+    const prepared = prepareSnowflakeReadOnlyQuery(limitedSql, input.params);
     return this.getDriver().query(prepared.sql, prepared.params);
   }
 

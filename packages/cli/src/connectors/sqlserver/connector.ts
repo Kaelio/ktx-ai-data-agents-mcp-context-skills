@@ -158,6 +158,21 @@ function tableScopeSql(
   return { clause: `AND ${columnExpression} IN (${placeholders.join(', ')})`, params };
 }
 
+/** @internal */
+export function prepareSqlServerReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: Record<string, unknown> } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  let parameterizedQuery = sql;
+  for (const key of Object.keys(params)) {
+    parameterizedQuery = parameterizedQuery.replace(new RegExp(`:${key}\\b`, 'g'), `@${key}`);
+  }
+  return { sql: parameterizedQuery, params };
+}
+
 class DefaultSqlServerPoolFactory implements KtxSqlServerPoolFactory {
   async createPool(config: KtxSqlServerPoolConfig): Promise<KtxSqlServerPool> {
     const pool = await new sql.ConnectionPool(config as sql.config).connect();
@@ -427,7 +442,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
   async executeReadOnly(input: KtxSqlServerReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
     const limitedSql = limitSqlForSqlServerExecution(input.sql, input.maxRows);
-    const prepared = this.dialect.prepareQuery(limitedSql, input.params);
+    const prepared = prepareSqlServerReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }

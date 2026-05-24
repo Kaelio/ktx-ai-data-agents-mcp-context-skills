@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPostgresLiveDatabaseIntrospection } from '../../connectors/postgres/live-database-introspection.js';
-import { isKtxPostgresConnectionConfig, KtxPostgresScanConnector, postgresPoolConfigFromConfig, type KtxPostgresConnectionConfig, type KtxPostgresPoolFactory } from '../../connectors/postgres/connector.js';
+import { isKtxPostgresConnectionConfig, KtxPostgresScanConnector, postgresPoolConfigFromConfig, preparePostgresReadOnlyQuery, type KtxPostgresConnectionConfig, type KtxPostgresPoolFactory } from '../../connectors/postgres/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 interface FakeQueryResult {
@@ -102,6 +102,28 @@ function metadataResults(): Map<string, FakeQueryResponse> {
 }
 
 describe('KtxPostgresScanConnector', () => {
+  it('prepares read-only SQL parameters with PostgreSQL positional placeholders', () => {
+    expect(
+      preparePostgresReadOnlyQuery('select * from orders where id = :id and status = :status', {
+        id: 1,
+        status: 'paid',
+      }),
+    ).toEqual({
+      sql: 'select * from orders where id = $1 and status = $2',
+      params: [1, 'paid'],
+    });
+    expect(
+      preparePostgresReadOnlyQuery('select :Client_Name_10, :Client_Name_1', {
+        Client_Name_1: 'short',
+        Client_Name_10: 'long',
+      }),
+    ).toEqual({
+      sql: 'select $2, $1',
+      params: ['short', 'long'],
+    });
+    expect(preparePostgresReadOnlyQuery('select 1')).toEqual({ sql: 'select 1', params: undefined });
+  });
+
   it('resolves configuration safely', () => {
     expect(isKtxPostgresConnectionConfig({ driver: 'postgres', url: 'env:DATABASE_URL' })).toBe(true);
     expect(isKtxPostgresConnectionConfig({ driver: 'postgresql', host: 'db', database: 'analytics' })).toBe(false);

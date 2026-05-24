@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { clickHouseClientConfigFromConfig, isKtxClickHouseConnectionConfig, KtxClickHouseScanConnector, type KtxClickHouseClientFactory } from '../../connectors/clickhouse/connector.js';
+import { clickHouseClientConfigFromConfig, isKtxClickHouseConnectionConfig, KtxClickHouseScanConnector, prepareClickHouseReadOnlyQuery, type KtxClickHouseClientFactory } from '../../connectors/clickhouse/connector.js';
 import { createClickHouseLiveDatabaseIntrospection } from '../../connectors/clickhouse/live-database-introspection.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
@@ -136,6 +136,33 @@ function multiDatabaseClickHouseClientFactory(): KtxClickHouseClientFactory {
 }
 
 describe('KtxClickHouseScanConnector', () => {
+  it('prepares read-only SQL parameters with ClickHouse typed placeholders', () => {
+    expect(
+      prepareClickHouseReadOnlyQuery('select * from events where id = :id and event_name = :name', {
+        id: 10,
+        name: 'signup',
+      }),
+    ).toEqual({
+      sql: 'select * from events where id = {id:Int64} and event_name = {name:String}',
+      params: { id: 10, name: 'signup' },
+    });
+    expect(
+      prepareClickHouseReadOnlyQuery('select * from events where enabled = :enabled and ratio = :ratio and created_at = :created_at', {
+        enabled: true,
+        ratio: 1.5,
+        created_at: new Date('2026-05-25T00:00:00.000Z'),
+      }),
+    ).toEqual({
+      sql: 'select * from events where enabled = {enabled:Bool} and ratio = {ratio:Float64} and created_at = {created_at:DateTime}',
+      params: {
+        enabled: true,
+        ratio: 1.5,
+        created_at: new Date('2026-05-25T00:00:00.000Z'),
+      },
+    });
+    expect(prepareClickHouseReadOnlyQuery('select 1')).toEqual({ sql: 'select 1', params: undefined });
+  });
+
   it('resolves ClickHouse connection configuration safely', () => {
     expect(isKtxClickHouseConnectionConfig({ driver: 'clickhouse', host: 'localhost', database: 'analytics' })).toBe(
       true,

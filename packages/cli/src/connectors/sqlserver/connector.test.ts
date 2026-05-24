@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSqlServerLiveDatabaseIntrospection } from '../../connectors/sqlserver/live-database-introspection.js';
-import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerConnectionConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
+import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, prepareSqlServerReadOnlyQuery, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerConnectionConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function recordset<T extends Record<string, unknown>>(
@@ -140,6 +140,19 @@ function fakePoolFactory(options: { primaryKeyError?: Error; foreignKeyError?: E
 }
 
 describe('KtxSqlServerScanConnector', () => {
+  it('prepares read-only SQL parameters with SQL Server named placeholders', () => {
+    expect(
+      prepareSqlServerReadOnlyQuery('select * from events where id = :id and name = :name', {
+        id: 10,
+        name: 'signup',
+      }),
+    ).toEqual({
+      sql: 'select * from events where id = @id and name = @name',
+      params: { id: 10, name: 'signup' },
+    });
+    expect(prepareSqlServerReadOnlyQuery('select 1')).toEqual({ sql: 'select 1', params: undefined });
+  });
+
   it('resolves SQL Server connection configuration safely', () => {
     expect(
       isKtxSqlServerConnectionConfig({

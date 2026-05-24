@@ -235,6 +235,23 @@ function normalizeValue(value: unknown): unknown {
   return value;
 }
 
+/** @internal */
+export function prepareBigQueryReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: Record<string, unknown> } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  let processedSql = sql;
+  const processedParams: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    processedSql = processedSql.replace(new RegExp(`:${key}\\b`, 'g'), `@${key}`);
+    processedParams[key] = value;
+  }
+  return { sql: processedSql, params: Object.keys(processedParams).length > 0 ? processedParams : undefined };
+}
+
 export function isKtxBigQueryConnectionConfig(
   connection: KtxBigQueryConnectionConfig | undefined,
 ): connection is KtxBigQueryConnectionConfig {
@@ -364,7 +381,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
   async executeReadOnly(input: KtxBigQueryReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
-    const prepared = this.dialect.prepareQuery(limitedSql, input.params);
+    const prepared = prepareBigQueryReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }

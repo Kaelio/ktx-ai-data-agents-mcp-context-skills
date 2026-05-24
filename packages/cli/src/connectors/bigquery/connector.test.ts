@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { bigQueryConnectionConfigFromConfig, isKtxBigQueryConnectionConfig, type KtxBigQueryClient, KtxBigQueryScanConnector, type KtxBigQueryClientFactory, type KtxBigQueryDataset, type KtxBigQueryQueryJob, type KtxBigQueryTableRef } from '../../connectors/bigquery/connector.js';
+import { bigQueryConnectionConfigFromConfig, isKtxBigQueryConnectionConfig, type KtxBigQueryClient, KtxBigQueryScanConnector, type KtxBigQueryClientFactory, type KtxBigQueryDataset, type KtxBigQueryQueryJob, type KtxBigQueryTableRef, prepareBigQueryReadOnlyQuery } from '../../connectors/bigquery/connector.js';
 import { createBigQueryLiveDatabaseIntrospection } from '../../connectors/bigquery/live-database-introspection.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
@@ -98,6 +98,17 @@ const connection = {
 } as const;
 
 describe('KtxBigQueryScanConnector', () => {
+  it('prepares read-only SQL parameters with BigQuery named placeholders', () => {
+    expect(prepareBigQueryReadOnlyQuery('SELECT * FROM orders WHERE id = :id AND id_2 = :id_2', { id: 1, id_2: 2 })).toEqual({
+      sql: 'SELECT * FROM orders WHERE id = @id AND id_2 = @id_2',
+      params: { id: 1, id_2: 2 },
+    });
+    expect(prepareBigQueryReadOnlyQuery('SELECT * FROM orders')).toEqual({
+      sql: 'SELECT * FROM orders',
+      params: undefined,
+    });
+  });
+
   it('resolves configuration safely', () => {
     expect(isKtxBigQueryConnectionConfig(connection)).toBe(true);
     expect(isKtxBigQueryConnectionConfig({ driver: 'mysql' })).toBe(false);

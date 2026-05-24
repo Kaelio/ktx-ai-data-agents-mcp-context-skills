@@ -219,6 +219,29 @@ function groupByTable<T extends { table_name: string }>(rows: T[]): Map<string, 
   return grouped;
 }
 
+/** @internal */
+export function preparePostgresReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: unknown[] } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  const paramNames = Object.keys(params);
+  const values: unknown[] = new Array(paramNames.length);
+  const paramIndexMap = new Map<string, number>();
+  paramNames.forEach((name, index) => {
+    paramIndexMap.set(name, index + 1);
+    values[index] = params[name];
+  });
+  const sortedKeys = [...paramNames].sort((a, b) => b.length - a.length);
+  let parameterizedQuery = sql;
+  for (const name of sortedKeys) {
+    parameterizedQuery = parameterizedQuery.replace(new RegExp(`:${name}\\b`, 'g'), `$${paramIndexMap.get(name)}`);
+  }
+  return { sql: parameterizedQuery, params: values };
+}
+
 function primaryKeyMap(rows: PostgresPrimaryKeyRow[]): Map<string, Set<string>> {
   const grouped = new Map<string, Set<string>>();
   for (const row of rows) {
@@ -489,7 +512,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
     const prepared = Array.isArray(input.params)
       ? { sql: limitedSql, params: input.params }
-      : this.dialect.prepareQuery(limitedSql, input.params);
+      : preparePostgresReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }
