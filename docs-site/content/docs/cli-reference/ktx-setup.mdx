@@ -136,6 +136,10 @@ Enabling query history makes deep ingest readiness matter for later
 
 ### Context Sources
 
+In interactive setup, after you configure a database, choose
+**Skip context sources** to leave optional context-source setup complete with no
+sources. This is equivalent to passing `--skip-sources` in scripted setup.
+
 | Flag | Description |
 |------|-------------|
 | `--source <type>` | Context-source connector type: `dbt`, `metricflow`, `metabase`, `looker`, `lookml`, or `notion` |

@@ -56,7 +56,12 @@ export interface KtxSetupDatabasesArgs {
 }
 
 export type KtxSetupDatabasesResult =
-  | { status: 'ready'; projectDir: string; connectionIds: string[] }
+  | {
+      status: 'ready';
+      projectDir: string;
+      connectionIds: string[];
+      skipSources?: boolean;
+    }
   | { status: 'skipped'; projectDir: string }
   | { status: 'back'; projectDir: string }
   | { status: 'missing-input'; projectDir: string }
@@ -659,6 +664,7 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
     message: `Databases configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
       { value: 'continue', label: 'Continue to context sources' },
+      { value: 'skip-sources', label: 'Skip context sources' },
       { value: 'edit', label: 'Edit an existing database' },
       { value: 'add', label: 'Add another database' },
     ],
@@ -2216,6 +2222,15 @@ export async function runKtxSetupDatabasesStep(
       if (action === 'continue' || action === 'back') {
         await markDatabasesComplete(args.projectDir, selectedConnectionIds);
         return { status: 'ready', projectDir: args.projectDir, connectionIds: selectedConnectionIds };
+      }
+      if (action === 'skip-sources') {
+        await markDatabasesComplete(args.projectDir, selectedConnectionIds);
+        return {
+          status: 'ready',
+          projectDir: args.projectDir,
+          connectionIds: selectedConnectionIds,
+          skipSources: true,
+        };
       }
       if (action === 'edit') {
         const connectionId = await choosePrimarySourceToEdit({

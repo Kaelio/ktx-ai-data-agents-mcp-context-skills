@@ -695,9 +695,52 @@ describe('setup databases step', () => {
       message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'skip-sources', label: 'Skip context sources' },
         { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
+    });
+    expect(testConnection).not.toHaveBeenCalled();
+    expect(scanConnection).not.toHaveBeenCalled();
+  });
+
+  it('can skip context sources from the configured database menu', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['databases'] });
+    const prompts = makePromptAdapter({ selectValues: ['skip-sources'] });
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        skipDatabases: false,
+        databaseSchemas: [],
+        disableQueryHistory: true,
+      },
+      makeIo().io,
+      { prompts, testConnection, scanConnection },
+    );
+
+    expect(result).toEqual({
+      status: 'ready',
+      projectDir: tempDir,
+      connectionIds: ['warehouse'],
+      skipSources: true,
     });
     expect(testConnection).not.toHaveBeenCalled();
     expect(scanConnection).not.toHaveBeenCalled();
@@ -753,6 +796,7 @@ describe('setup databases step', () => {
       message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'skip-sources', label: 'Skip context sources' },
         { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
@@ -801,6 +845,7 @@ describe('setup databases step', () => {
       message: 'Databases configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'skip-sources', label: 'Skip context sources' },
         { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
@@ -846,6 +891,7 @@ describe('setup databases step', () => {
       message: 'Databases configured: postgres-warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'skip-sources', label: 'Skip context sources' },
         { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
@@ -890,6 +936,7 @@ describe('setup databases step', () => {
       message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'skip-sources', label: 'Skip context sources' },
         { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],
@@ -936,6 +983,7 @@ describe('setup databases step', () => {
       message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
         { value: 'continue', label: 'Continue to context sources' },
+        { value: 'skip-sources', label: 'Skip context sources' },
         { value: 'edit', label: 'Edit an existing database' },
         { value: 'add', label: 'Add another database' },
       ],

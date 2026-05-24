@@ -667,6 +667,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     const shouldRunContext = !agentOnlySetup && (!runOnly || runOnly === 'context');
     const shouldRunAgents = agentsRequested || !runOnly || runOnly === 'agents';
     const showPromptInstructions = projectResult.confirmedCreation !== true;
+    let skipSourcesFromDatabaseMenu = false;
 
     const setupSteps: KtxSetupFlowStep[] = agentOnlySetup
       ? []
@@ -680,7 +681,9 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       if (step === 'models') return !args.skipLlm && shouldRunModels;
       if (step === 'embeddings') return !args.skipEmbeddings && shouldRunEmbeddings;
       if (step === 'databases') return !args.skipDatabases && shouldRunDatabases;
-      if (step === 'sources') return args.skipSources !== true && shouldRunSources;
+      if (step === 'sources') {
+        return args.skipSources !== true && !skipSourcesFromDatabaseMenu && shouldRunSources;
+      }
       if (step === 'runtime') return shouldRunRuntime;
       if (step === 'context') return shouldRunContext;
       return shouldRunAgents && args.skipAgents !== true;
@@ -743,7 +746,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
         const databasesRunner =
           deps.databases ??
           ((databaseArgs, databaseIo) => runKtxSetupDatabasesStep(databaseArgs, databaseIo, deps.databasesDeps));
-        stepResult = await databasesRunner(
+        const databaseResult = await databasesRunner(
           {
             projectDir: projectResult.projectDir,
             inputMode: args.inputMode,
@@ -768,6 +771,8 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
           },
           io,
         );
+        skipSourcesFromDatabaseMenu = databaseResult.status === 'ready' && databaseResult.skipSources === true;
+        stepResult = databaseResult;
       } else if (step === 'sources') {
         const sourcesRunner =
           deps.sources ?? ((sourceArgs, sourceIo) => runKtxSetupSourcesStep(sourceArgs, sourceIo, deps.sourcesDeps));
@@ -794,7 +799,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.notionCrawlMode ? { notionCrawlMode: args.notionCrawlMode } : {}),
             ...(args.notionRootPageIds ? { notionRootPageIds: args.notionRootPageIds } : {}),
             runInitialSourceIngest: args.runInitialSourceIngest ?? false,
-            skipSources: args.skipSources === true || !shouldRunSources,
+            skipSources: args.skipSources === true || !shouldRunSources || skipSourcesFromDatabaseMenu,
           },
           io,
         );
