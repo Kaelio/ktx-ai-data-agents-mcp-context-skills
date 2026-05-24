@@ -100,13 +100,13 @@ function fakePoolFactory(options: { primaryKeyError?: Error; foreignKeyError?: E
         ['table_name', 'row_count'],
       );
     }
-    if (sql.includes('SELECT TOP 1 [id], [status] FROM [dbo].[orders]')) {
+    if (sql.includes('SELECT TOP 1 [id], [status] FROM [analytics].[dbo].[orders]')) {
       return result([{ id: 10, status: 'paid' }], ['id', 'status']);
     }
     if (sql.includes('SELECT TOP 1 * FROM (select id, status from dbo.orders) AS ktx_query_result')) {
       return result([{ id: 10, status: 'paid' }], ['id', 'status']);
     }
-    if (sql.includes('SELECT TOP 5 [status] FROM [dbo].[orders]')) {
+    if (sql.includes('SELECT TOP 5 [status] FROM [analytics].[dbo].[orders]')) {
       return result([{ status: 'paid' }, { status: 'open' }], ['status']);
     }
     if (sql.includes('COUNT(DISTINCT val)')) {
