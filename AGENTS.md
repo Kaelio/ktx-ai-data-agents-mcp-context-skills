@@ -24,6 +24,11 @@ database migrations, ORPC contracts, or `python-service/` layout exist here.
 - **MUST**: Keep package/public API changes intentional. Do not add compatibility
   wrappers for old **ktx** names unless the user explicitly asks for a migration
   bridge.
+- **MUST**: Avoid compatibility shims for old **ktx** features, command shapes,
+  configuration formats, or internal APIs. This rule does not prohibit
+  compatibility support for third-party systems and libraries, such as
+  Metabase version differences. Keep the **ktx** codebase clean instead of
+  preserving stale **ktx** behavior.
 - **MUST**: Treat **ktx** as having no public users unless the user says otherwise.
   Legacy support is not necessary by default; prefer clean breaking changes over
   compatibility shims, migration bridges, or preserved stale behavior.
