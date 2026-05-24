@@ -347,6 +347,38 @@ describe('runKtxConnection', () => {
     expect(io.stdout()).toContain('Bot: bot-1');
   });
 
+  it('tests a Google Drive connection by listing visible Google Docs', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, {
+      docs_drive: {
+        driver: 'gdrive',
+        service_account_key_ref: 'file:/tmp/gdrive-key.json',
+        folder_id: 'folder-123',
+        recursive: false,
+      },
+    });
+    const listFiles = vi.fn(async () => ({
+      files: [
+        { id: '1', name: 'Spec', mimeType: 'application/vnd.google-apps.document', parents: [], webViewLink: null, modifiedTime: null },
+        { id: '2', name: 'Sheet', mimeType: 'application/vnd.google-apps.spreadsheet', parents: [], webViewLink: null, modifiedTime: null },
+      ],
+      nextPageToken: null,
+    }));
+    const createGdriveClient = vi.fn(async () => ({ listFiles }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test', projectDir, connectionId: 'docs_drive' }, io.io, { createGdriveClient }),
+    ).resolves.toBe(0);
+
+    expect(createGdriveClient).toHaveBeenCalledWith(expect.objectContaining({ projectDir }), 'docs_drive');
+    expect(listFiles).toHaveBeenCalledWith({ q: "'folder-123' in parents and trashed = false" });
+    expect(io.stdout()).toContain('Connection test passed: docs_drive');
+    expect(io.stdout()).toContain('Driver: gdrive');
+    expect(io.stdout()).toContain('Docs: 1');
+  });
+
   it('tests a dbt connection via testRepoConnection (success)', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });
@@ -472,6 +504,34 @@ describe('runKtxConnection', () => {
     expect(out).toContain('2 passed');
     expect(out).not.toContain('failed');
     expect(io.stderr()).toBe('');
+  });
+
+  it('--all: includes Google Drive rows in the summary table', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, {
+      docs_drive: {
+        driver: 'gdrive',
+        service_account_key_ref: 'file:/tmp/gdrive-key.json',
+        folder_id: 'folder-123',
+        recursive: false,
+      },
+    });
+    const createGdriveClient = vi.fn(async () => ({
+      listFiles: vi.fn(async () => ({
+        files: [
+          { id: '1', name: 'Spec', mimeType: 'application/vnd.google-apps.document', parents: [], webViewLink: null, modifiedTime: null },
+        ],
+        nextPageToken: null,
+      })),
+    }));
+    const io = makeIo();
+
+    await expect(
+      runKtxConnection({ command: 'test-all', projectDir }, io.io, { createGdriveClient }),
+    ).resolves.toBe(0);
+
+    expect(stripAnsi(io.stdout())).toMatch(/docs_drive\s+gdrive\s+✓ ok\s+Docs: 1/);
   });
 
   it('--all: marks failing connections, keeps passing ones, and returns non-zero', async () => {

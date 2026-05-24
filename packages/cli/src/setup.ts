@@ -128,6 +128,9 @@ export type KtxSetupArgs =
       metabaseDatabaseId?: number;
       notionCrawlMode?: 'all_accessible' | 'selected_roots';
       notionRootPageIds?: string[];
+      gdriveServiceAccountKeyRef?: string;
+      gdriveFolderId?: string;
+      gdriveRecursive?: boolean;
       runInitialSourceIngest?: boolean;
       skipSources?: boolean;
       showEntryMenu?: boolean;
@@ -169,7 +172,7 @@ export interface KtxSetupDeps {
   setupUi?: KtxSetupUiAdapter;
 }
 
-const SOURCE_DRIVERS = new Set(['dbt', 'metricflow', 'metabase', 'looker', 'lookml', 'notion']);
+const SOURCE_DRIVERS = new Set(['dbt', 'metricflow', 'metabase', 'looker', 'lookml', 'notion', 'gdrive']);
 
 type KtxSetupEntryAction = 'setup' | 'new-project' | 'agents' | 'status' | 'demo' | 'exit';
 type KtxSetupFlowStep = 'models' | 'embeddings' | 'databases' | 'sources' | 'runtime' | 'context' | 'agents';
@@ -793,6 +796,11 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.metabaseDatabaseId !== undefined ? { metabaseDatabaseId: args.metabaseDatabaseId } : {}),
             ...(args.notionCrawlMode ? { notionCrawlMode: args.notionCrawlMode } : {}),
             ...(args.notionRootPageIds ? { notionRootPageIds: args.notionRootPageIds } : {}),
+            ...(args.gdriveServiceAccountKeyRef
+              ? { gdriveServiceAccountKeyRef: args.gdriveServiceAccountKeyRef }
+              : {}),
+            ...(args.gdriveFolderId ? { gdriveFolderId: args.gdriveFolderId } : {}),
+            ...(args.gdriveRecursive !== undefined ? { gdriveRecursive: args.gdriveRecursive } : {}),
             runInitialSourceIngest: args.runInitialSourceIngest ?? false,
             skipSources: args.skipSources === true || !shouldRunSources,
           },

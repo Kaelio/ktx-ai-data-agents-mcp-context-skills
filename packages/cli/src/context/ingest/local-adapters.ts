@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { gdriveConnectionToPullConfig, parseGdriveConnectionConfig } from '../../context/connections/gdrive-config.js';
 import { localConnectionToWarehouseDescriptor } from '../../context/connections/local-warehouse-descriptor.js';
 import { notionConnectionToPullConfig, parseNotionConnectionConfig } from '../../context/connections/notion-config.js';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
@@ -7,6 +8,7 @@ import type { KtxLocalProject } from '../../context/project/project.js';
 import type { SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
 import { DbtSourceAdapter } from './adapters/dbt/dbt.adapter.js';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
+import { GdriveSourceAdapter } from './adapters/gdrive/gdrive.adapter.js';
 import { HistoricSqlSourceAdapter } from './adapters/historic-sql/historic-sql.adapter.js';
 import { PostgresPgssReader } from './adapters/historic-sql/postgres-pgss-reader.js';
 import {
@@ -102,6 +104,7 @@ export function createDefaultLocalIngestAdapters(
     createLocalMetabaseSourceAdapter(project, {
       ...(options.logger ? { logger: options.logger } : {}),
     }),
+    new GdriveSourceAdapter(),
     new LookerSourceAdapter({
       clientFactory: {
         async createClient(config, ctx) {
@@ -308,6 +311,9 @@ export async function localPullConfigForAdapter(
       ...pullConfig,
       lastSuccessfulCursor: await localNotionRuntimeStore(project).readCursor(connectionId),
     };
+  }
+  if (adapter.source === 'gdrive') {
+    return await gdriveConnectionToPullConfig(parseGdriveConnectionConfig(connection));
   }
   if (adapter.source === 'metricflow') {
     const metricflow = connection.metricflow;
