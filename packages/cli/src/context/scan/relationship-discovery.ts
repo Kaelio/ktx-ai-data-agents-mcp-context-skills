@@ -1,4 +1,5 @@
 import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
+import type { KtxDialect } from '../connections/dialects.js';
 import type { KtxScanRelationshipConfig } from '../project/config.js';
 import type { KtxEnrichedRelationship, KtxEnrichedSchema, KtxRelationshipUpdate } from './enrichment-types.js';
 import {
@@ -24,7 +25,6 @@ import {
 } from './relationship-profiling.js';
 import { validateKtxRelationshipDiscoveryCandidates } from './relationship-validation.js';
 import type {
-  KtxConnectionDriver,
   KtxScanConnector,
   KtxScanContext,
   KtxScanEnrichmentSummary,
@@ -34,7 +34,7 @@ import type {
 
 export interface DiscoverKtxRelationshipsInput {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   connector: KtxScanConnector;
   schema: KtxEnrichedSchema;
   context: KtxScanContext;
@@ -122,7 +122,7 @@ function compositeSummary(relationships: readonly KtxCompositeRelationshipCandid
 
 async function detectCompositeRelationships(input: {
   connectionId: string;
-  driver: DiscoverKtxRelationshipsInput['driver'];
+  dialect: KtxDialect;
   schema: KtxEnrichedSchema;
   profile: KtxRelationshipProfileArtifact;
   executor: KtxRelationshipReadOnlyExecutor | null;
@@ -135,7 +135,7 @@ async function detectCompositeRelationships(input: {
   try {
     const compositeDetection = await discoverKtxCompositeRelationships({
       connectionId: input.connectionId,
-      driver: input.driver,
+      driver: input.dialect.type,
       schema: input.schema,
       profiles: input.profile,
       executor: input.executor,
@@ -223,7 +223,7 @@ export async function discoverKtxRelationships(
   const profileCache = createKtxRelationshipProfileCache();
   const profile = await profileKtxRelationshipSchema({
     connectionId: input.connectionId,
-    driver: input.driver,
+    driver: input.dialect.type,
     schema: input.schema,
     executor,
     ctx: input.context,
@@ -256,7 +256,7 @@ export async function discoverKtxRelationships(
   warnings.push(...llmProposalResult.warnings);
   const validated = await validateKtxRelationshipDiscoveryCandidates({
     connectionId: input.connectionId,
-    driver: input.driver,
+    driver: input.dialect.type,
     candidates,
     profiles: profile,
     executor,
@@ -282,7 +282,7 @@ export async function discoverKtxRelationships(
   });
   const compositeRelationships = await detectCompositeRelationships({
     connectionId: input.connectionId,
-    driver: input.driver,
+    dialect: input.dialect,
     schema: input.schema,
     profile,
     executor,

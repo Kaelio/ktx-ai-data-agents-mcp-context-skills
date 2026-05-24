@@ -1,5 +1,6 @@
 import pLimit from 'p-limit';
 import type { KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
+import { getDialectForDriver } from '../connections/dialects.js';
 import { buildDefaultKtxProjectConfig, type KtxScanRelationshipConfig } from '../project/config.js';
 import { KtxDescriptionGenerator } from './description-generation.js';
 import { buildKtxColumnEmbeddingText } from './embedding-text.js';
@@ -116,6 +117,18 @@ function targetMatchesForeignKey(table: KtxEnrichedTable, foreignKey: KtxSchemaF
     (foreignKey.toCatalog === null || table.ref.catalog === foreignKey.toCatalog) &&
     (foreignKey.toDb === null || table.ref.db === foreignKey.toDb)
   );
+}
+
+function assertConnectorDriverMatchesSnapshot(input: {
+  connector: KtxScanConnector;
+  snapshot: KtxSchemaSnapshot;
+  connectionId: string;
+}): void {
+  if (input.connector.driver !== input.snapshot.driver) {
+    throw new Error(
+      `ktx scan connector driver "${input.connector.driver}" does not match snapshot driver "${input.snapshot.driver}" for connection "${input.connectionId}"`,
+    );
+  }
 }
 
 function formalRelationshipsFromSnapshot(
@@ -468,6 +481,12 @@ export async function runLocalScanEnrichment(
     ));
   await progress?.update(0.05, `Loaded schema snapshot with ${snapshot.tables.length} tables`);
 
+  assertConnectorDriverMatchesSnapshot({
+    connector: input.connector,
+    snapshot,
+    connectionId: input.connectionId,
+  });
+  const dialect = getDialectForDriver(snapshot.driver);
   const now = input.now ?? (() => new Date());
   const state = completedKtxScanEnrichmentStateSummary();
   const syncId = input.syncId ?? input.context.runId;
@@ -575,7 +594,7 @@ export async function runLocalScanEnrichment(
         await relationshipProgress?.update(0, 'Detecting relationships');
         const detection = await discoverKtxRelationships({
           connectionId: input.connectionId,
-          driver: snapshot.driver,
+          dialect,
           connector: input.connector,
           schema,
           context: input.context,

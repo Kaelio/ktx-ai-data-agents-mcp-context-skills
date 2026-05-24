@@ -331,6 +331,27 @@ describe('local scan enrichment', () => {
     expect(scanConnector.introspect).toHaveBeenCalledTimes(1);
   });
 
+  it('fails when connector driver and snapshot driver differ', async () => {
+    const mismatchedConnector: KtxScanConnector = {
+      ...connector(),
+      driver: 'mysql',
+    };
+
+    await expect(
+      runLocalScanEnrichment({
+        connectionId: 'warehouse',
+        mode: 'relationships',
+        detectRelationships: true,
+        connector: mismatchedConnector,
+        snapshot,
+        context: { runId: 'scan-run-driver-mismatch' },
+        providers: null,
+      }),
+    ).rejects.toThrow(
+      'ktx scan connector driver "mysql" does not match snapshot driver "postgres" for connection "warehouse"',
+    );
+  });
+
   it('runs deterministic relationship detection for relationship scans', async () => {
     const result = await runLocalScanEnrichment({
       connectionId: 'warehouse',
