@@ -8,7 +8,7 @@ import type {
   KtxTableRef,
 } from './types.js';
 
-type CatalogDriver = KtxConnectionDriver | 'sqlite3';
+type CatalogDriver = KtxConnectionDriver;
 
 export interface WarehouseCatalogServiceDeps {
   fileStore: KtxFileStorePort;
@@ -129,7 +129,7 @@ function splitDisplay(display: string): string[] {
 }
 
 function formatDisplay(driver: CatalogDriver, table: KtxTableRef): string {
-  if (driver === 'sqlite' || driver === 'sqlite3') {
+  if (driver === 'sqlite') {
     return table.name;
   }
   return [table.catalog, table.db, table.name].filter((part): part is string => Boolean(part)).join('.');
@@ -137,7 +137,7 @@ function formatDisplay(driver: CatalogDriver, table: KtxTableRef): string {
 
 function parseDisplay(driver: CatalogDriver, display: string): KtxTableRef | null {
   const parts = splitDisplay(display);
-  if (driver === 'sqlite' || driver === 'sqlite3') {
+  if (driver === 'sqlite') {
     return parts.length === 1 ? { catalog: null, db: null, name: parts[0]! } : null;
   }
   if (driver === 'bigquery' || driver === 'snowflake' || driver === 'sqlserver') {
@@ -156,7 +156,7 @@ function parseDisplay(driver: CatalogDriver, display: string): KtxTableRef | nul
 }
 
 function expectedDisplayPartCount(driver: CatalogDriver): number {
-  if (driver === 'sqlite' || driver === 'sqlite3') {
+  if (driver === 'sqlite') {
     return 1;
   }
   if (driver === 'bigquery' || driver === 'snowflake' || driver === 'sqlserver') {

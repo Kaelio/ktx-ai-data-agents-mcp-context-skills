@@ -20,10 +20,8 @@ export interface LocalConnectionInfo {
 
 const DRIVER_TO_CONNECTION_TYPE: Record<string, ConnectionType> = {
   postgres: 'POSTGRESQL',
-  postgresql: 'POSTGRESQL',
   sqlite: 'SQLITE',
   sqlserver: 'SQLSERVER',
-  mssql: 'SQLSERVER',
   mysql: 'MYSQL',
   clickhouse: 'CLICKHOUSE',
   snowflake: 'SNOWFLAKE',

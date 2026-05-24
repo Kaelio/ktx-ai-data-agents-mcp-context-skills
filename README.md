@@ -166,8 +166,8 @@ agent also needs pinned `ktx` admin commands.
 
 After setup, **ktx** prints **Required before using agents** with the exact
 commands to run. If the output includes `ktx mcp start --project-dir ...`, run
-it before opening your agent. Claude Desktop uses its own launcher and prints
-separate skill upload steps under `.ktx/agents/claude/`.
+it before opening your agent. Claude Desktop gets a stdio MCP config entry and
+prints separate skill upload steps under `.ktx/agents/claude/`.
 
 ## Workspace layout
 

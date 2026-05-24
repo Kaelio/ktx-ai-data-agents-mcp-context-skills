@@ -201,7 +201,7 @@ class SourceLoader:
             name = col.get("name")
             if name in base_by_name:
                 raise ValueError(
-                    f"column '{name}' in columns patches a manifest column on '{base.name}' — move it to 'column_overrides:'"
+                    f"column '{name}' in columns patches a manifest column on '{base.name}' - move it to 'column_overrides:'"
                 )
             source.columns.append(SourceColumn(**col))
 

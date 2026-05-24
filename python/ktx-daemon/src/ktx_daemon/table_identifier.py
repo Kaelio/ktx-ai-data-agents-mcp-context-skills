@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from semantic_layer.table_identifier_parser import (
     ParseTableIdentifierItem as SharedParseTableIdentifierItem,
     parse_table_identifier_batch,
@@ -30,8 +29,6 @@ class ParseTableIdentifierBatchRequest(BaseModel):
 
 
 class ParsedIdentifier(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
     ok: bool
     catalog: str | None = None
     schema_: str | None = Field(default=None, alias="schema")
@@ -60,7 +57,15 @@ def parse_table_identifier_response(
     )
     return ParseTableIdentifierBatchResponse(
         results={
-            key: ParsedIdentifier.model_validate(asdict(value))
+            key: ParsedIdentifier(
+                ok=value.ok,
+                catalog=value.catalog,
+                schema=value.schema_,
+                name=value.name,
+                canonical_table=value.canonical_table,
+                reason=value.reason,
+                detail=value.detail,
+            )
             for key, value in shared_results.items()
         }
     )

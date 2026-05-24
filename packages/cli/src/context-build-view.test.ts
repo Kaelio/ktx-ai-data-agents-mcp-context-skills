@@ -121,10 +121,6 @@ describe('parseIngestSummary', () => {
     expect(parseIngestSummary('Tasks: 5\nStatus: done')).toBe('5 tasks');
   });
 
-  it('still parses the legacy "Work units:" wording for backward compat', () => {
-    expect(parseIngestSummary('Work units: 7\nStatus: done')).toBe('7 tasks');
-  });
-
   it('extracts saved memory alone when no task count', () => {
     expect(parseIngestSummary('Saved memory: 3 wiki, 2 SL')).toBe('3 wiki, 2 SL');
   });

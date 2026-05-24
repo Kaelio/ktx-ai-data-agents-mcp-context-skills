@@ -104,7 +104,7 @@ function metadataResults(): Map<string, FakeQueryResponse> {
 describe('KtxPostgresScanConnector', () => {
   it('resolves configuration safely', () => {
     expect(isKtxPostgresConnectionConfig({ driver: 'postgres', url: 'env:DATABASE_URL' })).toBe(true);
-    expect(isKtxPostgresConnectionConfig({ driver: 'postgresql', host: 'db', database: 'analytics' })).toBe(true);
+    expect(isKtxPostgresConnectionConfig({ driver: 'postgresql', host: 'db', database: 'analytics' })).toBe(false);
     expect(isKtxPostgresConnectionConfig({ driver: 'mysql', host: 'db' })).toBe(false);
     expect(
       postgresPoolConfigFromConfig({

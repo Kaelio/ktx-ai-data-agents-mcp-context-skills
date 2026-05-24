@@ -38,7 +38,7 @@ export function createPostgresQueryExecutor(options: PostgresQueryExecutorOption
     async execute(input: KtxSqlQueryExecutionInput): Promise<KtxSqlQueryExecutionResult> {
       const driver = connectionDriver(input);
       const connection = input.connection;
-      if (driver !== 'postgres' && driver !== 'postgresql') {
+      if (driver !== 'postgres') {
         throw new Error(`Local Postgres execution cannot run driver "${connection?.driver ?? 'unknown'}".`);
       }
       if (typeof connection?.url !== 'string' || connection.url.trim().length === 0) {

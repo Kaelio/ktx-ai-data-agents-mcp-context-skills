@@ -307,7 +307,7 @@
   {
     "name": "sl_query",
     "title": "Semantic Layer Query",
-    "description": "Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: \"warehouse\", measures: [\"orders.order_count\"], dimensions: [{ dimension: \"orders.created_at\", granularity: \"month\" }] }).",
+    "description": "Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: \"warehouse\", measures: [\"orders.order_count\"], dimensions: [{ field: \"orders.created_at\", granularity: \"month\" }] }).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -349,7 +349,8 @@
           "description": "Measures to select. Use semantic-layer keys when available."
         },
         "dimensions": {
-          "description": "Dimensions to group by. Strings and {dimension, granularity} are accepted.",
+          "default": [],
+          "description": "Dimensions to group by. Use {field, granularity?} entries.",
           "type": "array",
           "items": {
             "type": "object",
@@ -389,7 +390,8 @@
           }
         },
         "order_by": {
-          "description": "Sort clauses. Strings and Cube-style {id, desc} are accepted.",
+          "default": [],
+          "description": "Sort clauses. Use {field, direction?} entries.",
           "type": "array",
           "items": {
             "type": "object",
@@ -489,7 +491,7 @@
   {
     "name": "entity_details",
     "title": "Entity Details",
-    "description": "Read table and column metadata from the latest live-database scan snapshot. Example: entity_details({ connectionId: \"warehouse\", entities: [{ table: { schema: \"public\", table: \"orders\" }, columns: [\"id\"] }] }).",
+    "description": "Read table and column metadata from the latest live-database scan snapshot. Example: entity_details({ connectionId: \"warehouse\", entities: [{ table: { catalog: null, db: \"public\", name: \"orders\" }, columns: [\"id\"] }] }).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -549,7 +551,7 @@
                     ]
                   }
                 ],
-                "description": "Table display string or object ref. {schema, table} is accepted as an alias for {db, name}."
+                "description": "Table display string or canonical object ref."
               },
               "columns": {
                 "description": "Optional column filter.",
@@ -560,7 +562,10 @@
                   "description": "Column name to inspect."
                 }
               }
-            }
+            },
+            "required": [
+              "table"
+            ]
           },
           "description": "Tables or columns to inspect. Maximum 20 entities."
         }

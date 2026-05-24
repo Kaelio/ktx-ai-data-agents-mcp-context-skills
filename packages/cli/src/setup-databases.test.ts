@@ -2156,7 +2156,6 @@ describe('setup databases step', () => {
         },
       },
     });
-    expect(config.connections.snowflake.historicSql).toBeUndefined();
     expect(configText).not.toContain('live-database');
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);
@@ -2262,7 +2261,6 @@ describe('setup databases step', () => {
         },
       },
     });
-    expect(config.connections.warehouse.historicSql).toBeUndefined();
     const warehouseContext =
       config.connections.warehouse.context &&
       typeof config.connections.warehouse.context === 'object' &&
@@ -2430,7 +2428,6 @@ describe('setup databases step', () => {
         },
       },
     });
-    expect(config.connections.analytics.historicSql).toBeUndefined();
     expect(configText).not.toContain('live-database');
     expect(configText).not.toContain('historic-sql');
     expect(configText).not.toMatch(/^\s+adapters:/m);

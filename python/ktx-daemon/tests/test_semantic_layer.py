@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from ktx_daemon.semantic_layer import (
     SemanticLayerQueryRequest,
     ValidateSourcesRequest,
@@ -93,6 +95,16 @@ def test_query_semantic_layer_emits_plan_and_sql_debug_events(
     assert '"event": "sl_plan_completed"' in captured.err
     assert '"event": "sql_gen_completed"' in captured.err
     assert "public.orders" not in captured.err
+
+
+def test_semantic_layer_request_rejects_project_id_field_name() -> None:
+    with pytest.raises(ValueError):
+        SemanticLayerQueryRequest(
+            sources=[],
+            dialect="postgres",
+            project_id="a" * 64,
+            query={"measures": ["orders.order_count"]},
+        )
 
 
 def test_validate_semantic_layer_reports_duplicate_measure_names() -> None:

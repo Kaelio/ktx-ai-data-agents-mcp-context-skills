@@ -323,7 +323,7 @@ export function isKtxPostgresConnectionConfig(
   connection: KtxPostgresConnectionConfig | undefined,
 ): connection is KtxPostgresConnectionConfig {
   const driver = String(connection?.driver ?? '').toLowerCase();
-  return driver === 'postgres' || driver === 'postgresql';
+  return driver === 'postgres';
 }
 
 /** @internal */

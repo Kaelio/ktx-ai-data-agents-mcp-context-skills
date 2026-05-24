@@ -1927,6 +1927,15 @@ describe('resolveEnabledTables', () => {
     expect(result!.has(tableRefKey({ catalog: null, db: 'public', name: 'orders' }))).toBe(true);
   });
 
+  it('ignores legacy enabled_tables object entries', () => {
+    expect(
+      resolveEnabledTables({
+        driver: 'postgres',
+        enabled_tables: [{ catalog: null, db: 'public', name: 'orders' }],
+      }),
+    ).toBeNull();
+  });
+
   it('returns null for undefined connection', () => {
     expect(resolveEnabledTables(undefined)).toBeNull();
   });

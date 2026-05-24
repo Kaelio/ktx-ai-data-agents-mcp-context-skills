@@ -392,7 +392,7 @@ describe('local semantic-layer helpers', () => {
     ).rejects.toThrow('Invalid semantic-layer source');
   });
 
-  it('reports legacy overlay column patches with a file-attributed migration hint', async () => {
+  it('reports overlay columns that are not computed columns', async () => {
     const invalidYaml = [
       'name: orders',
       'columns:',
@@ -406,9 +406,7 @@ describe('local semantic-layer helpers', () => {
       validateLocalSlSource(invalidYaml, { project, connectionId: 'warehouse', sourceName: 'orders' }),
     ).resolves.toEqual({
       valid: false,
-      errors: [
-        "semantic-layer/warehouse/orders.yaml: column 'status' patches a manifest column but is in 'columns:' — move it to 'column_overrides:'",
-      ],
+      errors: expect.arrayContaining([expect.stringContaining('columns.0.type')]),
     });
   });
 

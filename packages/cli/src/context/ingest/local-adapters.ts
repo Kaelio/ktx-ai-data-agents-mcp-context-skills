@@ -168,7 +168,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const historicSqlDialectByDriver = new Map<string, 'postgres' | 'bigquery' | 'snowflake'>([
   ['postgres', 'postgres'],
-  ['postgresql', 'postgres'],
   ['bigquery', 'bigquery'],
   ['snowflake', 'snowflake'],
 ]);
@@ -247,16 +246,10 @@ export async function localPullConfigForAdapter(
       return historicSqlUnifiedPullConfigSchema.parse(options.historicSqlPullConfigOverride);
     }
     const queryHistory = queryHistoryPullConfig(connection);
-    if (queryHistory) {
-      return historicSqlUnifiedPullConfigSchema.parse(queryHistory);
-    }
-    const historicSql = isRecord(connection?.historicSql) ? connection.historicSql : null;
-    if (historicSql?.enabled !== true) {
+    if (!queryHistory) {
       throw new Error(`Connection "${connectionId}" does not have context.queryHistory.enabled: true`);
     }
-    return historicSqlUnifiedPullConfigSchema.parse({
-      ...historicSql,
-    });
+    return historicSqlUnifiedPullConfigSchema.parse(queryHistory);
   }
   if (adapter.source === 'looker') {
     await seedLocalMappingStateFromKtxYaml(project, connectionId);

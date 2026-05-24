@@ -5,7 +5,6 @@ export type KtxDatabaseContextDepth = 'fast' | 'deep';
 const KTX_DATABASE_DRIVER_IDS = new Set([
   'sqlite',
   'postgres',
-  'postgresql',
   'mysql',
   'clickhouse',
   'sqlserver',

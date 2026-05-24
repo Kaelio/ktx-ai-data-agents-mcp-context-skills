@@ -26,6 +26,33 @@ describe('runtime requirement detection', () => {
     );
   });
 
+  it('does not treat stale local Looker driver aliases as Looker sources', () => {
+    const config: KtxProjectConfig = {
+      ...buildDefaultKtxProjectConfig(),
+      connections: {
+        stale: { driver: 'local_looker' } as never,
+      },
+    };
+
+    expect(resolveProjectRuntimeRequirements(config).features).toEqual([]);
+    expect(
+      resolvePublicIngestRuntimeRequirements({
+        projectDir: '/tmp/project',
+        warnings: [],
+        targets: [
+          {
+            connectionId: 'stale',
+            driver: 'local_looker',
+            operation: 'source-ingest',
+            adapter: 'local_looker',
+            debugCommand: 'ktx ingest stale --debug',
+            steps: ['source-ingest'],
+          },
+        ],
+      }).features,
+    ).toEqual([]);
+  });
+
   it('requires core for query-history ingest unless SQL analysis is externally configured', () => {
     const config: KtxProjectConfig = {
       ...buildDefaultKtxProjectConfig(),

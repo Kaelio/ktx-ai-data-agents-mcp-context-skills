@@ -43,16 +43,12 @@ function sqlAnalysisDialectForDriver(driver: string | undefined): SqlAnalysisDia
   const normalized = String(driver ?? '').trim().toLowerCase();
   const map: Record<string, SqlAnalysisDialect> = {
     postgres: 'postgres',
-    postgresql: 'postgres',
     bigquery: 'bigquery',
     snowflake: 'snowflake',
     mysql: 'mysql',
     sqlserver: 'tsql',
-    mssql: 'tsql',
     sqlite: 'sqlite',
-    sqlite3: 'sqlite',
     clickhouse: 'clickhouse',
-    redshift: 'redshift',
   };
   return map[normalized] ?? 'postgres';
 }

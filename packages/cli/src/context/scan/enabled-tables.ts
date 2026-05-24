@@ -8,12 +8,8 @@ import type { KtxTableRef } from './types.js';
  *
  * Accepted entry forms:
  *   "catalog.db.name"  — fully qualified
- *   "db.name"          — schema-qualified (catalog = null; legacy / Postgres-shape)
+ *   "db.name"          — schema-qualified (catalog = null)
  *   "name"             — bare (catalog = db = null; SQLite-shape)
- *   { catalog?, db?, name }  — escape hatch for identifiers containing dots
- *
- * The setup wizard writes the fully-qualified form going forward; the lenient
- * parser keeps existing project configs working.
  */
 export function resolveEnabledTables(
   connection: Record<string, unknown> | undefined,
@@ -32,16 +28,6 @@ export function resolveEnabledTables(
 function parseEnabledTableEntry(value: unknown): KtxTableRef | null {
   if (typeof value === 'string') {
     return parseDottedEntry(value);
-  }
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const entry = value as { catalog?: unknown; db?: unknown; name?: unknown };
-    const name = typeof entry.name === 'string' ? entry.name : null;
-    if (!name) return null;
-    return {
-      catalog: typeof entry.catalog === 'string' ? entry.catalog : null,
-      db: typeof entry.db === 'string' ? entry.db : null,
-      name,
-    };
   }
   return null;
 }

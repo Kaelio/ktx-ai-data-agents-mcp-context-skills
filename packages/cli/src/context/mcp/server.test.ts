@@ -466,7 +466,43 @@ describe('createKtxMcpServer', () => {
     });
   });
 
-  it('sl_query normalizes order_by from cube-style {id, desc} and bare strings to {field, direction}', async () => {
+  it('sl_query rejects cube-style order_by aliases and bare strings', async () => {
+    const fake = makeFakeServer();
+    const semanticLayer: KtxSemanticLayerMcpPort = {
+      readSource: vi.fn(),
+      query: vi.fn<KtxSemanticLayerMcpPort['query']>().mockResolvedValue({
+        sql: '',
+        headers: [],
+        rows: [],
+        totalRows: 0,
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { semanticLayer },
+    });
+
+    await expect(
+      getTool(fake.tools, 'sl_query').handler({
+        connectionId: 'warehouse',
+        measures: ['orders.count'],
+        order_by: [{ id: 'orders.quarter_label', desc: false }],
+      }),
+    ).resolves.toMatchObject({ isError: true });
+    await expect(
+      getTool(fake.tools, 'sl_query').handler({
+        connectionId: 'warehouse',
+        measures: ['orders.count'],
+        order_by: ['orders.segment'],
+      }),
+    ).resolves.toMatchObject({ isError: true });
+
+    expect(semanticLayer.query).not.toHaveBeenCalled();
+  });
+
+  it('sl_query accepts canonical order_by entries', async () => {
     const fake = makeFakeServer();
     const semanticLayer: KtxSemanticLayerMcpPort = {
       readSource: vi.fn(),
@@ -489,9 +525,7 @@ describe('createKtxMcpServer', () => {
       measures: ['orders.count'],
       order_by: [
         { field: 'orders.total', direction: 'desc' },
-        { id: 'orders.quarter_label', desc: false },
-        { id: 'orders.created_at', desc: true },
-        'orders.segment',
+        { field: 'orders.segment' },
       ],
     });
 
@@ -501,8 +535,6 @@ describe('createKtxMcpServer', () => {
         query: expect.objectContaining({
           order_by: [
             { field: 'orders.total', direction: 'desc' },
-            { field: 'orders.quarter_label', direction: 'asc' },
-            { field: 'orders.created_at', direction: 'desc' },
             { field: 'orders.segment', direction: 'asc' },
           ],
         }),
@@ -511,7 +543,35 @@ describe('createKtxMcpServer', () => {
     );
   });
 
-  it('sl_query normalizes cube-style dimensions to field dimensions', async () => {
+  it('sl_query rejects cube-style dimensions and bare strings', async () => {
+    const fake = makeFakeServer();
+    const semanticLayer = makeAllContextTools().semanticLayer!;
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { semanticLayer },
+    });
+
+    await expect(
+      getTool(fake.tools, 'sl_query').handler({
+        connectionId: 'warehouse',
+        measures: ['orders.count'],
+        dimensions: [{ dimension: 'orders.created_at', granularity: 'month' }],
+      }),
+    ).resolves.toMatchObject({ isError: true });
+    await expect(
+      getTool(fake.tools, 'sl_query').handler({
+        connectionId: 'warehouse',
+        measures: ['orders.count'],
+        dimensions: ['orders.status'],
+      }),
+    ).resolves.toMatchObject({ isError: true });
+
+    expect(semanticLayer.query).not.toHaveBeenCalled();
+  });
+
+  it('sl_query accepts canonical field dimensions', async () => {
     const fake = makeFakeServer();
     const semanticLayer = makeAllContextTools().semanticLayer!;
 
@@ -524,7 +584,7 @@ describe('createKtxMcpServer', () => {
     await getTool(fake.tools, 'sl_query').handler({
       connectionId: 'warehouse',
       measures: ['orders.count'],
-      dimensions: [{ dimension: 'orders.created_at', granularity: 'month' }, 'orders.status'],
+      dimensions: [{ field: 'orders.created_at', granularity: 'month' }, { field: 'orders.status' }],
     });
 
     expect(semanticLayer.query).toHaveBeenCalledWith(
@@ -538,7 +598,27 @@ describe('createKtxMcpServer', () => {
     );
   });
 
-  it('entity_details normalizes sql-style schema table refs', async () => {
+  it('entity_details rejects sql-style schema table ref aliases', async () => {
+    const fake = makeFakeServer();
+    const entityDetails = makeAllContextTools().entityDetails!;
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { entityDetails },
+    });
+
+    await expect(
+      getTool(fake.tools, 'entity_details').handler({
+        connectionId: 'warehouse',
+        entities: [{ table: { schema: 'public', table: 'orders' }, columns: ['id'] }],
+      }),
+    ).resolves.toMatchObject({ isError: true });
+
+    expect(entityDetails.read).not.toHaveBeenCalled();
+  });
+
+  it('entity_details accepts canonical table refs', async () => {
     const fake = makeFakeServer();
     const entityDetails = makeAllContextTools().entityDetails!;
 
@@ -550,7 +630,7 @@ describe('createKtxMcpServer', () => {
 
     await getTool(fake.tools, 'entity_details').handler({
       connectionId: 'warehouse',
-      entities: [{ table: { schema: 'public', table: 'orders' }, columns: ['id'] }],
+      entities: [{ table: { catalog: null, db: 'public', name: 'orders' }, columns: ['id'] }],
     });
 
     expect(entityDetails.read).toHaveBeenCalledWith({
@@ -1018,7 +1098,7 @@ describe('createKtxMcpServer', () => {
     await getTool(fake.tools, 'sl_query').handler({
       connectionId: '00000000-0000-4000-8000-000000000001',
       measures: ['orders.count'],
-      dimensions: ['orders.created_at'],
+      dimensions: [{ field: 'orders.created_at' }],
       filters: ['orders.status = paid'],
       limit: 25,
     });

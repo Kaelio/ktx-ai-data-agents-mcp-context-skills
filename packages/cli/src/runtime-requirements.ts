@@ -96,7 +96,7 @@ export function resolveProjectRuntimeRequirements(
 
   for (const [connectionId, connection] of Object.entries(config.connections)) {
     const driver = normalizeDriver(connection.driver);
-    if ((driver === 'looker' || driver === 'local_looker') && !hasDaemonOverride(env)) {
+    if (driver === 'looker' && !hasDaemonOverride(env)) {
       requirements.push({
         feature: 'core',
         reason: 'looker-source',
@@ -141,7 +141,7 @@ export function resolvePublicIngestRuntimeRequirements(
         detail: `${target.connectionId} query-history ingest uses SQL analysis.`,
       });
     }
-    if ((driver === 'looker' || driver === 'local_looker' || adapter === 'looker') && !hasDaemonOverride(env)) {
+    if ((driver === 'looker' || adapter === 'looker') && !hasDaemonOverride(env)) {
       requirements.push({
         feature: 'core',
         reason: 'looker-source',

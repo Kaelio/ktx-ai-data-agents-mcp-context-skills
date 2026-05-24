@@ -13,7 +13,7 @@ from semantic_layer.models import QueryResult, SourceDefinition
 
 
 class SemanticLayerQueryRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(extra="forbid")
 
     sources: list[dict[str, Any]]
     query: dict[str, Any]

@@ -1034,8 +1034,7 @@ async function maybeApplyHistoricSqlConfig(input: {
     }
   }
 
-  const existingRecord = queryHistoryConfigRecord(input.connection) ?? historicSqlConfigRecord(input.connection) ?? {};
-  const { dialect: _dialect, ...existing } = existingRecord;
+  const { dialect: _dialect, ...existing } = queryHistoryConfigRecord(input.connection) ?? {};
 
   if (!enabled) {
     return withQueryHistoryConfig(input.connection, { ...existing, enabled: false });
@@ -1287,18 +1286,11 @@ async function writeConnectionConfig(input: {
   io?: KtxCliIo;
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
-  const migratedConnections = Object.fromEntries(
-    Object.entries(project.config.connections).map(([connectionId, connection]) => [
-      connectionId,
-      migrateLegacyHistoricSqlConnection(connection),
-    ]),
-  );
-  const nextConnection = migrateLegacyHistoricSqlConnection(input.connection);
   const config = {
     ...project.config,
     connections: {
-      ...migratedConnections,
-      [input.connectionId]: nextConnection,
+      ...project.config.connections,
+      [input.connectionId]: input.connection,
     },
   };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
@@ -1308,13 +1300,13 @@ async function writeConnectionConfig(input: {
       projectDir: input.projectDir,
       io: input.io,
       fields: {
-        driver: String(nextConnection.driver ?? 'unknown').toLowerCase(),
-        isDemoConnection: isDemoConnection(input.connectionId, nextConnection),
+        driver: String(input.connection.driver ?? 'unknown').toLowerCase(),
+        isDemoConnection: isDemoConnection(input.connectionId, input.connection),
       },
     });
   }
 
-  const queryHistory = queryHistoryConfigRecord(nextConnection);
+  const queryHistory = queryHistoryConfigRecord(input.connection);
   if (queryHistory?.enabled === true) {
     await ensureHistoricSqlIngestDefaults(input.projectDir);
   }
@@ -2038,12 +2030,7 @@ async function runPrimarySourceFullEdit(input: {
     connectionId: input.connectionId,
     connection: withExistingPrimaryEditPromptDefaults({
       previous: existing,
-      next: {
-        ...withHistoricSql,
-        ...(!Object.hasOwn(withHistoricSql, 'historicSql') && existing.historicSql !== undefined
-          ? { historicSql: existing.historicSql }
-          : {}),
-      },
+      next: withHistoricSql,
       driver,
     }),
     io: input.io,

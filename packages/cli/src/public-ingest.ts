@@ -134,7 +134,6 @@ const sourceAdapterByDriver = new Map<string, string>([
   ['metabase', 'metabase'],
   ['local_metabase', 'metabase'],
   ['looker', 'looker'],
-  ['local_looker', 'looker'],
   ['notion', 'notion'],
   ['metricflow', 'metricflow'],
   ['dbt', 'dbt'],
@@ -143,7 +142,6 @@ const sourceAdapterByDriver = new Map<string, string>([
 
 const queryHistoryDialectByDriver = new Map<string, HistoricSqlDialect>([
   ['postgres', 'postgres'],
-  ['postgresql', 'postgres'],
   ['bigquery', 'bigquery'],
   ['snowflake', 'snowflake'],
 ]);
@@ -309,12 +307,6 @@ function queryHistoryPullConfig(input: {
   };
 }
 
-function depthFromLegacyScanMode(
-  mode: Extract<KtxScanArgs, { command: 'run' }>['mode'] | undefined,
-): KtxPublicIngestDepth | undefined {
-  return mode === 'enriched' || mode === 'relationships' ? 'deep' : undefined;
-}
-
 function sourceDirForConnection(connection: KtxProjectConnectionConfig): string | undefined {
   const value = connection.source_dir;
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -340,8 +332,7 @@ function resolveDatabaseTargetOptions(input: {
   const requestedQh =
     explicitQueryHistory === 'enabled' ||
     (explicitQueryHistory !== 'disabled' && (windowOverrideRequested || storedEnabled));
-  let depth =
-    input.args.depth ?? depthFromLegacyScanMode(input.args.scanMode) ?? databaseContextDepth(input.connection) ?? 'fast';
+  let depth = input.args.depth ?? databaseContextDepth(input.connection) ?? 'fast';
   const queryHistory = {
     enabled: false,
     ...(input.args.queryHistoryWindowDays !== undefined

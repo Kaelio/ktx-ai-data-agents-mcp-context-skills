@@ -53,6 +53,11 @@ describe('local connection info helpers', () => {
     expect(localConnectionTypeForConfig('snowflake', { driver: 'snowflake' })).toBe('SNOWFLAKE');
   });
 
+  it('keeps removed driver aliases as display-only labels', () => {
+    expect(localConnectionTypeForConfig('warehouse', { driver: 'postgresql' } as never)).toBe('postgresql');
+    expect(localConnectionTypeForConfig('warehouse', { driver: 'mssql' } as never)).toBe('mssql');
+  });
+
   it('keeps non-warehouse adapter labels for display-only local connection surfaces', () => {
     expect(localConnectionTypeForConfig('prod-metabase', { driver: 'metabase', api_url: 'https://metabase.example.com' })).toBe(
       'metabase',

@@ -183,10 +183,8 @@ Claude Desktop skill packages for the **ktx** workflows:
 
 - `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or
   `%AppData%/Claude/claude_desktop_config.json` (Windows) gets an
-  `mcpServers.ktx` entry that runs the **ktx** MCP server over stdio via a local
-  launcher shim at `.ktx/agents/claude/ktx-plugin-runner.sh`. The shim locates
-  a usable Node.js (Volta, NVM, Homebrew, system) so Claude Desktop can spawn
-  the server without needing `node` in PATH.
+  `mcpServers.ktx` entry that runs the **ktx** MCP server over stdio with the
+  current Node.js executable and the installed `ktx` CLI entrypoint.
 - `.ktx/agents/claude/ktx-analytics.zip` contains the `ktx-analytics` skill.
   If you choose **Ask data questions + manage ktx with CLI commands**, **ktx** also
   generates `.ktx/agents/claude/ktx.zip` with the admin `ktx` skill. Claude

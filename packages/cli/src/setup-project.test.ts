@@ -1,8 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initKtxProject } from './context/project/project.js';
-import { parseKtxProjectConfig } from './context/project/config.js';
 import { readKtxSetupState } from './context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { gray } from './io/symbols.js';
@@ -74,36 +72,6 @@ describe('setup project step', () => {
     await expect(readFile(join(projectDir, '.ktx/.gitignore'), 'utf-8')).resolves.toContain('secrets/');
     expect(testIo.stdout()).toContain(`Project: ${projectDir}`);
     expect(testIo.stderr()).toBe('');
-  });
-
-  it('loads an existing project in auto mode and drops config setup progress', async () => {
-    const projectDir = join(tempDir, 'warehouse');
-    await initKtxProject({ projectDir });
-    await writeFile(
-      join(projectDir, 'ktx.yaml'),
-      [
-        'setup:',
-        '  database_connection_ids:',
-        '    - warehouse',
-        '  completed_steps:',
-        '    - llm',
-        'connections: {}',
-      ].join('\n'),
-      'utf-8',
-    );
-
-    const result = await runKtxSetupProjectStep(
-      { projectDir, mode: 'auto', inputMode: 'disabled', yes: false },
-      makeIo().io,
-    );
-
-    expect(result.status).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.setup).toEqual({
-      database_connection_ids: ['warehouse'],
-    });
-    expect(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
-    expect(await readKtxSetupState(projectDir)).toEqual({ completed_steps: ['project'] });
   });
 
   it('creates a missing auto-mode project only when --yes is present in no-input mode', async () => {

@@ -274,9 +274,7 @@ async function testConnectionByDriver(
 
   if (
     driver === 'sqlite' ||
-    driver === 'sqlite3' ||
     driver === 'postgres' ||
-    driver === 'postgresql' ||
     driver === 'mysql' ||
     driver === 'clickhouse' ||
     driver === 'sqlserver' ||

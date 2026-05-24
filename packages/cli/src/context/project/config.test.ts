@@ -369,7 +369,7 @@ ingest:
   llm:
     backend: anthropic
 `),
-    ).toThrow('Unsupported ingest.llm: use top-level llm.provider, llm.models, and ingest.workUnits');
+    ).toThrow('Unsupported ingest.llm: unknown field');
 
     expect(() =>
       parseKtxProjectConfig(`
@@ -377,7 +377,7 @@ scan:
   enrichment:
     backend: gateway
 `),
-    ).toThrow('Unsupported scan.enrichment.backend: use scan.enrichment.mode');
+    ).toThrow('Unsupported scan.enrichment.backend: unknown field');
 
     expect(() =>
       parseKtxProjectConfig(`
@@ -387,7 +387,7 @@ scan:
     llm:
       backend: gateway
 `),
-    ).toThrow('Unsupported scan.enrichment.llm: use top-level llm.provider and llm.models');
+    ).toThrow('Unsupported scan.enrichment.llm: unknown field');
 
     expect(() =>
       parseKtxProjectConfig(`
@@ -476,28 +476,6 @@ scan:
         'scan.relationships.acceptThreshold',
       ]),
     );
-  });
-
-  it('attaches migration hints for known deprecated keys', () => {
-    const result = validateKtxProjectConfig(`
-ingest:
-  llm:
-    backend: anthropic
-scan:
-  enrichment:
-    backend: none
-`);
-
-    expect(result.ok).toBe(false);
-    const findIssue = (path: string) => result.issues.find((issue) => issue.path === path);
-    expect(findIssue('ingest.llm')).toMatchObject({
-      message: 'Unsupported ingest.llm: use top-level llm.provider, llm.models, and ingest.workUnits',
-      fix: 'use top-level llm.provider, llm.models, and ingest.workUnits',
-    });
-    expect(findIssue('scan.enrichment.backend')).toMatchObject({
-      message: 'Unsupported scan.enrichment.backend: use scan.enrichment.mode',
-      fix: 'use scan.enrichment.mode',
-    });
   });
 
   it('reports YAML parse errors as a root-level issue', () => {

@@ -155,7 +155,7 @@ describe('createDaemonLiveDatabaseIntrospection', () => {
       const introspection = createDaemonLiveDatabaseIntrospection({
         connections: {
           warehouse: {
-            driver: 'postgresql',
+            driver: 'postgres',
             url: 'postgres://localhost:5432/warehouse',
           },
         },
