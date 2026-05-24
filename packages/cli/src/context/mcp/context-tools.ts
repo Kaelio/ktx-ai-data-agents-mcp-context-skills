@@ -54,13 +54,13 @@ const toolDescriptions = {
     'Search KTX wiki pages for reusable business context. Example: wiki_search({ query: "revenue recognition", limit: 5 }).',
   wiki_read: 'Read a KTX wiki page by key returned from wiki_search. Example: wiki_read({ key: "global/revenue" }).',
   entity_details:
-    'Read table and column metadata from the latest live-database scan snapshot. Example: entity_details({ connectionId: "warehouse", entities: [{ table: { schema: "public", table: "orders" }, columns: ["id"] }] }).',
+    'Read table and column metadata from the latest live-database scan snapshot. Example: entity_details({ connectionId: "warehouse", entities: [{ table: { catalog: null, db: "public", name: "orders" }, columns: ["id"] }] }).',
   dictionary_search:
     'Search profile-sampled warehouse values to locate likely source columns for business values. Example: dictionary_search({ values: ["Acme Corp"], connectionId: "warehouse" }).',
   sl_read_source:
     'Read a semantic-layer YAML source by connection id and source name. Example: sl_read_source({ connectionId: "warehouse", sourceName: "orders" }).',
   sl_query:
-    'Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: "warehouse", measures: ["orders.order_count"], dimensions: [{ dimension: "orders.created_at", granularity: "month" }] }).',
+    'Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: "warehouse", measures: ["orders.order_count"], dimensions: [{ field: "orders.created_at", granularity: "month" }] }).',
   sql_execution:
     'Execute one parser-validated read-only SQL query against a configured KTX connection. Example: sql_execution({ connectionId: "warehouse", sql: "select count(*) from public.orders", maxRows: 100 }).',
   memory_ingest:
@@ -93,44 +93,16 @@ const slQueryMeasureSchema = z.union([
   }),
 ]);
 
-const slQueryDimensionSchema = z.preprocess(
-  (value) => {
-    if (typeof value === 'string') return { field: value };
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      const obj = { ...(value as Record<string, unknown>) };
-      if (!('field' in obj) && typeof obj.dimension === 'string') obj.field = obj.dimension;
-      return obj;
-    }
-    return value;
-  },
-  z.object({
+const slQueryDimensionSchema = z.object({
     field: z.string().min(1).describe('Dimension to group by, e.g. "orders.created_at" or "orders.status".'),
     granularity: z
       .string()
       .min(1)
       .optional()
       .describe('Time grain for time dimensions: day, week, month, quarter, or year.'),
-  }),
-);
+  });
 
-const slQueryOrderBySchema = z.preprocess(
-  (value) => {
-    if (typeof value === 'string') {
-      return { field: value };
-    }
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      const obj = { ...(value as Record<string, unknown>) };
-      if (!('field' in obj) && typeof obj.id === 'string') {
-        obj.field = obj.id;
-      }
-      if (!('direction' in obj) && 'desc' in obj) {
-        obj.direction = obj.desc === true ? 'desc' : 'asc';
-      }
-      return obj;
-    }
-    return value;
-  },
-  z.object({
+const slQueryOrderBySchema = z.object({
     field: z
       .string()
       .min(1)
@@ -141,8 +113,7 @@ const slQueryOrderBySchema = z.preprocess(
       .enum(['asc', 'desc'])
       .default('asc')
       .describe('Sort direction: "asc" or "desc". Defaults to "asc".'),
-  }),
-);
+  });
 
 const slQuerySchema = z.object({
   connectionId: connectionIdSchema
@@ -152,7 +123,7 @@ const slQuerySchema = z.object({
   dimensions: z
     .array(slQueryDimensionSchema)
     .default([])
-    .describe('Dimensions to group by. Strings and {dimension, granularity} are accepted.'),
+    .describe('Dimensions to group by. Use {field, granularity?} entries.'),
   filters: z
     .array(z.string().describe('Semantic-layer filter expression, e.g. "orders.status = paid".'))
     .default([])
@@ -164,28 +135,16 @@ const slQuerySchema = z.object({
   order_by: z
     .array(slQueryOrderBySchema)
     .default([])
-    .describe('Sort clauses. Strings and Cube-style {id, desc} are accepted.'),
+    .describe('Sort clauses. Use {field, direction?} entries.'),
   limit: z.number().int().min(0).default(1000).describe('Maximum rows to return. Defaults to 1000.'),
   include_empty: z.boolean().default(true).describe('Whether to include empty dimension groups. Defaults to true.'),
 });
 
-const entityDetailsTableRefSchema = z.preprocess(
-  (value) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      const obj = { ...(value as Record<string, unknown>) };
-      if (!('db' in obj) && typeof obj.schema === 'string') obj.db = obj.schema;
-      if (!('name' in obj) && typeof obj.table === 'string') obj.name = obj.table;
-      if (!('catalog' in obj)) obj.catalog = null;
-      return obj;
-    }
-    return value;
-  },
-  z.object({
+const entityDetailsTableRefSchema = z.object({
     catalog: z.string().nullable().describe('Catalog/project/database. Use null when not applicable.'),
     db: z.string().nullable().describe('Schema/database/dataset. Use null when not applicable.'),
     name: z.string().min(1).describe('Table name.'),
-  }),
-);
+  });
 
 const entityDetailsSchema = z.object({
   connectionId: connectionIdSchema.describe('Connection id whose latest scan snapshot should be read.'),
@@ -194,7 +153,7 @@ const entityDetailsSchema = z.object({
       z.object({
         table: z
           .union([z.string().min(1), entityDetailsTableRefSchema])
-          .describe('Table display string or object ref. {schema, table} is accepted as an alias for {db, name}.'),
+          .describe('Table display string or canonical object ref.'),
         columns: z
           .array(z.string().min(1).describe('Column name to inspect.'))
           .optional()

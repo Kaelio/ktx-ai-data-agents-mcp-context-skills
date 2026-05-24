@@ -2,14 +2,12 @@ import type { KtxSchemaDimensionType, KtxTableRef } from '../scan/types.js';
 
 type SupportedDriver =
   | 'postgres'
-  | 'postgresql'
   | 'mysql'
   | 'sqlserver'
   | 'snowflake'
   | 'bigquery'
   | 'clickhouse'
-  | 'sqlite'
-  | 'sqlite3';
+  | 'sqlite';
 
 export interface KtxDialect {
   readonly type: SupportedDriver;
@@ -23,9 +21,7 @@ const supportedDrivers: SupportedDriver[] = [
   'clickhouse',
   'mysql',
   'postgres',
-  'postgresql',
   'sqlite',
-  'sqlite3',
   'snowflake',
   'sqlserver',
 ];
@@ -83,11 +79,9 @@ function createDialect(type: SupportedDriver, quote: (identifier: string) => str
 
 const dialects: Record<SupportedDriver, KtxDialect> = {
   postgres: createDialect('postgres', doubleQuoted),
-  postgresql: createDialect('postgresql', doubleQuoted),
   mysql: createDialect('mysql', backtickQuoted),
   clickhouse: createDialect('clickhouse', backtickQuoted),
   sqlite: createDialect('sqlite', doubleQuoted, true),
-  sqlite3: createDialect('sqlite3', doubleQuoted, true),
   snowflake: createDialect('snowflake', doubleQuoted),
   bigquery: createDialect('bigquery', bigQueryQuoted),
   sqlserver: createDialect('sqlserver', bracketQuoted),

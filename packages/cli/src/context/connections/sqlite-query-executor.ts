@@ -52,7 +52,7 @@ function sqlitePathFromUrl(url: string): string {
 /** @internal */
 export function sqliteDatabasePathFromConnection(input: KtxSqlQueryExecutionInput): string {
   const driver = connectionDriver(input);
-  if (driver !== 'sqlite' && driver !== 'sqlite3') {
+  if (driver !== 'sqlite') {
     throw new Error(`Local SQLite execution cannot run driver "${input.connection?.driver ?? 'unknown'}".`);
   }
 

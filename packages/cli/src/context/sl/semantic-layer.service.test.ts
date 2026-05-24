@@ -847,7 +847,7 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
     });
   });
 
-  it('reports file-attributed errors for legacy overlay column patches', async () => {
+  it('reports file-attributed errors for overlay columns that shadow manifest columns', async () => {
     const schemaPath = 'semantic-layer/conn-1/_schema/marts.yaml';
     const overlayPath = 'semantic-layer/conn-1/orders.yaml';
     configService.listFiles.mockResolvedValue({ files: [schemaPath, overlayPath] });
@@ -871,7 +871,8 @@ describe('loadAllSources — standalone enrichment via inherits_columns_from', (
     const { loadErrors } = await service.loadAllSources('conn-1');
 
     expect(loadErrors.join('\n')).toContain(overlayPath);
-    expect(loadErrors.join('\n')).toContain("move it to 'column_overrides:'");
+    expect(loadErrors.join('\n')).toContain("column 'id' in columns already exists on manifest source 'orders'");
+    expect(loadErrors.join('\n')).not.toContain('column_overrides');
   });
 
   it('reports and logs directory listing failures instead of treating them as empty sources', async () => {

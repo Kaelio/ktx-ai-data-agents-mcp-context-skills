@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +55,7 @@ export interface KtxAgentInstallManifest {
     | {
         kind: 'file';
         path: string;
-        role?: 'skill' | 'rule' | 'analytics-skill' | 'claude-desktop-skill-bundle' | 'launcher';
+        role?: 'skill' | 'rule' | 'analytics-skill' | 'claude-desktop-skill-bundle';
       }
     | { kind: 'json-key'; path: string; jsonPath: string[] }
   >;
@@ -312,15 +312,12 @@ function collectClaudeDesktopForwardedEnv(source: NodeJS.ProcessEnv): Record<str
   return captured;
 }
 
-function claudeDesktopMcpEntry(input: {
-  launcherPath: string;
-  projectDir: string;
-  env?: NodeJS.ProcessEnv;
-}): Record<string, unknown> {
+function claudeDesktopMcpEntry(input: { projectDir: string; env?: NodeJS.ProcessEnv }): Record<string, unknown> {
   const captured = collectClaudeDesktopForwardedEnv(input.env ?? process.env);
+  const launcher = ktxCliLauncher();
   return {
-    command: input.launcherPath,
-    args: ['--project-dir', input.projectDir, 'mcp', 'stdio'],
+    command: launcher.command,
+    args: [...launcher.args, '--project-dir', input.projectDir, 'mcp', 'stdio'],
     ...(Object.keys(captured).length > 0 ? { env: captured } : {}),
   };
 }
@@ -336,11 +333,10 @@ async function installMcpClientConfig(input: {
 
   if (input.target === 'claude-desktop') {
     const config = claudeDesktopConfigPath();
-    const launcherPath = claudeDesktopLauncherPath(input.projectDir);
     await writeJsonKey(
       config.path,
       config.jsonPath,
-      claudeDesktopMcpEntry({ launcherPath, projectDir: input.projectDir }),
+      claudeDesktopMcpEntry({ projectDir: input.projectDir }),
     );
     entries.push({ kind: 'json-key', path: config.path, jsonPath: config.jsonPath });
     return { entries, snippets, notices };
@@ -406,10 +402,6 @@ function claudeDesktopAdminSkillBundlePath(projectDir: string): string {
   return join(resolve(projectDir), '.ktx/agents/claude/ktx.zip');
 }
 
-function claudeDesktopLauncherPath(projectDir: string): string {
-  return join(resolve(projectDir), '.ktx/agents/claude/ktx-plugin-runner.sh');
-}
-
 /** @internal */
 export function plannedKtxAgentFiles(input: {
   projectDir: string;
@@ -449,7 +441,6 @@ export function plannedKtxAgentFiles(input: {
     }
     if (input.target === 'claude-desktop') {
       return [
-        { kind: 'file', path: claudeDesktopLauncherPath(input.projectDir), role: 'launcher' as const },
         {
           kind: 'file',
           path: claudeDesktopAnalyticsSkillBundlePath(input.projectDir),
@@ -593,61 +584,6 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
   ].join('\n');
 }
 
-function claudeDesktopLauncherContent(input: { launcher: KtxCliLauncher }): string {
-  const binPath = input.launcher.args[0];
-  if (!binPath) {
-    throw new Error('Expected KTX CLI launcher to include a bin path.');
-  }
-  const candidates = [
-    input.launcher.command,
-    '/opt/homebrew/bin/node',
-    '/usr/local/bin/node',
-    '/usr/bin/node',
-  ];
-  return [
-    '#!/bin/sh',
-    'set -eu',
-    '',
-    `KTX_CLI_BIN=${shellScriptQuote(binPath)}`,
-    '',
-    'run_with_node() {',
-    '  node_bin=$1',
-    '  shift',
-    '  exec "$node_bin" "$KTX_CLI_BIN" "$@"',
-    '}',
-    '',
-    'if [ -n "${KTX_NODE:-}" ] && [ -x "${KTX_NODE:-}" ]; then',
-    '  run_with_node "$KTX_NODE" "$@"',
-    'fi',
-    '',
-    'if [ -x "$HOME/.volta/bin/node" ]; then',
-    '  run_with_node "$HOME/.volta/bin/node" "$@"',
-    'fi',
-    '',
-    ...candidates.map((candidate) =>
-      [
-        `if [ -x ${shellScriptQuote(candidate)} ]; then`,
-        `  run_with_node ${shellScriptQuote(candidate)} "$@"`,
-        'fi',
-      ].join('\n'),
-    ),
-    '',
-    'for candidate in "$HOME"/.nvm/versions/node/*/bin/node; do',
-    '  if [ -x "$candidate" ]; then',
-    '    run_with_node "$candidate" "$@"',
-    '  fi',
-    'done',
-    '',
-    'if command -v node >/dev/null 2>&1; then',
-    '  run_with_node "$(command -v node)" "$@"',
-    'fi',
-    '',
-    'echo "KTX Claude Desktop launcher could not find Node.js. Set KTX_NODE to a Node executable and rerun ktx setup --agents." >&2',
-    'exit 127',
-    '',
-  ].join('\n');
-}
-
 async function writeClaudeDesktopSkillBundle(input: {
   projectDir: string;
   path: string;
@@ -673,15 +609,6 @@ function claudeDesktopSkillNameForBundle(path: string): 'ktx-analytics' | 'ktx' 
     return 'ktx';
   }
   throw new Error(`Unsupported Claude Desktop skill bundle path: ${path}`);
-}
-
-async function writeClaudeDesktopLauncher(input: {
-  path: string;
-  launcher: KtxCliLauncher;
-}): Promise<void> {
-  await mkdir(dirname(input.path), { recursive: true });
-  await writeFile(input.path, claudeDesktopLauncherContent({ launcher: input.launcher }), 'utf-8');
-  await chmod(input.path, 0o755);
 }
 
 function ruleInstructionContent(input: { projectDir: string }): string {
@@ -941,10 +868,6 @@ export function formatInstallSummaryLines(
       lines.push(`${guidanceInstallLine(install.target)}.`);
     }
 
-    if (hasEntryRole(targetEntries, 'launcher')) {
-      lines.push('Starts KTX over stdio from Claude Desktop.');
-    }
-
     return {
       title: `${targetDisplayName(install.target)} · ${scopeDisplayName(install.scope)}`,
       lines,
@@ -1139,10 +1062,6 @@ async function installTarget(input: {
   const launcher = ktxCliLauncher();
   for (const entry of entries) {
     if (entry.kind !== 'file') continue;
-    if (entry.role === 'launcher') {
-      await writeClaudeDesktopLauncher({ path: entry.path, launcher });
-      continue;
-    }
     if (entry.role === 'claude-desktop-skill-bundle') {
       await writeClaudeDesktopSkillBundle({
         projectDir: input.projectDir,

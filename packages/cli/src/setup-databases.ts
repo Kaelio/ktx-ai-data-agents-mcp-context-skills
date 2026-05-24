@@ -260,8 +260,6 @@ function createPromptAdapter(): KtxSetupDatabasesPromptAdapter {
 
 function normalizeDriver(driver: string | undefined): KtxSetupDatabaseDriver | null {
   const normalized = String(driver ?? '').toLowerCase();
-  if (normalized === 'postgresql') return 'postgres';
-  if (normalized === 'sqlite3') return 'sqlite';
   return DRIVER_OPTIONS.some((option) => option.value === normalized) ? (normalized as KtxSetupDatabaseDriver) : null;
 }
 

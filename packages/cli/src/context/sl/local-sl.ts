@@ -266,23 +266,6 @@ export async function validateLocalSlSource(
   try {
     const parsed = parseYamlRecord(rawYaml);
     const schema = parsed.table || parsed.sql ? sourceDefinitionSchema : sourceOverlaySchema;
-    if (schema === sourceOverlaySchema && Array.isArray(parsed.columns)) {
-      const sourceName = options?.sourceName ?? (typeof parsed.name === 'string' ? parsed.name : 'source');
-      const path =
-        options?.connectionId && isSafeConnectionId(options.connectionId)
-          ? `semantic-layer/${options.connectionId}/${sourceName}.yaml`
-          : `${sourceName}.yaml`;
-      const legacyColumnPatchErrors = parsed.columns
-        .filter((column): column is Record<string, unknown> => isRecord(column))
-        .filter((column) => typeof column.name === 'string' && (!column.expr || !column.type))
-        .map(
-          (column) =>
-            `${path}: column '${column.name}' patches a manifest column but is in 'columns:' — move it to 'column_overrides:'`,
-        );
-      if (legacyColumnPatchErrors.length > 0) {
-        return { valid: false, errors: legacyColumnPatchErrors };
-      }
-    }
     const result = schema.parse(parsed);
     const errors: string[] = [];
 

@@ -1082,17 +1082,14 @@ export class SemanticLayerService {
   static mapDialect(connectionType: string): string {
     const normalized = connectionType.toUpperCase();
     const map: Record<string, string> = {
-      POSTGRESQL: 'postgres',
       POSTGRES: 'postgres',
       BIGQUERY: 'bigquery',
       SNOWFLAKE: 'snowflake',
       MYSQL: 'mysql',
       SQLSERVER: 'tsql',
-      MSSQL: 'tsql',
       SQLITE: 'sqlite',
       DUCKDB: 'duckdb',
       CLICKHOUSE: 'clickhouse',
-      REDSHIFT: 'redshift',
       DATABRICKS: 'databricks',
     };
     return map[normalized] ?? 'postgres';
@@ -1513,7 +1510,7 @@ export function composeOverlay(base: SemanticLayerSource, overlay: Record<string
   for (const column of computedColumns) {
     if (baseByLowerName.has(column.name.toLowerCase())) {
       throw new ColumnNameCollisionError(
-        `column '${column.name}' in columns patches a manifest column on '${base.name}' — move it to 'column_overrides:'`,
+        `column '${column.name}' in columns already exists on manifest source '${base.name}'`,
       );
     }
     columnsByLowerName.set(column.name.toLowerCase(), column);

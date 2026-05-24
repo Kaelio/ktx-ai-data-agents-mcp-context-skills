@@ -4,7 +4,6 @@ import { connectionConfigSchema } from './driver-schemas.js';
 describe('connectionConfigSchema (driver discriminated union)', () => {
   it.each([
     ['postgres', 'postgres://user:pass@host:5432/db'], // pragma: allowlist secret
-    ['postgresql', 'postgresql://user:pass@host:5432/db'], // pragma: allowlist secret
     ['mysql', 'mysql://user:pass@host:3306/db'], // pragma: allowlist secret
     ['snowflake', 'snowflake://account/db'],
     ['bigquery', 'bigquery://project/dataset'],
@@ -31,6 +30,10 @@ describe('connectionConfigSchema (driver discriminated union)', () => {
 
   it('rejects an unknown driver', () => {
     expect(() => connectionConfigSchema.parse({ driver: 'nope', url: 'x' })).toThrow();
+  });
+
+  it('rejects legacy warehouse driver aliases', () => {
+    expect(() => connectionConfigSchema.parse({ driver: 'postgresql', url: 'postgresql://host/db' })).toThrow();
   });
 });
 

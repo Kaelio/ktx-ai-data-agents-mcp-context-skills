@@ -4,7 +4,6 @@ import { getDialectForDriver } from './dialects.js';
 describe('getDialectForDriver', () => {
   it.each([
     ['postgres', '"public"."orders"'],
-    ['postgresql', '"public"."orders"'],
     ['mysql', '`public`.`orders`'],
     ['clickhouse', '`public`.`orders`'],
     ['sqlite', '"orders"'],
@@ -24,7 +23,12 @@ describe('getDialectForDriver', () => {
 
   it('throws with a supported-driver list for unknown drivers', () => {
     expect(() => getDialectForDriver('oracle')).toThrow(
-      'Unsupported warehouse driver "oracle". Supported drivers: bigquery, clickhouse, mysql, postgres, postgresql, sqlite, sqlite3, snowflake, sqlserver',
+      'Unsupported warehouse driver "oracle". Supported drivers: bigquery, clickhouse, mysql, postgres, sqlite, snowflake, sqlserver',
     );
+  });
+
+  it('rejects legacy driver aliases', () => {
+    expect(() => getDialectForDriver('postgresql')).toThrow('Unsupported warehouse driver "postgresql"');
+    expect(() => getDialectForDriver('sqlite3')).toThrow('Unsupported warehouse driver "sqlite3"');
   });
 });

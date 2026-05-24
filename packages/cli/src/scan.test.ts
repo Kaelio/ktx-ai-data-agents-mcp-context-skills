@@ -123,7 +123,7 @@ const createPostgresLiveDatabaseIntrospection = vi.hoisted(() =>
 );
 const isKtxPostgresConnectionConfig = vi.hoisted(() =>
   vi.fn((connection: { driver?: string } | undefined) =>
-    ['postgres', 'postgresql'].includes(String(connection?.driver ?? '').toLowerCase()),
+    String(connection?.driver ?? '').toLowerCase() === 'postgres',
   ),
 );
 const KtxPostgresScanConnector = vi.hoisted(

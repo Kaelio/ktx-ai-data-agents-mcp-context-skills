@@ -5,7 +5,7 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Literal
 
 import sqlglot
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from sqlglot import exp
 
 SqlAnalysisClause = Literal["select", "where", "join", "groupBy", "having", "orderBy"]
@@ -23,8 +23,6 @@ class AnalyzeSqlBatchRequest(BaseModel):
 
 
 class AnalyzeSqlBatchResult(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
     tables_touched: list[str] = Field(default_factory=list)
     columns_by_clause: dict[SqlAnalysisClause, list[str]] = Field(default_factory=dict)
     error: str | None = None

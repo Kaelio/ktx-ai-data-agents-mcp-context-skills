@@ -168,7 +168,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const historicSqlDialectByDriver = new Map<string, 'postgres' | 'bigquery' | 'snowflake'>([
   ['postgres', 'postgres'],
-  ['postgresql', 'postgres'],
   ['bigquery', 'bigquery'],
   ['snowflake', 'snowflake'],
 ]);

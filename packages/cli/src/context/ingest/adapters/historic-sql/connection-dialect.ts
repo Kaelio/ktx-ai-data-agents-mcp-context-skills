@@ -25,7 +25,7 @@ export function queryHistoryDialectForConnection(connection: unknown): HistoricS
   }
   const conn = recordOrNull(connection);
   const driver = String(conn?.driver ?? '').toLowerCase();
-  if (driver === 'postgres' || driver === 'postgresql') return 'postgres';
+  if (driver === 'postgres') return 'postgres';
   if (driver === 'bigquery') return 'bigquery';
   if (driver === 'snowflake') return 'snowflake';
   return null;

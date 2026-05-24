@@ -151,7 +151,7 @@ function optionalString(value: unknown): string | undefined {
 
 function normalizeDriver(driver: unknown): string {
   const normalized = String(driver ?? '').trim().toLowerCase();
-  return normalized === 'postgresql' ? 'postgres' : normalized;
+  return normalized;
 }
 
 function requirePostgresConnection(

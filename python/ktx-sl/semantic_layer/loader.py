@@ -195,13 +195,12 @@ class SourceLoader:
             columns_by_name[name] = SourceColumn(**merged)
         source.columns = list(columns_by_name.values())
 
-        # Append computed columns. Manifest column names cannot be reused here;
-        # use column_overrides for metadata patches.
+        # Append computed columns. Manifest column names cannot be reused here.
         for col in overlay.get("columns", []):
             name = col.get("name")
             if name in base_by_name:
                 raise ValueError(
-                    f"column '{name}' in columns patches a manifest column on '{base.name}' — move it to 'column_overrides:'"
+                    f"column '{name}' in columns already exists on manifest source '{base.name}'"
                 )
             source.columns.append(SourceColumn(**col))
 

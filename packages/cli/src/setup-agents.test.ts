@@ -82,7 +82,6 @@ describe('setup agents', () => {
       { kind: 'file', path: join(tempDir, '.claude/skills/ktx-analytics/SKILL.md'), role: 'analytics-skill' },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'claude-desktop', scope: 'global', mode: 'mcp' })).toEqual([
-      { kind: 'file', path: join(tempDir, '.ktx/agents/claude/ktx-plugin-runner.sh'), role: 'launcher' },
       {
         kind: 'file',
         path: join(tempDir, '.ktx/agents/claude/ktx-analytics.zip'),
@@ -127,7 +126,6 @@ describe('setup agents', () => {
       { kind: 'file', path: join(tempDir, '.agents/skills/ktx/SKILL.md') },
     ]);
     expect(plannedKtxAgentFiles({ projectDir: tempDir, target: 'claude-desktop', scope: 'global', mode: 'mcp-cli' })).toEqual([
-      { kind: 'file', path: join(tempDir, '.ktx/agents/claude/ktx-plugin-runner.sh'), role: 'launcher' },
       {
         kind: 'file',
         path: join(tempDir, '.ktx/agents/claude/ktx-analytics.zip'),
@@ -518,19 +516,15 @@ describe('setup agents', () => {
       const launcherPath = join(tempDir, '.ktx/agents/claude/ktx-plugin-runner.sh');
       await expect(stat(analyticsSkillPath)).resolves.toBeDefined();
       await expect(stat(adminSkillPath)).rejects.toThrow();
-      const launcherStat = await stat(launcherPath);
-      expect(launcherStat.mode & 0o111).not.toBe(0);
-      const launcher = await readFile(launcherPath, 'utf-8');
-      expect(launcher).toContain('KTX_CLI_BIN=');
-      expect(launcher).toContain('.nvm/versions/node');
+      await expect(stat(launcherPath)).rejects.toThrow();
 
       const configPath = join(home, 'Library/Application Support/Claude/claude_desktop_config.json');
       const config = JSON.parse(await readFile(configPath, 'utf-8')) as {
         mcpServers: { ktx: { command: string; args: string[]; env?: Record<string, string> } };
       };
       expect(config.mcpServers.ktx).toEqual({
-        command: launcherPath,
-        args: ['--project-dir', tempDir, 'mcp', 'stdio'],
+        command: process.execPath,
+        args: [expect.stringContaining('bin.js'), '--project-dir', tempDir, 'mcp', 'stdio'],
       });
 
       expect(await readZipText(analyticsSkillPath, 'ktx-analytics/SKILL.md')).toContain('KTX Analytics Workflow');
@@ -901,7 +895,7 @@ describe('setup agents', () => {
       const configPath = join(home, 'Library/Application Support/Claude/claude_desktop_config.json');
       await expect(stat(analyticsSkillPath)).resolves.toBeDefined();
       await expect(stat(adminSkillPath)).resolves.toBeDefined();
-      await expect(stat(launcherPath)).resolves.toBeDefined();
+      await expect(stat(launcherPath)).rejects.toThrow();
       const beforeConfig = JSON.parse(await readFile(configPath, 'utf-8')) as {
         mcpServers: Record<string, unknown>;
       };
@@ -911,7 +905,6 @@ describe('setup agents', () => {
 
       await expect(stat(analyticsSkillPath)).rejects.toThrow();
       await expect(stat(adminSkillPath)).rejects.toThrow();
-      await expect(stat(launcherPath)).rejects.toThrow();
       const afterConfig = JSON.parse(await readFile(configPath, 'utf-8')) as {
         mcpServers: Record<string, unknown>;
       };

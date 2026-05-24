@@ -7,7 +7,6 @@ import {
 
 const warehouseDrivers = [
   'postgres',
-  'postgresql',
   'mysql',
   'snowflake',
   'bigquery',
@@ -41,7 +40,6 @@ function warehouseConnectionSchema<const Driver extends WarehouseDriver>(driver:
 
 const warehouseConnectionSchemas = [
   warehouseConnectionSchema('postgres'),
-  warehouseConnectionSchema('postgresql'),
   warehouseConnectionSchema('mysql'),
   warehouseConnectionSchema('snowflake'),
   warehouseConnectionSchema('bigquery'),

@@ -3,7 +3,6 @@ import type { KtxTableRefKey } from './table-ref.js';
 export type KtxConnectionDriver =
   | 'sqlite'
   | 'postgres'
-  | 'postgresql'
   | 'sqlserver'
   | 'bigquery'
   | 'snowflake'

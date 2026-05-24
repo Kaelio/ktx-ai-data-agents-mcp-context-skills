@@ -125,7 +125,7 @@ export function isKtxSqliteConnectionConfig(
   connection: KtxSqliteConnectionConfig | undefined,
 ): connection is KtxSqliteConnectionConfig {
   const driver = String(connection?.driver ?? '').toLowerCase();
-  return driver === 'sqlite' || driver === 'sqlite3';
+  return driver === 'sqlite';
 }
 
 /** @internal */

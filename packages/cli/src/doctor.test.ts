@@ -597,7 +597,7 @@ describe('runKtxDoctor', () => {
     expect(testIo.stdout()).toContain('ktx setup');
   });
 
-  it('warns about stale and unsupported per-driver connection fields', async () => {
+  it('does not warn about removed-field migration hints', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
     process.env.WAREHOUSE_DATABASE_URL = 'postgresql://reader@example.test/warehouse';
     process.env.NOTION_TOKEN = 'notion-secret';
@@ -644,10 +644,9 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     const out = testIo.stdout();
-    expect(out).toContain('Warnings');
-    expect(out).toContain('connections.warehouse.readonly is no longer used.');
-    expect(out).toContain('connections.local.file_path was removed.');
-    expect(out).toContain('connections.docs.last_successful_cursor is local sync state.');
+    expect(out).not.toContain('connections.warehouse.readonly is no longer used.');
+    expect(out).not.toContain('connections.local.file_path was removed.');
+    expect(out).not.toContain('connections.docs.last_successful_cursor is local sync state.');
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.WAREHOUSE_DATABASE_URL;
     delete process.env.NOTION_TOKEN;

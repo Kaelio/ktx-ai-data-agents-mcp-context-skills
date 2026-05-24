@@ -92,10 +92,6 @@ type ClaudeCodeAuthProbe = (input: {
 
 const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
-function hasOwnField(value: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
 interface LocalStatsIngestPerConnection {
   connectionId: string;
   adapter: string;
@@ -332,7 +328,6 @@ function buildConnectionStatus(
 
   switch (driver) {
     case 'postgres':
-    case 'postgresql':
     case 'mysql':
     case 'clickhouse':
     case 'sqlserver': {
@@ -701,7 +696,7 @@ async function buildQueryHistoryStatus(
 }
 
 const ADAPTER_DRIVER_REQUIREMENT: Record<string, string[]> = {
-  'live-database': ['postgres', 'postgresql', 'mysql', 'snowflake', 'bigquery', 'clickhouse', 'sqlite', 'sqlserver'],
+  'live-database': ['postgres', 'mysql', 'snowflake', 'bigquery', 'clickhouse', 'sqlite', 'sqlserver'],
   dbt: ['dbt', 'dbt-core', 'dbt-cloud'],
   notion: ['notion'],
   metabase: ['metabase'],
@@ -739,30 +734,6 @@ function buildWarnings(
   embeddings: EmbeddingsStatus,
 ): WarningItem[] {
   const warnings: WarningItem[] = [];
-
-  for (const [connectionId, connection] of Object.entries(config.connections)) {
-    const driver = String(connection.driver ?? '').toLowerCase();
-    if (hasOwnField(connection, 'readonly')) {
-      warnings.push({
-        message: `connections.${connectionId}.readonly is no longer used.`,
-        fix: `Remove connections.${connectionId}.readonly from ktx.yaml.`,
-      });
-    }
-
-    if ((driver === 'sqlite' || driver === 'sqlite3') && hasOwnField(connection, 'file_path')) {
-      warnings.push({
-        message: `connections.${connectionId}.file_path was removed.`,
-        fix: `Rename connections.${connectionId}.file_path to path.`,
-      });
-    }
-
-    if (driver === 'notion' && hasOwnField(connection, 'last_successful_cursor')) {
-      warnings.push({
-        message: `connections.${connectionId}.last_successful_cursor is local sync state.`,
-        fix: 'Remove it from ktx.yaml. KTX stores the Notion cursor in .ktx/db.sqlite.',
-      });
-    }
-  }
 
   for (const adapter of config.ingest.adapters) {
     const requiredDrivers = ADAPTER_DRIVER_REQUIREMENT[adapter];

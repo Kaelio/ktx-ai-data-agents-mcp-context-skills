@@ -327,7 +327,7 @@ def introspect_database_response(
     now: NowProvider | None = None,
 ) -> DatabaseIntrospectionResponse:
     driver = _driver_name(request.driver)
-    if driver not in {"postgres", "postgresql"}:
+    if driver != "postgres":
         raise ValueError('database introspection supports only driver "postgres"')
 
     rows = (load_rows or _load_postgres_rows)(request)
