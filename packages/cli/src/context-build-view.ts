@@ -462,7 +462,7 @@ export function parseScanSummary(output: string): string | null {
 export function parseIngestSummary(output: string): string | null {
   const savedMemory = output.match(/Saved memory: (.+)/);
   if (savedMemory) return savedMemory[1];
-  const tasks = output.match(/(?:Tasks|Work units): (\d+)/);
+  const tasks = output.match(/Tasks: (\d+)/);
   if (tasks) return `${tasks[1]} tasks`;
   return null;
 }
@@ -694,7 +694,7 @@ function isLocalSqlAnalysisConnectionRefused(input: { capturedOutput?: string; f
 
 function friendlyDriverName(driver: string): string {
   const normalized = driver.toLowerCase();
-  if (normalized === 'postgres' || normalized === 'postgresql') return 'PostgreSQL';
+  if (normalized === 'postgres') return 'PostgreSQL';
   if (normalized === 'mysql') return 'MySQL';
   if (normalized === 'sqlserver') return 'SQL Server';
   if (normalized === 'bigquery') return 'BigQuery';

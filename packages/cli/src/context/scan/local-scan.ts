@@ -126,19 +126,17 @@ function normalizeDriver(driver: string | undefined): KtxConnectionDriver {
   const normalized = (driver ?? '').toLowerCase();
   if (
     normalized === 'postgres' ||
-    normalized === 'postgresql' ||
     normalized === 'sqlite' ||
-    normalized === 'sqlite3' ||
     normalized === 'mysql' ||
     normalized === 'clickhouse' ||
     normalized === 'sqlserver' ||
     normalized === 'bigquery' ||
     normalized === 'snowflake'
   ) {
-    return normalized === 'sqlite3' ? 'sqlite' : normalized;
+    return normalized;
   }
   throw new Error(
-    `Standalone ktx scan supports postgres/postgresql/sqlite/mysql/clickhouse/sqlserver/bigquery/snowflake in this phase, received "${driver ?? 'unknown'}"`,
+    `Standalone ktx scan supports postgres/sqlite/mysql/clickhouse/sqlserver/bigquery/snowflake in this phase, received "${driver ?? 'unknown'}"`,
   );
 }
 
@@ -469,6 +467,9 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
       extractedAtFallback: report.createdAt,
     });
     enrichmentSnapshot = rawSnapshot;
+    if (rawSnapshot.warnings?.length) {
+      report.warnings.push(...rawSnapshot.warnings);
+    }
     const manifestArtifacts = await writeLocalScanManifestShards({
       project: options.project,
       connectionId: options.connectionId,

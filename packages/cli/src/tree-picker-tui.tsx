@@ -32,7 +32,7 @@ const NO_COLOR_THEME = {
 type TreePickerTheme = Record<keyof typeof COLOR_THEME, string>;
 
 const DEFAULT_TREE_PICKER_HELP_TEXT =
-  'Right Arrow to expand, Up/Down to move, Space to select or unselect, Slash to filter, Enter to confirm, Escape to go back, or Ctrl+C to exit.';
+  'Up/Down to move, Right/Left to expand or collapse, Tab to select, Type to search, Enter to confirm, Escape to clear search or go back, Ctrl+C to exit.';
 
 const DEFAULT_SKIP_EMPTY_MESSAGE =
   'Nothing selected. Skip this step? Press Enter to skip or Escape to go back.';
@@ -50,6 +50,8 @@ interface InkKey {
   return?: boolean;
   escape?: boolean;
   ctrl?: boolean;
+  tab?: boolean;
+  shift?: boolean;
   backspace?: boolean;
   delete?: boolean;
 }
@@ -147,35 +149,27 @@ function truncateText(value: string, width: number): string {
 export function treePickerCommandForInkInput(
   input: string,
   key: InkKey,
-  search: PickerState['search'],
-  pendingConfirm: PickerState['pendingConfirm'],
+  state: Pick<PickerState, 'search' | 'isNavigating' | 'pendingConfirm'>,
 ): PickerCommand | null {
-  if (pendingConfirm) {
+  if (state.pendingConfirm) {
     if (input === 'y' || key.return) return 'save-confirm';
     if (input === 'n' || key.escape) return 'save-cancel';
     if (key.ctrl === true && input === 'c') return 'quit';
     return null;
   }
-  if (search.editing) {
-    if (key.escape) return 'search-cancel';
-    if (key.return) return 'search-submit';
-    if (key.backspace || key.delete) return 'search-backspace';
-    if (key.downArrow) return 'cursor-down';
-    if (key.upArrow) return 'cursor-up';
-    if (input.length === 1 && input >= ' ' && input !== '') return { type: 'search-input', value: input };
-    return null;
-  }
   if (key.ctrl === true && input === 'c') return 'quit';
+  if (key.ctrl === true && input === 'a') return 'toggle-select-all-visible';
+  if (key.ctrl === true && input === 'n') return 'select-none';
+  if (key.return) return 'save-request';
   if (key.upArrow) return 'cursor-up';
   if (key.downArrow) return 'cursor-down';
   if (key.leftArrow) return 'cursor-left';
   if (key.rightArrow) return 'cursor-right';
-  if (key.return) return 'save-request';
-  if (input === ' ') return 'toggle-check';
-  if (input === '/') return 'search-start';
-  if (input === 'a') return 'toggle-select-all-visible';
-  if (input === 'n') return 'select-none';
-  if (key.escape) return 'quit';
+  if (key.tab) return 'toggle-check';
+  if (input === ' ' && state.isNavigating) return 'toggle-check';
+  if (key.backspace || key.delete) return 'search-backspace';
+  if (key.escape) return state.search.query.length > 0 ? 'search-clear' : 'quit';
+  if (input.length === 1 && input >= ' ' && input !== '') return { type: 'search-input', value: input };
   return null;
 }
 
@@ -220,14 +214,13 @@ export function TreePickerApp(props: TreePickerAppProps): ReactNode {
   const theme = useMemo(() => resolveTheme(props.env), [props.env]);
   const visibleIds = visibleNodeIds(state);
   const selectedIndex = Math.max(0, visibleIds.indexOf(state.cursorId));
-  const reservedRows = state.pendingConfirm === 'save-confirm' ? 10 : 9;
+  const reservedRows = state.pendingConfirm === 'save-confirm' ? 11 : 10;
   const visibleRows = Math.max(5, Math.min(12, (props.terminalRows ?? 24) - reservedRows));
   const rows = windowItems(visibleIds, selectedIndex, visibleRows);
   const hiddenAbove = rows.offset;
   const hiddenBelow = Math.max(0, visibleIds.length - rows.offset - rows.items.length);
   const searchMatchCount = filterTree(state).visibleIds.size;
   const width = resolveTreePickerWidth(props.terminalWidth);
-  const showSearch = state.search.editing || state.search.query.trim().length > 0;
   const helpText = props.chrome.helpText ?? DEFAULT_TREE_PICKER_HELP_TEXT;
   const skipEmptyMessage = props.chrome.skipEmptyMessage ?? DEFAULT_SKIP_EMPTY_MESSAGE;
 
@@ -258,7 +251,7 @@ export function TreePickerApp(props: TreePickerAppProps): ReactNode {
   }, [state.transientHint?.expiresAt]);
 
   useInput((input, key) => {
-    const command = treePickerCommandForInkInput(input, key, stateRef.current.search, stateRef.current.pendingConfirm);
+    const command = treePickerCommandForInkInput(input, key, stateRef.current);
     if (!command) {
       return;
     }
@@ -308,16 +301,18 @@ export function TreePickerApp(props: TreePickerAppProps): ReactNode {
             {warning}
           </Text>
         ))}
-        {showSearch ? (
-          <Text>
-            <Text color={theme.muted}>/ </Text>
+        <Text>
+          <Text color={theme.muted}>Search: </Text>
+          {state.isNavigating ? (
+            <Text color={theme.muted}>{state.search.query || '(type to filter)'}</Text>
+          ) : (
             <Text>
               {state.search.query}
-              {state.search.editing ? '█' : ''}
+              <Text inverse> </Text>
             </Text>
-            <Text color={theme.muted}>  ({searchMatchCount} matches)</Text>
-          </Text>
-        ) : null}
+          )}
+          <Text color={theme.muted}>  ({searchMatchCount} match{searchMatchCount === 1 ? '' : 'es'})</Text>
+        </Text>
         <Text> </Text>
         {hiddenAbove > 0 ? <Text color={theme.muted}>↑ {hiddenAbove} more</Text> : null}
         {rows.items.map((nodeId) => (

@@ -39,36 +39,6 @@ describe('CLI local ingest adapters', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('registers Postgres historic SQL from the requested connection', async () => {
-    await writeProject(
-      tempDir,
-      [
-        'connections:',
-        '  warehouse:',
-        '    driver: postgres',
-        '    url: env:WAREHOUSE_DATABASE_URL',
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: postgres',
-        'ingest:',
-        '  adapters:',
-        '    - historic-sql',
-        '',
-      ].join('\n'),
-    );
-    const project = await loadKtxProject({ projectDir: tempDir });
-
-    const adapters = createKtxCliLocalIngestAdapters(project, {
-      historicSqlConnectionId: 'warehouse',
-      sqlAnalysis: sqlAnalysisStub(),
-    });
-
-    expect(adapters.find((adapter) => adapter.source === 'historic-sql')?.skillNames).toEqual([
-      'historic_sql_table_digest',
-      'historic_sql_patterns',
-    ]);
-  });
-
   it('registers Postgres historic SQL from connection context query history', async () => {
     await writeProject(
       tempDir,
@@ -110,9 +80,9 @@ describe('CLI local ingest adapters', () => {
         '    dataset_id: analytics',
         '    location: us',
         '    credentials_json: \'{"project_id":"demo-project"}\'',
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: bigquery',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
         'ingest:',
         '  adapters:',
         '    - historic-sql',
@@ -145,9 +115,9 @@ describe('CLI local ingest adapters', () => {
         '    schema_name: PUBLIC',
         '    username: reader',
         '    password: env:SNOWFLAKE_PASSWORD',
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: snowflake',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
         'ingest:',
         '  adapters:',
         '    - historic-sql',
@@ -179,9 +149,9 @@ describe('CLI local ingest adapters', () => {
         '    dataset_id: analytics',
         '    location: us',
         `    credentials_json: 'file:${credentialsPath}'`,
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: bigquery',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
         'ingest:',
         '  adapters:',
         '    - historic-sql',

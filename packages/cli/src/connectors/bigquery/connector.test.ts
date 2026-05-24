@@ -3,7 +3,7 @@ import { bigQueryConnectionConfigFromConfig, isKtxBigQueryConnectionConfig, type
 import { createBigQueryLiveDatabaseIntrospection } from '../../connectors/bigquery/live-database-introspection.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
-function fakeClientFactory(): KtxBigQueryClientFactory {
+function fakeClientFactory(options: { primaryKeyError?: Error } = {}): KtxBigQueryClientFactory {
   const queryResults = vi.fn(async (): ReturnType<KtxBigQueryQueryJob['getQueryResults']> => [
     [{ id: 1, status: 'paid' }],
     undefined,
@@ -11,6 +11,9 @@ function fakeClientFactory(): KtxBigQueryClientFactory {
   ]);
   const createQueryJob = vi.fn(async (input: { query: string }): ReturnType<KtxBigQueryClient['createQueryJob']> => {
     if (input.query.includes('INFORMATION_SCHEMA.TABLE_CONSTRAINTS')) {
+      if (options.primaryKeyError) {
+        throw options.primaryKeyError;
+      }
       return [
         {
           getQueryResults: async (): ReturnType<KtxBigQueryQueryJob['getQueryResults']> => [
@@ -168,6 +171,34 @@ describe('KtxBigQueryScanConnector', () => {
         comment: null,
       },
     ]);
+  });
+
+  it.each([
+    Object.assign(new Error('Access Denied'), { code: 403 }),
+    Object.assign(new Error('Not found'), { errors: [{ reason: 'notFound' }] }),
+  ])('soft-fails denied BigQuery primary-key discovery with a scan warning', async (primaryKeyError) => {
+    const connector = new KtxBigQueryScanConnector({
+      connectionId: 'warehouse',
+      connection,
+      clientFactory: fakeClientFactory({ primaryKeyError }),
+      now: () => new Date('2026-04-29T17:00:00.000Z'),
+    });
+
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'bigquery' },
+      { runId: 'scan-run-bigquery-denied-pk' },
+    );
+
+    expect(snapshot.warnings).toEqual([
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped primary-key discovery in analytics (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'analytics', kind: 'primary_key' },
+      },
+    ]);
+    expect(snapshot.tables[0]?.foreignKeys).toEqual([]);
+    expect(snapshot.tables[0]?.columns.every((column) => column.primaryKey === false)).toBe(true);
   });
 
   it('runs samples, read-only SQL, distinct values, dataset listing, row counts, and cleanup', async () => {

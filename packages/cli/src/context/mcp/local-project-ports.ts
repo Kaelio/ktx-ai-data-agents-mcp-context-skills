@@ -24,17 +24,14 @@ interface CreateLocalProjectMcpContextPortsOptions {
 function dialectForDriver(driver: string | undefined): string {
   const normalized = (driver ?? 'postgres').toUpperCase();
   const map: Record<string, string> = {
-    POSTGRESQL: 'postgres',
     POSTGRES: 'postgres',
     BIGQUERY: 'bigquery',
     SNOWFLAKE: 'snowflake',
     MYSQL: 'mysql',
     SQLSERVER: 'tsql',
-    MSSQL: 'tsql',
     SQLITE: 'sqlite',
     DUCKDB: 'duckdb',
     CLICKHOUSE: 'clickhouse',
-    REDSHIFT: 'redshift',
     DATABRICKS: 'databricks',
   };
   return map[normalized] ?? 'postgres';

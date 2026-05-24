@@ -184,6 +184,35 @@ describe('buildPublicIngestPlan', () => {
     ).toEqual(['--deep affects database ingest only; ignoring it for docs.']);
   });
 
+  it('does not infer deep ingest from legacy scanMode values', () => {
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+
+    const plan = buildPublicIngestPlan(project, {
+      projectDir: '/tmp/project',
+      targetConnectionId: 'warehouse',
+      all: false,
+      scanMode: 'enriched',
+    });
+
+    expect(plan.targets[0]).toMatchObject({
+      connectionId: 'warehouse',
+      databaseDepth: 'fast',
+      steps: ['database-schema'],
+    });
+  });
+
+  it('rejects stale local Looker source driver aliases', () => {
+    const project = projectWithConnections({
+      local_looker: { driver: 'local_looker' } as never,
+    });
+
+    expect(() => buildPublicIngestPlan(project, { projectDir: '/tmp/project', all: true })).toThrow(
+      'unsupported public ingest driver "local_looker"',
+    );
+  });
+
   it('upgrades effective depth when query history is explicitly enabled', () => {
     const project = projectWithConnections({
       warehouse: { driver: 'postgres', context: { queryHistory: { enabled: false } } },
@@ -1054,7 +1083,7 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain('warehouse requires deep ingest readiness');
   });
 
-  it('can request enriched relationship scans for setup-managed context builds', async () => {
+  it('does not infer enriched relationship scans from legacy scanMode values', async () => {
     const io = makeIo();
     const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
     const runScan = vi.fn(async () => 0);
@@ -1083,8 +1112,8 @@ describe('runKtxPublicIngest', () => {
         command: 'run',
         projectDir: '/tmp/project',
         connectionId: 'warehouse',
-        mode: 'enriched',
-        detectRelationships: true,
+        mode: 'structural',
+        detectRelationships: false,
         dryRun: false,
       },
       expect.objectContaining({ capturedOutput: expect.any(Function) }),

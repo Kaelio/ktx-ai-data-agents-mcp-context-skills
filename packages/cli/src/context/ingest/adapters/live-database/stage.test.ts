@@ -6,6 +6,7 @@ import {
   detectLiveDatabaseStagedDir,
   LIVE_DATABASE_FOREIGN_KEYS_FILE,
   LIVE_DATABASE_META_FILE,
+  LIVE_DATABASE_WARNINGS_FILE,
   liveDatabaseTablePath,
   readLiveDatabaseTableFiles,
   writeLiveDatabaseSnapshot,
@@ -143,6 +144,31 @@ describe('live-database staged snapshot files', () => {
     expect(connectionJson).toContain('"private_key": "<redacted>"');
     expect(connectionJson).not.toContain('postgres://reader:secret@example.test/db'); // pragma: allowlist secret
     expect(connectionJson).not.toContain('pem-value');
+  });
+
+  it('writes redacted scan warnings next to live database metadata', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ktx-live-db-warning-stage-'));
+    await writeLiveDatabaseSnapshot(dir, {
+      ...snapshot(),
+      warnings: [
+        {
+          code: 'constraint_discovery_unauthorized',
+          message: 'Skipped primary-key discovery in public (insufficient grants on system catalogs)',
+          recoverable: true,
+          metadata: {
+            schema: 'public',
+            kind: 'primary_key',
+            url: 'postgres://reader:secret@example.test/db', // pragma: allowlist secret
+          },
+        },
+      ],
+    });
+
+    const warningsJson = await readFile(join(dir, LIVE_DATABASE_WARNINGS_FILE), 'utf8');
+    expect(warningsJson).toContain('"constraint_discovery_unauthorized"');
+    expect(warningsJson).toContain('"schema": "public"');
+    expect(warningsJson).toContain('"url": "<redacted>"');
+    expect(warningsJson).not.toContain('postgres://reader:secret@example.test/db'); // pragma: allowlist secret
   });
 
   it('returns false for a directory that is missing live database metadata', async () => {

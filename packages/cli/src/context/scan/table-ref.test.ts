@@ -47,9 +47,9 @@ describe('scopedTableNames', () => {
     expect(scopedTableNames(scope, { catalog: 'ANALYTICS', db: 'STAGING' })).toEqual(['LISTINGS']);
   });
 
-  it('treats null in the scope entry as a wildcard for that segment', () => {
+  it('requires non-null scope segments to match the namespace', () => {
     const scope = tableRefSet([{ catalog: null, db: 'public', name: 'users' }]);
-    expect(scopedTableNames(scope, { catalog: 'any-catalog', db: 'public' })).toEqual(['users']);
+    expect(scopedTableNames(scope, { catalog: 'any-catalog', db: 'public' })).toEqual([]);
   });
 
   it('returns empty when no scope entry matches the namespace', () => {
@@ -57,7 +57,7 @@ describe('scopedTableNames', () => {
     expect(scopedTableNames(scope, { catalog: 'X', db: 'Y' })).toEqual([]);
   });
 
-  it('dedupes when the same name appears under different catalog projections', () => {
+  it('dedupes exact namespace matches only', () => {
     const scope: ReadonlySet<KtxTableRefKey> = tableRefSet([
       { catalog: null, db: 'public', name: 'users' },
       { catalog: 'A', db: 'public', name: 'users' },

@@ -17,14 +17,14 @@ export async function createKtxCliScanConnector(
       `Connection "${connectionId}" has no \`driver\` field in ktx.yaml. Supported drivers: ${SUPPORTED_DRIVERS}.`,
     );
   }
-  if (driver === 'sqlite' || driver === 'sqlite3') {
+  if (driver === 'sqlite') {
     const { KtxSqliteScanConnector, isKtxSqliteConnectionConfig } = await import('./connectors/sqlite/connector.js');;
     if (!isKtxSqliteConnectionConfig(connection)) {
       throw invalidConnectionConfigError(connectionId, driver);
     }
     return new KtxSqliteScanConnector({ connectionId, connection, projectDir: project.projectDir });
   }
-  if (driver === 'postgres' || driver === 'postgresql') {
+  if (driver === 'postgres') {
     const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('./connectors/postgres/connector.js');;
     if (!isKtxPostgresConnectionConfig(connection)) {
       throw invalidConnectionConfigError(connectionId, driver);

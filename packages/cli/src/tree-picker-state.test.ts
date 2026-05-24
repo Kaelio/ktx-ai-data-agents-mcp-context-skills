@@ -191,7 +191,7 @@ describe('search and cursor movement', () => {
     });
     const searching = {
       ...state,
-      search: { editing: false, query: 'architecture' },
+      search: { query: 'architecture' },
     };
 
     expect(filterTree(searching)).toEqual({
@@ -229,7 +229,7 @@ describe('bulk actions and reducer effects', () => {
     });
     const searching = {
       ...state,
-      search: { editing: false, query: 'architecture' },
+      search: { query: 'architecture' },
     };
 
     const selected = selectAllVisible(searching);
@@ -306,12 +306,11 @@ describe('bulk actions and reducer effects', () => {
       next: { ...state, pendingConfirm: null },
       effect: null,
     });
+    expect(reducer(state, { type: 'search-input', value: 'a' }).next.search).toEqual({ query: 'a' });
+    expect(reducer({ ...state, isNavigating: true }, { type: 'search-input', value: 'b' }).next.isNavigating).toBe(false);
     expect(
-      reducer(
-        reducer(reducer(state, 'search-start').next, { type: 'search-input', value: 'a' }).next,
-        'search-submit',
-      ).next.search,
-    ).toEqual({ editing: false, query: 'a' });
+      reducer({ ...state, search: { query: 'foo' }, isNavigating: true }, 'search-clear').next,
+    ).toEqual({ ...state, search: { query: '' }, isNavigating: false });
     expect(reducer(state, 'quit')).toEqual({
       next: state,
       effect: 'quit-without-save',
@@ -334,6 +333,34 @@ describe('bulk actions and reducer effects', () => {
       next: { ...state, pendingConfirm: null },
       effect: 'save',
     });
+  });
+
+  it('navigates cursor commands set isNavigating, typed input clears it, and search refocuses cursor', () => {
+    const state = buildInitialState({
+      tree: buildPickerTree(pages()),
+      existingSelectedIds: [],
+    });
+
+    expect(state.isNavigating).toBe(false);
+    const afterDown = reducer(state, 'cursor-down').next;
+    expect(afterDown.isNavigating).toBe(true);
+
+    const afterType = reducer(afterDown, { type: 'search-input', value: 'a' }).next;
+    expect(afterType.isNavigating).toBe(false);
+    expect(afterType.search.query).toBe('a');
+
+    const afterBackspace = reducer({ ...afterDown, search: { query: 'foo' } }, 'search-backspace').next;
+    expect(afterBackspace.search.query).toBe('fo');
+    expect(afterBackspace.isNavigating).toBe(false);
+
+    const withCursorOnHidden = {
+      ...state,
+      cursorId: IDS.journal,
+      search: { query: 'arch' },
+    };
+    const refocused = reducer(withCursorOnHidden, { type: 'search-input', value: 'i' }).next;
+    expect(refocused.search.query).toBe('archi');
+    expect(visibleNodeIds(refocused)).toContain(refocused.cursorId);
   });
 
   it('clears transient hints only when their expiry time has passed', () => {

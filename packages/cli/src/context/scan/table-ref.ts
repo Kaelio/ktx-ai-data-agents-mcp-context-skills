@@ -33,8 +33,7 @@ export function tableRefSet(refs: readonly KtxTableRef[]): ReadonlySet<KtxTableR
 
 /**
  * Return the bare table names from a scope that fall within the given
- * (catalog, db) namespace. `catalog: null` is treated as a wildcard so that
- * legacy 2-part `"db.name"` entries continue to match. Same for `db: null`.
+ * (catalog, db) namespace.
  */
 export function scopedTableNames(
   scope: ReadonlySet<KtxTableRefKey>,
@@ -45,8 +44,8 @@ export function scopedTableNames(
   const wantDb = namespace.db ?? null;
   for (const key of scope) {
     const ref = tableRefFromKey(key);
-    if (wantCatalog !== null && ref.catalog !== null && ref.catalog !== wantCatalog) continue;
-    if (wantDb !== null && ref.db !== null && ref.db !== wantDb) continue;
+    if (ref.catalog !== wantCatalog) continue;
+    if (ref.db !== wantDb) continue;
     names.add(ref.name);
   }
   return [...names];

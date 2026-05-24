@@ -187,14 +187,15 @@ describe('local ingest adapters', () => {
       warehouse: {
         driver: 'postgres',
         url: 'env:WAREHOUSE_DATABASE_URL',
-        historicSql: {
-          enabled: true,
-          dialect: 'postgres',
-          minExecutions: 7,
-          maxTemplatesPerRun: 123,
-          filters: {
-            serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
-            dropTrivialProbes: true,
+        context: {
+          queryHistory: {
+            enabled: true,
+            minExecutions: 7,
+            maxTemplatesPerRun: 123,
+            filters: {
+              serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
+              dropTrivialProbes: true,
+            },
           },
         },
       },
@@ -233,22 +234,6 @@ describe('local ingest adapters', () => {
       dialect: 'postgres',
       minExecutions: 7,
       filters: { dropTrivialProbes: true },
-    });
-  });
-
-  it('prefers context.queryHistory over legacy historicSql', async () => {
-    const project = projectWithConnections({
-      warehouse: {
-        driver: 'postgres',
-        historicSql: { enabled: true, dialect: 'postgres', windowDays: 90 },
-        context: { queryHistory: { enabled: true, windowDays: 30 } },
-      },
-    });
-    const adapter = { source: 'historic-sql' } as never;
-
-    await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
-      dialect: 'postgres',
-      minExecutions: 5,
     });
   });
 

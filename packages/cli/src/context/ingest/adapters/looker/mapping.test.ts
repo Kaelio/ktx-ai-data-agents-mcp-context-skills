@@ -72,7 +72,8 @@ describe('looker dialect and target validation helpers', () => {
   it('maps Looker dialect names to KTX connection types', () => {
     expect(lookerDialectToConnectionType('bigquery_standard_sql')).toBe('BIGQUERY');
     expect(lookerDialectToConnectionType('postgres')).toBe('POSTGRESQL');
-    expect(lookerDialectToConnectionType('mssql')).toBe('SQLSERVER');
+    expect(lookerDialectToConnectionType('mssql')).toBeNull();
+    expect(lookerDialectToConnectionType('tsql')).toBeNull();
     expect(lookerDialectToConnectionType('unknown')).toBeNull();
   });
 

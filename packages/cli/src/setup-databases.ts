@@ -3,7 +3,13 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { queryHistoryDialectForConnection } from './context/ingest/adapters/historic-sql/connection-dialect.js';
 import type { HistoricSqlDialect } from './context/ingest/adapters/historic-sql/types.js';
+import {
+  runHistoricSqlReadinessProbe,
+  type HistoricSqlProbeOutcome,
+  type HistoricSqlReadinessProbe,
+} from './context/ingest/historic-sql-probes.js';
 import { type KtxProjectConnectionConfig, serializeKtxProjectConfig } from './context/project/config.js';
 import { loadKtxProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete, setKtxSetupDatabaseConnectionIds } from './context/project/setup-config.js';
@@ -56,7 +62,12 @@ export interface KtxSetupDatabasesArgs {
 }
 
 export type KtxSetupDatabasesResult =
-  | { status: 'ready'; projectDir: string; connectionIds: string[] }
+  | {
+      status: 'ready';
+      projectDir: string;
+      connectionIds: string[];
+      skipSources?: boolean;
+    }
   | { status: 'skipped'; projectDir: string }
   | { status: 'back'; projectDir: string }
   | { status: 'missing-input'; projectDir: string }
@@ -84,18 +95,10 @@ export interface KtxSetupDatabasesPromptAdapter {
   cancel(message: string): void;
 }
 
-interface KtxSetupHistoricSqlProbeInput {
-  projectDir: string;
-  connectionId: string;
-  dialect: HistoricSqlDialect;
-}
-
 interface KtxSetupHistoricSqlProbeResult {
   ok: boolean;
   lines: string[];
 }
-
-type KtxSetupHistoricSqlProbe = (input: KtxSetupHistoricSqlProbeInput) => Promise<KtxSetupHistoricSqlProbeResult>;
 
 export interface KtxSetupDatabasesDeps {
   prompts?: KtxSetupDatabasesPromptAdapter;
@@ -105,7 +108,7 @@ export interface KtxSetupDatabasesDeps {
   listSchemas?: (projectDir: string, connectionId: string) => Promise<string[]>;
   listTables?: (projectDir: string, connectionId: string, schemas?: string[]) => Promise<KtxTableListEntry[]>;
   pickDatabaseScope?: (args: PickDatabaseScopeArgs, io: KtxCliIo) => Promise<DatabaseScopePickResult>;
-  historicSqlProbe?: KtxSetupHistoricSqlProbe;
+  historicSqlReadinessProbe?: HistoricSqlReadinessProbe;
 }
 
 const DRIVER_OPTIONS: Array<{ value: KtxSetupDatabaseDriver; label: string }> = [
@@ -334,121 +337,24 @@ function migrateLegacyHistoricSqlConnection(connection: KtxProjectConnectionConf
   return withQueryHistoryConfig(connection, queryHistory);
 }
 
-function historicSqlProbeFailureLines(error: unknown): string[] {
-  if (error instanceof Error && error.name === 'HistoricSqlExtensionMissingError') {
-    return [
-      '  FAIL pg_stat_statements extension is not installed in the connection database',
-      '  Fix: Run (against this database): CREATE EXTENSION pg_stat_statements;',
-      "  Fix: Ensure shared_preload_libraries includes 'pg_stat_statements'.",
-    ];
+function setupHistoricSqlProbeResult(
+  outcome: HistoricSqlProbeOutcome | null,
+): KtxSetupHistoricSqlProbeResult {
+  if (!outcome) {
+    return { ok: true, lines: [] };
   }
-  if (error instanceof Error && error.name === 'HistoricSqlGrantsMissingError') {
-    const dialect = (error as { dialect?: unknown }).dialect;
-    if (dialect === 'snowflake') {
-      return [
-        '  FAIL Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
-        '  Fix: Run (as ACCOUNTADMIN): GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE <connection role>;',
-      ];
-    }
-    return [
-      '  FAIL Postgres connection role lacks pg_read_all_stats',
-      '  Fix: Run: GRANT pg_read_all_stats TO <connection role>;',
-    ];
-  }
-  if (error instanceof Error && error.name === 'HistoricSqlVersionUnsupportedError') {
-    return [`  FAIL ${error.message}`];
-  }
-  return [`  FAIL Query history probe failed: ${error instanceof Error ? error.message : String(error)}`];
-}
-
-async function defaultHistoricSqlProbe(input: KtxSetupHistoricSqlProbeInput): Promise<KtxSetupHistoricSqlProbeResult> {
-  if (input.dialect === 'postgres') {
-    return probePostgresHistoricSql(input);
-  }
-  if (input.dialect === 'snowflake') {
-    return probeSnowflakeHistoricSql(input);
-  }
-  return { ok: true, lines: [] };
-}
-
-async function probePostgresHistoricSql(
-  input: KtxSetupHistoricSqlProbeInput,
-): Promise<KtxSetupHistoricSqlProbeResult> {
-  const project = await loadKtxProject({ projectDir: input.projectDir });
-  const connection = project.config.connections[input.connectionId];
-  const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient }, { isKtxPostgresConnectionConfig }] =
-    await Promise.all([
-      import('./context/ingest/adapters/historic-sql/postgres-pgss-reader.js'),
-      import('./connectors/postgres/historic-sql-query-client.js'),
-      import('./connectors/postgres/connector.js'),
-    ]);
-
-  const postgresConnection = connection as Parameters<typeof isKtxPostgresConnectionConfig>[0];
-  if (!isKtxPostgresConnectionConfig(postgresConnection)) {
-    return {
-      ok: false,
-      lines: [`  FAIL Connection ${input.connectionId} is not a native Postgres connection.`],
-    };
-  }
-
-  const client = new KtxPostgresHistoricSqlQueryClient({
-    connectionId: input.connectionId,
-    connection: postgresConnection,
-  });
-  try {
-    const result = await new PostgresPgssReader().probe(client);
+  if (outcome.ok) {
+    const { detail, warnings } = outcome.runner.formatSuccessDetail(outcome.result);
     return {
       ok: true,
-      lines: [
-        `  OK pg_stat_statements ready (${result.pgServerVersion})`,
-        ...result.warnings.map((warning: string) => `  ! ${warning}`),
-      ],
-    };
-  } catch (error) {
-    return { ok: false, lines: historicSqlProbeFailureLines(error) };
-  } finally {
-    await client.cleanup();
-  }
-}
-
-async function probeSnowflakeHistoricSql(
-  input: KtxSetupHistoricSqlProbeInput,
-): Promise<KtxSetupHistoricSqlProbeResult> {
-  const project = await loadKtxProject({ projectDir: input.projectDir });
-  const connection = project.config.connections[input.connectionId];
-  const [{ SnowflakeHistoricSqlQueryHistoryReader }, { KtxSnowflakeHistoricSqlQueryClient }, { isKtxSnowflakeConnectionConfig }] =
-    await Promise.all([
-      import('./context/ingest/adapters/historic-sql/snowflake-query-history-reader.js'),
-      import('./connectors/snowflake/historic-sql-query-client.js'),
-      import('./connectors/snowflake/connector.js'),
-    ]);
-
-  if (!isKtxSnowflakeConnectionConfig(connection)) {
-    return {
-      ok: false,
-      lines: [`  FAIL Connection ${input.connectionId} is not a native Snowflake connection.`],
+      lines: [`  OK ${detail}`, ...warnings.map((warning) => `  ! ${warning}`)],
     };
   }
-
-  const client = new KtxSnowflakeHistoricSqlQueryClient({
-    connectionId: input.connectionId,
-    connection,
-    projectDir: input.projectDir,
-  });
-  try {
-    const result = await new SnowflakeHistoricSqlQueryHistoryReader().probe(client);
-    return {
-      ok: true,
-      lines: [
-        '  OK SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY accessible',
-        ...result.warnings.map((warning: string) => `  ! ${warning}`),
-      ],
-    };
-  } catch (error) {
-    return { ok: false, lines: historicSqlProbeFailureLines(error) };
-  } finally {
-    await client.cleanup();
-  }
+  const advice = outcome.runner.fixAdvice(outcome.error);
+  return {
+    ok: false,
+    lines: [`  FAIL ${advice.failHeadline}`, `  Fix: ${advice.remediation}`],
+  };
 }
 
 async function defaultListSchemas(projectDir: string, connectionId: string): Promise<string[]> {
@@ -659,6 +565,7 @@ function configuredPrimarySourcesPrompt(connectionIds: string[]): {
     message: `Databases configured: ${connectionIds.join(', ')}\nWhat would you like to do?`,
     options: [
       { value: 'continue', label: 'Continue to context sources' },
+      { value: 'skip-sources', label: 'Skip context sources' },
       { value: 'edit', label: 'Edit an existing database' },
       { value: 'add', label: 'Add another database' },
     ],
@@ -1133,8 +1040,7 @@ async function maybeApplyHistoricSqlConfig(input: {
     }
   }
 
-  const existingRecord = queryHistoryConfigRecord(input.connection) ?? historicSqlConfigRecord(input.connection) ?? {};
-  const { dialect: _dialect, ...existing } = existingRecord;
+  const { dialect: _dialect, ...existing } = queryHistoryConfigRecord(input.connection) ?? {};
 
   if (!enabled) {
     return withQueryHistoryConfig(input.connection, { ...existing, enabled: false });
@@ -1386,18 +1292,11 @@ async function writeConnectionConfig(input: {
   io?: KtxCliIo;
 }): Promise<void> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
-  const migratedConnections = Object.fromEntries(
-    Object.entries(project.config.connections).map(([connectionId, connection]) => [
-      connectionId,
-      migrateLegacyHistoricSqlConnection(connection),
-    ]),
-  );
-  const nextConnection = migrateLegacyHistoricSqlConnection(input.connection);
   const config = {
     ...project.config,
     connections: {
-      ...migratedConnections,
-      [input.connectionId]: nextConnection,
+      ...project.config.connections,
+      [input.connectionId]: input.connection,
     },
   };
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
@@ -1407,13 +1306,13 @@ async function writeConnectionConfig(input: {
       projectDir: input.projectDir,
       io: input.io,
       fields: {
-        driver: String(nextConnection.driver ?? 'unknown').toLowerCase(),
-        isDemoConnection: isDemoConnection(input.connectionId, nextConnection),
+        driver: String(input.connection.driver ?? 'unknown').toLowerCase(),
+        isDemoConnection: isDemoConnection(input.connectionId, input.connection),
       },
     });
   }
 
-  const queryHistory = queryHistoryConfigRecord(nextConnection);
+  const queryHistory = queryHistoryConfigRecord(input.connection);
   if (queryHistory?.enabled === true) {
     await ensureHistoricSqlIngestDefaults(input.projectDir);
   }
@@ -1770,23 +1669,27 @@ async function maybeRunHistoricSqlSetupProbe(input: {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
   const queryHistory = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection);
-  const driver = normalizeDriver(connection?.driver);
   if (queryHistory?.enabled !== true) {
     return;
   }
-  const dialect: 'postgres' | 'snowflake' | null =
-    driver === 'postgres' ? 'postgres' : driver === 'snowflake' ? 'snowflake' : null;
+  if (!connection) {
+    return;
+  }
+  const dialect = queryHistoryDialectForConnection(connection);
   if (!dialect) {
     return;
   }
 
   input.io.stdout.write('│  Query history probe...\n');
-  const probe = input.deps.historicSqlProbe ?? defaultHistoricSqlProbe;
-  const result = await probe({
-    projectDir: input.projectDir,
-    connectionId: input.connectionId,
-    dialect,
-  });
+  const probe = input.deps.historicSqlReadinessProbe ?? runHistoricSqlReadinessProbe;
+  const result = setupHistoricSqlProbeResult(
+    await probe({
+      projectDir: input.projectDir,
+      connectionId: input.connectionId,
+      connection,
+      env: process.env,
+    }),
+  );
   for (const line of result.lines) {
     input.io.stdout.write(`│${line}\n`);
   }
@@ -2133,12 +2036,7 @@ async function runPrimarySourceFullEdit(input: {
     connectionId: input.connectionId,
     connection: withExistingPrimaryEditPromptDefaults({
       previous: existing,
-      next: {
-        ...withHistoricSql,
-        ...(!Object.hasOwn(withHistoricSql, 'historicSql') && existing.historicSql !== undefined
-          ? { historicSql: existing.historicSql }
-          : {}),
-      },
+      next: withHistoricSql,
       driver,
     }),
     io: input.io,
@@ -2216,6 +2114,15 @@ export async function runKtxSetupDatabasesStep(
       if (action === 'continue' || action === 'back') {
         await markDatabasesComplete(args.projectDir, selectedConnectionIds);
         return { status: 'ready', projectDir: args.projectDir, connectionIds: selectedConnectionIds };
+      }
+      if (action === 'skip-sources') {
+        await markDatabasesComplete(args.projectDir, selectedConnectionIds);
+        return {
+          status: 'ready',
+          projectDir: args.projectDir,
+          connectionIds: selectedConnectionIds,
+          skipSources: true,
+        };
       }
       if (action === 'edit') {
         const connectionId = await choosePrimarySourceToEdit({

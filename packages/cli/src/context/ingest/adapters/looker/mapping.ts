@@ -7,12 +7,9 @@ const LOOKER_DIALECT_TO_CONNECTION_TYPE = {
   bigquery_standard_sql: 'BIGQUERY',
   snowflake: 'SNOWFLAKE',
   postgres: 'POSTGRESQL',
-  postgresql: 'POSTGRESQL',
   mysql: 'MYSQL',
   sqlite: 'SQLITE',
   sqlserver: 'SQLSERVER',
-  mssql: 'SQLSERVER',
-  tsql: 'SQLSERVER',
   clickhouse: 'CLICKHOUSE',
 } as const;
 

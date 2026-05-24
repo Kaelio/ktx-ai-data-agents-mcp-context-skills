@@ -22,10 +22,10 @@ export function createDefaultLocalQueryExecutor(options: DefaultLocalQueryExecut
   return {
     async execute(input: KtxSqlQueryExecutionInput): Promise<KtxSqlQueryExecutionResult> {
       const driver = driverFor(input);
-      if (driver === 'postgres' || driver === 'postgresql') {
+      if (driver === 'postgres') {
         return postgres.execute(input);
       }
-      if (driver === 'sqlite' || driver === 'sqlite3') {
+      if (driver === 'sqlite') {
         return sqlite.execute(input);
       }
       throw new Error(`No local query executor is configured for driver "${input.connection?.driver ?? 'unknown'}".`);

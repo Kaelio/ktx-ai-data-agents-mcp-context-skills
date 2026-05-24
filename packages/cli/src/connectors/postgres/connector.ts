@@ -2,8 +2,29 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
-import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
+import {
+  createKtxConnectorCapabilities,
+  type KtxColumnSampleInput,
+  type KtxColumnSampleResult,
+  type KtxColumnStatsInput,
+  type KtxColumnStatsResult,
+  type KtxQueryResult,
+  type KtxReadOnlyQueryInput,
+  type KtxScanConnector,
+  type KtxScanContext,
+  type KtxScanInput,
+  type KtxScanWarning,
+  type KtxSchemaColumn,
+  type KtxSchemaForeignKey,
+  type KtxSchemaSnapshot,
+  type KtxSchemaTable,
+  type KtxTableListEntry,
+  type KtxTableRef,
+  type KtxTableSampleInput,
+  type KtxTableSampleResult,
+} from '../../context/scan/types.js';
 import { Pool } from 'pg';
 import { KtxPostgresDialect } from './dialect.js';
 
@@ -43,6 +64,7 @@ export interface KtxPostgresConnectionConfig {
   sslmode?: string;
   sslMode?: string;
   rejectUnauthorized?: boolean;
+  maxConnections?: number;
   [key: string]: unknown;
 }
 
@@ -207,6 +229,14 @@ function primaryKeyMap(rows: PostgresPrimaryKeyRow[]): Map<string, Set<string>> 
   return grouped;
 }
 
+function isDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  return code === '42501' || code === '42P01';
+}
+
 function queryRows(result: KtxPostgresQueryResult): unknown[][] {
   const headers = (result.fields ?? []).map((field) => field.name);
   return result.rows.map((row) => headers.map((header) => row[header]));
@@ -240,6 +270,23 @@ function resolveStringReference(value: string, env: NodeJS.ProcessEnv): string {
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function positiveIntegerConfigValue(input: {
+  connection: KtxPostgresConnectionConfig;
+  key: keyof KtxPostgresConnectionConfig;
+  connectionId: string;
+  defaultValue: number;
+}): number {
+  const value = input.connection[input.key];
+  if (value === undefined) {
+    return input.defaultValue;
+  }
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    throw new Error(`connections.${input.connectionId}.${String(input.key)} must be a positive integer`);
+  }
+  return numberValue;
 }
 
 function parsePostgresUrl(url: string): Partial<KtxPostgresConnectionConfig> {
@@ -276,7 +323,7 @@ export function isKtxPostgresConnectionConfig(
   connection: KtxPostgresConnectionConfig | undefined,
 ): connection is KtxPostgresConnectionConfig {
   const driver = String(connection?.driver ?? '').toLowerCase();
-  return driver === 'postgres' || driver === 'postgresql';
+  return driver === 'postgres';
 }
 
 /** @internal */
@@ -299,6 +346,12 @@ export function postgresPoolConfigFromConfig(input: {
   const user = stringConfigValue(merged, 'username', env) ?? stringConfigValue(merged, 'user', env);
   const password = stringConfigValue(merged, 'password', env);
   const sslmode = normalizedSslMode(merged);
+  const maxConnections = positiveIntegerConfigValue({
+    connection: merged,
+    key: 'maxConnections',
+    connectionId: input.connectionId,
+    defaultValue: 10,
+  });
 
   if (!referencedUrl && !host) {
     throw new Error(`Native PostgreSQL connector requires connections.${input.connectionId}.host or url`);
@@ -311,7 +364,7 @@ export function postgresPoolConfigFromConfig(input: {
   }
 
   const config: KtxPostgresPoolConfig = {
-    max: 10,
+    max: maxConnections,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     ...(referencedUrl && sslmode !== 'prefer' && sslmode !== 'disable'
@@ -379,10 +432,11 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
     this.assertConnection(input.connectionId);
     const schemas = schemasFromConnection(this.connection);
     const allTables: KtxSchemaTable[] = [];
+    const snapshotWarnings: KtxScanWarning[] = [];
     for (const schema of schemas) {
       const scopedNames = input.tableScope ? scopedTableNames(input.tableScope, { catalog: null, db: schema }) : null;
       if (scopedNames && scopedNames.length === 0) continue;
-      const tables = await this.loadSchemaTables(schema, scopedNames);
+      const tables = await this.loadSchemaTables(schema, scopedNames, snapshotWarnings);
       allTables.push(...tables);
     }
     return {
@@ -398,6 +452,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         total_columns: allTables.reduce((sum, table) => sum + table.columns.length, 0),
       },
       tables: allTables,
+      warnings: snapshotWarnings,
     };
   }
 
@@ -546,7 +601,11 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
     }
   }
 
-  private async loadSchemaTables(schema: string, scopedNames: readonly string[] | null): Promise<KtxSchemaTable[]> {
+  private async loadSchemaTables(
+    schema: string,
+    scopedNames: readonly string[] | null,
+    snapshotWarnings: KtxScanWarning[],
+  ): Promise<KtxSchemaTable[]> {
     if (scopedNames && scopedNames.length === 0) return [];
     const pgCatalogScopeClause = scopedNames ? 'AND c.relname = ANY($2)' : '';
     const tableConstraintScopeClause = scopedNames ? 'AND tc.table_name = ANY($2)' : '';
@@ -591,8 +650,11 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
       `,
       [schema, ...scopeValues],
     );
-    const primaryKeys = await this.queryRaw<PostgresPrimaryKeyRow>(
-      `
+    const primaryKeysResult = await tryConstraintQuery(
+      { schema, kind: 'primary_key', isDeniedError },
+      () =>
+        this.queryRaw<PostgresPrimaryKeyRow>(
+          `
       SELECT tc.table_name, kcu.column_name
       FROM information_schema.table_constraints tc
       JOIN information_schema.key_column_usage kcu
@@ -603,10 +665,18 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         ${tableConstraintScopeClause}
       ORDER BY tc.table_name, kcu.ordinal_position
       `,
-      [schema, ...scopeValues],
+          [schema, ...scopeValues],
+        ),
     );
-    const foreignKeys = await this.queryRaw<PostgresForeignKeyRow>(
-      `
+    const primaryKeys = primaryKeysResult.ok ? primaryKeysResult.value : [];
+    if (!primaryKeysResult.ok) {
+      snapshotWarnings.push(primaryKeysResult.warning);
+    }
+    const foreignKeysResult = await tryConstraintQuery(
+      { schema, kind: 'foreign_key', isDeniedError },
+      () =>
+        this.queryRaw<PostgresForeignKeyRow>(
+          `
       SELECT
         tc.table_name,
         kcu.column_name,
@@ -626,8 +696,13 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
         ${tableConstraintScopeClause}
       ORDER BY tc.table_name, kcu.column_name
       `,
-      [schema, ...scopeValues],
+          [schema, ...scopeValues],
+        ),
     );
+    const foreignKeys = foreignKeysResult.ok ? foreignKeysResult.value : [];
+    if (!foreignKeysResult.ok) {
+      snapshotWarnings.push(foreignKeysResult.warning);
+    }
 
     const columnsByTable = groupByTable(columns);
     const primaryKeysByTable = primaryKeyMap(primaryKeys);

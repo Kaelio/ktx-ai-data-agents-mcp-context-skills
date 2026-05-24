@@ -21,7 +21,7 @@ ktx status [options]
 | `--json` | Print JSON output | `false` |
 | `-v`, `--verbose` | Show every check, including passing ones | `false` |
 | `--validate` | Only validate the `ktx.yaml` schema; skip readiness checks | `false` |
-| `--fast` | Skip checks that require external communication (Postgres query-history probe, Claude Code auth probe) | `false` |
+| `--fast` | Skip checks that require external communication (query-history readiness probes and Claude Code auth probe) | `false` |
 | `--no-input` | Disable interactive terminal input | - |
 
 ## Examples
@@ -39,7 +39,7 @@ ktx status --verbose
 # Validate ktx.yaml without running readiness checks
 ktx status --validate
 
-# Skip slow probes (Postgres pg_stat_statements, Claude Code auth)
+# Skip slow probes (query-history readiness, Claude Code auth)
 ktx status --fast
 
 # Check a project from another directory

@@ -138,6 +138,18 @@ def test_introspect_database_response_rejects_non_postgres_driver() -> None:
         )
 
 
+def test_introspect_database_response_rejects_legacy_postgresql_driver() -> None:
+    with pytest.raises(ValueError, match='supports only driver "postgres"'):
+        introspect_database_response(
+            DatabaseIntrospectionRequest(
+                connection_id="warehouse",
+                driver="postgresql",
+                url="postgresql://readonly@example.test/warehouse",
+            ),
+            load_rows=lambda request: DatabaseIntrospectionRows([], [], []),
+        )
+
+
 def test_database_introspection_request_rejects_empty_schema_list() -> None:
     with pytest.raises(ValueError, match="at least one schema"):
         DatabaseIntrospectionRequest(

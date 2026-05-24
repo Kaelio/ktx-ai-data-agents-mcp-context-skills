@@ -4,11 +4,15 @@ import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
 import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
-import type { PostgresPgssProbeResult } from './context/ingest/adapters/historic-sql/types.js';
 import {
   isQueryHistoryEnabled,
   queryHistoryDialectForConnection,
 } from './context/ingest/adapters/historic-sql/connection-dialect.js';
+import {
+  historicSqlProbeCatalogName,
+  runHistoricSqlReadinessProbe,
+  type HistoricSqlReadinessProbe,
+} from './context/ingest/historic-sql-probes.js';
 import {
   formatClaudeCodePromptCachingFix,
   formatClaudeCodePromptCachingWarning,
@@ -92,14 +96,6 @@ type ClaudeCodeAuthProbe = (input: {
 
 const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hasOwnField(value: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
 interface LocalStatsIngestPerConnection {
   connectionId: string;
   adapter: string;
@@ -176,6 +172,13 @@ function resolveRef(value: unknown, env: NodeJS.ProcessEnv): { resolved: string;
     return { resolved: trimmed.slice(5), via: 'file' };
   }
   return { resolved: trimmed, via: 'literal' };
+}
+
+function failureDetail(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim().split('\n')[0] ?? error.message.trim();
+  }
+  return String(error);
 }
 
 function envHint(value: unknown): string | undefined {
@@ -336,7 +339,6 @@ function buildConnectionStatus(
 
   switch (driver) {
     case 'postgres':
-    case 'postgresql':
     case 'mysql':
     case 'clickhouse':
     case 'sqlserver': {
@@ -401,232 +403,6 @@ function buildConnectionStatus(
   }
 }
 
-interface QueryHistoryProbeInput {
-  projectDir: string;
-  connectionId: string;
-  connection: KtxProjectConnectionConfig;
-  env: NodeJS.ProcessEnv;
-}
-
-interface GenericProbeResult {
-  warnings: string[];
-  info?: string[];
-}
-
-type PostgresQueryHistoryProbe = (input: QueryHistoryProbeInput) => Promise<PostgresPgssProbeResult>;
-type SnowflakeQueryHistoryProbe = (input: QueryHistoryProbeInput) => Promise<GenericProbeResult>;
-type BigQueryQueryHistoryProbe = (input: QueryHistoryProbeInput) => Promise<GenericProbeResult>;
-
-function failureDetail(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message.trim().split('\n')[0] ?? error.message.trim();
-  }
-  return String(error);
-}
-
-function postgresReadinessDetail(result: PostgresPgssProbeResult): string {
-  const warningText = result.warnings.length > 0 ? ` with warnings: ${result.warnings.join('; ')}` : '';
-  const info = result.info ?? [];
-  const infoText = info.length > 0 ? `; info: ${info.join('; ')}` : '';
-  return `pg_stat_statements ready (${result.pgServerVersion})${warningText}${infoText}`;
-}
-
-function genericReadinessDetail(label: string, result: GenericProbeResult): string {
-  const warningText = result.warnings.length > 0 ? ` with warnings: ${result.warnings.join('; ')}` : '';
-  const info = result.info ?? [];
-  const infoText = info.length > 0 ? `; info: ${info.join('; ')}` : '';
-  return `${label} ready${warningText}${infoText}`;
-}
-
-function probeFailureFix(error: unknown, dialect: string, connectionId: string, projectDir: string): string {
-  if (error instanceof Error && error.name === 'HistoricSqlExtensionMissingError' && 'remediation' in error) {
-    return String(error.remediation);
-  }
-  if (error instanceof Error && error.name === 'HistoricSqlGrantsMissingError' && 'remediation' in error) {
-    return String(error.remediation);
-  }
-  if (error instanceof Error && error.name === 'HistoricSqlVersionUnsupportedError') {
-    return 'Use PostgreSQL 14 or newer, or disable query history for this connection';
-  }
-  return `Fix connections.${connectionId} ${dialect} settings, then rerun \`ktx status --project-dir ${projectDir}\``;
-}
-
-async function defaultPostgresQueryHistoryProbe(
-  input: QueryHistoryProbeInput,
-): Promise<PostgresPgssProbeResult> {
-  const [{ PostgresPgssReader }, { KtxPostgresHistoricSqlQueryClient }, { isKtxPostgresConnectionConfig }] =
-    await Promise.all([
-      import('./context/ingest/adapters/historic-sql/postgres-pgss-reader.js'),
-      import('./connectors/postgres/historic-sql-query-client.js'),
-      import('./connectors/postgres/connector.js'),
-    ]);
-
-  const inputDriver = input.connection.driver ?? 'unknown';
-  if (!isKtxPostgresConnectionConfig(input.connection)) {
-    throw new Error(`Native PostgreSQL connector cannot run driver "${inputDriver}"`);
-  }
-
-  const client = new KtxPostgresHistoricSqlQueryClient({
-    connectionId: input.connectionId,
-    connection: input.connection,
-    env: input.env,
-  });
-  try {
-    return await new PostgresPgssReader().probe(client);
-  } finally {
-    await client.cleanup();
-  }
-}
-
-async function defaultSnowflakeQueryHistoryProbe(
-  input: QueryHistoryProbeInput,
-): Promise<GenericProbeResult> {
-  const [{ SnowflakeHistoricSqlQueryHistoryReader }, { KtxSnowflakeHistoricSqlQueryClient }, { isKtxSnowflakeConnectionConfig }] =
-    await Promise.all([
-      import('./context/ingest/adapters/historic-sql/snowflake-query-history-reader.js'),
-      import('./connectors/snowflake/historic-sql-query-client.js'),
-      import('./connectors/snowflake/connector.js'),
-    ]);
-
-  const inputDriver = input.connection.driver ?? 'unknown';
-  if (!isKtxSnowflakeConnectionConfig(input.connection)) {
-    throw new Error(`Native Snowflake connector cannot run driver "${inputDriver}"`);
-  }
-
-  const client = new KtxSnowflakeHistoricSqlQueryClient({
-    connectionId: input.connectionId,
-    connection: input.connection,
-    projectDir: input.projectDir,
-    env: input.env,
-  });
-  try {
-    return await new SnowflakeHistoricSqlQueryHistoryReader().probe(client);
-  } finally {
-    await client.cleanup();
-  }
-}
-
-async function defaultBigQueryQueryHistoryProbe(
-  input: QueryHistoryProbeInput,
-): Promise<GenericProbeResult> {
-  const [
-    { BigQueryHistoricSqlQueryHistoryReader },
-    { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig },
-    { resolveKtxConfigReference },
-  ] = await Promise.all([
-    import('./context/ingest/adapters/historic-sql/bigquery-query-history-reader.js'),
-    import('./connectors/bigquery/connector.js'),
-    import('./context/core/config-reference.js'),
-  ]);
-
-  const inputDriver = input.connection.driver ?? 'unknown';
-  if (!isKtxBigQueryConnectionConfig(input.connection)) {
-    throw new Error(`Native BigQuery connector cannot run driver "${inputDriver}"`);
-  }
-
-  const rawCredentials = typeof input.connection.credentials_json === 'string' ? input.connection.credentials_json : '';
-  const resolvedCredentials = resolveKtxConfigReference(rawCredentials, input.env);
-  if (!resolvedCredentials) {
-    throw new Error(`Query history BigQuery connection ${input.connectionId} requires credentials_json`);
-  }
-  const parsed = JSON.parse(resolvedCredentials) as { project_id?: unknown };
-  if (typeof parsed.project_id !== 'string' || parsed.project_id.trim().length === 0) {
-    throw new Error(`Query history BigQuery connection ${input.connectionId} requires credentials_json.project_id`);
-  }
-  const region =
-    typeof input.connection.location === 'string' && input.connection.location.trim().length > 0
-      ? input.connection.location.trim()
-      : 'us';
-
-  const connector = new KtxBigQueryScanConnector({
-    connectionId: input.connectionId,
-    connection: input.connection,
-  });
-  try {
-    return await new BigQueryHistoricSqlQueryHistoryReader({
-      projectId: parsed.project_id,
-      region,
-    }).probe({
-      async executeQuery(sql: string) {
-        const result = await connector.executeReadOnly({ connectionId: input.connectionId, sql }, {} as never);
-        return {
-          headers: result.headers,
-          rows: result.rows,
-          totalRows: result.totalRows,
-        };
-      },
-    });
-  } finally {
-    await connector.cleanup();
-  }
-}
-
-interface DispatchedProbe {
-  label: string;
-  spinnerLabel: string;
-  fastSkipDetail: string;
-  run: () => Promise<{ status: ProjectStatusLevel; detail: string; fix?: string }>;
-}
-
-function postgresProbeDispatch(
-  input: QueryHistoryProbeInput,
-  probe: PostgresQueryHistoryProbe,
-): DispatchedProbe {
-  return {
-    label: 'postgres',
-    spinnerLabel: `Probing pg_stat_statements on ${input.connectionId}`,
-    fastSkipDetail: 'pg_stat_statements probe skipped (--fast)',
-    run: async () => {
-      const result = await probe(input);
-      return {
-        status: result.warnings.length > 0 ? 'warn' : 'ok',
-        detail: postgresReadinessDetail(result),
-        ...(result.warnings.length > 0
-          ? {
-              fix: `Update the Postgres parameter group or config, then rerun \`ktx status --project-dir ${input.projectDir}\``,
-            }
-          : {}),
-      };
-    },
-  };
-}
-
-function snowflakeProbeDispatch(
-  input: QueryHistoryProbeInput,
-  probe: SnowflakeQueryHistoryProbe,
-): DispatchedProbe {
-  return {
-    label: 'snowflake',
-    spinnerLabel: `Probing SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY on ${input.connectionId}`,
-    fastSkipDetail: 'SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY probe skipped (--fast)',
-    run: async () => {
-      const result = await probe(input);
-      return {
-        status: result.warnings.length > 0 ? 'warn' : 'ok',
-        detail: genericReadinessDetail('SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY', result),
-      };
-    },
-  };
-}
-
-function bigqueryProbeDispatch(
-  input: QueryHistoryProbeInput,
-  probe: BigQueryQueryHistoryProbe,
-): DispatchedProbe {
-  return {
-    label: 'bigquery',
-    spinnerLabel: `Probing INFORMATION_SCHEMA.JOBS_BY_PROJECT on ${input.connectionId}`,
-    fastSkipDetail: 'INFORMATION_SCHEMA.JOBS_BY_PROJECT probe skipped (--fast)',
-    run: async () => {
-      const result = await probe(input);
-      return {
-        status: result.warnings.length > 0 ? 'warn' : 'ok',
-        detail: genericReadinessDetail('INFORMATION_SCHEMA.JOBS_BY_PROJECT', result),
-      };
-    },
-  };
-}
-
 async function buildQueryHistoryStatus(
   project: KtxLocalProject,
   options: BuildProjectStatusOptions,
@@ -635,9 +411,7 @@ async function buildQueryHistoryStatus(
     .filter(([, connection]) => isQueryHistoryEnabled(connection))
     .sort(([left], [right]) => left.localeCompare(right));
 
-  const postgresProbe = options.postgresQueryHistoryProbe ?? defaultPostgresQueryHistoryProbe;
-  const snowflakeProbe = options.snowflakeQueryHistoryProbe ?? defaultSnowflakeQueryHistoryProbe;
-  const bigqueryProbe = options.bigqueryQueryHistoryProbe ?? defaultBigQueryQueryHistoryProbe;
+  const probe = options.queryHistoryReadinessProbe ?? runHistoricSqlReadinessProbe;
   const env = options.env ?? process.env;
   const statuses: QueryHistoryStatus[] = [];
 
@@ -657,18 +431,7 @@ async function buildQueryHistoryStatus(
       continue;
     }
 
-    const probeInput: QueryHistoryProbeInput = {
-      projectDir: project.projectDir,
-      connectionId,
-      connection,
-      env,
-    };
-    const dispatched =
-      dialect === 'postgres'
-        ? postgresProbeDispatch(probeInput, postgresProbe)
-        : dialect === 'snowflake'
-          ? snowflakeProbeDispatch(probeInput, snowflakeProbe)
-          : bigqueryProbeDispatch(probeInput, bigqueryProbe);
+    const catalogName = historicSqlProbeCatalogName(dialect);
 
     if (options.fast === true) {
       statuses.push({
@@ -676,36 +439,68 @@ async function buildQueryHistoryStatus(
         driver,
         dialect,
         status: 'skipped',
-        detail: dispatched.fastSkipDetail,
+        detail: `${catalogName} probe skipped (--fast)`,
       });
       continue;
     }
 
-    try {
-      const outcome = await withSpinner(options.useSpinner === true, dispatched.spinnerLabel, dispatched.run);
+    const outcome = await withSpinner(
+      options.useSpinner === true,
+      `Probing ${catalogName} on ${connectionId}`,
+      () =>
+        probe({
+          projectDir: project.projectDir,
+          connectionId,
+          connection,
+          env,
+        }),
+    );
+
+    if (!outcome) {
       statuses.push({
         connection: connectionId,
         driver,
-        dialect,
-        ...outcome,
-      });
-    } catch (error) {
-      statuses.push({
-        connection: connectionId,
-        driver,
-        dialect,
+        dialect: driver,
         status: 'fail',
-        detail: failureDetail(error),
-        fix: probeFailureFix(error, dispatched.label, connectionId, project.projectDir),
+        detail: `query history is not supported for driver "${driver}"`,
+        fix: `Disable connections.${connectionId}.context.queryHistory, or use a postgres, snowflake, or bigquery connection`,
       });
+      continue;
     }
+
+    if (outcome.ok) {
+      const { detail, warnings } = outcome.runner.formatSuccessDetail(outcome.result);
+      statuses.push({
+        connection: connectionId,
+        driver,
+        dialect,
+        status: warnings.length > 0 ? 'warn' : 'ok',
+        detail,
+        ...(dialect === 'postgres' && warnings.length > 0
+          ? {
+              fix: `Update the Postgres parameter group or config, then rerun \`ktx status --project-dir ${project.projectDir}\``,
+            }
+          : {}),
+      });
+      continue;
+    }
+
+    const advice = outcome.runner.fixAdvice(outcome.error);
+    statuses.push({
+      connection: connectionId,
+      driver,
+      dialect,
+      status: 'fail',
+      detail: advice.failHeadline,
+      fix: advice.remediation,
+    });
   }
 
   return statuses;
 }
 
 const ADAPTER_DRIVER_REQUIREMENT: Record<string, string[]> = {
-  'live-database': ['postgres', 'postgresql', 'mysql', 'snowflake', 'bigquery', 'clickhouse', 'sqlite', 'sqlserver'],
+  'live-database': ['postgres', 'mysql', 'snowflake', 'bigquery', 'clickhouse', 'sqlite', 'sqlserver'],
   dbt: ['dbt', 'dbt-core', 'dbt-cloud'],
   notion: ['notion'],
   metabase: ['metabase'],
@@ -743,51 +538,6 @@ function buildWarnings(
   embeddings: EmbeddingsStatus,
 ): WarningItem[] {
   const warnings: WarningItem[] = [];
-
-  for (const [connectionId, connection] of Object.entries(config.connections)) {
-    const driver = String(connection.driver ?? '').toLowerCase();
-    if (hasOwnField(connection, 'readonly')) {
-      warnings.push({
-        message: `connections.${connectionId}.readonly is no longer used.`,
-        fix: `Remove connections.${connectionId}.readonly from ktx.yaml.`,
-      });
-    }
-
-    if ((driver === 'sqlite' || driver === 'sqlite3') && hasOwnField(connection, 'file_path')) {
-      warnings.push({
-        message: `connections.${connectionId}.file_path was removed.`,
-        fix: `Rename connections.${connectionId}.file_path to path.`,
-      });
-    }
-
-    if (driver === 'notion' && hasOwnField(connection, 'last_successful_cursor')) {
-      warnings.push({
-        message: `connections.${connectionId}.last_successful_cursor is local sync state.`,
-        fix: 'Remove it from ktx.yaml. KTX stores the Notion cursor in .ktx/db.sqlite.',
-      });
-    }
-
-    const historicSql = isRecord(connection.historicSql) ? connection.historicSql : null;
-    if (!historicSql) {
-      continue;
-    }
-    if (hasOwnField(historicSql, 'concurrency')) {
-      warnings.push({
-        message: `connections.${connectionId}.historicSql.concurrency is no longer used.`,
-        fix: `Remove connections.${connectionId}.historicSql.concurrency from ktx.yaml.`,
-      });
-    }
-    const historicDialect = String(historicSql.dialect ?? driver).toLowerCase();
-    if (
-      (historicDialect === 'postgres' || historicDialect === 'postgresql') &&
-      hasOwnField(historicSql, 'windowDays')
-    ) {
-      warnings.push({
-        message: `connections.${connectionId}.historicSql.windowDays does not constrain pg_stat_statements.`,
-        fix: `Remove connections.${connectionId}.historicSql.windowDays from ktx.yaml.`,
-      });
-    }
-  }
 
   for (const adapter of config.ingest.adapters) {
     const requiredDrivers = ADAPTER_DRIVER_REQUIREMENT[adapter];
@@ -882,9 +632,7 @@ function buildVerdict(
 
 export interface BuildProjectStatusOptions {
   env?: NodeJS.ProcessEnv;
-  postgresQueryHistoryProbe?: PostgresQueryHistoryProbe;
-  snowflakeQueryHistoryProbe?: SnowflakeQueryHistoryProbe;
-  bigqueryQueryHistoryProbe?: BigQueryQueryHistoryProbe;
+  queryHistoryReadinessProbe?: HistoricSqlReadinessProbe;
   claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
   configIssues?: KtxConfigIssue[];
   fast?: boolean;

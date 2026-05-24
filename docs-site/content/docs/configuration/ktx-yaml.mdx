@@ -105,7 +105,7 @@ context-source drivers share the map.
 
 | Driver | Kind | Required fields | Common optional fields |
 |--------|------|-----------------|------------------------|
-| `postgres` / `postgresql` | Warehouse | `driver` | `url`, `enabled_tables`, `historicSql`, `context.queryHistory` |
+| `postgres` | Warehouse | `driver` | `url`, `enabled_tables`, `historicSql`, `context.queryHistory` |
 | `mysql` | Warehouse | `driver` | `url`, `enabled_tables` |
 | `sqlite` | Warehouse | `driver` | `url` or `path`, `enabled_tables` |
 | `sqlserver` | Warehouse | `driver` | `url`, `enabled_tables` |
@@ -157,11 +157,14 @@ connections:
     dataset_ids: [analytics, mart]
 ```
 
-For Snowflake connections, set `maxSessions` when deep ingest needs more or
-fewer concurrent warehouse sessions. The default is `4`. This caps all
-concurrent Snowflake SQL work for that connector instance, including schema
-introspection, table sampling, relationship profiling, relationship
-validation, and read-only SQL execution.
+For Postgres, MySQL, SQL Server, and Snowflake connections, set
+`maxConnections` when scan or ingest work needs to stay below the target's
+connection cap. Postgres, MySQL, and SQL Server default to `10`; Snowflake
+defaults to `4`. This caps all concurrent SQL work for that connector instance,
+including schema introspection, table sampling, relationship profiling,
+relationship validation, and read-only SQL execution. BigQuery and ClickHouse
+do not expose `maxConnections` because their connectors don't use client-side
+connection pools.
 
 For Postgres, BigQuery, and Snowflake, `historicSql` and `context.queryHistory`
 toggle query-history ingest. The shape is connector-specific; the setup wizard
@@ -517,7 +520,7 @@ the manifest.
 | `relationships.maxLlmTablesPerBatch` | `int > 0` | `40` | Max tables included in a single LLM relationship-proposal batch. |
 | `relationships.maxCandidatesPerColumn` | `int > 0` | `25` | Max join partners considered per column. |
 | `relationships.profileSampleRows` | `int > 0` | `10000` | Rows sampled per table when profiling values for relationship inference. |
-| `relationships.profileConcurrency` | `int > 0` | `4` | Parallel relationship-profile queries against the database. For Snowflake, effective database concurrency is also bounded by the connection's `maxSessions`. |
+| `relationships.profileConcurrency` | `int > 0` | `4` | Parallel relationship-profile queries against the database. For pooled connectors, effective database concurrency is also bounded by the connection's `maxConnections`. |
 | `relationships.validationConcurrency` | `int > 0` | `4` | Parallel relationship validation queries against the database. |
 | `relationships.validationBudget` | `all` \| `int ≥ 0` | runtime default | Cap on validation queries per scan. `all` means unlimited. |
 
