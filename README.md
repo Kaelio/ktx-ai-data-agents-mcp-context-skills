@@ -162,7 +162,8 @@ ktx sl query --connection-id warehouse --measure orders.revenue --format sql
 
 During setup, choose **Ask data questions with ktx MCP** for agent clients.
 Choose **Ask data questions + manage ktx with CLI commands** when an operator
-agent also needs pinned `ktx` admin commands.
+agent also needs pinned `ktx` admin commands. Choose **Skip agent setup for
+now** to leave agent integration incomplete and run `ktx setup --agents` later.
 
 After setup, **ktx** prints **Required before using agents** with the exact
 commands to run. If the output includes `ktx mcp start --project-dir ...`, run

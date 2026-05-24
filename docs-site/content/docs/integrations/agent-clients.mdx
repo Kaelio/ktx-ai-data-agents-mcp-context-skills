@@ -9,7 +9,9 @@ admin surface for setup, ingest, status, daemon lifecycle, and debugging.
 Run `ktx setup` and select your agent client targets, or configure manually
 using the snippets below. Choose **Ask data questions with ktx MCP** for agent
 clients. Choose **Ask data questions + manage ktx with CLI commands** only when
-a developer or operator agent also needs pinned `ktx` admin commands.
+a developer or operator agent also needs pinned `ktx` admin commands. Choose
+**Skip agent setup for now** to leave agent integration incomplete and run
+`ktx setup --agents` later.
 
 ## Install with setup
 
@@ -43,14 +45,19 @@ ktx setup --agents --target codex --global
 manifest lets status checks report agent readiness and lets future cleanup
 remove only files **ktx** installed.
 
-The interactive command asks two questions:
+The interactive command asks what agents can do first:
 
 ```txt
 ◆  What should agents be allowed to do with this ktx project?
 │  ○ Ask data questions with ktx MCP
 │  ○ Ask data questions + manage ktx with CLI commands
+│  ○ Skip agent setup for now
 └
+```
 
+If you choose an install mode, it then asks which targets to install:
+
+```txt
 ◆  Which agent targets should ktx install?
 │  ◻ Claude Code
 │  ◻ Claude Desktop
