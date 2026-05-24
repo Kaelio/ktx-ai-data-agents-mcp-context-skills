@@ -46,6 +46,7 @@ describe('local ingest adapters', () => {
       'looker',
       'metricflow',
       'notion',
+      'slack',
     ]);
     expect(adapters.find((adapter) => adapter.source === 'metabase')?.fetch).toBeTypeOf('function');
   });
@@ -687,6 +688,28 @@ describe('local ingest adapters', () => {
       path: 'semantic_models',
       authToken: 'token-123',
       parsedTargetTables: {},
+    });
+  });
+
+  it('resolves Slack bot_token_ref and keeps the channel allowlist', async () => {
+    const slackProject = projectWithConnections({
+      slack_docs: {
+        driver: 'slack',
+        bot_token_ref: 'env:SLACK_BOT_TOKEN',
+        channel_ids: ['C1'],
+        max_messages_per_channel: 50,
+      },
+    } as never);
+    const slack = createDefaultLocalIngestAdapters(slackProject).find((candidate) => candidate.source === 'slack');
+
+    await expect(
+      localPullConfigForAdapter(slackProject, slack!, 'slack_docs', {
+        looker: { env: { SLACK_BOT_TOKEN: 'xoxb-env-token' } as NodeJS.ProcessEnv },
+      }),
+    ).resolves.toEqual({
+      authToken: 'xoxb-env-token',
+      channelIds: ['C1'],
+      maxMessagesPerChannel: 50,
     });
   });
 });

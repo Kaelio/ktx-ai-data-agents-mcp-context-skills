@@ -168,6 +168,29 @@ const notionConnectionSchema = z
   })
   .describe('Notion context-source connection.');
 
+const slackConnectionSchema = z
+  .looseObject({
+    driver: z.literal('slack'),
+    bot_token: z.string().min(1).optional().describe('Literal Slack bot token. Prefer bot_token_ref.'),
+    bot_token_ref: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Reference to Slack bot token (e.g. env:SLACK_BOT_TOKEN).'),
+    channel_ids: z
+      .array(z.string().min(1))
+      .min(1)
+      .describe('Allowlisted Slack channel IDs to inspect for messages.'),
+    max_messages_per_channel: z
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .optional()
+      .describe('Maximum messages to fetch per configured channel in one ingest run.'),
+  })
+  .describe('Slack context-source connection.');
+
 const dbtConnectionSchema = z
   .looseObject({
     driver: z.literal('dbt'),
@@ -202,6 +225,7 @@ export const connectionConfigSchema = z.discriminatedUnion('driver', [
   lookerConnectionSchema,
   lookmlConnectionSchema,
   notionConnectionSchema,
+  slackConnectionSchema,
   dbtConnectionSchema,
   metricflowConnectionSchema,
 ]);

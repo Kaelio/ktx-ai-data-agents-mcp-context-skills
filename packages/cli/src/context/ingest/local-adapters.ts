@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { localConnectionToWarehouseDescriptor } from '../../context/connections/local-warehouse-descriptor.js';
 import { notionConnectionToPullConfig, parseNotionConnectionConfig } from '../../context/connections/notion-config.js';
+import { parseSlackConnectionConfig, slackConnectionToPullConfig } from '../../context/connections/slack-config.js';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
 import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
@@ -42,6 +43,7 @@ import { pullConfigFromMetricflowIntegration } from './adapters/metricflow/pull-
 import { LocalNotionRuntimeStore } from './adapters/notion/local-state-store.js';
 import { NotionSourceAdapter } from './adapters/notion/notion.adapter.js';
 import type { NotionFetchLogger } from './adapters/notion/fetch.js';
+import { SlackSourceAdapter } from './adapters/slack/slack.adapter.js';
 import { seedLocalMappingStateFromKtxYaml } from './local-mapping-reconcile.js';
 import type { SourceAdapter } from './types.js';
 
@@ -123,6 +125,7 @@ export function createDefaultLocalIngestAdapters(
       },
       ...(options.logger ? { logger: options.logger } : {}),
     }),
+    new SlackSourceAdapter(),
   ];
 
   if (options.historicSql) {
@@ -301,6 +304,11 @@ export async function localPullConfigForAdapter(
       ...pullConfig,
       lastSuccessfulCursor: await localNotionRuntimeStore(project).readCursor(connectionId),
     };
+  }
+  if (adapter.source === 'slack') {
+    return slackConnectionToPullConfig(parseSlackConnectionConfig(connection), {
+      env: options.looker?.env ?? process.env,
+    });
   }
   if (adapter.source === 'metricflow') {
     const metricflow = connection.metricflow;
