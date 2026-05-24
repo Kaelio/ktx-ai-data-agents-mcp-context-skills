@@ -1,9 +1,17 @@
+import type { KtxDialect } from '../../context/connections/dialects.js';
+import {
+  columnDisplayPartCount,
+  formatDialectDisplayRef,
+  formatDialectTableName,
+  parseDialectDisplayRef,
+  safeSqlLimit,
+} from '../../context/connections/dialect-helpers.js';
 import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type SqlServerTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
-export class KtxSqlServerDialect {
-  readonly type = 'sqlserver';
+export class KtxSqlServerDialect implements KtxDialect {
+  readonly type = 'sqlserver' as const;
 
   private readonly typeMappings: Record<string, KtxSchemaDimensionType> = {
     datetime: 'time',
@@ -39,9 +47,19 @@ export class KtxSqlServerDialect {
   }
 
   formatTableName(table: SqlServerTableNameRef): string {
-    return table.db
-      ? `${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`
-      : this.quoteIdentifier(table.name);
+    return formatDialectTableName(table, this.quoteIdentifier.bind(this), 'three-part');
+  }
+
+  formatDisplayRef(table: SqlServerTableNameRef): string {
+    return formatDialectDisplayRef(table, 'three-part');
+  }
+
+  parseDisplayRef(display: string): KtxTableRef | null {
+    return parseDialectDisplayRef(display, 'three-part');
+  }
+
+  columnDisplayTablePartCount(): 1 | 2 | 3 {
+    return columnDisplayPartCount('three-part');
   }
 
   mapDataType(nativeType: string): string {
@@ -111,12 +129,12 @@ export class KtxSqlServerDialect {
     return `TABLESAMPLE (${samplePct * 100} PERCENT)`;
   }
 
-  getLimitOffsetClause(limit: number, offset?: number): string {
-    return offset !== undefined && offset > 0 ? `OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY` : '';
+  getLimitOffsetClause(_limit: number, _offset?: number): string {
+    return '';
   }
 
   getTopClause(limit: number): string {
-    return `TOP ${limit}`;
+    return `TOP (${safeSqlLimit(limit)})`;
   }
 
   getNullCountExpression(column: string): string {
@@ -125,6 +143,18 @@ export class KtxSqlServerDialect {
 
   getDistinctCountExpression(column: string): string {
     return `COUNT(DISTINCT ${column})`;
+  }
+
+  textLengthExpression(columnSql: string): string {
+    return `LEN(CAST(${columnSql} AS NVARCHAR(MAX)))`;
+  }
+
+  castToText(columnSql: string): string {
+    return `CAST(${columnSql} AS NVARCHAR(MAX))`;
+  }
+
+  getSampleValueAggregation(innerSql: string): string {
+    return `(SELECT STRING_AGG(CAST(value AS NVARCHAR(MAX)), CHAR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
   }
 
   generateCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {
@@ -166,36 +196,5 @@ export class KtxSqlServerDialect {
       SELECT COUNT(DISTINCT val) AS cardinality
       FROM sampled
     `;
-  }
-
-  getTimeTruncExpression(
-    column: string,
-    granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
-    timezone?: string,
-  ): string {
-    const col = timezone ? `${column} AT TIME ZONE 'UTC' AT TIME ZONE '${timezone}'` : column;
-    switch (granularity) {
-      case 'day':
-        return `CAST(${col} AS DATE)`;
-      case 'week':
-        return `DATEADD(WEEK, DATEDIFF(WEEK, 0, ${col}), 0)`;
-      case 'month':
-        return `DATEFROMPARTS(YEAR(${col}), MONTH(${col}), 1)`;
-      case 'quarter':
-        return `DATEFROMPARTS(YEAR(${col}), (DATEPART(QUARTER, ${col}) - 1) * 3 + 1, 1)`;
-      case 'year':
-        return `DATEFROMPARTS(YEAR(${col}), 1, 1)`;
-    }
-  }
-
-  getCustomTimeTruncExpression(column: string, interval: string, origin?: string, timezone?: string): string {
-    const col = timezone ? `${column} AT TIME ZONE 'UTC' AT TIME ZONE '${timezone}'` : column;
-    const [amount, unit] = interval.split(' ');
-    const originExpr = origin ? `'${origin}'` : `'1970-01-01'`;
-    return `DATEADD(${unit}, (DATEDIFF(${unit}, ${originExpr}, ${col}) / ${amount}) * ${amount}, ${originExpr})`;
-  }
-
-  parseIntervalToSql(interval: string): string {
-    return `'${interval}'`;
   }
 }

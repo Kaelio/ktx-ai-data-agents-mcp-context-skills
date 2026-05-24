@@ -1,9 +1,17 @@
+import type { KtxDialect } from '../../context/connections/dialects.js';
+import {
+  columnDisplayPartCount,
+  formatDialectDisplayRef,
+  formatDialectTableName,
+  limitOffsetClause,
+  parseDialectDisplayRef,
+} from '../../context/connections/dialect-helpers.js';
 import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type PostgresTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
-export class KtxPostgresDialect {
-  readonly type = 'postgresql';
+export class KtxPostgresDialect implements KtxDialect {
+  readonly type = 'postgres' as const;
 
   private readonly typeMappings: Record<string, KtxSchemaDimensionType> = {
     timestamp: 'time',
@@ -45,9 +53,19 @@ export class KtxPostgresDialect {
   }
 
   formatTableName(table: PostgresTableNameRef): string {
-    return table.db
-      ? `${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`
-      : this.quoteIdentifier(table.name);
+    return formatDialectTableName(table, this.quoteIdentifier.bind(this), 'ansi');
+  }
+
+  formatDisplayRef(table: PostgresTableNameRef): string {
+    return formatDialectDisplayRef(table, 'ansi');
+  }
+
+  parseDisplayRef(display: string): KtxTableRef | null {
+    return parseDialectDisplayRef(display, 'ansi');
+  }
+
+  columnDisplayTablePartCount(): 1 | 2 | 3 {
+    return columnDisplayPartCount('ansi');
   }
 
   mapDataType(nativeType: string): string {
@@ -126,7 +144,11 @@ export class KtxPostgresDialect {
   }
 
   getLimitOffsetClause(limit: number, offset?: number): string {
-    return offset !== undefined && offset > 0 ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}`;
+    return limitOffsetClause(limit, offset);
+  }
+
+  getTopClause(_limit: number): string {
+    return '';
   }
 
   getNullCountExpression(column: string): string {
@@ -135,6 +157,18 @@ export class KtxPostgresDialect {
 
   getDistinctCountExpression(column: string): string {
     return `COUNT(DISTINCT ${column})`;
+  }
+
+  textLengthExpression(columnSql: string): string {
+    return `LENGTH(CAST(${columnSql} AS TEXT))`;
+  }
+
+  castToText(columnSql: string): string {
+    return `CAST(${columnSql} AS TEXT)`;
+  }
+
+  getSampleValueAggregation(innerSql: string): string {
+    return `(SELECT STRING_AGG(CAST(value AS TEXT), CHR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
   }
 
   generateCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {
@@ -190,24 +224,5 @@ export class KtxPostgresDialect {
       SELECT COUNT(DISTINCT val) AS cardinality
       FROM sampled
     `;
-  }
-
-  getTimeTruncExpression(
-    column: string,
-    granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
-    timezone?: string,
-  ): string {
-    const col = timezone ? `(${column} AT TIME ZONE '${timezone.replace(/'/g, "''")}')` : column;
-    return `DATE_TRUNC('${granularity}', ${col})`;
-  }
-
-  getCustomTimeTruncExpression(column: string, interval: string, origin?: string, timezone?: string): string {
-    const col = timezone ? `(${column} AT TIME ZONE '${timezone.replace(/'/g, "''")}')` : column;
-    const originExpr = origin ? `TIMESTAMP '${origin.replace(/'/g, "''")}'` : "TIMESTAMP '1970-01-01'";
-    return `${originExpr} + FLOOR(EXTRACT(EPOCH FROM (${col} - ${originExpr})) / EXTRACT(EPOCH FROM INTERVAL '${interval.replace(/'/g, "''")}')) * INTERVAL '${interval.replace(/'/g, "''")}'`;
-  }
-
-  parseIntervalToSql(interval: string): string {
-    return `INTERVAL '${interval.replace(/'/g, "''")}'`;
   }
 }

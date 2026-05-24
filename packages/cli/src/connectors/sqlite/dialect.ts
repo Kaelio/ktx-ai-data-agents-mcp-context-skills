@@ -1,9 +1,17 @@
+import type { KtxDialect } from '../../context/connections/dialects.js';
+import {
+  columnDisplayPartCount,
+  formatDialectDisplayRef,
+  formatDialectTableName,
+  limitOffsetClause,
+  parseDialectDisplayRef,
+} from '../../context/connections/dialect-helpers.js';
 import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type SqliteTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
-export class KtxSqliteDialect {
-  readonly type = 'sqlite';
+export class KtxSqliteDialect implements KtxDialect {
+  readonly type = 'sqlite' as const;
 
   private readonly typeMappings: Record<string, KtxSchemaDimensionType> = {
     DATETIME: 'time',
@@ -29,7 +37,19 @@ export class KtxSqliteDialect {
   }
 
   formatTableName(table: SqliteTableNameRef): string {
-    return this.quoteIdentifier(table.name);
+    return formatDialectTableName(table, this.quoteIdentifier.bind(this), 'sqlite');
+  }
+
+  formatDisplayRef(table: SqliteTableNameRef): string {
+    return formatDialectDisplayRef(table, 'sqlite');
+  }
+
+  parseDisplayRef(display: string): KtxTableRef | null {
+    return parseDialectDisplayRef(display, 'sqlite');
+  }
+
+  columnDisplayTablePartCount(): 1 | 2 | 3 {
+    return columnDisplayPartCount('sqlite');
   }
 
   mapDataType(nativeType: string): string {
@@ -92,7 +112,11 @@ export class KtxSqliteDialect {
   }
 
   getLimitOffsetClause(limit: number, offset?: number): string {
-    return offset !== undefined && offset > 0 ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}`;
+    return limitOffsetClause(limit, offset);
+  }
+
+  getTopClause(_limit: number): string {
+    return '';
   }
 
   getNullCountExpression(column: string): string {
@@ -101,6 +125,18 @@ export class KtxSqliteDialect {
 
   getDistinctCountExpression(column: string): string {
     return `COUNT(DISTINCT ${column})`;
+  }
+
+  textLengthExpression(columnSql: string): string {
+    return `LENGTH(CAST(${columnSql} AS TEXT))`;
+  }
+
+  castToText(columnSql: string): string {
+    return `CAST(${columnSql} AS TEXT)`;
+  }
+
+  getSampleValueAggregation(innerSql: string): string {
+    return `(SELECT GROUP_CONCAT(CAST(value AS TEXT), char(31)) FROM (${innerSql}) AS relationship_profile_values)`;
   }
 
   generateCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {
@@ -142,36 +178,5 @@ export class KtxSqliteDialect {
       SELECT COUNT(DISTINCT val) AS cardinality
       FROM sampled
     `;
-  }
-
-  getTimeTruncExpression(
-    column: string,
-    granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
-    _timezone?: string,
-  ): string {
-    switch (granularity) {
-      case 'day':
-        return `DATE(${column})`;
-      case 'week':
-        return `DATE(${column}, 'weekday 0', '-6 days')`;
-      case 'month':
-        return `DATE(${column}, 'start of month')`;
-      case 'quarter':
-        return `DATE(${column}, 'start of month', '-' || ((CAST(STRFTIME('%m', ${column}) AS INTEGER) - 1) % 3) || ' months')`;
-      case 'year':
-        return `DATE(${column}, 'start of year')`;
-    }
-  }
-
-  getCustomTimeTruncExpression(column: string, interval: string, origin?: string, _timezone?: string): string {
-    const [amount, unit] = interval.split(' ');
-    const originExpr = origin ? `julianday('${origin}')` : `julianday('1970-01-01')`;
-    const unitDays = unit === 'day' ? 1 : unit === 'week' ? 7 : 30;
-    const intervalDays = Number(amount) * unitDays;
-    return `DATE(julianday('1970-01-01') + (CAST((julianday(${column}) - ${originExpr}) / ${intervalDays} AS INTEGER) * ${intervalDays}))`;
-  }
-
-  parseIntervalToSql(interval: string): string {
-    return `'${interval}'`;
   }
 }
