@@ -201,6 +201,22 @@ describe('createKtxEntityDetailsService', () => {
     });
   });
 
+  it('resolves quoted qualified display strings through the dialect parser', async () => {
+    await seedScan({ syncId: 'sync-1', runId: 'scan-1' });
+    const service = createKtxEntityDetailsService(project);
+
+    const result = await service.read({
+      connectionId: 'warehouse',
+      entities: [{ table: '"public"."orders"' }],
+    });
+
+    expect(result.results[0]).toMatchObject({
+      ok: true,
+      display: 'public.orders',
+      tableRef: { catalog: null, db: 'public', name: 'orders' },
+    });
+  });
+
   it('filters requested columns while keeping full-table foreign keys', async () => {
     await seedScan({ syncId: 'sync-1', runId: 'scan-1' });
     const service = createKtxEntityDetailsService(project);
