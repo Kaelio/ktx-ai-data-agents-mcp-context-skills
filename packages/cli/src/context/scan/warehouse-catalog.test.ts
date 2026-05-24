@@ -156,6 +156,17 @@ describe('WarehouseCatalogService', () => {
     });
   });
 
+  it('keeps one-part table display fallback for loose catalog resolution', async () => {
+    await seedLiveDatabaseScan();
+    const catalog = new WarehouseCatalogService({ fileStore: project.fileStore });
+
+    await expect(catalog.resolveDisplay('warehouse', 'orders')).resolves.toMatchObject({
+      resolved: { catalog: null, db: 'public', name: 'orders' },
+      candidates: [],
+      dialect: 'postgres',
+    });
+  });
+
   it('treats two-part BigQuery identifiers as ambiguous instead of guessing', async () => {
     await seedLiveDatabaseScan('warehouse', 'sync-bigquery', 'bigquery');
     const catalog = new WarehouseCatalogService({ fileStore: project.fileStore });
