@@ -36,13 +36,4 @@ describe('KtxMysqlDialect', () => {
     expect(dialect.getLimitOffsetClause(10, 20)).toBe('LIMIT 10 OFFSET 20');
   });
 
-  it('prepares named parameters in deterministic SQL placeholder order', () => {
-    expect(dialect.prepareQuery('select * from orders where id = :id and status = :status', {
-      status: 'paid',
-      id: 10,
-    })).toEqual({
-      sql: 'select * from orders where id = ? and status = ?',
-      params: [10, 'paid'],
-    });
-  });
 });

@@ -10,6 +10,7 @@ import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/typ
 
 type SqlServerTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
+/** @internal */
 export class KtxSqlServerDialect implements KtxDialect {
   readonly type = 'sqlserver' as const;
 
@@ -102,17 +103,6 @@ export class KtxSqlServerDialect implements KtxDialect {
   generateColumnSampleQuery(tableName: string, columnName: string, limit: number): string {
     const quotedColumn = this.quoteIdentifier(columnName);
     return `SELECT TOP ${limit} ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND LTRIM(RTRIM(CAST(${quotedColumn} AS NVARCHAR(MAX)))) != ''`;
-  }
-
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: Record<string, unknown> } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-    let parameterizedQuery = sql;
-    for (const key of Object.keys(params)) {
-      parameterizedQuery = parameterizedQuery.replace(new RegExp(`:${key}\\b`, 'g'), `@${key}`);
-    }
-    return { sql: parameterizedQuery, params };
   }
 
   getRandomSampleFilter(samplePct: number): string {

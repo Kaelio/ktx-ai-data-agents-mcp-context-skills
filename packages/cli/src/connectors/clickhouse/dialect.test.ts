@@ -36,13 +36,4 @@ describe('KtxClickHouseDialect', () => {
     expect(dialect.getLimitOffsetClause(10, 20)).toBe('LIMIT 10 OFFSET 20');
   });
 
-  it('prepares named parameters using ClickHouse typed placeholders', () => {
-    expect(dialect.prepareQuery('select * from events where id = :id and event_name = :name', {
-      id: 10,
-      name: 'signup',
-    })).toEqual({
-      sql: 'select * from events where id = {id:Int64} and event_name = {name:String}',
-      params: { id: 10, name: 'signup' },
-    });
-  });
 });

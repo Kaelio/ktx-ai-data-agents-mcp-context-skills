@@ -10,6 +10,7 @@ import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/typ
 
 type MysqlTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
+/** @internal */
 export class KtxMysqlDialect implements KtxDialect {
   readonly type = 'mysql' as const;
 
@@ -107,21 +108,6 @@ export class KtxMysqlDialect implements KtxDialect {
   generateColumnSampleQuery(tableName: string, columnName: string, limit: number): string {
     const quotedColumn = this.quoteIdentifier(columnName);
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND TRIM(CAST(${quotedColumn} AS CHAR)) != '' LIMIT ${limit}`;
-  }
-
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: unknown[] } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-    const values: unknown[] = [];
-    const parameterizedQuery = sql.replace(/:([A-Za-z_][A-Za-z0-9_]*)\b/g, (placeholder, key: string) => {
-      if (!(key in params)) {
-        return placeholder;
-      }
-      values.push(params[key]);
-      return '?';
-    });
-    return { sql: parameterizedQuery, params: values };
   }
 
   getRandomSampleFilter(samplePct: number): string {

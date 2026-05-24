@@ -31,21 +31,4 @@ describe('KtxPostgresDialect', () => {
     expect(dialect.generateColumnStatisticsQuery('public', 'orders')).toContain('FROM pg_stats s');
   });
 
-  it('prepares named parameters with PostgreSQL positional parameters', () => {
-    expect(
-      dialect.prepareQuery('select * from orders where id = :id and status = :status', { id: 1, status: 'paid' }),
-    ).toEqual({
-      sql: 'select * from orders where id = $1 and status = $2',
-      params: [1, 'paid'],
-    });
-    expect(
-      dialect.prepareQuery('select :Client_Name_10, :Client_Name_1', {
-        Client_Name_1: 'short',
-        Client_Name_10: 'long',
-      }),
-    ).toEqual({
-      sql: 'select $2, $1',
-      params: ['short', 'long'],
-    });
-  });
 });

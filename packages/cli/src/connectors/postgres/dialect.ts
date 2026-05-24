@@ -10,6 +10,7 @@ import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/typ
 
 type PostgresTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
+/** @internal */
 export class KtxPostgresDialect implements KtxDialect {
   readonly type = 'postgres' as const;
 
@@ -108,25 +109,6 @@ export class KtxPostgresDialect implements KtxDialect {
   generateColumnSampleQuery(tableName: string, columnName: string, limit: number): string {
     const quotedColumn = this.quoteIdentifier(columnName);
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND TRIM(CAST(${quotedColumn} AS TEXT)) != '' LIMIT ${limit}`;
-  }
-
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: unknown[] } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-    const paramNames = Object.keys(params);
-    const values: unknown[] = new Array(paramNames.length);
-    const paramIndexMap = new Map<string, number>();
-    paramNames.forEach((name, index) => {
-      paramIndexMap.set(name, index + 1);
-      values[index] = params[name];
-    });
-    const sortedKeys = [...paramNames].sort((a, b) => b.length - a.length);
-    let parameterizedQuery = sql;
-    for (const name of sortedKeys) {
-      parameterizedQuery = parameterizedQuery.replace(new RegExp(`:${name}\\b`, 'g'), `$${paramIndexMap.get(name)}`);
-    }
-    return { sql: parameterizedQuery, params: values };
   }
 
   getRandomSampleFilter(samplePct: number): string {

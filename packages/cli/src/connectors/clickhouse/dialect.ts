@@ -10,6 +10,7 @@ import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/typ
 
 type ClickHouseTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
+/** @internal */
 export class KtxClickHouseDialect implements KtxDialect {
   readonly type = 'clickhouse' as const;
 
@@ -115,29 +116,6 @@ export class KtxClickHouseDialect implements KtxDialect {
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND trim(toString(${quotedColumn})) != '' LIMIT ${limit}`;
   }
 
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: Record<string, unknown> } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-
-    let parameterizedQuery = sql;
-    const queryParams: Record<string, unknown> = {};
-    const sortedKeys = Object.keys(params).sort((a, b) => b.length - a.length);
-
-    for (const key of sortedKeys) {
-      const placeholder = `:${key}`;
-      if (parameterizedQuery.includes(placeholder)) {
-        parameterizedQuery = parameterizedQuery.replace(
-          new RegExp(`:${key}\\b`, 'g'),
-          `{${key}:${this.inferClickHouseType(params[key])}}`,
-        );
-        queryParams[key] = params[key];
-      }
-    }
-
-    return { sql: parameterizedQuery, params: queryParams };
-  }
-
   getRandomSampleFilter(samplePct: number): string {
     if (samplePct <= 0 || samplePct >= 1) {
       return '';
@@ -218,22 +196,6 @@ export class KtxClickHouseDialect implements KtxDialect {
   private unwrapClickHouseType(value: string, wrapper: string): string {
     const prefix = `${wrapper}(`;
     return value.startsWith(prefix) && value.endsWith(')') ? value.slice(prefix.length, -1) : value;
-  }
-
-  private inferClickHouseType(value: unknown): string {
-    if (value === null || value === undefined) {
-      return 'String';
-    }
-    if (typeof value === 'boolean') {
-      return 'Bool';
-    }
-    if (typeof value === 'number') {
-      return Number.isInteger(value) ? 'Int64' : 'Float64';
-    }
-    if (value instanceof Date) {
-      return 'DateTime';
-    }
-    return 'String';
   }
 
 }

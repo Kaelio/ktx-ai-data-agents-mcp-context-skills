@@ -34,15 +34,4 @@ describe('KtxSqlServerDialect', () => {
     expect(dialect.getLimitOffsetClause(10, 20)).toBe('');
   });
 
-  it('prepares named parameters using SQL Server @ parameters', () => {
-    expect(
-      dialect.prepareQuery('select * from events where id = :id and name = :name', {
-        id: 10,
-        name: 'signup',
-      }),
-    ).toEqual({
-      sql: 'select * from events where id = @id and name = @name',
-      params: { id: 10, name: 'signup' },
-    });
-  });
 });

@@ -10,6 +10,7 @@ import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/typ
 
 type BigQueryTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
+/** @internal */
 export class KtxBigQueryDialect implements KtxDialect {
   readonly type = 'bigquery' as const;
 
@@ -105,19 +106,6 @@ export class KtxBigQueryDialect implements KtxDialect {
   generateColumnSampleQuery(tableName: string, columnName: string, limit: number): string {
     const quotedColumn = this.quoteIdentifier(columnName);
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND TRIM(CAST(${quotedColumn} AS STRING)) != '' ORDER BY RAND() LIMIT ${limit}`;
-  }
-
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: Record<string, unknown> } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-    let processedSql = sql;
-    const processedParams: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(params)) {
-      processedSql = processedSql.replace(new RegExp(`:${key}\\b`, 'g'), `@${key}`);
-      processedParams[key] = value;
-    }
-    return { sql: processedSql, params: Object.keys(processedParams).length > 0 ? processedParams : undefined };
   }
 
   getRandomSampleFilter(samplePct: number): string {

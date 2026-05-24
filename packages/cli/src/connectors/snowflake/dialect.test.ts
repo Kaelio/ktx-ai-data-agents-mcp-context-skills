@@ -36,14 +36,6 @@ describe('KtxSnowflakeDialect', () => {
     );
   });
 
-  it('passes Snowflake positional parameters as bind arrays', () => {
-    expect(dialect.prepareQuery('SELECT * FROM ORDERS WHERE ID = ? AND STATUS = ?', { id: 1, status: 'paid' })).toEqual({
-      sql: 'SELECT * FROM ORDERS WHERE ID = ? AND STATUS = ?',
-      params: [1, 'paid'],
-    });
-    expect(dialect.prepareQuery('SELECT * FROM ORDERS')).toEqual({ sql: 'SELECT * FROM ORDERS', params: undefined });
-  });
-
   it('keeps unsupported statistics explicit', () => {
     expect(dialect.generateColumnStatisticsQuery('PUBLIC', 'ORDERS')).toBeNull();
   });

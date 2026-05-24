@@ -38,14 +38,6 @@ describe('KtxBigQueryDialect', () => {
     );
   });
 
-  it('rewrites colon parameters to BigQuery named parameters', () => {
-    expect(dialect.prepareQuery('SELECT * FROM orders WHERE id = :id AND id_2 = :id_2', { id: 1, id_2: 2 })).toEqual({
-      sql: 'SELECT * FROM orders WHERE id = @id AND id_2 = @id_2',
-      params: { id: 1, id_2: 2 },
-    });
-    expect(dialect.prepareQuery('SELECT * FROM orders')).toEqual({ sql: 'SELECT * FROM orders', params: undefined });
-  });
-
   it('keeps unsupported statistics explicit', () => {
     expect(dialect.generateColumnStatisticsQuery('analytics', 'orders')).toBeNull();
   });

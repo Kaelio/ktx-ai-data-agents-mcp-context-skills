@@ -10,6 +10,7 @@ import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/typ
 
 type SqliteTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
+/** @internal */
 export class KtxSqliteDialect implements KtxDialect {
   readonly type = 'sqlite' as const;
 
@@ -94,10 +95,6 @@ export class KtxSqliteDialect implements KtxDialect {
   generateColumnSampleQuery(tableName: string, columnName: string, limit: number): string {
     const quoted = this.quoteIdentifier(columnName);
     return `SELECT ${quoted} FROM ${tableName} WHERE ${quoted} IS NOT NULL AND TRIM(CAST(${quoted} AS TEXT)) != '' LIMIT ${limit}`;
-  }
-
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: unknown } {
-    return params ? { sql, params } : { sql };
   }
 
   getRandomSampleFilter(samplePct: number): string {
