@@ -1,4 +1,5 @@
 import { assertReadOnlySql } from '../../context/connections/read-only-sql.js';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
 import {
@@ -26,7 +27,6 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import sql from 'mssql';
-import { KtxSqlServerDialect } from './dialect.js';
 
 export interface KtxSqlServerConnectionConfig {
   driver?: string;
@@ -364,7 +364,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
   private readonly poolFactory: KtxSqlServerPoolFactory;
   private readonly endpointResolver?: KtxSqlServerEndpointResolver;
   private readonly now: () => Date;
-  private readonly dialect = new KtxSqlServerDialect();
+  private readonly dialect = getDialectForDriver('sqlserver');
   private pool: KtxSqlServerPool | null = null;
   private resolvedEndpoint: KtxSqlServerResolvedEndpoint | null = null;
 

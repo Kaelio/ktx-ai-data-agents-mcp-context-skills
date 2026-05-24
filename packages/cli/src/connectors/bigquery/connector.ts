@@ -1,5 +1,6 @@
 import { BigQuery, type TableField } from '@google-cloud/bigquery';
 import { normalizeBigQueryProjectId, normalizeBigQueryRegion } from '../../context/connections/bigquery-identifiers.js';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -26,7 +27,6 @@ import {
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { KtxBigQueryDialect } from './dialect.js';
 
 export interface KtxBigQueryConnectionConfig {
   driver?: string;
@@ -303,7 +303,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
   private readonly now: () => Date;
   private readonly maxBytesBilled?: number | string;
   private readonly queryTimeoutMs?: number;
-  private readonly dialect = new KtxBigQueryDialect();
+  private readonly dialect = getDialectForDriver('bigquery');
   private client: KtxBigQueryClient | null = null;
 
   constructor(options: KtxBigQueryScanConnectorOptions) {

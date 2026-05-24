@@ -1,4 +1,5 @@
 import { createClient } from '@clickhouse/client';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableListEntry, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -6,7 +7,6 @@ import { readFileSync } from 'node:fs';
 import { Agent as HttpsAgent } from 'node:https';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { KtxClickHouseDialect } from './dialect.js';
 
 export interface KtxClickHouseConnectionConfig {
   driver?: string;
@@ -299,7 +299,7 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
   private readonly clientFactory: KtxClickHouseClientFactory;
   private readonly endpointResolver?: KtxClickHouseEndpointResolver;
   private readonly now: () => Date;
-  private readonly dialect = new KtxClickHouseDialect();
+  private readonly dialect = getDialectForDriver('clickhouse');
   private client: KtxClickHouseClient | null = null;
   private resolvedEndpoint: KtxClickHouseResolvedEndpoint | null = null;
 

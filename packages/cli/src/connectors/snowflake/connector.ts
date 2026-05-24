@@ -2,6 +2,7 @@ import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -27,7 +28,6 @@ import {
 } from '../../context/scan/types.js';
 import snowflake from 'snowflake-sdk';
 import type { Bind, Binds, Connection, ConnectionOptions } from 'snowflake-sdk';
-import { KtxSnowflakeDialect } from './dialect.js';
 import { assertSafeSnowflakeIdentifier, quoteSnowflakeIdentifier } from './identifiers.js';
 import { configureSnowflakeSdkLogger } from './sdk-logger.js';
 
@@ -558,7 +558,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
 
   private readonly resolved: KtxSnowflakeResolvedConnectionConfig;
   private readonly driverFactory: KtxSnowflakeDriverFactory;
-  private readonly dialect = new KtxSnowflakeDialect();
+  private readonly dialect = getDialectForDriver('snowflake');
   private readonly now: () => Date;
   private driverInstance: KtxSnowflakeDriver | null = null;
 

@@ -2,6 +2,7 @@ import mysql, { type FieldPacket, type Pool, type RowDataPacket } from 'mysql2/p
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import {
   constraintDiscoveryWarning,
@@ -30,7 +31,6 @@ import {
   type KtxTableSampleInput,
   type KtxTableSampleResult,
 } from '../../context/scan/types.js';
-import { KtxMysqlDialect } from './dialect.js';
 
 export interface KtxMysqlConnectionConfig {
   driver?: string;
@@ -395,7 +395,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
   private readonly poolFactory: KtxMysqlPoolFactory;
   private readonly endpointResolver?: KtxMysqlEndpointResolver;
   private readonly now: () => Date;
-  private readonly dialect = new KtxMysqlDialect();
+  private readonly dialect = getDialectForDriver('mysql');
   private pool: KtxMysqlPool | null = null;
   private resolvedEndpoint: KtxMysqlResolvedEndpoint | null = null;
 

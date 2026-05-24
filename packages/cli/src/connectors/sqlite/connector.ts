@@ -3,11 +3,11 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { normalizeQueryRows } from '../../context/connections/query-executor.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
-import { KtxSqliteDialect } from './dialect.js';
 
 export interface KtxSqliteConnectionConfig {
   driver?: string;
@@ -157,7 +157,7 @@ export class KtxSqliteScanConnector implements KtxScanConnector {
   private readonly connectionId: string;
   private readonly dbPath: string;
   private readonly now: () => Date;
-  private readonly dialect = new KtxSqliteDialect();
+  private readonly dialect = getDialectForDriver('sqlite');
   private db: Database.Database | null = null;
 
   constructor(options: KtxSqliteScanConnectorOptions) {
