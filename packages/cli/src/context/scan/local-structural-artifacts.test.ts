@@ -165,6 +165,61 @@ describe('readLocalScanStructuralSnapshot', () => {
     });
   });
 
+  it('rebuilds scan warnings from persisted live-database warning files', async () => {
+    const rawRoot = 'raw-sources/warehouse/live-database/sync-warnings';
+    await project.fileStore.writeFile(
+      `${rawRoot}/connection.json`,
+      '{"connectionId":"warehouse","metadata":{}}\n',
+      'ktx',
+      'ktx@example.com',
+      'Seed connection artifact',
+    );
+    await project.fileStore.writeFile(
+      `${rawRoot}/warnings.json`,
+      `${JSON.stringify(
+        {
+          warnings: [
+            {
+              code: 'constraint_discovery_unauthorized',
+              message: 'Skipped foreign-key discovery in public (insufficient grants on system catalogs)',
+              recoverable: true,
+              metadata: { schema: 'public', kind: 'foreign_key' },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      'ktx',
+      'ktx@example.com',
+      'Seed warning artifact',
+    );
+    await project.fileStore.writeFile(
+      `${rawRoot}/tables/orders.json`,
+      '{"name":"orders","catalog":null,"db":"public","kind":"table","comment":null,"estimatedRows":null,"columns":[{"name":"id","nativeType":"integer","normalizedType":"integer","dimensionType":"number","nullable":false,"primaryKey":false,"comment":null}],"foreignKeys":[]}\n',
+      'ktx',
+      'ktx@example.com',
+      'Seed orders artifact',
+    );
+
+    const snapshot = await readLocalScanStructuralSnapshot({
+      project,
+      connectionId: 'warehouse',
+      driver: 'postgres',
+      rawSourcesDir: rawRoot,
+      extractedAtFallback: '2026-04-29T13:00:00.000Z',
+    });
+
+    expect(snapshot.warnings).toEqual([
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped foreign-key discovery in public (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'public', kind: 'foreign_key' },
+      },
+    ]);
+  });
+
   it('uses the scan report timestamp when connection.json omits extractedAt', async () => {
     const rawRoot = 'raw-sources/warehouse/live-database/sync-2';
     await project.fileStore.writeFile(
@@ -191,5 +246,33 @@ describe('readLocalScanStructuralSnapshot', () => {
     });
 
     expect(snapshot.extractedAt).toBe('2026-04-29T13:00:00.000Z');
+  });
+
+  it('tolerates older live-database staged directories without warnings.json', async () => {
+    const rawRoot = 'raw-sources/warehouse/live-database/sync-no-warnings';
+    await project.fileStore.writeFile(
+      `${rawRoot}/connection.json`,
+      '{"connectionId":"warehouse","metadata":{}}\n',
+      'ktx',
+      'ktx@example.com',
+      'Seed connection artifact',
+    );
+    await project.fileStore.writeFile(
+      `${rawRoot}/tables/orders.json`,
+      '{"name":"orders","catalog":null,"db":null,"kind":"table","comment":null,"estimatedRows":null,"columns":[{"name":"id","nativeType":"integer","normalizedType":"integer","dimensionType":"number","nullable":false,"primaryKey":true,"comment":null}],"foreignKeys":[]}\n',
+      'ktx',
+      'ktx@example.com',
+      'Seed orders artifact',
+    );
+
+    const snapshot = await readLocalScanStructuralSnapshot({
+      project,
+      connectionId: 'warehouse',
+      driver: 'postgres',
+      rawSourcesDir: rawRoot,
+      extractedAtFallback: '2026-04-29T13:00:00.000Z',
+    });
+
+    expect(snapshot.warnings).toEqual([]);
   });
 });

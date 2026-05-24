@@ -591,7 +591,7 @@ describe('local ingest', () => {
       status: 'done',
       adapter: 'live-database',
       connectionId: 'warehouse',
-      rawFileCount: 3,
+      rawFileCount: 4,
       workUnitCount: 1,
     });
   });

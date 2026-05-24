@@ -284,7 +284,30 @@ describe('runKtxIngest', () => {
               return 0;
             },
             scanConnection: async () => 0,
-            historicSqlProbe: async () => ({ ok: true, lines: ['PASS Historic SQL probe skipped in test'] }),
+            historicSqlReadinessProbe: async () => ({
+              ok: true,
+              dialect: 'postgres',
+              runner: {
+                dialect: 'postgres',
+                catalogName: 'pg_stat_statements',
+                async run() {
+                  return { warnings: [], info: [] };
+                },
+                formatSuccessDetail() {
+                  return {
+                    detail: 'pg_stat_statements ready (PostgreSQL 16.4)',
+                    warnings: [],
+                  };
+                },
+                fixAdvice() {
+                  return {
+                    failHeadline: 'pg_stat_statements unavailable',
+                    remediation: 'Fix query-history grants.',
+                  };
+                },
+              },
+              result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+            }),
           },
           context: async () => ({ status: 'skipped', projectDir }),
           runtime: async () => runtimeReady(projectDir),

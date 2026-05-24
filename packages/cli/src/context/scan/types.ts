@@ -90,6 +90,7 @@ export interface KtxSchemaSnapshot {
   scope: KtxSchemaScope;
   tables: KtxSchemaTable[];
   metadata: Record<string, unknown>;
+  warnings?: KtxScanWarning[];
 }
 
 interface KtxCredentialEnvReference {
@@ -364,7 +365,8 @@ type KtxScanWarningCode =
   | 'relationship_llm_proposal_failed'
   | 'credential_redacted'
   | 'enrichment_failed'
-  | 'description_fallback_used';
+  | 'description_fallback_used'
+  | 'constraint_discovery_unauthorized';
 
 export interface KtxScanWarning {
   code: KtxScanWarningCode;

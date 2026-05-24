@@ -134,6 +134,16 @@ window flag applies to BigQuery and Snowflake; Postgres reads the current
 Enabling query history makes deep ingest readiness matter for later
 `ktx ingest` runs.
 
+When query history is enabled for PostgreSQL, Snowflake, or BigQuery,
+`ktx setup` runs a non-blocking readiness probe after the connection test
+passes. A failed probe still writes setup changes, prints the warehouse-specific
+grant or extension remediation, and leaves query-history ingest disabled until
+you fix the prerequisite.
+
+For BigQuery, the remediation tells you to grant `roles/bigquery.resourceViewer`
+on the BigQuery project, or grant a custom role that contains
+`bigquery.jobs.listAll`.
+
 ### Context Sources
 
 In interactive setup, after you configure a database, choose

@@ -1,6 +1,7 @@
 import type { KtxLocalProject } from '../../context/project/project.js';
 import type {
   KtxConnectionDriver,
+  KtxScanWarning,
   KtxSchemaColumn,
   KtxSchemaForeignKey,
   KtxSchemaSnapshot,
@@ -28,6 +29,59 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function metadataRecord(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
+}
+
+const scanWarningCodes = new Set<KtxScanWarning['code']>([
+  'connector_capability_missing',
+  'sampling_failed',
+  'statistics_failed',
+  'llm_unavailable',
+  'embedding_unavailable',
+  'scan_enrichment_backend_not_configured',
+  'relationship_validation_failed',
+  'relationship_llm_invalid_reference',
+  'relationship_llm_proposal_failed',
+  'credential_redacted',
+  'enrichment_failed',
+  'description_fallback_used',
+  'constraint_discovery_unauthorized',
+]);
+
+function parseWarning(rawWarning: unknown, path: string): KtxScanWarning {
+  if (
+    !isRecord(rawWarning) ||
+    typeof rawWarning.code !== 'string' ||
+    !scanWarningCodes.has(rawWarning.code as KtxScanWarning['code']) ||
+    typeof rawWarning.message !== 'string' ||
+    typeof rawWarning.recoverable !== 'boolean'
+  ) {
+    throw new Error(`Invalid KTX schema warning artifact: ${path}`);
+  }
+  return {
+    code: rawWarning.code as KtxScanWarning['code'],
+    message: rawWarning.message,
+    recoverable: rawWarning.recoverable,
+    ...(typeof rawWarning.table === 'string' ? { table: rawWarning.table } : {}),
+    ...(typeof rawWarning.column === 'string' ? { column: rawWarning.column } : {}),
+    ...(isRecord(rawWarning.metadata) ? { metadata: rawWarning.metadata } : {}),
+  };
+}
+
+async function readWarnings(input: ReadLocalScanStructuralSnapshotInput): Promise<KtxScanWarning[]> {
+  const path = `${input.rawSourcesDir}/warnings.json`;
+  try {
+    const warningRaw = await input.project.fileStore.readFile(path);
+    const parsed = JSON.parse(warningRaw.content) as unknown;
+    if (!isRecord(parsed) || !Array.isArray(parsed.warnings)) {
+      throw new Error(`Invalid KTX schema warnings artifact: ${path}`);
+    }
+    return parsed.warnings.map((warning) => parseWarning(warning, path));
+  } catch (error) {
+    if (error instanceof Error && /not found|ENOENT|no such file/i.test(error.message)) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 function optionalStringOrNull(value: unknown): string | null | undefined {
@@ -113,6 +167,7 @@ export async function readLocalScanStructuralSnapshot(
     const tableRaw = await input.project.fileStore.readFile(path);
     tables.push(parseTable(tableRaw.content, path));
   }
+  const warnings = await readWarnings(input);
 
   return {
     connectionId: typeof connection.connectionId === 'string' ? connection.connectionId : input.connectionId,
@@ -121,5 +176,6 @@ export async function readLocalScanStructuralSnapshot(
     scope: isRecord(connection.scope) ? connection.scope : {},
     metadata: metadataRecord(connection.metadata),
     tables,
+    warnings,
   };
 }

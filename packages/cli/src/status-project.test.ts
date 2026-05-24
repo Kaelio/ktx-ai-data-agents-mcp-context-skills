@@ -197,26 +197,58 @@ function withMysqlQueryHistory(config: KtxProjectConfig): KtxProjectConfig {
   };
 }
 
+function fakeStatusRunner(
+  dialect: 'postgres' | 'snowflake' | 'bigquery',
+  catalogName: string,
+) {
+  return {
+    dialect,
+    catalogName,
+    async run() {
+      return { warnings: [], info: [] };
+    },
+    formatSuccessDetail(result: unknown) {
+      const typed = result as { warnings: string[]; info?: string[]; pgServerVersion?: string };
+      const info = typed.info && typed.info.length > 0 ? `; ${typed.info.join('; ')}` : '';
+      const base =
+        dialect === 'postgres'
+          ? `pg_stat_statements ready (${typed.pgServerVersion ?? 'PostgreSQL 16.4'})`
+          : `${catalogName} ready`;
+      return { detail: `${base}${info}`, warnings: typed.warnings };
+    },
+    fixAdvice(error: unknown) {
+      return {
+        failHeadline: error instanceof Error ? error.message : String(error),
+        remediation: 'Fix query-history grants.',
+      };
+    },
+  };
+}
+
 describe('buildProjectStatus query history dispatch', () => {
-  it('runs the snowflake probe for snowflake connections, not the postgres one', async () => {
-    let postgresCalls = 0;
-    let snowflakeCalls = 0;
+  it('runs the shared probe for snowflake connections', async () => {
+    let probeCalls = 0;
+    const runner = fakeStatusRunner(
+      'snowflake',
+      'SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+    );
     const project = projectWithConfig(withSnowflakeQueryHistory(baseProjectConfig()));
 
     const status = await buildProjectStatus(project, {
       claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
-      postgresQueryHistoryProbe: async () => {
-        postgresCalls += 1;
-        throw new Error('postgres probe should not run for snowflake');
-      },
-      snowflakeQueryHistoryProbe: async () => {
-        snowflakeCalls += 1;
-        return { warnings: [], info: [] };
+      queryHistoryReadinessProbe: async (input) => {
+        probeCalls += 1;
+        expect(input.connectionId).toBe('warehouse');
+        return {
+          ok: true,
+          dialect: 'snowflake',
+          runner,
+          result: { warnings: [], info: [] },
+        };
       },
     });
 
-    expect(postgresCalls).toBe(0);
-    expect(snowflakeCalls).toBe(1);
+    expect(probeCalls).toBe(1);
     expect(status.queryHistory).toHaveLength(1);
     expect(status.queryHistory[0]).toMatchObject({
       connection: 'warehouse',
@@ -231,19 +263,21 @@ describe('buildProjectStatus query history dispatch', () => {
 
   it('reports snowflake probe failures with the reader-provided remediation', async () => {
     const project = projectWithConfig(withSnowflakeQueryHistory(baseProjectConfig()));
-    const { HistoricSqlGrantsMissingError } = await import(
-      './context/ingest/adapters/historic-sql/errors.js'
-    );
 
     const status = await buildProjectStatus(project, {
       claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
-      snowflakeQueryHistoryProbe: async () => {
-        throw new HistoricSqlGrantsMissingError({
-          dialect: 'snowflake',
-          message: 'role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
-          remediation: 'GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE ktx;',
-        });
-      },
+      queryHistoryReadinessProbe: async () => ({
+        ok: false,
+        dialect: 'snowflake',
+        runner: {
+          ...fakeStatusRunner('snowflake', 'SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY'),
+          fixAdvice: () => ({
+            failHeadline: 'Snowflake role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY',
+            remediation: 'GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE ktx;',
+          }),
+        },
+        error: new Error('role cannot read SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY'),
+      }),
     });
 
     expect(status.queryHistory[0]).toMatchObject({
@@ -257,18 +291,25 @@ describe('buildProjectStatus query history dispatch', () => {
   });
 
   it('runs the bigquery probe for bigquery connections', async () => {
-    let bigqueryCalls = 0;
+    let probeCalls = 0;
+    const runner = fakeStatusRunner('bigquery', 'INFORMATION_SCHEMA.JOBS_BY_PROJECT');
     const project = projectWithConfig(withBigQueryQueryHistory(baseProjectConfig()));
 
     const status = await buildProjectStatus(project, {
       claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
-      bigqueryQueryHistoryProbe: async () => {
-        bigqueryCalls += 1;
-        return { warnings: [], info: [] };
+      queryHistoryReadinessProbe: async (input) => {
+        probeCalls += 1;
+        expect(input.connectionId).toBe('bq');
+        return {
+          ok: true,
+          dialect: 'bigquery',
+          runner,
+          result: { warnings: [], info: [] },
+        };
       },
     });
 
-    expect(bigqueryCalls).toBe(1);
+    expect(probeCalls).toBe(1);
     expect(status.queryHistory[0]).toMatchObject({
       connection: 'bq',
       driver: 'bigquery',
@@ -283,7 +324,7 @@ describe('buildProjectStatus query history dispatch', () => {
 
     const status = await buildProjectStatus(project, {
       claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
-      postgresQueryHistoryProbe: async () => {
+      queryHistoryReadinessProbe: async () => {
         throw new Error('postgres probe must not run for mysql');
       },
     });
@@ -306,7 +347,7 @@ describe('buildProjectStatus query history dispatch', () => {
 describe('buildProjectStatus --fast', () => {
   it('skips claude-code probe and Postgres query-history probe', async () => {
     let claudeProbeCalls = 0;
-    let pgProbeCalls = 0;
+    let queryHistoryProbeCalls = 0;
     const project = projectWithConfig(withPostgresQueryHistory(baseProjectConfig()));
 
     const status = await buildProjectStatus(project, {
@@ -316,14 +357,14 @@ describe('buildProjectStatus --fast', () => {
         claudeProbeCalls += 1;
         return { ok: true };
       },
-      postgresQueryHistoryProbe: async () => {
-        pgProbeCalls += 1;
+      queryHistoryReadinessProbe: async () => {
+        queryHistoryProbeCalls += 1;
         throw new Error('should not be called');
       },
     });
 
     expect(claudeProbeCalls).toBe(0);
-    expect(pgProbeCalls).toBe(0);
+    expect(queryHistoryProbeCalls).toBe(0);
     expect(status.llm.status).toBe('skipped');
     expect(status.llm.detail).toMatch(/--fast/);
     expect(status.queryHistory).toHaveLength(1);
@@ -340,7 +381,7 @@ describe('buildProjectStatus --fast', () => {
       env: { ANALYTICS_DATABASE_URL: 'postgres://example' },
       fast: true,
       claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
-      postgresQueryHistoryProbe: async () => {
+      queryHistoryReadinessProbe: async () => {
         throw new Error('should not be called');
       },
     });

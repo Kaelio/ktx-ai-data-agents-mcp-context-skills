@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FieldPacket, RowDataPacket } from 'mysql2/promise';
 import { createMysqlLiveDatabaseIntrospection } from '../../connectors/mysql/live-database-introspection.js';
-import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
+import { isKtxMysqlConnectionConfig, KtxMysqlScanConnector, mysqlConnectionPoolConfigFromConfig, type KtxMysqlConnectionConfig, type KtxMysqlPoolFactory } from '../../connectors/mysql/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function mysqlResult(rows: Record<string, unknown>[], fields: Array<{ name: string; type?: number }>): [RowDataPacket[], FieldPacket[]] {
@@ -86,7 +86,9 @@ function fakePoolFactory(): KtxMysqlPoolFactory {
   };
 }
 
-function multiSchemaMysqlPoolFactory(): KtxMysqlPoolFactory {
+function multiSchemaMysqlPoolFactory(
+  options: { primaryKeyError?: Error; foreignKeyError?: Error } = {},
+): KtxMysqlPoolFactory {
   const query = vi.fn(async (sql: string, params?: unknown): Promise<[RowDataPacket[], FieldPacket[]]> => {
     if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
       expect(params).toEqual(['analytics', 'mart']);
@@ -141,6 +143,9 @@ function multiSchemaMysqlPoolFactory(): KtxMysqlPoolFactory {
       );
     }
     if (sql.includes('INFORMATION_SCHEMA.KEY_COLUMN_USAGE') && sql.includes("CONSTRAINT_NAME = 'PRIMARY'")) {
+      if (options.primaryKeyError) {
+        throw options.primaryKeyError;
+      }
       expect(params).toEqual(['analytics', 'mart']);
       return mysqlResult(
         [
@@ -151,6 +156,9 @@ function multiSchemaMysqlPoolFactory(): KtxMysqlPoolFactory {
       );
     }
     if (sql.includes('INFORMATION_SCHEMA.KEY_COLUMN_USAGE') && sql.includes('REFERENCED_TABLE_NAME IS NOT NULL')) {
+      if (options.foreignKeyError) {
+        throw options.foreignKeyError;
+      }
       expect(params).toEqual(['analytics', 'mart']);
       return mysqlResult([], []);
     }
@@ -189,6 +197,46 @@ describe('KtxMysqlScanConnector', () => {
       password: 'secret', // pragma: allowlist secret
       ssl: { rejectUnauthorized: false },
     });
+  });
+
+  it('defaults and validates MySQL maxConnections', () => {
+    const baseConnection: KtxMysqlConnectionConfig = {
+      driver: 'mysql',
+      host: 'db.example.test',
+      database: 'analytics',
+      username: 'reader',
+      password: 'secret', // pragma: allowlist secret
+    };
+
+    expect(
+      mysqlConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: baseConnection,
+      }),
+    ).toMatchObject({ connectionLimit: 10 });
+
+    expect(
+      mysqlConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: 25 },
+      }),
+    ).toMatchObject({ connectionLimit: 25 });
+
+    expect(
+      mysqlConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: '12' as never },
+      }),
+    ).toMatchObject({ connectionLimit: 12 });
+
+    for (const maxConnections of [0, -1, 1.5, Number.NaN, 'abc' as never]) {
+      expect(() =>
+        mysqlConnectionPoolConfigFromConfig({
+          connectionId: 'warehouse',
+          connection: { ...baseConnection, maxConnections },
+        }),
+      ).toThrow('connections.warehouse.maxConnections must be a positive integer');
+    }
   });
 
   it('introspects schema, primary keys, comments, row counts, views, and foreign keys', async () => {
@@ -274,6 +322,65 @@ describe('KtxMysqlScanConnector', () => {
       'analytics.customers',
       'mart.orders',
     ]);
+  });
+
+  it('soft-fails denied MySQL constraint discovery with one warning per schema and kind', async () => {
+    const connector = new KtxMysqlScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'mysql',
+        host: 'db.example.test',
+        database: 'analytics',
+        schemas: ['analytics', 'mart'],
+        username: 'reader',
+        password: 'secret', // pragma: allowlist secret
+      },
+      poolFactory: multiSchemaMysqlPoolFactory({
+        primaryKeyError: Object.assign(new Error('select command denied'), {
+          code: 'ER_TABLEACCESS_DENIED_ERROR',
+          errno: 1142,
+        }),
+        foreignKeyError: Object.assign(new Error('database access denied'), {
+          code: 'ER_DBACCESS_DENIED_ERROR',
+          errno: 1044,
+        }),
+      }),
+      now: () => new Date('2026-04-29T12:00:00.000Z'),
+    });
+
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'mysql' },
+      { runId: 'scan-run-mysql-denied-constraints' },
+    );
+
+    expect(snapshot.warnings).toEqual([
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped primary-key discovery in analytics (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'analytics', kind: 'primary_key' },
+      },
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped primary-key discovery in mart (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'mart', kind: 'primary_key' },
+      },
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped foreign-key discovery in analytics (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'analytics', kind: 'foreign_key' },
+      },
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped foreign-key discovery in mart (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'mart', kind: 'foreign_key' },
+      },
+    ]);
+    expect(snapshot.tables.every((table) => table.columns.every((column) => column.primaryKey === false))).toBe(true);
+    expect(snapshot.tables.every((table) => table.foreignKeys.length === 0)).toBe(true);
   });
 
   it('limits introspection to tables in tableScope', async () => {

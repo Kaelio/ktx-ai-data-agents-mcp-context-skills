@@ -21,6 +21,7 @@ export type KtxAgentTarget = 'claude-code' | 'claude-desktop' | 'codex' | 'curso
 export type KtxAgentScope = 'project' | 'global' | 'local';
 /** @internal */
 export type KtxAgentInstallMode = 'mcp' | 'mcp-cli';
+type KtxAgentModePromptChoice = KtxAgentInstallMode | 'skip' | 'back';
 
 export interface KtxSetupAgentsArgs {
   projectDir: string;
@@ -1122,9 +1123,18 @@ export async function runKtxSetupAgentsStep(
               label: 'Ask data questions + manage KTX with CLI commands',
               hint: 'Adds an admin CLI skill so agents can run ktx status, sl, wiki, and setup commands.',
             },
+            {
+              value: 'skip',
+              label: 'Skip agent setup for now',
+              hint: 'Leaves agent integration incomplete. You can run ktx setup --agents later.',
+            },
           ],
-        })) as KtxAgentInstallMode | 'back');
+        })) as KtxAgentModePromptChoice);
   if (mode === 'back') return { status: 'skipped', projectDir: args.projectDir };
+  if (mode === 'skip') {
+    io.stdout.write('│  Agent integration skipped.\n');
+    return { status: 'skipped', projectDir: args.projectDir };
+  }
 
   const targets =
     args.target !== undefined

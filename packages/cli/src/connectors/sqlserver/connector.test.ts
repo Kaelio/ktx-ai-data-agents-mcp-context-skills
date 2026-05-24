@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSqlServerLiveDatabaseIntrospection } from '../../connectors/sqlserver/live-database-introspection.js';
-import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
+import { isKtxSqlServerConnectionConfig, KtxSqlServerScanConnector, sqlServerConnectionPoolConfigFromConfig, type KtxSqlServerConnectionConfig, type KtxSqlServerPoolFactory, type KtxSqlServerQueryResult } from '../../connectors/sqlserver/connector.js';
 import { tableRefSet } from '../../context/scan/table-ref.js';
 
 function recordset<T extends Record<string, unknown>>(
@@ -16,7 +16,7 @@ function result<T extends Record<string, unknown>>(rows: T[], columnNames: strin
   return { recordset: recordset(rows, columnNames) };
 }
 
-function fakePoolFactory(): KtxSqlServerPoolFactory {
+function fakePoolFactory(options: { primaryKeyError?: Error; foreignKeyError?: Error } = {}): KtxSqlServerPoolFactory {
   const query = vi.fn(async (sql: string): Promise<KtxSqlServerQueryResult> => {
     if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
       return result(
@@ -55,6 +55,9 @@ function fakePoolFactory(): KtxSqlServerPoolFactory {
       );
     }
     if (sql.includes("CONSTRAINT_TYPE = 'PRIMARY KEY'")) {
+      if (options.primaryKeyError) {
+        throw options.primaryKeyError;
+      }
       return result(
         [
           { table_name: 'customers', column_name: 'id' },
@@ -64,6 +67,9 @@ function fakePoolFactory(): KtxSqlServerPoolFactory {
       );
     }
     if (sql.includes('REFERENTIAL_CONSTRAINTS')) {
+      if (options.foreignKeyError) {
+        throw options.foreignKeyError;
+      }
       return result(
         [
           {
@@ -164,6 +170,45 @@ describe('KtxSqlServerScanConnector', () => {
     });
   });
 
+  it('defaults and validates SQL Server maxConnections', () => {
+    const baseConnection: KtxSqlServerConnectionConfig = {
+      driver: 'sqlserver',
+      host: 'db.example.test',
+      database: 'analytics',
+      username: 'reader',
+    };
+
+    expect(
+      sqlServerConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: baseConnection,
+      }),
+    ).toMatchObject({ pool: { max: 10 } });
+
+    expect(
+      sqlServerConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: 15 },
+      }),
+    ).toMatchObject({ pool: { max: 15 } });
+
+    expect(
+      sqlServerConnectionPoolConfigFromConfig({
+        connectionId: 'warehouse',
+        connection: { ...baseConnection, maxConnections: '12' as never },
+      }),
+    ).toMatchObject({ pool: { max: 12 } });
+
+    for (const maxConnections of [0, -1, 1.5, Number.NaN, 'abc' as never]) {
+      expect(() =>
+        sqlServerConnectionPoolConfigFromConfig({
+          connectionId: 'warehouse',
+          connection: { ...baseConnection, maxConnections },
+        }),
+      ).toThrow('connections.warehouse.maxConnections must be a positive integer');
+    }
+  });
+
   it('introspects schema, primary keys, comments, row counts, views, and foreign keys', async () => {
     const connector = new KtxSqlServerScanConnector({
       connectionId: 'warehouse',
@@ -220,6 +265,46 @@ describe('KtxSqlServerScanConnector', () => {
         constraintName: 'orders_customer_id_fk',
       },
     ]);
+  });
+
+  it('soft-fails denied SQL Server constraint discovery with scan warnings', async () => {
+    const connector = new KtxSqlServerScanConnector({
+      connectionId: 'warehouse',
+      connection: {
+        driver: 'sqlserver',
+        host: 'db.example.test',
+        database: 'analytics',
+        username: 'reader',
+        schema: 'dbo',
+      },
+      poolFactory: fakePoolFactory({
+        primaryKeyError: Object.assign(new Error('SELECT permission denied'), { number: 229 }),
+        foreignKeyError: Object.assign(new Error('EXECUTE permission denied'), { number: 230 }),
+      }),
+      now: () => new Date('2026-04-29T16:00:00.000Z'),
+    });
+
+    const snapshot = await connector.introspect(
+      { connectionId: 'warehouse', driver: 'sqlserver' },
+      { runId: 'scan-run-sqlserver-denied-constraints' },
+    );
+
+    expect(snapshot.warnings).toEqual([
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped primary-key discovery in dbo (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'dbo', kind: 'primary_key' },
+      },
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped foreign-key discovery in dbo (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'dbo', kind: 'foreign_key' },
+      },
+    ]);
+    expect(snapshot.tables.every((table) => table.columns.every((column) => column.primaryKey === false))).toBe(true);
+    expect(snapshot.tables.every((table) => table.foreignKeys.length === 0)).toBe(true);
   });
 
   it('runs samples, distinct values, read-only SQL, row count, schema list, and cleanup', async () => {

@@ -180,6 +180,13 @@ function fetchOnlyAdapter(options: { extractedAt?: () => string; snapshot?: KtxS
         'utf-8',
       );
       await writeFile(join(stagedDir, 'foreign-keys.json'), '{"foreignKeys":[]}\n', 'utf-8');
+      if (scanSnapshot.warnings?.length) {
+        await writeFile(
+          join(stagedDir, 'warnings.json'),
+          `${JSON.stringify({ warnings: scanSnapshot.warnings })}\n`,
+          'utf-8',
+        );
+      }
       for (const table of scanSnapshot.tables) {
         await writeFile(join(stagedDir, 'tables', `${table.name}.json`), `${JSON.stringify(table)}\n`, 'utf-8');
       }
@@ -334,6 +341,48 @@ describe('local scan', () => {
       runId: 'scan-run-1',
       connectionId: 'warehouse',
     });
+  });
+
+  it('threads structural snapshot warnings into the final scan report', async () => {
+    const result = await runLocalScan({
+      project,
+      adapters: [
+        fetchOnlyAdapter({
+          snapshot: {
+            ...defaultFetchSnapshot(),
+            warnings: [
+              {
+                code: 'constraint_discovery_unauthorized',
+                message: 'Skipped primary-key discovery in public (insufficient grants on system catalogs)',
+                recoverable: true,
+                metadata: { schema: 'public', kind: 'primary_key' },
+              },
+            ],
+          },
+        }),
+      ],
+      connectionId: 'warehouse',
+      jobId: 'scan-run-structural-warnings',
+      now: () => new Date('2026-04-29T09:01:00.000Z'),
+    });
+
+    expect(result.report.warnings).toEqual([
+      {
+        code: 'constraint_discovery_unauthorized',
+        message: 'Skipped primary-key discovery in public (insufficient grants on system catalogs)',
+        recoverable: true,
+        metadata: { schema: 'public', kind: 'primary_key' },
+      },
+    ]);
+    await expect(
+      readFile(
+        join(
+          project.projectDir,
+          'raw-sources/warehouse/live-database/2026-04-29-090100-scan-run-structural-warnings/scan-report.json',
+        ),
+        'utf-8',
+      ),
+    ).resolves.toContain('"constraint_discovery_unauthorized"');
   });
 
   it('passes enabled_tables as fetch context tableScope and does not post-filter staged snapshots', async () => {

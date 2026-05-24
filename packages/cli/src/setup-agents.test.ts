@@ -418,6 +418,11 @@ describe('setup agents', () => {
           label: 'Ask data questions + manage KTX with CLI commands',
           hint: 'Adds an admin CLI skill so agents can run ktx status, sl, wiki, and setup commands.',
         },
+        {
+          value: 'skip',
+          label: 'Skip agent setup for now',
+          hint: 'Leaves agent integration incomplete. You can run ktx setup --agents later.',
+        },
       ],
     });
     expect(prompts.multiselect).toHaveBeenCalledWith(
@@ -425,6 +430,58 @@ describe('setup agents', () => {
         options: expect.arrayContaining([{ value: 'claude-desktop', label: 'Claude Desktop' }]),
       }),
     );
+  });
+
+  it('lets interactive setup skip agent integration from the connection mode prompt', async () => {
+    const io = makeIo();
+    const prompts = {
+      select: vi.fn(async () => 'skip'),
+      multiselect: vi.fn(async () => {
+        throw new Error('target selection should not run');
+      }),
+      cancel: vi.fn(),
+    };
+
+    await expect(
+      runKtxSetupAgentsStep(
+        {
+          projectDir: tempDir,
+          inputMode: 'auto',
+          yes: false,
+          agents: true,
+          scope: 'project',
+          mode: 'mcp',
+          skipAgents: false,
+        },
+        io.io,
+        { prompts },
+      ),
+    ).resolves.toMatchObject({ status: 'skipped', projectDir: tempDir });
+
+    expect(prompts.select).toHaveBeenCalledWith({
+      message: 'What should agents be allowed to do with this KTX project?',
+      options: [
+        {
+          value: 'mcp',
+          label: 'Ask data questions with KTX MCP',
+          hint: 'Installs the MCP connection and analytics workflow skill. Best for normal use.',
+        },
+        {
+          value: 'mcp-cli',
+          label: 'Ask data questions + manage KTX with CLI commands',
+          hint: 'Adds an admin CLI skill so agents can run ktx status, sl, wiki, and setup commands.',
+        },
+        {
+          value: 'skip',
+          label: 'Skip agent setup for now',
+          hint: 'Leaves agent integration incomplete. You can run ktx setup --agents later.',
+        },
+      ],
+    });
+    expect(prompts.multiselect).not.toHaveBeenCalled();
+    expect(io.stdout()).toContain('Agent integration skipped.');
+    await expect(stat(join(tempDir, '.ktx/agents/install-manifest.json'))).rejects.toThrow();
+    expect(await readKtxSetupState(tempDir)).toEqual({ completed_steps: [] });
   });
 
   it('prompts for global scope when every selected target supports it', async () => {
