@@ -1,11 +1,10 @@
+import type { KtxDialect } from '../connections/dialects.js';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable, KtxRelationshipType } from './enrichment-types.js';
 import {
-  formatKtxRelationshipTableRef,
-  quoteKtxRelationshipIdentifier,
   type KtxRelationshipProfileArtifact,
   type KtxRelationshipReadOnlyExecutor,
 } from './relationship-profiling.js';
-import type { KtxConnectionDriver, KtxQueryResult, KtxScanContext, KtxTableRef } from './types.js';
+import type { KtxQueryResult, KtxScanContext, KtxTableRef } from './types.js';
 
 type KtxCompositeRelationshipStatus = 'accepted' | 'review' | 'rejected';
 
@@ -57,7 +56,7 @@ export interface KtxCompositeRelationshipCandidate {
 
 export interface DiscoverKtxCompositeRelationshipsInput {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   schema: KtxEnrichedSchema;
   profiles: KtxRelationshipProfileArtifact;
   executor: KtxRelationshipReadOnlyExecutor | null;
@@ -224,28 +223,16 @@ function numberAt(result: KtxQueryResult, header: string): number {
   return 0;
 }
 
-function topSql(driver: KtxConnectionDriver, limit: number): string {
-  if (driver === 'sqlserver') {
-    return ` TOP (${Math.max(1, Math.floor(limit))})`;
-  }
-  return '';
+function sqlSuffix(fragment: string): string {
+  return fragment ? ` ${fragment}` : '';
 }
 
-function limitSql(driver: KtxConnectionDriver, limit: number): string {
-  if (driver === 'sqlserver') {
-    return '';
-  }
-  return ` LIMIT ${Math.max(1, Math.floor(limit))}`;
+function aliasedTupleSelect(dialect: KtxDialect, columns: readonly string[]): string {
+  return columns.map((column, index) => `${dialect.quoteIdentifier(column)} AS c${index}`).join(', ');
 }
 
-function aliasedTupleSelect(driver: KtxConnectionDriver, columns: readonly string[]): string {
-  return columns
-    .map((column, index) => `${quoteKtxRelationshipIdentifier(driver, column)} AS c${index}`)
-    .join(', ');
-}
-
-function nonNullPredicate(driver: KtxConnectionDriver, columns: readonly string[]): string {
-  return columns.map((column) => `${quoteKtxRelationshipIdentifier(driver, column)} IS NOT NULL`).join(' AND ');
+function nonNullPredicate(dialect: KtxDialect, columns: readonly string[]): string {
+  return columns.map((column) => `${dialect.quoteIdentifier(column)} IS NOT NULL`).join(' AND ');
 }
 
 function tupleEquality(columns: number): string {
@@ -255,39 +242,39 @@ function tupleEquality(columns: number): string {
 }
 
 function buildTupleDistinctSql(input: {
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   table: KtxTableRef;
   columns: readonly string[];
 }): string {
-  const tableSql = formatKtxRelationshipTableRef(input.driver, input.table);
+  const tableSql = input.dialect.formatTableName(input.table);
   return [
     'WITH tuple_values AS (',
-    `SELECT DISTINCT ${aliasedTupleSelect(input.driver, input.columns)} FROM ${tableSql}`,
-    `WHERE ${nonNullPredicate(input.driver, input.columns)}`,
+    `SELECT DISTINCT ${aliasedTupleSelect(input.dialect, input.columns)} FROM ${tableSql}`,
+    `WHERE ${nonNullPredicate(input.dialect, input.columns)}`,
     ')',
     'SELECT COUNT(*) AS distinct_count FROM tuple_values',
   ].join(' ');
 }
 
 function buildCompositeCoverageSql(input: {
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   childTable: KtxTableRef;
   childColumns: readonly string[];
   parentTable: KtxTableRef;
   parentColumns: readonly string[];
   maxDistinctSourceValues: number;
 }): string {
-  const childTableSql = formatKtxRelationshipTableRef(input.driver, input.childTable);
-  const parentTableSql = formatKtxRelationshipTableRef(input.driver, input.parentTable);
-  const top = topSql(input.driver, input.maxDistinctSourceValues);
-  const limit = limitSql(input.driver, input.maxDistinctSourceValues);
+  const childTableSql = input.dialect.formatTableName(input.childTable);
+  const parentTableSql = input.dialect.formatTableName(input.parentTable);
+  const top = input.dialect.getTopClause(input.maxDistinctSourceValues);
+  const limit = sqlSuffix(input.dialect.getLimitOffsetClause(input.maxDistinctSourceValues));
   return [
     'WITH child_values AS (',
-    `SELECT DISTINCT${top} ${aliasedTupleSelect(input.driver, input.childColumns)} FROM ${childTableSql}`,
-    `WHERE ${nonNullPredicate(input.driver, input.childColumns)}${limit}`,
+    `SELECT DISTINCT${top ? ` ${top}` : ''} ${aliasedTupleSelect(input.dialect, input.childColumns)} FROM ${childTableSql}`,
+    `WHERE ${nonNullPredicate(input.dialect, input.childColumns)}${limit}`,
     '), parent_values AS (',
-    `SELECT DISTINCT ${aliasedTupleSelect(input.driver, input.parentColumns)} FROM ${parentTableSql}`,
-    `WHERE ${nonNullPredicate(input.driver, input.parentColumns)}`,
+    `SELECT DISTINCT ${aliasedTupleSelect(input.dialect, input.parentColumns)} FROM ${parentTableSql}`,
+    `WHERE ${nonNullPredicate(input.dialect, input.parentColumns)}`,
     ')',
     'SELECT',
     '(SELECT COUNT(*) FROM child_values) AS child_distinct,',
@@ -335,7 +322,7 @@ function hasAcceptedSubset(
 
 async function detectCompositePrimaryKeys(input: {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   table: KtxEnrichedTable;
   profiles: KtxRelationshipProfileArtifact;
   executor: KtxRelationshipReadOnlyExecutor;
@@ -379,7 +366,7 @@ async function detectCompositePrimaryKeys(input: {
         {
           connectionId: input.connectionId,
           sql: buildTupleDistinctSql({
-            driver: input.driver,
+            dialect: input.dialect,
             table: input.table.ref,
             columns: columnNames,
           }),
@@ -439,7 +426,7 @@ function compatibleTuple(sourceColumns: readonly KtxEnrichedColumn[], targetColu
 
 async function validateCompositeRelationship(input: {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   sourceTable: KtxEnrichedTable;
   sourceColumns: readonly KtxEnrichedColumn[];
   targetKey: KtxCompositePrimaryKeyCandidate;
@@ -454,7 +441,7 @@ async function validateCompositeRelationship(input: {
     {
       connectionId: input.connectionId,
       sql: buildCompositeCoverageSql({
-        driver: input.driver,
+        dialect: input.dialect,
         childTable: input.sourceTable.ref,
         childColumns: input.sourceColumns.map((column) => column.name),
         parentTable: input.targetTable.ref,
@@ -552,7 +539,7 @@ export async function discoverKtxCompositeRelationships(
   for (const table of tables) {
     const result = await detectCompositePrimaryKeys({
       connectionId: input.connectionId,
-      driver: input.driver,
+      dialect: input.dialect,
       table,
       profiles: input.profiles,
       executor: input.executor,
@@ -595,7 +582,7 @@ export async function discoverKtxCompositeRelationships(
 
       const result = await validateCompositeRelationship({
         connectionId: input.connectionId,
-        driver: input.driver,
+        dialect: input.dialect,
         sourceTable,
         sourceColumns,
         targetKey,

@@ -1,3 +1,4 @@
+import type { KtxDialect } from '../connections/dialects.js';
 import type { KtxEnrichedColumn, KtxEnrichedSchema, KtxEnrichedTable } from './enrichment-types.js';
 import { mapWithConcurrency } from './relationship-validation.js';
 import type {
@@ -55,7 +56,7 @@ export interface KtxRelationshipProfileCache {
 
 export interface ProfileKtxRelationshipSchemaInput {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   schema: KtxEnrichedSchema;
   executor: KtxRelationshipReadOnlyExecutor | null;
   ctx: KtxScanContext;
@@ -70,75 +71,6 @@ export function createKtxRelationshipProfileCache(): KtxRelationshipProfileCache
 }
 
 const SAMPLE_VALUE_DELIMITER = '\u001f';
-
-type QuoteStyle = 'double' | 'backtick' | 'bracket';
-
-function quoteStyle(driver: KtxConnectionDriver): QuoteStyle {
-  if (driver === 'mysql' || driver === 'clickhouse') {
-    return 'backtick';
-  }
-  if (driver === 'sqlserver') {
-    return 'bracket';
-  }
-  return 'double';
-}
-
-export function quoteKtxRelationshipIdentifier(driver: KtxConnectionDriver, identifier: string): string {
-  switch (quoteStyle(driver)) {
-    case 'backtick':
-      return `\`${identifier.replace(/`/g, '``')}\``;
-    case 'bracket':
-      return `[${identifier.replace(/\]/g, ']]')}]`;
-    case 'double':
-      return `"${identifier.replace(/"/g, '""')}"`;
-  }
-}
-
-export function formatKtxRelationshipTableRef(driver: KtxConnectionDriver, table: KtxTableRef): string {
-  const parts =
-    driver === 'sqlite'
-      ? [table.name]
-      : [table.catalog, table.db, table.name].filter((value): value is string => Boolean(value));
-  return parts.map((part) => quoteKtxRelationshipIdentifier(driver, part)).join('.');
-}
-
-function textLengthExpression(driver: KtxConnectionDriver, columnSql: string): string {
-  if (driver === 'mysql') {
-    return `CHAR_LENGTH(CAST(${columnSql} AS CHAR))`;
-  }
-  if (driver === 'sqlserver') {
-    return `LEN(CAST(${columnSql} AS NVARCHAR(MAX)))`;
-  }
-  if (driver === 'bigquery') {
-    return `LENGTH(CAST(${columnSql} AS STRING))`;
-  }
-  if (driver === 'clickhouse') {
-    return `length(toString(${columnSql}))`;
-  }
-  return `LENGTH(CAST(${columnSql} AS TEXT))`;
-}
-
-function limitSql(driver: KtxConnectionDriver, limit: number): string {
-  if (driver === 'sqlserver') {
-    return '';
-  }
-  return ` LIMIT ${Math.max(1, Math.floor(limit))}`;
-}
-
-function topSql(driver: KtxConnectionDriver, limit: number): string {
-  if (driver === 'sqlserver') {
-    return ` TOP (${Math.max(1, Math.floor(limit))})`;
-  }
-  return '';
-}
-
-function sampledTableSql(driver: KtxConnectionDriver, tableSql: string, limit: number): string {
-  const safeLimit = Math.max(1, Math.floor(limit));
-  if (driver === 'sqlserver') {
-    return `(SELECT TOP (${safeLimit}) * FROM ${tableSql}) AS relationship_profile_sample`;
-  }
-  return `(SELECT * FROM ${tableSql}${limitSql(driver, safeLimit)}) AS relationship_profile_sample`;
-}
 
 function firstRow(result: KtxQueryResult): unknown[] {
   return result.rows[0] ?? [];
@@ -191,7 +123,7 @@ function columnKey(table: KtxEnrichedTable, column: KtxEnrichedColumn): string {
 
 function tableProfileCacheKey(input: {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   ctx: KtxScanContext;
   table: KtxTableRef;
   sampleValuesPerColumn: number;
@@ -200,7 +132,7 @@ function tableProfileCacheKey(input: {
   return [
     input.ctx.runId,
     input.connectionId,
-    input.driver,
+    input.dialect.type,
     input.table.catalog ?? '',
     input.table.db ?? '',
     input.table.name,
@@ -213,57 +145,47 @@ function sqlStringLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function sampleAggregateSql(driver: KtxConnectionDriver, innerSql: string): string {
-  if (driver === 'postgres') {
-    return `(SELECT STRING_AGG(CAST(value AS TEXT), CHR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
+function sqlSuffix(fragment: string): string {
+  return fragment ? ` ${fragment}` : '';
+}
+
+function sampledTableSql(dialect: KtxDialect, tableSql: string, limit: number): string {
+  const top = dialect.getTopClause(limit);
+  if (top) {
+    return `(SELECT ${top} * FROM ${tableSql}) AS relationship_profile_sample`;
   }
-  if (driver === 'bigquery') {
-    return `(SELECT STRING_AGG(CAST(value AS STRING), '\\u001F') FROM (${innerSql}) AS relationship_profile_values)`;
-  }
-  if (driver === 'mysql') {
-    return `(SELECT GROUP_CONCAT(CAST(value AS CHAR) SEPARATOR CHAR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
-  }
-  if (driver === 'sqlserver') {
-    return `(SELECT STRING_AGG(CAST(value AS NVARCHAR(MAX)), CHAR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
-  }
-  if (driver === 'clickhouse') {
-    return `(SELECT arrayStringConcat(groupArray(toString(value)), '\\x1F') FROM (${innerSql}) AS relationship_profile_values)`;
-  }
-  if (driver === 'snowflake') {
-    return `(SELECT LISTAGG(CAST(value AS VARCHAR), '\\x1f') FROM (${innerSql}) AS relationship_profile_values)`;
-  }
-  return `(SELECT GROUP_CONCAT(CAST(value AS TEXT), char(31)) FROM (${innerSql}) AS relationship_profile_values)`;
+  return `(SELECT * FROM ${tableSql}${sqlSuffix(dialect.getLimitOffsetClause(limit))}) AS relationship_profile_sample`;
 }
 
 function sampleValuesSql(input: {
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   tableSql: string;
   columnSql: string;
   limit: number;
 }): string {
+  const top = input.dialect.getTopClause(input.limit);
   return [
-    `SELECT${topSql(input.driver, input.limit)} ${input.columnSql} AS value`,
+    `SELECT${top ? ` ${top}` : ''} ${input.columnSql} AS value`,
     `FROM ${input.tableSql}`,
     `WHERE ${input.columnSql} IS NOT NULL`,
     `GROUP BY ${input.columnSql}`,
     `ORDER BY COUNT(*) DESC, ${input.columnSql} ASC`,
-    limitSql(input.driver, input.limit),
+    sqlSuffix(input.dialect.getLimitOffsetClause(input.limit)),
   ].join(' ');
 }
 
 function columnProfileSelectSql(input: {
-  connectionDriver: KtxConnectionDriver;
+  dialect: KtxDialect;
   tableSql: string;
   profileTableSql: string;
   column: KtxEnrichedColumn;
   sampleValuesPerColumn: number;
 }): string {
-  const columnSql = quoteKtxRelationshipIdentifier(input.connectionDriver, input.column.name);
-  const textLengthSql = textLengthExpression(input.connectionDriver, columnSql);
-  const samplesSql = sampleAggregateSql(
-    input.connectionDriver,
+  const columnSql = input.dialect.quoteIdentifier(input.column.name);
+  const textLengthSql = input.dialect.textLengthExpression(columnSql);
+  const samplesSql = input.dialect.getSampleValueAggregation(
     sampleValuesSql({
-      driver: input.connectionDriver,
+      dialect: input.dialect,
       tableSql: input.profileTableSql,
       columnSql,
       limit: input.sampleValuesPerColumn,
@@ -296,12 +218,12 @@ function splitSampleValues(value: unknown): string[] {
 
 async function queryCount(input: {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   table: KtxTableRef;
   executor: KtxRelationshipReadOnlyExecutor;
   ctx: KtxScanContext;
 }): Promise<{ rowCount: number; queryCount: number }> {
-  const tableSql = formatKtxRelationshipTableRef(input.driver, input.table);
+  const tableSql = input.dialect.formatTableName(input.table);
   const result = await input.executor.executeReadOnly(
     { connectionId: input.connectionId, sql: `SELECT COUNT(*) AS row_count FROM ${tableSql}`, maxRows: 1 },
     input.ctx,
@@ -311,7 +233,7 @@ async function queryCount(input: {
 
 async function queryTableProfile(input: {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   table: KtxEnrichedTable;
   executor: KtxRelationshipReadOnlyExecutor;
   ctx: KtxScanContext;
@@ -325,7 +247,7 @@ async function queryTableProfile(input: {
   if (input.table.columns.length === 0) {
     const rowCount = await queryCount({
       connectionId: input.connectionId,
-      driver: input.driver,
+      dialect: input.dialect,
       table: input.table.ref,
       executor: input.executor,
       ctx: input.ctx,
@@ -337,12 +259,12 @@ async function queryTableProfile(input: {
     };
   }
 
-  const tableSql = formatKtxRelationshipTableRef(input.driver, input.table.ref);
-  const profileTableSql = sampledTableSql(input.driver, tableSql, input.profileSampleRows);
+  const tableSql = input.dialect.formatTableName(input.table.ref);
+  const profileTableSql = sampledTableSql(input.dialect, tableSql, input.profileSampleRows);
   const sql = input.table.columns
     .map((column) =>
       columnProfileSelectSql({
-        connectionDriver: input.driver,
+        dialect: input.dialect,
         tableSql,
         profileTableSql,
         column,
@@ -401,7 +323,7 @@ export async function profileKtxRelationshipSchema(
   if (!input.executor) {
     return {
       connectionId: input.connectionId,
-      driver: input.driver,
+      driver: input.dialect.type,
       sqlAvailable: false,
       queryCount: 0,
       tables: [],
@@ -425,7 +347,7 @@ export async function profileKtxRelationshipSchema(
       const profileSampleRows = input.profileSampleRows ?? 10000;
       const cacheKey = tableProfileCacheKey({
         connectionId: input.connectionId,
-        driver: input.driver,
+        dialect: input.dialect,
         ctx: input.ctx,
         table: table.ref,
         sampleValuesPerColumn,
@@ -439,7 +361,7 @@ export async function profileKtxRelationshipSchema(
       try {
         const tableProfile = await queryTableProfile({
           connectionId: input.connectionId,
-          driver: input.driver,
+          dialect: input.dialect,
           table,
           executor,
           ctx: input.ctx,
@@ -481,7 +403,7 @@ export async function profileKtxRelationshipSchema(
 
   return {
     connectionId: input.connectionId,
-    driver: input.driver,
+    driver: input.dialect.type,
     sqlAvailable: true,
     queryCount: queryTotal,
     tables,

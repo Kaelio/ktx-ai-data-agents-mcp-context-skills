@@ -135,7 +135,7 @@ async function detectCompositeRelationships(input: {
   try {
     const compositeDetection = await discoverKtxCompositeRelationships({
       connectionId: input.connectionId,
-      driver: input.dialect.type,
+      dialect: input.dialect,
       schema: input.schema,
       profiles: input.profile,
       executor: input.executor,
@@ -223,7 +223,7 @@ export async function discoverKtxRelationships(
   const profileCache = createKtxRelationshipProfileCache();
   const profile = await profileKtxRelationshipSchema({
     connectionId: input.connectionId,
-    driver: input.dialect.type,
+    dialect: input.dialect,
     schema: input.schema,
     executor,
     ctx: input.context,
@@ -256,7 +256,7 @@ export async function discoverKtxRelationships(
   warnings.push(...llmProposalResult.warnings);
   const validated = await validateKtxRelationshipDiscoveryCandidates({
     connectionId: input.connectionId,
-    driver: input.dialect.type,
+    dialect: input.dialect,
     candidates,
     profiles: profile,
     executor,
