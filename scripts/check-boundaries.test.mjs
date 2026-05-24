@@ -112,6 +112,43 @@ describe('scanFileContent', () => {
     );
   });
 
+  it('rejects concrete connector dialect imports from scan workflow and connector classes', () => {
+    const violations = [
+      ...scanFileContent(
+        'packages/cli/src/context/scan/relationship-profiling.ts',
+        "import { KtxPostgresDialect } from '../../connectors/postgres/dialect.js';",
+      ),
+      ...scanFileContent(
+        'packages/cli/src/connectors/postgres/connector.ts',
+        "import { KtxPostgresDialect } from './dialect.js';",
+      ),
+    ];
+
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      ['dialect-boundary', 'dialect-boundary'],
+    );
+    assert.equal(
+      violations[0]?.message,
+      'Forbidden concrete connector dialect import; use getDialectForDriver() from context/connections/dialects.ts',
+    );
+
+    assert.deepEqual(
+      scanFileContent(
+        'packages/cli/src/context/connections/dialects.ts',
+        "import { KtxPostgresDialect } from '../../connectors/postgres/dialect.js';",
+      ),
+      [],
+    );
+    assert.deepEqual(
+      scanFileContent(
+        'packages/cli/src/connectors/postgres/dialect.test.ts',
+        "import { KtxPostgresDialect } from './dialect.js';",
+      ),
+      [],
+    );
+  });
+
   it('rejects old KTX LLM port declarations in context', () => {
     const violations = [
       ...scanFileContent('packages/cli/src/context/agent/agent-runner.service.ts', 'export interface LlmProviderPort {}'),
