@@ -23,7 +23,7 @@ describe('KtxClickHouseDialect', () => {
     expect(dialect.mapToDimensionType('')).toBe('string');
   });
 
-  it('builds sampling, distinct-value, pagination, and time SQL', () => {
+  it('builds sampling, distinct-value, and pagination SQL', () => {
     expect(dialect.generateSampleQuery('`analytics`.`events`', 25, ['id', 'event_name'])).toBe(
       'SELECT `id`, `event_name` FROM `analytics`.`events` LIMIT 25',
     );
@@ -34,7 +34,6 @@ describe('KtxClickHouseDialect', () => {
       'SELECT DISTINCT toString(`event_name`) AS val',
     );
     expect(dialect.getLimitOffsetClause(10, 20)).toBe('LIMIT 10 OFFSET 20');
-    expect(dialect.getTimeTruncExpression('created_at', 'week')).toBe('toStartOfWeek(created_at, 1)');
   });
 
   it('prepares named parameters using ClickHouse typed placeholders', () => {

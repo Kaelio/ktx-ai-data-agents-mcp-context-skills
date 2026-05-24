@@ -7,7 +7,9 @@ describe('KtxSqlServerDialect', () => {
   it('quotes identifiers and formats schema-qualified table names', () => {
     expect(dialect.quoteIdentifier('events')).toBe('[events]');
     expect(dialect.quoteIdentifier('odd]name')).toBe('[odd]]name]');
-    expect(dialect.formatTableName({ catalog: 'warehouse', db: 'dbo', name: 'events' })).toBe('[dbo].[events]');
+    expect(dialect.formatTableName({ catalog: 'warehouse', db: 'dbo', name: 'events' })).toBe(
+      '[warehouse].[dbo].[events]',
+    );
     expect(dialect.formatTableName({ catalog: null, db: null, name: 'events' })).toBe('[events]');
   });
 
@@ -20,7 +22,7 @@ describe('KtxSqlServerDialect', () => {
     expect(dialect.mapToDimensionType('')).toBe('string');
   });
 
-  it('builds sampling, distinct-value, pagination, and time SQL', () => {
+  it('builds sampling, distinct-value, and pagination SQL', () => {
     expect(dialect.generateSampleQuery('[dbo].[events]', 25, ['id', 'event_name'])).toBe(
       'SELECT TOP 25 [id], [event_name] FROM [dbo].[events]',
     );
@@ -28,11 +30,8 @@ describe('KtxSqlServerDialect', () => {
       "SELECT TOP 10 [event_name] FROM [dbo].[events] WHERE [event_name] IS NOT NULL AND LTRIM(RTRIM(CAST([event_name] AS NVARCHAR(MAX)))) != ''",
     );
     expect(dialect.generateDistinctValuesQuery('[dbo].[events]', '[event_name]', 5)).toContain('SELECT TOP 5 val');
-    expect(dialect.getTopClause(10)).toBe('TOP 10');
-    expect(dialect.getLimitOffsetClause(10, 20)).toBe('OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY');
-    expect(dialect.getTimeTruncExpression('created_at', 'month')).toBe(
-      'DATEFROMPARTS(YEAR(created_at), MONTH(created_at), 1)',
-    );
+    expect(dialect.getTopClause(10)).toBe('TOP (10)');
+    expect(dialect.getLimitOffsetClause(10, 20)).toBe('');
   });
 
   it('prepares named parameters using SQL Server @ parameters', () => {

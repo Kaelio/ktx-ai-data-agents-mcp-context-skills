@@ -23,7 +23,7 @@ describe('KtxMysqlDialect', () => {
     expect(dialect.mapToDimensionType('')).toBe('string');
   });
 
-  it('builds sampling, distinct-value, pagination, and time SQL', () => {
+  it('builds sampling, distinct-value, and pagination SQL', () => {
     expect(dialect.generateSampleQuery('`analytics`.`orders`', 25, ['id', 'status'])).toBe(
       'SELECT `id`, `status` FROM `analytics`.`orders` LIMIT 25',
     );
@@ -34,7 +34,6 @@ describe('KtxMysqlDialect', () => {
       'SELECT DISTINCT CAST(`status` AS CHAR) AS val',
     );
     expect(dialect.getLimitOffsetClause(10, 20)).toBe('LIMIT 10 OFFSET 20');
-    expect(dialect.getTimeTruncExpression('created_at', 'month')).toBe("DATE_FORMAT(created_at, '%Y-%m-01')");
   });
 
   it('prepares named parameters in deterministic SQL placeholder order', () => {

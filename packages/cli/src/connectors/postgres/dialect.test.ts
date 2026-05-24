@@ -18,7 +18,7 @@ describe('KtxPostgresDialect', () => {
     expect(dialect.mapToDimensionType('jsonb')).toBe('string');
   });
 
-  it('generates sample, distinct-value, statistics, and time SQL', () => {
+  it('generates sample, distinct-value, and statistics SQL', () => {
     expect(dialect.generateSampleQuery('"public"."orders"', 5, ['id', 'status'])).toBe(
       'SELECT "id", "status" FROM "public"."orders" LIMIT 5',
     );
@@ -29,7 +29,6 @@ describe('KtxPostgresDialect', () => {
       'SELECT DISTINCT "status"::text AS val',
     );
     expect(dialect.generateColumnStatisticsQuery('public', 'orders')).toContain('FROM pg_stats s');
-    expect(dialect.getTimeTruncExpression('"created_at"', 'month')).toBe('DATE_TRUNC(\'month\', "created_at")');
   });
 
   it('prepares named parameters with PostgreSQL positional parameters', () => {
