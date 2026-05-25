@@ -93,6 +93,8 @@ describe('KTX scan contract types', () => {
         expect(ctx.runId).toBe('scan-run-1');
         return snapshot;
       },
+      listSchemas: async () => [],
+      listTables: async () => [],
     };
 
     await expect(
@@ -164,6 +166,8 @@ describe('KTX scan contract types', () => {
           tables: [],
         };
       },
+      listSchemas: async () => [],
+      listTables: async () => [],
     };
 
     await expect(

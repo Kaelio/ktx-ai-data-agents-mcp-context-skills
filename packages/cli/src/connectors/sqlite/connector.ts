@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { normalizeQueryRows } from '../../context/connections/query-executor.js';
-import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
+import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaForeignKey, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableListEntry, type KtxTableRef, type KtxTableSampleInput, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
 
 export interface KtxSqliteConnectionConfig {
@@ -207,6 +207,30 @@ export class KtxSqliteScanConnector implements KtxScanConnector {
       },
       tables,
     };
+  }
+
+  async listSchemas(): Promise<string[]> {
+    return [];
+  }
+
+  async listTables(_schemas?: string[]): Promise<KtxTableListEntry[]> {
+    const rows = this.database()
+      .prepare(
+        `
+      SELECT name, type
+      FROM sqlite_master
+      WHERE type IN ('table', 'view')
+        AND name NOT LIKE 'sqlite_%'
+      ORDER BY name
+      `,
+      )
+      .all() as SqliteMasterRow[];
+
+    return rows.map((row) => ({
+      schema: '',
+      name: row.name,
+      kind: row.type === 'view' ? ('view' as const) : ('table' as const),
+    }));
   }
 
   async sampleTable(input: KtxTableSampleInput, _ctx: KtxScanContext): Promise<KtxTableSampleResult> {

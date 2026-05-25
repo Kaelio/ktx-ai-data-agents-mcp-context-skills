@@ -150,6 +150,20 @@ describe('KtxSqliteScanConnector', () => {
     ]);
   });
 
+  it('lists schemaless tables and views for setup discovery', async () => {
+    const connector = new KtxSqliteScanConnector({
+      connectionId: 'warehouse',
+      connection: { driver: 'sqlite', path: dbPath },
+    });
+
+    await expect(connector.listSchemas()).resolves.toEqual([]);
+    await expect(connector.listTables(['ignored'])).resolves.toEqual([
+      { schema: '', name: 'customers', kind: 'table' },
+      { schema: '', name: 'orders', kind: 'table' },
+      { schema: '', name: 'recent_orders', kind: 'view' },
+    ]);
+  });
+
   it('runs samples, distinct values, statistics, and read-only SQL', async () => {
     const connector = new KtxSqliteScanConnector({
       connectionId: 'warehouse',

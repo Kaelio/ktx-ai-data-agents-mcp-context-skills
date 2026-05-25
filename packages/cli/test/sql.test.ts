@@ -66,6 +66,8 @@ function makeConnector(overrides: Partial<KtxScanConnector> = {}): KtxScanConnec
     })),
     cleanup: vi.fn(async () => undefined),
     ...overrides,
+    listSchemas: overrides.listSchemas ?? vi.fn(async () => []),
+    listTables: overrides.listTables ?? vi.fn(async () => []),
   };
 }
 

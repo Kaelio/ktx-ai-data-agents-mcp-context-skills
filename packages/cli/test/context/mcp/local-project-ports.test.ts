@@ -56,6 +56,8 @@ describe('createLocalProjectMcpContextPorts', () => {
       driver: snapshot.driver,
       capabilities: createKtxConnectorCapabilities({ readOnlySql: queryResult !== undefined }),
       introspect: vi.fn(async () => snapshot),
+      listSchemas: vi.fn(async () => []),
+      listTables: vi.fn(async () => []),
       executeReadOnly: queryResult === undefined ? undefined : vi.fn(async () => queryResult),
       cleanup: vi.fn(async () => {}),
     };

@@ -72,6 +72,8 @@ function createConnector(): KtxScanConnector {
     introspect: vi.fn(async () => {
       throw new Error('introspection is not used by description generation');
     }),
+    listSchemas: vi.fn(async () => []),
+    listTables: vi.fn(async () => []),
     sampleColumn: vi.fn(async () => ({
       values: ['paid', 'refunded', null],
       nullCount: 1,

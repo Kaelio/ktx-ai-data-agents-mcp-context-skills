@@ -104,6 +104,8 @@ function connector(): KtxScanConnector {
       columnStats: true,
     }),
     introspect: vi.fn(async () => snapshot),
+    listSchemas: vi.fn(async () => []),
+    listTables: vi.fn(async () => []),
     sampleTable: vi.fn(async () => ({
       headers: ['id', 'customer_id'],
       rows: [[1, 10]],

@@ -59,6 +59,8 @@ function nativeConnector(
     introspect: vi.fn(async () => {
       throw new Error('introspect should not be called from connection test');
     }),
+    listSchemas: vi.fn(async () => []),
+    listTables: vi.fn(async () => []),
     testConnection,
     cleanup,
   };

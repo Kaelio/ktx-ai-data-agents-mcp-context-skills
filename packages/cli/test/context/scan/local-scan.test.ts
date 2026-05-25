@@ -16,6 +16,11 @@ import type {
   KtxSchemaSnapshot,
 } from '../../../src/context/scan/types.js';
 
+const connectorScopeListing = {
+  listSchemas: vi.fn(async () => []),
+  listTables: vi.fn(async () => []),
+};
+
 function relationshipSqlResult(
   input: KtxReadOnlyQueryInput,
   options: { throwOnCoverage?: boolean } = {},
@@ -254,6 +259,7 @@ function nativeScanConnector(options: { cleanup?: () => Promise<void> } = {}): K
       formalForeignKeys: false,
       estimatedRowCounts: false,
     },
+    ...connectorScopeListing,
     introspect: vi.fn(async () => nativeScanSnapshot()),
     sampleTable: vi.fn(async () => ({ headers: ['id'], rows: [[1]], totalRows: 1 })),
     sampleColumn: vi.fn(async () => ({ values: ['1'], nullCount: 0, distinctCount: 1 })),
@@ -656,6 +662,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: false,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -741,6 +748,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: true,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -930,6 +938,14 @@ describe('local scan', () => {
         };
       }
 
+      async listSchemas(): Promise<string[]> {
+        return [];
+      }
+
+      async listTables() {
+        return [];
+      }
+
       async executeReadOnly(input: KtxReadOnlyQueryInput): Promise<KtxQueryResult> {
         return relationshipSqlResult(input);
       }
@@ -972,6 +988,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: true,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -1073,6 +1090,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: true,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -1200,6 +1218,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: true,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -1340,6 +1359,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: true,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -1455,6 +1475,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: false,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -1550,6 +1571,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: false,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',
@@ -1666,6 +1688,7 @@ describe('local scan', () => {
         formalForeignKeys: false,
         estimatedRowCounts: false,
       },
+      ...connectorScopeListing,
       async introspect() {
         return {
           connectionId: 'warehouse',

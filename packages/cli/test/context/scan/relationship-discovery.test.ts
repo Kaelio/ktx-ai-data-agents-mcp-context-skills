@@ -213,6 +213,8 @@ function connector(executor: InMemorySqliteExecutor | null): KtxScanConnector {
       columnSampling: false,
     }),
     introspect: async () => snapshot(),
+    listSchemas: async () => [],
+    listTables: async () => [],
     executeReadOnly: executor ? executor.executeReadOnly.bind(executor) : undefined,
   };
 }
@@ -645,6 +647,8 @@ describe('production relationship discovery', () => {
         columnSampling: false,
       }),
       introspect: async () => maskedSnapshot,
+      listSchemas: async () => [],
+      listTables: async () => [],
       executeReadOnly: async (input) => {
         const rows = database.prepare(input.sql).all() as Record<string, unknown>[];
         const headers = Object.keys(rows[0] ?? {});
