@@ -76,7 +76,7 @@ describe('local ingest adapters', () => {
     expect(looker?.fetch).toBeTypeOf('function');
   });
 
-  it('returns the explicit Metabase fan-out boundary before runner construction', async () => {
+  it('returns the explicit Metabase fanout boundary before runner construction', async () => {
     const metabase = createDefaultLocalIngestAdapters(project).find((adapter) => adapter.source === 'metabase');
 
     await expect(localPullConfigForAdapter(project, metabase!, 'warehouse')).rejects.toThrow(

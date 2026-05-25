@@ -59,7 +59,7 @@ uv run python -m semantic_layer.cli --model /tmp/model.yaml \
   -q '{"measures":["orders.revenue"],"dimensions":["customers.segment"]}' --suggest
 ```
 
-### 3. Test fan-out / chasm traps
+### 3. Test fanout / chasm traps
 
 Add multiple measure sources that fan out from a shared dimension hub:
 

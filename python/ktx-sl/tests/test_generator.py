@@ -89,10 +89,10 @@ class TestCrossSourceM2O:
 
 
 class TestFanOut:
-    """Test 3: Fan-out (aggregate locality)."""
+    """Test 3: Fanout (aggregate locality)."""
 
     def test_orders_by_region_no_fanout(self, planner, generator, ecommerce_sources):
-        """orders → customers → regions is all m2o. No fan-out needed."""
+        """orders → customers → regions is all m2o. No fanout needed."""
         sql = generate_sql(
             planner,
             generator,

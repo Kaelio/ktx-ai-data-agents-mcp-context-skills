@@ -346,7 +346,7 @@ describe('runKtxIngest', () => {
     );
   });
 
-  it('routes metabase scheduled pulls to the fan-out runner and prints child summaries', async () => {
+  it('routes metabase scheduled pulls to the fanout runner and prints child summaries', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -397,13 +397,13 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
+    expect(io.stdout()).toContain('Metabase fanout: all_succeeded');
     expect(io.stdout()).toContain('warehouse_a');
     expect(io.stdout()).toContain('metabase-child-1');
     expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
-  it('returns a non-zero code when Metabase fan-out has failed children', async () => {
+  it('returns a non-zero code when Metabase fanout has failed children', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -467,13 +467,13 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(1);
 
-    expect(io.stdout()).toContain('Metabase fan-out: partial_failure');
+    expect(io.stdout()).toContain('Metabase fanout: partial_failure');
     expect(io.stdout()).toContain('Failed tasks: 1');
     expect(io.stdout()).toContain('status=error');
     expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
-  it('prints Metabase fan-out progress before the final summary', async () => {
+  it('prints Metabase fanout progress before the final summary', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -548,11 +548,11 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).toContain('Targets: 1 mapped database');
     expect(io.stderr()).toContain('- database=1 target=warehouse_a status=running job=metabase-child-1');
     expect(io.stderr()).toContain('- database=1 target=warehouse_a status=done job=metabase-child-1');
-    expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
+    expect(io.stdout()).toContain('Metabase fanout: all_succeeded');
     expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
   });
 
-  it('writes metabase fan-out progress to stderr and final result to stdout', async () => {
+  it('writes metabase fanout progress to stderr and final result to stdout', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo({ isTTY: true });
@@ -592,11 +592,11 @@ describe('runKtxIngest', () => {
 
     expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
     expect(io.stderr()).toContain('status=running job=metabase-child-1');
-    expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
+    expect(io.stdout()).toContain('Metabase fanout: all_succeeded');
     expect(io.stdout()).not.toContain('status=running job=metabase-child-1');
   });
 
-  it('emits structured progress for Metabase fan-out without writing progress to JSON output', async () => {
+  it('emits structured progress for Metabase fanout without writing progress to JSON output', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -655,7 +655,7 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).not.toContain('Metabase ingest: prod-metabase');
   });
 
-  it('emits structured child ingest progress during Metabase fan-out', async () => {
+  it('emits structured child ingest progress during Metabase fanout', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -766,7 +766,7 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).not.toContain('Metabase ingest: prod-metabase');
   });
 
-  it('runs Metabase scheduled ingest through the public CLI command path with real fan-out', async () => {
+  it('runs Metabase scheduled ingest through the public CLI command path with real fanout', async () => {
     const projectDir = join(tempDir, 'metabase-cli-project');
     await writeWarehouseConfig(projectDir);
     await writeFile(
@@ -838,7 +838,7 @@ describe('runKtxIngest', () => {
 
     expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
     expect(io.stderr()).toContain('Targets: 2 mapped databases');
-    expect(io.stdout()).toContain('Metabase fan-out: all_succeeded');
+    expect(io.stdout()).toContain('Metabase fanout: all_succeeded');
     expect(io.stdout()).toContain('Source: prod-metabase');
     expect(io.stdout()).toContain('Children: 2');
     expect(io.stdout()).toContain('target=warehouse_a database=1 status=done job=metabase-child-1');
@@ -893,7 +893,7 @@ describe('runKtxIngest', () => {
     });
   });
 
-  it('prints metabase fan-out JSON results', async () => {
+  it('prints metabase fanout JSON results', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -967,7 +967,7 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).toBe('');
   });
 
-  it('rejects source-dir uploads through the metabase fan-out route', async () => {
+  it('rejects source-dir uploads through the metabase fanout route', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -985,13 +985,13 @@ describe('runKtxIngest', () => {
         io.io,
         {
           runLocalMetabaseIngest: async () => {
-            throw new Error('fan-out should not be called');
+            throw new Error('fanout should not be called');
           },
         },
       ),
     ).resolves.toBe(1);
 
-    expect(io.stderr()).toContain('source-dir uploads are not supported for the Metabase fan-out adapter');
+    expect(io.stderr()).toContain('source-dir uploads are not supported for the Metabase fanout adapter');
     expect(io.stderr()).not.toContain('ktx ingest requires llm.provider.backend');
     expect(io.stdout()).toBe('');
   });

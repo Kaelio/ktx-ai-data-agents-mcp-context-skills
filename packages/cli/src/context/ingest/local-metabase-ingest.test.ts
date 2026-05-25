@@ -148,7 +148,7 @@ describe('runLocalMetabaseIngest', () => {
     ).rejects.toThrow('no sync-enabled mappings with a target connection');
   });
 
-  it('seeds yaml-only Metabase mappings before the unhydrated fan-out preflight', async () => {
+  it('seeds yaml-only Metabase mappings before the unhydrated fanout preflight', async () => {
     project.config.connections['prod-metabase'].mappings = {
       databaseMappings: { '1': 'warehouse_a' },
       syncEnabled: { '1': true },
@@ -172,7 +172,7 @@ describe('runLocalMetabaseIngest', () => {
     ]);
   });
 
-  it('rejects source-dir uploads through the Metabase fan-out runner', async () => {
+  it('rejects source-dir uploads through the Metabase fanout runner', async () => {
     await expect(
       runLocalMetabaseIngest({
         project,
@@ -181,7 +181,7 @@ describe('runLocalMetabaseIngest', () => {
         agentRunner: new TestAgentRunner(),
         sourceDir: tempDir,
       } as Parameters<typeof runLocalMetabaseIngest>[0] & { sourceDir: string }),
-    ).rejects.toThrow('source-dir uploads are not supported for the Metabase fan-out adapter');
+    ).rejects.toThrow('source-dir uploads are not supported for the Metabase fanout adapter');
   });
 
   it('reports partial failure when a child job fails', async () => {
