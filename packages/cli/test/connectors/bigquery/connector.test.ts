@@ -267,7 +267,7 @@ describe('KtxBigQueryScanConnector', () => {
       ),
     ).resolves.toEqual({ values: ['open', 'paid'], cardinality: 2 });
     await expect(connector.getTableRowCount('orders')).resolves.toBe(12);
-    await expect(connector.listDatasets()).resolves.toEqual(['analytics', 'staging']);
+    await expect(connector.listSchemas()).resolves.toEqual(['analytics', 'staging']);
     await expect(
       connector.columnStats(
         { connectionId: 'warehouse', table: { catalog: 'project-1', db: 'analytics', name: 'orders' }, column: 'status' },

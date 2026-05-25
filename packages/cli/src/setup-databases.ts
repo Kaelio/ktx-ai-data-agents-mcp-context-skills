@@ -411,7 +411,7 @@ async function defaultListSchemas(projectDir: string, connectionId: string): Pro
     if (!isKtxBigQueryConnectionConfig(connection)) return [];
     const connector = new KtxBigQueryScanConnector({ connectionId, connection });
     try {
-      return await connector.listDatasets();
+      return await connector.listSchemas();
     } finally {
       await connector.cleanup();
     }

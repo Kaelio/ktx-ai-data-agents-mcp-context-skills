@@ -428,7 +428,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     return this.dialect.quoteIdentifier(identifier);
   }
 
-  async listDatasets(): Promise<string[]> {
+  async listSchemas(): Promise<string[]> {
     const [datasets] = await this.getClient().getDatasets();
     return datasets.map((dataset) => dataset.id).filter((id): id is string => Boolean(id));
   }

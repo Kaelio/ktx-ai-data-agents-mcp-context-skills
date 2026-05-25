@@ -313,6 +313,8 @@ export interface KtxScanConnector {
   capabilities: KtxConnectorCapabilities;
   eventStreamDiscovery?: KtxEventStreamDiscoveryPort;
   introspect(input: KtxScanInput, ctx: KtxScanContext): Promise<KtxSchemaSnapshot>;
+  listSchemas(): Promise<string[]>;
+  listTables(schemas?: string[]): Promise<KtxTableListEntry[]>;
   testConnection?(): Promise<KtxConnectorTestResult>;
   sampleColumn?(input: KtxColumnSampleInput, ctx: KtxScanContext): Promise<KtxColumnSampleResult>;
   sampleTable?(input: KtxTableSampleInput, ctx: KtxScanContext): Promise<KtxTableSampleResult>;
