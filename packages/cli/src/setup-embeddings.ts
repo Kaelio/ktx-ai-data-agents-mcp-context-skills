@@ -6,7 +6,7 @@ import { markKtxSetupStateStepComplete, readKtxSetupState } from './context/proj
 import type { KtxEmbeddingConfig } from './llm/types.js';
 import { type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from './llm/embedding-health.js';
 import type { KtxCliIo } from './cli-runtime.js';
-import { createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
+import { createStaticCliSpinner, errorMessage, writePrefixedLines, type KtxCliSpinner } from './clack.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
@@ -420,11 +420,12 @@ export async function runKtxSetupEmbeddingsStep(
           io,
         });
       } catch (error) {
+        const write = (chunk: string) => io.stderr.write(chunk);
         if (error instanceof ManagedPythonDaemonStartError) {
           const tail = await readLocalEmbeddingDaemonStderrTail(error.stderrLog);
-          io.stderr.write(`${localEmbeddingSetupMessage(error.detail, tail)}\n`);
+          writePrefixedLines(write, localEmbeddingSetupMessage(error.detail, tail));
         } else {
-          io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+          writePrefixedLines(write, errorMessage(error));
         }
         return { status: 'failed', projectDir: args.projectDir };
       }

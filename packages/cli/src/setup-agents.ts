@@ -10,6 +10,7 @@ import { markKtxSetupStateStepComplete } from './context/project/setup-config.js
 import { serializeKtxProjectConfig } from './context/project/config.js';
 import { strToU8, zipSync } from 'fflate';
 import type { KtxCliIo } from './cli-runtime.js';
+import { errorMessage, writePrefixedLines } from './clack.js';
 import {
   createKtxSetupPromptAdapter,
   createKtxSetupUiAdapter,
@@ -1230,7 +1231,7 @@ export async function runKtxSetupAgentsStep(
     }
     return { status: 'ready', projectDir: args.projectDir, installs, nextActions };
   } catch (error) {
-    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
     return { status: 'failed', projectDir: args.projectDir };
   }
 }

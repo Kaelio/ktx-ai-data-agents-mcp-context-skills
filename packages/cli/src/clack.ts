@@ -1,6 +1,29 @@
 import { cancel, confirm, isCancel, log, spinner } from '@clack/prompts';
+import type { KtxCliIo } from './cli-runtime.js';
 
 const ESC = String.fromCharCode(0x1b);
+
+export interface RailBufferedSource {
+  stdoutText(): string;
+  stderrText(): string;
+}
+
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function writePrefixedLines(write: (chunk: string) => void, output: string): void {
+  for (const line of output.split(/\r?\n/)) {
+    if (line.length > 0) {
+      write(`│  ${line}\n`);
+    }
+  }
+}
+
+export function flushPrefixedBufferedCommandOutput(io: KtxCliIo, buffered: RailBufferedSource): void {
+  writePrefixedLines((chunk) => io.stdout.write(chunk), buffered.stdoutText());
+  writePrefixedLines((chunk) => io.stderr.write(chunk), buffered.stderrText());
+}
 
 export interface KtxCliSpinner {
   start(message: string): void;

@@ -1,6 +1,7 @@
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete } from './context/project/setup-config.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { errorMessage, writePrefixedLines } from './clack.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,
   type ManagedLocalEmbeddingsDaemon,
@@ -88,7 +89,7 @@ export async function runKtxSetupRuntimeStep(
       });
     }
   } catch (error) {
-    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
     return { status: 'failed', projectDir: args.projectDir, requirements };
   }
 
