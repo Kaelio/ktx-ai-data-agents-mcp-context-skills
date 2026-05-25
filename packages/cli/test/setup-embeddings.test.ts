@@ -5,6 +5,7 @@ import { initKtxProject } from '../src/context/project/project.js';
 import { parseKtxProjectConfig } from '../src/context/project/config.js';
 import { readKtxSetupState, writeKtxSetupState } from '../src/context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ManagedPythonDaemonStartError } from '../src/managed-python-daemon.js';
 import { type KtxSetupEmbeddingsPromptAdapter, runKtxSetupEmbeddingsStep } from '../src/setup-embeddings.js';
 
 const EMBEDDING_OPTION_PROMPT_MESSAGE = [
@@ -364,6 +365,40 @@ describe('setup embeddings step', () => {
     expect(io.stderr()).toContain('daemon traceback line 6');
     expect(io.stderr()).toContain('daemon traceback line 45');
     expect(io.stderr()).not.toContain('daemon traceback line 5');
+  });
+
+  it('prints the daemon stderr tail when the daemon fails to start', async () => {
+    const io = makeIo();
+    const stderrLog = join(tempDir, '.ktx', 'runtime', 'daemon.stderr.log');
+    await mkdir(join(tempDir, '.ktx', 'runtime'), { recursive: true });
+    await writeFile(
+      stderrLog,
+      Array.from({ length: 45 }, (_value, index) => `daemon startup traceback ${index + 1}`).join('\n'),
+    );
+
+    const result = await runKtxSetupEmbeddingsStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
+        skipEmbeddings: false,
+      },
+      io.io,
+      {
+        env: {},
+        ensureLocalEmbeddings: vi.fn(async () => {
+          throw new ManagedPythonDaemonStartError('fetch failed: connect ECONNREFUSED 127.0.0.1:61234', stderrLog);
+        }),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(io.stderr()).toContain('Local embedding health check failed: fetch failed: connect ECONNREFUSED');
+    expect(io.stderr()).toContain('Recent KTX daemon stderr:');
+    expect(io.stderr()).toContain('daemon startup traceback 6');
+    expect(io.stderr()).toContain('daemon startup traceback 45');
+    expect(io.stderr()).not.toContain('daemon startup traceback 5');
   });
 
   it('does not print daemon stderr diagnostics when the log is unavailable or empty', async () => {

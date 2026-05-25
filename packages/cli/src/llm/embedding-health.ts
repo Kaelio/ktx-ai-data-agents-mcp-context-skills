@@ -1,3 +1,4 @@
+import { describeError } from '../error-message.js';
 import { createKtxEmbeddingProvider, type KtxEmbeddingProviderDeps } from './embedding-provider.js';
 import type { KtxEmbeddingConfig } from './types.js';
 
@@ -48,7 +49,6 @@ export async function runKtxEmbeddingHealthCheck(
     }
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, message: redactHealthCheckMessage(message, config) };
+    return { ok: false, message: redactHealthCheckMessage(describeError(error), config) };
   }
 }

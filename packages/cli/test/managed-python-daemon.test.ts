@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ManagedPythonDaemonStartError,
   readManagedPythonDaemonStatus,
   startManagedPythonDaemon,
   stopAllManagedPythonDaemons,
@@ -242,6 +243,76 @@ describe('KTX daemon lifecycle', () => {
       port: 61234,
       version: '0.2.0',
     });
+  });
+
+  it('kills the spawned daemon when the startup health check times out', async () => {
+    const spawnDaemon = makeSpawn(7777);
+    const killProcess = vi.fn();
+    const fetch = vi.fn<ManagedPythonDaemonFetch>().mockRejectedValue(new Error('fetch failed'));
+
+    await expect(
+      startManagedPythonDaemon({
+        ...daemonOptionsBase(tempDir),
+        features: ['core'],
+        installRuntime: vi.fn(async () => installResult(tempDir)),
+        spawnDaemon,
+        fetch,
+        processAlive: vi.fn(() => true),
+        killProcess,
+        allocatePort: vi.fn(async () => 61234),
+        now: () => new Date('2026-05-11T00:00:00.000Z'),
+        startupTimeoutMs: 5,
+        pollIntervalMs: 1,
+      }),
+    ).rejects.toBeInstanceOf(ManagedPythonDaemonStartError);
+
+    expect(killProcess).toHaveBeenCalledWith(7777);
+    await expect(readFile(layout(tempDir).daemonStatePath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('surfaces the underlying fetch cause in the startup failure message', async () => {
+    const cause = new Error('connect ECONNREFUSED 127.0.0.1:61234');
+    const fetchError = new Error('fetch failed');
+    (fetchError as Error & { cause?: unknown }).cause = cause;
+
+    const error = await startManagedPythonDaemon({
+      ...daemonOptionsBase(tempDir),
+      features: ['core'],
+      installRuntime: vi.fn(async () => installResult(tempDir)),
+      spawnDaemon: makeSpawn(7778),
+      fetch: vi.fn<ManagedPythonDaemonFetch>().mockRejectedValue(fetchError),
+      processAlive: vi.fn(() => false),
+      killProcess: vi.fn(),
+      allocatePort: vi.fn(async () => 61234),
+      now: () => new Date('2026-05-11T00:00:00.000Z'),
+      startupTimeoutMs: 5,
+      pollIntervalMs: 1,
+    }).catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(ManagedPythonDaemonStartError);
+    const startError = error as ManagedPythonDaemonStartError;
+    expect(startError.detail).toContain('fetch failed');
+    expect(startError.detail).toContain('ECONNREFUSED');
+    expect(startError.message).toContain('ECONNREFUSED');
+  });
+
+  it('exposes the daemon stderr log path on startup failure', async () => {
+    const error = await startManagedPythonDaemon({
+      ...daemonOptionsBase(tempDir),
+      features: ['core'],
+      installRuntime: vi.fn(async () => installResult(tempDir)),
+      spawnDaemon: makeSpawn(7779),
+      fetch: vi.fn<ManagedPythonDaemonFetch>().mockRejectedValue(new Error('fetch failed')),
+      processAlive: vi.fn(() => false),
+      killProcess: vi.fn(),
+      allocatePort: vi.fn(async () => 61234),
+      now: () => new Date('2026-05-11T00:00:00.000Z'),
+      startupTimeoutMs: 5,
+      pollIntervalMs: 1,
+    }).catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(ManagedPythonDaemonStartError);
+    expect((error as ManagedPythonDaemonStartError).stderrLog).toBe(layout(tempDir).daemonStderrPath);
   });
 
   it('reuses a healthy daemon with the requested feature set', async () => {

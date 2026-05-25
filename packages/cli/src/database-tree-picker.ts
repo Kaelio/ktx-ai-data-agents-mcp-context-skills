@@ -228,11 +228,14 @@ async function runStageTwoTreePicker(input: {
       ? initialSelectionForExisting(args.existing.enabledTables, byId)
       : initialSelectionFromDefaults(selectedSchemas, schemaIds);
 
-  const initialState = buildInitialState({
-    tree,
-    existingSelectedIds: initialSelection,
-    skipEmptyAction: 'save-empty',
-  });
+  const initialState = {
+    ...buildInitialState({
+      tree,
+      existingSelectedIds: initialSelection,
+      skipEmptyAction: 'save-empty',
+    }),
+    expanded: new Set(schemaIds),
+  };
 
   const schemaWordPlural = schemaCount === 1 ? args.schemaNoun : args.schemaNounPlural;
   const subtitleLines = [

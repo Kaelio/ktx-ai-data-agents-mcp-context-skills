@@ -164,13 +164,13 @@ describe('setup databases step', () => {
         'Which databases should KTX connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
       options: [
-        { value: 'sqlite', label: 'SQLite' },
         { value: 'postgres', label: 'PostgreSQL' },
+        { value: 'bigquery', label: 'BigQuery' },
+        { value: 'snowflake', label: 'Snowflake' },
         { value: 'mysql', label: 'MySQL' },
         { value: 'clickhouse', label: 'ClickHouse' },
         { value: 'sqlserver', label: 'SQL Server' },
-        { value: 'bigquery', label: 'BigQuery' },
-        { value: 'snowflake', label: 'Snowflake' },
+        { value: 'sqlite', label: 'SQLite' },
       ],
       required: true,
     });
@@ -381,12 +381,16 @@ describe('setup databases step', () => {
 
   it('emits debug telemetry when setup writes a database connection', async () => {
     vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('KTX_TELEMETRY_DISABLED', '');
+    vi.stubEnv('DO_NOT_TRACK', '');
     vi.stubEnv('CI', '');
     const io = makeIo();
     const prompts = makePromptAdapter({
       selectValues: ['url'],
       textValues: ['', 'env:DATABASE_URL'],
     });
+    const listSchemas = vi.fn(async () => []);
+    const listTables = vi.fn(async () => []);
 
     const result = await runKtxSetupDatabasesStep(
       {
@@ -397,7 +401,13 @@ describe('setup databases step', () => {
         skipDatabases: false,
       },
       io.io,
-      { prompts, testConnection: vi.fn(async () => 0), scanConnection: vi.fn(async () => 0) },
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        listSchemas,
+        listTables,
+      },
     );
 
     expect(result.status).toBe('ready');

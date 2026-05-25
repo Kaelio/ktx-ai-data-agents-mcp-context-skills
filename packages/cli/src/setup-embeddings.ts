@@ -12,6 +12,7 @@ import {
   managedLocalEmbeddingHealthConfig,
   type ManagedLocalEmbeddingsDaemon,
 } from './managed-local-embeddings.js';
+import { ManagedPythonDaemonStartError } from './managed-python-daemon.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { withTextInputNavigation } from './prompt-navigation.js';
 import { envCredentialReference, writeProjectLocalSecretReference } from './setup-secrets.js';
@@ -419,7 +420,12 @@ export async function runKtxSetupEmbeddingsStep(
           io,
         });
       } catch (error) {
-        io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        if (error instanceof ManagedPythonDaemonStartError) {
+          const tail = await readLocalEmbeddingDaemonStderrTail(error.stderrLog);
+          io.stderr.write(`${localEmbeddingSetupMessage(error.detail, tail)}\n`);
+        } else {
+          io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        }
         return { status: 'failed', projectDir: args.projectDir };
       }
     }

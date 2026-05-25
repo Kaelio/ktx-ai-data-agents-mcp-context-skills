@@ -113,13 +113,13 @@ export interface KtxSetupDatabasesDeps {
 }
 
 const DRIVER_OPTIONS: Array<{ value: KtxSetupDatabaseDriver; label: string }> = [
-  { value: 'sqlite', label: 'SQLite' },
   { value: 'postgres', label: 'PostgreSQL' },
+  { value: 'bigquery', label: 'BigQuery' },
+  { value: 'snowflake', label: 'Snowflake' },
   { value: 'mysql', label: 'MySQL' },
   { value: 'clickhouse', label: 'ClickHouse' },
   { value: 'sqlserver', label: 'SQL Server' },
-  { value: 'bigquery', label: 'BigQuery' },
-  { value: 'snowflake', label: 'Snowflake' },
+  { value: 'sqlite', label: 'SQLite' },
 ];
 
 const DRIVER_LABELS = Object.fromEntries(DRIVER_OPTIONS.map((option) => [option.value, option.label])) as Record<

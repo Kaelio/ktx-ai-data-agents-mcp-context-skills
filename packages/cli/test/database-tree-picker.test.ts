@@ -161,6 +161,7 @@ describe('pickDatabaseScope', () => {
       'public.events',
       'public.sessions',
     ]);
+    expect([...(capture.state?.expanded ?? [])].sort()).toEqual(['analytics', 'public']);
     expect(capture.state?.byId.get('public.events')?.title).toBe('events (view)');
   });
 
