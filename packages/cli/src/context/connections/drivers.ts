@@ -1,0 +1,205 @@
+import type { KtxConnectionDriver, KtxScanConnector } from '../scan/types.js';
+
+type KtxScopeConfigKey = 'dataset_ids' | 'databases' | 'schemas' | 'schema_names';
+
+interface KtxDriverConnectorModule {
+  isConnectionConfig(connection: unknown): boolean;
+  createScanConnector(args: {
+    connectionId: string;
+    connection: unknown;
+    projectDir: string;
+  }): KtxScanConnector;
+}
+
+export interface KtxDriverRegistration {
+  readonly driver: KtxConnectionDriver;
+  readonly scopeConfigKey: KtxScopeConfigKey | null;
+  readonly hasHistoricSqlReader: boolean;
+  readonly hasLocalQueryExecutor: boolean;
+  load(): Promise<KtxDriverConnectorModule>;
+}
+
+function invalidConnectionConfig(driver: KtxConnectionDriver): Error {
+  return new Error(`Connection config does not match warehouse driver "${driver}".`);
+}
+
+/** @internal */
+export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistration> = {
+  bigquery: {
+    driver: 'bigquery',
+    scopeConfigKey: 'dataset_ids',
+    hasHistoricSqlReader: true,
+    hasLocalQueryExecutor: false,
+    load: async () => {
+      const m = await import('../../connectors/bigquery/connector.js');
+      return {
+        isConnectionConfig: (connection) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxBigQueryConnectionConfig>[0];
+          return m.isKtxBigQueryConnectionConfig(typedConnection);
+        },
+        createScanConnector: ({ connectionId, connection }) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxBigQueryConnectionConfig>[0];
+          if (!m.isKtxBigQueryConnectionConfig(typedConnection)) {
+            throw invalidConnectionConfig('bigquery');
+          }
+          return new m.KtxBigQueryScanConnector({ connectionId, connection: typedConnection });
+        },
+      };
+    },
+  },
+  clickhouse: {
+    driver: 'clickhouse',
+    scopeConfigKey: 'databases',
+    hasHistoricSqlReader: false,
+    hasLocalQueryExecutor: false,
+    load: async () => {
+      const m = await import('../../connectors/clickhouse/connector.js');
+      return {
+        isConnectionConfig: (connection) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxClickHouseConnectionConfig>[0];
+          return m.isKtxClickHouseConnectionConfig(typedConnection);
+        },
+        createScanConnector: ({ connectionId, connection }) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxClickHouseConnectionConfig>[0];
+          if (!m.isKtxClickHouseConnectionConfig(typedConnection)) {
+            throw invalidConnectionConfig('clickhouse');
+          }
+          return new m.KtxClickHouseScanConnector({ connectionId, connection: typedConnection });
+        },
+      };
+    },
+  },
+  mysql: {
+    driver: 'mysql',
+    scopeConfigKey: 'schemas',
+    hasHistoricSqlReader: false,
+    hasLocalQueryExecutor: false,
+    load: async () => {
+      const m = await import('../../connectors/mysql/connector.js');
+      return {
+        isConnectionConfig: (connection) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxMysqlConnectionConfig>[0];
+          return m.isKtxMysqlConnectionConfig(typedConnection);
+        },
+        createScanConnector: ({ connectionId, connection }) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxMysqlConnectionConfig>[0];
+          if (!m.isKtxMysqlConnectionConfig(typedConnection)) {
+            throw invalidConnectionConfig('mysql');
+          }
+          return new m.KtxMysqlScanConnector({ connectionId, connection: typedConnection });
+        },
+      };
+    },
+  },
+  postgres: {
+    driver: 'postgres',
+    scopeConfigKey: 'schemas',
+    hasHistoricSqlReader: true,
+    hasLocalQueryExecutor: true,
+    load: async () => {
+      const m = await import('../../connectors/postgres/connector.js');
+      return {
+        isConnectionConfig: (connection) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxPostgresConnectionConfig>[0];
+          return m.isKtxPostgresConnectionConfig(typedConnection);
+        },
+        createScanConnector: ({ connectionId, connection }) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxPostgresConnectionConfig>[0];
+          if (!m.isKtxPostgresConnectionConfig(typedConnection)) {
+            throw invalidConnectionConfig('postgres');
+          }
+          return new m.KtxPostgresScanConnector({ connectionId, connection: typedConnection });
+        },
+      };
+    },
+  },
+  sqlite: {
+    driver: 'sqlite',
+    scopeConfigKey: null,
+    hasHistoricSqlReader: false,
+    hasLocalQueryExecutor: true,
+    load: async () => {
+      const m = await import('../../connectors/sqlite/connector.js');
+      return {
+        isConnectionConfig: (connection) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxSqliteConnectionConfig>[0];
+          return m.isKtxSqliteConnectionConfig(typedConnection);
+        },
+        createScanConnector: ({ connectionId, connection, projectDir }) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxSqliteConnectionConfig>[0];
+          if (!m.isKtxSqliteConnectionConfig(typedConnection)) {
+            throw invalidConnectionConfig('sqlite');
+          }
+          return new m.KtxSqliteScanConnector({ connectionId, connection: typedConnection, projectDir });
+        },
+      };
+    },
+  },
+  snowflake: {
+    driver: 'snowflake',
+    scopeConfigKey: 'schema_names',
+    hasHistoricSqlReader: true,
+    hasLocalQueryExecutor: false,
+    load: async () => {
+      const m = await import('../../connectors/snowflake/connector.js');
+      return {
+        isConnectionConfig: (connection) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxSnowflakeConnectionConfig>[0];
+          return m.isKtxSnowflakeConnectionConfig(typedConnection);
+        },
+        createScanConnector: ({ connectionId, connection, projectDir }) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxSnowflakeConnectionConfig>[0];
+          if (!m.isKtxSnowflakeConnectionConfig(typedConnection)) {
+            throw invalidConnectionConfig('snowflake');
+          }
+          return new m.KtxSnowflakeScanConnector({ connectionId, connection: typedConnection, projectDir });
+        },
+      };
+    },
+  },
+  sqlserver: {
+    driver: 'sqlserver',
+    scopeConfigKey: 'schemas',
+    hasHistoricSqlReader: false,
+    hasLocalQueryExecutor: false,
+    load: async () => {
+      const m = await import('../../connectors/sqlserver/connector.js');
+      return {
+        isConnectionConfig: (connection) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxSqlServerConnectionConfig>[0];
+          return m.isKtxSqlServerConnectionConfig(typedConnection);
+        },
+        createScanConnector: ({ connectionId, connection }) => {
+          const typedConnection = connection as Parameters<typeof m.isKtxSqlServerConnectionConfig>[0];
+          if (!m.isKtxSqlServerConnectionConfig(typedConnection)) {
+            throw invalidConnectionConfig('sqlserver');
+          }
+          return new m.KtxSqlServerScanConnector({ connectionId, connection: typedConnection });
+        },
+      };
+    },
+  },
+};
+
+const supportedDrivers: KtxConnectionDriver[] = [
+  'bigquery',
+  'clickhouse',
+  'mysql',
+  'postgres',
+  'sqlite',
+  'snowflake',
+  'sqlserver',
+];
+
+function isRegisteredDriver(driver: string): driver is KtxConnectionDriver {
+  return Object.prototype.hasOwnProperty.call(driverRegistrations, driver);
+}
+
+export function getDriverRegistration(driver: string): KtxDriverRegistration | undefined {
+  const normalized = driver.toLowerCase().trim();
+  return isRegisteredDriver(normalized) ? driverRegistrations[normalized] : undefined;
+}
+
+export function listSupportedDrivers(): KtxConnectionDriver[] {
+  return [...supportedDrivers];
+}
