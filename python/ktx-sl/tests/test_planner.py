@@ -200,12 +200,12 @@ class TestFanOutDetection:
 
 
 class TestFanOutSingleSource:
-    """Fan-out when a single measure source has o2m path to dimension source."""
+    """Fanout when a single measure source has o2m path to dimension source."""
 
     def test_reverse_path_fan_out(self):
-        """Querying from customers (dimension) with measures from orders triggers fan-out
+        """Querying from customers (dimension) with measures from orders triggers fanout
         when the path from the measure source (orders) to the dimension source (customers)
-        is m2o — so no fan-out. But reversed: measure on customers, dim on orders."""
+        is m2o — so no fanout. But reversed: measure on customers, dim on orders."""
         customers = SourceDefinition(
             name="customers",
             table="t",
@@ -248,7 +248,7 @@ class TestFanOutSingleSource:
         assert plan.has_fan_out
 
     def test_m2o_multi_hop_no_fan_out(self, planner):
-        """orders → customers → regions is all m2o. No fan-out."""
+        """orders → customers → regions is all m2o. No fanout."""
         query = SemanticQuery(
             measures=["sum(orders.amount)"],
             dimensions=["regions.name"],
@@ -1116,7 +1116,7 @@ class TestDerivedMeasureEdgeCases:
         assert_valid_sql(result.sql)
 
 
-# ── From test_edge_cases.py: filter fan-out detection ────────────────
+# ── From test_edge_cases.py: filter fanout detection ────────────────
 
 
 class TestFilterFanOutDetection:

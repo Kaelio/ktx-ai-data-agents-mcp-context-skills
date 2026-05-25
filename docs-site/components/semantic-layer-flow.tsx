@@ -253,7 +253,7 @@ const engine: EngineNode = {
       },
       {
         index: 3,
-        title: "Detect fan-out",
+        title: "Detect fanout",
         detail: "group measures by source, flag chasm traps",
       },
       {

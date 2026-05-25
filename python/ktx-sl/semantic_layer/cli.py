@@ -160,7 +160,7 @@ def print_plan(plan) -> None:
         print("  Joins:")
         for jp in plan.join_paths:
             print(f"    {jp}")
-    print(f"  Fan-out: {plan.fan_out_description}")
+    print(f"  Fanout: {plan.fan_out_description}")
     if plan.aggregate_locality:
         print("  Locality:")
         for al in plan.aggregate_locality:

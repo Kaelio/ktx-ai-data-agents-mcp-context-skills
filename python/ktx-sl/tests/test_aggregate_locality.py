@@ -1,4 +1,4 @@
-"""Dedicated tests for aggregate locality (fan-out/chasm trap correctness)."""
+"""Dedicated tests for aggregate locality (fanout/chasm trap correctness)."""
 
 import pytest
 import sqlglot
@@ -213,7 +213,7 @@ class TestNoFanOut:
         sqlglot.parse(sql)
 
     def test_m2o_join_no_ctes(self, ecommerce_sources):
-        """orders → customers is m2o, no fan-out."""
+        """orders → customers is m2o, no fanout."""
         graph = JoinGraph(ecommerce_sources)
         graph.build()
         planner = QueryPlanner(ecommerce_sources, graph)
@@ -540,7 +540,7 @@ class TestFactSideDimensionsInChasm:
     """LIMIT 1: Fact-side dimensions in chasm trap (local to one CTE only)."""
 
     def test_fact_side_dimension_in_chasm_raises_error(self):
-        """Asymmetric dim from fact_a only → raises error (would cause FULL JOIN fan-out)."""
+        """Asymmetric dim from fact_a only → raises error (would cause FULL JOIN fanout)."""
         hub = SourceDefinition(
             name="hub",
             table="public.hub",
@@ -977,7 +977,7 @@ class TestBug13_FalseChasm_AliasAggregate:
             dimensions=["billing_customer.name", "shipping_customer.name"],
         )
         plan = planner.plan(query)
-        assert not plan.has_fan_out, "Should not detect fan-out between alias siblings"
+        assert not plan.has_fan_out, "Should not detect fanout between alias siblings"
         sql = gen.generate(plan, sources)
         sqlglot.parse(sql)
 

@@ -107,7 +107,7 @@ class QueryPlanner:
             for e in tree.edges
         ]
 
-        # 8. Detect fan-out / chasm trap
+        # 8. Detect fanout / chasm trap
         has_fan_out, measure_groups, fan_out_desc, locality_descs = (
             self._detect_fan_out(measures, dimensions, tree, filters=query.filters)
         )
@@ -937,7 +937,7 @@ class QueryPlanner:
         filters: list[str] | None = None,
     ) -> tuple[bool, list[MeasureGroup], str, list[str]]:
         """
-        Detect fan-out and chasm traps. Group measures by source.
+        Detect fanout and chasm traps. Group measures by source.
         If multiple measure sources exist, each needs its own pre-aggregation CTE.
         Also checks filter sources — a filter forcing a one_to_many join from the
         measure source is an error (cannot be safely pre-aggregated).
@@ -991,7 +991,7 @@ class QueryPlanner:
 
         if len(groups) <= 1:
             # Single measure group: check the path FROM measure source TO dimension sources.
-            # Only flag fan-out if those specific paths have one_to_many edges.
+            # Only flag fanout if those specific paths have one_to_many edges.
             if groups:
                 source_name = next(iter(groups))
                 source_actual = self.graph.alias_map.get(source_name, source_name)
@@ -999,7 +999,7 @@ class QueryPlanner:
                 for dim_src in dim_sources:
                     if dim_src == source_name:
                         continue
-                    # Skip alias siblings (same underlying source — no fan-out)
+                    # Skip alias siblings (same underlying source — no fanout)
                     dim_actual = self.graph.alias_map.get(dim_src, dim_src)
                     if dim_actual == source_actual:
                         continue
@@ -1008,7 +1008,7 @@ class QueryPlanner:
                         has_o2m = True
                         break
 
-                # Also check filter sources for one_to_many fan-out
+                # Also check filter sources for one_to_many fanout
                 if not has_o2m:
                     for filter_src in filter_sources - dim_sources - {source_name}:
                         filter_actual = self.graph.alias_map.get(filter_src, filter_src)
@@ -1019,7 +1019,7 @@ class QueryPlanner:
                             raise ValueError(
                                 f"Filter on '{filter_src}' requires a one_to_many join "
                                 f"from measure source '{source_name}', which would cause "
-                                f"incorrect aggregation (fan-out). Consider rewriting the "
+                                f"incorrect aggregation (fanout). Consider rewriting the "
                                 f"filter as a subquery or adding the filter source as a "
                                 f"dimension source."
                             )
@@ -1033,10 +1033,10 @@ class QueryPlanner:
                     return (
                         True,
                         measure_groups,
-                        f"Fan-out detected: one_to_many edges from {source_name} to dimensions",
+                        f"Fanout detected: one_to_many edges from {source_name} to dimensions",
                         [f"Pre-aggregate {source_name} measures before joining"],
                     )
-            return False, [], "No fan-out", []
+            return False, [], "No fanout", []
 
         # Multiple measure sources. Only merge groups that are provably row-safe
         # (alias siblings or pure one_to_one chains). many_to_one chains are not
@@ -1048,7 +1048,7 @@ class QueryPlanner:
             # All measure sources are on the same safe join chain
             if merged_groups:
                 mg_name, mg_measures = next(iter(merged_groups.items()))
-                # Still check if there's fan-out to dimension sources
+                # Still check if there's fanout to dimension sources
                 has_o2m = False
                 for dim_src in dim_sources:
                     if dim_src == mg_name:
@@ -1061,10 +1061,10 @@ class QueryPlanner:
                     return (
                         True,
                         [MeasureGroup(source_name=mg_name, measures=mg_measures)],
-                        f"Fan-out detected: one_to_many edges from {mg_name} to dimensions",
+                        f"Fanout detected: one_to_many edges from {mg_name} to dimensions",
                         [f"Pre-aggregate {mg_name} measures before joining"],
                     )
-            return False, [], "No fan-out", []
+            return False, [], "No fanout", []
 
         # True chasm trap — independent measure sources that can't be safely merged.
         # Before building groups, validate that all filter sources are reachable

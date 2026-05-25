@@ -156,7 +156,7 @@ joins:
     relationship: many_to_one
 ```
 
-For how the compiler walks the join graph, handles fan-out, and transpiles
+For how the compiler walks the join graph, handles fanout, and transpiles
 dialects, read [Semantic querying](/docs/concepts/semantic-layer-internals).
 
 ## Wiki pages
@@ -240,7 +240,7 @@ models every time the warehouse changes.
 | **Surface** | Indexed docs and chats | Modeling language or runtime | YAML and Markdown files |
 | **Data-stack awareness** | None - treats data tools as text | High for declared metrics, none for the surrounding warehouse | Built in: scans schemas, dbt, BI tools, and query history |
 | **Maintenance** | Manual page authoring | Manual modeling, model-per-change | Auto-maintained: reconciles evidence with accepted files |
-| **SQL safety** | None - generates plausible text | Compiled, dialect-correct | Compiled with join-graph and fan-out handling |
+| **SQL safety** | None - generates plausible text | Compiled, dialect-correct | Compiled with join-graph and fanout handling |
 | **Agent edit loop** | Text-only | Tied to the modeling workflow | First-class: patch files, validate, review diffs |
 
 If you already use MetricFlow, LookML, dbt, or BI tools, **ktx** can ingest that
