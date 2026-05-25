@@ -8,7 +8,7 @@ import { SemanticLayerFlow } from "@/components/semantic-layer-flow";
 **ktx**'s semantic layer is a compiler that turns intent into SQL. The agent
 declares _what_ it wants - measures, dimensions, filters - in a small
 semantic query. **ktx** figures out the _how_: which tables to join, what
-grain to aggregate at, how to keep fan-out from inflating measures, and
+grain to aggregate at, how to keep fanout from inflating measures, and
 what dialect the warehouse speaks.
 
 This page covers four mechanics:
@@ -16,7 +16,7 @@ This page covers four mechanics:
 - The semantic query contract agents send to the compiler.
 - The planner steps that turn a semantic query into SQL.
 - The join graph that backs those steps, and how it's built.
-- The fan-out failure mode the compiler is designed to prevent.
+- The fanout failure mode the compiler is designed to prevent.
 
 ## Imperative SQL vs declarative semantic querying
 
@@ -84,14 +84,14 @@ same ordered steps before any SQL is emitted.
 2. **Pick an anchor and build the join tree.** Choose the largest measure
    source as the root, then run a shortest-path search across the typed
    join graph to reach every required source.
-3. **Detect fan-out.** Group measures by their owning source. If more
+3. **Detect fanout.** Group measures by their owning source. If more
    than one group exists, the planner marks the query as a chasm trap
    and switches to aggregate-locality compilation.
 4. **Classify filters.** Split predicates into row-level (`WHERE`) and
    aggregate-level (`HAVING`) based on whether they reference a measure.
 5. **Generate SQL.** Emit Postgres-shaped SQL with the right shape:
    single-source aggregation when the query is safe, per-source CTEs
-   when fan-out is present.
+   when fanout is present.
 6. **Transpile to the target dialect.** Run the result through `sqlglot`
    so the warehouse receives syntax it understands.
 
@@ -107,7 +107,7 @@ inverted, so the planner can traverse from any anchor.
 | Relationship | Planning impact |
 |--------------|-----------------|
 | `many_to_one` | Safe direction for adding dimensions |
-| `one_to_many` | Multiplies measures and triggers fan-out handling |
+| `one_to_many` | Multiplies measures and triggers fanout handling |
 | `one_to_one` | Safe in either direction when keys match |
 | Equal-cost paths | Treated as ambiguous; aliases or explicit joins resolve them |
 
@@ -286,9 +286,9 @@ inference. Each input contributes a different kind of authority.
   </div>
 </div>
 
-## Fan-out and aggregate locality
+## Fanout and aggregate locality
 
-Fan-out is the classic analytics failure mode. Two fact tables join to a
+Fanout is the classic analytics failure mode. Two fact tables join to a
 shared dimension. A naive query joins them all together first, so each
 row from one fact is multiplied by the matching rows from the other.
 Measures duplicate, numbers go wrong, and the agent doesn't notice.
@@ -336,5 +336,5 @@ different from what the agent first proposed.
 | Explain the semantic query shape | The semantic query contract | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Describe what the planner does between query and SQL | What the planner does | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Explain why **ktx** asks for grain and relationship types | The join graph | [Writing context](/docs/guides/writing-context) |
-| Diagnose duplicated measures after a join | Fan-out and aggregate locality | [ktx sl](/docs/cli-reference/ktx-sl) |
+| Diagnose duplicated measures after a join | Fanout and aggregate locality | [ktx sl](/docs/cli-reference/ktx-sl) |
 | Describe how semantic context stays current | Building and maintaining the graph | [Reviewing Context](/docs/guides/reviewing-context) |

@@ -336,7 +336,7 @@ export async function runLocalMetabaseIngest(
   options: RunLocalMetabaseIngestOptions,
 ): Promise<LocalMetabaseFanoutResult> {
   if ((options as RunLocalMetabaseIngestOptions & { sourceDir?: string }).sourceDir) {
-    throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
+    throw new Error('source-dir uploads are not supported for the Metabase fanout adapter');
   }
 
   const metabaseConnectionId = safeSegment('metabase connection id', options.metabaseConnectionId);

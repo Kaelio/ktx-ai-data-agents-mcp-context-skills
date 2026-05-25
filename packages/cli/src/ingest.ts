@@ -222,7 +222,7 @@ function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIng
     },
     { wikiCount: 0, slCount: 0 },
   );
-  io.stdout.write(`Metabase fan-out: ${result.status}\n`);
+  io.stdout.write(`Metabase fanout: ${result.status}\n`);
   io.stdout.write(`Source: ${result.metabaseConnectionId}\n`);
   io.stdout.write(`Children: ${result.children.length}\n`);
   if (result.totals) {
@@ -719,7 +719,7 @@ export async function runKtxIngest(
         localIngestOptions.queryExecutor ??
         (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(ingestProject);
       if (args.adapter === 'metabase' && args.sourceDir) {
-        throw new Error('source-dir uploads are not supported for the Metabase fan-out adapter');
+        throw new Error('source-dir uploads are not supported for the Metabase fanout adapter');
       }
       if (args.adapter === 'metabase') {
         const executeMetabaseFanout = deps.runLocalMetabaseIngest ?? runLocalMetabaseIngest;

@@ -124,7 +124,7 @@ Every standalone column requires `name` and `type`. Overlays have computed colum
 
 ### Grain
 
-`grain: [col_a, col_b]` - the set of columns that uniquely identify one row. The query engine uses grain to prevent fan-out in joins. Overlays inherit grain from the manifest unless they override.
+`grain: [col_a, col_b]` - the set of columns that uniquely identify one row. The query engine uses grain to prevent fanout in joins. Overlays inherit grain from the manifest unless they override.
 
 ### Joins
 
@@ -177,7 +177,7 @@ The reverse edge (wiki pages that cite this source) is derived automatically fro
 
 ## Part 2 - Querying via `sl_query`
 
-The `sl_query` tool generates correct SQL from a structured query. It handles joins, fan-out prevention, aggregation correctness, and filter classification automatically. Prefer it over writing raw SQL whenever the SL has the relevant sources.
+The `sl_query` tool generates correct SQL from a structured query. It handles joins, fanout prevention, aggregation correctness, and filter classification automatically. Prefer it over writing raw SQL whenever the SL has the relevant sources.
 
 ### When to prefer sl_query over raw SQL
 

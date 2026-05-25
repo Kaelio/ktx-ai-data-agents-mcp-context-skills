@@ -305,12 +305,12 @@ class TestPredefinedMeasureDeps:
         assert "GROUP BY" in sql.upper()
 
 
-# ── Planner: fan-out with one_to_many to dimension sources (lines 595-643) ──
+# ── Planner: fanout with one_to_many to dimension sources (lines 595-643) ──
 
 
 class TestFanOutEdgeCases:
     def test_single_source_fan_out_to_dimension(self):
-        """Measure source with one_to_many to dimension should trigger fan-out."""
+        """Measure source with one_to_many to dimension should trigger fanout."""
         hub = SourceDefinition(
             name="hub",
             table="public.hub",

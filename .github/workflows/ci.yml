@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+env:
+  DO_NOT_TRACK: "1"
+  KTX_TELEMETRY_DISABLED: "1"
+  NEXT_TELEMETRY_DISABLED: "1"
+
 concurrency:
   group: ktx-ci-${{ github.ref }}
   cancel-in-progress: true

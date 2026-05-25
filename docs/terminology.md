@@ -56,7 +56,7 @@ referent (e.g., body of a `Semantic sources` page, or `sourceName` as a CLI arg)
 | Wiki surface as a whole | **wiki** | "wiki context" |
 | A single Markdown file | **wiki page** | — |
 | YAML vs Markdown contrast | **wiki Markdown** (only when contrasting with **semantic source YAML**) | — |
-| Joins multiplying rows (generic) | **fan-out** | — |
+| Joins multiplying rows (generic) | **fanout** | — |
 | The two named patterns | **chasm trap** / **fan trap** | — |
 | Casual gloss in user prose | **double-count** | (avoid in technical/internals prose) |
 

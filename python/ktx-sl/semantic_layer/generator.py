@@ -92,7 +92,7 @@ class SqlGenerator:
             return "WITH " + source_header + ",\n" + rest
         return "WITH " + source_header + "\n" + outer_transpiled
 
-    # ── Path A: Simple (no fan-out) ────────────────────────────────────
+    # ── Path A: Simple (no fanout) ────────────────────────────────────
 
     def _generate_simple(
         self, plan: ResolvedPlan, sources: dict[str, SourceDefinition]
@@ -216,7 +216,7 @@ class SqlGenerator:
         shared_dim_aliases = shared_dim_aliases or set()
         shared_dims = [dk for dk in all_dim_keys if dk["alias"] in shared_dim_aliases]
 
-        # Validate grain consistency: asymmetric dims cause FULL JOIN fan-out
+        # Validate grain consistency: asymmetric dims cause FULL JOIN fanout
         if len(plan.measure_groups) > 1:
             for group in plan.measure_groups:
                 cte_dim_aliases = {
