@@ -1,8 +1,10 @@
 import type { KtxConnectionDriver, KtxScanConnector } from '../scan/types.js';
 
-type KtxScopeConfigKey = 'dataset_ids' | 'databases' | 'schemas' | 'schema_names';
+/** @internal */
+export type KtxScopeConfigKey = 'dataset_ids' | 'databases' | 'schemas' | 'schema_names';
 
-interface KtxDriverConnectorModule {
+/** @internal */
+export interface KtxDriverConnectorModule {
   isConnectionConfig(connection: unknown): boolean;
   createScanConnector(args: {
     connectionId: string;
@@ -181,15 +183,7 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
   },
 };
 
-const supportedDrivers: KtxConnectionDriver[] = [
-  'bigquery',
-  'clickhouse',
-  'mysql',
-  'postgres',
-  'sqlite',
-  'snowflake',
-  'sqlserver',
-];
+const supportedDrivers = Object.keys(driverRegistrations).sort() as KtxConnectionDriver[];
 
 function isRegisteredDriver(driver: string): driver is KtxConnectionDriver {
   return Object.prototype.hasOwnProperty.call(driverRegistrations, driver);

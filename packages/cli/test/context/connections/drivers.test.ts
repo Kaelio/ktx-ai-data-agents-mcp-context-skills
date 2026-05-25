@@ -7,6 +7,10 @@ import {
   getDriverRegistration,
   listSupportedDrivers,
 } from '../../../src/context/connections/drivers.js';
+import type {
+  KtxDriverConnectorModule,
+  KtxScopeConfigKey,
+} from '../../../src/context/connections/drivers.js';
 import type { KtxConnectionDriver } from '../../../src/context/scan/types.js';
 
 type FixtureFactory = (projectDir: string) => Record<string, unknown>;
@@ -66,6 +70,16 @@ const allowedScopeKeys = new Set(['dataset_ids', 'databases', 'schemas', 'schema
 const historicSqlReaderDrivers = new Set<KtxConnectionDriver>(['postgres', 'bigquery', 'snowflake']);
 const localExecutorDrivers = new Set<KtxConnectionDriver>(['postgres', 'sqlite']);
 
+function assertExportedRegistryBoundaryTypes(input: {
+  scopeConfigKey: KtxScopeConfigKey;
+  connectorModule: KtxDriverConnectorModule;
+}): {
+  scopeConfigKey: KtxScopeConfigKey;
+  connectorModule: KtxDriverConnectorModule;
+} {
+  return input;
+}
+
 describe('driverRegistrations', () => {
   let projectDir: string;
 
@@ -78,13 +92,15 @@ describe('driverRegistrations', () => {
   });
 
   it('lists every supported warehouse driver', () => {
+    const registryDrivers = Object.keys(driverRegistrations).sort();
+    expect(listSupportedDrivers()).toEqual(registryDrivers);
     expect(listSupportedDrivers()).toEqual([
       'bigquery',
       'clickhouse',
       'mysql',
       'postgres',
-      'sqlite',
       'snowflake',
+      'sqlite',
       'sqlserver',
     ]);
   });
@@ -97,6 +113,11 @@ describe('driverRegistrations', () => {
   it.each(Object.values(driverRegistrations))('adapts $driver connector exports', async (registration) => {
     const connectorModule = await registration.load();
     const connection = connectionFixtures[registration.driver](projectDir);
+    const exportedBoundary = assertExportedRegistryBoundaryTypes({
+      scopeConfigKey: registration.scopeConfigKey ?? 'schemas',
+      connectorModule,
+    });
+    expect(exportedBoundary.connectorModule.createScanConnector).toEqual(expect.any(Function));
 
     expect(connectorModule.isConnectionConfig(connection)).toBe(true);
     expect(connectorModule.isConnectionConfig({})).toBe(false);
