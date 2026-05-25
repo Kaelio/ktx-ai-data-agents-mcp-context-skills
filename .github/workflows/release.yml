@@ -26,6 +26,11 @@ permissions:
   contents: write
   id-token: write
 
+env:
+  DO_NOT_TRACK: "1"
+  KTX_TELEMETRY_DISABLED: "1"
+  NEXT_TELEMETRY_DISABLED: "1"
+
 concurrency:
   group: ktx-release-${{ github.ref }}
   cancel-in-progress: false
