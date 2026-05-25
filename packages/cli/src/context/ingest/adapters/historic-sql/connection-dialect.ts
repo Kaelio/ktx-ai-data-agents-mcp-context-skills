@@ -1,4 +1,8 @@
+import { getDriverRegistration } from '../../../connections/drivers.js';
+import type { KtxConnectionDriver } from '../../../scan/types.js';
 import type { HistoricSqlDialect } from './types.js';
+
+const historicSqlDialects: readonly HistoricSqlDialect[] = ['postgres', 'bigquery', 'snowflake'];
 
 function recordOrNull(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -8,6 +12,14 @@ function queryHistoryRecord(connection: unknown): Record<string, unknown> | null
   const conn = recordOrNull(connection);
   const context = conn ? recordOrNull(conn.context) : null;
   return context ? recordOrNull(context.queryHistory) : null;
+}
+
+function historicSqlDialectForDriver(driver: KtxConnectionDriver): HistoricSqlDialect {
+  const dialect = historicSqlDialects.find((candidate) => candidate === driver);
+  if (!dialect) {
+    throw new Error(`Driver "${driver}" is marked as historic-SQL capable but has no HistoricSqlDialect mapping.`);
+  }
+  return dialect;
 }
 
 export function isQueryHistoryEnabled(connection: unknown): boolean {
@@ -25,8 +37,6 @@ export function queryHistoryDialectForConnection(connection: unknown): HistoricS
   }
   const conn = recordOrNull(connection);
   const driver = String(conn?.driver ?? '').toLowerCase();
-  if (driver === 'postgres') return 'postgres';
-  if (driver === 'bigquery') return 'bigquery';
-  if (driver === 'snowflake') return 'snowflake';
-  return null;
+  const registration = getDriverRegistration(driver);
+  return registration?.hasHistoricSqlReader ? historicSqlDialectForDriver(registration.driver) : null;
 }
