@@ -44,9 +44,9 @@ function metadataResults(): Map<string, FakeQueryResponse> {
       'FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n',
       {
         rows: [
-          { table_name: 'customers', table_kind: 'r', row_count: '2', table_comment: 'Customers' },
-          { table_name: 'orders', table_kind: 'r', row_count: '3', table_comment: null },
-          { table_name: 'recent_orders', table_kind: 'v', row_count: '0', table_comment: 'Recent orders' },
+          { schema_name: 'public', table_name: 'customers', table_kind: 'r', row_count: '2', table_comment: 'Customers' },
+          { schema_name: 'public', table_name: 'orders', table_kind: 'r', row_count: '3', table_comment: null },
+          { schema_name: 'public', table_name: 'recent_orders', table_kind: 'v', row_count: '0', table_comment: 'Recent orders' },
         ],
       },
     ],
@@ -389,6 +389,11 @@ describe('KtxPostgresScanConnector', () => {
     });
     await expect(connector.getTableRowCount({ db: 'public', name: 'orders' })).resolves.toBe(3);
     await expect(connector.listSchemas()).resolves.toEqual(['public']);
+    await expect(connector.listTables(['public'])).resolves.toEqual([
+      { schema: 'public', name: 'customers', kind: 'table' },
+      { schema: 'public', name: 'orders', kind: 'table' },
+      { schema: 'public', name: 'recent_orders', kind: 'view' },
+    ]);
     await expect(connector.testConnection()).resolves.toEqual({ success: true });
 
     await expect(

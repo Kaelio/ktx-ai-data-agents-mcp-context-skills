@@ -21,9 +21,9 @@ function fakePoolFactory(options: { primaryKeyError?: Error; foreignKeyError?: E
     if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
       return result(
         [
-          { table_name: 'customers', table_type: 'BASE TABLE' },
-          { table_name: 'orders', table_type: 'BASE TABLE' },
-          { table_name: 'order_summary', table_type: 'VIEW' },
+          { schema_name: 'dbo', table_name: 'customers', table_type: 'BASE TABLE' },
+          { schema_name: 'dbo', table_name: 'orders', table_type: 'BASE TABLE' },
+          { schema_name: 'dbo', table_name: 'order_summary', table_type: 'VIEW' },
         ],
         ['table_name', 'table_type'],
       );
@@ -117,6 +117,16 @@ function fakePoolFactory(options: { primaryKeyError?: Error; foreignKeyError?: E
     }
     if (sql.includes('SUM(p.rows) AS row_count') && sql.includes('t.name = @tableName')) {
       return result([{ row_count: 2 }], ['row_count']);
+    }
+    if (sql.includes('FROM sys.objects o')) {
+      return result(
+        [
+          { schema_name: 'dbo', table_name: 'customers', table_type: 'USER_TABLE' },
+          { schema_name: 'dbo', table_name: 'order_summary', table_type: 'VIEW' },
+          { schema_name: 'dbo', table_name: 'orders', table_type: 'USER_TABLE' },
+        ],
+        ['schema_name', 'table_name', 'table_type'],
+      );
     }
     if (sql.includes('SELECT s.name AS schema_name')) {
       return result([{ schema_name: 'dbo' }, { schema_name: 'sales' }], ['schema_name']);
@@ -379,6 +389,11 @@ describe('KtxSqlServerScanConnector', () => {
 
     await expect(connector.getTableRowCount('orders')).resolves.toBe(2);
     await expect(connector.listSchemas()).resolves.toEqual(['dbo', 'sales']);
+    await expect(connector.listTables(['dbo'])).resolves.toEqual([
+      { schema: 'dbo', name: 'customers', kind: 'table' },
+      { schema: 'dbo', name: 'order_summary', kind: 'view' },
+      { schema: 'dbo', name: 'orders', kind: 'table' },
+    ]);
     await expect(
       connector.columnStats(
         { connectionId: 'warehouse', table: { catalog: 'analytics', db: 'dbo', name: 'orders' }, column: 'status' },

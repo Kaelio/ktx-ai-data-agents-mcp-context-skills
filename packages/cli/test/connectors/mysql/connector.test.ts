@@ -13,9 +13,9 @@ function fakePoolFactory(): KtxMysqlPoolFactory {
     if (sql.includes('INFORMATION_SCHEMA.TABLES')) {
       return mysqlResult(
         [
-          { TABLE_NAME: 'customers', TABLE_TYPE: 'BASE TABLE', TABLE_COMMENT: 'Customer table', TABLE_ROWS: 2 },
-          { TABLE_NAME: 'orders', TABLE_TYPE: 'BASE TABLE', TABLE_COMMENT: 'InnoDB free: 1 kB; Order table', TABLE_ROWS: 2 },
-          { TABLE_NAME: 'order_summary', TABLE_TYPE: 'VIEW', TABLE_COMMENT: '', TABLE_ROWS: null },
+          { TABLE_SCHEMA: 'analytics', TABLE_NAME: 'customers', TABLE_TYPE: 'BASE TABLE', TABLE_COMMENT: 'Customer table', TABLE_ROWS: 2 },
+          { TABLE_SCHEMA: 'analytics', TABLE_NAME: 'orders', TABLE_TYPE: 'BASE TABLE', TABLE_COMMENT: 'InnoDB free: 1 kB; Order table', TABLE_ROWS: 2 },
+          { TABLE_SCHEMA: 'analytics', TABLE_NAME: 'order_summary', TABLE_TYPE: 'VIEW', TABLE_COMMENT: '', TABLE_ROWS: null },
         ],
         [{ name: 'TABLE_NAME' }, { name: 'TABLE_TYPE' }, { name: 'TABLE_COMMENT' }, { name: 'TABLE_ROWS' }],
       );
@@ -510,6 +510,11 @@ describe('KtxMysqlScanConnector', () => {
 
     await expect(connector.getTableRowCount('orders')).resolves.toBe(2);
     await expect(connector.listSchemas()).resolves.toEqual(['analytics', 'warehouse']);
+    await expect(connector.listTables(['analytics'])).resolves.toEqual([
+      { schema: 'analytics', name: 'customers', kind: 'table' },
+      { schema: 'analytics', name: 'orders', kind: 'table' },
+      { schema: 'analytics', name: 'order_summary', kind: 'view' },
+    ]);
     await expect(connector.columnStats(
       { connectionId: 'warehouse', table: { catalog: null, db: 'analytics', name: 'orders' }, column: 'status' },
       { runId: 'scan-run-1' },

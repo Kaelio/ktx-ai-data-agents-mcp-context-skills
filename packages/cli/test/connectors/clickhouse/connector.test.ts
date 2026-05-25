@@ -15,8 +15,8 @@ function fakeClientFactory(): KtxClickHouseClientFactory {
   const query = vi.fn(async (input: { query: string; format: string; query_params?: Record<string, unknown> }) => {
     if (input.query.includes('FROM system.tables')) {
       return result([
-        { name: 'events', engine: 'MergeTree', comment: 'Event stream' },
-        { name: 'event_summary', engine: 'View', comment: '' },
+        { database: 'analytics', name: 'event_summary', engine: 'View', comment: '' },
+        { database: 'analytics', name: 'events', engine: 'MergeTree', comment: 'Event stream' },
       ]);
     }
     if (input.query.includes('FROM system.columns')) {
@@ -223,8 +223,8 @@ describe('KtxClickHouseScanConnector', () => {
       },
     });
     expect(snapshot.tables.map((table) => [table.name, table.kind, table.estimatedRows, table.comment])).toEqual([
-      ['events', 'table', 2, 'Event stream'],
       ['event_summary', 'view', null, null],
+      ['events', 'table', 2, 'Event stream'],
     ]);
     expect(snapshot.tables.find((table) => table.name === 'events')?.columns[0]).toMatchObject({
       name: 'id',
@@ -371,6 +371,10 @@ describe('KtxClickHouseScanConnector', () => {
 
     await expect(connector.getTableRowCount('events')).resolves.toBe(2);
     await expect(connector.listSchemas()).resolves.toEqual(['analytics', 'warehouse']);
+    await expect(connector.listTables(['analytics'])).resolves.toEqual([
+      { schema: 'analytics', name: 'event_summary', kind: 'view' },
+      { schema: 'analytics', name: 'events', kind: 'table' },
+    ]);
     await expect(
       connector.columnStats(
         { connectionId: 'warehouse', table: { catalog: null, db: 'analytics', name: 'events' }, column: 'event_name' },
