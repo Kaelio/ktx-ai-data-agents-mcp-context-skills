@@ -511,9 +511,9 @@ describe('KtxMysqlScanConnector', () => {
     await expect(connector.getTableRowCount('orders')).resolves.toBe(2);
     await expect(connector.listSchemas()).resolves.toEqual(['analytics', 'warehouse']);
     await expect(connector.listTables(['analytics'])).resolves.toEqual([
-      { schema: 'analytics', name: 'customers', kind: 'table' },
-      { schema: 'analytics', name: 'orders', kind: 'table' },
-      { schema: 'analytics', name: 'order_summary', kind: 'view' },
+      { catalog: null, schema: 'analytics', name: 'customers', kind: 'table' },
+      { catalog: null, schema: 'analytics', name: 'orders', kind: 'table' },
+      { catalog: null, schema: 'analytics', name: 'order_summary', kind: 'view' },
     ]);
     await expect(connector.columnStats(
       { connectionId: 'warehouse', table: { catalog: null, db: 'analytics', name: 'orders' }, column: 'status' },

@@ -372,8 +372,8 @@ describe('KtxClickHouseScanConnector', () => {
     await expect(connector.getTableRowCount('events')).resolves.toBe(2);
     await expect(connector.listSchemas()).resolves.toEqual(['analytics', 'warehouse']);
     await expect(connector.listTables(['analytics'])).resolves.toEqual([
-      { schema: 'analytics', name: 'event_summary', kind: 'view' },
-      { schema: 'analytics', name: 'events', kind: 'table' },
+      { catalog: null, schema: 'analytics', name: 'event_summary', kind: 'view' },
+      { catalog: null, schema: 'analytics', name: 'events', kind: 'table' },
     ]);
     await expect(
       connector.columnStats(

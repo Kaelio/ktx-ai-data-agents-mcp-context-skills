@@ -64,8 +64,8 @@ function fakeDriverFactory(): KtxSnowflakeDriverFactory {
     ]),
     listSchemas: vi.fn(async () => ['PUBLIC', 'MART']),
     listTables: vi.fn(async () => [
-      { schema: 'PUBLIC', name: 'ORDERS', kind: 'table' as const },
-      { schema: 'PUBLIC', name: 'ORDER_SUMMARY', kind: 'view' as const },
+      { catalog: 'ANALYTICS', schema: 'PUBLIC', name: 'ORDERS', kind: 'table' as const },
+      { catalog: 'ANALYTICS', schema: 'PUBLIC', name: 'ORDER_SUMMARY', kind: 'view' as const },
     ]),
     cleanup: vi.fn(async () => undefined),
   };
@@ -572,8 +572,8 @@ describe('KtxSnowflakeScanConnector', () => {
     });
 
     await expect(connector.listTables(['MART', 'PUBLIC'])).resolves.toEqual([
-      { schema: 'MART', name: 'ORDERS', kind: 'table' },
-      { schema: 'PUBLIC', name: 'ORDER_SUMMARY', kind: 'view' },
+      { catalog: 'ANALYTICS', schema: 'MART', name: 'ORDERS', kind: 'table' },
+      { catalog: 'ANALYTICS', schema: 'PUBLIC', name: 'ORDER_SUMMARY', kind: 'view' },
     ]);
 
     expect(queries).toHaveLength(1);

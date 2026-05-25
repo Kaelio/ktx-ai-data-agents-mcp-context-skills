@@ -454,6 +454,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
       params,
     );
     return rows.map((row) => ({
+      catalog: this.resolved.projectId,
       schema: row.table_schema,
       name: row.table_name,
       kind:

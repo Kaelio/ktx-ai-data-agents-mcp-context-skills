@@ -438,6 +438,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
       [this.resolved.database, ...(schemas ?? [])],
     );
     return result.rows.map((row) => ({
+      catalog: this.resolved.database,
       schema: String(row[0]),
       name: String(row[1]),
       kind: String(row[2]) === 'VIEW' ? ('view' as const) : ('table' as const),
@@ -704,6 +705,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
       [this.resolved.database, ...(schemas ?? [])],
     );
     return result.rows.map((row) => ({
+      catalog: this.resolved.database,
       schema: String(row[0]),
       name: String(row[1]),
       kind: String(row[2]) === 'VIEW' ? ('view' as const) : ('table' as const),

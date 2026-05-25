@@ -607,6 +607,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
       [filterSchemas],
     );
     return rows.map((row) => ({
+      catalog: null,
       schema: row.schema_name,
       name: row.table_name,
       kind: row.table_kind === 'v' ? ('view' as const) : ('table' as const),

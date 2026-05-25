@@ -16,6 +16,7 @@ import type {
   DatabaseScopePickResult,
   PickDatabaseScopeArgs,
 } from '../src/database-tree-picker.js';
+import type { KtxSetupPromptOption } from '../src/setup-prompts.js';
 
 function makeIo() {
   let stdout = '';
@@ -1039,7 +1040,7 @@ describe('setup databases step', () => {
     const testConnection = vi.fn(async () => 0);
     const scanConnection = vi.fn(async () => 0);
     const listSchemas = vi.fn(async () => ['analytics', 'public']);
-    const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'customers', kind: 'table' as const }]);
+    const listTables = vi.fn(async () => [{ catalog: null, schema: 'analytics', name: 'customers', kind: 'table' as const }]);
     const pickers = makePickerStubs({
       scopes: [{ schemas: ['analytics'], tables: ['analytics.customers'] }],
     });
@@ -1110,9 +1111,9 @@ describe('setup databases step', () => {
     });
     const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
     const listTables = vi.fn(async () => [
-      { schema: 'public', name: 'customers', kind: 'table' as const },
-      { schema: 'public', name: 'orders', kind: 'table' as const },
-      { schema: 'public', name: 'products', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'customers', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'orders', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'products', kind: 'table' as const },
     ]);
     const pickers = makePickerStubs({
       scopes: [{ schemas: ['public'], tables: ['public.customers', 'public.orders'] }],
@@ -1184,8 +1185,8 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
     const listSchemas = vi.fn(async () => ['analytics', 'public']);
     const listTables = vi.fn(async () => [
-      { schema: 'analytics', name: 'customers', kind: 'table' as const },
-      { schema: 'public', name: 'orders', kind: 'table' as const },
+      { catalog: null, schema: 'analytics', name: 'customers', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'orders', kind: 'table' as const },
     ]);
     const pickers = makePickerStubs({ scopes: ['back'] });
 
@@ -1250,8 +1251,8 @@ describe('setup databases step', () => {
     const scanConnection = vi.fn(async () => 0);
     const listSchemas = vi.fn(async () => ['public']);
     const listTables = vi.fn(async () => [
-      { schema: 'public', name: 'customers', kind: 'table' as const },
-      { schema: 'public', name: 'orders', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'customers', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'orders', kind: 'table' as const },
     ]);
     const pickers = makePickerStubs({ scopes: [{ schemas: ['public'], tables: 'back' }] });
 
@@ -1311,8 +1312,8 @@ describe('setup databases step', () => {
       return 'back';
     });
     const listTables = vi.fn(async () => [
-      { schema: 'public', name: 'customers', kind: 'table' as const },
-      { schema: 'public', name: 'orders', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'customers', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'orders', kind: 'table' as const },
     ]);
     const pickers = makePickerStubs({ scopes: ['enable-all'] });
 
@@ -1610,7 +1611,7 @@ describe('setup databases step', () => {
     });
     const listSchemas = vi.fn(async () => ['analytics', 'mart']);
     const listTables = vi.fn(async (_projectDir: string, _connectionId: string, schemas?: string[]) =>
-      (schemas ?? []).map((schema) => ({ schema, name: 'orders', kind: 'table' as const })),
+      (schemas ?? []).map((schema) => ({ catalog: null, schema, name: 'orders', kind: 'table' as const })),
     );
     const pickDatabaseScope = vi.fn(async (args: PickDatabaseScopeArgs) => {
       const scopedArgs = args as PickDatabaseScopeArgs & {
@@ -1667,7 +1668,7 @@ describe('setup databases step', () => {
       textValues: ['bigquery-warehouse', '/tmp/service-account.json', 'US'],
     });
     const listSchemas = vi.fn(async () => ['analytics']);
-    const listTables = vi.fn(async () => [{ schema: 'analytics', name: 'orders', kind: 'table' as const }]);
+    const listTables = vi.fn(async () => [{ catalog: 'project-1', schema: 'analytics', name: 'orders', kind: 'table' as const }]);
     const pickDatabaseScope = vi.fn(async () => ({
       kind: 'selected' as const,
       activeSchemas: ['analytics'],
@@ -1700,9 +1701,9 @@ describe('setup databases step', () => {
     });
     const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
     const listTables = vi.fn(async () => [
-      { schema: 'orbit_analytics', name: 'events', kind: 'table' as const },
-      { schema: 'orbit_raw', name: 'inputs', kind: 'table' as const },
-      { schema: 'public', name: 'misc', kind: 'table' as const },
+      { catalog: null, schema: 'orbit_analytics', name: 'events', kind: 'table' as const },
+      { catalog: null, schema: 'orbit_raw', name: 'inputs', kind: 'table' as const },
+      { catalog: null, schema: 'public', name: 'misc', kind: 'table' as const },
     ]);
     const pickers = makePickerStubs({
       scopes: [
@@ -1761,7 +1762,7 @@ describe('setup databases step', () => {
       throw new Error('permission denied to list schemas');
     });
     const listTables = vi.fn(async (_projectDir: string, _connectionId: string, schemas?: string[]) =>
-      (schemas ?? []).map((schema) => ({ schema, name: 'events', kind: 'table' as const })),
+      (schemas ?? []).map((schema) => ({ catalog: null, schema, name: 'events', kind: 'table' as const })),
     );
     const pickers = makePickerStubs({
       scopes: [
@@ -1808,18 +1809,18 @@ describe('setup databases step', () => {
   it('passes schemas and a lazy table callback to the scope picker instead of eager table discovery', async () => {
     const listSchemas = vi.fn(async () => ['analytics', 'raw']);
     const listTables = vi.fn(async (_projectDir: string, _connectionId: string, schemas?: string[]) =>
-      (schemas ?? []).map((schema) => ({ schema, name: 'orders', kind: 'table' as const })),
+      (schemas ?? []).map((schema) => ({ catalog: null, schema, name: 'orders', kind: 'table' as const })),
     );
     const pickDatabaseScope = vi.fn(async (args: PickDatabaseScopeArgs) => {
       const lazyArgs = args as PickDatabaseScopeArgs & {
         schemas: string[];
-        listTablesForSchemas: (schemas: string[]) => Promise<Array<{ schema: string; name: string; kind: 'table' }>>;
+        listTablesForSchemas: (schemas: string[]) => Promise<Array<{ catalog: string | null; schema: string; name: string; kind: 'table' }>>;
       };
       expect(lazyArgs.schemas).toEqual(['analytics', 'raw']);
       expect(args).not.toHaveProperty('discovered');
       expect(listTables).not.toHaveBeenCalled();
       const tables = await lazyArgs.listTablesForSchemas(['analytics']);
-      expect(tables).toEqual([{ schema: 'analytics', name: 'orders', kind: 'table' }]);
+      expect(tables).toEqual([{ catalog: null, schema: 'analytics', name: 'orders', kind: 'table' }]);
       return { kind: 'selected' as const, activeSchemas: ['analytics'], enabledTables: ['analytics.orders'] };
     });
 
@@ -2555,6 +2556,81 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('roles/bigquery.resourceViewer');
     expect(io.stdout()).toContain('bigquery.jobs.listAll');
     expect(io.stdout()).toContain('Setup written; query history will be skipped until fixed.');
+  });
+
+  it('lets interactive BigQuery setup disable unavailable query history and retry after scan failure', async () => {
+    const io = makeIo();
+    const failurePromptOptions: KtxSetupPromptOption[][] = [];
+    let failurePromptCount = 0;
+    const prompts = makePromptAdapter({
+      textValues: ['/tmp/service-account.json', 'US'],
+    });
+    vi.mocked(prompts.select).mockImplementation(async ({ message, options }) => {
+      if (message.startsWith('Enable query-history ingest')) return 'yes';
+      if (message.includes('How much database context should KTX build?')) return 'fast';
+      if (message.startsWith('Database setup failed for analytics')) {
+        failurePromptCount += 1;
+        failurePromptOptions.push(options);
+        if (failurePromptCount === 1) return 'disable-query-history';
+        throw new Error('setup did not disable query history before retrying');
+      }
+      throw new Error(`unexpected select prompt: ${message}`);
+    });
+    const runner = {
+      ...fakeHistoricSqlRunner('bigquery', 'INFORMATION_SCHEMA.JOBS_BY_PROJECT'),
+      fixAdvice: () => ({
+        failHeadline: 'BigQuery principal cannot read INFORMATION_SCHEMA.JOBS_BY_PROJECT',
+        remediation:
+          'Grant roles/bigquery.resourceViewer on the BigQuery project, or grant a custom role containing bigquery.jobs.listAll.',
+      }),
+    };
+    const historicSqlReadinessProbe = vi.fn(async () => ({
+      ok: false as const,
+      dialect: 'bigquery' as const,
+      runner,
+      error: new Error('access denied'),
+    }));
+    let scanAttempts = 0;
+    const scanConnection = vi.fn(async () => {
+      scanAttempts += 1;
+      return scanAttempts === 1 ? 1 : 0;
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseDrivers: ['bigquery'],
+        databaseConnectionId: 'analytics',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection,
+        historicSqlReadinessProbe,
+        listSchemas: vi.fn(async () => ['analytics']),
+        listTables: vi.fn(async () => [{ catalog: null, schema: 'analytics', name: 'orders', kind: 'table' as const }]),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(scanConnection).toHaveBeenCalledTimes(2);
+    expect(historicSqlReadinessProbe).toHaveBeenCalledTimes(1);
+    expect(failurePromptOptions[0]).toContainEqual({
+      value: 'disable-query-history',
+      label: 'Disable query history and retry',
+    });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.analytics).toMatchObject({
+      context: {
+        queryHistory: {
+          enabled: false,
+        },
+      },
+    });
   });
 
   it('enables query history on an existing Postgres connection', async () => {

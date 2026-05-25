@@ -297,6 +297,7 @@ export interface KtxQueryResult {
 }
 
 export interface KtxTableListEntry {
+  catalog: string | null;
   schema: string;
   name: string;
   kind: 'table' | 'view';

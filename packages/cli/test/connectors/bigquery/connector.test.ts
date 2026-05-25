@@ -377,9 +377,9 @@ describe('KtxBigQueryScanConnector', () => {
     });
 
     await expect(connector.listTables(['analytics', 'mart'])).resolves.toEqual([
-      { schema: 'analytics', name: 'orders', kind: 'table' },
-      { schema: 'analytics', name: 'order_clone', kind: 'table' },
-      { schema: 'mart', name: 'orders_mv', kind: 'view' },
+      { catalog: 'project-1', schema: 'analytics', name: 'orders', kind: 'table' },
+      { catalog: 'project-1', schema: 'analytics', name: 'order_clone', kind: 'table' },
+      { catalog: 'project-1', schema: 'mart', name: 'orders_mv', kind: 'view' },
     ]);
 
     expect(createQueryJob).toHaveBeenCalledTimes(1);

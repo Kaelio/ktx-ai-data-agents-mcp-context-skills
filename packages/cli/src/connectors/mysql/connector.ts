@@ -644,6 +644,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
       filterSchemas,
     );
     return rows.map((row) => ({
+      catalog: null,
       schema: row.TABLE_SCHEMA,
       name: row.TABLE_NAME,
       kind: row.TABLE_TYPE === 'VIEW' ? ('view' as const) : ('table' as const),

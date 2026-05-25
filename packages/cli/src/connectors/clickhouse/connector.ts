@@ -531,6 +531,7 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
       { schemas: filterSchemas },
     );
     return rows.map((row) => ({
+      catalog: null,
       schema: row.database,
       name: row.name,
       kind: row.engine === 'View' || row.engine === 'MaterializedView' ? ('view' as const) : ('table' as const),

@@ -532,6 +532,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
       params,
     );
     return rows.map((row) => ({
+      catalog: this.poolConfig.database,
       schema: row.schema_name,
       name: row.table_name,
       kind: row.table_type === 'VIEW' ? ('view' as const) : ('table' as const),

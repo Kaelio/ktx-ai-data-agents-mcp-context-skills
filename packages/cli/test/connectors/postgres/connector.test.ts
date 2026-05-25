@@ -390,9 +390,9 @@ describe('KtxPostgresScanConnector', () => {
     await expect(connector.getTableRowCount({ db: 'public', name: 'orders' })).resolves.toBe(3);
     await expect(connector.listSchemas()).resolves.toEqual(['public']);
     await expect(connector.listTables(['public'])).resolves.toEqual([
-      { schema: 'public', name: 'customers', kind: 'table' },
-      { schema: 'public', name: 'orders', kind: 'table' },
-      { schema: 'public', name: 'recent_orders', kind: 'view' },
+      { catalog: null, schema: 'public', name: 'customers', kind: 'table' },
+      { catalog: null, schema: 'public', name: 'orders', kind: 'table' },
+      { catalog: null, schema: 'public', name: 'recent_orders', kind: 'view' },
     ]);
     await expect(connector.testConnection()).resolves.toEqual({ success: true });
 

@@ -52,10 +52,10 @@ function captureRenderer(): {
 }
 
 const discovered = [
-  { schema: 'analytics', name: 'customers', kind: 'table' as const },
-  { schema: 'analytics', name: 'orders', kind: 'table' as const },
-  { schema: 'public', name: 'events', kind: 'view' as const },
-  { schema: 'public', name: 'sessions', kind: 'table' as const },
+  { catalog: null, schema: 'analytics', name: 'customers', kind: 'table' as const },
+  { catalog: null, schema: 'analytics', name: 'orders', kind: 'table' as const },
+  { catalog: null, schema: 'public', name: 'events', kind: 'view' as const },
+  { catalog: null, schema: 'public', name: 'sessions', kind: 'table' as const },
 ];
 
 function promptAdapter(overrides: Partial<DatabaseScopePromptAdapter> = {}): DatabaseScopePromptAdapter {
@@ -88,7 +88,7 @@ describe('pickDatabaseScope', () => {
       select: vi.fn(async () => 'save'),
     });
     const listTablesForSchemas = vi.fn(async () => [
-      { schema: 'analytics', name: 'orders', kind: 'table' as const },
+      { catalog: null, schema: 'analytics', name: 'orders', kind: 'table' as const },
     ]);
 
     const result = await pickDatabaseScope(
@@ -114,6 +114,58 @@ describe('pickDatabaseScope', () => {
     });
   });
 
+  it('emits fully-qualified catalog.schema.name ids for catalog-bearing drivers and round-trips existing selection', async () => {
+    const promptsSave = promptAdapter({
+      autocompleteMultiselect: vi.fn(async () => ['analytics']),
+      select: vi.fn(async () => 'save'),
+    });
+    const listTablesForSchemas = vi.fn(async () => [
+      { catalog: 'project-1', schema: 'analytics', name: 'orders', kind: 'table' as const },
+      { catalog: 'project-1', schema: 'analytics', name: 'customers', kind: 'table' as const },
+    ]);
+    const saveResult = await pickDatabaseScope(
+      baseArgs({
+        schemas: ['analytics'],
+        schemaSuggestion: { excluded: new Set(), suggested: new Set(['analytics']) },
+        listTablesForSchemas,
+        prompts: promptsSave,
+      }),
+      makeIo().io,
+      captureRenderer().renderer,
+    );
+    expect(saveResult).toEqual({
+      kind: 'selected',
+      activeSchemas: ['analytics'],
+      enabledTables: ['project-1.analytics.orders', 'project-1.analytics.customers'],
+    });
+
+    const { renderer, capture, setResult } = captureRenderer();
+    setResult({
+      kind: 'save',
+      selectedIds: ['project-1.analytics.orders'],
+    });
+    const refineResult = await pickDatabaseScope(
+      baseArgs({
+        schemas: ['analytics'],
+        schemaSuggestion: { excluded: new Set(), suggested: new Set(['analytics']) },
+        existing: { enabledTables: ['project-1.analytics.orders'] },
+        listTablesForSchemas,
+        prompts: promptAdapter({
+          autocompleteMultiselect: vi.fn(async () => ['analytics']),
+          select: vi.fn(async () => 'refine'),
+        }),
+      }),
+      makeIo().io,
+      renderer,
+    );
+    expect(refineResult).toEqual({
+      kind: 'selected',
+      activeSchemas: ['analytics'],
+      enabledTables: ['project-1.analytics.orders'],
+    });
+    expect([...(capture.state?.checked ?? [])]).toContain('project-1.analytics.orders');
+  });
+
   it('routes partial existing allowlists through Stage 2 so save preserves table selections', async () => {
     const { renderer, setResult } = captureRenderer();
     setResult({ kind: 'save', selectedIds: ['analytics.customers'] });
@@ -122,8 +174,8 @@ describe('pickDatabaseScope', () => {
       select: vi.fn(async () => 'save'),
     });
     const listTablesForSchemas = vi.fn(async () => [
-      { schema: 'analytics', name: 'customers', kind: 'table' as const },
-      { schema: 'analytics', name: 'orders', kind: 'table' as const },
+      { catalog: null, schema: 'analytics', name: 'customers', kind: 'table' as const },
+      { catalog: null, schema: 'analytics', name: 'orders', kind: 'table' as const },
     ]);
 
     const result = await pickDatabaseScope(

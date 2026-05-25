@@ -158,9 +158,9 @@ describe('KtxSqliteScanConnector', () => {
 
     await expect(connector.listSchemas()).resolves.toEqual([]);
     await expect(connector.listTables(['ignored'])).resolves.toEqual([
-      { schema: '', name: 'customers', kind: 'table' },
-      { schema: '', name: 'orders', kind: 'table' },
-      { schema: '', name: 'recent_orders', kind: 'view' },
+      { catalog: null, schema: '', name: 'customers', kind: 'table' },
+      { catalog: null, schema: '', name: 'orders', kind: 'table' },
+      { catalog: null, schema: '', name: 'recent_orders', kind: 'view' },
     ]);
   });
 

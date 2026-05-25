@@ -390,9 +390,9 @@ describe('KtxSqlServerScanConnector', () => {
     await expect(connector.getTableRowCount('orders')).resolves.toBe(2);
     await expect(connector.listSchemas()).resolves.toEqual(['dbo', 'sales']);
     await expect(connector.listTables(['dbo'])).resolves.toEqual([
-      { schema: 'dbo', name: 'customers', kind: 'table' },
-      { schema: 'dbo', name: 'order_summary', kind: 'view' },
-      { schema: 'dbo', name: 'orders', kind: 'table' },
+      { catalog: 'analytics', schema: 'dbo', name: 'customers', kind: 'table' },
+      { catalog: 'analytics', schema: 'dbo', name: 'order_summary', kind: 'view' },
+      { catalog: 'analytics', schema: 'dbo', name: 'orders', kind: 'table' },
     ]);
     await expect(
       connector.columnStats(

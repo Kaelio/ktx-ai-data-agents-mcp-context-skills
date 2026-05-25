@@ -227,6 +227,7 @@ export class KtxSqliteScanConnector implements KtxScanConnector {
       .all() as SqliteMasterRow[];
 
     return rows.map((row) => ({
+      catalog: null,
       schema: '',
       name: row.name,
       kind: row.type === 'view' ? ('view' as const) : ('table' as const),

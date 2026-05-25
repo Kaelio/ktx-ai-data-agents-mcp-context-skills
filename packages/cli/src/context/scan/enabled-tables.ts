@@ -27,12 +27,13 @@ export function resolveEnabledTables(
 
 function parseEnabledTableEntry(value: unknown): KtxTableRef | null {
   if (typeof value === 'string') {
-    return parseDottedEntry(value);
+    return parseDottedTableEntry(value);
   }
   return null;
 }
 
-function parseDottedEntry(value: string): KtxTableRef | null {
+/** @internal */
+export function parseDottedTableEntry(value: string): KtxTableRef | null {
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
   const parts = trimmed.split('.');
