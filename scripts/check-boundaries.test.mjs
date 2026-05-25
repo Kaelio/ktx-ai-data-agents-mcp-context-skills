@@ -68,8 +68,8 @@ describe('scanFileContent', () => {
   it('allows product identifiers in test fixtures', () => {
     const name = lowerProductName();
 
-    assert.equal(scanFileContent('packages/cli/src/setup.test.ts', `project: ${name}-dev`).length, 0);
-    assert.equal(scanFileContent('packages/cli/src/context/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
+    assert.equal(scanFileContent('packages/cli/test/setup.test.ts', `project: ${name}-dev`).length, 0);
+    assert.equal(scanFileContent('packages/cli/test/context/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
     assert.equal(scanFileContent('python/ktx-daemon/tests/test_package.py', `${name}-ktx`).length, 0);
   });
 
@@ -142,7 +142,7 @@ describe('scanFileContent', () => {
     );
     assert.deepEqual(
       scanFileContent(
-        'packages/cli/src/connectors/postgres/dialect.test.ts',
+        'packages/cli/test/connectors/postgres/dialect.test.ts',
         "import { KtxPostgresDialect } from './dialect.js';",
       ),
       [],
@@ -187,7 +187,7 @@ describe('scanFileContent', () => {
 
     assert.deepEqual(
       scanFileContent(
-        'packages/cli/src/context/ingest/page-triage/page-triage.service.test.ts',
+        'packages/cli/test/context/ingest/page-triage/page-triage.service.test.ts',
         "const model = this.deps.llmProvider.getModelByName('test-model');",
       ),
       [],
