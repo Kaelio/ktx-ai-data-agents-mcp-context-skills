@@ -1,0 +1,84 @@
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchGdriveSnapshot } from './fetch.js';
+
+const getDocument = vi.fn(async () => ({
+  title: 'Herness and Enterprise Agent Operating Framework for Connected Systems',
+  body: { content: [] },
+}));
+const listFiles = vi.fn(async () => ({
+  files: [
+    {
+      id: '1A74GH0di2jrBvSJMfkzQSI_PqPZdT3raqsFRcEc7_gc',
+      name: 'Herness and Enterprise Agent Operating Framework for Connected Systems',
+      mimeType: 'application/vnd.google-apps.document',
+      parents: ['folder-123'],
+      webViewLink: 'https://docs.google.com/document/d/doc-1',
+      modifiedTime: '2026-05-24T01:53:28.347Z',
+    },
+  ],
+  nextPageToken: null,
+}));
+
+vi.mock('./gdrive-client.js', () => ({
+  createGoogleDocsClients: vi.fn(() => ({
+    drive: { listFiles },
+    docs: { getDocument },
+  })),
+}));
+
+vi.mock('./normalize.js', () => ({
+  normalizeGoogleDocToMarkdown: vi.fn(() => 'Durable operating rules.'),
+}));
+
+async function listRelativeFiles(root: string): Promise<string[]> {
+  const entries = await readdir(root, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(root, join(entry.parentPath, entry.name)).replace(/\\/g, '/'))
+    .sort();
+}
+
+describe('fetchGdriveSnapshot', () => {
+  let stagedDir: string;
+
+  afterEach(async () => {
+    await rm(stagedDir, { recursive: true, force: true });
+    vi.clearAllMocks();
+  });
+
+  it('writes compact staged paths while preserving full metadata title and path', async () => {
+    stagedDir = await mkdtemp(join(tmpdir(), 'ktx-gdrive-fetch-'));
+
+    const manifest = await fetchGdriveSnapshot({
+      key: { client_email: 'bot@example.com', private_key: 'secret' },
+      config: { serviceAccountKey: 'unused', folderId: 'folder-123', recursive: false },
+      stagedDir,
+    });
+
+    expect(manifest.fileCount).toBe(1);
+    expect(listFiles).toHaveBeenCalledWith({ q: "'folder-123' in parents and trashed = false", pageToken: undefined });
+    expect(getDocument).toHaveBeenCalledWith('1A74GH0di2jrBvSJMfkzQSI_PqPZdT3raqsFRcEc7_gc');
+
+    const files = await listRelativeFiles(stagedDir);
+    expect(files).toEqual([
+      'docs/herness-and-enterprise-a-a88aa1bf05/metadata.json',
+      'docs/herness-and-enterprise-a-a88aa1bf05/page.md',
+      'manifest.json',
+    ]);
+
+    const metadata = JSON.parse(
+      await readFile(join(stagedDir, 'docs', 'herness-and-enterprise-a-a88aa1bf05', 'metadata.json'), 'utf-8'),
+    );
+    expect(metadata).toMatchObject({
+      id: '1A74GH0di2jrBvSJMfkzQSI_PqPZdT3raqsFRcEc7_gc',
+      title: 'Herness and Enterprise Agent Operating Framework for Connected Systems',
+      path: 'Herness and Enterprise Agent Operating Framework for Connected Systems',
+    });
+    await expect(
+      readFile(join(stagedDir, 'docs', 'herness-and-enterprise-a-a88aa1bf05', 'page.md'), 'utf-8'),
+    ).resolves.toContain('# Herness and Enterprise Agent Operating Framework for Connected Systems');
+  });
+});

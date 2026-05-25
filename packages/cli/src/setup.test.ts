@@ -251,9 +251,10 @@ describe('setup status', () => {
         '  database_connection_ids: []',
         'connections:',
         '  docs:',
-        '    driver: notion',
-        '    auth_token_ref: env:NOTION_TOKEN',
-        '    crawl_mode: all_accessible',
+        '    driver: gdrive',
+        '    service_account_key_ref: file:/tmp/gdrive-key.json',
+        '    folder_id: folder-123',
+        '    recursive: false',
         '  warehouse:',
         '    driver: postgres',
         '    url: env:DATABASE_URL',
@@ -264,7 +265,7 @@ describe('setup status', () => {
     await writeKtxSetupState(tempDir, { completed_steps: ['project', 'sources'] });
 
     await expect(readKtxSetupStatus(tempDir)).resolves.toMatchObject({
-      sources: [{ connectionId: 'docs', type: 'notion', ready: true }],
+      sources: [{ connectionId: 'docs', type: 'gdrive', ready: true }],
     });
   });
 
