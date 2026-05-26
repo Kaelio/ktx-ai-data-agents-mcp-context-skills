@@ -278,7 +278,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
             key: sourceName,
             targetConnectionId: input.connectionId,
             detail: `Merged historic-SQL usage for ${matchingEvidence.table}`,
-            rawPaths: [matchingEvidence.rawPath],
+            rawPaths: matchingEvidence.rawPaths,
           });
         }
       } else if (entry.usage && !currentTables.has(tableRef)) {
@@ -298,6 +298,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
             key: sourceName,
             targetConnectionId: input.connectionId,
             detail: `Marked historic-SQL usage stale for ${tableRef}`,
+            rawPaths: ['manifest.json'],
           });
         }
       }
@@ -341,7 +342,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
       type: reusable ? 'updated' : 'created',
       key,
       detail: `Projected historic-SQL pattern ${pattern.pattern.title}`,
-      rawPaths: [pattern.rawPath],
+      rawPaths: pattern.rawPaths,
     });
   }
 
@@ -361,6 +362,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
         type: 'updated',
         key: page.key,
         detail: `Archived stale historic-SQL pattern page ${page.key}`,
+        rawPaths: ['manifest.json'],
       });
       continue;
     }
@@ -377,6 +379,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
       type: 'updated',
       key: page.key,
       detail: `Marked historic-SQL pattern page ${page.key} stale`,
+      rawPaths: ['manifest.json'],
     });
   }
 

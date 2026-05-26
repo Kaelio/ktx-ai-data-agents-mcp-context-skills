@@ -57,7 +57,6 @@ class HistoricSqlAcceptanceAgentRunner implements AgentRunnerPort {
       const result = await emitEvidence.execute({
         kind: 'table_usage',
         table: 'public.orders',
-        rawPath: 'tables/public.orders.json',
         usage: {
           narrative: 'Analysts repeatedly inspect paid order lifecycle by customer segment.',
           frequencyTier: 'high',
@@ -76,7 +75,6 @@ class HistoricSqlAcceptanceAgentRunner implements AgentRunnerPort {
       const result = await emitEvidence.execute({
         kind: 'table_usage',
         table: 'public.customers',
-        rawPath: 'tables/public.customers.json',
         usage: {
           narrative: 'Customers provide segment context for paid order lifecycle analysis.',
           frequencyTier: 'mid',
@@ -94,7 +92,6 @@ class HistoricSqlAcceptanceAgentRunner implements AgentRunnerPort {
     if (params.telemetryTags.unitKey === 'historic-sql-patterns-part-0001') {
       const result = await emitEvidence.execute({
         kind: 'pattern',
-        rawPath: 'patterns-input/part-0001.json',
         pattern: {
           slug: 'paid-order-lifecycle',
           title: 'Paid Order Lifecycle',
@@ -254,6 +251,33 @@ describe('historic-SQL local ingest retrieval acceptance', () => {
       expect.arrayContaining([
         { connectionId: 'warehouse', sourceName: 'customers' },
         { connectionId: 'warehouse', sourceName: 'orders' },
+      ]),
+    );
+
+    // Regression for KLO-698: the bundle report's provenance rows must
+    // attribute the table-usage merges and pattern-page writes back to
+    // their raw files instead of falling through as `actionType: 'skipped'`
+    // with null artifact metadata.
+    const provenanceRows = result.report.body.provenanceRows;
+    const nonSkipped = provenanceRows.filter((row) => row.actionType !== 'skipped');
+    expect(nonSkipped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rawPath: 'tables/public.orders.json',
+          artifactKind: 'sl',
+          artifactKey: 'orders',
+        }),
+        expect.objectContaining({
+          rawPath: 'tables/public.customers.json',
+          artifactKind: 'sl',
+          artifactKey: 'customers',
+        }),
+        expect.objectContaining({
+          rawPath: 'patterns-input/part-0001.json',
+          artifactKind: 'wiki',
+          artifactKey: 'historic-sql-paid-order-lifecycle',
+          actionType: 'wiki_written',
+        }),
       ]),
     );
 

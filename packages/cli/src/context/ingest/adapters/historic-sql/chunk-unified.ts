@@ -60,7 +60,7 @@ export async function chunkHistoricSqlUnifiedStagedDir(stagedDir: string, diffSe
       dependencyPaths: ['manifest.json'],
       peerFileIndex: files.filter((file) => file !== path && file !== 'manifest.json').sort(),
       notes:
-        `Use historic_sql_patterns. Read ${path} and emit pattern objects with emit_historic_sql_evidence using rawPath "${path}". Do not call wiki_write or sl_write_source.`,
+        `Use historic_sql_patterns. Read ${path} and emit pattern objects with emit_historic_sql_evidence. Do not call wiki_write or sl_write_source.`,
     });
   }
 
