@@ -173,6 +173,7 @@ export interface KtxSetupDeps {
 }
 
 const SOURCE_DRIVERS = new Set(['dbt', 'metricflow', 'metabase', 'looker', 'lookml', 'notion', 'gdrive']);
+const KTX_DOCS_URL = 'https://docs.kaelio.com/ktx';
 
 type KtxSetupEntryAction = 'setup' | 'new-project' | 'agents' | 'status' | 'demo' | 'exit';
 type KtxSetupFlowStep = 'models' | 'embeddings' | 'databases' | 'sources' | 'runtime' | 'context' | 'agents';
@@ -589,7 +590,7 @@ export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSet
 async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
   const setupUi = deps.setupUi ?? createKtxSetupUiAdapter();
   setupUi.intro('KTX setup', io);
-  setupUi.note('https://docs.kaelio.com/ktx', '📚 Docs', io);
+  setupUi.note(KTX_DOCS_URL, '📚 Docs', io);
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
   let agentNextActions: string | undefined;

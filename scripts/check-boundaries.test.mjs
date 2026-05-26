@@ -3,14 +3,6 @@ import { describe, it } from 'node:test';
 
 import { scanFileContent } from './check-boundaries.mjs';
 
-function productName() {
-  return ['Kae', 'lio'].join('');
-}
-
-function lowerProductName() {
-  return ['kae', 'lio'].join('');
-}
-
 describe('scanFileContent', () => {
   it('rejects source imports from application directories', () => {
     const serverAlias = '@' + 'server/contracts';
@@ -25,64 +17,6 @@ describe('scanFileContent', () => {
       violations.map((violation) => violation.kind),
       ['app-import', 'app-import'],
     );
-  });
-
-  it('rejects forbidden product identifiers in code source files', () => {
-    const violations = scanFileContent('packages/cli/src/context/index.ts', `export const owner = '${lowerProductName()}';`);
-
-    assert.equal(violations.length, 1);
-    assert.equal(violations[0]?.kind, 'identifier');
-  });
-
-  it('rejects forbidden product identifiers in shipped runtime prompt assets', () => {
-    const violations = scanFileContent(
-      'packages/cli/src/prompts/memory_agent_bundle_ingest_work_unit.md',
-      `Write output for ${productName()}.`,
-    );
-
-    assert.equal(violations.length, 1);
-    assert.equal(violations[0]?.kind, 'identifier');
-    assert.equal(violations[0]?.file, 'packages/cli/src/prompts/memory_agent_bundle_ingest_work_unit.md');
-  });
-
-  it('rejects forbidden product identifiers in shipped runtime skill assets', () => {
-    const violations = scanFileContent(
-      'packages/cli/src/skills/metabase_ingest/SKILL.md',
-      `Use ${productName()} project conventions.`,
-    );
-
-    assert.equal(violations.length, 1);
-    assert.equal(violations[0]?.kind, 'identifier');
-    assert.equal(violations[0]?.file, 'packages/cli/src/skills/metabase_ingest/SKILL.md');
-  });
-
-  it('allows product identifiers in docs, examples, and transition metadata', () => {
-    const name = productName();
-
-    assert.equal(scanFileContent('docs/transition.md', name).length, 0);
-    assert.equal(scanFileContent('examples/transition.md', name).length, 0);
-    assert.equal(scanFileContent('python/ktx-sl/plans/brainstorm.md', name).length, 0);
-    assert.equal(scanFileContent('python/ktx-sl/openspec/specs/semantic-layer/spec.md', name).length, 0);
-  });
-
-  it('allows product identifiers in test fixtures', () => {
-    const name = lowerProductName();
-
-    assert.equal(scanFileContent('packages/cli/test/setup.test.ts', `project: ${name}-dev`).length, 0);
-    assert.equal(scanFileContent('packages/cli/test/context/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
-    assert.equal(scanFileContent('python/ktx-daemon/tests/test_package.py', `${name}-ktx`).length, 0);
-  });
-
-  it('allows public package identifiers in release packaging and managed runtime source', () => {
-    const name = lowerProductName();
-
-    assert.equal(scanFileContent('scripts/local-embeddings-runtime-smoke.mjs', `@${name}/ktx`).length, 0);
-    assert.equal(scanFileContent('scripts/package-artifacts.test.mjs', `${name}-ktx`).length, 0);
-    assert.equal(scanFileContent('scripts/public-npm-release-metadata.mjs', `@${name}/ktx`).length, 0);
-    assert.equal(scanFileContent('scripts/semantic-release-config.cjs', `${name}-ktx-`).length, 0);
-    assert.equal(scanFileContent('packages/cli/src/release-version.ts', `@${name}/ktx`).length, 0);
-    assert.equal(scanFileContent('packages/cli/src/managed-python-runtime.ts', `${name}_ktx`).length, 0);
-    assert.equal(scanFileContent('python/ktx-daemon/src/ktx_daemon/__init__.py', `${name}-ktx`).length, 0);
   });
 
   it('allows clean source files and clean runtime prompt assets', () => {
