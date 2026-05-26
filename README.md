@@ -16,17 +16,26 @@
   <a href="https://www.ycombinator.com/companies?batch=P25"><img src="https://img.shields.io/badge/Y%20Combinator-P25-orange?style=flat-square" alt="Y Combinator P25" /></a>
 </p>
 
+<p align="center">
+  <a href="https://docs.kaelio.com/ktx/docs/getting-started/quickstart"><b>Quickstart</b></a> ·
+  <a href="https://docs.kaelio.com/ktx/docs/cli-reference/ktx"><b>CLI Reference</b></a> ·
+  <a href="https://docs.kaelio.com/ktx/docs/ai-resources/agent-quickstart"><b>Agent Setup</b></a> ·
+  <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><b>Slack</b></a>
+</p>
+
 ---
 
 **ktx** is a self-improving context layer that teaches agents how to query your
 warehouse accurately - from approved metric definitions, joinable columns, and
 business knowledge it builds and maintains for you.
 
-Works with PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
-SQLite. Integrates with dbt, MetricFlow, LookML, Looker, Metabase, and Notion.
+> [!NOTE]
+> Run **ktx** with your own LLM API keys or a **Claude Pro/Max** subscription.
+> No extra usage billing from **ktx**.
 
-Runs with your own LLM API keys or a **Claude
-Pro/Max subscription - no extra usage billing from** **ktx**.
+<p align="center">
+  <img src="docs-site/public/images/ingestion-flow-transparent.svg" alt="ktx ingestion flow from source systems through validation to wiki and semantic-layer outputs" width="900" />
+</p>
 
 ## Why ktx
 
@@ -51,23 +60,36 @@ upkeep and don't absorb the rest of your company's knowledge.
 - **Serves agents at execution.** Exposes CLI and MCP tools with combined
   full-text and semantic search across wiki and semantic-layer entities.
 
-Agents can run raw SQL when they need it, or compose semantic-layer queries
-when they want approved metrics with reliable joins.
+## How ktx compares
 
-<p align="center">
-  <img src="docs-site/public/images/ingestion-flow-transparent.svg" alt="ktx ingestion flow from source systems through validation to wiki and semantic-layer outputs" width="900" />
-</p>
+|  | General-purpose agent | Traditional semantic layer | **ktx** |
+| --- | :---: | :---: | :---: |
+| Builds warehouse context automatically | — | — | ✓ |
+| Detects joinable columns + resolves fan/chasm traps | — | Manual | ✓ |
+| Approved, reusable metric definitions | — | ✓ | ✓ |
+| Absorbs wiki / Notion / team knowledge | — | — | ✓ |
+| Flags contradictions across sources | — | — | ✓ |
+| Ships CLI + MCP for agent execution | Partial | — | ✓ |
+| Read-only by design | n/a | n/a | ✓ |
 
-## Agent Setup
+## Who is ktx for
 
-Ask an agent such as Claude Code, Codex, Cursor, or OpenCode to install and
-configure **ktx** from your project directory:
+**Use ktx if you:**
 
-```text
-Follow instructions from
-https://docs.kaelio.com/ktx/docs/agents-setup.md
-to install and configure ktx
-```
+- Want agents like Claude Code, Codex, Cursor, or OpenCode to query your
+  warehouse with approved metric definitions
+- Have business knowledge scattered across dbt, Looker, Metabase, Notion, and
+  team wikis
+- Need agents to reuse canonical SQL instead of inventing it on every prompt
+
+**Skip ktx if you:**
+
+- You don't have a SQL warehouse - **ktx** sits on top of one
+- You only need one ad-hoc query - `psql` or a notebook will do
+- You already have a curated semantic layer your agents query reliably
+
+Works with PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
+SQLite. Integrates with dbt, MetricFlow, LookML, Looker, Metabase, and Notion.
 
 ## Quick Start
 
@@ -77,10 +99,10 @@ ktx setup
 ktx status
 ```
 
-`ktx setup` creates or resumes a local **ktx** project, configures providers and
-connections, builds context, and installs agent integration.
+`ktx setup` creates or resumes a local **ktx** project, configures providers
+and connections, builds context, and installs agent integration.
 
-Example `ktx status` output after setup:
+Example `ktx status` after setup:
 
 ```text
 ktx project: /home/user/analytics
@@ -93,38 +115,33 @@ ktx context built: yes
 Agent integration ready: yes (codex:project)
 ```
 
-## Telemetry
+> [!TIP]
+> Already using an agent? Ask Claude Code, Codex, Cursor, or OpenCode from
+> your project directory:
+>
+> ```text
+> Follow instructions from
+> https://docs.kaelio.com/ktx/docs/agents-setup.md
+> to install and configure ktx
+> ```
 
-**ktx** collects anonymous usage telemetry from interactive CLI runs to improve
-setup, command reliability, and data-agent workflows. See
-[Telemetry](https://docs.kaelio.com/ktx/docs/community/telemetry) for the event
-catalog, privacy details, and opt-out options.
+> [!IMPORTANT]
+> If `ktx status` prints `ktx mcp start --project-dir ...`, run it before
+> opening your agent client.
 
-## Common Commands
+## First commands
 
 | Command | Purpose |
-|---------|---------|
+| --- | --- |
 | `ktx setup` | Create, resume, or update a **ktx** project |
 | `ktx status` | Check project readiness |
-| `ktx connection` | List configured connections |
-| `ktx connection test` | Test every configured connection |
-| `ktx connection test <id>` | Test one connection |
 | `ktx ingest` | Build context for every configured connection |
-| `ktx ingest <id>` | Build context for one connection |
-| `ktx ingest --text "..."` | Capture free-form notes into memory |
-| `ktx ingest --file notes.md --connection-id <id>` | Capture a text file into memory |
-| `ktx sl` | List semantic sources |
 | `ktx sl "revenue"` | Search semantic sources |
-| `ktx sl validate <source> --connection-id <id>` | Validate a semantic source |
-| `ktx sl query --measure <measure> --format sql` | Compile semantic-layer SQL |
-| `ktx sql --connection <id> "select 1"` | Execute read-only SQL |
-| `ktx wiki` | List local wiki pages |
-| `ktx wiki "revenue definition"` | Search local wiki pages |
-| `ktx mcp` | Show MCP daemon status |
-| `ktx mcp start` | Start the local MCP server for agent clients |
+| `ktx wiki "refund policy"` | Search local wiki pages |
+| `ktx mcp start` | Start the MCP server for agent clients |
 
-Project resolution defaults to `KTX_PROJECT_DIR`, then the nearest `ktx.yaml`,
-then the current directory. Pass `--project-dir <path>` when scripting.
+See the [CLI Reference](https://docs.kaelio.com/ktx/docs/cli-reference/ktx)
+for every command, flag, and option.
 
 ## Project Layout
 
@@ -140,46 +157,46 @@ my-project/
 
 Commit `ktx.yaml`, `semantic-layer/`, and `wiki/`. Keep `.ktx/` local.
 
-## Agent Usage
+Project resolution defaults to `KTX_PROJECT_DIR`, then the nearest `ktx.yaml`,
+then the current directory. Pass `--project-dir <path>` when scripting.
 
-Install **ktx** integration for Claude Code, Claude Desktop, Codex, Cursor,
-OpenCode, and generic `.agents` clients:
+## FAQ
 
-```bash
-ktx setup --agents
-```
+**Does ktx send my schema or query results to a hosted service?**
+No. **ktx** runs locally. The only data leaving your machine is what you send
+to the LLM provider you configured.
 
-Pass `--target <target>` to install or repair one specific integration.
+**Which LLM backends are supported?**
+Anthropic API, Google Vertex AI, AI Gateway, and the local Claude Code session
+through the Claude Agent SDK. See
+[LLM configuration](https://docs.kaelio.com/ktx/docs/guides/llm-configuration).
 
-A typical agent workflow combines wiki and semantic-layer search before
-querying:
+**How is ktx different from a dbt or MetricFlow semantic layer?**
+**ktx** *ingests* those layers and combines them with raw-table introspection
+and wiki content. Agents get one searchable surface instead of three
+disconnected ones - and **ktx** flags contradictions across sources.
 
-```bash
-ktx sl "revenue" --json
-ktx wiki "refund policy" --json
-ktx sl query --connection-id warehouse --measure orders.revenue --format sql
-```
+**Does ktx need a running server?**
+There is no hosted service. The local MCP daemon runs on demand via
+`ktx mcp start` when an agent client needs it.
 
-During setup, choose **Ask data questions with ktx MCP** for agent clients.
-Choose **Ask data questions + manage ktx with CLI commands** when an operator
-agent also needs pinned `ktx` admin commands. Choose **Skip agent setup for
-now** to leave agent integration incomplete and run `ktx setup --agents` later.
+**Is my warehouse safe?**
+Yes. Connections are read-only - **ktx** never writes to your database.
 
-After setup, **ktx** prints **Required before using agents** with the exact
-commands to run. If the output includes `ktx mcp start --project-dir ...`, run
-it before opening your agent. Claude Desktop gets a stdio MCP config entry and
-prints separate skill upload steps under `.ktx/agents/claude/`.
+## Docs
 
-## Workspace layout
+- [Quickstart](https://docs.kaelio.com/ktx/docs/getting-started/quickstart)
+- [The Context Layer](https://docs.kaelio.com/ktx/docs/concepts/the-context-layer)
+- [Building Context](https://docs.kaelio.com/ktx/docs/guides/building-context)
+- [CLI Reference](https://docs.kaelio.com/ktx/docs/cli-reference/ktx)
+- [Agent Quickstart](https://docs.kaelio.com/ktx/docs/ai-resources/agent-quickstart)
+- [Community & Support](https://docs.kaelio.com/ktx/docs/community/support)
 
-| Path | Purpose |
-|------|---------|
-| `packages/cli` | TypeScript CLI package and published npm package source |
-| `packages/cli/src/context` | Core context engine |
-| `packages/cli/src/llm` | LLM and embedding providers |
-| `packages/cli/src/connectors` | Database scan connectors |
-| `python/ktx-sl` | Semantic-layer query planning |
-| `python/ktx-daemon` | Portable compute service |
+## Community
+
+- **[Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ)** — ask questions, share what you're building, and chat with maintainers.
+- **[GitHub Issues](https://github.com/Kaelio/ktx/issues)** — report bugs and request features.
+- **[Contributing](https://docs.kaelio.com/ktx/docs/community/contributing)** — set up the repo, run tests, and open a PR.
 
 ## Development
 
@@ -192,20 +209,24 @@ pnpm run build
 pnpm run check
 ```
 
-Use the development CLI locally:
+**ktx** is a pnpm + uv workspace:
+
+| Path | Purpose |
+| --- | --- |
+| `packages/cli` | TypeScript CLI and published npm package source |
+| `packages/cli/src/context` | Core context engine |
+| `packages/cli/src/llm` | LLM and embedding providers |
+| `packages/cli/src/connectors` | Database scan connectors |
+| `python/ktx-sl` | Semantic-layer query planning |
+| `python/ktx-daemon` | Portable compute service |
+
+Local development CLI:
 
 ```bash
 pnpm run setup:dev
 pnpm run link:dev
 ktx-dev --help
 ```
-
-**ktx** is a pnpm + uv workspace:
-
-- TypeScript packages live in `packages/*`
-- CLI source lives in `packages/cli`
-- Python runtime source lives in `python/ktx-sl` and `python/ktx-daemon`
-- Public docs live in `docs-site/content/docs`
 
 Useful checks:
 
@@ -216,23 +237,22 @@ pnpm run dead-code
 uv run pytest -q
 ```
 
-## Docs
+## Telemetry
 
-- [Quickstart](docs-site/content/docs/getting-started/quickstart.mdx)
-- [CLI Reference](docs-site/content/docs/cli-reference/ktx.mdx)
-- [Building Context](docs-site/content/docs/guides/building-context.mdx)
-- [Community & Support](docs-site/content/docs/community/support.mdx)
-- [Contributing](docs-site/content/docs/community/contributing.mdx)
-
-## Community
-
-- **[Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ)** — ask questions, share what you're building, and chat with maintainers and other users.
-- **[GitHub Issues](https://github.com/Kaelio/ktx/issues)** — report bugs and request features.
-- **[Contributing guide](docs-site/content/docs/community/contributing.mdx)** — set up the repo, run tests, and open a PR.
-
-See [Community & Support](docs-site/content/docs/community/support.mdx) for the
-full guide on where to ask what.
+**ktx** collects anonymous usage telemetry from interactive CLI runs to
+improve setup, command reliability, and data-agent workflows. No file paths,
+hostnames, SQL, schema names, error messages, or argv are recorded. See
+[Telemetry](https://docs.kaelio.com/ktx/docs/community/telemetry) for the
+event catalog and opt-out options.
 
 ## License
 
 **ktx** is licensed under the Apache License, Version 2.0. See `LICENSE`.
+
+## Star History
+
+<p align="center">
+  <a href="https://star-history.com/#Kaelio/ktx&Date">
+    <img src="https://api.star-history.com/svg?repos=Kaelio/ktx&type=Date" alt="ktx Star History Chart" width="700" />
+  </a>
+</p>
