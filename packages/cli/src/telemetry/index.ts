@@ -55,6 +55,10 @@ const emittedProjectSnapshots = new Set<string>();
 const MCP_SAMPLE_RATE = 0.1 as const;
 let mcpSampled: boolean | undefined;
 
+function telemetryDebugEnabled(): boolean {
+  return process.env.KTX_TELEMETRY_DEBUG === '1';
+}
+
 export function shouldEmitMcpTelemetry(): boolean {
   mcpSampled ??= Math.random() < MCP_SAMPLE_RATE;
   return mcpSampled;
@@ -71,19 +75,21 @@ export async function emitTelemetryEvent<Name extends TelemetryEventName>(input:
   packageInfo?: KtxCliPackageInfo;
   projectDir?: string;
 }): Promise<void> {
+  const debug = telemetryDebugEnabled();
   const identity = await loadTelemetryIdentity({
     stdoutIsTTY: input.io.stdout.isTTY === true,
     stderr: input.io.stderr,
     env: process.env,
   });
 
-  if (!identity.enabled || !identity.installId) {
+  if ((!identity.enabled || !identity.installId) && !debug) {
     return;
   }
 
   const packageInfo = input.packageInfo ?? getKtxCliPackageInfo();
+  const installId = identity.installId ?? 'debug';
 
-  const projectId = input.projectDir ? computeTelemetryProjectId(identity.installId, input.projectDir) : undefined;
+  const projectId = input.projectDir ? computeTelemetryProjectId(installId, input.projectDir) : undefined;
   await trackTelemetryEvent({
     event: buildTelemetryEvent(
       input.name,
@@ -93,7 +99,7 @@ export async function emitTelemetryEvent<Name extends TelemetryEventName>(input:
       }),
       input.fields,
     ),
-    distinctId: identity.installId,
+    distinctId: installId,
     projectId,
     env: process.env,
     stderr: input.io.stderr,
