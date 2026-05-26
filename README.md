@@ -86,7 +86,6 @@ upkeep and don't absorb the rest of your company's knowledge.
 
 - You don't have a SQL warehouse - **ktx** sits on top of one
 - You only need one ad-hoc query - `psql` or a notebook will do
-- You already have a curated semantic layer your agents query reliably
 
 Works with PostgreSQL, Snowflake, BigQuery, ClickHouse, MySQL, SQL Server, and
 SQLite. Integrates with dbt, MetricFlow, LookML, Looker, Metabase, and Notion.
@@ -162,26 +161,23 @@ then the current directory. Pass `--project-dir <path>` when scripting.
 
 ## FAQ
 
-**Does ktx send my schema or query results to a hosted service?**
-No. **ktx** runs locally. The only data leaving your machine is what you send
-to the LLM provider you configured.
-
-**Which LLM backends are supported?**
-Anthropic API, Google Vertex AI, AI Gateway, and the local Claude Code session
-through the Claude Agent SDK. See
-[LLM configuration](https://docs.kaelio.com/ktx/docs/guides/llm-configuration).
-
-**How is ktx different from a dbt or MetricFlow semantic layer?**
-**ktx** *ingests* those layers and combines them with raw-table introspection
-and wiki content. Agents get one searchable surface instead of three
-disconnected ones - and **ktx** flags contradictions across sources.
-
-**Does ktx need a running server?**
-There is no hosted service. The local MCP daemon runs on demand via
-`ktx mcp start` when an agent client needs it.
-
-**Is my warehouse safe?**
-Yes. Connections are read-only - **ktx** never writes to your database.
+- **Does ktx send my schema or query results to a hosted service?**
+  No. **ktx** runs locally. The only data leaving your machine is what you
+  send to the LLM provider you configured.
+- **Which LLM backends are supported?**
+  Anthropic API, Google Vertex AI, AI Gateway, and the local Claude Code
+  session through the Claude Agent SDK. See
+  [LLM configuration](https://docs.kaelio.com/ktx/docs/guides/llm-configuration).
+- **How is ktx different from a dbt or MetricFlow semantic layer?**
+  **ktx** *ingests* those layers and combines them with raw-table
+  introspection and wiki content. Agents get one searchable surface instead
+  of three disconnected ones - and **ktx** flags contradictions across
+  sources.
+- **Does ktx need a running server?**
+  There is no hosted service. The local MCP daemon runs on demand via
+  `ktx mcp start` when an agent client needs it.
+- **Is my warehouse safe?**
+  Yes. Connections are read-only - **ktx** never writes to your database.
 
 ## Docs
 
