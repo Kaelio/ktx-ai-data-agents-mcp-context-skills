@@ -97,12 +97,12 @@ describe('packageArtifactLayout', () => {
   it('uses stable artifact paths under ktx/dist/artifacts', () => {
     const layout = packageArtifactLayout('/repo/ktx', PUBLIC_NPM_PACKAGE_VERSION);
 
-    assert.equal(layout.artifactDir, '/repo/ktx/dist/artifacts');
-    assert.equal(layout.npmDir, '/repo/ktx/dist/artifacts/npm');
-    assert.equal(layout.pythonDir, '/repo/ktx/dist/artifacts/python');
+    assert.equal(layout.artifactDir, join('/repo/ktx', 'dist', 'artifacts'));
+    assert.equal(layout.npmDir, join('/repo/ktx', 'dist', 'artifacts', 'npm'));
+    assert.equal(layout.pythonDir, join('/repo/ktx', 'dist', 'artifacts', 'python'));
     assert.equal(
       layout.cliTarball,
-      `/repo/ktx/dist/artifacts/npm/kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`,
+      join('/repo/ktx', 'dist', 'artifacts', 'npm', `kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`),
     );
     assert.deepEqual(Object.keys(layout.npmTarballs), ['@kaelio/ktx']);
   });
@@ -112,17 +112,21 @@ describe('buildArtifactCommands', () => {
   it('builds the CLI package, then the runtime wheel, then packs the npm tarball directly', () => {
     const layout = packageArtifactLayout('/repo/ktx', PUBLIC_NPM_PACKAGE_VERSION);
     const commands = buildArtifactCommands(layout);
+    const expectedBuildCommand =
+      process.platform === 'win32'
+        ? ['cmd.exe', ['/d', '/s', '/c', 'pnpm', '--filter', '@kaelio/ktx', 'run', 'build'], layout.rootDir]
+        : ['pnpm', ['--filter', '@kaelio/ktx', 'run', 'build'], layout.rootDir];
+    const expectedPackCommand =
+      process.platform === 'win32'
+        ? ['cmd.exe', ['/d', '/s', '/c', 'pnpm', 'pack', '--out', layout.cliTarball], join('/repo/ktx', 'packages', 'cli')]
+        : ['pnpm', ['pack', '--out', layout.cliTarball], join('/repo/ktx', 'packages', 'cli')];
 
     assert.deepEqual(
       commands.map((command) => [command.command, command.args, command.cwd]),
       [
-        ['pnpm', ['--filter', '@kaelio/ktx', 'run', 'build'], '/repo/ktx'],
-        [process.execPath, ['scripts/build-python-runtime-wheel.mjs'], '/repo/ktx'],
-        [
-          'pnpm',
-          ['pack', '--out', `/repo/ktx/dist/artifacts/npm/kaelio-ktx-${PUBLIC_NPM_PACKAGE_VERSION}.tgz`],
-          '/repo/ktx/packages/cli',
-        ],
+        expectedBuildCommand,
+        [process.execPath, ['scripts/build-python-runtime-wheel.mjs'], layout.rootDir],
+        expectedPackCommand,
       ],
     );
   });
@@ -476,18 +480,27 @@ describe('verification snippets', () => {
   it('runs installed CLI commands through the public package runtime', () => {
     const source = npmRuntimeSmokeSource();
 
+    assert.match(source, /function pnpmCommand\(args\)/);
+    assert.match(source, /process\.platform === 'win32'/);
+    assert.match(source, /command: 'cmd\.exe'/);
+    assert.match(source, /args: \['\/d', '\/s', '\/c', 'pnpm', \.\.\.args\]/);
+    assert.match(source, /import \{ setTimeout as delay \} from 'node:timers\/promises';/);
+    assert.match(source, /async function rmWithRetry\(path\)/);
+    assert.match(source, /await delay\(500\)/);
+    assert.match(source, /await rmWithRetry\(root\)/);
     assert.match(source, /ktx public package version/);
     assert.match(source, /installedPackageVersionPattern/);
     assert.doesNotMatch(source, /@kaelio\\\/ktx 0\\\.1\\\.0/);
-    assert.match(source, /'ktx', 'sl', 'query'/);
+    assert.match(source, /pnpmCommand\(\[\s*'exec',\s*'ktx',\s*'sl',\s*'query'/);
     assert.doesNotMatch(source, /@ktx\/context/);
     assert.doesNotMatch(source, /@modelcontextprotocol/);
     assert.doesNotMatch(source, /startSemanticDaemon/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'setup'/);
+    assert.doesNotMatch(source, /run\('pnpm',/);
+    assert.match(source, /pnpmCommand\(\[\s*'exec',\s*'ktx',\s*'setup'/);
     assert.match(source, /wiki', 'global', 'revenue\.md'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'wiki',\s*'revenue'/);
+    assert.match(source, /pnpmCommand\(\[\s*'exec',\s*'ktx',\s*'wiki',\s*'revenue'/);
     assert.match(source, /semantic-layer', 'warehouse', 'orders\.yaml'/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'sl',\s*'orders'/);
+    assert.match(source, /pnpmCommand\(\[\s*'exec',\s*'ktx',\s*'sl',\s*'orders'/);
     assert.match(source, /orders\.order_count/);
     assert.match(source, /node:sqlite/);
     assert.match(source, /driver: sqlite/);
@@ -516,7 +529,7 @@ describe('verification snippets', () => {
     assert.match(source, /ktx admin runtime stop/);
     assert.doesNotMatch(source, /ktx admin runtime prune/);
     assert.doesNotMatch(source, /staleRuntimeDir/);
-    assert.match(source, /run\('pnpm', \[\s*'exec',\s*'ktx',\s*'ingest',\s*'warehouse'/);
+    assert.match(source, /pnpmCommand\(\['exec', 'ktx', 'ingest', 'warehouse'/);
     assert.match(source, /'--deep'/);
     assert.doesNotMatch(source, /'--enrich'/);
     assert.match(source, /ktx ingest fast verified/);
@@ -534,8 +547,11 @@ describe('verification snippets', () => {
     it('exercises supported public package CLI commands', () => {
       const source = npmCliSmokeSource();
 
-      assert.match(source, /pnpm', \['exec', 'ktx', '--help'\]/);
-      assert.match(source, /pnpm', \['exec', 'ktx', 'setup', '--help'\]/);
+      assert.match(source, /function pnpmCommand\(args\)/);
+      assert.match(source, /process\.platform === 'win32'/);
+      assert.doesNotMatch(source, /run\('pnpm',/);
+      assert.match(source, /pnpmCommand\(\['exec', 'ktx', '--help'\]\)/);
+      assert.match(source, /pnpmCommand\(\['exec', 'ktx', 'setup', '--help'\]\)/);
       assert.match(source, /Usage: ktx setup/);
       assert.doesNotMatch(source, new RegExp(["'demo'", "'--mode'", "'deterministic'"].join(', ')));
       assert.match(source, /'status', '--verbose', '--no-input'/);

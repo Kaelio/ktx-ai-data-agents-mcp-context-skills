@@ -28,6 +28,20 @@ export const NPM_ARTIFACT_PACKAGES = [{ name: PUBLIC_NPM_PACKAGE_NAME, packageRo
 
 export const CLI_PYTHON_ASSET_MANIFEST = 'manifest.json';
 
+function pnpmCommand(args) {
+  if (process.platform === 'win32') {
+    return {
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'pnpm', ...args],
+    };
+  }
+
+  return {
+    command: 'pnpm',
+    args,
+  };
+}
+
 function scriptRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
@@ -70,8 +84,7 @@ export function packageArtifactLayout(rootDir = scriptRootDir(), version = publi
 export function buildArtifactCommands(layout) {
   return [
     {
-      command: 'pnpm',
-      args: ['--filter', PUBLIC_NPM_PACKAGE_NAME, 'run', 'build'],
+      ...pnpmCommand(['--filter', PUBLIC_NPM_PACKAGE_NAME, 'run', 'build']),
       cwd: layout.rootDir,
     },
     {
@@ -80,8 +93,7 @@ export function buildArtifactCommands(layout) {
       cwd: layout.rootDir,
     },
     {
-      command: 'pnpm',
-      args: ['pack', '--out', layout.cliTarball],
+      ...pnpmCommand(['pack', '--out', layout.cliTarball]),
       cwd: join(layout.rootDir, 'packages', 'cli'),
     },
   ];
@@ -460,10 +472,18 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
+
+function pnpmCommand(args) {
+  if (process.platform === 'win32') {
+    return { command: 'cmd.exe', args: ['/d', '/s', '/c', 'pnpm', ...args] };
+  }
+  return { command: 'pnpm', args };
+}
 
 async function run(command, args, options = {}) {
   process.stdout.write('$ ' + command + ' ' + args.join(' ') + '\\n');
@@ -551,6 +571,21 @@ function requireIncludes(values, expected, label) {
   assert.ok(values.includes(expected), label + ' did not include ' + expected + ': ' + values.join(', '));
 }
 
+async function rmWithRetry(path) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rm(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = typeof error?.code === 'string' ? error.code : '';
+      if (attempt >= 4 || !['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code)) {
+        throw error;
+      }
+      await delay(500);
+    }
+  }
+}
+
 async function writeSqliteWarehouse(projectDir) {
   const database = new DatabaseSync(join(projectDir, 'warehouse.db'));
   try {
@@ -575,50 +610,58 @@ let daemonStarted = false;
 try {
   const projectDir = join(root, 'project');
 
-  const version = await run('pnpm', ['exec', 'ktx', '--version']);
+  const version = await run(...Object.values(pnpmCommand(['exec', 'ktx', '--version'])));
   requireSuccess('ktx public package version', version);
   requireOutput('ktx public package version', version, await installedPackageVersionPattern());
 
   const runtimeStatusBefore = parseJsonResultWithExitCode(
     'ktx admin runtime status missing',
-    await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'status', '--json']),
+    await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'status', '--json']))),
     1,
   );
   assert.equal(runtimeStatusBefore.kind, 'missing');
   assert.equal(runtimeStatusBefore.layout.runtimeRoot, process.env.KTX_RUNTIME_ROOT);
   process.stdout.write('ktx managed runtime starts missing in isolated root\\n');
 
-  const init = await run('pnpm', [
-    'exec',
-    'ktx',
-    'setup',
-    '--project-dir',
-    projectDir,
-    '--no-input',
-    '--yes',
-    '--skip-llm',
-    '--skip-embeddings',
-    '--skip-databases',
-    '--skip-sources',
-    '--skip-agents',
-  ]);
+  const init = await run(
+    ...Object.values(
+      pnpmCommand([
+        'exec',
+        'ktx',
+        'setup',
+        '--project-dir',
+        projectDir,
+        '--no-input',
+        '--yes',
+        '--skip-llm',
+        '--skip-embeddings',
+        '--skip-databases',
+        '--skip-sources',
+        '--skip-agents',
+      ]),
+    ),
+  );
   requireSuccess('ktx setup', init);
 
   const emptyProjectDir = join(root, 'empty-project');
-  const emptyInit = await run('pnpm', [
-    'exec',
-    'ktx',
-    'setup',
-    '--project-dir',
-    emptyProjectDir,
-    '--no-input',
-    '--yes',
-    '--skip-llm',
-    '--skip-embeddings',
-    '--skip-databases',
-    '--skip-sources',
-    '--skip-agents',
-  ]);
+  const emptyInit = await run(
+    ...Object.values(
+      pnpmCommand([
+        'exec',
+        'ktx',
+        'setup',
+        '--project-dir',
+        emptyProjectDir,
+        '--no-input',
+        '--yes',
+        '--skip-llm',
+        '--skip-embeddings',
+        '--skip-databases',
+        '--skip-sources',
+        '--skip-agents',
+      ]),
+    ),
+  );
   requireSuccess('ktx setup empty project', emptyInit);
   await writeFile(
     join(projectDir, 'ktx.yaml'),
@@ -658,17 +701,21 @@ try {
     'utf-8',
   );
 
-  const wikiSearch = await run('pnpm', [
-    'exec',
-    'ktx',
-    'wiki',
-    'revenue',
-    '--json',
-    '--limit',
-    '5',
-    '--project-dir',
-    projectDir,
-  ]);
+  const wikiSearch = await run(
+    ...Object.values(
+      pnpmCommand([
+        'exec',
+        'ktx',
+        'wiki',
+        'revenue',
+        '--json',
+        '--limit',
+        '5',
+        '--project-dir',
+        projectDir,
+      ]),
+    ),
+  );
   const wikiSearchJson = parseJsonResult('ktx wiki search', wikiSearch);
   assert.equal(wikiSearchJson.kind, 'list');
   assert.equal(wikiSearchJson.data.items.length, 1);
@@ -700,17 +747,21 @@ try {
   await mkdir(join(projectDir, 'semantic-layer', 'warehouse'), { recursive: true });
   await writeFile(join(projectDir, 'semantic-layer', 'warehouse', 'orders.yaml'), slYaml, 'utf-8');
 
-  const slSearch = await run('pnpm', [
-    'exec',
-    'ktx',
-    'sl',
-    'orders',
-    '--json',
-    '--connection-id',
-    'warehouse',
-    '--project-dir',
-    projectDir,
-  ]);
+  const slSearch = await run(
+    ...Object.values(
+      pnpmCommand([
+        'exec',
+        'ktx',
+        'sl',
+        'orders',
+        '--json',
+        '--connection-id',
+        'warehouse',
+        '--project-dir',
+        projectDir,
+      ]),
+    ),
+  );
   const slSearchJson = parseJsonResult('ktx sl search', slSearch);
   assert.equal(slSearchJson.kind, 'list');
   assert.equal(slSearchJson.data.items.length, 1);
@@ -720,17 +771,25 @@ try {
   requireIncludes(slSearchJson.data.items[0].matchReasons, 'lexical', 'sl search match reasons');
   process.stdout.write('ktx sl search hybrid metadata verified\\n');
 
-  const slQuery = await run('pnpm', ['exec', 'ktx', 'sl', 'query',
-    '--connection-id',
-    'warehouse',
-    '--measure',
-    'orders.order_count',
-    '--format',
-    'json',
-    '--yes',
-    '--project-dir',
-    projectDir,
-  ]);
+  const slQuery = await run(
+    ...Object.values(
+      pnpmCommand([
+        'exec',
+        'ktx',
+        'sl',
+        'query',
+        '--connection-id',
+        'warehouse',
+        '--measure',
+        'orders.order_count',
+        '--format',
+        'json',
+        '--yes',
+        '--project-dir',
+        projectDir,
+      ]),
+    ),
+  );
   requireSuccessWithStderr(
     'ktx sl query first managed runtime install',
     slQuery,
@@ -741,27 +800,35 @@ try {
 
   const runtimeStatusAfter = parseJsonResult(
     'ktx admin runtime status ready',
-    await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'status', '--json']),
+    await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'status', '--json']))),
   );
   assert.equal(runtimeStatusAfter.kind, 'ready');
   assert.deepEqual(runtimeStatusAfter.manifest.features, ['core']);
   assert.equal(runtimeStatusAfter.layout.runtimeRoot, process.env.KTX_RUNTIME_ROOT);
   process.stdout.write('ktx managed runtime lazy install verified\\n');
 
-  const sqliteSlQuery = await run('pnpm', ['exec', 'ktx', 'sl', 'query',
-    '--connection-id',
-    'warehouse',
-    '--measure',
-    'orders.order_count',
-    '--format',
-    'json',
-    '--execute',
-    '--max-rows',
-    '100',
-    '--yes',
-    '--project-dir',
-    projectDir,
-  ]);
+  const sqliteSlQuery = await run(
+    ...Object.values(
+      pnpmCommand([
+        'exec',
+        'ktx',
+        'sl',
+        'query',
+        '--connection-id',
+        'warehouse',
+        '--measure',
+        'orders.order_count',
+        '--format',
+        'json',
+        '--execute',
+        '--max-rows',
+        '100',
+        '--yes',
+        '--project-dir',
+        projectDir,
+      ]),
+    ),
+  );
   requireSuccess('ktx sl query sqlite execute', sqliteSlQuery);
   requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"dialect": "sqlite"/);
   requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"mode": "executed"/);
@@ -769,36 +836,35 @@ try {
   requireOutput('ktx sl query sqlite execute', sqliteSlQuery, /"rows": \\[\\s*\\[\\s*3\\s*\\]\\s*\\]/);
   process.stdout.write('ktx sl query sqlite execute verified\\n');
 
-  const runtimeDoctor = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'status']);
+  const runtimeDoctor = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'status'])));
   requireSuccess('ktx admin runtime status', runtimeDoctor);
   requireOutput('ktx admin runtime status', runtimeDoctor, /KTX Python runtime/);
   requireOutput('ktx admin runtime status', runtimeDoctor, /status: ready/);
   process.stdout.write('ktx admin runtime status verified\\n');
 
-  const runtimeStart = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'start']);
+  const runtimeStart = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'start'])));
   requireSuccess('ktx admin runtime start', runtimeStart);
   daemonStarted = true;
   requireOutput('ktx admin runtime start', runtimeStart, /Started KTX daemon/);
   requireOutput('ktx admin runtime start', runtimeStart, /url: http:\\/\\/127\\.0\\.0\\.1:\\d+/);
   requireOutput('ktx admin runtime start', runtimeStart, /features: core/);
 
-  const runtimeStartReuse = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'start']);
+  const runtimeStartReuse = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'start'])));
   requireSuccess('ktx admin runtime start reuse', runtimeStartReuse);
   requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /Using existing KTX daemon/);
   requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /features: core/);
 
-  const runtimeStop = await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop']);
+  const runtimeStop = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'stop'])));
   requireSuccess('ktx admin runtime stop', runtimeStop);
   daemonStarted = false;
   requireOutput('ktx admin runtime stop', runtimeStop, /Stopped KTX daemon/);
   process.stdout.write('ktx admin runtime daemon lifecycle verified\\n');
 
-  const structuralScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',
-    '--project-dir',
-    projectDir,
-    '--fast',
-    '--no-input',
-  ]);
+  const structuralScan = await run(
+    ...Object.values(
+      pnpmCommand(['exec', 'ktx', 'ingest', 'warehouse', '--project-dir', projectDir, '--fast', '--no-input']),
+    ),
+  );
   requireSuccessWithProjectStderr('ktx ingest fast', structuralScan, projectDir);
   requireOutput('ktx ingest fast', structuralScan, /Ingest finished/);
   requireOutput('ktx ingest fast', structuralScan, /Database schema/);
@@ -806,12 +872,11 @@ try {
   await access(join(projectDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'));
   process.stdout.write('ktx ingest fast verified\\n');
 
-  const enrichedScan = await run('pnpm', ['exec', 'ktx', 'ingest', 'warehouse',
-    '--project-dir',
-    projectDir,
-    '--deep',
-    '--no-input',
-  ]);
+  const enrichedScan = await run(
+    ...Object.values(
+      pnpmCommand(['exec', 'ktx', 'ingest', 'warehouse', '--project-dir', projectDir, '--deep', '--no-input']),
+    ),
+  );
   requireExitCodeWithProjectStderr('ktx ingest deep readiness guard', enrichedScan, projectDir, 1);
   requireOutput('ktx ingest deep readiness guard', enrichedScan, /Ingest finished with partial failures/);
   requireOutput('ktx ingest deep readiness guard', enrichedScan, /requires deep ingest readiness/);
@@ -821,14 +886,15 @@ try {
   process.stdout.write('ktx ingest state verified\\n');
 } finally {
   if (daemonStarted) {
-    await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop']);
+    await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'stop'])));
+    await delay(500);
   }
   if (previousRuntimeRoot === undefined) {
     delete process.env.KTX_RUNTIME_ROOT;
   } else {
     process.env.KTX_RUNTIME_ROOT = previousRuntimeRoot;
   }
-  await rm(root, { recursive: true, force: true });
+  await rmWithRetry(root);
 }
 `;
 }
@@ -843,6 +909,13 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+
+function pnpmCommand(args) {
+  if (process.platform === 'win32') {
+    return { command: 'cmd.exe', args: ['/d', '/s', '/c', 'pnpm', ...args] };
+  }
+  return { command: 'pnpm', args };
+}
 
 async function run(command, args, options = {}) {
   process.stdout.write('$ ' + command + ' ' + args.join(' ') + '\\n');
@@ -880,17 +953,17 @@ try {
   const packageJson = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8'));
   assert.deepEqual(Object.keys(packageJson.dependencies), ['@kaelio/ktx']);
 
-  const help = await run('pnpm', ['exec', 'ktx', '--help']);
+  const help = await run(...Object.values(pnpmCommand(['exec', 'ktx', '--help'])));
   requireSuccess('ktx --help', help);
   requireStdout('ktx --help', help, /Usage: ktx/);
   requireStdout('ktx --help', help, /setup/);
 
-  const setupHelp = await run('pnpm', ['exec', 'ktx', 'setup', '--help']);
+  const setupHelp = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'setup', '--help'])));
   requireSuccess('ktx setup --help', setupHelp);
   requireStdout('ktx setup --help', setupHelp, /Usage: ktx setup/);
   requireStdout('ktx setup --help', setupHelp, /--no-input/);
 
-  const doctor = await run('pnpm', ['exec', 'ktx', 'status', '--verbose', '--no-input']);
+  const doctor = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'status', '--verbose', '--no-input'])));
   assert.ok([0, 1].includes(doctor.code), 'ktx status setup exit code must be 0 or 1');
   requireStdout('ktx status setup', doctor, /KTX status/);
   requireStdout('ktx status setup', doctor, /No project here yet\\./);
@@ -949,10 +1022,19 @@ async function verifyNpmArtifacts(layout, tmpRoot) {
   await writeFile(join(projectDir, 'verify-installed-cli.mjs'), npmRuntimeSmokeSource());
   await writeFile(join(projectDir, 'verify-installed-cli-commands.mjs'), npmCliSmokeSource());
 
-  await runCommand('pnpm', ['install'], { cwd: projectDir });
-  await runCommand('pnpm', ['rebuild', 'better-sqlite3'], { cwd: projectDir });
+  {
+    const pnpmInstall = pnpmCommand(['install']);
+    await runCommand(pnpmInstall.command, pnpmInstall.args, { cwd: projectDir });
+  }
+  {
+    const pnpmRebuild = pnpmCommand(['rebuild', 'better-sqlite3']);
+    await runCommand(pnpmRebuild.command, pnpmRebuild.args, { cwd: projectDir });
+  }
   await runCommand('node', ['verify-npm.mjs'], { cwd: projectDir });
-  await runCommand('pnpm', ['exec', 'ktx', '--version'], { cwd: projectDir });
+  {
+    const pnpmExecVersion = pnpmCommand(['exec', 'ktx', '--version']);
+    await runCommand(pnpmExecVersion.command, pnpmExecVersion.args, { cwd: projectDir });
+  }
   await runCommand('node', ['verify-installed-cli.mjs'], { cwd: projectDir });
   await runCommand('node', ['verify-installed-cli-commands.mjs'], { cwd: projectDir });
 }
@@ -968,7 +1050,10 @@ async function verifyNpmCliArtifacts(layout, tmpRoot) {
   await writeFile(join(projectDir, 'pnpm-workspace.yaml'), npmSmokePnpmWorkspaceYaml());
   await writeFile(join(projectDir, 'verify-installed-cli-commands.mjs'), npmCliSmokeSource());
 
-  await runCommand('pnpm', ['install'], { cwd: projectDir });
+  {
+    const pnpmInstall = pnpmCommand(['install']);
+    await runCommand(pnpmInstall.command, pnpmInstall.args, { cwd: projectDir });
+  }
   await runCommand('node', ['verify-installed-cli-commands.mjs'], { cwd: projectDir });
 }
 
